@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -108,6 +109,7 @@ function isQualitativeValue(value: string | null | undefined): boolean {
   selector: 'app-lab-results-inbox',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     LabCorrectionBadgeComponent,
     RouterLink,
     TranslateModule,

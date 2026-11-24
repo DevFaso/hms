@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -56,6 +57,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
   selector: 'app-imaging-exam-record',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     RuleStatusComponent,
     FormsModule,
     TranslateModule,
@@ -173,6 +175,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
             <div class="exam-record__field">
               <label [for]="noteId">{{ 'IMAGING_EXAM.TECHNICAL_NOTE' | translate }}</label>
               <textarea
+                appFormControl
                 [id]="noteId"
                 name="technicalNote"
                 rows="3"
@@ -198,6 +201,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
                   'IMAGING_EXAM.CONTRAST_DETAILS' | translate
                 }}</label>
                 <input
+                  appFormControl
                   type="text"
                   [id]="contrastDetailsId"
                   name="contrastDetails"
@@ -210,6 +214,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
             <div class="exam-record__field">
               <label [for]="doseId">{{ 'IMAGING_EXAM.DOSE' | translate }} (mGy)</label>
               <input
+                appFormControl
                 type="number"
                 [id]="doseId"
                 name="radiationDoseMgy"

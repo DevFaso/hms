@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { checkClinicalFormControls } from './check-clinical-form-controls.mjs';
 /**
  * The round-16 regression gates (and the round-17 person-search and translate-params gates, and
  * the round-18 required-refusal gate, the round-29 form-behaviour gate, the
@@ -44,6 +45,7 @@ const components = componentSources();
 const ctx = { components, templates: loadTemplates(components) };
 
 let failed = 0;
+if (!checkClinicalFormControls(ctx)) failed++;
 for (const gate of [
   dialogs,
   names,

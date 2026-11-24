@@ -10,6 +10,7 @@
       <label class="filter">
         <span class="sr-only">{{ 'PATIENT_DOCUMENTS.FILTER_TYPE' | translate }}</span>
         <select
+          appFormControl
           [ngModel]="typeFilter()"
           (ngModelChange)="onFilterChange($event)"
           [attr.aria-label]="'PATIENT_DOCUMENTS.FILTER_TYPE' | translate"

@@ -15811,7 +15811,8 @@
     "PICK_HINT": "Examen del catálogo del hospital: se tarifica según la lista de precios.",
     "FREE_TEXT_HINT": "Elija el examen en el catálogo cuando figure en él. Fuera del catálogo, la línea puede quedar por tarificar en caja, y el examen puede ocultarse a los familiares por prudencia.",
     "EMPTY_HINT": "El catálogo de imagen del hospital está vacío: escriba el examen en texto libre.",
-    "ORDER_LOAD_FAILED": "No se pudo cargar el catálogo: escriba el examen en texto libre."
+    "ORDER_LOAD_FAILED": "No se pudo cargar el catálogo: escriba el examen en texto libre.",
+    "READ_ONLY_FIELDS": "Estos campos son de solo lectura con su acceso actual a este catálogo."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Abrir las solicitudes de renovación",

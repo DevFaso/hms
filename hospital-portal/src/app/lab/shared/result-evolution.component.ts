@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import { formatDecimal } from '../../shared/i18n/app-locale';
 import {
   ChangeDetectionStrategy,
@@ -32,6 +33,7 @@ import { serverInstant } from '../../shared/date-utils';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-result-evolution',
   imports: [
+    FormControlStyleDirective,
     FormsModule,
     DayMonthPipe,
     TranslateModule,
@@ -49,7 +51,7 @@ import { serverInstant } from '../../shared/date-utils';
         @if (units().length > 1) {
           <label
             >{{ 'LAB_EVOLUTION.UNIT' | translate }}
-            <select [ngModel]="unit()" (ngModelChange)="chosenUnit.set($event)">
+            <select appFormControl [ngModel]="unit()" (ngModelChange)="chosenUnit.set($event)">
               @for (u of units(); track u) {
                 <option [value]="u">{{ u }}</option>
               }

@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import { ClinicalRulesService } from '../services/clinical-rules.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleContextService } from '../core/role-context.service';
@@ -149,6 +150,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     PatientSafetyHeaderComponent,
     DateTimePipe,
     SubmitGuardDirective,
