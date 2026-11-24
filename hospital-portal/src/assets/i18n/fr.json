@@ -2183,7 +2183,8 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
-      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
+      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -3886,7 +3887,9 @@
       "F": "Féminin",
       "M": "Masculin",
       "X": "X"
-    }
+    },
+    "MERGE_REASON": "Motif de la fusion",
+    "MERGE_REASON_REQUIRED": "Indiquez un motif avant de confirmer la fusion."
   },
   "ENCOUNTERS": {
     "ADDENDUM_ARIA": "Addendum à la note de consultation",
@@ -6354,7 +6357,10 @@
     "MEWS_CONCERNS": "préoccupation supplémentaire signalée",
     "MEWS_ALERT_SEVERE_HYPERTENSION": "Tension sévère",
     "MEWS_ALERT_SHOCK": "Indice de choc : zone jaune",
-    "MEWS_ALERT_SEVERE_SHOCK": "Indice de choc : zone rouge"
+    "MEWS_ALERT_SEVERE_SHOCK": "Indice de choc : zone rouge",
+    "DUPLICATE_REASON": "Motif pour garder un dossier séparé",
+    "DUPLICATE_REASON_REQUIRED": "Indiquez un motif avant de créer un autre dossier.",
+    "DUPLICATE_REASON_HELP": "Vérifiez l’identité de la personne. Ce motif est conservé avec la décision ; aucun dossier n’est fusionné."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",

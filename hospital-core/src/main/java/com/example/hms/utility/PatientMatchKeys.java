@@ -39,6 +39,10 @@ public final class PatientMatchKeys {
     /** The plain letter of each character of {@link #NAME_FOLD_FROM}, in order. */
     public static final String NAME_FOLD_TO = "aaaaaaaeeeeeiiiiioooooouuuuuyycn";
 
+    /** Compact a folded family name for the same-family/DOB candidate block. */
+    public static final String COMPACT_FAMILY_SQL_OPEN = "REPLACE(REPLACE(REPLACE(REPLACE(";
+    public static final String COMPACT_FAMILY_SQL_CLOSE = ", ' ', ''), '-', ''), '''', ''), '’', '')";
+
     /**
      * The SQL that reduces a phone column to its digits:
      * {@code DIGITS_SQL_OPEN + "p.phoneNumberPrimary" + DIGITS_SQL_CLOSE}.

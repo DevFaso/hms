@@ -410,8 +410,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     /** Same-family/same-DOB candidates are targeted before the general birth-date cap. */
     @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
         + " WHERE r.hospital.id = :hospitalId AND r.active = true AND p.active = true"
-        + " AND p.dateOfBirth = :bornOn AND REPLACE(REPLACE(REPLACE(REPLACE("
-        + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + ", ' ', ''), '-', ''), '''', ''), '’', '') IN :familyKeys"
+        + " AND p.dateOfBirth = :bornOn AND " + PatientMatchKeys.COMPACT_FAMILY_SQL_OPEN
+        + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + PatientMatchKeys.COMPACT_FAMILY_SQL_CLOSE + " IN :familyKeys"
         + " ORDER BY p.createdAt DESC, p.id")
     List<Patient> findActiveFamilyBornAtHospital(@Param("familyKeys") java.util.Set<String> familyKeys,
             @Param("bornOn") java.time.LocalDate bornOn, @Param("hospitalId") UUID hospitalId, Pageable pageable);

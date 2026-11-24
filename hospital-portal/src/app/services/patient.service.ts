@@ -116,6 +116,7 @@ export interface PatientResponse {
 }
 
 export interface PatientCreateRequest extends NationalUniqueIdChange {
+  duplicateReviewReason?: string;
   userId: string;
   hospitalId: string;
   firstName: string;

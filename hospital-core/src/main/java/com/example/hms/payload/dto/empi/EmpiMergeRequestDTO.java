@@ -19,5 +19,7 @@ public class EmpiMergeRequestDTO {
     @Size(max = 50)
     private String resolution;
 
+    @jakarta.validation.constraints.NotBlank(message = "{patient.duplicateReview.mergeReasonRequired}")
+    @Size(max = 2000)
     private String notes;
 }

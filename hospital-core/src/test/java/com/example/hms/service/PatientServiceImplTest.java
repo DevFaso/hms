@@ -219,6 +219,7 @@ class PatientServiceImplTest {
     @InjectMocks
     private PatientServiceImpl patientService;
 
+    @org.mockito.Mock private PatientDuplicateReview duplicateReview;
     private UUID patientId;
     private UUID hospitalId;
     private Patient patient;
