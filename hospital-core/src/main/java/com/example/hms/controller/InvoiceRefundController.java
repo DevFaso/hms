@@ -123,7 +123,7 @@ public class InvoiceRefundController {
         byte[] content = pdf.content();
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
-            .cacheControl(CacheControl.noCache())
+            .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(pdf.suggestedFilename() + ".pdf").build().toString())
             .contentLength(content.length)

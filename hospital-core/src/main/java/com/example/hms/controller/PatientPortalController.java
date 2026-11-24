@@ -317,7 +317,7 @@ public class PatientPortalController {
     private static ResponseEntity<byte[]> pdfAttachment(byte[] content, String filename) {
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
-            .cacheControl(org.springframework.http.CacheControl.noCache())
+            .cacheControl(org.springframework.http.CacheControl.noStore())
             .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                 org.springframework.http.ContentDisposition.attachment().filename(filename).build().toString())
             .contentLength(content.length)

@@ -1245,9 +1245,15 @@ public class SecurityConfig {
         http.headers(headers -> headers
             .contentTypeOptions(cto -> {})   // X-Content-Type-Options: nosniff
             .frameOptions(fo -> fo.deny())   // X-Frame-Options: DENY
+            // HSTS: TLS ends at the edge (Cloudflare, then Railway's proxy), so
+            // the request reaching Tomcat is plain HTTP and Spring's default
+            // "secure requests only" matcher never wrote the header. Browsers
+            // ignore HSTS received over HTTP, so sending it on every response
+            // is safe and is the only way it reaches them.
             .httpStrictTransportSecurity(hsts -> hsts
+                .requestMatcher(org.springframework.security.web.util.matcher.AnyRequestMatcher.INSTANCE)
                 .includeSubDomains(true)
-                .maxAgeInSeconds(63072000L)
+                .maxAgeInSeconds(31536000L)
             )
             .contentSecurityPolicy(csp -> csp
                 .policyDirectives(

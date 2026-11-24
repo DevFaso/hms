@@ -138,7 +138,7 @@ public class CashSessionController {
         CashSessionReports.Rendered rendered = reports.journalCsv(date);
         return ResponseEntity.ok()
             .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-            .cacheControl(CacheControl.noCache())
+            .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(rendered.fileName() + ".csv").build().toString())
             .contentLength(rendered.content().length)
@@ -148,7 +148,7 @@ public class CashSessionController {
     private static ResponseEntity<byte[]> pdf(byte[] content, String fileName) {
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
-            .cacheControl(CacheControl.noCache())
+            .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(fileName + ".pdf").build().toString())
             .contentLength(content.length)
