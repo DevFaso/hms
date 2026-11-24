@@ -763,6 +763,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Patient's cross-hospital record sharing opt-out revoked$/,
   },
   {
+    key: 'AUDIT.DESC.ROI_PDF_DOWNLOADED',
+    re: /^Patient record PDF downloaded for Patient\/(\S+) at hospital (\S+) \((\S+) chart entries\) under ROI request (\S+)$/,
+    params: ['patient', 'hospital', 'entries', 'request'],
+  },
+  {
     key: 'AUDIT.DESC.PATIENT_PDF_DOWNLOADED',
     re: /^Patient record PDF downloaded for Patient\/(\S+) at hospital (\S+) \((\S+) chart entries\)$/,
     params: ['patient', 'hospital', 'entries'],

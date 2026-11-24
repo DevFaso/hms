@@ -51,6 +51,9 @@ public interface ChartReviewService {
      */
     ChartReviewDTO getCompleteChartReview(UUID patientId, UUID hospitalId);
 
+    /** Hospital-owned rows for an approved disclosure; never treatment reach or break-glass. */
+    ChartReviewDTO getHospitalReleaseChart(UUID patientId, UUID hospitalId);
+
     /** QA D1380: the tab a page is asked for. */
     enum ChartReviewSection { TIMELINE, ENCOUNTERS, NOTES, RESULTS, MEDICATIONS, IMAGING, PROCEDURES }
 }

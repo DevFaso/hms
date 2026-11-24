@@ -6,6 +6,8 @@
     </h1>
   </div>
 
+  <app-record-rights [hospitals]="summary()?.profile?.hospitalRecords ?? []" />
+
   @if (loading()) {
     <div class="portal-loading">
       <div class="portal-spinner"></div>

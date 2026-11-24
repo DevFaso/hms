@@ -51,7 +51,8 @@ import java.util.UUID;
  * COPY_RELEASED — and if that row cannot be persisted the fulfilment is
  * rolled back: a release the accounting cannot see must not be recorded
  * as fulfilled. The workflow's own trail entries (ROI_REQUESTED etc.)
- * stay best-effort, and audit descriptions carry no request narrative —
+ * also fail closed; an unavailable audit sink is a 503, not an invalid
+ * request field. Audit descriptions carry no request narrative —
  * {@code event_description} is a plaintext column, and {@code resourceId}
  * already links the row to the encrypted request.
  */
@@ -62,6 +63,9 @@ public class RoiRequestService {
 
     /** Worklist page-size ceiling: a triage read is a page, never a dump. */
     static final int MAX_WORKLIST_PAGE = 200;
+
+    @org.springframework.beans.factory.annotation.Value("${hms.roi.response-target-days:30}")
+    private int responseTargetDays = 30;
 
 
     private final RoiRequestRepository roiRepository;
@@ -98,12 +102,13 @@ public class RoiRequestService {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "roi.request.hospitalRequired");
         }
         return persistRequest(patient, hospitalId, RoiRequestCreateDTO.builder()
+            .requestKind(request.getRequestKind())
             .requesterType(RoiRequesterType.PATIENT)
             .requesterName(patient.getFullName())
             .requesterContact(request.getRequesterContact())
             .purpose(request.getPurpose())
             .scopeDescription(request.getScopeDescription())
-            .requestedOn(request.getRequestedOn())
+            .requestedOn(LocalDate.now(clock))
             .build());
     }
 
@@ -116,6 +121,8 @@ public class RoiRequestService {
         }
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         RoiRequest saved = roiRepository.save(RoiRequest.builder()
+            .requestKind(request.getRequestKind() == null ? com.example.hms.enums.RoiRequestKind.COPY : request.getRequestKind())
+            .dueOn(requestedOn.plusDays(Math.clamp(responseTargetDays, 1, 365)))
             .patientId(patient.getId())
             // The snapshot that keeps this legal record legible if the
             // patient row is ever purged (no FK - the V141 pattern).
@@ -142,13 +149,13 @@ public class RoiRequestService {
     public RoiRequestResponseDTO fulfil(UUID requestId, RoiDecisionDTO decision) {
         UUID hospitalId = requireHospital();
         RoiRequest request = requirePendingInTenant(requestId, hospitalId);
-        decide(request, RoiRequestStatus.FULFILLED, trimToNull(decision.getNote()), hospitalId);
+        decide(request, RoiRequestStatus.FULFILLED, requiredReason(decision), hospitalId);
 
         // THE DISCLOSURE ROW: PATIENT_EXPORT keyed by patient is what the
         // item-39 whitelist shows the patient as COPY_RELEASED. This is the
         // whole point of the workflow, so it is NOT best-effort - if it
         // cannot be persisted, the fulfilment above rolls back with it.
-        emitDisclosureOrFail(request);
+        if (request.getRequestKind() != com.example.hms.enums.RoiRequestKind.CORRECTION) emitDisclosureOrFail(request);
         emitAudit(AuditEventType.ROI_FULFILLED, request, "ROI request fulfilled");
         return mapper.toDto(request);
     }
@@ -172,7 +179,7 @@ public class RoiRequestService {
     public RoiRequestResponseDTO cancel(UUID requestId, RoiDecisionDTO decision) {
         UUID hospitalId = requireHospital();
         RoiRequest request = requirePendingInTenant(requestId, hospitalId);
-        decide(request, RoiRequestStatus.CANCELLED, trimToNull(decision.getNote()), hospitalId);
+        decide(request, RoiRequestStatus.CANCELLED, requiredReason(decision), hospitalId);
         emitAudit(AuditEventType.ROI_CANCELLED, request, "ROI request cancelled");
         return mapper.toDto(request);
     }
@@ -182,6 +189,7 @@ public class RoiRequestService {
         request.setDecidedAt(LocalDateTime.now(clock));
         request.setDecidedBy(resolveCurrentStaff(hospitalId));
         request.setDecisionNote(note);
+        request.setDecisionActorUserId(roleValidator.getCurrentUserId());
         try {
             // Flush inside the method so a concurrent decision surfaces as
             // the @Version conflict HERE - decide-once means the second
@@ -273,6 +281,25 @@ public class RoiRequestService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private static String requiredReason(RoiDecisionDTO decision) {
+        String reason = trimToNull(decision == null ? null : decision.getNote());
+        if (reason == null) throw new com.example.hms.exception.FieldBusinessException("note", "roi.decision.reasonRequired");
+        return reason;
+    }
+
+    /** Resolve the PDF's patient only after the request's hospital, kind and release decision match. */
+    @Transactional(readOnly = true)
+    public UUID copyForExport(UUID requestId) {
+        UUID hospitalId = requireHospital();
+        RoiRequest request = roiRepository.findById(requestId)
+            .filter(row -> row.getHospital() != null && hospitalId.equals(row.getHospital().getId()))
+            .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
+        if (request.getRequestKind() == com.example.hms.enums.RoiRequestKind.CORRECTION
+            || request.getStatus() != RoiRequestStatus.FULFILLED
+            || !"FULL_RECORD".equals(request.getScopeDescription())) throw new BusinessException("roi.request.copyNotApproved");
+        return request.getPatientId();
+    }
+
     /**
      * The one MANDATORY audit write. {@code logEvent} commits in its own
      * transaction and returns null instead of throwing when the sink
@@ -292,13 +319,13 @@ public class RoiRequestService {
         }
     }
 
-    /** Best-effort: a trail-entry failure must never undo a recorded request or decision. */
+    /** A request or decision must not commit without its attributed audit event. */
     private void emitAudit(AuditEventType type, RoiRequest request, String description) {
         try {
-            auditService.logEvent(buildAudit(type, request, description));
+            if (auditService.logEvent(buildAudit(type, request, description)) == null)
+                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
         } catch (RuntimeException ex) {
-            log.warn("Failed to emit {} audit for ROI request {}: {}",
-                type, request.getId(), ex.getMessage());
+            throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
         }
     }
 

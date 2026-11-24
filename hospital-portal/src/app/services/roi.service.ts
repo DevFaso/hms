@@ -4,8 +4,12 @@ import { Observable } from 'rxjs';
 
 export type RoiRequestStatus = 'PENDING' | 'FULFILLED' | 'DENIED' | 'CANCELLED';
 export type RoiRequesterType = 'PATIENT' | 'THIRD_PARTY';
+export type RoiRequestKind = 'COPY' | 'CORRECTION';
 
 export interface RoiRequest {
+  requestKind?: RoiRequestKind;
+  dueOn?: string | null;
+  decisionActorUserId?: string | null;
   id: string;
   patientId: string;
   patientName?: string;
@@ -31,6 +35,7 @@ export interface RoiPage {
 }
 
 export interface RoiCreateRequest {
+  requestKind?: RoiRequestKind;
   requesterType: RoiRequesterType;
   requesterName?: string;
   requesterContact?: string;
@@ -43,6 +48,10 @@ export interface RoiCreateRequest {
 @Injectable({ providedIn: 'root' })
 export class RoiService {
   private readonly http = inject(HttpClient);
+
+  downloadCopy(id: string): Observable<Blob> {
+    return this.http.get(`/roi-requests/${id}/record.pdf`, { responseType: 'blob' });
+  }
 
   create(patientId: string, req: RoiCreateRequest): Observable<RoiRequest> {
     return this.http.post<RoiRequest>(`/patients/${patientId}/roi-requests`, req);

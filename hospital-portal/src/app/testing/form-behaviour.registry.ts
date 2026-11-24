@@ -25,6 +25,7 @@ import { MyDocumentsComponent } from '../patient-portal/my-documents/my-document
 import { MyEducationComponent } from '../patient-portal/my-education/my-education.component';
 import { MyFamilyAccessComponent } from '../patient-portal/my-family-access/my-family-access.component';
 import { MyMedicalHistoryComponent } from '../patient-portal/my-medical-history/my-medical-history.component';
+import { RecordRightsComponent } from '../patient-portal/my-records/record-rights.component';
 import { MyScreeningsComponent } from '../patient-portal/my-screenings/my-screenings.component';
 import { MySharingComponent } from '../patient-portal/my-sharing/my-sharing.component';
 import { AdvanceDirectivesTabComponent } from '../patients/advance-directives/advance-directives-tab.component';
@@ -195,6 +196,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'MyMedicalHistoryComponent',
     file: 'patient-portal/my-medical-history/my-medical-history.component',
     type: MyMedicalHistoryComponent,
+  },
+  {
+    name: 'RecordRightsComponent',
+    file: 'patient-portal/my-records/record-rights.component',
+    type: RecordRightsComponent,
   },
   {
     name: 'MyScreeningsComponent',

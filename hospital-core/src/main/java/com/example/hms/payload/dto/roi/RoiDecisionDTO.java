@@ -19,6 +19,7 @@ import lombok.Setter;
 @Builder
 public class RoiDecisionDTO {
 
+    @jakarta.validation.constraints.NotBlank(message = "{roi.decision.reasonRequired}")
     @Size(max = 500)
     private String note;
 }

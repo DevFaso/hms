@@ -2177,7 +2177,8 @@
       "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
       "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
-      "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)"
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)",
+      "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -16316,5 +16317,26 @@
     "CONFIRM": "Confirmar código",
     "ERROR": "No se pudo verificar este contacto. Inténtelo de nuevo.",
     "CODE_REQUIRED": "Introduzca el código de seis dígitos."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Acceder a mi expediente o corregirlo",
+    "INTRO": "Solicite una copia o una corrección a su hospital. El personal revisa las solicitudes; este formulario nunca modifica el expediente clínico. Las fechas de respuesta son objetivos internos, no plazos legales.",
+    "HOSPITAL": "Hospital",
+    "KIND": "Tipo de solicitud",
+    "COPY": "Copia del expediente",
+    "CORRECTION": "Corrección del expediente",
+    "PURPOSE": "Motivo de la solicitud",
+    "DESCRIPTION": "Documento, fecha y corrección solicitada",
+    "FULL_RECORD": "Expediente completo",
+    "SUBMIT": "Enviar solicitud",
+    "SENT": "Su solicitud se ha registrado.",
+    "HISTORY": "Mis solicitudes",
+    "EMPTY": "Aún no hay solicitudes.",
+    "TARGET": "Respuesta prevista",
+    "DECISION": "Decisión y motivo:",
+    "FAILED": "No se pudo completar esta acción. Inténtelo de nuevo.",
+    "COMPLETE_CORRECTION": "Completar revisión de la corrección",
+    "CORRECTION_HINT": "Revise la corrección en el proceso autorizado del expediente y explique el resultado. Esta decisión no sustituye datos clínicos.",
+    "EXPORT": "Descargar copia aprobada (PDF)"
   }
 }

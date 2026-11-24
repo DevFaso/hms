@@ -67,6 +67,18 @@ import java.util.UUID;
     "requesterContact", "purpose", "scopeDescription", "decisionNote"})
 public class RoiRequest extends BaseEntity {
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_kind", nullable = false, length = 20)
+    private com.example.hms.enums.RoiRequestKind requestKind = com.example.hms.enums.RoiRequestKind.COPY;
+
+    /** Internal response target, not a statement of a statutory deadline. Unknown for legacy rows. */
+    @Column(name = "due_on")
+    private LocalDate dueOn;
+
+    @Column(name = "decision_actor_user_id")
+    private UUID decisionActorUserId;
+
     /** Lookup key, not a relationship — no FK, survives patient purge (V141 pattern). */
     @Column(name = "patient_id", nullable = false)
     private UUID patientId;

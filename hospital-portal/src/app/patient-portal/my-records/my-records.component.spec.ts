@@ -1,6 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { RoleContextService } from '../../core/role-context.service';
 import { of, throwError } from 'rxjs';
 import { MyRecordsComponent } from './my-records.component';
 import {
@@ -40,6 +43,8 @@ describe('MyRecordsComponent', () => {
   function create(): void {
     fixture = TestBed.createComponent(MyRecordsComponent);
     fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/me/patient/roi-requests').flush([]);
+    fixture.detectChanges();
   }
 
   beforeEach(() => {
@@ -58,7 +63,13 @@ describe('MyRecordsComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [MyRecordsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: portal }, provideRouter([])],
+      providers: [
+        { provide: PatientPortalService, useValue: portal },
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
+      ],
     });
     const translate = TestBed.inject(TranslateService);
     translate.setFallbackLang('fr');

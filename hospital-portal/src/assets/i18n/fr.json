@@ -2177,7 +2177,8 @@
       "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
-      "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)"
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -16316,5 +16317,26 @@
     "CONFIRM": "Confirmer le code",
     "ERROR": "Impossible de vérifier ces coordonnées. Réessayez.",
     "CODE_REQUIRED": "Saisissez le code à six chiffres."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Accéder à mon dossier ou le rectifier",
+    "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",
+    "HOSPITAL": "Hôpital",
+    "KIND": "Type de demande",
+    "COPY": "Copie du dossier",
+    "CORRECTION": "Rectification du dossier",
+    "PURPOSE": "Motif de la demande",
+    "DESCRIPTION": "Document, date et rectification demandée",
+    "FULL_RECORD": "Dossier complet",
+    "SUBMIT": "Envoyer la demande",
+    "SENT": "Votre demande a été enregistrée.",
+    "HISTORY": "Mes demandes",
+    "EMPTY": "Aucune demande pour le moment.",
+    "TARGET": "Réponse visée",
+    "DECISION": "Décision et motif :",
+    "FAILED": "Impossible de terminer cette action. Réessayez.",
+    "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
+    "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
+    "EXPORT": "Télécharger la copie approuvée (PDF)"
   }
 }

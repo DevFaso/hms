@@ -275,11 +275,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("PUT /nurse/tasks/{taskId}/complete",
             "the completion note is optional"),
         Map.entry("PUT /refills/{refillId}/approve",
-            "the provider notes are optional to approve (required to deny or hold, D1315)"),
-        Map.entry("PUT /roi-requests/{requestId}/cancel",
-            "KNOWN GAP (D1157 class, standing debt): the note is optional on cancel"),
-        Map.entry("PUT /roi-requests/{requestId}/fulfil",
-            "the note is optional to fulfil")
+            "the provider notes are optional to approve (required to deny or hold, D1315)")
     );
 
     /**

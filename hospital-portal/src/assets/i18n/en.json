@@ -2177,7 +2177,8 @@
       "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
       "CROSS_HOSPITAL_INSURANCE_READ": "Insurance policy of another hospital read to verify at the desk (identity only)",
-      "CROSS_HOSPITAL_INSURANCE_REUSED": "Insurance policy of another hospital taken over as this hospital's own coverage (identity only)"
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Insurance policy of another hospital taken over as this hospital's own coverage (identity only)",
+      "ROI_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries) under record request {{request}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -16316,5 +16317,26 @@
     "CONFIRM": "Confirm code",
     "ERROR": "Unable to verify this contact. Try again.",
     "CODE_REQUIRED": "Enter the six-digit code."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Access or correct my record",
+    "INTRO": "Ask your hospital for a copy or a correction. Staff review requests; this form never changes your clinical record. Response dates are internal targets, not statutory deadlines.",
+    "HOSPITAL": "Hospital",
+    "KIND": "Request type",
+    "COPY": "Record copy",
+    "CORRECTION": "Record correction",
+    "PURPOSE": "Reason for the request",
+    "DESCRIPTION": "Record, date and correction requested",
+    "FULL_RECORD": "Full record",
+    "SUBMIT": "Send request",
+    "SENT": "Your request has been recorded.",
+    "HISTORY": "My requests",
+    "EMPTY": "No requests yet.",
+    "TARGET": "Response target",
+    "DECISION": "Decision and reason:",
+    "FAILED": "Unable to complete this action. Try again.",
+    "COMPLETE_CORRECTION": "Complete correction review",
+    "CORRECTION_HINT": "Review the requested correction in the authorized record workflow and explain the outcome. This decision does not overwrite clinical data.",
+    "EXPORT": "Download approved copy (PDF)"
   }
 }

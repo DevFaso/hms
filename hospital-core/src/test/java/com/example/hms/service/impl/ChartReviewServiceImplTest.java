@@ -156,6 +156,110 @@ class ChartReviewServiceImplTest {
     }
 
     @Test
+    void thirdPartyReleaseEndpointNeverUsesTreatmentOrBreakGlassReach() throws Exception {
+        UUID otherId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("FOREIGN HOSPITAL").build(); other.setId(otherId);
+        Encounter own = encounter(EncounterStatus.COMPLETED, LocalDateTime.now());
+        own.setHospital(hospital); own.setChiefComplaint("OWN-RELEASABLE-VISIT");
+        Encounter foreign = encounter(EncounterStatus.COMPLETED, LocalDateTime.now());
+        foreign.setHospital(other); foreign.setChiefComplaint("FOREIGN-UNTAGGED-VISIT");
+        Encounter hiv = encounter(EncounterStatus.COMPLETED, LocalDateTime.now());
+        hiv.setHospital(other); hiv.setChiefComplaint("FOREIGN-HIV-VISIT");
+        hiv.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, otherId));
+        when(breakGlassGate.isUnlocked(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+        when(sensitivityClassifier.effectiveCategory(hiv))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(eq(PATIENT_ID), any(), any()))
+            .thenAnswer(inv -> new PageImpl<>(List.of(own, foreign, hiv).stream()
+                .filter(e -> ((Set<?>) inv.getArgument(1)).contains(e.getHospital().getId())).toList()));
+        LabResult ownResult = labResult(LocalDateTime.now(), AbnormalFlag.NORMAL, "OWN-LAB-RESULT", "OWN-LAB");
+        ownResult.getLabOrder().setHospital(hospital);
+        LabResult foreignResult = labResult(LocalDateTime.now(), AbnormalFlag.NORMAL, "FOREIGN-LAB-RESULT", "FOREIGN-LAB");
+        foreignResult.getLabOrder().setHospital(other);
+        // The shared treatment query can return an order owned elsewhere but performed here.
+        when(labResultRepo.findPatientResultsReadableAt(eq(PATIENT_ID), any(), eq(HOSPITAL_ID), eq(false), any()))
+            .thenReturn(List.of(ownResult, foreignResult));
+        // The clinical screen can see all three under this clinician's treatment/break-glass authority.
+        UUID readerId = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(readerId)
+                .activeHospitalId(HOSPITAL_ID).build());
+        try {
+            assertThat(service.getCompleteChartReview(PATIENT_ID, HOSPITAL_ID).getEncounters()).hasSize(3);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+        org.mockito.Mockito.clearInvocations(recordAccessPolicy, breakGlassGate, reachRecorder);
+
+        var allergies = mock(com.example.hms.repository.PatientAllergyRepository.class);
+        var problems = mock(com.example.hms.repository.PatientProblemRepository.class);
+        var directives = mock(com.example.hms.repository.AdvanceDirectiveRepository.class);
+        var ownDirective = new com.example.hms.model.AdvanceDirective(); ownDirective.setId(UUID.randomUUID());
+        ownDirective.setHospital(hospital); ownDirective.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
+        ownDirective.setDirectiveType(com.example.hms.enums.AdvanceDirectiveType.LIVING_WILL);
+        ownDirective.setDescription("OWN-DIRECTIVE-CONTENT");
+        var foreignDirective = new com.example.hms.model.AdvanceDirective(); foreignDirective.setId(UUID.randomUUID());
+        foreignDirective.setHospital(other); foreignDirective.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
+        foreignDirective.setDirectiveType(com.example.hms.enums.AdvanceDirectiveType.LIVING_WILL);
+        foreignDirective.setDescription("FOREIGN-DIRECTIVE-CONTENT");
+        when(directives.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any()))
+            .thenAnswer(inv -> List.of(ownDirective, foreignDirective).stream()
+                .filter(d -> ((Set<?>) inv.getArgument(1)).contains(d.getHospital().getId())).toList());
+        patient.setCodeStatus("DNR");
+        var ownAllergy = new com.example.hms.model.PatientAllergy(); ownAllergy.setId(UUID.randomUUID());
+        ownAllergy.setHospital(hospital); ownAllergy.setActive(true); ownAllergy.setAllergenDisplay("OWN-ALLERGY");
+        var foreignAllergy = new com.example.hms.model.PatientAllergy(); foreignAllergy.setId(UUID.randomUUID());
+        foreignAllergy.setHospital(other); foreignAllergy.setActive(true); foreignAllergy.setAllergenDisplay("FOREIGN-ALLERGY");
+        when(allergies.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of(ownAllergy));
+        when(allergies.findVisibleAt(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of(ownAllergy, foreignAllergy));
+        var storyboard = new PatientStoryboardServiceImpl(patientChartAccess, allergies, problems, encounterRepo,
+            directives, hospitalRepo, recordAccessPolicy, sensitivityClassifier, reachRecorder, breakGlassGate,
+            mock(com.example.hms.repository.PatientVitalSignRepository.class));
+        var patients = mock(com.example.hms.repository.PatientRepository.class);
+        var registrations = mock(com.example.hms.repository.PatientHospitalRegistrationRepository.class);
+        var audits = mock(com.example.hms.service.AuditEventLogService.class);
+        when(patients.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(registrations.existsByPatientIdAndHospitalId(PATIENT_ID, HOSPITAL_ID)).thenReturn(true);
+        when(audits.logEvent(any())).thenReturn(com.example.hms.payload.dto.AuditEventLogResponseDTO.builder()
+            .id(UUID.randomUUID()).build());
+        patient.setAllergies("UNSCOPED-LEGACY-ALLERGY");
+        var pdf = new com.example.hms.service.PatientRecordPdfService(patients, registrations, storyboard, service,
+            audits, mock(com.example.hms.repository.UserRepository.class), com.example.hms.i18n.TestMessageSources.bundles());
+        var repository = mock(com.example.hms.repository.RoiRequestRepository.class);
+        var roles = mock(com.example.hms.utility.RoleValidator.class);
+        when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
+        var request = com.example.hms.model.RoiRequest.builder().hospital(hospital).patientId(PATIENT_ID)
+            .requesterType(com.example.hms.enums.RoiRequesterType.THIRD_PARTY)
+            .requesterName("Approved third party").scopeDescription("FULL_RECORD")
+            .status(com.example.hms.enums.RoiRequestStatus.FULFILLED).build();
+        request.setId(UUID.randomUUID());
+        when(repository.findById(request.getId())).thenReturn(Optional.of(request));
+        var requests = new com.example.hms.service.roi.RoiRequestService(repository, patients, hospitalRepo,
+            mock(com.example.hms.repository.StaffRepository.class), roles, audits,
+            mock(com.example.hms.mapper.RoiRequestMapper.class), java.time.Clock.systemUTC());
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+            new com.example.hms.controller.RoiRecordExportController(requests, pdf)).build();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(readerId).activeHospitalId(HOSPITAL_ID).build());
+        try {
+            byte[] bytes = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                "/roi-requests/{id}/record.pdf", request.getId()))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+            try (var document = org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
+                assertThat(new org.apache.pdfbox.text.PDFTextStripper().getText(document))
+                    .contains("OWN-RELEASABLE-VISIT", "OWN-ALLERGY", "OWN-LAB-RESULT", "OWN-DIRECTIVE-CONTENT")
+                    .doesNotContain("FOREIGN-UNTAGGED-VISIT", "FOREIGN-HIV-VISIT", "FOREIGN-ALLERGY", "FOREIGN-LAB-RESULT", "FOREIGN-DIRECTIVE-CONTENT", "UNSCOPED-LEGACY-ALLERGY");
+            }
+            org.mockito.Mockito.verifyNoInteractions(recordAccessPolicy, breakGlassGate, reachRecorder);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     void missingPatientThrowsNotFound() {
         UUID missingId = UUID.randomUUID();
         when(patientChartAccess.require(eq(missingId), any()))
