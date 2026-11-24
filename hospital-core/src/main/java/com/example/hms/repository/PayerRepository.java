@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,4 +39,7 @@ public interface PayerRepository extends JpaRepository<Payer, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Payer p WHERE p.id = :id AND p.hospitalId = :hospitalId")
     Optional<Payer> lockByIdAtHospital(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
+
+    /** QA D3601 (r72): the payers of plans read by {@code PayerPlanRepository#findByIdInAndHospitalIdIn}. */
+    List<Payer> findByIdInAndHospitalIdIn(Collection<UUID> ids, Collection<UUID> hospitalIds);
 }

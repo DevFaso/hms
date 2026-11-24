@@ -432,6 +432,20 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     expect(insuranceSpy.forPatient).toHaveBeenCalledTimes(2);
   });
 
+  it("shows the formule of another hospital's policy, and says when none was recorded (QA D3601)", () => {
+    insuranceSpy.otherHospitals.and.returnValue(
+      of([otherPolicy(true), { ...otherPolicy(true), sourceInsuranceId: 'src-2', planName: null }]),
+    );
+    fixture.detectChanges();
+
+    const plans = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid="other-plan"]',
+      ) as NodeListOf<HTMLElement>,
+    ).map((cell) => cell.textContent?.trim());
+    expect(plans).toEqual(['Formule Test Essentielle', 'COVERAGE.PLAN_NOT_RECORDED']);
+  });
+
   it('without an agreement here it says so, and a takeover records the policy only', () => {
     insuranceSpy.otherHospitals.and.returnValue(of([otherPolicy(false)]));
     insuranceSpy.reuseOtherHospital.and.returnValue(of({ id: 'own-1', patientId: 'p1' }));

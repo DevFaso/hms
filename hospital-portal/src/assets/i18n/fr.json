@@ -11947,6 +11947,7 @@
     "OTHER_REUSED": "Assurance reprise pour cet établissement, à vérifier. Vérifiez-la, puis choisissez sa formule.",
     "OTHER_REUSE_ERROR": "Échec de la reprise de l’assurance",
     "OTHER_NO_AGREEMENT": "Aucune convention avec cet assureur dans cet établissement. La reprise enregistre seulement l’assurance : aucune part assureur n’est facturée tant que l’établissement n’a pas sa propre convention.",
+    "PLAN_NOT_RECORDED": "Formule non renseignée",
     "OTHER_DECLARED": "Déclarée à {{hospital}} le {{date}} — à vérifier",
     "OTHER_DECLARED_NO_DATE": "Déclarée à {{hospital}} — à vérifier",
     "OTHER_CARD_HINT": "La carte d’assurance déposée par le patient, s’il y en a une, se trouve dans l’onglet « Documents ».",

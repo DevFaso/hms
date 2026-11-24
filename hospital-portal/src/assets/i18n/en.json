@@ -11947,6 +11947,7 @@
     "OTHER_REUSED": "Insurance taken over for this hospital, unverified. Verify it, then choose its plan.",
     "OTHER_REUSE_ERROR": "Could not take over the insurance",
     "OTHER_NO_AGREEMENT": "No agreement with this insurer at this hospital. Taking it over records the policy only: no insurer share is billed until this hospital has its own agreement.",
+    "PLAN_NOT_RECORDED": "Plan not recorded",
     "OTHER_DECLARED": "Declared at {{hospital}} on {{date}} — to verify",
     "OTHER_DECLARED_NO_DATE": "Declared at {{hospital}} — to verify",
     "OTHER_CARD_HINT": "The insurance card the patient uploaded, if any, is in the Documents tab.",
