@@ -51,7 +51,7 @@ Each listed site changes only the refusal wording/arguments. Existing predicates
 | com/example/hms/controller/integration/Dhis2ExportController.java | 52 | "Access denied for hospital: " + body.hospitalId() | "request.hospitalContext.denied" |
 | com/example/hms/controller/integration/Dhis2ExportController.java | 74 | "Access denied for hospital: " + hospitalId | "request.hospitalContext.denied" |
 | com/example/hms/controller/integration/Dhis2ExportController.java | 92 | "Access denied for hospital: " + run.getHospital().getId() | "request.hospitalContext.denied" |
-| com/example/hms/controller/support/ControllerAuthUtils.java | 44 | "Authentication required." | "request.session.required" |
+| com/example/hms/controller/support/ControllerAuthUtils.java | 44 | "Authentication required." | "request.context.sessionRequired" |
 | com/example/hms/controller/support/ControllerAuthUtils.java | 125 | "Receptionist must be affiliated with a hospital (select an active hospital or provide hospitalId)." | "request.hospitalContext.required" |
 | com/example/hms/controller/support/ControllerAuthUtils.java | 178 | "Invalid datetime format; expected ISO-8601." | "request.datetime.invalid" |
 | com/example/hms/service/FrontendAuditServiceImpl.java | 31 | "Audit payload is required." | "request.auditPayload.required" |
@@ -65,8 +65,8 @@ Each listed site changes only the refusal wording/arguments. Existing predicates
 | com/example/hms/service/apikey/ApiKeyService.java | 204 | "The key is already revoked." | "apikey.revocation.finished" |
 | com/example/hms/service/apikey/ApiKeyService.java | 217 | "The key was changed at the same time by someone else - reload and retry." | "apikey.change.concurrent" |
 | com/example/hms/service/credentialing/CredentialRenewalService.java | 103 | "A practitioner cannot record their own credential renewal." | "credential.renewal.otherRecorder" |
-| com/example/hms/service/empi/EmpiServiceImpl.java | 536 | "EMPI link request is required" | "empi.link.required" |
-| com/example/hms/service/empi/EmpiServiceImpl.java | 550 | "Alias request is required" | "empi.alias.required" |
+| com/example/hms/service/empi/EmpiServiceImpl.java | 536 | "EMPI link request is required" | "empi.link.requestRequired" |
+| com/example/hms/service/empi/EmpiServiceImpl.java | 550 | "Alias request is required" | "empi.alias.requestRequired" |
 | com/example/hms/service/impl/CdsAcknowledgementServiceImpl.java | 72 | "Unable to resolve user from authentication." | "request.userContext.unavailable" |
 | com/example/hms/service/impl/InBasketServiceImpl.java | 138 | "In-Basket item is already acknowledged" | "inbasket.acknowledgement.finished" |
 | com/example/hms/service/impl/InBasketServiceImpl.java | 299 | "In-Basket item does not belong to the current user" | "inbasket.item.otherOwner" |

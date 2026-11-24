@@ -41,7 +41,7 @@ public class ControllerAuthUtils {
      */
     public void requireAuth(Authentication auth) {
         if (auth == null) {
-            throw new BusinessException("request.session.required");
+            throw new BusinessException("request.context.sessionRequired");
         }
     }
 

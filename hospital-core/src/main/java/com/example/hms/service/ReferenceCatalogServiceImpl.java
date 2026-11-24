@@ -90,7 +90,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     @Transactional
     public CatalogImportResponseDTO importCatalog(UUID catalogId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("catalog.import.required");
+            throw new com.example.hms.exception.FieldBusinessException("file", "catalog.import.required");
         }
 
         ReferenceCatalog catalog = catalogRepository.findById(catalogId)

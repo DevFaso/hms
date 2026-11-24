@@ -222,8 +222,11 @@ class ReferenceCatalogServiceImplTest {
     @Test
     void importCatalog_nullFile_throws() {
         assertThatThrownBy(() -> service.importCatalog(catalogId, null))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required"));
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(error -> {
+                    assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required");
+                    assertThat(error).extracting("field").isEqualTo("file");
+                });
     }
 
     @Test
@@ -232,8 +235,11 @@ class ReferenceCatalogServiceImplTest {
                 "text/csv", new byte[0]);
 
         assertThatThrownBy(() -> service.importCatalog(catalogId, file))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required"));
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(error -> {
+                    assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required");
+                    assertThat(error).extracting("field").isEqualTo("file");
+                });
     }
 
     @Test

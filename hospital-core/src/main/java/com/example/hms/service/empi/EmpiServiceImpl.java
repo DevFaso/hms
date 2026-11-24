@@ -533,7 +533,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private void validateLinkRequest(EmpiIdentityLinkRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("empi.link.required");
+            throw new BusinessException("empi.link.requestRequired");
         }
         if (request.getPatientId() == null) {
             throw new BusinessException(MSG_LINK_MISSING_PATIENT);
@@ -547,7 +547,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private void validateAliasRequest(EmpiAliasRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("empi.alias.required");
+            throw new BusinessException("empi.alias.requestRequired");
         }
         if (request.getAliasType() == null || !StringUtils.hasText(request.getAliasValue())) {
             throw new BusinessException(MSG_ALIAS_INVALID);
