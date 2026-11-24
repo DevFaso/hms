@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -84,8 +85,11 @@ class PersonalIdentifierUrlGuardTest {
             declared = requestParam.name().isEmpty() ? requestParam.value() : requestParam.name();
         } else if (pathVariable != null) {
             declared = pathVariable.name().isEmpty() ? pathVariable.value() : pathVariable.name();
-        } else if (parameter.getParameterAnnotations().length == 0
-            && BeanUtils.isSimpleProperty(parameter.getParameterType())) {
+        } else if (BeanUtils.isSimpleProperty(parameter.getParameterType())
+            && Arrays.stream(parameter.getParameterAnnotations())
+                .noneMatch(annotation -> annotation.annotationType().getName().startsWith("org.springframework."))) {
+            // No binding annotation (a validation one such as @NotBlank does not count): Spring
+            // binds a simple value from the query string.
             declared = "";
         } else {
             return null;
