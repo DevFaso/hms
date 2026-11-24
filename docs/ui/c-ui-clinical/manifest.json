@@ -1,0 +1,195 @@
+{
+  "sourceCommit": "ec1cff6b2",
+  "syntheticData": true,
+  "browserLocale": "fr-FR",
+  "cssViewports": [
+    390,
+    1440
+  ],
+  "screenshots": [
+    {
+      "file": "cash-session-1440.png",
+      "sha256": "1e009a56ac93952b2b3932548f29d7cf3aea0cc37c8553e957a403dd96d47b17"
+    },
+    {
+      "file": "cash-session-390.png",
+      "sha256": "5046cacd6c7d6401de1bc78a74d085657b405cfd620209b4f039e52cb1762c26"
+    },
+    {
+      "file": "nursing-note-addendum-1440.png",
+      "sha256": "e2c9af5d0472c863a948f5ab5b395d68f3071b3305ebac1e7c409732c901b77d"
+    },
+    {
+      "file": "nursing-note-addendum-390.png",
+      "sha256": "c7b2645fa176c11578200f6fd857e27fcae378f485d7187baef0665bab767a46"
+    },
+    {
+      "file": "patient-documents-1440.png",
+      "sha256": "593a1f698b7918bc03676fc21da92f520dc4f0ce221d57351f7db3371c12d980"
+    },
+    {
+      "file": "patient-documents-390.png",
+      "sha256": "55f70c4a9272231fa7dbfa710e268430e10e0bc47c9d47ca300e1fed6a0a4268"
+    },
+    {
+      "file": "imaging-catalogue-1440.png",
+      "sha256": "5348bbd22626a987bfae71d2da5eb8ea404da5833a0eac019f9a43a1cea08b55"
+    },
+    {
+      "file": "imaging-catalogue-390.png",
+      "sha256": "4594ea3b932970af24ea099b700e95abe6e599a09b9e06d56c8c48f8aa00dfbd"
+    },
+    {
+      "file": "imaging-hospital-filter-1440.png",
+      "sha256": "0c163bf21bc29239260b4e312105d340d2bc00ecc0353c73cde0ae56d6490156"
+    },
+    {
+      "file": "imaging-hospital-filter-390.png",
+      "sha256": "c46827d5256b746c222a5633f85d52ac91f61825a6404f8a62b37a351f4ec329"
+    },
+    {
+      "file": "payer-share-list-1440.png",
+      "sha256": "8a4757500d8d8022af7967040e41a6b5a0c672f9990a13d7a9b49a465d340889"
+    },
+    {
+      "file": "payer-share-list-390.png",
+      "sha256": "67440cde4fc571ec6c474789d76e132c9fdc2c666dbb47e7aa2a166ef521367d"
+    },
+    {
+      "file": "imaging-exam-record-1440.png",
+      "sha256": "d819c2dc762ba539a0c122db51ac018bd688194e39e6e7bb34ff995078ff60a0"
+    },
+    {
+      "file": "imaging-exam-record-390.png",
+      "sha256": "f3871fcbe194cf83775433bdba7ffe25897d492f14b6557c8ab394756d59e3e6"
+    },
+    {
+      "file": "imaging-staged-caption-1440.png",
+      "sha256": "83d19f741012ce799d8b3f3b90d4129de0858d1b6c4ea89b79b9e085185cae2d"
+    },
+    {
+      "file": "imaging-staged-caption-390.png",
+      "sha256": "e1072e1e48d4ea239c9816b726ff6cece7bb6f09e10325abea70b31214f1417d"
+    },
+    {
+      "file": "imaging-viewer-caption-1440.png",
+      "sha256": "b6435921571a36bd9ce340535dbcf320444855b795d1ecb9ad1473849b84b998"
+    },
+    {
+      "file": "imaging-viewer-caption-390.png",
+      "sha256": "560bf1b9255229223d3e4e1571a267909667014cc02b7c13f8a9e6e3fcccf846"
+    },
+    {
+      "file": "invoice-payer-share-1440.png",
+      "sha256": "a9cc9d082763fb13aee8d05a9fadcf157bb0f183bf0b42fdd169e30d19345779"
+    },
+    {
+      "file": "invoice-payer-share-390.png",
+      "sha256": "27b1d88874c62a242bb429af535df95c35a41895017ae9c730928d33d0c06047"
+    },
+    {
+      "file": "maternity-stay-acuity-1440.png",
+      "sha256": "65cca2d64479e614eaec573385bdbb129856ff6a82429d6f690bce7afa0272df"
+    },
+    {
+      "file": "maternity-stay-acuity-390.png",
+      "sha256": "33413fb11df57998c1c94c0da98a0656186b4c6f7a96620fb529f54078ca45b5"
+    },
+    {
+      "file": "maternity-stay-bed-1440.png",
+      "sha256": "62ba27307dd2686a7fe7dc4a22ca7092924fceaf177cd4731a004376849b0cc7"
+    },
+    {
+      "file": "maternity-stay-bed-390.png",
+      "sha256": "1332adfef21b95a7a29897de3f1e349269442636587edffae4e3c66121ef7cd6"
+    },
+    {
+      "file": "mortality-filters-1440.png",
+      "sha256": "80eb557571faf733301fa5d0f0bd902845584d52e13ba6724e1aa437b872e2cf"
+    },
+    {
+      "file": "mortality-filters-390.png",
+      "sha256": "93c822c6d7767670d6f53a55489b2806049da2fe299358d01730b9c2837ae9db"
+    },
+    {
+      "file": "nurse-consciousness-1440.png",
+      "sha256": "f9e61173f2fe3923bf1f1dd46a6707da1ae604309802a27c08346549442a8d8b"
+    },
+    {
+      "file": "nurse-consciousness-390.png",
+      "sha256": "3e731bcdc47f25c8bdf0e3693aa6c5c1661f0632da4d64ac0ff1d02f1876b61f"
+    },
+    {
+      "file": "nurse-witness-1440.png",
+      "sha256": "44fdd043ac06232c4c3cabfe6e019956e83cfd329bb804a9ad1dfb346ce18baf"
+    },
+    {
+      "file": "nurse-witness-390.png",
+      "sha256": "2e9e81fb42370b2d1dbe3f563023b7b6f8c8c5780635531c6cf0e88f6aa152cc"
+    },
+    {
+      "file": "recipient-verification-1440.png",
+      "sha256": "17e06a9429be3f77369c96d9624f5dca226b2604bd0526989f909962d4da6572"
+    },
+    {
+      "file": "recipient-verification-390.png",
+      "sha256": "4f50d4f76cf107162e51bc5897286c5c9930c5f33c4f4170c5a45f23cca4ab43"
+    },
+    {
+      "file": "pharmacy-refund-rejection-1440.png",
+      "sha256": "f278dfdbff3752237d8b95900d2d1553eef9f7654c26aa915556ca9a95e8937b"
+    },
+    {
+      "file": "pharmacy-refund-rejection-390.png",
+      "sha256": "93742a147bc0a39976a7738d10e173cb5a1aa09466839a5dc701bd17b07e4e66"
+    },
+    {
+      "file": "profile-verification-1440.png",
+      "sha256": "1e49338bf245e463bfb76a4e7cac0d0e5d158f5df7c205f5d1eaa698c4bc7cb5"
+    },
+    {
+      "file": "profile-verification-390.png",
+      "sha256": "3baef80d9683cbbab91aac72621b58f215c7f537fa3b70b2f9eb978b53cf8d2b"
+    },
+    {
+      "file": "result-read-back-1440.png",
+      "sha256": "a49ada7a20050b379a33c57f52a39fefc403dcd0673785aabe7c9f34f531399b"
+    },
+    {
+      "file": "result-read-back-390.png",
+      "sha256": "679c035884f8fa58d4a2082c0098adfcc9bd8ff5f4f49eb71cfc4331332d963f"
+    },
+    {
+      "file": "result-evolution-1440.png",
+      "sha256": "755ef63fc44c18cde43733828744ccdd172ed60a2b6ecbd284e951401130c557"
+    },
+    {
+      "file": "result-evolution-390.png",
+      "sha256": "d5bf532ff90ab2f1fa1286e8cf77f48ea7b1eb19220fcaa65d6c5bda97e90ce8"
+    },
+    {
+      "file": "cash-supervisor-1440.png",
+      "sha256": "d2fdf6bd7b0111c86866afc565361eb900f8c4da777b0c2a68ed69119992088f"
+    },
+    {
+      "file": "cash-supervisor-390.png",
+      "sha256": "64b45dc2cd39b12bb4f76b6707b0b1cbe7711739eecd3e2107bb0e98a4e774af"
+    },
+    {
+      "file": "transfusion-inventory-1440.png",
+      "sha256": "173904a956a60435e054ea2ddd711752246194610b788274c2b1e28270104600"
+    },
+    {
+      "file": "transfusion-inventory-390.png",
+      "sha256": "23f1fae0a76a1bf77f8a3909169760d405bf9dd79f9180797893705a4823a440"
+    },
+    {
+      "file": "transfusion-requests-1440.png",
+      "sha256": "6e61d005f83e190e67ec1c461be789bd31bb98c1b58be8f7bff6643d0812fa98"
+    },
+    {
+      "file": "transfusion-requests-390.png",
+      "sha256": "6a3948cca158109fd7da54e8070b656d5aff2e5c88a827b7539624b6fd3c2767"
+    }
+  ]
+}

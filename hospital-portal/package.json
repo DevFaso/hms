@@ -48,7 +48,8 @@
     "guard:design-tokens": "node scripts/check-design-tokens.mjs",
     "guards": "node scripts/check-guards.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
-    "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
+    "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only",
+    "e2e:clinical-form-display": "playwright test --config=playwright.clinical-form-display.config.ts"
   },
   "prettier": {
     "printWidth": 100,

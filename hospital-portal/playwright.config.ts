@@ -58,6 +58,7 @@ export default defineConfig({
       },
       dependencies: ['setup'],
       testIgnore: [
+        /clinical-form-display\.spec\.ts/,
         /global-setup\.ts/,
         /auth\.spec\.ts/,
         /keycloak-login\.spec\.ts/,
