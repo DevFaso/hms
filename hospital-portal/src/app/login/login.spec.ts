@@ -55,6 +55,66 @@ describe('Login — KC-2b SSO entry point', () => {
     expect(component.oidcLoginEnabled).toBeTrue();
   });
 
+  const mountFields = (ids: string[]) => {
+    const host = (component as unknown as { hostEl: { nativeElement: HTMLElement } }).hostEl
+      .nativeElement;
+    host.innerHTML = ids
+      .map((id) => `<div class="input-wrapper"><input id="${id}"></div>`)
+      .join('');
+    return host;
+  };
+
+  for (const missing of [['username'], ['password'], ['username', 'password']]) {
+    it(`announces and focuses the missing sign-in fields: ${missing.join(', ')}`, () => {
+      const host = mountFields(['username', 'password']);
+      component.username = missing.includes('username') ? '' : 'cdx account';
+      component.password = missing.includes('password') ? '' : 'cdx password';
+      component.submit();
+      for (const id of missing) {
+        const input = host.querySelector<HTMLInputElement>(`#${id}`)!;
+        expect(input.getAttribute('aria-invalid')).toBe('true');
+        const message = host.querySelector(`#${input.getAttribute('aria-describedby')}`)!;
+        expect(message.getAttribute('role')).toBe('alert');
+        expect(message.textContent).not.toBe('');
+      }
+      expect(document.activeElement?.id).toBe(missing[0]);
+      TestBed.inject(HttpTestingController).expectNone((request) =>
+        request.url.endsWith('/auth/login'),
+      );
+    });
+  }
+
+  it('announces every missing first-account field in form order without sending a request', () => {
+    const fields = [
+      'bs-firstName',
+      'bs-lastName',
+      'bs-username',
+      'bs-email',
+      'bs-phone',
+      'bs-password',
+    ];
+    const host = mountFields([...fields, 'bs-confirm']);
+    component.submitBootstrap();
+    for (const id of fields)
+      expect(host.querySelector(`#${id}`)?.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement?.id).toBe('bs-firstName');
+    TestBed.inject(HttpTestingController).expectNone((request) =>
+      request.url.endsWith('/auth/bootstrap-signup'),
+    );
+  });
+
+  for (const form of ['forgot-password', 'resend-activation']) {
+    it(`announces the blank contact in ${form}`, () => {
+      const id = form === 'forgot-password' ? 'fp-email' : 'ra-email';
+      const host = mountFields([id]);
+      if (form === 'forgot-password') component.submitForgotPassword();
+      else component.submitResendActivation();
+      expect(host.querySelector(`#${id}`)?.getAttribute('aria-invalid')).toBe('true');
+      expect(document.activeElement?.id).toBe(id);
+      TestBed.inject(HttpTestingController).expectNone((request) => request.method === 'POST');
+    });
+  }
+
   it('loginWithKeycloak() delegates to OidcAuthService.login() only when enabled', () => {
     environment.oidc.enabled = false;
     component.loginWithKeycloak();

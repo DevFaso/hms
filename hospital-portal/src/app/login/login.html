@@ -328,7 +328,7 @@
       }
       <form (ngSubmit)="submit()" class="login-form">
         <div class="form-group">
-          <label for="username">{{ 'LOGIN.USERNAME' | translate }}</label>
+          <label for="username">{{ 'LOGIN.USERNAME' | translate }} *</label>
           <div class="input-wrapper">
             <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path
@@ -344,6 +344,7 @@
             -->
             <input
               id="username"
+              required
               #usernameInput
               type="text"
               [(ngModel)]="username"
@@ -356,7 +357,7 @@
         </div>
 
         <div class="form-group">
-          <label for="password">{{ 'LOGIN.PASSWORD' | translate }}</label>
+          <label for="password">{{ 'LOGIN.PASSWORD' | translate }} *</label>
           <div class="input-wrapper">
             <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path
@@ -365,6 +366,7 @@
             </svg>
             <input
               id="password"
+              required
               [type]="showPassword ? 'text' : 'password'"
               [(ngModel)]="password"
               name="password"

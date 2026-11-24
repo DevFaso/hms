@@ -16,6 +16,20 @@ describe('invalid-fields (QA D1072)', () => {
 
   afterEach(() => root.remove());
 
+  it('keeps feedback outside an icon or password input wrapper while describing its input', () => {
+    root.innerHTML =
+      '<div class="input-wrapper"><span>icon</span><input id="password"><button type="button">show</button></div>';
+    refuseFields(root, ['password'], ['password'], 'Mot de passe obligatoire.');
+    const wrapper = root.querySelector('.input-wrapper')!;
+    const input = root.querySelector<HTMLInputElement>('#password')!;
+    const message = root.querySelector(`#${invalidMessageId('password')}`)!;
+    expect(wrapper.nextElementSibling).toBe(message);
+    expect(wrapper.contains(message)).toBeFalse();
+    expect(message.getAttribute('role')).toBe('alert');
+    expect(input.getAttribute('aria-describedby')).toBe(message.id);
+    expect(document.activeElement).toBe(input);
+  });
+
   it('marks each refused field, shows a message under it and focuses the first', () => {
     refuseFields(
       root,
