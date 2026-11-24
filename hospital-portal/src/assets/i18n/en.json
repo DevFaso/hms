@@ -45,15 +45,15 @@
   "ADT_INTAKE": {
     "TITLE": "Automatic admissions from another system",
     "SUBTITLE": "Set the defaults used when another system sends an admission or visit with no matching visit record. Creation requires both this hospital and the platform automatic-admissions service to be enabled.",
-    "LOADING": "Loading intake configs…",
-    "ERROR": "Could not load intake configs.",
-    "EMPTY": "No intake configs yet. Use the form below to create one for a hospital.",
+    "LOADING": "Loading automatic-admission settings…",
+    "ERROR": "Could not load automatic-admission settings.",
+    "EMPTY": "No hospital has automatic-admission settings yet. Use the form below to configure one.",
     "SAVING": "Saving…",
     "SAVE": "Save",
     "STATE_ENABLED": "Enabled",
     "STATE_DISABLED": "Disabled",
     "FORM_CREATE_TITLE": "Configure a hospital",
-    "FORM_EDIT_TITLE": "Edit intake config",
+    "FORM_EDIT_TITLE": "Edit automatic-admission settings",
     "COL_HOSPITAL": "Hospital",
     "COL_ADMISSION_TYPE": "Admission type",
     "COL_ACUITY": "Acuity",
@@ -89,10 +89,10 @@
       "REQUIRED": "Hospital and admitting provider are required."
     },
     "TOAST": {
-      "SAVED": "Intake config saved.",
-      "SAVE_FAILED": "Could not save intake config.",
-      "DELETED": "Intake config deleted.",
-      "DELETE_FAILED": "Could not delete intake config."
+      "SAVED": "Automatic-admission settings saved.",
+      "SAVE_FAILED": "Could not save automatic-admission settings.",
+      "DELETED": "Automatic-admission settings deleted.",
+      "DELETE_FAILED": "Could not delete automatic-admission settings."
     },
     "HOSPITAL_LOCKED": "The hospital cannot change while editing. Cancel to configure another hospital.",
     "CHOOSE_HOSPITAL_FIRST": "Choose a hospital first to access its physicians, departments and assignments."
@@ -5373,7 +5373,7 @@
     "PROVIDER_STAFF": "Staff",
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
-    "ADT_INTAKE": "Automatic admissions from another system",
+    "ADT_INTAKE": "Automatic admissions",
     "UNSIGNED_NOTES": "Unsigned notes",
     "PRICE_LIST": "Price list",
     "PATIENT_NOTIFICATIONS": "Patient notifications",

@@ -1,14 +1,14 @@
 {
-  "environment": "Local production SPA; Chromium; synthetic API responses; CSS viewports, not a physical-device acceptance",
+  "environment": "Local production SPA; Chromium; synthetic API responses; CSS viewports, not physical-device acceptance",
   "views": 5,
   "images": [
     {
       "file": "automatic-admissions-390.png",
-      "sha256": "4dc938236ce021f478e7a8dfe2c95d8d8ff666021af2c74a1888455ff323e119"
+      "sha256": "77a69af1579527c4b4fe6c01d0bf0ce0a2b01a2d20f8a32f85ef8e3a81d119ba"
     },
     {
       "file": "automatic-admissions-1440.png",
-      "sha256": "b1a921f2c9d7e614eb4b67185c0cb7609e259da8b233da71d89434b8600ee04c"
+      "sha256": "b9571fa01085e2fd2e413b8be8eafcd1f32fc0ec0993ab188de91404d22d744e"
     },
     {
       "file": "integration-settings-390.png",
@@ -41,6 +41,10 @@
     {
       "file": "platform-cost-filters-1440.png",
       "sha256": "452a307ef5f4c47c7d1d8eac66bbb787d7d9eaa69abf3e92653ec154eb23a18a"
+    },
+    {
+      "file": "automatic-admissions-navigation-390.png",
+      "sha256": "9661c64d1380ea81f5c13ad5ef7f64bff5dedd06edf1ee622d6659bfaa8abe8a"
     }
   ]
 }

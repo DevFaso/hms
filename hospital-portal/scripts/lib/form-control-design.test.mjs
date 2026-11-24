@@ -59,6 +59,19 @@ test('a card alone does not style a bare control, and formatting is not a new ex
   assert.notEqual(a, nested, 'moving an exception out of its styled context needs review');
 });
 
+test('an exception for one control never exempts an identical sibling', () => {
+  const text = '<input id="special-search" class="special">';
+  const first = controlsIn(text, 'src/app/admin/example.ts')[0];
+  const exceptions = {
+    [first.key]: {
+      reason: 'Borderless search control inside its independently styled search surface.',
+    },
+  };
+  const controls = controlsIn(text + text, 'src/app/admin/example.ts');
+  assert.notEqual(controls[0].key, controls[1].key);
+  assert.equal(bareControlFindings(fixture(text + text), exceptions).length, 1);
+});
+
 test('visits empty/deferred branches and does not treat virtual containers as styled wrappers', () => {
   const templates = fixture(
     '@for (row of rows; track row) { <div>{{row}}</div> } @empty { <input> } @defer { <span>Ready</span> } @placeholder { <textarea></textarea> }',

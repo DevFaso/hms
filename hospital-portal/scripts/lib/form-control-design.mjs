@@ -16,6 +16,7 @@ export function controlsIn(text, file) {
   const parsed = parseTemplate(text, file);
   if (parsed.errors?.length) throw new Error(`${file}: template could not be parsed`);
   const controls = [];
+  const occurrences = new Map();
   class Collector extends TmplAstRecursiveVisitor {
     ancestors = [];
     visitElement(node) {
@@ -28,9 +29,11 @@ export function controlsIn(text, file) {
           .update(JSON.stringify({ opening, ancestors }))
           .digest('hex')
           .slice(0, 20);
+        const occurrence = occurrences.get(fingerprint) ?? 0;
+        occurrences.set(fingerprint, occurrence + 1);
         controls.push({
           file,
-          key: `${file}::${node.name}::${fingerprint}`,
+          key: `${file}::${node.name}::${fingerprint}::${occurrence}`,
           index: controls.length,
           tag: node.name,
           attributes,

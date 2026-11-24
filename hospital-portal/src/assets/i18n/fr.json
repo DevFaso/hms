@@ -45,15 +45,15 @@
   "ADT_INTAKE": {
     "TITLE": "Admissions automatiques depuis un autre logiciel",
     "SUBTITLE": "Définissez les valeurs utilisées lorsqu’un autre logiciel transmet une admission ou une visite sans dossier de visite correspondant. La création nécessite l’activation de cet hôpital et celle du service d’admissions automatiques pour la plateforme.",
-    "LOADING": "Chargement des configurations…",
-    "ERROR": "Impossible de charger les configurations.",
-    "EMPTY": "Aucune configuration pour l'instant. Utilisez le formulaire ci-dessous pour en créer une pour un hôpital.",
+    "LOADING": "Chargement des paramètres d’admission automatique…",
+    "ERROR": "Impossible de charger les paramètres d’admission automatique.",
+    "EMPTY": "Aucun hôpital n’a encore de paramètres d’admission automatique. Utilisez le formulaire ci-dessous pour en configurer un.",
     "SAVING": "Enregistrement…",
     "SAVE": "Enregistrer",
     "STATE_ENABLED": "Activée",
     "STATE_DISABLED": "Désactivée",
     "FORM_CREATE_TITLE": "Configurer un hôpital",
-    "FORM_EDIT_TITLE": "Modifier la configuration",
+    "FORM_EDIT_TITLE": "Modifier les paramètres d’admission automatique",
     "COL_HOSPITAL": "Hôpital",
     "COL_ADMISSION_TYPE": "Type d'admission",
     "COL_ACUITY": "Niveau de gravité",
@@ -89,13 +89,13 @@
       "REQUIRED": "L'hôpital et le médecin admetteur sont obligatoires."
     },
     "TOAST": {
-      "SAVED": "Configuration enregistrée.",
-      "SAVE_FAILED": "Impossible d'enregistrer la configuration.",
-      "DELETED": "Configuration supprimée.",
-      "DELETE_FAILED": "Impossible de supprimer la configuration."
+      "SAVED": "Paramètres d’admission automatique enregistrés.",
+      "SAVE_FAILED": "Impossible d’enregistrer les paramètres d’admission automatique.",
+      "DELETED": "Paramètres d’admission automatique supprimés.",
+      "DELETE_FAILED": "Impossible de supprimer les paramètres d’admission automatique."
     },
     "HOSPITAL_LOCKED": "L’hôpital ne peut pas être changé pendant la modification. Annulez pour configurer un autre hôpital.",
-    "CHOOSE_HOSPITAL_FIRST": "Choisissez d’abord un hôpital pour accéder à ses médecins, services et affectations."
+    "CHOOSE_HOSPITAL_FIRST": "Choisissez d’abord un hôpital pour accéder à ses médecins, départements et affectations."
   },
   "BEDS": {
     "DELETE_BED_CONFIRM": "Supprimer le lit {{name}} ?",
@@ -5373,7 +5373,7 @@
     "PROVIDER_STAFF": "Personnel",
     "PROVIDER_AUDIT": "Journal d'audit",
     "DHIS2": "Export DHIS2",
-    "ADT_INTAKE": "Admissions automatiques depuis un autre logiciel",
+    "ADT_INTAKE": "Admissions automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",

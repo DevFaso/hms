@@ -270,6 +270,13 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   text-overflow: ellipsis;
 }
 
+// Keep the complete plain-language label readable in the narrow admin drawer.
+.nav-item[href='/admin/adt-intake-configs'] .nav-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
 // ---------- Sidebar Footer ----------
 .sidebar-footer {
   padding: 0.75rem;

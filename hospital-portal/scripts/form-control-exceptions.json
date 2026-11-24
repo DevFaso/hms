@@ -1,489 +1,499 @@
 {
-  "src/app/admin/order-sets/order-set-edit.component.html::input::a980e16a66e0c336b60e": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::a980e16a66e0c336b60e::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "order-set-name"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::textarea::9d242d7ec4f20e8c476f": {
+  "src/app/admin/order-sets/order-set-edit.component.html::textarea::9d242d7ec4f20e8c476f::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "description"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::1410ea14327f9416b7ae": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::1410ea14327f9416b7ae::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "admissionType"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::2356d03fcbb0325b3510": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::2356d03fcbb0325b3510::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "clinicalGuidelines"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::bc9cc12c71ca95165fbe": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::bc9cc12c71ca95165fbe::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "select"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::a24b4e3151f2019711fb": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::a24b4e3151f2019711fb::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::ea47ca3f50f9e5aa847b": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::ea47ca3f50f9e5aa847b::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::55721ce669f8f5a41789": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::55721ce669f8f5a41789::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "select"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::ae24a9d8863140d03a77": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::ae24a9d8863140d03a77::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::69afe4ee668776d55de1": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::69afe4ee668776d55de1::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::b70230f4917601c7d550": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::b70230f4917601c7d550::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "select"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::7286f1917aa2f3c0688d": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::7286f1917aa2f3c0688d::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "select"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::select::f5e9eb4186059032457c": {
+  "src/app/admin/order-sets/order-set-edit.component.html::select::f5e9eb4186059032457c::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "select"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::4515928cf15f6b839a53": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::4515928cf15f6b839a53::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::5ea210ca4be57ad14ab0": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::5ea210ca4be57ad14ab0::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::e5c57ae9892fbe20b838": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::e5c57ae9892fbe20b838::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-edit.component.html::input::6c0516ed4edf35b37281": {
+  "src/app/admin/order-sets/order-set-edit.component.html::input::6c0516ed4edf35b37281::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".order-set-edit__form input,\n.order-set-edit__form textarea,\n.order-set-edit__form select"
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-list.component.ts::input::6723a585212b845369c9": {
+  "src/app/admin/order-sets/order-set-list.component.ts::input::6723a585212b845369c9::0": {
     "reason": "Existing module-specific control styling sets padding via .order-set-admin__search. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".order-set-admin__search"],
     "control": "input"
   },
-  "src/app/admin-governance/credentials-tab.html::input::70bfb101d2836cdf4142": {
+  "src/app/admin-governance/credentials-tab.html::input::70bfb101d2836cdf4142::0": {
     "reason": "Existing module-specific control styling sets padding via :where(.search-box) and .panel-actions .search-box. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [":where(.search-box)", ".panel-actions .search-box"],
     "control": "input"
   },
-  "src/app/admin-governance/matrix-tab.html::select::3a0eb57a32421b2724f1": {
+  "src/app/admin-governance/matrix-tab.html::select::3a0eb57a32421b2724f1::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "select"
   },
-  "src/app/admin-governance/matrix-tab.html::input::39e7c96afe8d1015d098": {
+  "src/app/admin-governance/matrix-tab.html::input::39e7c96afe8d1015d098::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/matrix-tab.html::textarea::4e9fb30be6aa029c8632": {
+  "src/app/admin-governance/matrix-tab.html::textarea::4e9fb30be6aa029c8632::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/matrix-tab.html::input::9d0bc2e9feeada70324f": {
+  "src/app/admin-governance/matrix-tab.html::input::9d0bc2e9feeada70324f::0": {
     "reason": "Existing module-specific control styling sets padding via .row-editor-line input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".row-editor-line input"],
     "control": "input"
   },
-  "src/app/admin-governance/matrix-tab.html::input::5dcdef04538d5e09620b": {
+  "src/app/admin-governance/matrix-tab.html::input::5dcdef04538d5e09620b::0": {
     "reason": "Existing module-specific control styling sets padding via .row-editor-line input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".row-editor-line input"],
     "control": "input"
   },
-  "src/app/admin-governance/matrix-tab.html::input::7b78675c353d4b439dc6": {
+  "src/app/admin-governance/matrix-tab.html::input::7b78675c353d4b439dc6::0": {
     "reason": "Existing module-specific control styling sets padding via .row-editor-line input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".row-editor-line input"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::input::10b2628670fde4bbdef7": {
+  "src/app/admin-governance/policies-tab.html::input::10b2628670fde4bbdef7::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::input::0845cb9295bb999fdc27": {
+  "src/app/admin-governance/policies-tab.html::input::0845cb9295bb999fdc27::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::textarea::d704615ff3b960ebfd46": {
+  "src/app/admin-governance/policies-tab.html::textarea::d704615ff3b960ebfd46::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/policies-tab.html::select::64b0e0b00f7bcd52da8b": {
+  "src/app/admin-governance/policies-tab.html::select::64b0e0b00f7bcd52da8b::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "select"
   },
-  "src/app/admin-governance/policies-tab.html::select::72e135c2bc2f3b9b3e53": {
+  "src/app/admin-governance/policies-tab.html::select::72e135c2bc2f3b9b3e53::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "select"
   },
-  "src/app/admin-governance/policies-tab.html::input::33c51275850abce8fb19": {
+  "src/app/admin-governance/policies-tab.html::input::33c51275850abce8fb19::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::input::e931372e2fad49d5eb12": {
+  "src/app/admin-governance/policies-tab.html::input::e931372e2fad49d5eb12::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::input::220aaa004be62feb7fb0": {
+  "src/app/admin-governance/policies-tab.html::input::220aaa004be62feb7fb0::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::textarea::288e02f3ca7953552e39": {
+  "src/app/admin-governance/policies-tab.html::textarea::288e02f3ca7953552e39::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/policies-tab.html::select::43f8698a22f85e8b406e": {
+  "src/app/admin-governance/policies-tab.html::select::43f8698a22f85e8b406e::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "select"
   },
-  "src/app/admin-governance/policies-tab.html::input::3965eb085870ace06b50": {
+  "src/app/admin-governance/policies-tab.html::input::3965eb085870ace06b50::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/policies-tab.html::textarea::2c2e147a432ee3a445b1": {
+  "src/app/admin-governance/policies-tab.html::textarea::2c2e147a432ee3a445b1::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/security-tab.html::input::845a2584d2c8f8cb7032": {
+  "src/app/admin-governance/security-tab.html::input::845a2584d2c8f8cb7032::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/security-tab.html::textarea::2c162a88cc90f36ff794": {
+  "src/app/admin-governance/security-tab.html::textarea::2c162a88cc90f36ff794::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/security-tab.html::input::46fcd3c9a399c9408f46": {
+  "src/app/admin-governance/security-tab.html::input::46fcd3c9a399c9408f46::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/security-tab.html::input::faef48bf22c243bbf3b4": {
+  "src/app/admin-governance/security-tab.html::input::faef48bf22c243bbf3b4::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/security-tab.html::input::3f92c2a3a277e4ab4ffc": {
+  "src/app/admin-governance/security-tab.html::input::3f92c2a3a277e4ab4ffc::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/users-tab.html::input::4f561ae87acd90613ca1": {
+  "src/app/admin-governance/users-tab.html::input::4f561ae87acd90613ca1::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/admin-governance/users-tab.html::select::d8855f79e22e02666306": {
+  "src/app/admin-governance/users-tab.html::select::d8855f79e22e02666306::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "select"
   },
-  "src/app/admin-governance/users-tab.html::textarea::0a5c87908a0741d00d9b": {
+  "src/app/admin-governance/users-tab.html::textarea::0a5c87908a0741d00d9b::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "textarea"
   },
-  "src/app/admin-governance/users-tab.html::input::2bcf99b07d82107381a2": {
+  "src/app/admin-governance/users-tab.html::input::2bcf99b07d82107381a2::0": {
     "reason": "Existing module-specific control styling sets padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::bed59dd554abd7f35827": {
+  "src/app/super-admin/audit-search/audit-search.html::input::bed59dd554abd7f35827::0": {
     "reason": "Existing module-specific control styling sets padding via .saved-strip .saved-name-input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".saved-strip .saved-name-input"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::select::7053dca870457aab3fa7": {
+  "src/app/super-admin/audit-search/audit-search.html::select::7053dca870457aab3fa7::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "select"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::9de55aa71c44c22b5f26": {
+  "src/app/super-admin/audit-search/audit-search.html::input::9de55aa71c44c22b5f26::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::7c5cc6fd7fd677d74796": {
+  "src/app/super-admin/audit-search/audit-search.html::input::7c5cc6fd7fd677d74796::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::7cec243564f7f6e0a549": {
+  "src/app/super-admin/audit-search/audit-search.html::input::7cec243564f7f6e0a549::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::cc3eb1140feacc4cb40d": {
+  "src/app/super-admin/audit-search/audit-search.html::input::cc3eb1140feacc4cb40d::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::select::02f09eb67eae414164a6": {
+  "src/app/super-admin/audit-search/audit-search.html::select::02f09eb67eae414164a6::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "select"
   },
-  "src/app/super-admin/audit-search/audit-search.html::select::83e17aa03610eaa212be": {
+  "src/app/super-admin/audit-search/audit-search.html::select::83e17aa03610eaa212be::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "select"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::f58072d182ad69a7f27f": {
+  "src/app/super-admin/audit-search/audit-search.html::input::f58072d182ad69a7f27f::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/audit-search/audit-search.html::input::b75f83b8d3884e9a6e53": {
+  "src/app/super-admin/audit-search/audit-search.html::input::b75f83b8d3884e9a6e53::0": {
     "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
     "control": "input"
   },
-  "src/app/super-admin/data-residency/data-residency.html::select::11a8930982c4d3efb877": {
+  "src/app/super-admin/audit-search/audit-search.html::input::f58072d182ad69a7f27f::1": {
+    "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
+    "control": "input"
+  },
+  "src/app/super-admin/audit-search/audit-search.html::input::b75f83b8d3884e9a6e53::1": {
+    "reason": "Existing module-specific control styling sets padding via .filter-card .filter-field input,\n.filter-card .filter-field select. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".filter-card .filter-field input,\n.filter-card .filter-field select"],
+    "control": "input"
+  },
+  "src/app/super-admin/data-residency/data-residency.html::select::11a8930982c4d3efb877::0": {
     "reason": "Existing module-specific control styling sets padding via .grid label input,\n.grid label select,\n.grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".grid label input,\n.grid label select,\n.grid label textarea"],
     "control": "select"
   },
-  "src/app/super-admin/data-residency/data-residency.html::textarea::a2220404256f57a42df7": {
+  "src/app/super-admin/data-residency/data-residency.html::textarea::a2220404256f57a42df7::0": {
     "reason": "Existing module-specific control styling sets padding via .grid label input,\n.grid label select,\n.grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".grid label input,\n.grid label select,\n.grid label textarea"],
     "control": "textarea"
   },
-  "src/app/super-admin/emergency/emergency.html::textarea::1bd8df70e5c237b1880e": {
+  "src/app/super-admin/emergency/emergency.html::textarea::1bd8df70e5c237b1880e::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-logout-reason"
   },
-  "src/app/super-admin/emergency/emergency.html::input::4ecf68240e45f7034254": {
+  "src/app/super-admin/emergency/emergency.html::input::4ecf68240e45f7034254::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-logout-confirm"
   },
-  "src/app/super-admin/emergency/emergency.html::input::e8b82c0716b7403b5f83": {
+  "src/app/super-admin/emergency/emergency.html::input::e8b82c0716b7403b5f83::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-logout-mfa"
   },
-  "src/app/super-admin/emergency/emergency.html::input::6f653bd9bf858ac2c627": {
+  "src/app/super-admin/emergency/emergency.html::input::6f653bd9bf858ac2c627::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-kill-key"
   },
-  "src/app/super-admin/emergency/emergency.html::textarea::358d611140469aa77064": {
+  "src/app/super-admin/emergency/emergency.html::textarea::358d611140469aa77064::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-kill-reason"
   },
-  "src/app/super-admin/emergency/emergency.html::input::480bc4db36f754f04de8": {
+  "src/app/super-admin/emergency/emergency.html::input::480bc4db36f754f04de8::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-kill-mfa"
   },
-  "src/app/super-admin/emergency/emergency.html::input::8bda8f8f95aad569e188": {
+  "src/app/super-admin/emergency/emergency.html::input::8bda8f8f95aad569e188::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-mfa-search"
   },
-  "src/app/super-admin/emergency/emergency.html::select::67bf116f19e716d911ff": {
+  "src/app/super-admin/emergency/emergency.html::select::67bf116f19e716d911ff::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-mfa-hospital"
   },
-  "src/app/super-admin/emergency/emergency.html::input::47d4ff6a20ba9e5058df": {
+  "src/app/super-admin/emergency/emergency.html::input::47d4ff6a20ba9e5058df::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-mfa-confirm"
   },
-  "src/app/super-admin/emergency/emergency.html::textarea::9a687409fd88f3be5745": {
+  "src/app/super-admin/emergency/emergency.html::textarea::9a687409fd88f3be5745::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-mfa-reason"
   },
-  "src/app/super-admin/emergency/emergency.html::input::2ed303c859b52ad46c6c": {
+  "src/app/super-admin/emergency/emergency.html::input::2ed303c859b52ad46c6c::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-mfa-token"
   },
-  "src/app/super-admin/emergency/emergency.html::textarea::83424b5144cbe22c1b34": {
+  "src/app/super-admin/emergency/emergency.html::textarea::83424b5144cbe22c1b34::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-broadcast-message"
   },
-  "src/app/super-admin/emergency/emergency.html::select::1c70a2393abe2e5c0abb": {
+  "src/app/super-admin/emergency/emergency.html::select::1c70a2393abe2e5c0abb::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-broadcast-severity"
   },
-  "src/app/super-admin/emergency/emergency.html::input::c904e19e828125eda17a": {
+  "src/app/super-admin/emergency/emergency.html::input::c904e19e828125eda17a::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-broadcast-mfa"
   },
-  "src/app/super-admin/emergency/emergency.html::textarea::caaa51690d74130fbca9": {
+  "src/app/super-admin/emergency/emergency.html::textarea::caaa51690d74130fbca9::0": {
     "reason": "Existing module-specific control styling sets padding via .action-panel label input,\n.action-panel label textarea,\n.action-panel label select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [
       ".action-panel label input,\n.action-panel label textarea,\n.action-panel label select"
     ],
     "control": "emergency-downtime-message"
   },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::bd1af2f0898876adda97": {
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::bd1af2f0898876adda97::0": {
     "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".pa-field select,\n.pa-field input"],
     "control": "pa-org"
   },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::3c9ef0c045dd6d030b2f": {
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::3c9ef0c045dd6d030b2f::0": {
     "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".pa-field select,\n.pa-field input"],
     "control": "pa-plan"
   },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::input::bf345cfff619a5b6f857": {
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::input::bf345cfff619a5b6f857::0": {
     "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".pa-field select,\n.pa-field input"],
     "control": "pa-seats"
   },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::b19f8c233213f6b33d85": {
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::b19f8c233213f6b33d85::0": {
     "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".pa-field select,\n.pa-field input"],
     "control": "pa-period"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::0baca07e25613fb7945a": {
+  "src/app/super-admin/subscriptions/subscriptions.html::input::0baca07e25613fb7945a::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-name"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::32f3c11d238a699ee18d": {
+  "src/app/super-admin/subscriptions/subscriptions.html::input::32f3c11d238a699ee18d::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-tier-code"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::textarea::217183925eb722050624": {
+  "src/app/super-admin/subscriptions/subscriptions.html::textarea::217183925eb722050624::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-description"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::select::d87b5dc305b1a52b79ff": {
+  "src/app/super-admin/subscriptions/subscriptions.html::select::d87b5dc305b1a52b79ff::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid select"],
     "control": "plan-currency"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::6055472b27ebeeacd169": {
+  "src/app/super-admin/subscriptions/subscriptions.html::input::6055472b27ebeeacd169::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-price"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::b4b3732f9ea65ea1c861": {
+  "src/app/super-admin/subscriptions/subscriptions.html::input::b4b3732f9ea65ea1c861::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-seats"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::7e273a3353048b6f13c6": {
+  "src/app/super-admin/subscriptions/subscriptions.html::input::7e273a3353048b6f13c6::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-feature-keys"
   },
-  "src/app/super-admin/super-admin.html::select::3744893ba30ea4347d3d": {
+  "src/app/super-admin/super-admin.html::select::3744893ba30ea4347d3d::0": {
     "reason": "Existing module-specific control styling sets padding via .audit-period select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".audit-period select"],
     "control": "select"

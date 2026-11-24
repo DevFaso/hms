@@ -1,3 +1,66 @@
+.adt-intake {
+  padding: 1.5rem;
+}
+.adt-intake__header h1 {
+  margin-bottom: 0.25rem;
+}
+.adt-intake__subtitle {
+  margin-top: 0;
+  color: var(--text-secondary);
+}
+.adt-intake__error,
+.adt-intake__field-error {
+  color: var(--danger, #b00020);
+}
+.adt-intake__pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85em;
+}
+.adt-intake__pill--on {
+  background: var(--success-bg, #dcfce7);
+  color: var(--success, #166534);
+}
+.adt-intake__pill--off {
+  background: var(--muted-bg, #f1f5f9);
+  color: var(--muted, #475569);
+}
+.adt-intake__form {
+  margin-top: 2rem;
+  max-width: 640px;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+.form-row label {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+.form-row small {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+.form-row--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.form-row--checkbox label {
+  margin: 0;
+}
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 :host {
   display: block;
   min-width: 0;

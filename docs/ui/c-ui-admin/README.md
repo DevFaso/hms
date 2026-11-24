@@ -31,3 +31,14 @@ have explicit type-specific reasons to retain their native affordances.
 
 This module does not declare the clinical/operations sweep complete. That module
 has its own review and screenshots; it does not hold up the other go-live lanes.
+
+Claude review follow-up: ADT uses one stylesheet; mobile padding is asserted at
+16 px (desktop 24 px). The shortened navigation label is measured without
+clipping in the open phone drawer: [390 px navigation](automatic-admissions-navigation-390.png).
+The shared production-SPA config applies no network throttling.
+`npm run e2e:form-display` runs explicitly in frontend CI, separately from the default suite.
+
+Exception keys include an occurrence counter: 87 existing controls have 85
+previously recorded fingerprints (two pairs were identical siblings). Each
+control now has its own reasoned entry; copying one again fails the guard.
+This corrects the old collision rather than adding an exception for new code.

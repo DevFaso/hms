@@ -19,6 +19,7 @@
     "e2e": "playwright test",
     "e2e:a11y": "playwright test a11y.spec.ts",
     "e2e:slow-network": "playwright test --config=playwright.slow-network.config.ts",
+    "e2e:form-display": "playwright test --config=playwright.form-display.config.ts",
     "e2e:layout": "playwright test layout-overflow.spec.ts --project=chromium --workers=3",
     "lint": "eslint \"{src,scripts}/**/*.{ts,html,mjs,js}\"",
     "lint:fix": "npm run lint -- --fix",

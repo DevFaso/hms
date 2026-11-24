@@ -14,6 +14,10 @@ for (const width of [390, 1440]) {
     await page.goto('/admin/adt-intake-configs');
     const form = page.getByTestId('adt-intake-form');
     await expect(form).toBeVisible();
+    const padding = await page
+      .getByTestId('adt-intake-admin')
+      .evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft));
+    expect(padding).toBe(width < 600 ? 16 : 24);
     const provider = page.getByTestId('adt-intake-provider');
     await expect(provider).toBeDisabled();
     await expect(page.locator('#adt-dependent-help')).toBeVisible();
@@ -50,6 +54,34 @@ for (const width of [390, 1440]) {
       path: screenshot,
       contentType: 'image/png',
     });
+    if (width === 390) {
+      await page.locator('.mobile-toggle').click();
+      const navigation = page.locator('#primary-navigation');
+      const link = navigation.locator('a[href="/admin/adt-intake-configs"]');
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAccessibleName('Admissions automatiques');
+      await link.scrollIntoViewIfNeeded();
+      const fits = await link.locator('.nav-label').evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const text = range.getBoundingClientRect();
+        const box = el.closest('a')!.getBoundingClientRect();
+        return (
+          el.scrollWidth <= el.clientWidth + 1 &&
+          text.left >= box.left &&
+          text.right <= box.right + 1 &&
+          text.bottom <= box.bottom + 1
+        );
+      });
+      expect(fits).toBe(true);
+      const sidebar = info.outputPath('automatic-admissions-navigation-390.png');
+      await page.screenshot({ path: sidebar, fullPage: true });
+      await info.attach('automatic-admissions-navigation-390', {
+        path: sidebar,
+        contentType: 'image/png',
+      });
+      await page.keyboard.press('Escape');
+    }
   });
 }
 
