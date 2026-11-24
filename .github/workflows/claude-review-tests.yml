@@ -1,6 +1,6 @@
-# Unit tests for the Claude review script. A separate workflow so they run on
+# Unit tests for the PR review scripts (OpenAI primary, Claude fallback). A separate workflow so they run on
 # every PR touching the script, drafts included (the review job skips drafts).
-name: Claude review script tests
+name: PR review script tests
 
 on:
   pull_request:
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - name: Install the pinned SDK and pytest
+      - name: Install the pinned SDKs and pytest
         # requirements-dev.in -> uv pip compile --generate-hashes; wheels only.
         run: >-
           pip install --quiet --require-hashes --only-binary ':all:'

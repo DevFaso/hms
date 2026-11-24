@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
@@ -332,31 +333,32 @@ public class PrescriptionController {
     }
 
     /**
-     * QA D1314: {@code GET /prescriptions?search=}. The search box searches the
-     * hospital's list, so a term with an id filter is refused: never silently a
-     * different list. A blank term is the plain list.
+     * QA D1314: the prescriptions page's search box searches the hospital's list, so a term with
+     * an id filter is refused: never silently a different list. The term (a drug, a patient's or a
+     * prescriber's name) travels in the body, never in the URL (proxy and access logs, browser
+     * history, front-end tracing); the status filter and the paging stay in the query.
      */
-    @GetMapping(params = "search")
+    @com.example.hms.security.ReadsOnly("the prescriptions page's search box, under POST so the typed term stays"
+        + " out of the URL")
+    @PostMapping("/term-search")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
         + "'ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search Prescriptions",
         description = "One page of the hospital's list narrowed to a drug, patient or prescriber name, "
-            + "accents ignored. `status` as on the list. Does not combine with patientId, staffId or encounterId.")
+            + "accents ignored; the term is in the body. `status` as on the list. Does not combine with "
+            + "patientId, staffId or encounterId.")
     public ResponseEntity<Page<PrescriptionResponseDTO>> search(
+        @jakarta.validation.Valid @RequestBody SearchTermRequestDTO body,
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID staffId,
         @RequestParam(required = false) UUID encounterId,
         @RequestParam(required = false) List<PrescriptionStatus> status,
-        @RequestParam String search,
         @ParameterObject Pageable pageable,
         Locale locale) {
-        if (search.isBlank()) {
-            return list(patientId, staffId, encounterId, status, pageable, locale);
-        }
         if (patientId != null || staffId != null || encounterId != null) {
             throw new com.example.hms.exception.FieldBusinessException("search", "prescription.list.searchWithFilter");
         }
-        return ResponseEntity.ok(prescriptionService.search(search, status, pageable, locale));
+        return ResponseEntity.ok(prescriptionService.search(body.term(), status, pageable, locale));
     }
 
     @PutMapping("/{id}")

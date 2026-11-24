@@ -506,6 +506,18 @@ class UserControllerTest {
     }
 
     @Test
+    void search_refusesAMisspeltCriterion_neverTheWholeDirectory() throws Exception {
+        // QA D3753: an unknown body field used to be skipped, and the search ran with no filter.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/users/search")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"nmae\":\"Awa\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("nmae"));
+
+        org.mockito.Mockito.verifyNoInteractions(userService);
+    }
+
+    @Test
     void restoreUser_serviceThrows_propagatesError() throws Exception {
         UUID id = UUID.randomUUID();
         doThrow(new com.example.hms.exception.ResourceNotFoundException("User not found: " + id))

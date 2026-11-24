@@ -259,11 +259,11 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("D1019: the pickers' ?search= finds a patient by phone, however the number is written")
+    @DisplayName("D1019: the pickers' term search finds a patient by phone, however the number is written")
     void thePickerSearchFindsAPhoneInEveryFormat() throws Exception {
         for (String typed : List.of("70161099", "70 16 10 99", "+226 70 16 10 99", "0022670161099")) {
-            mockMvc.perform(get(API + "/patients").contextPath(API)
-                    .param("search", typed).with(asReceptionist()))
+            mockMvc.perform(post(API + "/patients/term-search").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"search\":\"" + typed + "\"}").with(asReceptionist()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
         }
@@ -683,8 +683,8 @@ class FrontDeskRoundTripIT extends BaseIT {
     @DisplayName("D943/D942: the patient list search ignores accents, and the picker search ignores phone formatting")
     void theSearchFoldsAccentsAndPhones() throws Exception {
         for (String typed : List.of("Kabore", "Aicha", "aïcha kaboré", "Kaboré Aïcha")) {
-            mockMvc.perform(get(API + "/patients").contextPath(API)
-                    .param("search", typed).with(asReceptionist()))
+            mockMvc.perform(post(API + "/patients/term-search").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"search\":\"" + typed + "\"}").with(asReceptionist()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
         }

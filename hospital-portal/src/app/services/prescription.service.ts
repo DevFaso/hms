@@ -363,17 +363,21 @@ export class PrescriptionService {
     for (const status of filters.statuses ?? []) {
       params = params.append('status', status);
     }
+    params = params
+      .set('page', page)
+      .set('size', size)
+      .append('sort', 'createdAt,desc')
+      .append('sort', 'id,desc');
+    // QA D3750: the typed term (a drug, a patient's or a prescriber's name) is posted in the
+    // body, never put in the URL; the statuses and the paging stay in the query.
     const search = filters.search?.trim();
-    if (search) {
-      params = params.set('search', search);
-    }
-    return this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
-      params: params
-        .set('page', page)
-        .set('size', size)
-        .append('sort', 'createdAt,desc')
-        .append('sort', 'id,desc'),
-    });
+    return search
+      ? this.http.post<PageSlice<PrescriptionResponse>>(
+          `${this.baseUrl}/term-search`,
+          { search },
+          { params },
+        )
+      : this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, { params });
   }
 
   getById(id: string): Observable<PrescriptionResponse> {

@@ -1,7 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.EmailInvoiceRequest;
-import com.example.hms.payload.dto.identifiersearch.EmailQueryDTO;
+import com.example.hms.payload.dto.InvoiceSendToRequestDTO;
 import com.example.hms.service.InvoiceEmailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +42,7 @@ public class InvoiceEmailController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     public ResponseEntity<Map<String,Object>> emailInvoiceQuick(
         @PathVariable UUID invoiceId,
-        @RequestBody @Valid EmailQueryDTO body) {
+        @RequestBody @Valid InvoiceSendToRequestDTO body) {
         String email = body.email();
 
         // validate path email (strict)

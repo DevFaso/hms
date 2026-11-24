@@ -72,9 +72,39 @@ public class SuperAdminOrganizationController {
         @RequestParam(name = "includeStaff", defaultValue = "true") boolean includeStaff,
         @RequestParam(name = "includePatients", defaultValue = "false") boolean includePatients,
         @RequestParam(name = "activeOnly", required = false) Boolean activeOnly,
-        @RequestParam(name = "search", required = false) String search,
         @RequestParam(name = "staffLimit", defaultValue = "25") int staffLimit,
         @RequestParam(name = "patientLimit", defaultValue = "15") int patientLimit
+    ) {
+        return hierarchy(includeStaff, includePatients, activeOnly, null, staffLimit, patientLimit);
+    }
+
+    /**
+     * The hierarchy narrowed to a typed term. It matches staff and patients by name, so it
+     * travels in the body, never in the URL; the flags and limits stay in the query.
+     */
+    @com.example.hms.security.ReadsOnly("the organisation hierarchy's search box, under POST so the typed term"
+        + " stays out of the URL")
+    @PostMapping("/hierarchy/term-search")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+        summary = "Search the organization hierarchy",
+        description = "The hierarchy as GET /hierarchy, narrowed to the body's term.",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<SuperAdminOrganizationHierarchyResponseDTO> termSearchOrganizationHierarchy(
+        @Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+        @RequestParam(name = "includeStaff", defaultValue = "true") boolean includeStaff,
+        @RequestParam(name = "includePatients", defaultValue = "false") boolean includePatients,
+        @RequestParam(name = "activeOnly", required = false) Boolean activeOnly,
+        @RequestParam(name = "staffLimit", defaultValue = "25") int staffLimit,
+        @RequestParam(name = "patientLimit", defaultValue = "15") int patientLimit
+    ) {
+        return hierarchy(includeStaff, includePatients, activeOnly, body.term(), staffLimit, patientLimit);
+    }
+
+    private ResponseEntity<SuperAdminOrganizationHierarchyResponseDTO> hierarchy(
+        boolean includeStaff, boolean includePatients, Boolean activeOnly, String search, int staffLimit,
+        int patientLimit
     ) {
         Locale locale = LocaleContextHolder.getLocale();
         SuperAdminOrganizationHierarchyResponseDTO response = overviewService.getOrganizationHierarchy(
