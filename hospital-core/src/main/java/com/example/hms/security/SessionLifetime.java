@@ -28,8 +28,8 @@ public record SessionLifetime(Duration maxLifetime) {
     public SessionLifetime {
         Objects.requireNonNull(maxLifetime, "maxLifetime is required");
         if (maxLifetime.isNegative() || maxLifetime.isZero()) {
-            // A start-up configuration fault (AuthControllerProperties explains it), never a client answer.
-            throw new IllegalArgumentException("app.auth.session-max-lifetime");
+            // A start-up configuration fault (AuthControllerProperties names the property), never a client answer.
+            throw new IllegalArgumentException("maxLifetime");
         }
     }
 
