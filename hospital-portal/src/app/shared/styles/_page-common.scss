@@ -688,7 +688,12 @@ div.data-table {
 
 // Standalone native controls use the same visual system as .field / .form-group.
 // This class has no value accessor, event handler or validation behavior.
-:where(.keneya-form-control) {
+:where(
+  .keneya-form-control,
+  input[appFormControl],
+  select[appFormControl],
+  textarea[appFormControl]
+) {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -714,7 +719,7 @@ div.data-table {
   }
 }
 
-:where(textarea.keneya-form-control) {
+:where(textarea.keneya-form-control, textarea[appFormControl]) {
   min-height: 80px;
   resize: vertical;
 }

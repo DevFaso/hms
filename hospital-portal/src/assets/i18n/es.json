@@ -44,7 +44,7 @@
   },
   "ADT_INTAKE": {
     "TITLE": "Ingresos automáticos desde otro sistema",
-    "SUBTITLE": "Defina los valores utilizados cuando otro sistema envía un ingreso o una visita sin un registro de visita coincidente. La creación requiere activar tanto este hospital como el servicio de ingresos automáticos de la plataforma.",
+    "SUBTITLE": "Configure los valores usados cuando otro sistema envía un ingreso o una visita sin un registro de visita correspondiente. Active la creación automática para este hospital y para la plataforma.",
     "LOADING": "Cargando los ajustes de ingresos automáticos…",
     "ERROR": "No se pudieron cargar los ajustes de ingresos automáticos.",
     "EMPTY": "Ningún hospital tiene ajustes de ingresos automáticos. Use el formulario de abajo para configurar uno.",
@@ -71,7 +71,7 @@
       "ACUITY": "Nivel de gravedad predeterminado",
       "ENCOUNTER_TYPE": "Tipo de encuentro predeterminado",
       "CHIEF_COMPLAINT": "Motivo de consulta predeterminado",
-      "ENABLED": "Habilitar la creación automática para este hospital",
+      "ENABLED": "Permitir ingresos y visitas automáticos para este hospital",
       "ASSIGNMENT": "Asignación médica para visitas automáticas",
       "ASSIGNMENT_NONE": "— Ninguna: solo ingresos —"
     },

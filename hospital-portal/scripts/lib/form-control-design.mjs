@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { parseTemplate, TmplAstRecursiveVisitor, tmplAstVisitAll } from '@angular/compiler';
+import postcss from 'postcss';
 
 const DESIGN_CLASSES = new Set(['keneya-form-control', 'filter-input', 'filter-select']);
 const DESIGN_WRAPPERS = new Set(['field', 'form-group', 'modal-body', 'dialog-body', 'search-box']);
@@ -12,11 +13,11 @@ export const NATIVE_EXCEPTIONS = Object.freeze({
   color: 'Native color swatch retains its color-picker affordance rather than text-field styling.',
 });
 
-export function controlsIn(text, file) {
+export function controlsIn(text, file, componentIdentity = '', occurrences = new Map()) {
   const parsed = parseTemplate(text, file);
   if (parsed.errors?.length) throw new Error(`${file}: template could not be parsed`);
   const controls = [];
-  const occurrences = new Map();
+  const owner = componentIdentity ? `${file}::${componentIdentity}` : file;
   class Collector extends TmplAstRecursiveVisitor {
     ancestors = [];
     visitElement(node) {
@@ -29,11 +30,12 @@ export function controlsIn(text, file) {
           .update(JSON.stringify({ opening, ancestors }))
           .digest('hex')
           .slice(0, 20);
-        const occurrence = occurrences.get(fingerprint) ?? 0;
-        occurrences.set(fingerprint, occurrence + 1);
+        const occurrenceKey = `${owner}::${fingerprint}`;
+        const occurrence = occurrences.get(occurrenceKey) ?? 0;
+        occurrences.set(occurrenceKey, occurrence + 1);
         controls.push({
           file,
-          key: `${file}::${node.name}::${fingerprint}::${occurrence}`,
+          key: `${owner}::${node.name}::${fingerprint}::${occurrence}`,
           index: controls.length,
           tag: node.name,
           attributes,
@@ -69,17 +71,34 @@ export function bareControlFindings(
 ) {
   const findings = [],
     seen = new Set();
+  const occurrences = new Map();
+  const selectorCache = new Map();
   for (const template of templates) {
     if (!inScope(template.rel)) continue;
-    for (const control of controlsIn(template.text, template.rel)) {
+    for (const control of controlsIn(
+      template.text,
+      template.rel,
+      template.componentIdentity,
+      occurrences,
+    )) {
       const exception = exceptions[control.key];
       if (exception) {
         seen.add(control.key);
         if (typeof exception.reason !== 'string' || exception.reason.trim().length < 30)
           findings.push(`${control.key}: exception requires a specific reason`);
-        const css = (styles.get(template.rel) ?? '')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .replace(/\s+/g, ' ');
+        const owner = template.componentIdentity
+          ? `${template.rel}::${template.componentIdentity}`
+          : template.rel;
+        let selectors = selectorCache.get(owner);
+        const normalize = (selector) => postcss.list.space(selector.trim()).join(' ');
+        if (!selectors) {
+          selectors = new Set();
+          postcss.parse(styles.get(owner) ?? '').walkRules((rule) => {
+            for (const selector of postcss.list.comma(rule.selector))
+              selectors.add(normalize(selector));
+          });
+          selectorCache.set(owner, selectors);
+        }
         if (
           !Array.isArray(exception.evidence) ||
           !exception.evidence.length ||
@@ -87,7 +106,7 @@ export function bareControlFindings(
             (selector) =>
               typeof selector === 'string' &&
               selector.trim() &&
-              css.includes(selector.replace(/\s+/g, ' ').trim() + ' {'),
+              postcss.list.comma(selector).every((part) => selectors.has(normalize(part))),
           )
         ) {
           findings.push(
