@@ -1862,6 +1862,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['changes'],
   },
   {
+    // QA r73 D3702: the patient's own change, audited like the desk's.
+    key: 'AUDIT.DESC.PATIENT_CHANNEL_CHOICES_SELF',
+    re: /^Patient channel choices recorded by the patient: (.+)$/,
+    params: ['changes'],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

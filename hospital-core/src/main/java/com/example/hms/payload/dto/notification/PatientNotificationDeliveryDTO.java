@@ -40,7 +40,12 @@ public class PatientNotificationDeliveryDTO {
     private LocalDateTime nextAttemptAt;
     private LocalDateTime sentAt;
     private LocalDateTime lastRetriedAt;
-    private UUID consentRecordedBy;
+    /**
+     * QA r73 D3700: who recorded the refusal, as this hospital may know it: PATIENT, STAFF or OTHER_FACILITY
+     * ({@code ConsentRecorderLabels.Kind}). Never the recorder's account id.
+     */
+    private String consentRecordedByKind;
+    /** The recorder's display name, only when staff of the reader's own hospital (ConsentRecorderLabels). */
     private String consentRecordedByName;
     private LocalDateTime consentRecordedAt;
     /**

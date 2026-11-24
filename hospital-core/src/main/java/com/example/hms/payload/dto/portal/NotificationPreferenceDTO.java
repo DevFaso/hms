@@ -20,8 +20,15 @@ public class NotificationPreferenceDTO {
     private NotificationType notificationType;
     private NotificationChannel channel;
     private boolean enabled;
-    private UUID recordedByUserId;
-    /** Public display name only; never the account's username, address or phone. */
+    /**
+     * QA r73 D3700: who recorded the choice, as this reader may know it: PATIENT, STAFF or OTHER_FACILITY
+     * ({@code ConsentRecorderLabels.Kind}); null for a legacy, unattributed choice. Never the recorder's account id.
+     */
+    private String recordedByKind;
+    /**
+     * Public display name only, and only for a recorder this reader may name (ConsentRecorderLabels); never the
+     * account's id, username, address or phone.
+     */
     private String recordedByName;
     private java.time.LocalDateTime recordedAt;
 }

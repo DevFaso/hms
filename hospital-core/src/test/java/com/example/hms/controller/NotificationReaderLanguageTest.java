@@ -66,7 +66,9 @@ class NotificationReaderLanguageTest {
     private NotificationServiceImpl realService() {
         ObjectProvider<ProviderCallerResolver> resolver = mock(ObjectProvider.class);
         return new NotificationServiceImpl(repository, push, mock(NotificationPreferenceRepository.class),
-            mock(UserRepository.class), resolver, localizer);
+            mock(UserRepository.class), resolver, localizer,
+            new com.example.hms.service.notification.ConsentRecorderLabels(mock(UserRepository.class)),
+                mock(com.example.hms.repository.PatientRepository.class), mock(com.example.hms.service.AuditEventLogService.class));
     }
 
     private Notification written() {

@@ -63,7 +63,7 @@ describe('PatientChannelPreferencesComponent', () => {
     const choices = matrix();
     choices[0] = {
       ...choices[0],
-      recordedByUserId: 'recorder-1',
+      recordedByKind: 'STAFF',
       recordedByName: 'cdx Desk Recorder',
       recordedAt: '2026-11-22T08:00:00',
     };
@@ -76,6 +76,36 @@ describe('PatientChannelPreferencesComponent', () => {
     expect(provenance.querySelector('time')?.dateTime).toBe('2026-11-22T08:00:00Z');
     expect(provenance.querySelector('time')?.textContent?.trim()).toBeTruthy();
     expect(fixture.nativeElement.querySelectorAll('.choice-recorder').length).toBe(1);
+  });
+
+  it('QA r73 D3700: a choice recorded at another facility shows « Autre établissement », not a name', () => {
+    setUp(true);
+    const choices = matrix();
+    choices[0] = {
+      ...choices[0],
+      enabled: false,
+      recordedByKind: 'OTHER_FACILITY',
+      recordedByName: null,
+      recordedAt: '2026-11-24T01:29:00',
+    };
+    choices[1] = {
+      ...choices[1],
+      enabled: false,
+      recordedByKind: 'PATIENT',
+      recordedByName: null,
+      recordedAt: '2026-11-24T01:30:00',
+    };
+    http.expectOne('/patients/p-1/channel-preferences').flush(choices);
+    fixture.detectChanges();
+    const recorder = (i: number) =>
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="choice-recorder-${choices[i].notificationType}-${choices[i].channel}"]`,
+        ) as HTMLElement
+      ).textContent ?? '';
+    expect(recorder(0)).toContain('PATIENT_CHANNELS.RECORDER_OTHER_FACILITY');
+    expect(recorder(0)).not.toContain('COMMON.UNKNOWN');
+    expect(recorder(1)).toContain('PATIENT_CHANNELS.RECORDER_PATIENT');
   });
 
   it('shows the stored choices: the patient turned billing e-mails off', async () => {

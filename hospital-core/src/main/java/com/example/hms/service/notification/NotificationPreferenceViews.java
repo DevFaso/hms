@@ -1,39 +1,54 @@
 package com.example.hms.service.notification;
 
+import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationType;
 import com.example.hms.model.NotificationPreference;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
-import com.example.hms.repository.UserRepository;
 
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-/** One provenance presentation for staff and self-service; batch names, never contact identifiers. */
+/**
+ * One provenance presentation for staff and self-service. The recorder is shown only as the reader's
+ * {@link ConsentRecorderLabels.Labels} allow (QA r73 D3700): a kind and, at most, a display name; never an id.
+ */
 public final class NotificationPreferenceViews {
     private NotificationPreferenceViews() { }
 
-    public static NotificationPreferenceDTO of(NotificationPreference row) {
-        return NotificationPreferenceDTO.builder().id(row.getId()).notificationType(row.getNotificationType())
-            .channel(row.getChannel()).enabled(row.isEnabled()).recordedByUserId(row.getRecordedByUserId())
-            .recordedAt(row.getRecordedAt()).build();
+    /** A stored choice, labelled for this reader. */
+    public static NotificationPreferenceDTO of(NotificationPreference row, UUID accountId,
+                                               ConsentRecorderLabels.Labels labels) {
+        return of(row.getNotificationType(), row.getChannel(), row, accountId, labels);
     }
 
-    public static Map<UUID, String> names(List<UUID> ids, UserRepository users) {
-        if (ids.isEmpty()) return Map.of();
-        return users.findClinicalActorNames(ids).stream().collect(Collectors.toMap(
-            UserRepository.ClinicalActorName::getId,
-            actor -> java.util.stream.Stream.of(actor.getFirstName(), actor.getLastName())
-                .filter(java.util.Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty())
-                .collect(Collectors.joining(" ")),
-            (first, ignored) -> first));
+    /** One cell of a matrix: on, with no recorder, when nothing is stored. */
+    public static NotificationPreferenceDTO of(NotificationType type, NotificationChannel channel,
+                                               NotificationPreference row, UUID accountId,
+                                               ConsentRecorderLabels.Labels labels) {
+        NotificationPreferenceDTO dto = NotificationPreferenceDTO.builder()
+            .id(row == null ? null : row.getId())
+            .notificationType(type)
+            .channel(channel)
+            .enabled(row == null || row.isEnabled())
+            .recordedAt(row == null ? null : row.getRecordedAt())
+            .build();
+        labels.apply(dto, row == null ? null : row.getRecordedByUserId(), accountId);
+        return dto;
     }
 
-    public static List<NotificationPreferenceDTO> describe(List<NotificationPreferenceDTO> rows, UserRepository users) {
-        var ids = rows.stream().map(NotificationPreferenceDTO::getRecordedByUserId)
-            .filter(java.util.Objects::nonNull).distinct().toList();
-        var names = names(ids, users);
-        rows.forEach(row -> row.setRecordedByName(row.getRecordedByUserId() == null ? null : names.get(row.getRecordedByUserId())));
-        return rows;
+    /**
+     * QA r73 D3702: one audit wording for every consent writer (desk and self-service): the kind, the channel and
+     * the old and new state. Never a phone number, an address or a message.
+     */
+    public static String change(NotificationType type, NotificationChannel channel, boolean before, boolean after) {
+        return type.name() + "/" + channel.name() + " " + (before ? "on" : "off") + "->" + (after ? "on" : "off");
+    }
+
+    /** The recorders to label, for one batched lookup. */
+    public static List<UUID> recorders(Collection<NotificationPreference> rows) {
+        return rows.stream().filter(Objects::nonNull).map(NotificationPreference::getRecordedByUserId)
+            .filter(Objects::nonNull).distinct().toList();
     }
 }

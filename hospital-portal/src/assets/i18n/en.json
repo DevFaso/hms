@@ -2130,6 +2130,7 @@
       "MFA_RESET_REFUSED": "Two-step verification reset refused: the caller may not administer this account",
       "MFA_REMOVED_BY_USER": "Two-step verification removed by the user",
       "PATIENT_CHANNEL_CHOICES": "Patient channel choices recorded at the desk: {{changes}}",
+      "PATIENT_CHANNEL_CHOICES_SELF": "Patient channel choices recorded by the patient: {{changes}}",
       "IMAGING_PORTAL_READ_BY_PROXY": "Imaging reports of patient {{patient}} read on the patient portal by a proxy ({{count}} studies)",
       "IMAGING_PORTAL_READ": "Imaging reports of patient {{patient}} read on the patient portal ({{count}} studies)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} of imaging order {{order}} viewed on the patient portal by a proxy",
@@ -15296,7 +15297,9 @@
     "SAVED": "The patient's choices are saved.",
     "SAVE_FAILED": "The patient's choices could not be saved.",
     "LOAD_FAILED": "The patient's choices could not be loaded.",
-    "RECORDED_BY": "Last recorded by:"
+    "RECORDED_BY": "Last recorded by:",
+    "RECORDER_PATIENT": "The patient",
+    "RECORDER_OTHER_FACILITY": "Another facility"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",

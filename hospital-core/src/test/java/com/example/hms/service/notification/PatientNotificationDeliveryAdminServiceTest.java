@@ -61,7 +61,8 @@ class PatientNotificationDeliveryAdminServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PatientNotificationDeliveryAdminService(repository, patientRepository, userRepository, appointmentRepository,
+        service = new PatientNotificationDeliveryAdminService(repository, patientRepository,
+            new ConsentRecorderLabels(userRepository), appointmentRepository,
             invoiceRepository, labOrderRepository, actingScopeResolver,
             roleValidator, Clock.fixed(Instant.parse("2026-11-17T08:00:00Z"), ZoneOffset.UTC));
         lenient().when(actingScopeResolver.requirePinned()).thenReturn(hospitalId);
@@ -137,6 +138,52 @@ class PatientNotificationDeliveryAdminServiceTest {
         assertThat(rows.get(1).getSubjectReference()).isEqualTo("CHA-2026-000057");
         assertThat(rows.get(2).getSubjectReference()).isNull();
         assertThat(rows).allSatisfy(row -> assertThat(row.getCreatedAt()).isNotNull());
+    }
+
+    @Test
+    @DisplayName("QA r73 D3700: a refusal recorded by another hospital's desk shows no name and no id; ours shows the name")
+    void refusalRecorderIsScopedToTheReadersHospital() {
+        UUID receptionistA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        com.example.hms.model.User account = new com.example.hms.model.User();
+        account.setId(UUID.randomUUID());
+        var accountRow = org.mockito.Mockito.mock(PatientRepository.PatientAccountId.class);
+        when(accountRow.getPatientId()).thenReturn(patient.getId());
+        when(accountRow.getAccountId()).thenReturn(account.getId());
+        when(patientRepository.findNotificationAccountsScoped(any(), any())).thenReturn(List.of(accountRow));
+        PatientNotificationDelivery byDesk = skipped(PatientNotificationEvent.APPOINTMENT_REMINDER, null);
+        byDesk.setConsentRecordedBy(receptionistA);
+        byDesk.setConsentRecordedAt(java.time.LocalDateTime.of(2026, 11, 24, 1, 29));
+        PatientNotificationDelivery bySelf = skipped(PatientNotificationEvent.LAB_RESULT_AVAILABLE, null);
+        bySelf.setConsentRecordedBy(account.getId());
+        when(repository.searchForHospital(any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(byDesk, bySelf), PageRequest.of(0, 25), 2));
+        when(patientRepository.findAllById(any())).thenReturn(List.of(patient));
+        var name = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.ClinicalActorName.class);
+        when(name.getId()).thenReturn(receptionistA);
+        when(name.getFirstName()).thenReturn("Test");
+        when(name.getLastName()).thenReturn("Accueil");
+        when(userRepository.findStaffActorNamesAtHospital(any(), eq(hospitalId))).thenReturn(List.of(name));
+        when(userRepository.findStaffActorNamesAtHospital(any(), eq(hospitalB))).thenReturn(List.of());
+
+        // Hospital B's administrator.
+        when(actingScopeResolver.requirePinned()).thenReturn(hospitalB);
+        List<com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO> atB =
+            service.search("SKIPPED", 0, 25).getContent();
+        assertThat(atB.get(0).getConsentRecordedByKind()).isEqualTo("OTHER_FACILITY");
+        assertThat(atB.get(0).getConsentRecordedByName()).isNull();
+        assertThat(atB.get(0).getConsentRecordedAt()).isEqualTo(byDesk.getConsentRecordedAt());
+        assertThat(atB.get(1).getConsentRecordedByKind()).isEqualTo("PATIENT");
+
+        // Hospital A's administrator.
+        when(actingScopeResolver.requirePinned()).thenReturn(hospitalId);
+        List<com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO> atA =
+            service.search("SKIPPED", 0, 25).getContent();
+        assertThat(atA.get(0).getConsentRecordedByKind()).isEqualTo("STAFF");
+        assertThat(atA.get(0).getConsentRecordedByName()).isEqualTo("Test Accueil");
+        assertThat(atA.get(1).getConsentRecordedByKind()).isEqualTo("PATIENT");
+        assertThat(atA.get(1).getConsentRecordedByName()).isNull();
+        verify(userRepository, org.mockito.Mockito.never()).findClinicalActorNames(any());
     }
 
     private PatientNotificationDelivery skipped(PatientNotificationEvent event, UUID subjectId) {
