@@ -85,13 +85,14 @@ class SecurityHeadersIT {
         for (String path : List.of("/v3/api-docs", "/api-docs", "/api-docs/swagger-config", "/swagger-ui/index.html")) {
             ResponseEntity<String> response = restTemplate.getForEntity(path, String.class);
             assertThat(response.getStatusCode().value()).as(path).isEqualTo(404);
-            assertThat(response.getBody()).as(path).doesNotContain("openapi", "swagger-ui");
+            // The 404 body echoes the path, so look for the documents' own markers.
+            assertThat(response.getBody()).as(path).doesNotContain("\"openapi\"", "\"paths\"", "SwaggerUIBundle");
         }
         // The Swagger UI entry point is not permitAll on its own, so an anonymous
         // caller is refused before routing; either way nothing is served.
         ResponseEntity<String> entry = restTemplate.getForEntity("/swagger-ui.html", String.class);
         assertThat(entry.getStatusCode().is4xxClientError()).as("/swagger-ui.html").isTrue();
-        assertThat(entry.getBody()).as("/swagger-ui.html").doesNotContain("swagger-ui");
+        assertThat(entry.getBody()).as("/swagger-ui.html").doesNotContain("SwaggerUIBundle");
     }
 
     @Test
