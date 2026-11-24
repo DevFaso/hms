@@ -60,7 +60,7 @@ async function headersOrSkip(page: Page, path: string) {
 
 test('the SPA shell carries every security header', async ({ page }) => {
   const { headers, policy } = await headersOrSkip(page, '/login');
-  expect(headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
+  expect(headers['strict-transport-security']).toBe('max-age=604800; includeSubDomains');
   expect(headers['x-frame-options']).toBe('DENY');
   expect(headers['x-content-type-options']).toBe('nosniff');
   expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');

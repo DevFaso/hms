@@ -1253,7 +1253,7 @@ public class SecurityConfig {
             .httpStrictTransportSecurity(hsts -> hsts
                 .requestMatcher(org.springframework.security.web.util.matcher.AnyRequestMatcher.INSTANCE)
                 .includeSubDomains(true)
-                .maxAgeInSeconds(31536000L)
+                .maxAgeInSeconds(604800L) // one week while it settles; raise to 31536000 after a clean week on prod
             )
             .contentSecurityPolicy(csp -> csp
                 .policyDirectives(

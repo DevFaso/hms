@@ -111,7 +111,7 @@ class SecurityHeadersIT {
 
     private static void assertHardened(HttpHeaders headers, String path) {
         assertThat(headers.get("Strict-Transport-Security")).as(path)
-            .containsExactly("max-age=31536000 ; includeSubDomains");
+            .containsExactly("max-age=604800 ; includeSubDomains");
         assertThat(headers.get("X-Content-Type-Options")).as(path).containsExactly("nosniff");
         assertThat(headers.get("X-Frame-Options")).as(path).containsExactly("DENY");
         assertThat(headers.get("Referrer-Policy")).as(path).containsExactly("strict-origin-when-cross-origin");

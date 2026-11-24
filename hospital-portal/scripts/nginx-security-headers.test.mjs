@@ -77,7 +77,7 @@ test('no add_header outside a location (it would leak onto the API proxies twice
 });
 
 test('the shared headers carry the hardened values', () => {
-  assert.equal(header('Strict-Transport-Security'), 'max-age=31536000; includeSubDomains');
+  assert.equal(header('Strict-Transport-Security'), 'max-age=604800; includeSubDomains');
   assert.equal(header('X-Frame-Options'), 'DENY');
   assert.equal(header('X-Content-Type-Options'), 'nosniff');
   assert.equal(header('Referrer-Policy'), 'strict-origin-when-cross-origin');
