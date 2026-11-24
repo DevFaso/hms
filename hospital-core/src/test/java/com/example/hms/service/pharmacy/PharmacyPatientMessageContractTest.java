@@ -42,7 +42,7 @@ class PharmacyPatientMessageContractTest {
                 default -> throw new AssertionError("Missing real sender contract: "+event);
             }
         };
-        send.run();
+        send.run();f.assertDirectNotice(event,NotificationChannel.SMS);
         PatientMessageGate.Notice notice=ReflectionTestUtils.invokeMethod(sender,"notice",event,prescription,pharmacy);
         assertThat(notice).isEqualTo(new PatientMessageGate.Notice(event,f.hospital.getId(),f.subjectId));
         String key=PatientNotificationDelivery.keyOf(notice.event(),notice.subjectId(),NotificationChannel.SMS);

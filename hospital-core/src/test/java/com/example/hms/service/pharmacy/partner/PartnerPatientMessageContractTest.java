@@ -32,7 +32,7 @@ class PartnerPatientMessageContractTest {
             if(event==PatientNotificationEvent.PHARMACY_OUT_OF_STOCK)sender.notifyPatientAccepted(decision,f.patient,partner);
             else sender.notifyPatientDispensed(decision,f.patient,partner);
         };
-        send.run();verifyNoInteractions(transport);
+        send.run();f.assertDirectNotice(event,NotificationChannel.SMS);verifyNoInteractions(transport);
         if(refusal==Refusal.NONE) {
             assertThat(f.wire).hasSize(1);var delivered=f.wire.getFirst();
             assertThat(delivered.recipient()).isEqualTo("+22670000000");

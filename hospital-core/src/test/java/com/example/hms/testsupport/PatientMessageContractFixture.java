@@ -94,7 +94,22 @@ public final class PatientMessageContractFixture {
         });
         when(deliveries.findById(any())).thenAnswer(call -> rows.values().stream().filter(row -> row.getId().equals(call.getArgument(0))).findFirst());
         ledger=new PatientNotificationLedger(deliveries,patients,consent,sms,email,clock,transactions);
-        gate=new PatientMessageGate(consent,ledger,sms,email,new PatientRecipientVerification(),new PatientRecipientCurrentCheck(patients,new PatientRecipientVerification()));
+        gate=spy(new PatientMessageGate(consent,ledger,sms,email,new PatientRecipientVerification(),new PatientRecipientCurrentCheck(patients,new PatientRecipientVerification())));
+    }
+
+    /** Observe the real gate without stubbing it: accepted and refused direct sends retain the same trace. */
+    public void assertDirectNotice(PatientNotificationEvent event, NotificationChannel channel) {
+        var notices = mockingDetails(gate).getInvocations().stream()
+            .flatMap(invocation -> Arrays.stream(invocation.getArguments()))
+            .filter(PatientMessageGate.Notice.class::isInstance)
+            .map(PatientMessageGate.Notice.class::cast).toList();
+        org.assertj.core.api.Assertions.assertThat(notices).isNotEmpty().allSatisfy(notice -> {
+            org.assertj.core.api.Assertions.assertThat(notice.event()).isEqualTo(event);
+            org.assertj.core.api.Assertions.assertThat(notice.hospitalId()).isEqualTo(hospital.getId());
+            org.assertj.core.api.Assertions.assertThat(notice.subjectId()).isEqualTo(subjectId);
+            org.assertj.core.api.Assertions.assertThat(PatientNotificationDelivery.keyOf(notice.event(), notice.subjectId(), channel))
+                .isEqualTo(event.name() + ":" + subjectId + ":" + channel.name());
+        });
     }
 
     public <T> T realSender(Class<T> type, Map<String,Object> dependencies) {

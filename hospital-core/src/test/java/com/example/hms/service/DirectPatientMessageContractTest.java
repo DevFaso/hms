@@ -72,6 +72,7 @@ class DirectPatientMessageContractTest {
         }
         if(event==PatientNotificationEvent.INVOICE && refusal!=Refusal.NONE)assertThatThrownBy(send::run).isInstanceOf(com.example.hms.exception.BusinessException.class);
         else send.run();
+        f.assertDirectNotice(event,channel);
         String key=PatientNotificationDelivery.keyOf(event,f.subjectId,channel);
         if(refusal==Refusal.NONE) {
             assertThat(f.wire).hasSize(1);var delivered=f.wire.getFirst();

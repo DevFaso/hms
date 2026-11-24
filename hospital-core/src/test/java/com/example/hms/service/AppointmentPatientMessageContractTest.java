@@ -33,7 +33,7 @@ class AppointmentPatientMessageContractTest {
         Appointment appointment=new Appointment();appointment.setId(f.subjectId);appointment.setPatient(f.patient);appointment.setHospital(f.hospital);appointment.setStaff(staff);
         appointment.setAppointmentDate(LocalDate.of(2026,11,25));appointment.setStartTime(LocalTime.of(10,0));appointment.setEndTime(LocalTime.of(10,30));
         Runnable send=()->ReflectionTestUtils.invokeMethod(sender,"emailPatientAboutAppointment",appointment,event);
-        send.run();String key=PatientNotificationDelivery.keyOf(event,f.subjectId,NotificationChannel.EMAIL);
+        send.run();f.assertDirectNotice(event,NotificationChannel.EMAIL);String key=PatientNotificationDelivery.keyOf(event,f.subjectId,NotificationChannel.EMAIL);
         if(refusal==Refusal.NONE) {
             assertThat(f.wire).hasSize(1);var delivered=f.wire.getFirst();
             assertThat(delivered.recipient()).isEqualTo("cdx-patient@example.invalid");
