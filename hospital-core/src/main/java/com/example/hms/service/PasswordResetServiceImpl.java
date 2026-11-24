@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.bootstrap.DeploymentProfiles;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -25,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.Objects;
@@ -396,11 +398,19 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         return sha256Hex(presentedToken);
     }
 
+    /**
+     * Developer machines only (local, local-h2). A shared dev environment ships its logs to the
+     * same third-party stores as prod, so a reset token must not reach them there either.
+     */
     private boolean shouldLogRawToken() {
         String profileProp = System.getProperty("spring.profiles.active", "");
         String profileEnv = System.getenv("SPRING_PROFILES_ACTIVE");
-        String combined = (profileProp + "," + (profileEnv != null ? profileEnv : "")).toLowerCase();
-        return !combined.contains("prod");
+        String combined = profileProp + "," + (profileEnv != null ? profileEnv : "");
+        String[] profiles = Arrays.stream(combined.split(","))
+            .map(String::trim)
+            .filter(profile -> !profile.isEmpty())
+            .toArray(String[]::new);
+        return profiles.length > 0 && Arrays.stream(profiles).allMatch(DeploymentProfiles.DEVELOPER::contains);
     }
 
 }
