@@ -110,7 +110,7 @@ class ProviderConfinementSecurityIT extends BaseIT {
     private List<MockHttpServletRequestBuilder> hospitalEndpoints() {
         UUID someId = UUID.randomUUID();
         return List.of(
-            get("/patients/search").param("q", "doe"),
+            post("/patients/search").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"doe\"}"),
             get("/lab-results"),
             get("/lab-orders"),
             post("/lab-orders").contentType(MediaType.APPLICATION_JSON).content("{}"),
@@ -149,7 +149,7 @@ class ProviderConfinementSecurityIT extends BaseIT {
             assertThat(refusalShape(result)).as(label(result)).isEqualTo(unmapped);
         }
         // Naming the hospital where they are a patient does not lift it.
-        MvcResult named = as(token, get("/patients/search").param("q", "doe")
+        MvcResult named = as(token, post("/patients/search").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"doe\"}")
             .header("X-Hospital-Id", hospitalId.toString()));
         assertThat(refusalShape(named)).isEqualTo(unmapped);
     }

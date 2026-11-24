@@ -5,7 +5,6 @@ import com.example.hms.controller.ReceptionController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import java.lang.reflect.Method;
@@ -57,8 +56,8 @@ class PatientRegistrarAlignmentTest {
     @DisplayName("the registration form's duplicate check admits every patient registrar")
     void duplicateCandidatesAdmitsRegistrars() {
         Method duplicates = annotated(ReceptionController.class, m -> {
-            GetMapping get = m.getAnnotation(GetMapping.class);
-            return get != null && Arrays.asList(get.value()).contains("/patients/duplicate-candidates");
+            PostMapping post = m.getAnnotation(PostMapping.class);
+            return post != null && Arrays.asList(post.value()).contains("/patients/duplicate-candidates");
         });
         Set<String> admitted = authorities(duplicates.getAnnotation(PreAuthorize.class).value());
         assertThat(admitted).containsAll(Arrays.stream(

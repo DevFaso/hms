@@ -750,7 +750,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_PATIENTS + "/national-unique-id/check",
                     API_PATIENTS + "/national-unique-id/*/reveal")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.GET, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
+                // The picker's two reads are POSTs whose identifiers travel in the
+                // body; this is the same role set the GET matcher had.
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
@@ -761,6 +763,12 @@ public class SecurityConfig {
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
+                // The registration form's duplicate check, a POST read since its
+                // identifiers left the URL. The controller's registrar set, which is what the
+                // GET /patients/** matcher above intersected with before.
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/registration-match")
+                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -917,6 +925,11 @@ public class SecurityConfig {
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
                 .requestMatchers(HttpMethod.POST, API_STAFF)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                // Staff by e-mail or phone, POST reads since the identifier left the
+                // URL. The controller's set, which the GET /staff/** matcher intersected with.
+                .requestMatchers(HttpMethod.POST, API_STAFF + "/search/*")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // QA D846: a lab director sets a lab staff member's lab role

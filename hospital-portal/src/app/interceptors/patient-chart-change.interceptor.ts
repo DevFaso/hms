@@ -2,6 +2,8 @@ import { HttpEventType, HttpInterceptorFn } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject, filter, tap } from 'rxjs';
 
+import { isReadRequest } from '../core/read-only-posts';
+
 /**
  * QA D957: the patient banner still said "Aucune allergie connue" and "Aucun
  * problème actif" after the doctor added Pénicilline and B50.9 in the chart,
@@ -38,7 +40,8 @@ const READ_ONLY_POSTS =
   /(^|\/)(doctor-timeline|doctor-record|search|filter|lookup|query|preview|validate|check)$/;
 
 export const patientChartChangeInterceptor: HttpInterceptorFn = (req, next) => {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+  // A read, including a POST that only reads (a search whose terms travel in the body).
+  if (isReadRequest(req.method, req.url)) {
     return next(req);
   }
   const path = req.url.replace(/^\/api\//, '/');

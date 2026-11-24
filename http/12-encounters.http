@@ -38,9 +38,12 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Get encounters by doctor
-GET {{baseUrl}}/encounters/doctor/{{staffId}}
+POST {{baseUrl}}/encounters/by-doctor
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"identifier": "{{staffId}}"}
 
 ### Update encounter
 PUT {{baseUrl}}/encounters/{{encounterId}}

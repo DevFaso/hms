@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { stepUpRequestOptions } from './step-up';
+import { compactBody } from '../shared/identifier-body';
 
 export interface UserSummary {
   id: string;
@@ -127,8 +128,8 @@ export class UserService {
   }
 
   /**
-   * Server-side search with optional filters. Uses the /users/search endpoint
-   * which supports name, role, and email query params with pagination.
+   * Server-side search with optional filters: POST /users/search, the name, role and e-mail in
+   * the body (never in the URL), paging and the deleted flags in the query.
    */
   search(
     page = 0,
@@ -142,12 +143,10 @@ export class UserService {
     } = {},
   ): Observable<UserSummaryPage> {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
-    if (filters.name) params = params.set('name', filters.name);
-    if (filters.role) params = params.set('role', filters.role);
-    if (filters.email) params = params.set('email', filters.email);
     if (filters.includeDeleted) params = params.set('includeDeleted', 'true');
     if (filters.onlyDeleted) params = params.set('onlyDeleted', 'true');
-    return this.http.get<UserSummaryPage>('/users/search', { params });
+    const body = compactBody({ name: filters.name, role: filters.role, email: filters.email });
+    return this.http.post<UserSummaryPage>('/users/search', body, { params });
   }
 
   /**

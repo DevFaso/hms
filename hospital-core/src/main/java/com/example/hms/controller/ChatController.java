@@ -45,6 +45,9 @@ public class ChatController {
      * participant checks, incl. the attachment ownership gate from PR #482).
      */
     private static final String CHAT_ROLES = "isAuthenticated()";
+    /** The e-mail or username of the by-identity reads travels in the body, never in the URL. */
+    private static final String BY_IDENTITY_READ =
+        "messages by a participant's identity, under POST so the identity stays out of the URL";
 
     private final ChatMessageService chatMessageService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -231,28 +234,36 @@ public class ChatController {
         return ResponseEntity.ok(messages);
     }
 
-    @GetMapping("/messages/by-sender-email")
+    @com.example.hms.security.ReadsOnly(BY_IDENTITY_READ)
+    @PostMapping("/messages/by-sender-email")
     @PreAuthorize(CHAT_ROLES)
-    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderEmail(@RequestParam String email) {
-        return ResponseEntity.ok(chatMessageService.getMessagesBySenderEmail(email));
+    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderEmail(
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.EmailQueryDTO body) {
+        return ResponseEntity.ok(chatMessageService.getMessagesBySenderEmail(body.email()));
     }
 
-    @GetMapping("/messages/by-recipient-email")
+    @com.example.hms.security.ReadsOnly(BY_IDENTITY_READ)
+    @PostMapping("/messages/by-recipient-email")
     @PreAuthorize(CHAT_ROLES)
-    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientEmail(@RequestParam String email) {
-        return ResponseEntity.ok(chatMessageService.getMessagesByRecipientEmail(email));
+    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientEmail(
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.EmailQueryDTO body) {
+        return ResponseEntity.ok(chatMessageService.getMessagesByRecipientEmail(body.email()));
     }
 
-    @GetMapping("/messages/by-sender-username")
+    @com.example.hms.security.ReadsOnly(BY_IDENTITY_READ)
+    @PostMapping("/messages/by-sender-username")
     @PreAuthorize(CHAT_ROLES)
-    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderUsername(@RequestParam String username) {
-        return ResponseEntity.ok(chatMessageService.getMessagesBySenderUsername(username));
+    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderUsername(
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.UsernameQueryDTO body) {
+        return ResponseEntity.ok(chatMessageService.getMessagesBySenderUsername(body.username()));
     }
 
-    @GetMapping("/messages/by-recipient-username")
+    @com.example.hms.security.ReadsOnly(BY_IDENTITY_READ)
+    @PostMapping("/messages/by-recipient-username")
     @PreAuthorize(CHAT_ROLES)
-    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientUsername(@RequestParam String username) {
-        return ResponseEntity.ok(chatMessageService.getMessagesByRecipientUsername(username));
+    public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientUsername(
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.UsernameQueryDTO body) {
+        return ResponseEntity.ok(chatMessageService.getMessagesByRecipientUsername(body.username()));
     }
 
     // Kafka listener moved to separate conditional component

@@ -566,8 +566,17 @@ public class AuthController {
         return ResponseEntity.ok(new EmailVerificationResponseDTO(MessageUtil.resolve("auth.api.emailVerified"), true));
     }
 
-    @Operation(summary = "Verify email via link",
-               description = "GET version for email verification links. Activates user and patient role assignments.")
+    /**
+     * The GET twin of {@code POST /auth/verify-email}, kept for one release for the installed
+     * patient mobile apps only: it puts the e-mail address and the token in the URL. The portal
+     * posts the body instead; remove this once the apps do too.
+     *
+     * @deprecated use {@code POST /auth/verify-email} with a JSON body.
+     */
+    @Deprecated(since = "2026-11", forRemoval = true)
+    @Operation(summary = "Verify email via link (deprecated: use POST)", deprecated = true,
+               description = "GET version kept for installed mobile apps; the address and token travel in the URL. "
+                   + "Use POST /auth/verify-email. Activates user and patient role assignments.")
     @GetMapping("/verify-email")
     public ResponseEntity<Object> verifyEmailViaLink(
             @RequestParam("email") @Email(message = "{validation.email.invalid}") @NotBlank String email,

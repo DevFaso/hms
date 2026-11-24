@@ -12,14 +12,20 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Search patients
-GET {{baseUrl}}/patients/search?query=smith&page=0&size=10
+POST {{baseUrl}}/patients/search?page=0&size=10
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
 
+{"name": "smith"}
+
 ### Lookup patient
-GET {{baseUrl}}/patients/lookup?email=patient@hms.local
+POST {{baseUrl}}/patients/lookup
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"email": "patient@hms.local"}
 
 ### Register new patient
 POST {{baseUrl}}/patients

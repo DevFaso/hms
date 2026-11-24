@@ -29,39 +29,54 @@ function buildParams(entries: Record<string, ParamValue>): HttpParams {
 }
 
 /**
- * MVP-8: Calls /super-admin/audit-search with the provided filter.
- * Empty / undefined fields are dropped so the URL stays clean.
+ * The audit search filters as the POST body: empty fields dropped, the event types as a list.
+ * Never a query string: `userName` is a person's login.
+ */
+function filterBody(filter: AuditSearchFilter): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const scalars: Record<string, ParamValue> = {
+    userId: filter.userId,
+    userName: filter.userName,
+    status: filter.status,
+    hospitalId: filter.hospitalId,
+    organizationId: filter.organizationId,
+    impersonatorUserId: filter.impersonatorUserId,
+    entityType: filter.entityType,
+    resourceId: filter.resourceId,
+    fromDate: filter.fromDate,
+    toDate: filter.toDate,
+    // MVP-9b — region scope passed through as the backend OrganizationRegion enum name.
+    tenantRegion: filter.tenantRegion,
+  };
+  for (const [key, value] of Object.entries(scalars)) {
+    if (value !== undefined && value !== null && value !== '') {
+      body[key] = value;
+    }
+  }
+  if (filter.excludeRoutineSuccesses) {
+    body['excludeRoutineSuccesses'] = true;
+  }
+  if (filter.eventTypes && filter.eventTypes.length > 0) {
+    body['eventTypes'] = [...filter.eventTypes];
+  }
+  return body;
+}
+
+/**
+ * MVP-8: Calls POST /super-admin/audit-search with the provided filter in the body.
+ * Empty / undefined fields are dropped.
  */
 @Injectable({ providedIn: 'root' })
 export class AuditSearchService {
   private readonly http = inject(HttpClient);
 
   search(filter: AuditSearchFilter): Observable<AuditSearchPage> {
-    let params = buildParams({
-      excludeRoutineSuccesses: filter.excludeRoutineSuccesses,
-      userId: filter.userId,
-      userName: filter.userName,
-      status: filter.status,
-      hospitalId: filter.hospitalId,
-      organizationId: filter.organizationId,
-      impersonatorUserId: filter.impersonatorUserId,
-      entityType: filter.entityType,
-      resourceId: filter.resourceId,
-      fromDate: filter.fromDate,
-      toDate: filter.toDate,
-      // MVP-9b — region scope passed through as the backend OrganizationRegion enum name.
-      tenantRegion: filter.tenantRegion,
-      page: filter.page,
-      size: filter.size,
+    // The filters (a user's login among them) travel in the body, never in the URL;
+    // only the page stays in the query.
+    const params = buildParams({ page: filter.page, size: filter.size });
+    return this.http.post<AuditSearchPage>('/api/super-admin/audit-search', filterBody(filter), {
+      params,
     });
-
-    if (filter.eventTypes && filter.eventTypes.length > 0) {
-      for (const t of filter.eventTypes) {
-        params = params.append('eventTypes', t);
-      }
-    }
-
-    return this.http.get<AuditSearchPage>('/api/super-admin/audit-search', { params });
   }
 
   /**
@@ -69,29 +84,8 @@ export class AuditSearchService {
    * as a Blob so the component can trigger a browser download.
    */
   exportCsv(filter: AuditSearchFilter, maxRows = 10_000): Observable<Blob> {
-    let params = buildParams({
-      excludeRoutineSuccesses: filter.excludeRoutineSuccesses,
-      userId: filter.userId,
-      userName: filter.userName,
-      status: filter.status,
-      hospitalId: filter.hospitalId,
-      organizationId: filter.organizationId,
-      impersonatorUserId: filter.impersonatorUserId,
-      entityType: filter.entityType,
-      resourceId: filter.resourceId,
-      fromDate: filter.fromDate,
-      toDate: filter.toDate,
-      tenantRegion: filter.tenantRegion,
-      maxRows,
-    });
-
-    if (filter.eventTypes && filter.eventTypes.length > 0) {
-      for (const t of filter.eventTypes) {
-        params = params.append('eventTypes', t);
-      }
-    }
-
-    return this.http.get('/api/super-admin/audit-search/csv', {
+    const params = buildParams({ maxRows });
+    return this.http.post('/api/super-admin/audit-search/csv', filterBody(filter), {
       params,
       responseType: 'blob',
     });

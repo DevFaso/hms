@@ -139,6 +139,15 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 + " when the result is critical or its QC rejected; a normal release sends none"),
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        // Identifier searches and lookups: the identifiers travel in the body, never in the URL;
+        // every criterion stays optional, as the query parameters were.
+        Map.entry("POST /patients/search", SEARCH_FILTER),
+        Map.entry("POST /patients/lookup", SEARCH_FILTER),
+        Map.entry("POST /patients/registration-match", SEARCH_FILTER),
+        Map.entry("POST /reception/patients/duplicate-candidates", SEARCH_FILTER),
+        Map.entry("POST /users/search", SEARCH_FILTER),
+        Map.entry("POST /super-admin/audit-search", SEARCH_FILTER),
+        Map.entry("POST /super-admin/audit-search/csv", SEARCH_FILTER),
         Map.entry("POST /cash-sessions/{id}/review",
             "billing plan PR 10: a supervisor's review note is optional; marking a closed till reviewed needs nothing else"),
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",

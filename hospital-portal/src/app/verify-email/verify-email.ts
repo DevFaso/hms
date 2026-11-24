@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import {
   Component,
@@ -26,7 +27,8 @@ export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
  * build. Until this route existed the `**` fallback sent the link to /login
  * and the click did nothing (Standing platform debt, from the #569 review).
  *
- * The page calls `GET /auth/verify-email`, which activates the account and
+ * The page posts the address and the token to `POST /auth/verify-email` (in the body, never
+ * in a request URL), which activates the account and
  * its patient assignments, and on a refused or incomplete link offers a new
  * one from the same address. The resend answer is deliberately the same
  * whether or not the address exists: the backend does not disclose it, and
@@ -47,6 +49,7 @@ export class VerifyEmailComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -63,14 +66,14 @@ export class VerifyEmailComponent implements OnInit {
     const email = this.route.snapshot.queryParamMap.get('email') ?? '';
     const token = this.route.snapshot.queryParamMap.get('token') ?? '';
     this.resendEmail = email;
+    // The link's address and token leave the address bar (and the history) once read.
+    this.location.replaceState('/verify');
     if (!email || !token) {
       this.state.set('missing');
       return;
     }
     this.http
-      .get<{ message?: string; success?: boolean }>('/auth/verify-email', {
-        params: { email, token },
-      })
+      .post<{ message?: string; success?: boolean }>('/auth/verify-email', { email, token })
       .subscribe({
         next: () => this.state.set('verified'),
         error: () => this.state.set('failed'),
