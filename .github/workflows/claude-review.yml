@@ -1,10 +1,23 @@
-# Automatic Claude review on every pull request (replaces the Copilot review
-# whose quota ran out on 2026-09-05). Calls the Claude API directly, billed to
-# the Console organisation behind the ANTHROPIC_API_KEY repository secret.
+# Automatic AI review on every pull request (replaces the Copilot review whose
+# quota ran out on 2026-09-05). One sticky comment per PR, from the first
+# reviewer that succeeds (.github/scripts/pr_review.py):
+#   1. OpenAI (primary), when the OPENAI_API_KEY secret is set. Model: the
+#      OPENAI_REVIEW_MODEL repository variable, default in openai_review.py.
+#   2. Claude (fallback), when ANTHROPIC_API_KEY is set: used when the OpenAI
+#      key is absent or its call fails (quota, billing, 5xx, empty answer).
+# The job fails only when every configured reviewer failed. The repository
+# variable REVIEW_PROVIDER (openai | anthropic) forces one, with no fallback.
+# The job summary names the reviewer used; keys are never printed.
+#
+# Enabling OpenAI (owner, once): link the OpenAI API organisation to the
+# Pro benefit (the free monthly API credit), create an API key in THAT
+# organisation, and add it as the repository secret OPENAI_API_KEY
+# (Settings -> Secrets and variables -> Actions -> New repository secret).
+# Until then the review runs on Claude alone, exactly as before.
 #
 # Draft PRs are skipped (review once ready). Fork PRs and Dependabot PRs are skipped: they get no secrets, and this repo
 # is public. The job only reads the diff and posts one sticky comment.
-name: Claude PR review
+name: PR review (OpenAI, Claude fallback)
 
 on:
   pull_request:
@@ -27,7 +40,9 @@ jobs:
       && github.actor != 'dependabot[bot]'
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Two providers may run back to back.
+    # OpenAI <= 15 min (one attempt), then Claude <= 30 min (SDK default 3 x 10).
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,14 +53,19 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - name: Install the Anthropic SDK
-        # anthropic==1.12.1 and its dependencies, locked by hash
+      - name: Install the OpenAI and Anthropic SDKs
+        # openai==3.58.0, anthropic==1.12.1 and their dependencies, locked by hash
         # (requirements.in -> uv pip compile --generate-hashes); wheels only.
         run: >-
           pip install --quiet --require-hashes --only-binary ':all:'
           -r .github/scripts/requirements.txt
       - name: Review the diff
         env:
+          # Secrets reach the script through env only; an unset one is empty
+          # and that provider is skipped.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_REVIEW_MODEL: ${{ vars.OPENAI_REVIEW_MODEL }}
+          REVIEW_PROVIDER: ${{ vars.REVIEW_PROVIDER }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # The key belongs to the organisation, so each request names the
           # workspace to bill. An identifier, not a secret.
@@ -53,4 +73,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
-        run: python .github/scripts/claude_review.py
+        run: python .github/scripts/pr_review.py
