@@ -3,6 +3,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app/app.config';
 import { environment } from './environments/environment';
+import { sanitizeTelemetryItem } from './app/shared/telemetry/telemetry-sanitizer';
 
 /**
  * Detects an environment/host mismatch and returns the effective env name.
@@ -59,6 +60,9 @@ if (faro) {
           environment: faro.envName,
         },
         instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
+        // Every item leaves the browser scrubbed: URLs without their query string and with
+        // their ids replaced, no request or response header or body (telemetry-sanitizer.ts).
+        beforeSend: (item) => sanitizeTelemetryItem(item),
       });
     }),
   );

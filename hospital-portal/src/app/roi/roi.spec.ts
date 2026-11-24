@@ -111,6 +111,15 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('does not offer or send a PDF export after the hospital scope is removed', () => {
+    fixture.detectChanges();
+    expect(component.canExport()).toBeTrue();
+    scopedHospitalId.set(null);
+    expect(component.canExport()).toBeFalse();
+    component.exportCopy(request({ status: 'FULFILLED', scopeDescription: 'FULL_RECORD' }));
+    expect(roiService.downloadCopy).not.toHaveBeenCalled();
+  });
+
   it('loads every status for All, pending first then newest, while retaining the server total', () => {
     fixture.detectChanges();
     roiService.worklist.calls.reset();

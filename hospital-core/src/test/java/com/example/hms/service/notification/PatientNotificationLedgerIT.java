@@ -143,6 +143,50 @@ class PatientNotificationLedgerIT extends BaseIT {
         assertThat(patientRepository.findNotificationAccountScoped(UUID.randomUUID(), hospital.getId())).isEmpty();
     }
 
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
+    @Test
+    @DisplayName("QA r73 D3700: a recorder's name is read only for staff of the reader's hospital (PostgreSQL)")
+    void recorderNamesAreReadOnlyForStaffOfTheReadersHospital() {
+        int n = SEQ.incrementAndGet();
+        User receptionist = userRepository.saveAndFlush(User.builder()
+            .username("pnd-it-desk-" + n).passwordHash("noop").email("pnd-it-desk-" + n + "@hospital.test")
+            .firstName("Test").lastName("Accueil").phoneNumber("+22672" + String.format("%06d", n % 1_000_000))
+            .build());
+        var desk = roleRepository.findByCode("ROLE_RECEPTIONIST").orElseGet(() -> roleRepository.save(
+            com.example.hms.model.Role.builder().name("RECEPTIONIST").code("ROLE_RECEPTIONIST").build()));
+        var patientRole = roleRepository.findByCode("ROLE_PATIENT").orElseGet(() -> roleRepository.save(
+            com.example.hms.model.Role.builder().name("PATIENT").code("ROLE_PATIENT").build()));
+        var deskAtA = assignmentRepository.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("PND-DESK-" + n).startDate(java.time.LocalDate.now(clock)).registeredBy(receptionist)
+            .user(receptionist).hospital(hospital).role(desk).assignedAt(LocalDateTime.now(clock)).active(true).build());
+        // A patient's own role at the hospital does not make the patient "staff" there.
+        var patientAtA = assignmentRepository.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("PND-PAT-" + n).startDate(java.time.LocalDate.now(clock)).registeredBy(account)
+            .user(account).hospital(hospital).role(patientRole).assignedAt(LocalDateTime.now(clock)).active(true).build());
+        try {
+            var ids = List.of(receptionist.getId(), account.getId());
+            assertThat(userRepository.findStaffActorNamesAtHospital(ids, hospital.getId()))
+                .extracting(com.example.hms.repository.UserRepository.ClinicalActorName::getId)
+                .containsExactly(receptionist.getId());
+            assertThat(userRepository.findStaffActorNamesAtHospital(ids, otherHospital.getId())).isEmpty();
+
+            var labels = new ConsentRecorderLabels(userRepository);
+            var atB = new com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO();
+            labels.forStaffViewer(ids, otherHospital.getId()).apply(atB, receptionist.getId(), account.getId());
+            assertThat(atB.getConsentRecordedByKind()).isEqualTo("OTHER_FACILITY");
+            assertThat(atB.getConsentRecordedByName()).isNull();
+            var atA = new com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO();
+            labels.forStaffViewer(ids, hospital.getId()).apply(atA, receptionist.getId(), account.getId());
+            assertThat(atA.getConsentRecordedByKind()).isEqualTo("STAFF");
+            assertThat(atA.getConsentRecordedByName()).isEqualTo("Test Accueil");
+        } finally {
+            assignmentRepository.deleteAll(List.of(deskAtA, patientAtA));
+            userRepository.deleteById(receptionist.getId());
+        }
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
     void aCommittedConsentChangeCannotRewriteTheRefusalThatQueuedTheTrace(boolean enabledAfterDecision) throws Exception {
@@ -205,7 +249,8 @@ class PatientNotificationLedgerIT extends BaseIT {
         // Real HTTP controller, admin search and database; only the caller's pinned scope is supplied.
         var scope = Mockito.mock(com.example.hms.security.tenant.ActingScopeResolver.class);
         Mockito.when(scope.requirePinned()).thenReturn(hospital.getId());
-        var admin = new PatientNotificationDeliveryAdminService(repository, patientRepository, userRepository,
+        var admin = new PatientNotificationDeliveryAdminService(repository, patientRepository,
+            new ConsentRecorderLabels(userRepository),
             Mockito.mock(com.example.hms.repository.AppointmentRepository.class),
             Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class),
             Mockito.mock(com.example.hms.repository.LabOrderRepository.class), scope,
@@ -217,9 +262,14 @@ class PatientNotificationLedgerIT extends BaseIT {
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                 .jsonPath("$.data.content.length()").value(2))
+            // QA r73 D3700: the refusal is the patient's own; the reader gets a kind, never an account id.
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
-                .jsonPath("$.data.content[*].consentRecordedBy")
-                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(originalActor.toString()))))
+                .jsonPath("$.data.content[*].consentRecordedByKind")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("PATIENT"))))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[0].consentRecordedBy").doesNotExist())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(originalActor.toString()))))
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                 .jsonPath("$.data.content[*].consentRecordedAt")
                 .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.startsWith("2026-11-23T08:00"))));

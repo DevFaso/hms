@@ -177,7 +177,9 @@
               </div>
               <div>
                 <dt>{{ 'COVERAGE.PLAN' | translate }}</dt>
-                <dd>{{ o.planName || '—' }}</dd>
+                <dd data-testid="other-plan">
+                  {{ o.planName || ('COVERAGE.PLAN_NOT_RECORDED' | translate) }}
+                </dd>
               </div>
               <div>
                 <dt>{{ 'COVERAGE.RELATIONSHIP' | translate }}</dt>

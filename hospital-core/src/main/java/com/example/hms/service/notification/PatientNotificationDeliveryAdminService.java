@@ -54,7 +54,7 @@ public class PatientNotificationDeliveryAdminService {
 
     private final PatientNotificationDeliveryRepository repository;
     private final PatientRepository patientRepository;
-    private final com.example.hms.repository.UserRepository userRepository;
+    private final ConsentRecorderLabels recorderLabels;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
     private final com.example.hms.repository.BillingInvoiceRepository invoiceRepository;
     private final com.example.hms.repository.LabOrderRepository labOrderRepository;
@@ -77,6 +77,7 @@ public class PatientNotificationDeliveryAdminService {
             : patientRepository.findAllById(patientIds).stream()
                 .collect(Collectors.toMap(Patient::getId, PatientNotificationDeliveryAdminService::nameOf,
                     (a, b) -> a));
+        Map<UUID, UUID> accounts = accountsOf(patientIds, hospitalId);
 
         Map<String, Long> counts = new LinkedHashMap<>();
         for (NotificationDeliveryStatus s : NotificationDeliveryStatus.values()) {
@@ -86,14 +87,12 @@ public class PatientNotificationDeliveryAdminService {
             counts.put(((NotificationDeliveryStatus) row[0]).name(), (Long) row[1]);
         }
 
-        List<PatientNotificationDeliveryDTO> content = rows.getContent().stream().map(row -> toDto(row, names))
-            .toList();
+        // QA r73 D3700: a refusal recorded at another hospital is shown without its recorder's name or id.
+        ConsentRecorderLabels.Labels labels = recorderLabels.forStaffViewer(rows.getContent().stream()
+            .map(PatientNotificationDelivery::getConsentRecordedBy).toList(), hospitalId);
+        List<PatientNotificationDeliveryDTO> content = rows.getContent().stream()
+            .map(row -> toDto(row, names, accounts, labels)).toList();
         describeSubjects(rows.getContent(), content, hospitalId);
-        var recorderIds = content.stream().map(PatientNotificationDeliveryDTO::getConsentRecordedBy)
-            .filter(java.util.Objects::nonNull).distinct().toList();
-        var recorderNames = NotificationPreferenceViews.names(recorderIds, userRepository);
-        content.forEach(dto -> dto.setConsentRecordedByName(dto.getConsentRecordedBy() == null ? null
-            : recorderNames.get(dto.getConsentRecordedBy())));
         return PatientNotificationDeliveryPageDTO.builder()
             .content(content)
             .page(rows.getNumber())
@@ -129,7 +128,9 @@ public class PatientNotificationDeliveryAdminService {
         Map<UUID, String> names = patientRepository.findById(fresh.getPatientId())
             .map(p -> Map.of(p.getId(), nameOf(p)))
             .orElse(Map.of());
-        return toDto(fresh, names);
+        ConsentRecorderLabels.Labels labels = recorderLabels.forStaffViewer(
+            java.util.Collections.singletonList(fresh.getConsentRecordedBy()), hospitalId);
+        return toDto(fresh, names, accountsOf(Set.of(fresh.getPatientId()), hospitalId), labels);
     }
 
     /**
@@ -200,6 +201,20 @@ public class PatientNotificationDeliveryAdminService {
         };
     }
 
+    /**
+     * Patient id to the patient's own account (registered at this hospital), so a refusal the patient recorded
+     * reads as the patient's own. Ids only: nothing is decrypted.
+     */
+    private Map<UUID, UUID> accountsOf(Set<UUID> patientIds, UUID hospitalId) {
+        if (patientIds.isEmpty()) return Map.of();
+        Map<UUID, UUID> accounts = new java.util.HashMap<>();
+        for (PatientRepository.PatientAccountId row
+                : patientRepository.findNotificationAccountsScoped(patientIds, hospitalId)) {
+            if (row.getAccountId() != null) accounts.putIfAbsent(row.getPatientId(), row.getAccountId());
+        }
+        return accounts;
+    }
+
     private static String nameOf(Patient patient) {
         return patient.getFullName() == null ? "" : patient.getFullName();
     }
@@ -221,8 +236,10 @@ public class PatientNotificationDeliveryAdminService {
         return List.of(parsed);
     }
 
-    private static PatientNotificationDeliveryDTO toDto(PatientNotificationDelivery row, Map<UUID, String> names) {
-        return PatientNotificationDeliveryDTO.builder()
+    private static PatientNotificationDeliveryDTO toDto(PatientNotificationDelivery row, Map<UUID, String> names,
+                                                        Map<UUID, UUID> accounts,
+                                                        ConsentRecorderLabels.Labels labels) {
+        PatientNotificationDeliveryDTO dto = PatientNotificationDeliveryDTO.builder()
             .id(row.getId())
             .patientId(row.getPatientId())
             .patientName(names.getOrDefault(row.getPatientId(), ""))
@@ -238,9 +255,10 @@ public class PatientNotificationDeliveryAdminService {
             .nextAttemptAt(row.getNextAttemptAt())
             .sentAt(row.getSentAt())
             .lastRetriedAt(row.getLastRetriedAt())
-            .consentRecordedBy(row.getConsentRecordedBy())
             .consentRecordedAt(row.getConsentRecordedAt())
             .build();
+        labels.apply(dto, row.getConsentRecordedBy(), accounts.get(row.getPatientId()));
+        return dto;
     }
 
     private static boolean retryable(PatientNotificationDelivery row) {

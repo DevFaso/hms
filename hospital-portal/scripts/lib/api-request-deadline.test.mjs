@@ -200,7 +200,7 @@ test('timeout notices are scoped to the session and billing callbacks to the lat
   assert.match(auth, /logout\(\): void \{\s*this\.endSession\(\)/);
   assert.match(auth, /getUserProfile\(\)\?\.id !== profile\.id/);
   const interceptor = read('src/app/interceptors/api-timeout.interceptor.ts');
-  assert.match(interceptor, /notice\.noteTimeout\(method, sessionEpoch\)/);
+  assert.match(interceptor, /notice\.noteTimeout\(method, sessionEpoch, request\.url\)/);
   assert.match(interceptor, /isSignInRequest\(request\)[\s\S]*?notice\.resetForSession\(\)/);
   const billing = read('src/app/billing/billing.ts');
   assert.equal(

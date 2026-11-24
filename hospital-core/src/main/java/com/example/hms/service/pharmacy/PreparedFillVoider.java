@@ -120,7 +120,7 @@ public class PreparedFillVoider {
                 "Prepared fill cancelled, prescription " + prescriptionId + ", reason " + reason.name()
                         + ", stock " + condition.name(),
                 current.getId().toString(), "DISPENSE");
-        support.notifyReadyCancelled(current.getPrescription(), current.getPatient(), current.getPharmacy(), current.getMedicationName());
+        support.notifyReadyCancelled(current.getPrescription(), current.getPatient(), current.getPharmacy());
         log.info("Prepared fill {} cancelled ({})", current.getId(), reason);
         return current;
     }

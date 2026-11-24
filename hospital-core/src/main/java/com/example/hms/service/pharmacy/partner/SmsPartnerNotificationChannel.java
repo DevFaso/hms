@@ -154,23 +154,9 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         return "****" + tail;
     }
 
+    /** K4: a partner reads the patient's initials, never the name ({@link com.example.hms.utility.SmsPatientLabel}). */
     private static String patientInitials(Patient p) {
-        if (p == null) {
-            return "—";
-        }
-        char first = initial(p.getFirstName());
-        char last = initial(p.getLastName());
-        if (first == 0 && last == 0) {
-            return "—";
-        }
-        StringBuilder sb = new StringBuilder(2);
-        if (first != 0) sb.append(first);
-        if (last != 0) sb.append(last);
-        return sb.toString();
-    }
-
-    private static char initial(String s) {
-        return (s == null || s.isBlank()) ? 0 : Character.toUpperCase(s.trim().charAt(0));
+        return com.example.hms.utility.SmsPatientLabel.initials(p);
     }
 
     /**
