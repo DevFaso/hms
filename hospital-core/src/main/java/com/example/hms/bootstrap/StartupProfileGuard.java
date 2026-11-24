@@ -41,12 +41,12 @@ public class StartupProfileGuard implements EnvironmentPostProcessor, Ordered {
     static void check(Environment environment) {
         String[] active = environment.getActiveProfiles();
         if (active.length == 0) {
-            throw new IllegalStateException(
+            throw new StartupConfigurationException(
                 "No Spring profile is active, and the application has no default. Set SPRING_PROFILES_ACTIVE "
                     + "(dev or prod on a deployed service; local-h2 or local on a developer machine).");
         }
         if (DeploymentProfiles.anyDeveloper(active) && DeploymentProfiles.anyDeployed(active)) {
-            throw new IllegalStateException(
+            throw new StartupConfigurationException(
                 "Profiles " + Arrays.toString(active) + " mix a developer profile (local, local-h2) with a "
                     + "deployed one. A developer profile carries committed credentials and seeds data; "
                     + "activate only the deployed profile.");
@@ -54,7 +54,7 @@ public class StartupProfileGuard implements EnvironmentPostProcessor, Ordered {
         if (DeploymentProfiles.anyDeveloper(active)) {
             for (String marker : HOSTED_PLATFORM_MARKERS) {
                 if (StringUtils.hasText(environment.getProperty(marker))) {
-                    throw new IllegalStateException(
+                    throw new StartupConfigurationException(
                         "A developer profile " + Arrays.toString(active) + " is active on a hosted platform ("
                             + marker + " is set). Set SPRING_PROFILES_ACTIVE to the environment's own "
                             + "profile (dev or prod).");

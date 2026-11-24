@@ -47,13 +47,13 @@ public class JwtSecretValidator implements InitializingBean {
 
     static void validate(String secret, String[] activeProfiles) {
         if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("JWT secret is missing (env JWT_SECRET not set)");
+            throw new StartupConfigurationException("JWT secret is missing (env JWT_SECRET not set)");
         }
         if (secret.length() < MIN_LENGTH) {
-            throw new IllegalStateException("JWT secret too short (min " + MIN_LENGTH + " chars)");
+            throw new StartupConfigurationException("JWT secret too short (min " + MIN_LENGTH + " chars)");
         }
         if (!DeploymentProfiles.onlyDeveloperOrTest(activeProfiles) && isPublishedOrPlaceholder(secret)) {
-            throw new IllegalStateException(
+            throw new StartupConfigurationException(
                 "JWT secret is a value published in the source tree or a placeholder, and profiles "
                     + Arrays.toString(activeProfiles) + " are not developer or test profiles. "
                     + "Set JWT_SECRET to a private random value of at least " + MIN_LENGTH + " characters.");
