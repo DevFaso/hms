@@ -17,6 +17,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import com.example.hms.payload.dto.identifiersearch.EmailQueryDTO;
+import com.example.hms.payload.dto.identifiersearch.MrnQueryDTO;
+import com.example.hms.payload.dto.identifiersearch.PhoneQueryDTO;
+import com.example.hms.security.ReadsOnly;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,6 +36,9 @@ import org.springframework.web.bind.annotation.RestController;
  * patient's name, email, phone and visit reason for any identifier supplied.
  * No portal or mobile client calls them (verified: only the http/ scratch
  * files), so narrowing breaks nothing.
+ *
+ * <p>The lookups by e-mail, phone or MRN are POSTs that carry the identifier in the
+ * body, so it never reaches a URL (proxy and access logs, front-end tracing).
  */
 @RestController
 @RequestMapping("/lookup")
@@ -36,6 +46,8 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_DOCTOR','ROLE_MIDWIFE',"
     + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
 public class LookupController {
+
+    private static final String UNDER_POST = "an appointment lookup, under POST to keep out of the URL ";
 
     private final AppointmentRepository appointmentRepository;
     private final RoleValidator roleValidator;
@@ -48,9 +60,13 @@ public class LookupController {
     // lookup per request. A real read of one patient's data, marked so the
     // gap stays visible; the durable fix is an emission in the service.
     @PatientAccessAudited(skip = true)
-    @GetMapping("/appointment/patient/email/{email}")
+    // The address travels in the body, never in the URL.
+    @ReadsOnly(UNDER_POST + "the patient's e-mail")
+    @PostMapping("/appointment/patient/email")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientEmail(@PathVariable String email) {
+    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientEmail(
+        @Valid @RequestBody EmailQueryDTO body) {
+        String email = body.email();
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Appointment> appointments;
         if (activeHospitalId != null) {
@@ -67,9 +83,13 @@ public class LookupController {
     // lookup per request. A real read of one patient's data, marked so the
     // gap stays visible; the durable fix is an emission in the service.
     @PatientAccessAudited(skip = true)
-    @GetMapping("/appointment/patient/phone/{phone}")
+    // The number travels in the body, never in the URL.
+    @ReadsOnly(UNDER_POST + "the patient's phone number")
+    @PostMapping("/appointment/patient/phone")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(@PathVariable String phone) {
+    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(
+        @Valid @RequestBody PhoneQueryDTO body) {
+        String phone = body.phone();
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         // QA D942: numbers are stored in E.164 now; the subscriber digits
         // narrow the rows and the full number decides, as for every patient match.
@@ -101,9 +121,13 @@ public class LookupController {
     // lookup per request. A real read of one patient's data, marked so the
     // gap stays visible; the durable fix is an emission in the service.
     @PatientAccessAudited(skip = true)
-    @GetMapping("/appointment/patient/mri/{mri}")
+    // The MRN travels in the body, never in the URL.
+    @ReadsOnly(UNDER_POST + "the patient's MRN")
+    @PostMapping("/appointment/patient/mrn")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientMri(@PathVariable String mri) {
+    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientMri(
+        @Valid @RequestBody MrnQueryDTO body) {
+        String mri = body.mrn();
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Appointment> appointments;
         if (activeHospitalId != null) {
@@ -129,9 +153,13 @@ public class LookupController {
     }
 
     // Lookup appointments by staff email
-    @GetMapping("/appointment/staff/email/{email}")
+    // The address travels in the body, never in the URL.
+    @ReadsOnly(UNDER_POST + "the staff member's e-mail")
+    @PostMapping("/appointment/staff/email")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByStaffEmail(@PathVariable String email) {
+    public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByStaffEmail(
+        @Valid @RequestBody EmailQueryDTO body) {
+        String email = body.email();
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Appointment> appointments;
         if (activeHospitalId != null) {

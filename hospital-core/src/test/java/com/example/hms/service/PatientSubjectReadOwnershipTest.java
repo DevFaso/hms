@@ -725,12 +725,12 @@ class PatientSubjectReadOwnershipTest {
         }
     }
 
-    // ── GET /appointments/{id}, /patients/{patientId}, /patients/username/{u} ─
+    // ── GET /appointments/{id}, /patients/{patientId}, /patients/by-username ─
 
     @Nested
     @ExtendWith(MockitoExtension.class)
     @MockitoSettings(strictness = Strictness.LENIENT)
-    @DisplayName("GET /appointments/{id}, /patients/{patientId}, /patients/username/{patientUsername}")
+    @DisplayName("GET /appointments/{id}, /patients/{patientId}, POST /patients/by-username")
     class Appointments {
         @Mock private AppointmentRepository appointmentRepository;
         @Mock private PatientRepository patientRepository;

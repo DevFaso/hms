@@ -38,8 +38,11 @@ class NotificationPreferenceProvenanceGuardTest {
             assertThat(Files.readString(source.resolve(file))).as("scoped account projection in %s", file)
                 .contains("findNotificationAccountScoped(");
         }
+        // QA r73 D3700: names are resolved by ConsentRecorderLabels only (see ConsentRecorderScopeGuardTest).
         assertThat(Files.readString(source.resolve("NotificationPreferenceViews.java")))
-            .contains("findClinicalActorNames(").doesNotContain(".getUsername(", ".getEmail(", ".getPhone(");
+            .doesNotContain("findClinicalActorNames(", ".getUsername(", ".getEmail(", ".getPhone(");
+        assertThat(Files.readString(source.resolve("ConsentRecorderLabels.java")))
+            .doesNotContain(".getUsername(", ".getEmail(", ".getPhone(");
         assertThat(Files.readString(source.resolve("PatientMessageGate.java")))
             .contains("var decision = consent.decision(", "channel, decision);");
         assertThat(Files.readString(source.resolve("PatientNotificationLedger.java")))

@@ -87,7 +87,7 @@ public class BillingInvoiceController {
 
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
-            .cacheControl(CacheControl.noCache())
+            .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(filename).build().toString())
             .contentLength(content.length)
@@ -297,7 +297,7 @@ public class BillingInvoiceController {
         byte[] content = pdf.content();
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
-            .cacheControl(CacheControl.noCache())
+            .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 ContentDisposition.attachment().filename(pdf.suggestedFilename() + ".pdf").build().toString())
             .contentLength(content.length)

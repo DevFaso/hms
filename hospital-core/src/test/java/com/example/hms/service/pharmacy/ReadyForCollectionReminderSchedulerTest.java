@@ -141,7 +141,7 @@ class ReadyForCollectionReminderSchedulerTest {
             when(dispenseRepository.findById(d.getId())).thenReturn(Optional.of(d));
 
             assertThat(claim.claimAndNotify(d.getId(), NOW)).isTrue();
-            verify(support).notifyReadyReminder(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
+            verify(support).notifyReadyReminder(any(), eq(patient), eq(pharmacy));
         }
 
         @Test
@@ -151,7 +151,7 @@ class ReadyForCollectionReminderSchedulerTest {
             when(dispenseRepository.claimReadyReminder(id, NOW)).thenReturn(0);
 
             assertThat(claim.claimAndNotify(id, NOW)).isFalse();
-            verify(support, never()).notifyReadyReminder(any(), any(), any(), any());
+            verify(support, never()).notifyReadyReminder(any(), any(), any());
             verify(dispenseRepository, never()).findById(any());
         }
     }

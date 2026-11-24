@@ -263,7 +263,7 @@ class StockOutRoutingServiceImplBranchesTest {
         service.backOrder(prescriptionId, null);
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
-        verify(support).notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+        verify(support).notifyOutOfStock(prescription, patient,
                 PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
     }
 

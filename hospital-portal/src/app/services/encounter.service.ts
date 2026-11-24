@@ -553,8 +553,9 @@ export class EncounterService {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 
+  /** A username, an e-mail or a licence number: in the body, never in the URL. */
   getByDoctor(identifier: string): Observable<EncounterResponse[]> {
-    return this.http.get<EncounterResponse[]>(`${this.baseUrl}/doctor/${identifier}`);
+    return this.http.post<EncounterResponse[]>(`${this.baseUrl}/by-doctor`, { identifier });
   }
 
   addNote(encounterId: string, req: EncounterNoteRequest): Observable<EncounterNoteResponse> {

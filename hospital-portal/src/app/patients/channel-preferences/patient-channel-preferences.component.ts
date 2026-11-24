@@ -26,6 +26,8 @@ import {
   NOTICE_TYPES,
   NoticeType,
   changedChannelChoices,
+  consentRecorderKey,
+  ConsentRecorderKind,
 } from '../../shared/notification-channel-choices';
 
 /** One switch of the desk's matrix, as the API reads and writes it. */
@@ -33,7 +35,7 @@ export interface ChannelChoice {
   notificationType: NoticeType;
   channel: 'SMS' | 'EMAIL';
   enabled: boolean;
-  recordedByUserId?: string | null;
+  recordedByKind?: ConsentRecorderKind | null;
   recordedByName?: string | null;
   recordedAt?: string | null;
 }
@@ -106,7 +108,11 @@ export interface ChannelChoice {
                               [attr.data-testid]="'choice-recorder-' + type + '-' + ch"
                             >
                               {{ 'PATIENT_CHANNELS.RECORDED_BY' | translate }}
-                              {{ storedChoice.recordedByName || ('COMMON.UNKNOWN' | translate) }}
+                              @if (recorderKey(storedChoice.recordedByKind); as key) {
+                                {{ key | translate }}
+                              } @else {
+                                {{ storedChoice.recordedByName || ('COMMON.UNKNOWN' | translate) }}
+                              }
                               <time [attr.datetime]="storedChoice.recordedAt | serverTime">{{
                                 storedChoice.recordedAt | serverTime | date: 'short'
                               }}</time>
@@ -192,6 +198,8 @@ export class PatientChannelPreferencesComponent {
 
   readonly types = NOTICE_TYPES;
   readonly channels = DESK_NOTICE_CHANNELS;
+  /** QA r73 D3700: « Autre établissement » / « Le patient » instead of a name the server withheld. */
+  readonly recorderKey = consentRecorderKey;
   /** The roles PatientChannelPreferenceController admits (ActionPermissionsMirrorTest). */
   readonly canRecord = this.roleContext.hasAnyActiveRole(
     actionRoles('patientChannelPreferencesUpdate'),

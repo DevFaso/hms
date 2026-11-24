@@ -124,7 +124,7 @@ class ProviderMfaGateIT extends BaseIT {
             for (MockHttpServletRequestBuilder request : List.of(
                     get("/notifications"),                  // on the provider allow-list
                     get("/me/assignments"),                 // on it too
-                    get("/patients/search").param("q", "x"), // a hospital endpoint
+                    csrf(post("/patients/search")),         // a hospital endpoint
                     get(UNMAPPED),                          // no handler
                     csrf(post("/auth/ws-ticket")))) {       // under /auth, but not sign-in
                 assertMfaRefusal(as(token, request));
@@ -144,7 +144,7 @@ class ProviderMfaGateIT extends BaseIT {
             .isFalse();
         assertThat(as(token, get("/notifications")).getResponse().getStatus()).isEqualTo(200);
         assertThat(as(token, csrf(post("/auth/ws-ticket"))).getResponse().getStatus()).isEqualTo(200);
-        assertThat(ProviderConfinementSecurityIT.refusalShape(as(token, get("/patients/search").param("q", "x"))))
+        assertThat(ProviderConfinementSecurityIT.refusalShape(as(token, csrf(post("/patients/search")))))
             .isEqualTo(unmapped);
     }
 

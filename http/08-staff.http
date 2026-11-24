@@ -12,14 +12,20 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Search staff by email
-GET {{baseUrl}}/staff/search/by-email?email=dr.smith@hms.local
+POST {{baseUrl}}/staff/search/by-email
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
 
+{"email": "dr.smith@hms.local"}
+
 ### Search staff by phone
-GET {{baseUrl}}/staff/search/by-phone?phone=555-400
+POST {{baseUrl}}/staff/search/by-phone
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"phone": "555-400"}
 
 ### Get staff by hospital
 GET {{baseUrl}}/staff/hospital/{{hospitalId}}

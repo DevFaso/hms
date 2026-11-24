@@ -40,4 +40,16 @@ public class RoiRequestMapper {
             .decisionNote(r.getDecisionNote())
             .build();
     }
+
+    /**
+     * QA r73 D3700: the patient's own view (/me). The decider is shown by name ({@code decidedByName}); the
+     * deciding staff member's internal account id never reaches a patient.
+     */
+    public RoiRequestResponseDTO toPatientDto(RoiRequest r) {
+        RoiRequestResponseDTO dto = toDto(r);
+        if (dto != null) {
+            dto.setDecisionActorUserId(null);
+        }
+        return dto;
+    }
 }

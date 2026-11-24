@@ -64,9 +64,15 @@ class PatientChannelChoiceHttpTest {
             });
             return stored;
         });
+        var deskName = mock(UserRepository.ClinicalActorName.class);
+        when(deskName.getId()).thenReturn(recorder);
+        when(deskName.getFirstName()).thenReturn("Test");
+        when(deskName.getLastName()).thenReturn("Accueil");
+        when(users.findStaffActorNamesAtHospital(any(), eq(hospital))).thenReturn(List.of(deskName));
         var writer = new PatientChannelPreferenceService(patients, registrations, preferences, users,
-            mock(AuditEventLogService.class));
-        var mvc = MockMvcBuilders.standaloneSetup(new PatientChannelPreferenceController(writer, auth)).build();
+            mock(AuditEventLogService.class), new ConsentRecorderLabels(users));
+        var mvc = MockMvcBuilders.standaloneSetup(new PatientChannelPreferenceController(writer, auth))
+            .setControllerAdvice(new com.example.hms.exception.GlobalExceptionHandler()).build();
         var principal = new UsernamePasswordAuthenticationToken("cdx-desk", null);
         var consent = new PatientChannelConsent(preferences);
         var verification = new PatientRecipientVerification();
@@ -78,7 +84,9 @@ class PatientChannelChoiceHttpTest {
                 var response = mvc.perform(put("/patients/{id}/channel-preferences", patient.getId())
                     .principal(principal).contentType(MediaType.APPLICATION_JSON).content(body))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-                assertThat(response).contains(recorder.toString());
+                // QA r73 D3700: the desk's own hospital sees its staff member by name, never by account id.
+                assertThat(response).contains("\"recordedByKind\":\"STAFF\"", "Test Accueil")
+                    .doesNotContain(recorder.toString());
                 assertThat(consent.allows(account.getId(), type, channel)).isFalse();
             }
         }
@@ -88,6 +96,15 @@ class PatientChannelChoiceHttpTest {
             assertThat(gate.smsNow(patient, notice, "cdx test message")).isFalse();
             assertThat(gate.htmlEmail(patient, notice, patient.getEmail(), "cdx", "cdx test")).isFalse();
         }
+        // QA r73 D3702: the bell is the patient's own choice; a desk write of it is refused, never a silent 200.
+        int before = stored.size();
+        for (String channel : List.of("IN_APP", "PUSH")) {
+            mvc.perform(put("/patients/{id}/channel-preferences", patient.getId()).principal(principal)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("[{\"notificationType\":\"BILLING\",\"channel\":\"" + channel + "\",\"enabled\":false}]"))
+                .andExpect(status().isBadRequest());
+        }
+        assertThat(stored).hasSize(before);
         verify(sms, atLeastOnce()).deliversRealSms();
         verify(sms, never()).send(anyString(), anyString());
         verifyNoInteractions(email);

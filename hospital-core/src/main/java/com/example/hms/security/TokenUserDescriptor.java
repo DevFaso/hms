@@ -4,8 +4,8 @@ import java.util.Collection;
 import java.util.UUID;
 
 /**
- * Lightweight payload supplied when issuing tokens outside the authentication flow.
- * Roles are optional; when omitted the token provider will resolve them via tenant assignments.
+ * The user and the roles a token is minted with.
+ * The roles are exactly the ones minted: an empty set mints a token with no role.
  */
 public record TokenUserDescriptor(
     UUID userId,

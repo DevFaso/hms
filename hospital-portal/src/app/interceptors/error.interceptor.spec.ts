@@ -997,6 +997,17 @@ describe('errorInterceptor', () => {
       }
     });
 
+    it('a refused search sent as a POST (it only reads) stays on the landing page', () => {
+      onPage('/dashboard');
+      let error: HttpErrorResponse | undefined;
+      http.post('/patients/search', { name: 'x' }).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne('/patients/search').flush(null, { status: 403, statusText: 'Forbidden' });
+      expect(httpMock.expectOne('/frontend-audit').request.body.type).toBe('SILENT_403');
+
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
+
     it('a refused write on the dashboard is not silenced by being there', () => {
       onPage('/dashboard');
       http.post('/prescriptions', {}).subscribe({ error: () => undefined });
