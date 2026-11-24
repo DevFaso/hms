@@ -122,12 +122,12 @@
   },
   "src/app/bed-board/bed-board.html::input::1c8469cb295ae6a38f2d::0": {
     "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; adding an independent full-width skin would duplicate its border and icon spacing.",
-    "evidence": [],
+    "evidence": [".board-search input"],
     "control": "input"
   },
   "src/app/bed-board/bed-board.html::input::641d01aa741af95a63a0::0": {
     "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; adding an independent full-width skin would duplicate its border and icon spacing.",
-    "evidence": [],
+    "evidence": [".board-search input"],
     "control": "bed-board-search"
   },
   "src/app/bed-board/bed-board.html::select::3dd1447c9af6bae9005d::0": {
@@ -137,7 +137,7 @@
   },
   "src/app/bed-management/bed-management.html::input::bc95d45d112bd7943880::0": {
     "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
-    "evidence": [],
+    "evidence": [".dashboard-filters .dashboard-search input"],
     "control": "input"
   },
   "src/app/bed-management/bed-management.html::select::1b8023a1285ba0f03af4::0": {
@@ -152,7 +152,7 @@
   },
   "src/app/bed-management/bed-management.html::input::024eb2435409313d9299::0": {
     "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
-    "evidence": [],
+    "evidence": [".dashboard-filters .dashboard-search input"],
     "control": "input"
   },
   "src/app/bed-management/bed-management.html::select::61e3a20ed767a1b5fe51::0": {
@@ -252,7 +252,7 @@
   },
   "src/app/dashboard/dashboard.html::input::d370780abdf1d694dea6::0": {
     "reason": "The header-search-input is a compact transparent header search inside its padded toolbar container, not a standalone form field; preserve its existing responsive search design.",
-    "evidence": [],
+    "evidence": [".header-search-input"],
     "control": "input"
   },
   "src/app/dashboard/doctor-worklist/doctor-worklist.html::input::f184f6a3e70a1a5bd865::0": {
@@ -867,37 +867,37 @@
   },
   "src/app/nurse-station/emar/emar.component.html::input::b7bb18bff13ecb9e4948::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".care-search input"],
     "control": "input"
   },
   "src/app/nurse-station/emar/emar.component.html::input::e286e62aa5f288d82cf9::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-patient-scan"
   },
   "src/app/nurse-station/emar/emar.component.html::input::cf477e9ac57c9815f446::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-med-scan"
   },
   "src/app/nurse-station/emar/emar.component.html::input::7d13f2c28c5f8846cd09::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-dose"
   },
   "src/app/nurse-station/emar/emar.component.html::input::648a41b5cf9263ccdf05::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-route"
   },
   "src/app/nurse-station/emar/emar.component.html::textarea::46b3df0c7a53deb92dbf::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-override-reason"
   },
   "src/app/nurse-station/emar/emar.component.html::textarea::0f74868dbc318c7fe0a3::0": {
     "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
-    "evidence": [],
+    "evidence": [".emar__input"],
     "control": "emar-hold-reason"
   },
   "src/app/nurse-station/nurse-station.html::select::db5d233c05dfba834ca3::0": {
@@ -1093,7 +1093,7 @@
   },
   "src/app/onboarding/role-welcome/role-welcome.html::input::dfee7797e4bb17c5989f::0": {
     "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
-    "evidence": [],
+    "evidence": [".rw-digit"],
     "control": "input"
   },
   "src/app/organizations/organization-list.html::input::46c7f5913aca773227de::0": {
@@ -1265,17 +1265,17 @@
   },
   "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::f3d96619bfb968bc9f1f::0": {
     "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
-    "evidence": [],
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
     "control": "input"
   },
   "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::767d327492f9a81a1278::0": {
     "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
-    "evidence": [],
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
     "control": "input"
   },
   "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::9a6c812f3ffb2c42e6d8::0": {
     "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
-    "evidence": [],
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
     "control": "input"
   },
   "src/app/patient-portal/my-billing/my-billing.component.html::input::f69a60a1a50589c0678e::0": {
@@ -1893,7 +1893,7 @@
   },
   "src/app/registrations/registrations.html::input::5176df1352f96df89f9a::0": {
     "reason": "The care-workspace padded search container owns the border and icon spacing; its transparent native input intentionally has no independent text-field skin.",
-    "evidence": [],
+    "evidence": [".dashboard-filters .dashboard-search input"],
     "control": "input"
   },
   "src/app/registrations/registrations.html::select::f57a7f0f42476e8b4f6f::0": {
@@ -1958,7 +1958,7 @@
   },
   "src/app/shared/hospital-typeahead/hospital-typeahead.component.html::input::c395a199f8fa079620ac::0": {
     "reason": "The hospital-typeahead input shares a styled combobox wrapper with its search icon and clear action; the wrapper owns padding and border so a second input skin would duplicate them.",
-    "evidence": [],
+    "evidence": [".hospital-typeahead__input"],
     "control": "hospital-typeahead-input"
   },
   "src/app/shared/patient-picker/patient-picker.component.html::input::2be5f7e3d67eaf9d0cb6::0": {
@@ -2111,13 +2111,11 @@
   },
   "src/app/verify-email/verify-email.html::input::cf2c6a430fad05f83985::0": {
     "reason": "The resend form reuses reset-password.scss: rp-input-wrapper owns the icon layout and its input padding/border. Preserve the shared authentication design rather than introducing a second skin.",
-    "evidence": [],
+    "evidence": [".rp-input-wrapper input"],
     "control": "verify-email"
   },
   "src/app/billing/cash-closing/cash-closing.component.ts::input::7f8e4f312d27a9c9321b::0": {
-    "reason": "Unrouted legacy CashClosingComponent: the live billing route renders CashSessionComponent instead. This inactive component has no page to restyle or screenshot; retain until explicit retirement.",
-    "evidence": [
-      "app-cash-closing has no consumer in src/app; billing.html renders app-cash-session"
-    ]
+    "reason": "Unrouted legacy CashClosingComponent: the live billing route renders CashSessionComponent instead. This inactive component has no page to restyle or screenshot; retain until explicit retirement. Its existing cash-closing-controls layout remains present; the guard separately verifies that no template mounts its selector.",
+    "evidence": [".cash-closing-controls"]
   }
 }

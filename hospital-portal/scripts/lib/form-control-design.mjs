@@ -61,7 +61,12 @@ export function controlsIn(text, file) {
   return controls;
 }
 
-export function bareControlFindings(templates, exceptions = {}, inScope = () => true) {
+export function bareControlFindings(
+  templates,
+  exceptions = {},
+  inScope = () => true,
+  styles = new Map(),
+) {
   const findings = [],
     seen = new Set();
   for (const template of templates) {
@@ -72,6 +77,23 @@ export function bareControlFindings(templates, exceptions = {}, inScope = () => 
         seen.add(control.key);
         if (typeof exception.reason !== 'string' || exception.reason.trim().length < 30)
           findings.push(`${control.key}: exception requires a specific reason`);
+        const css = (styles.get(template.rel) ?? '')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\s+/g, ' ');
+        if (
+          !Array.isArray(exception.evidence) ||
+          !exception.evidence.length ||
+          !exception.evidence.every(
+            (selector) =>
+              typeof selector === 'string' &&
+              selector.trim() &&
+              css.includes(selector.replace(/\s+/g, ' ').trim() + ' {'),
+          )
+        ) {
+          findings.push(
+            `${control.key}: exception requires existing component/global CSS selector evidence`,
+          );
+        }
         if (control.designed || control.nativeReason)
           findings.push(
             `${control.key}: obsolete exception; design-system or native-type coverage now applies`,
