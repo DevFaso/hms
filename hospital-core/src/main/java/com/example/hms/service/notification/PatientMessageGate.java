@@ -89,10 +89,11 @@ public class PatientMessageGate {
             return false;
         }
         UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
-        if (consent.allows(userId, notice.event().preferenceType(), channel)) {
+        var decision = consent.decision(userId, notice.event().preferenceType(), channel);
+        if (decision.allowed()) {
             return true;
         }
-        ledger.recordOptOut(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel);
+        ledger.recordOptOut(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel, decision);
         log.info("Patient {} opted out of {} by {}: not sent", patient.getId(), notice.event(), channel);
         return false;
     }
@@ -102,7 +103,7 @@ public class PatientMessageGate {
         if (patient == null || patient.getUser() == null) {
             return false;
         }
-        return consent.allows(patient.getUser().getId(), type, NotificationChannel.IN_APP);
+        return consent.decision(patient.getUser().getId(), type, NotificationChannel.IN_APP).allowed();
     }
 
     /**

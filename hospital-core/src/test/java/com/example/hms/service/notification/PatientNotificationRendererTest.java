@@ -1,5 +1,7 @@
 package com.example.hms.service.notification;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.NotificationChannel;
@@ -99,7 +101,8 @@ class PatientNotificationRendererTest {
         lenient().when(patientRepository.findNotificationAccountScoped(eq(patient.getId()), any()))
             .thenAnswer(call -> Optional.of(patient.getUser().getId()));
         lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         lenient().when(localeResolver.resolve(any(), any())).thenAnswer(inv -> inv.getArgument(1));
         lenient().when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         lenient().when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released));
@@ -112,12 +115,40 @@ class PatientNotificationRendererTest {
         var author = UUID.randomUUID();
         var at = LocalDateTime.of(2026, 11, 22, 8, 0);
         choice.recordChoice(false, author, at);
-        when(consent.allows(any(), any(), any())).thenReturn(false);
-        when(consent.refusal(any(), any(), any())).thenReturn(Optional.of(choice));
+        when(consent.decision(any(), any(), any()))
+            .thenReturn(new PatientChannelConsent.Decision(false, account.getId(), author, at));
         var delivery = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(), NotificationChannel.SMS);
         assertThat(renderer.prepare(delivery.getId())).isNull();
         assertThat(delivery.getConsentRecordedBy()).isEqualTo(author);
         assertThat(delivery.getConsentRecordedAt()).isEqualTo(at);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void dispatchKeepsTheOriginalRefusalWhenTheChoiceChangesBeforeTheTrace(boolean enabledAfterDecision) {
+        var preferences = mock(com.example.hms.repository.NotificationPreferenceRepository.class);
+        UUID author = UUID.randomUUID();
+        var at = LocalDateTime.of(2026, 11, 23, 8, 0);
+        var choice = com.example.hms.model.NotificationPreference.builder().channel(NotificationChannel.SMS).build();
+        choice.recordChoice(false, author, at);
+        when(preferences.findByUser_IdAndNotificationType(patient.getUser().getId(),
+            com.example.hms.enums.NotificationType.LAB_RESULT)).thenReturn(List.of(choice));
+        var actual = new PatientNotificationRenderer(repository, patientRepository, hospitalRepository,
+            appointmentRepository, labOrderRepository, labResultRepository, imagingReportRepository,
+            ultrasoundReportRepository, new PatientChannelConsent(preferences), localeResolver, TestMessageSources.bundles(),
+            Clock.fixed(NOW, ZoneOffset.UTC), properties, new PatientRecipientVerification());
+        when(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).thenAnswer(call -> {
+            choice.recordChoice(enabledAfterDecision, UUID.randomUUID(), at.plusMinutes(1));
+            return Optional.of(patient.getUser().getId());
+        });
+        var delivery = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(), NotificationChannel.SMS);
+        assertThat(actual.prepare(delivery.getId())).isNull();
+        assertThat(delivery.getErrorCode()).isEqualTo("OPTED_OUT");
+        assertThat(delivery.getConsentRecordedBy()).isEqualTo(author);
+        assertThat(delivery.getConsentRecordedAt()).isEqualTo(at);
+        org.mockito.Mockito.verify(preferences).findByUser_IdAndNotificationType(patient.getUser().getId(),
+            com.example.hms.enums.NotificationType.LAB_RESULT);
+        org.mockito.Mockito.verifyNoMoreInteractions(preferences);
     }
 
 
@@ -172,7 +203,8 @@ class PatientNotificationRendererTest {
     @Test
     @DisplayName("a channel turned off since queueing is skipped")
     void optedOutSinceQueueing() {
-        when(consent.allows(any(), any(), any())).thenReturn(false);
+        when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
         PatientNotificationDelivery row = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(),
             NotificationChannel.SMS);
 

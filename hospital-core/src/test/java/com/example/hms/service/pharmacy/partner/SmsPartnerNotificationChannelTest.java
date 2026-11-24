@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy.partner;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
@@ -67,7 +69,8 @@ class SmsPartnerNotificationChannelTest {
                 new PartnerSmsTemplates(TestMessageSources.bundles()), patientLocaleResolver);
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
         lenient().when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         lenient().when(patientLocaleResolver.resolve(any(), any()))
                 .thenAnswer(inv -> inv.getArgument(1));
 
@@ -437,7 +440,8 @@ class SmsPartnerNotificationChannelTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
     void bothPatientNoticesRespectOptOut(boolean dispensed) {
-        when(consent.allows(any(), any(), any())).thenReturn(false);
+        when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
         if (dispensed) channel.notifyPatientDispensed(patient, partner);
         else channel.notifyPatientAccepted(patient, partner);
         verify(smsService, never()).send(anyString(), anyString());

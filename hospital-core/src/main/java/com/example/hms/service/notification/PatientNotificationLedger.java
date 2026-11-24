@@ -116,10 +116,10 @@ public class PatientNotificationLedger {
             List<ChannelDecision> decisions = ownTransaction.execute(status -> eligibleChannels(event, patientId));
             List<NotificationChannel> queued = new ArrayList<>();
             for (ChannelDecision decision : decisions == null ? List.<ChannelDecision>of() : decisions) {
-                if (decision.optedOut()) {
+                if (!decision.consent().allowed()) {
                     insertOnce(event, hospitalId, patientId, subjectId, decision.channel(),
-                        PatientNotificationErrorCode.OPTED_OUT);
-                } else if (insertOnce(event, hospitalId, patientId, subjectId, decision.channel(), null)) {
+                        PatientNotificationErrorCode.OPTED_OUT, decision.consent());
+                } else if (insertOnce(event, hospitalId, patientId, subjectId, decision.channel(), null, null)) {
                     queued.add(decision.channel());
                 }
             }
@@ -138,22 +138,24 @@ public class PatientNotificationLedger {
      * {@code event:subject:channel}, like every row. Never throws.
      */
     public void recordOptOut(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
-                             NotificationChannel channel) {
-        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.OPTED_OUT);
+                             NotificationChannel channel, PatientChannelConsent.Decision decision) {
+        if (decision == null || decision.allowed()) return;
+        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.OPTED_OUT, decision);
     }
 
     public void recordUnverified(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
                                  NotificationChannel channel) {
-        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.RECIPIENT_UNVERIFIED);
+        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.RECIPIENT_UNVERIFIED, null);
     }
 
     private void recordSkipped(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
-                               NotificationChannel channel, PatientNotificationErrorCode reason) {
+                               NotificationChannel channel, PatientNotificationErrorCode reason,
+                               PatientChannelConsent.Decision decision) {
         if (event == null || hospitalId == null || patientId == null || subjectId == null || channel == null) {
             return;
         }
         try {
-            insertOnce(event, hospitalId, patientId, subjectId, channel, reason);
+            insertOnce(event, hospitalId, patientId, subjectId, channel, reason, decision);
         } catch (RuntimeException ex) {
             log.warn("Opt-out trace of {} for subject {} not written: {}", event, subjectId,
                 ex.getClass().getSimpleName());
@@ -161,7 +163,7 @@ public class PatientNotificationLedger {
     }
 
     /** One channel the patient can be reached on, and whether they turned it off for this notice. */
-    private record ChannelDecision(NotificationChannel channel, boolean optedOut) {
+    private record ChannelDecision(NotificationChannel channel, PatientChannelConsent.Decision consent) {
     }
 
     /**
@@ -177,11 +179,11 @@ public class PatientNotificationLedger {
         List<ChannelDecision> channels = new ArrayList<>(2);
         if (smsService.deliversRealSms() && StringUtils.hasText(patient.getPhoneNumberPrimary())) {
             channels.add(new ChannelDecision(NotificationChannel.SMS,
-                !consent.allows(userId, event.preferenceType(), NotificationChannel.SMS)));
+                consent.decision(userId, event.preferenceType(), NotificationChannel.SMS)));
         }
         if (event.sendsEmail() && emailService.deliversRealEmail() && StringUtils.hasText(patient.getEmail())) {
             channels.add(new ChannelDecision(NotificationChannel.EMAIL,
-                !consent.allows(userId, event.preferenceType(), NotificationChannel.EMAIL)));
+                consent.decision(userId, event.preferenceType(), NotificationChannel.EMAIL)));
         }
         return channels;
     }
@@ -191,7 +193,8 @@ public class PatientNotificationLedger {
      * @return true when this call created the row.
      */
     private boolean insertOnce(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
-                               NotificationChannel channel, PatientNotificationErrorCode skipped) {
+                               NotificationChannel channel, PatientNotificationErrorCode skipped,
+                               PatientChannelConsent.Decision decision) {
         String key = PatientNotificationDelivery.keyOf(event, subjectId, channel);
         try {
             Boolean created = ownTransaction.execute(status -> {
@@ -200,8 +203,8 @@ public class PatientNotificationLedger {
                 }
                 var refusal = skipped == PatientNotificationErrorCode.OPTED_OUT
                     ? patientRepository.findNotificationAccountScoped(patientId, hospitalId)
-                        .flatMap(accountId -> consent.refusal(accountId, event.preferenceType(), channel))
-                    : java.util.Optional.<com.example.hms.model.NotificationPreference>empty();
+                        .map(decision::scopeTo)
+                    : java.util.Optional.<PatientChannelConsent.Decision>empty();
                 repository.saveAndFlush(PatientNotificationDelivery.builder()
                     .hospitalId(hospitalId)
                     .patientId(patientId)
@@ -211,8 +214,8 @@ public class PatientNotificationLedger {
                     .idempotencyKey(key)
                     .status(skipped == null ? NotificationDeliveryStatus.PENDING : NotificationDeliveryStatus.SKIPPED)
                     .errorCode(skipped == null ? null : skipped.name())
-                    .consentRecordedBy(refusal.map(com.example.hms.model.NotificationPreference::getRecordedByUserId).orElse(null))
-                    .consentRecordedAt(refusal.map(com.example.hms.model.NotificationPreference::getRecordedAt).orElse(null))
+                    .consentRecordedBy(refusal.map(PatientChannelConsent.Decision::recordedBy).orElse(null))
+                    .consentRecordedAt(refusal.map(PatientChannelConsent.Decision::recordedAt).orElse(null))
                     .nextAttemptAt(LocalDateTime.now(clock))
                     .build());
                 return true;

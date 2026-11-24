@@ -1,5 +1,7 @@
 package com.example.hms.service.notification;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.*;
 import com.example.hms.model.Patient;
 import com.example.hms.service.EmailService;
@@ -15,7 +17,8 @@ class PatientRecipientVerificationTest {
         Patient patient = new Patient(); patient.setId(UUID.randomUUID());
         patient.setEmail("cdx@example.invalid"); patient.setPhoneNumberPrimary("+22670000000");
         PatientChannelConsent consent = mock(PatientChannelConsent.class);
-        when(consent.allows(any(), any(), any())).thenReturn(true);
+        when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         SmsService sms = mock(SmsService.class); when(sms.deliversRealSms()).thenReturn(true);
         EmailService email = mock(EmailService.class);
         PatientMessageGate gate = new PatientMessageGate(consent, mock(PatientNotificationLedger.class), sms, email, new PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class));

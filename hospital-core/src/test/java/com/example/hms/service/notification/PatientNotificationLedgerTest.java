@@ -1,5 +1,7 @@
 package com.example.hms.service.notification;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
@@ -76,7 +78,8 @@ class PatientNotificationLedgerTest {
             .thenAnswer(call -> Optional.of(patient.getUser().getId()));
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
         lenient().when(emailService.deliversRealEmail()).thenReturn(true);
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
     }
 
     @Test
@@ -86,9 +89,8 @@ class PatientNotificationLedgerTest {
         var choice = com.example.hms.model.NotificationPreference.builder().notificationType(NotificationType.LAB_RESULT)
             .channel(NotificationChannel.SMS).enabled(false).build();
         choice.recordChoice(false, recorder, recorded);
-        when(consent.allows(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS)).thenReturn(false);
-        when(consent.refusal(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
-            .thenReturn(Optional.of(choice));
+        when(consent.decision(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
+            .thenReturn(new PatientChannelConsent.Decision(false, patient.getUser().getId(), recorder, recorded));
         ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, patient.getId(), subjectId);
         var saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
         verify(repository, times(2)).saveAndFlush(saved.capture());
@@ -98,6 +100,46 @@ class PatientNotificationLedgerTest {
                 assertThat(row.getConsentRecordedAt()).isEqualTo(recorded);
                 assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.NotificationDeliveryStatus.SKIPPED);
             });
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"true,true", "true,false", "false,true", "false,false"})
+    void aNewerChoiceCannotReplaceTheDecisionProvenance(boolean inline, boolean enabledAfterDecision) {
+        var preferences = org.mockito.Mockito.mock(com.example.hms.repository.NotificationPreferenceRepository.class);
+        UUID author = UUID.randomUUID();
+        var at = java.time.LocalDateTime.of(2026, 11, 23, 8, 0);
+        var choice = com.example.hms.model.NotificationPreference.builder().channel(NotificationChannel.SMS).build();
+        choice.recordChoice(false, author, at);
+        when(preferences.findByUser_IdAndNotificationType(patient.getUser().getId(), NotificationType.LAB_RESULT))
+            .thenReturn(List.of(choice));
+        var realConsent = new PatientChannelConsent(preferences);
+        var realLedger = new PatientNotificationLedger(repository, patientRepository, realConsent, smsService,
+            emailService, Clock.systemUTC(), transactionManager);
+        when(patientRepository.findNotificationAccountScoped(patient.getId(), hospitalId)).thenAnswer(call -> {
+            choice.recordChoice(enabledAfterDecision, UUID.randomUUID(), at.plusMinutes(1));
+            return Optional.of(patient.getUser().getId());
+        });
+        if (inline) {
+            var gate = new PatientMessageGate(realConsent, realLedger, smsService, emailService,
+                new PatientRecipientVerification(), new PatientRecipientCurrentCheck(patientRepository, new PatientRecipientVerification()));
+            assertThat(gate.smsNow(patient,
+                new PatientMessageGate.Notice(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, subjectId), "cdx notice"))
+                .isFalse();
+        } else {
+            assertThat(realLedger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, patient.getId(), subjectId))
+                .containsExactly(NotificationChannel.EMAIL);
+        }
+        var saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
+        verify(repository, times(inline ? 1 : 2)).saveAndFlush(saved.capture());
+        assertThat(saved.getAllValues()).filteredOn(row -> row.getChannel() == NotificationChannel.SMS)
+            .singleElement().satisfies(row -> {
+                assertThat(row.getConsentRecordedBy()).isEqualTo(author);
+                assertThat(row.getConsentRecordedAt()).isEqualTo(at);
+                assertThat(row.getErrorCode()).isEqualTo("OPTED_OUT");
+            });
+        verify(preferences, times(inline ? 1 : 2))
+            .findByUser_IdAndNotificationType(patient.getUser().getId(), NotificationType.LAB_RESULT);
+        verify(smsService, never()).send(any(), any());
     }
 
 
@@ -150,8 +192,8 @@ class PatientNotificationLedgerTest {
     @Test
     @DisplayName("a channel the patient turned off is not queued")
     void honoursTheStoredPreference() {
-        when(consent.allows(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
-            .thenReturn(false);
+        when(consent.decision(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
 
         assertThat(ledger.enqueue(PatientNotificationEvent.IMAGING_RESULT_AVAILABLE, hospitalId, patient.getId(),
             subjectId)).containsExactly(NotificationChannel.EMAIL);
@@ -160,8 +202,8 @@ class PatientNotificationLedgerTest {
     @Test
     @DisplayName("D2206: a channel the patient turned off leaves a SKIPPED / OPTED_OUT row staff can see")
     void anOptOutLeavesATrace() {
-        when(consent.allows(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
-            .thenReturn(false);
+        when(consent.decision(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
 
         ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, patient.getId(), subjectId);
 
@@ -180,8 +222,7 @@ class PatientNotificationLedgerTest {
     @Test
     @DisplayName("D2206: the gate's opt-out trace is one SKIPPED row; a direct event is never queued")
     void recordOptOutAndDirectEvents() {
-        ledger.recordOptOut(PatientNotificationEvent.PHARMACY_DISPENSED, hospitalId, patient.getId(), subjectId,
-            NotificationChannel.SMS);
+        ledger.recordOptOut(PatientNotificationEvent.PHARMACY_DISPENSED, hospitalId, patient.getId(), subjectId, NotificationChannel.SMS, new PatientChannelConsent.Decision(false, patient.getUser().getId(), null, null));
 
         ArgumentCaptor<PatientNotificationDelivery> saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
         verify(repository).saveAndFlush(saved.capture());
@@ -197,13 +238,11 @@ class PatientNotificationLedgerTest {
     @Test
     @DisplayName("D2206: a trace with no hospital or subject is not written, and never throws")
     void recordOptOutIsBestEffort() {
-        ledger.recordOptOut(PatientNotificationEvent.INVOICE, null, patient.getId(), subjectId,
-            NotificationChannel.EMAIL);
+        ledger.recordOptOut(PatientNotificationEvent.INVOICE, null, patient.getId(), subjectId, NotificationChannel.EMAIL, new PatientChannelConsent.Decision(false, patient.getUser().getId(), null, null));
         verify(repository, never()).saveAndFlush(any());
 
         when(repository.saveAndFlush(any())).thenThrow(new IllegalStateException("db down"));
-        org.assertj.core.api.Assertions.assertThatCode(() -> ledger.recordOptOut(PatientNotificationEvent.INVOICE,
-            hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> ledger.recordOptOut(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL, new PatientChannelConsent.Decision(false, patient.getUser().getId(), null, null))).doesNotThrowAnyException();
     }
 
     @Test
