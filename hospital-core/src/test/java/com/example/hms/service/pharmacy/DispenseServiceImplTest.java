@@ -1730,7 +1730,7 @@ class DispenseServiceImplTest {
             service.createDispense(dto);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
-            verify(support).notifyDispensed(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
+            verify(support).notifyDispensed(any(), eq(patient), eq(pharmacy));
             // G6: the prescriber is told the order was filled
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.DISPENSED);
         }
@@ -1876,7 +1876,7 @@ class DispenseServiceImplTest {
 
             service.createDispense(dto);
 
-            verify(support, never()).notifyDispensed(any(), any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
         }
     }
 
@@ -3239,7 +3239,7 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any());
             verify(prescriptionRepository, never()).save(any());
             verify(stockLotRepository, never()).save(any());
-            verify(support, never()).notifyDispensed(any(), any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 
@@ -3383,7 +3383,7 @@ class DispenseServiceImplTest {
             // tx (in production) would have rolled back. Mockito verifies
             // we never reached those code paths after the violation.
             verify(prescriptionRepository, never()).save(any(Prescription.class));
-            verify(support, never()).notifyDispensed(any(), any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 
