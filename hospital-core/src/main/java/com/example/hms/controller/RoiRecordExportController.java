@@ -19,7 +19,7 @@ public class RoiRecordExportController {
     @GetMapping(value = "/roi-requests/{requestId}/record.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     @PreAuthorize(PatientRecordExportController.EXPORT_ROLES)
     public ResponseEntity<byte[]> download(@PathVariable UUID requestId) {
-        byte[] bytes = pdf.renderForRoi(requests.copyForExport(requestId), requestId);
+        byte[] bytes = pdf.renderForRoi(requests.copyForExport(requestId));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"record-copy-" + requestId + ".pdf\"")
             .header("X-Content-Type-Options", "nosniff").contentType(MediaType.APPLICATION_PDF).body(bytes);

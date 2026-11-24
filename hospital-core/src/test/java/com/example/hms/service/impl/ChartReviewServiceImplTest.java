@@ -181,6 +181,34 @@ class ChartReviewServiceImplTest {
         // The shared treatment query can return an order owned elsewhere but performed here.
         when(labResultRepo.findPatientResultsReadableAt(eq(PATIENT_ID), any(), eq(HOSPITAL_ID), eq(false), any()))
             .thenReturn(List.of(ownResult, foreignResult));
+        var ownMedication = Prescription.builder().hospital(hospital).medicationName("OWN-MEDICATION")
+            .status(PrescriptionStatus.SIGNED).build(); ownMedication.setId(UUID.randomUUID());
+        var foreignMedication = Prescription.builder().hospital(other).medicationName("FOREIGN-MEDICATION")
+            .status(PrescriptionStatus.SIGNED).build(); foreignMedication.setId(UUID.randomUUID());
+        when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any(), any()))
+            .thenAnswer(inv -> new PageImpl<>(List.of(ownMedication, foreignMedication).stream()
+                .filter(p -> ((Set<?>) inv.getArgument(1)).contains(p.getHospital().getId())).toList()));
+        var ownImaging = ImagingOrder.builder().hospital(hospital).studyType("OWN-IMAGING")
+            .status(ImagingOrderStatus.ORDERED).build(); ownImaging.setId(UUID.randomUUID());
+        var foreignImaging = ImagingOrder.builder().hospital(other).studyType("FOREIGN-IMAGING")
+            .status(ImagingOrderStatus.ORDERED).build(); foreignImaging.setId(UUID.randomUUID());
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(eq(PATIENT_ID), any(), any()))
+            .thenAnswer(inv -> new PageImpl<>(List.of(ownImaging, foreignImaging).stream()
+                .filter(p -> ((Set<?>) inv.getArgument(1)).contains(p.getHospital().getId())).toList()));
+        var ownProcedure = ProcedureOrder.builder().hospital(hospital).procedureName("OWN-PROCEDURE").build();
+        ownProcedure.setId(UUID.randomUUID());
+        var foreignProcedure = ProcedureOrder.builder().hospital(other).procedureName("FOREIGN-PROCEDURE").build();
+        foreignProcedure.setId(UUID.randomUUID());
+        when(procedureRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(eq(PATIENT_ID), any()))
+            .thenAnswer(inv -> List.of(ownProcedure, foreignProcedure).stream()
+                .filter(p -> ((Set<?>) inv.getArgument(1)).contains(p.getHospital().getId())).toList());
+        var ownNursing = com.example.hms.model.NursingNote.builder().hospital(hospital).narrative("OWN-NURSING").build();
+        ownNursing.setId(UUID.randomUUID());
+        var foreignNursing = com.example.hms.model.NursingNote.builder().hospital(other).narrative("FOREIGN-NURSING").build();
+        foreignNursing.setId(UUID.randomUUID());
+        when(nursingNoteRepo.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(eq(PATIENT_ID), any()))
+            .thenAnswer(inv -> List.of(ownNursing, foreignNursing).stream()
+                .filter(p -> ((Set<?>) inv.getArgument(1)).contains(p.getHospital().getId())).toList());
         // The clinical screen can see all three under this clinician's treatment/break-glass authority.
         UUID readerId = UUID.randomUUID();
         com.example.hms.security.context.HospitalContextHolder.setContext(
@@ -237,7 +265,7 @@ class ChartReviewServiceImplTest {
         request.setId(UUID.randomUUID());
         when(repository.findById(request.getId())).thenReturn(Optional.of(request));
         var requests = new com.example.hms.service.roi.RoiRequestService(repository, patients, hospitalRepo,
-            mock(com.example.hms.repository.StaffRepository.class), roles, audits,
+            mock(com.example.hms.repository.StaffRepository.class), roles, mock(com.example.hms.service.RequiredAuditEventLogPort.class),
             mock(com.example.hms.mapper.RoiRequestMapper.class), java.time.Clock.systemUTC());
         var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
             new com.example.hms.controller.RoiRecordExportController(requests, pdf)).build();
@@ -250,7 +278,9 @@ class ChartReviewServiceImplTest {
                 .andReturn().getResponse().getContentAsByteArray();
             try (var document = org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
                 assertThat(new org.apache.pdfbox.text.PDFTextStripper().getText(document))
-                    .contains("OWN-RELEASABLE-VISIT", "OWN-ALLERGY", "OWN-LAB-RESULT", "OWN-DIRECTIVE-CONTENT")
+                    .contains("OWN-RELEASABLE-VISIT", "OWN-ALLERGY", "OWN-LAB-RESULT", "OWN-DIRECTIVE-CONTENT",
+                        "OWN-MEDICATION", "OWN-IMAGING", "OWN-PROCEDURE", "OWN-NURSING")
+                    .doesNotContain("FOREIGN-MEDICATION", "FOREIGN-IMAGING", "FOREIGN-PROCEDURE", "FOREIGN-NURSING")
                     .doesNotContain("FOREIGN-UNTAGGED-VISIT", "FOREIGN-HIV-VISIT", "FOREIGN-ALLERGY", "FOREIGN-LAB-RESULT", "FOREIGN-DIRECTIVE-CONTENT", "UNSCOPED-LEGACY-ALLERGY");
             }
             org.mockito.Mockito.verifyNoInteractions(recordAccessPolicy, breakGlassGate, reachRecorder);
