@@ -19,7 +19,7 @@ class PdfAmountLocaleGuardTest {
             for (var file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = SourceScan.stripComments(Files.readString(file));
                 boolean own = file.endsWith("PdfInvoiceService.java");
-                var matcher = Pattern.compile(own ? "\\bmoney\\s*\\(" : "\\bPdfInvoiceService\\.money\\s*\\(").matcher(source);
+                var matcher = amountCalls(source, own).matcher(source);
                 while (matcher.find()) {
                     if (own && source.substring(Math.max(0, matcher.start()-30), matcher.start()).stripTrailing().endsWith("String")) continue;
                     int open = source.indexOf('(', matcher.start());
@@ -37,18 +37,35 @@ class PdfAmountLocaleGuardTest {
         String source = SourceScan.stripComments(Files.readString(MAIN.resolve("service/PdfInvoiceService.java")));
         var formatter = Pattern.compile("getIntegerInstance\\s*\\(([^)]+)\\)").matcher(source);
         assertThat(formatter.find()).isTrue();
+        var signature = Pattern.compile("money\\s*\\(\\s*BigDecimal\\s+\\w+\\s*,\\s*Locale\\s+(\\w+)").matcher(source);
+        assertThat(signature.find()).as("explicit locale parameter").isTrue();
+        String parameter = signature.group(1);
         String argument = formatter.group(1).strip();
         String dependency = argument;
-        if (argument.matches("[a-zA-Z]+")) {
-            var declaration = Pattern.compile("Locale\\s+" + Pattern.quote(argument) + "\\s*=([^;]+);").matcher(source);
+        if (!argument.equals(parameter) && argument.matches("[a-zA-Z]+")) {
+            var declaration = Pattern.compile("(?:Locale|var)\\s+" + Pattern.quote(argument) + "\\s*=([^;]+);").matcher(source);
             assertThat(declaration.find()).as("formatter locale origin").isTrue();
             dependency = declaration.group(1);
         }
-        assertThat(Pattern.compile("\\blocale\\b").matcher(dependency).find()).as("the passed locale reaches NumberFormat").isTrue();
+        assertThat(Pattern.compile("\\b" + Pattern.quote(parameter) + "\\b").matcher(dependency).find()).as("the passed locale reaches NumberFormat").isTrue();
         String nested = "money(totalOf(item, price), labels.locale())";
         assertThat(arguments(nested, nested.indexOf('('), SourceScan.closingParen(nested, nested.indexOf('(')))).hasSize(2);
         String missing = "money(totalOf(item, price))";
         assertThat(arguments(missing, missing.indexOf('('), SourceScan.closingParen(missing, missing.indexOf('(')))).hasSize(1);
+    }
+
+    @Test void staticImportsCannotHideAnAmountCaller() {
+        String imported = "import static com.example.hms.service.PdfInvoiceService.money; return money(total);";
+        assertThat(amountCalls(imported, false).matcher(imported).find()).isTrue();
+        String wildcard = "import static com.example.hms.service.PdfInvoiceService.*; return money(total);";
+        assertThat(amountCalls(wildcard, false).matcher(wildcard).find()).isTrue();
+        String unrelated = "import static com.example.hms.service.PdfInvoiceService.money; return other.money(total);";
+        assertThat(amountCalls(unrelated, false).matcher(unrelated).find()).isFalse();
+    }
+
+    private static Pattern amountCalls(String source, boolean own) {
+        boolean imported = Pattern.compile("import\\s+static\\s+com\\.example\\.hms\\.service\\.PdfInvoiceService\\.(?:money|\\*)\\s*;").matcher(source).find();
+        return Pattern.compile(own || imported ? "(?:\\bPdfInvoiceService\\.|(?<![\\w.]))money\\s*\\(" : "\\bPdfInvoiceService\\.money\\s*\\(");
     }
 
     private static List<String> arguments(String source, int open, int close) {
