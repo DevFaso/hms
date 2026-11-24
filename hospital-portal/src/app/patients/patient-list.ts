@@ -226,6 +226,9 @@ export class PatientListComponent implements OnInit, OnDestroy {
 
   onSearchChange(value: string): void {
     this.searchTerm = value;
+    // Invalidate an outstanding exact-IU response immediately, before the debounce.
+    this.iuRequest++;
+    this.iuMatchIds.set(new Set<string>());
     this.searchInput$.next(value);
   }
 
@@ -243,7 +246,12 @@ export class PatientListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (rows) => {
-          if (request !== this.iuRequest) return;
+          if (
+            request !== this.iuRequest ||
+            iu !== normalizedNationalUniqueId(this.searchTerm.trim()) ||
+            !this.roleContext.hasAnyActiveRoleExactly([...NATIONAL_IU_SEARCH_ROLES])
+          )
+            return;
           this.iuMatchIds.set(new Set((rows ?? []).map((r) => r.id)));
           this.applyFilter();
         },

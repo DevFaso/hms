@@ -8,6 +8,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** QA D924, D942, D943: the folds every patient search and match path shares. */
 class PatientMatchKeysTest {
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(value = {
+        "Aïcha Kaboré|Kabore|true",
+        "Kaboré Aïcha|Kaboré|true",
+        "Aïcha Kaboré Sawadogo|Kaboré-Sawadogo|true",
+        "Kaboré-Sawadogo Aïcha|Kabore Sawadogo|true",
+        "Aïcha Traoré-N’Guessan|Traore-N'Guessan|true",
+        "Awa Ki|Ki|true",
+        "Kinda Ouedraogo|Ki|false",
+        "Awa Kinda|Ki|false",
+        "Kaboré|Kaboré|false",
+        "NULL|Kabore|false",
+        "Aicha Kabore|NULL|false"
+    }, delimiter = '|', nullValues = "NULL")
+    void familyNamesAreFoldedAtWordBoundariesInEitherOrder(String typed, String family, boolean expected) {
+        assertThat(PatientMatchKeys.sharedFamilyName(typed, family)).isEqualTo(expected);
+    }
+
+    @Test
+    void oversizedFamilyQueriesAreNotExpandedIntoUnboundedSqlKeys() {
+        assertThat(PatientMatchKeys.familyNameKeys("a ".repeat(200))).isEmpty();
+    }
+
     @Test
     @DisplayName("the SQL fold maps each accented letter to the letter the Java fold produces")
     void theSqlAndJavaFoldsAgree() {

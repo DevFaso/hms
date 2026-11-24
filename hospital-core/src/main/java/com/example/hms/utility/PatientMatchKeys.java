@@ -325,6 +325,30 @@ public final class PatientMatchKeys {
         return false;
     }
 
+    /**
+     * Family names may be written first or last. These are bounded, exact folded
+     * prefix/suffix variants, never substrings of another name (Ki is not Kinda).
+     * They only source possible duplicates with the same DOB; they never merge identities.
+     */
+    public static java.util.Set<String> familyNameKeys(String typed) {
+        if (typed == null || typed.length() > 256) return java.util.Set.of();
+        String folded = foldName(typed);
+        if (folded == null) return java.util.Set.of();
+        String[] parts = NAME_JOINERS.split(folded);
+        if (parts.length < 2) return java.util.Set.of();
+        java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+        for (int boundary = 1; boundary < parts.length; boundary++) {
+            keys.add(String.join("", java.util.Arrays.copyOfRange(parts, 0, boundary)));
+            keys.add(String.join("", java.util.Arrays.copyOfRange(parts, boundary, parts.length)));
+        }
+        return java.util.Set.copyOf(keys);
+    }
+
+    public static boolean sharedFamilyName(String typed, String storedFamilyName) {
+        String family = compactName(storedFamilyName);
+        return family != null && familyNameKeys(typed).contains(family);
+    }
+
     /** The folded name with its spaces, hyphens and apostrophes removed; null when blank. */
     static String compactName(String value) {
         String folded = foldName(value);
