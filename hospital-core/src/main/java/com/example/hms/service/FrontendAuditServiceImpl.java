@@ -28,7 +28,7 @@ public class FrontendAuditServiceImpl implements FrontendAuditService {
     @Transactional
     public void recordEvent(FrontendAuditEventRequestDTO request, String ipAddress, String userAgent) {
         if (request == null) {
-            throw new BusinessException("Audit payload is required.");
+            throw new BusinessException("request.auditPayload.required");
         }
         String normalizedType = trimToNull(request.getType());
         if (normalizedType == null) {

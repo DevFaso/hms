@@ -41,7 +41,7 @@ public class ControllerAuthUtils {
      */
     public void requireAuth(Authentication auth) {
         if (auth == null) {
-            throw new BusinessException("Authentication required.");
+            throw new BusinessException("request.session.required");
         }
     }
 
@@ -122,8 +122,7 @@ public class ControllerAuthUtils {
             case AMBIGUOUS -> throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
             default -> {
                 if (requiredForReceptionist && hasAuthority(auth, ROLE_RECEPTIONIST)) {
-                    throw new BusinessException(
-                        "Receptionist must be affiliated with a hospital (select an active hospital or provide hospitalId).");
+                    throw new BusinessException("request.hospitalContext.required");
                 }
                 return null;
             }
@@ -175,7 +174,7 @@ public class ControllerAuthUtils {
         try {
             return LocalDateTime.parse(raw.trim());
         } catch (DateTimeParseException ex) {
-            throw new BusinessException("Invalid datetime format; expected ISO-8601.");
+            throw new BusinessException("request.datetime.invalid");
         }
     }
 

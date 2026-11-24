@@ -76,7 +76,7 @@ public final class Hl7MessageInspector {
     private static void requireWithin(String value, int max, String field,
                                       Hl7MessageHeader replyHeader) {
         if (!Hl7FieldBounds.fits(value, max)) {
-            throw new MllpFieldWidthException(field + " exceeds " + max + " characters", replyHeader);
+            throw new MllpFieldWidthException(field + " exceeds " + max + " characters", replyHeader, field, max);
         }
     }
 

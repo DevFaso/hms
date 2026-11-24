@@ -108,14 +108,14 @@ class ProScoringTest {
     void rejectsAnItemTheInstrumentDoesNotHave() {
         assertThatThrownBy(() -> ProScoring.score(fixture(), Map.of(1, 1, 9, 1)))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no item 9");
+            .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.item.unknown"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(9); });
     }
 
     @Test
     void rejectsAnOptionTheItemDoesNotHave() {
         assertThatThrownBy(() -> ProScoring.score(fixture(), Map.of(2, 5)))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("item 2 has no option 5");
+            .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.option.unknown"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(2); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[2]).isEqualTo(5); });
     }
 
     @Test
@@ -133,6 +133,6 @@ class ProScoringTest {
 
         assertThatThrownBy(() -> ProScoring.score(empty, Map.of()))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no items loaded");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("pro.items.missing"));
     }
 }

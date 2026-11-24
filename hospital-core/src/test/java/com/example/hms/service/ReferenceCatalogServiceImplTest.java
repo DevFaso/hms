@@ -223,7 +223,7 @@ class ReferenceCatalogServiceImplTest {
     void importCatalog_nullFile_throws() {
         assertThatThrownBy(() -> service.importCatalog(catalogId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("CSV file is required");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required"));
     }
 
     @Test
@@ -233,7 +233,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.importCatalog(catalogId, file))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("CSV file is required");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.import.required"));
     }
 
     @Test

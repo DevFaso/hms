@@ -90,7 +90,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     @Transactional
     public CatalogImportResponseDTO importCatalog(UUID catalogId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("CSV file is required for import");
+            throw new BusinessException("catalog.import.required");
         }
 
         ReferenceCatalog catalog = catalogRepository.findById(catalogId)
@@ -124,7 +124,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
                 .skipped(stats.skipped())
                 .build();
         } catch (IOException ex) {
-            throw new BusinessException("Failed to parse catalog CSV: " + ex.getMessage(), ex);
+            throw new BusinessException("catalog.import.unreadable", ex);
         }
     }
 

@@ -102,7 +102,11 @@ class IntegrationHealthActionServiceTest {
         UUID orgId = UUID.randomUUID();
         assertThatThrownBy(() -> service.testConnection("not.registered", orgId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not.registered");
+            .satisfies(error -> {
+                ResourceNotFoundException refusal = (ResourceNotFoundException) error;
+                assertThat(refusal.getMessageKey()).isEqualTo("integration.probe.notRegistered");
+                assertThat(refusal.getArgs()).containsExactly("not.registered");
+            });
     }
 
     @Test

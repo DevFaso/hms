@@ -102,7 +102,7 @@ public class NotificationController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<NotificationPreferenceDTO>> getMyPreferences(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         return ResponseEntity.ok(notificationService.getPreferences(userId));
     }
 
@@ -112,7 +112,7 @@ public class NotificationController {
             Authentication auth,
             @Valid @RequestBody List<NotificationPreferenceUpdateDTO> updates) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         return ResponseEntity.ok(notificationService.updatePreferences(userId, updates));
     }
 }

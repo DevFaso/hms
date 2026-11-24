@@ -18,8 +18,7 @@ public enum InvoiceStatus {
 
     /** {@link #localizedLabel()} in an explicit locale (the request's when null). */
     public String localizedLabel(java.util.Locale locale) {
-        String label = com.example.hms.utility.MessageUtil.resolve(locale, "pdf.invoice.statusValue." + name());
-        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+        return com.example.hms.utility.MessageUtil.resolveLabel(locale, "pdf.invoice.statusValue." + name(), name());
     }
 
     /** The label of {@code status}, or a dash for an invoice that carries none. */

@@ -137,6 +137,6 @@ public class InvoiceItemMapper {
         } catch (RuntimeException ignored) {
             // Best-effort display name construction; ignore lookup issues.
         }
-        return "Staff";
+        return com.example.hms.utility.MessageUtil.resolve("common.display.staff");
     }
 }
