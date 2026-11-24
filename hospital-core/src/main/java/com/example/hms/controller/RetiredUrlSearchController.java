@@ -18,6 +18,10 @@ import org.springframework.web.server.ResponseStatusException;
  * {@code GET /patients?search=…} silently answered the unfiltered list. Each now answers
  * 410 Gone, in the caller's language, naming the POST that replaced it. Nothing is read: the
  * query string is never bound (no parameter here names it).
+ *
+ * <p>Not the audit reads: {@code GET /audit-logs?search=} is already refused by its
+ * {@code @StrictQueryParams} (400 naming the parameter), and {@code GET /super-admin/audit-search}
+ * has no GET twin to be confused with (405).
  */
 @Hidden
 @RestController
@@ -34,7 +38,6 @@ public class RetiredUrlSearchController {
         "/patients",
         "/appointments",
         "/prescriptions",
-        "/audit-logs",
         "/notifications",
         "/me/patient/notifications",
         "/assignments",
@@ -58,9 +61,7 @@ public class RetiredUrlSearchController {
         "/chat/messages/by-sender-username",
         "/chat/messages/by-recipient-email",
         "/chat/messages/by-recipient-username",
-        "/chat/history/{user1Id}/{user2Id}/search",
-        "/super-admin/audit-search",
-        "/super-admin/audit-search/csv"
+        "/chat/history/{user1Id}/{user2Id}/search"
     })
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> searchMovedToBody(HttpServletRequest request) {
