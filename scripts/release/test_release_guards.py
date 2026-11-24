@@ -26,6 +26,18 @@ class ReleaseEvidenceGuardTest(unittest.TestCase):
         self.assertIn("existing[0]['state'] == 'closed'", publisher)
         self.assertNotIn("'--force'", publisher)
 
+    def test_own_run_inventory_is_outside_polling_loop_and_stacked_bases_are_not_filtered(self):
+        source = Path(__file__).with_name('sync_record.py').read_text(encoding='utf-8')
+        tree = ast.parse(source)
+        functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+        loop = next(node for node in ast.walk(functions['evidence_snapshot']) if isinstance(node, ast.While))
+        self.assertFalse(any(isinstance(node, ast.Constant) and isinstance(node.value, str) and 'workflow_runs' in node.value for node in ast.walk(loop)))
+        inventory_literals = [node.value for node in ast.walk(functions['included_prs']) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+        self.assertTrue(any('sort=updated' in value for value in inventory_literals))
+        self.assertFalse(any('base=develop' in value for value in inventory_literals))
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/sync-record.yml').read_text(encoding='utf-8')
+        self.assertIn("'docs/releases/**'", workflow)
+
 
 if __name__ == '__main__':
     unittest.main()

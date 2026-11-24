@@ -13,7 +13,10 @@ named develop commit to equal the sync's second parent and verifies that the syn
 is an ancestor of `origin/main`. Its first parent is the code rollback point.
 It inventories all commits introduced since previous main; a paginated closed-PR
 inventory matches actual merge SHAs for merge, squash and rebase PRs, with merge
-subjects as an independent completeness check. Missing associations fail visibly.
+subjects as an independent completeness check. The inventory includes stacked PRs
+targeting feature branches, sorts by update time and stops at the earliest
+introduced commit date. It has a five-minute budget; missing merge-subject PRs
+receive an individual SHA-verified lookup and are named if still missing.
 Added versioned SQL migrations and every other migration-directory change
 (including edited/deleted/renamed SQL and changelog registration) are listed separately.
 Both the main and included develop commit receive check-run and commit-status
@@ -26,14 +29,18 @@ minutes for other checks/statuses; pending or absent evidence at that deadline
 fails publication visibly and retains the incomplete artifact for inspection.
 Terminal failures are recorded truthfully, never relabelled green. Rerun after
 pending checks finish. GitHub rate-limit failures receive bounded backoff;
-authorization refusals do not. Each GitHub call has a 90-second timeout.
+authorization refusals do not. Polling is once per minute and the workflow's own
+run IDs are cached once per SHA. Rate-limit retries wait at least one minute and
+honour Retry-After/reset headers within the overall budget. Each GitHub call has
+a maximum 90-second timeout, shortened to the remaining collection budget.
 The test/selection jobs have read-only tokens. The recording job creates one dedicated
 record branch and opens a **draft PR against develop** containing only the generated
 Markdown file. Its token can write that branch/PR; it cannot change repository
 settings. An open PR's explicitly delimited evidence block may be refreshed by
 an ordinary fast-forward commit. Stable identity, PR and migration sections must
-match exactly; unrelated branch changes are refused. A pushed branch whose PR
-creation failed is recoverable even after evidence changes. Closed/merged PRs
+match exactly; unrelated branch changes are refused. A new record branch can also refresh a record already on develop, subject to the
+same stable-content check. An identical record creates no new commit or PR. A
+pushed branch whose PR creation failed is recoverable even after evidence changes. Closed/merged PRs
 are left alone. Runs for the same canonical full sync SHA are serialized; a
 racing external writer fails safely without force-pushing. The workflow retains a 90-day artifact,
 including when PR publication fails. The record branch/PR provides durable Git

@@ -8,6 +8,7 @@ import re
 import subprocess
 import os
 import time
+from email.utils import parsedate_to_datetime
 
 REPO = 'DevFaso/hms'
 SYNC = re.compile(r'Sync develop ([0-9a-f]{7,40}) into main \(sync #(\d+)\)')
@@ -27,24 +28,69 @@ def git(*args):
     return run('git', *args)
 
 
-def api(path):
-    for attempt in range(4):
+class EvidenceBudgetExpired(RuntimeError):
+    """A bounded evidence collection may retain its last incomplete snapshot."""
+
+
+def rate_limit_delay(path, result, deadline):
+    # gh does not normally print response headers. A bounded HEAD obtains only
+    # response headers; neither bodies nor authentication headers are logged.
+    headers = result.stderr + '\n' + result.stdout
+    if not re.search(r'^retry-after:', headers, re.IGNORECASE | re.MULTILINE):
+        remaining = deadline - time.monotonic()
+        if remaining <= 60:
+            raise EvidenceBudgetExpired('GitHub evidence wait budget exhausted')
         try:
-            result = subprocess.run(['gh', 'api', '--paginate', '--slurp', f'repos/{REPO}/{path}'],
-                                    text=True, encoding='utf-8', capture_output=True, timeout=90)
+            response = subprocess.run(['gh', 'api', '--method', 'HEAD', '--include', f'repos/{REPO}/{path}'],
+                                      text=True, encoding='utf-8', capture_output=True, timeout=min(30, remaining))
+            headers = response.stdout
         except subprocess.TimeoutExpired:
+            headers = ''
+    retry = re.search(r'^retry-after:\s*([^\r\n]+)', headers, re.IGNORECASE | re.MULTILINE)
+    date = re.search(r'^date:\s*([^\r\n]+)', headers, re.IGNORECASE | re.MULTILINE)
+    reset = re.search(r'^x-ratelimit-reset:\s*(\d+)', headers, re.IGNORECASE | re.MULTILINE)
+    delay = 60
+    try:
+        if retry:
+            delay = int(retry[1]) if retry[1].isdigit() else (parsedate_to_datetime(retry[1]) - parsedate_to_datetime(date[1])).total_seconds()
+        elif reset and date:
+            delay = int(reset[1]) - parsedate_to_datetime(date[1]).timestamp()
+    except (ValueError, TypeError, AttributeError):
+        delay = 60
+    return max(60, delay)
+
+
+def api(path, *, paginate=True, deadline=None):
+    deadline = deadline if deadline is not None else time.monotonic() + 300
+    for attempt in range(4):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise EvidenceBudgetExpired('GitHub evidence wait budget exhausted')
+        try:
+            options = ['--paginate', '--slurp'] if paginate else []
+            result = subprocess.run(['gh', 'api', *options, f'repos/{REPO}/{path}'],
+                                    text=True, encoding='utf-8', capture_output=True, timeout=min(90, remaining))
+        except subprocess.TimeoutExpired:
+            if deadline <= time.monotonic():
+                raise EvidenceBudgetExpired('GitHub evidence wait budget exhausted') from None
             if attempt == 3:
                 raise RuntimeError('GitHub evidence request timed out') from None
+            if 2 ** attempt >= deadline - time.monotonic():
+                raise EvidenceBudgetExpired('GitHub evidence wait budget exhausted') from None
             time.sleep(2 ** attempt)
             continue
         if result.returncode == 0:
-            return json.loads(result.stdout)
+            value = json.loads(result.stdout)
+            return value if paginate else [value]
         # Never retry a plain authorization refusal or include response bodies/tokens.
         limited = 'HTTP 429' in result.stderr or ('HTTP 403' in result.stderr and
                   any(term in result.stderr.lower() for term in ['rate limit', 'secondary limit', 'abuse']))
         if not limited or attempt == 3:
             raise RuntimeError('GitHub evidence request failed; check permissions or rate limits')
-        time.sleep(2 ** attempt)
+        delay = rate_limit_delay(path, result, deadline)
+        if delay >= deadline - time.monotonic():
+            raise EvidenceBudgetExpired('GitHub evidence wait budget exhausted')
+        time.sleep(delay)
 
 
 def commit(ref):
@@ -74,7 +120,11 @@ def inspect_sync(ref, number):
                '--diff-filter=ACDMR', rollback, head, '--', MIGRATION_ROOT).splitlines()]
     migrations = [row[1] for row in changes if row[0] == 'A' and MIGRATION.fullmatch(row[1])]
     date = datetime.fromisoformat(git('show', '-s', '--format=%cI', head)).astimezone(timezone.utc).date().isoformat()
-    return dict(number=number, main=head, develop=develop, rollback=rollback, date=date, prs=sorted(pull_requests), migrations=sorted(migrations), migration_changes=[row for row in changes if not (row[0] == 'A' and MIGRATION.fullmatch(row[1]))], introduced=git('rev-list', f'{rollback}..{develop}').splitlines())
+    dates = [git('show', '-s', '--format=%cI', rollback)] + git('log', '--format=%cI', f'{rollback}..{develop}').splitlines()
+    # A stacked feature can introduce a merge older than previous main. Its
+    # committer date, not just rollback date, bounds the PR inventory safely.
+    since = min(datetime.fromisoformat(value) for value in dates).astimezone(timezone.utc).isoformat()
+    return dict(number=number, main=head, develop=develop, rollback=rollback, date=date, inventory_since=since, prs=sorted(pull_requests), migrations=sorted(migrations), migration_changes=[row for row in changes if not (row[0] == 'A' and MIGRATION.fullmatch(row[1]))], introduced=git('rev-list', f'{rollback}..{develop}').splitlines())
 
 
 def included_prs(data):
@@ -82,13 +132,25 @@ def included_prs(data):
     found = {}
     # One paginated inventory, not one request per branch commit. A rebase tip,
     # squash or ordinary merge must still occur in the introduced Git range.
-    for page in api('pulls?state=closed&base=develop&per_page=100'):
+    deadline = time.monotonic() + 300
+    page_number = 1
+    cutoff = datetime.fromisoformat(data['inventory_since']) if data.get('inventory_since') else None
+    while True:
+        page = api(f'pulls?state=closed&sort=updated&direction=desc&per_page=100&page={page_number}', paginate=False, deadline=deadline)[0]
         for record in page:
             if record.get('merged_at') and record.get('merge_commit_sha') in introduced:
                 found[record['number']] = record['title']
+        if len(page) < 100 or (cutoff and page[-1].get('updated_at') and datetime.fromisoformat(page[-1]['updated_at'].replace('Z', '+00:00')) < cutoff):
+            break
+        page_number += 1
+    for number in sorted(set(data['prs']) - set(found)):
+        record = api(f'pulls/{number}', paginate=False, deadline=deadline)[0]
+        if isinstance(record, dict) and record.get('merged_at') and record.get('merge_commit_sha') in introduced:
+            found[number] = record['title']
     # Conventional merge subjects are an independent completeness check.
     if not set(data['prs']).issubset(found):
-        raise ValueError('GitHub PR evidence does not cover every merge commit in the sync')
+        missing = ', '.join('#' + str(number) for number in sorted(set(data['prs']) - set(found)))
+        raise ValueError('GitHub PR evidence does not cover every merge commit in the sync; missing: ' + missing)
     return sorted(found.items())
 
 
@@ -98,16 +160,18 @@ def one_line(value):
     return re.sub(r'([\[\]()!*_`|])', lambda match: chr(92) + match[0], text)
 
 
-def check_evidence(sha, excluded_runs=()):
+def check_evidence(sha, excluded_runs=(), deadline=None):
+    def request(path):
+        return api(path, deadline=deadline) if deadline is not None else api(path)
     rows = []
-    for page in api(f'commits/{sha}/check-runs?per_page=100'):
+    for page in request(f'commits/{sha}/check-runs?per_page=100'):
         for check in page['check_runs']:
             links = [check.get('html_url') or '', check.get('details_url') or '']
             if any(f'/actions/runs/{run_id}/' in link + '/' for run_id in excluded_runs for link in links):
                 continue
             rows.append((check['name'], check.get('conclusion') or check['status'], check.get('html_url')))
     seen_contexts = set()
-    for page in api(f'commits/{sha}/statuses?per_page=100'):
+    for page in request(f'commits/{sha}/statuses?per_page=100'):
         for status in page:
             if status['context'] in seen_contexts:
                 continue
@@ -118,15 +182,28 @@ def check_evidence(sha, excluded_runs=()):
 
 def evidence_snapshot(data, wait_seconds):
     deadline = time.monotonic() + wait_seconds
+    request_deadline = deadline if wait_seconds else time.monotonic() + 90
+    shas = list(dict.fromkeys([data['main'], data['develop']]))
+    evidence = {sha: [] for sha in shas}
+    excluded = {}
+    try:
+        for sha in shas:
+            excluded[sha] = [run['id'] for page in api(f'actions/workflows/sync-record.yml/runs?head_sha={sha}&per_page=100', deadline=request_deadline) for run in page['workflow_runs']]
+            current = os.environ.get('GITHUB_RUN_ID', '')
+            if current.isdigit():
+                excluded[sha].append(int(current))
+    except EvidenceBudgetExpired:
+        return evidence, False
     while True:
-        evidence = {}
-        for sha in dict.fromkeys([data['main'], data['develop']]):
-            own_runs = [run['id'] for page in api(f'actions/workflows/sync-record.yml/runs?head_sha={sha}&per_page=100') for run in page['workflow_runs']]
-            evidence[sha] = check_evidence(sha, own_runs)
+        try:
+            for sha in shas:
+                evidence[sha] = check_evidence(sha, excluded[sha], deadline=request_deadline)
+        except EvidenceBudgetExpired:
+            return evidence, False
         pending = any(not rows or any(row[1] in PENDING for row in rows) for rows in evidence.values())
         if not pending or time.monotonic() >= deadline:
             return evidence, not pending
-        time.sleep(min(15, max(0, deadline - time.monotonic())))
+        time.sleep(min(60, max(0, deadline - time.monotonic())))
 
 
 def stable_content(content):
@@ -207,12 +284,16 @@ def main():
     parser.add_argument('--wait-seconds', type=int, default=0)
     parser.add_argument('--output-dir', type=Path, default=Path('docs/releases'))
     args = parser.parse_args()
+    if not 0 <= args.wait_seconds <= 900:
+        parser.error('wait-seconds must be between 0 and 900')
     if args.from_event:
         selected = select_event(os.environ['GITHUB_EVENT_NAME'], json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')),
                                 os.environ.get('SYNC_COMMIT', ''), os.environ.get('SYNC_NUMBER', ''))
         write_selection(selected, Path(os.environ['GITHUB_OUTPUT']))
         return
-    if not args.sync_commit or not args.sync_number or args.sync_number < 1 or not 0 <= args.wait_seconds <= 900:
+    if not args.sync_commit:
+        parser.error('sync-commit is required')
+    if not args.sync_number or args.sync_number < 1:
         parser.error('sync-number must be positive')
     data = inspect_sync(args.sync_commit, args.sync_number)
     prs = included_prs(data)

@@ -70,6 +70,55 @@ class PublishDraftTest(unittest.TestCase):
             self.assertTrue(p.publish(self.data, self.generated).endswith('/9998'))
             invoke.assert_not_called()
 
+    def test_existing_develop_record_refreshes_only_evidence_or_creates_nothing(self):
+        source = self.generated / '2026-11-23-sync-10.md'
+        destination = Path('docs/releases') / source.name
+        destination.parent.mkdir(parents=True)
+        def content(state):
+            return f'# Immutable sync\n{p.records.EVIDENCE_START}\n{state}\n{p.records.EVIDENCE_END}\n'
+        destination.write_text(content('pending'), encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-m', 'cdx committed record')
+        self.git('push', 'origin', 'develop')
+        source.write_text(content('pending'), encoding='utf-8')
+        calls = []
+        def invoke(*args):
+            calls.append(args)
+            if args[0] == 'git':
+                return self.git(*args[1:])
+            self.assertEqual(args[:3], ('gh', 'pr', 'create'))
+            self.assertIn('--draft', args)
+            return 'https://github.com/DevFaso/hms/pull/9999'
+        with patch.object(p.records, 'api', return_value=[[]]), patch.object(p, 'invoke', side_effect=invoke):
+            before = self.git('rev-parse', 'HEAD')
+            self.assertIn('/blob/develop/', p.publish(self.data, self.generated))
+            self.assertEqual(self.git('rev-parse', 'HEAD'), before)
+            self.assertFalse(any(args[:2] == ('git', 'push') or args[0] == 'gh' for args in calls))
+            # The no-op creates a local branch but no remote branch.
+            self.git('switch', 'develop')
+            self.git('branch', '-D', 'codex/sync-record-10-' + 'a' * 12)
+            source.write_text(content('success'), encoding='utf-8')
+            self.assertTrue(p.publish(self.data, self.generated).endswith('/9999'))
+            self.assertEqual(self.git('rev-parse', 'HEAD^'), before)
+            self.assertEqual(p.records.stable_content(destination.read_text()), p.records.stable_content(content('pending')))
+
+    def test_existing_develop_record_refuses_changed_identity(self):
+        source = self.generated / '2026-11-23-sync-10.md'
+        destination = Path('docs/releases') / source.name
+        destination.parent.mkdir(parents=True)
+        original = f'# Original\n{p.records.EVIDENCE_START}\npending\n{p.records.EVIDENCE_END}\n'
+        destination.write_text(original, encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-m', 'cdx committed record')
+        self.git('push', 'origin', 'develop')
+        source.write_text(original.replace('Original', 'Altered'), encoding='utf-8')
+        def invoke(*args):
+            self.assertEqual(args[0], 'git', 'No PR may be opened for altered stable data')
+            self.assertNotIn('push', args)
+            return self.git(*args[1:])
+        with patch.object(p.records, 'api', return_value=[[]]), patch.object(p, 'invoke', side_effect=invoke), self.assertRaisesRegex(ValueError, 'refusing to rewrite'):
+            p.publish(self.data, self.generated)
+
     def test_failed_create_recovers_with_refreshed_evidence_and_open_pr_updates_fast_forward(self):
         source = self.generated / '2026-11-23-sync-10.md'
         def content(state):

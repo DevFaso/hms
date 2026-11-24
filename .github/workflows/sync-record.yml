@@ -3,6 +3,7 @@ name: Sync evidence record
 on:
   pull_request:
     paths:
+      - 'docs/releases/**'
       - 'scripts/release/**'
       - '.github/workflows/sync-record.yml'
   workflow_run:

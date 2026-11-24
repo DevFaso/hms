@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
+import io
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -154,10 +156,12 @@ class SyncRecordTest(unittest.TestCase):
         data = {'main': 'main', 'develop': 'dev'}
         pending = [('CI', 'pending', None)]
         success = [('CI', 'success', None)]
-        with patch.object(m, 'api', return_value=[{'workflow_runs': []}]), patch.object(m, 'check_evidence', side_effect=[pending, success, success, success]), patch.object(m.time, 'sleep'):
-            evidence, complete = m.evidence_snapshot(data, 5)
+        with patch.object(m, 'api', return_value=[{'workflow_runs': []}]) as inventory, patch.object(m, 'check_evidence', side_effect=[pending, success, success, success]), patch.object(m.time, 'sleep') as sleep:
+            evidence, complete = m.evidence_snapshot(data, 120)
             self.assertTrue(complete)
             self.assertEqual(evidence['main'], success)
+            self.assertEqual(inventory.call_count, 2)
+            sleep.assert_called_once_with(60)
         with patch.object(m, 'api', return_value=[{'workflow_runs': []}]), patch.object(m, 'check_evidence', return_value=pending):
             evidence, complete = m.evidence_snapshot(data, 0)
             self.assertFalse(complete)
@@ -165,15 +169,64 @@ class SyncRecordTest(unittest.TestCase):
 
     def test_api_retries_only_transient_limits_without_exposing_responses(self):
         limited = SimpleNamespace(returncode=1, stderr='HTTP 403 secondary rate limit', stdout='')
+        headers = SimpleNamespace(returncode=0, stderr='', stdout='HTTP/2 200\nRetry-After: 120\n')
         ok = SimpleNamespace(returncode=0, stderr='', stdout='[[]]')
-        with patch.object(m.subprocess, 'run', side_effect=[limited, ok]) as request, patch.object(m.time, 'sleep') as sleep:
+        with patch.object(m.subprocess, 'run', side_effect=[limited, headers, ok]) as request, patch.object(m.time, 'sleep') as sleep:
             self.assertEqual(m.api('pulls'), [[]])
-            self.assertEqual(request.call_count, 2)
-            sleep.assert_called_once()
+            self.assertEqual(request.call_count, 3)
+            self.assertIn('HEAD', request.call_args_list[1].args[0])
+            sleep.assert_called_once_with(120)
         denied = SimpleNamespace(returncode=1, stderr='HTTP 403 Forbidden private response', stdout='')
         with patch.object(m.subprocess, 'run', return_value=denied) as request, self.assertRaisesRegex(RuntimeError, 'permissions'):
             m.api('pulls')
         self.assertEqual(request.call_count, 1)
+
+    def test_rate_limit_minimum_and_budget_never_leak_body(self):
+        for retry, delay in [('1', 60), ('120', 120)]:
+            limited = SimpleNamespace(returncode=1, stderr='HTTP 429 private response', stdout='Retry-After: ' + retry)
+            ok = SimpleNamespace(returncode=0, stderr='', stdout='[[]]')
+            with self.subTest(retry=retry), patch.object(m.subprocess, 'run', side_effect=[limited, ok]), patch.object(m.time, 'sleep') as sleep:
+                self.assertEqual(m.api('pulls'), [[]])
+                sleep.assert_called_once_with(delay)
+            with patch.object(m.subprocess, 'run', return_value=limited), patch.object(m.time, 'sleep') as sleep, self.assertRaisesRegex(m.EvidenceBudgetExpired, '^GitHub evidence wait budget exhausted$'):
+                m.api('pulls', deadline=m.time.monotonic() + 30)
+            sleep.assert_not_called()
+
+    def test_stacked_pr_fallback_verifies_merge_sha_and_names_missing_numbers(self):
+        data = {'introduced': ['stacked-sha'], 'prs': [21]}
+        def fake_api(path, **kwargs):
+            self.assertNotIn('base=', path)
+            if path.startswith('pulls?'):
+                return [[]]
+            return [{'number': 21, 'title': 'Stacked feature', 'merged_at': 'date', 'merge_commit_sha': 'stacked-sha'}]
+        with patch.object(m, 'api', side_effect=fake_api):
+            self.assertEqual(m.included_prs(data), [(21, 'Stacked feature')])
+        with patch.object(m, 'api', side_effect=[[[]], [{'number': 21, 'merged_at': 'date', 'merge_commit_sha': 'outside'}]]), self.assertRaisesRegex(ValueError, 'missing: #21'):
+            m.included_prs(data)
+
+    def test_pr_inventory_stops_at_cutoff_without_loading_entire_history(self):
+        data = {'introduced': ['wanted'], 'prs': [21], 'inventory_since': '2026-11-01T00:00:00+00:00'}
+        rows = [{'number': 21, 'title': 'Feature', 'merged_at': 'date', 'merge_commit_sha': 'wanted', 'updated_at': '2026-10-01T00:00:00Z'}] * 100
+        with patch.object(m, 'api', return_value=[rows]) as request:
+            self.assertEqual(m.included_prs(data), [(21, 'Feature')])
+            self.assertEqual(request.call_count, 1)
+            self.assertIn('sort=updated', request.call_args.args[0])
+            self.assertFalse(request.call_args.kwargs['paginate'])
+
+    def test_invalid_wait_has_its_own_error_before_git_or_network(self):
+        with patch('sys.argv', ['sync_record.py', '--wait-seconds', '901']), patch('sys.stderr', io.StringIO()) as errors, patch.object(m, 'inspect_sync') as inspect, self.assertRaises(SystemExit):
+            m.main()
+        self.assertIn('wait-seconds must be between 0 and 900', errors.getvalue())
+        inspect.assert_not_called()
+
+    def test_every_committed_sync_record_is_refreshable_and_reports_migration_changes(self):
+        paths = list((Path(__file__).resolve().parents[2] / 'docs/releases').glob('*-sync-*.md'))
+        self.assertTrue(paths)
+        for path in paths:
+            with self.subTest(record=path.name):
+                content = path.read_text(encoding='utf-8')
+                self.assertIn('## Changed existing migrations and registration', content)
+                self.assertIn(m.EVIDENCE_START + m.EVIDENCE_END, m.stable_content(content))
 
 
 if __name__ == '__main__':

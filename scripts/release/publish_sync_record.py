@@ -47,7 +47,11 @@ def publish(data, generated):
     elif remote.returncode == 2:
         invoke('git', 'switch', '--create', branch, 'origin/develop')
         if destination.exists():
-            raise ValueError('Release record already exists on develop')
+            saved = destination.read_text(encoding='utf-8')
+            if saved.strip() == content.strip():
+                return f'https://github.com/{records.REPO}/blob/develop/{destination.as_posix()}'
+            if records.stable_content(saved) != records.stable_content(content):
+                raise ValueError('Stable record differs; refusing to rewrite it')
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding='utf-8', newline='\n')
         commit_and_push(destination, branch, data['number'])
