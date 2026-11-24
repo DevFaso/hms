@@ -41,6 +41,7 @@ import java.util.UUID;
 import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -95,12 +96,30 @@ class PatientNotificationRendererTest {
         released.setResultValue("7.2 mmol/L HIV positive");
 
         lenient().when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        lenient().when(patientRepository.findNotificationAccountScoped(eq(patient.getId()), any()))
+            .thenAnswer(call -> Optional.of(patient.getUser().getId()));
         lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
         lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
         lenient().when(localeResolver.resolve(any(), any())).thenAnswer(inv -> inv.getArgument(1));
         lenient().when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         lenient().when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released));
     }
+
+    @Test
+    void aSendTimeRefusalKeepsItsAuthorInTheTerminalTrace() {
+        var account = new com.example.hms.model.User(); account.setId(UUID.randomUUID()); patient.setUser(account);
+        var choice = com.example.hms.model.NotificationPreference.builder().build();
+        var author = UUID.randomUUID();
+        var at = LocalDateTime.of(2026, 11, 22, 8, 0);
+        choice.recordChoice(false, author, at);
+        when(consent.allows(any(), any(), any())).thenReturn(false);
+        when(consent.refusal(any(), any(), any())).thenReturn(Optional.of(choice));
+        var delivery = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(), NotificationChannel.SMS);
+        assertThat(renderer.prepare(delivery.getId())).isNull();
+        assertThat(delivery.getConsentRecordedBy()).isEqualTo(author);
+        assertThat(delivery.getConsentRecordedAt()).isEqualTo(at);
+    }
+
 
     private PatientNotificationDelivery row(PatientNotificationEvent event, UUID subjectId, NotificationChannel channel) {
         PatientNotificationDelivery row = PatientNotificationDelivery.builder()

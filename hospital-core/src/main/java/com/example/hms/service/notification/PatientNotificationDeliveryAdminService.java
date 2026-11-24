@@ -54,6 +54,7 @@ public class PatientNotificationDeliveryAdminService {
 
     private final PatientNotificationDeliveryRepository repository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
     private final com.example.hms.repository.BillingInvoiceRepository invoiceRepository;
     private final com.example.hms.repository.LabOrderRepository labOrderRepository;
@@ -88,6 +89,11 @@ public class PatientNotificationDeliveryAdminService {
         List<PatientNotificationDeliveryDTO> content = rows.getContent().stream().map(row -> toDto(row, names))
             .toList();
         describeSubjects(rows.getContent(), content, hospitalId);
+        var recorderIds = content.stream().map(PatientNotificationDeliveryDTO::getConsentRecordedBy)
+            .filter(java.util.Objects::nonNull).distinct().toList();
+        var recorderNames = NotificationPreferenceViews.names(recorderIds, userRepository);
+        content.forEach(dto -> dto.setConsentRecordedByName(dto.getConsentRecordedBy() == null ? null
+            : recorderNames.get(dto.getConsentRecordedBy())));
         return PatientNotificationDeliveryPageDTO.builder()
             .content(content)
             .page(rows.getNumber())
@@ -232,6 +238,8 @@ public class PatientNotificationDeliveryAdminService {
             .nextAttemptAt(row.getNextAttemptAt())
             .sentAt(row.getSentAt())
             .lastRetriedAt(row.getLastRetriedAt())
+            .consentRecordedBy(row.getConsentRecordedBy())
+            .consentRecordedAt(row.getConsentRecordedAt())
             .build();
     }
 

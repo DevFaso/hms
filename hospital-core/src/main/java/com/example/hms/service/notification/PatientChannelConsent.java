@@ -22,6 +22,14 @@ public class PatientChannelConsent {
 
     private final NotificationPreferenceRepository preferenceRepository;
 
+    /** Provenance of the current explicit refusal, without exposing any recipient contact. */
+    public java.util.Optional<NotificationPreference> refusal(UUID userId, NotificationType type,
+                                                             NotificationChannel channel) {
+        if (userId == null) return java.util.Optional.empty();
+        return preferenceRepository.findByUser_IdAndNotificationType(userId, type).stream()
+            .filter(row -> row.getChannel() == channel && !row.isEnabled()).findFirst();
+    }
+
     /** Call inside a transaction. A null user (no portal account) is allowed. */
     public boolean allows(UUID userId, NotificationType type, NotificationChannel channel) {
         if (userId == null) {

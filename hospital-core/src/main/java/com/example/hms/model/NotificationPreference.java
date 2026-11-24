@@ -49,4 +49,18 @@ public class NotificationPreference extends BaseEntity {
 
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
+
+    /** Who recorded the current choice; null only for legacy rows. */
+    @Column(name = "recorded_by_user_id")
+    private java.util.UUID recordedByUserId;
+
+    @Column(name = "recorded_at")
+    private java.time.LocalDateTime recordedAt;
+
+    /** The choice and its provenance are one write, for desk and self-service alike. */
+    public void recordChoice(boolean value, java.util.UUID actorId, java.time.LocalDateTime at) {
+        this.enabled = value;
+        this.recordedByUserId = java.util.Objects.requireNonNull(actorId, "recorder");
+        this.recordedAt = java.util.Objects.requireNonNull(at, "recordedAt");
+    }
 }

@@ -198,6 +198,10 @@ public class PatientNotificationLedger {
                 if (repository.existsByIdempotencyKey(key)) {
                     return false;
                 }
+                var refusal = skipped == PatientNotificationErrorCode.OPTED_OUT
+                    ? patientRepository.findNotificationAccountScoped(patientId, hospitalId)
+                        .flatMap(accountId -> consent.refusal(accountId, event.preferenceType(), channel))
+                    : java.util.Optional.<com.example.hms.model.NotificationPreference>empty();
                 repository.saveAndFlush(PatientNotificationDelivery.builder()
                     .hospitalId(hospitalId)
                     .patientId(patientId)
@@ -207,6 +211,8 @@ public class PatientNotificationLedger {
                     .idempotencyKey(key)
                     .status(skipped == null ? NotificationDeliveryStatus.PENDING : NotificationDeliveryStatus.SKIPPED)
                     .errorCode(skipped == null ? null : skipped.name())
+                    .consentRecordedBy(refusal.map(com.example.hms.model.NotificationPreference::getRecordedByUserId).orElse(null))
+                    .consentRecordedAt(refusal.map(com.example.hms.model.NotificationPreference::getRecordedAt).orElse(null))
                     .nextAttemptAt(LocalDateTime.now(clock))
                     .build());
                 return true;

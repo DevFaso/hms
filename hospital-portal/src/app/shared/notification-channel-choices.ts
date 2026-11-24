@@ -20,3 +20,22 @@ export const DESK_NOTICE_CHANNELS = ['SMS', 'EMAIL'] as const;
 
 export type NoticeType = (typeof NOTICE_TYPES)[number];
 export type NoticeChannel = (typeof NOTICE_CHANNELS)[number];
+
+export interface NotificationChoiceValue {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+/** Send only the choices actually edited, never stale neighbouring switches or server provenance. */
+export function changedChannelChoices(
+  current: readonly NotificationChoiceValue[],
+  saved: readonly NotificationChoiceValue[],
+): NotificationChoiceValue[] {
+  const prior = new Map(
+    saved.map((row) => [`${row.notificationType}/${row.channel}`, row.enabled]),
+  );
+  return current
+    .filter((row) => row.enabled !== (prior.get(`${row.notificationType}/${row.channel}`) ?? true))
+    .map(({ notificationType, channel, enabled }) => ({ notificationType, channel, enabled }));
+}

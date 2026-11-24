@@ -5416,7 +5416,8 @@
     "UNREAD": "No leído",
     "UNREAD_COUNT": "{{count}} notificaciones no leídas",
     "VIEW_ALL": "Ver todo",
-    "SETTINGS_SECURITY_NOTE": "Los mensajes de seguridad de su cuenta (restablecimiento de contraseña, códigos de verificación) se envían siempre, sea cual sea su elección."
+    "SETTINGS_SECURITY_NOTE": "Los mensajes de seguridad de su cuenta (restablecimiento de contraseña, códigos de verificación) se envían siempre, sea cual sea su elección.",
+    "PREFERENCES_LOAD_FAILED": "No se pudieron cargar las preferencias de contacto. Reintente antes de modificarlas."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -15136,7 +15137,8 @@
     "SUBJECT_APPOINTMENT": "Cita del {{date}} a las {{time}}",
     "SUBJECT_INVOICE": "Factura {{number}}",
     "SUBJECT_LAB_ORDER": "Solicitud de análisis {{number}}",
-    "COL_NEXT_ATTEMPT": "Próximo intento"
+    "COL_NEXT_ATTEMPT": "Próximo intento",
+    "CONSENT_RECORDED_BY": "Preferencia de canal registrada por:"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Estudio vinculado",
@@ -15291,7 +15293,8 @@
     "SAVE": "Guardar las opciones",
     "SAVED": "Las opciones del paciente se guardaron.",
     "SAVE_FAILED": "No se pudieron guardar las opciones del paciente.",
-    "LOAD_FAILED": "No se pudieron cargar las opciones del paciente."
+    "LOAD_FAILED": "No se pudieron cargar las opciones del paciente.",
+    "RECORDED_BY": "Último registro por:"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",

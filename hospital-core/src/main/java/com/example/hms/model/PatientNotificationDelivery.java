@@ -112,6 +112,13 @@ public class PatientNotificationDelivery extends BaseEntity {
     @Column(name = "last_retried_at")
     private LocalDateTime lastRetriedAt;
 
+    /** Snapshot of the refusal's author/time, not the dispatch worker's identity. */
+    @Column(name = "consent_recorded_by")
+    private UUID consentRecordedBy;
+
+    @Column(name = "consent_recorded_at")
+    private LocalDateTime consentRecordedAt;
+
     /** The idempotency key of one send: {@code event:subject:channel}. */
     public static String keyOf(PatientNotificationEvent event, UUID subjectId, NotificationChannel channel) {
         return event.name() + ":" + subjectId + ":" + channel.name();
