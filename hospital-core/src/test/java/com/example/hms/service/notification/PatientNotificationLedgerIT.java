@@ -65,6 +65,7 @@ class PatientNotificationLedgerIT extends BaseIT {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
     @Autowired private com.example.hms.repository.PatientHospitalRegistrationRepository registrations;
+    @Autowired private com.example.hms.repository.NotificationPreferenceRepository preferences;
 
     private Hospital hospital;
     private Hospital otherHospital;
@@ -140,6 +141,88 @@ class PatientNotificationLedgerIT extends BaseIT {
         assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).contains(account.getId());
         assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), otherHospital.getId())).isEmpty();
         assertThat(patientRepository.findNotificationAccountScoped(UUID.randomUUID(), hospital.getId())).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void aCommittedConsentChangeCannotRewriteTheRefusalThatQueuedTheTrace(boolean enabledAfterDecision) throws Exception {
+        registrations.saveAndFlush(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(hospital).mrn("cdx-" + UUID.randomUUID())
+            .registrationDate(java.time.LocalDate.now(clock)).active(true).build());
+        UUID originalActor = account.getId();
+        LocalDateTime originalTime = LocalDateTime.of(2026, 11, 23, 8, 0);
+        UUID laterActor = UUID.randomUUID();
+        for (NotificationChannel channel : List.of(NotificationChannel.SMS, NotificationChannel.EMAIL)) {
+            var choice = com.example.hms.model.NotificationPreference.builder().user(account)
+                .notificationType(com.example.hms.enums.NotificationType.LAB_RESULT).channel(channel).build();
+            choice.recordChoice(false, originalActor, originalTime);
+            preferences.saveAndFlush(choice);
+        }
+        PatientRepository hookedPatients = Mockito.mock(PatientRepository.class,
+            org.mockito.AdditionalAnswers.delegatesTo(patientRepository));
+        var changed = new java.util.concurrent.atomic.AtomicBoolean();
+        Mockito.doAnswer(call -> {
+            if (changed.compareAndSet(false, true)) {
+                TransactionTemplate operatorWrite = new TransactionTemplate(transactionManager);
+                operatorWrite.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                operatorWrite.executeWithoutResult(status -> {
+                    userRepository.lockForNotificationPreferences(account.getId()).orElseThrow();
+                    var choices = preferences.findByUser_IdAndNotificationType(account.getId(),
+                        com.example.hms.enums.NotificationType.LAB_RESULT);
+                    choices.forEach(choice -> choice.recordChoice(enabledAfterDecision, laterActor, originalTime.plusMinutes(1)));
+                    preferences.saveAllAndFlush(choices);
+                });
+            }
+            return patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId());
+        }).when(hookedPatients).findNotificationAccountScoped(patient.getId(), hospital.getId());
+        SmsService sms = Mockito.mock(SmsService.class);
+        EmailService mail = Mockito.mock(EmailService.class);
+        Mockito.when(sms.deliversRealSms()).thenReturn(true);
+        Mockito.when(mail.deliversRealEmail()).thenReturn(true);
+        var ledger = new PatientNotificationLedger(repository, hookedPatients, consent, sms, mail, clock, transactionManager);
+        try {
+            UUID subject = UUID.randomUUID();
+            assertThat(ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospital.getId(), patient.getId(), subject))
+                .isEmpty();
+            var traces = repository.findAll().stream().filter(row -> subject.equals(row.getSubjectId())).toList();
+            assertThat(changed).isTrue();
+            assertThat(traces).hasSize(2).allSatisfy(row -> {
+                assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.SKIPPED);
+                assertThat(row.getErrorCode()).isEqualTo("OPTED_OUT");
+                assertThat(row.getConsentRecordedBy()).isEqualTo(originalActor);
+                assertThat(row.getConsentRecordedAt()).isEqualTo(originalTime);
+            });
+            assertAdminEndpointShowsOriginalRefusal(originalActor);
+            Mockito.verify(sms).deliversRealSms();
+            Mockito.verify(mail).deliversRealEmail();
+            Mockito.verifyNoMoreInteractions(sms, mail);
+        } finally {
+            jdbc.update("delete from security.notification_preferences where user_id=?", account.getId());
+        }
+    }
+
+    private void assertAdminEndpointShowsOriginalRefusal(UUID originalActor) throws Exception {
+        // Real HTTP controller, admin search and database; only the caller's pinned scope is supplied.
+        var scope = Mockito.mock(com.example.hms.security.tenant.ActingScopeResolver.class);
+        Mockito.when(scope.requirePinned()).thenReturn(hospital.getId());
+        var admin = new PatientNotificationDeliveryAdminService(repository, patientRepository, userRepository,
+            Mockito.mock(com.example.hms.repository.AppointmentRepository.class),
+            Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class),
+            Mockito.mock(com.example.hms.repository.LabOrderRepository.class), scope,
+            Mockito.mock(com.example.hms.utility.RoleValidator.class), clock);
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+            new com.example.hms.controller.PatientNotificationDeliveryController(admin)).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/patient-notification-deliveries").param("status", "SKIPPED"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content.length()").value(2))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[*].consentRecordedBy")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(originalActor.toString()))))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[*].consentRecordedAt")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.startsWith("2026-11-23T08:00"))));
     }
 
     @Test

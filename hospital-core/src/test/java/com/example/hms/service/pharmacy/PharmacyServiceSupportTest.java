@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -92,7 +94,8 @@ class PharmacyServiceSupportTest {
                 gate(smsService), messageSource, patientLocaleResolver);
         // A real SMS transport, and a patient who has not turned anything off.
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         // The fallback the caller passes is the product default; a patient
         // with no stated language gets exactly that.
         lenient().when(patientLocaleResolver.resolve(any(), any()))
@@ -261,8 +264,8 @@ class PharmacyServiceSupportTest {
     @DisplayName("D2202: a patient who turned SMS off for prescription notices gets no pharmacy SMS, and staff see why")
     void optedOutPatientGetsNoPharmacySms() {
         Patient p = patient();
-        when(consent.allows(any(), eq(NotificationType.MEDICATION_REFILL), eq(NotificationChannel.SMS)))
-                .thenReturn(false);
+        when(consent.decision(any(), eq(NotificationType.MEDICATION_REFILL), eq(NotificationChannel.SMS)))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
 
         support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         support.notifyReadyForCollection(rx, p, pharmacy("X"), "Med");
@@ -276,7 +279,12 @@ class PharmacyServiceSupportTest {
                 PatientNotificationEvent.PHARMACY_READY, PatientNotificationEvent.PHARMACY_READY_CANCELLED,
                 PatientNotificationEvent.PHARMACY_READY_REMINDER, PatientNotificationEvent.PHARMACY_OUT_OF_STOCK,
                 PatientNotificationEvent.PHARMACY_REFILL_REMINDER)) {
-            verify(ledger).recordOptOut(event, HOSPITAL_ID, p.getId(), rx.getId(), NotificationChannel.SMS);
+            verify(ledger).recordOptOut(eq(event),
+                eq(HOSPITAL_ID),
+                eq(p.getId()),
+                eq(rx.getId()),
+                eq(NotificationChannel.SMS),
+                any(Decision.class));
         }
     }
 

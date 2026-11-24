@@ -1,5 +1,9 @@
 package com.example.hms.service.scheduling;
 
+import static org.mockito.ArgumentMatchers.any;
+
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -127,8 +131,12 @@ class PatientOutreachNotifierTest {
         verify(smsService, never()).send(anyString(), anyString());
         verify(notificationService).created(anyString(), anyString(), anyString());
         // QA D2206: the refusal is visible to staff, without the message or the number.
-        verify(ledger).recordOptOut(PatientNotificationEvent.RECALL_DUE, HOSPITAL_ID, patient.getId(), RECALL_ID,
-            NotificationChannel.SMS);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.RECALL_DUE),
+            eq(HOSPITAL_ID),
+            eq(patient.getId()),
+            eq(RECALL_ID),
+            eq(NotificationChannel.SMS),
+            any(Decision.class));
     }
 
     @Test
