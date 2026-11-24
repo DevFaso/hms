@@ -1,0 +1,46 @@
+{
+  "environment": "Local production SPA; Chromium; synthetic API responses; CSS viewports, not a physical-device acceptance",
+  "views": 5,
+  "images": [
+    {
+      "file": "automatic-admissions-390.png",
+      "sha256": "4dc938236ce021f478e7a8dfe2c95d8d8ff666021af2c74a1888455ff323e119"
+    },
+    {
+      "file": "automatic-admissions-1440.png",
+      "sha256": "510b55d98bc83a8c0099a1d2e90a956089716098b7804458cef368caeb8383a8"
+    },
+    {
+      "file": "integration-settings-390.png",
+      "sha256": "aae67fe152a8bf581137ba3c5bd7a05505797b88b5f9c71bc2d26401f49bdf3c"
+    },
+    {
+      "file": "integration-settings-1440.png",
+      "sha256": "52b76e8d6e40bfb0a1d812b3a18e02e5561432addf80f6c1048f0d48b54b060e"
+    },
+    {
+      "file": "integration-mappings-390.png",
+      "sha256": "5774f384fa3e9fbc7dade9d3ea176378bc40c9a4258fb7732cd3d841a3931b6b"
+    },
+    {
+      "file": "integration-mappings-1440.png",
+      "sha256": "4000648d8a06ccb9e1784db9a064127c7e4b90e484c83aae233accbd502d6535"
+    },
+    {
+      "file": "integration-exports-390.png",
+      "sha256": "cd95f46ece306cdfca8f1ad0b74aad4828dab32983874f4bb482217f351bd12c"
+    },
+    {
+      "file": "integration-exports-1440.png",
+      "sha256": "99943b153f3dd1d2bcf002aac1f3ce383e80763ba8121b925a7a1330f6980f09"
+    },
+    {
+      "file": "platform-cost-filters-390.png",
+      "sha256": "3aa2862e38416920e21a5a04009a428c594a265355313cc82b129b503a7d1b90"
+    },
+    {
+      "file": "platform-cost-filters-1440.png",
+      "sha256": "452a307ef5f4c47c7d1d8eac66bbb787d7d9eaa69abf3e92653ec154eb23a18a"
+    }
+  ]
+}

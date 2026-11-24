@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../../shared/forms/form-control-style.directive';
 import { allRows } from '../../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
@@ -38,7 +39,14 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
 @Component({
   selector: 'app-dhis2-export-panel',
   standalone: true,
-  imports: [SubmitGuardDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    FormControlStyleDirective,
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-export" data-testid="dhis2-export-panel">
@@ -46,10 +54,15 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
         <h2>{{ 'DHIS2.PANEL.HEADING' | translate }}</h2>
       </header>
 
-      <form class="dhis2-export__form" (ngSubmit)="onTrigger()" data-testid="dhis2-export-form">
+      <form
+        class="dhis2-export__form form-card"
+        (ngSubmit)="onTrigger()"
+        data-testid="dhis2-export-form"
+      >
         <label>
           {{ 'DHIS2.PANEL.DATASET_UID' | translate }} *
           <input
+            appFormControl
             type="text"
             name="datasetUid"
             data-testid="dhis2-export-dataset"
@@ -62,7 +75,12 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
 
         <label>
           {{ 'DHIS2.PANEL.PERIOD_TYPE' | translate }}
-          <select name="periodType" data-testid="dhis2-export-period-type" [(ngModel)]="periodType">
+          <select
+            appFormControl
+            name="periodType"
+            data-testid="dhis2-export-period-type"
+            [(ngModel)]="periodType"
+          >
             <option value="MONTHLY">{{ 'DHIS2.PERIOD.MONTHLY' | translate }}</option>
             <option value="WEEKLY">{{ 'DHIS2.PERIOD.WEEKLY' | translate }}</option>
             <option value="YEARLY">{{ 'DHIS2.PERIOD.YEARLY' | translate }}</option>
@@ -72,6 +90,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
         <label>
           {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }} *
           <input
+            appFormControl
             type="text"
             name="periodIso"
             data-testid="dhis2-export-period-iso"
@@ -146,6 +165,17 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
   `,
   styles: [
     `
+      .form-card {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .form-card label {
+        min-width: 0;
+        flex: 1 1 14rem;
+      }
+
       .dhis2-export {
         padding: 1.5rem;
       }
