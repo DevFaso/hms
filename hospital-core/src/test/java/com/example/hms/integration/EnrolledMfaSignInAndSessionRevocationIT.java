@@ -262,23 +262,46 @@ class EnrolledMfaSignInAndSessionRevocationIT extends BaseIT {
         String sessionId = jwtTokenProvider.getSessionId(signIn.get("refreshToken").asString());
         var descriptor = new com.example.hms.security.TokenUserDescriptor(
             nurse.getId(), nurse.getUsername(), List.of("ROLE_NURSE"));
-        com.example.hms.security.SessionLifetime lifetime =
-            new com.example.hms.security.SessionLifetime(java.time.Duration.ofHours(12));
 
         java.time.Instant longAgo = java.time.Instant.now().minus(java.time.Duration.ofHours(12)).minusSeconds(5);
         String expired = jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
-            lifetime.live(longAgo, longAgo, longAgo).orElseThrow());
+            com.example.hms.security.SessionLifetimeTestSupport.signedInAt(longAgo));
         MvcResult refused = refresh(expired);
         assertThat(status(refused)).isEqualTo(401);
         assertThat(refused.getResponse().getHeader("WWW-Authenticate")).contains("session_lifetime");
 
         java.time.Instant recently = java.time.Instant.now().minus(java.time.Duration.ofHours(11));
         String live = jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
-            lifetime.live(recently, recently, recently).orElseThrow());
+            com.example.hms.security.SessionLifetimeTestSupport.signedInAt(recently));
         JsonNode rotated = json(refresh(live));
         assertThat(jwtTokenProvider.signedInAt(rotated.get("refreshToken").asString()))
             .as("the rotated token keeps the original sign-in time")
             .isEqualTo(recently.truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        assertThat(rotated.get("sessionEndsAt").asLong()).as("the refresh says when the session ends")
+            .isEqualTo(recently.truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+                .plus(java.time.Duration.ofHours(12)).toEpochMilli());
+        long signedInEnds = signIn.get("sessionEndsAt").asLong();
+        assertThat(signedInEnds).as("so does the sign-in")
+            .isBetween(java.time.Instant.now().plus(java.time.Duration.ofHours(12)).minusSeconds(120).toEpochMilli(),
+                java.time.Instant.now().plus(java.time.Duration.ofHours(12)).toEpochMilli());
+    }
+
+    @Test
+    @DisplayName("a patient-only session is refreshed past 12 h, up to its own lifetime")
+    void patientSessionOutlivesTheStaffLifetime() throws Exception {
+        User patient = withPassword(accounts.userAt("patient", hospitalId, "PATIENT"));
+        JsonNode signIn = json(login(patient));
+        String sessionId = jwtTokenProvider.getSessionId(signIn.get("refreshToken").asString());
+        var descriptor = new com.example.hms.security.TokenUserDescriptor(
+            patient.getId(), patient.getUsername(), List.of("ROLE_PATIENT"));
+
+        java.time.Instant aDayAgo = java.time.Instant.now().minus(java.time.Duration.ofHours(24));
+        assertThat(status(refresh(jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
+            com.example.hms.security.SessionLifetimeTestSupport.signedInAt(aDayAgo))))).isEqualTo(200);
+
+        java.time.Instant pastThirtyDays = java.time.Instant.now().minus(java.time.Duration.ofDays(30)).minusSeconds(5);
+        assertThat(status(refresh(jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
+            com.example.hms.security.SessionLifetimeTestSupport.signedInAt(pastThirtyDays))))).isEqualTo(401);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

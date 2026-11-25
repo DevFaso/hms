@@ -1868,6 +1868,7 @@
       "REFRESH_REFUSED_LIFETIME": "Renovación de sesión rechazada: la sesión alcanzó su duración máxima desde el inicio de sesión",
       "REFRESH_REFUSED_REUSED": "Renovación de sesión rechazada: se volvió a presentar un token de renovación ya utilizado y se terminó la sesión",
       "SESSION_REVOKED_REFRESH_REUSE": "Sesión terminada tras volver a presentarse un token de renovación ya utilizado (todos sus tokens revocados)",
+      "SESSION_REVOKED_SECOND_FACTOR": "Sesión terminada: su verificación en dos pasos ya no era válida (todos sus tokens revocados)",
       "PASSWORD_REUSE_REJECTED": "Cambio de contraseña rechazado: coincide con una contraseña reciente",
       "PASSWORD_RESET_COMPLETED": "Restablecimiento de contraseña completado",
       "PASSWORD_RESET_LINK_SMS": "Enlace de restablecimiento de contraseña enviado por SMS",

@@ -927,6 +927,35 @@ public class JwtTokenProvider {
     }
 
     /**
+     * The session a refresh token continues, as {@link SessionLifetime#live}
+     * judges it: its sign-in time, its own issue time and the role set it
+     * carries, read from a token whose signature and expiry are verified here.
+     * Empty for anything that is not a refresh token this issuer minted. The
+     * only way to build a {@link SessionLifetime.Presented}, so no caller can
+     * hand the lifetime check a time of its own.
+     */
+    public Optional<SessionLifetime.Presented> presentedSession(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return Optional.empty();
+        }
+        try {
+            Claims claims = jwtParser().parseSignedClaims(refreshToken).getPayload();
+            if (!(TokenUse.isMarkedRefresh(claims) || TokenUse.isLegacyRefreshShape(claims))
+                    || claims.getIssuedAt() == null) {
+                return Optional.empty();
+            }
+            Instant signedInAt = claims.get(SIGNED_IN_AT_CLAIM) instanceof Number seconds
+                ? Instant.ofEpochSecond(seconds.longValue()) : null;
+            List<String> roles = claims.get(ROLES_CLAIM) instanceof Collection<?> carried
+                ? carried.stream().filter(Objects::nonNull).map(String::valueOf).toList()
+                : List.of();
+            return Optional.of(new SessionLifetime.Presented(signedInAt, claims.getIssuedAt().toInstant(), roles));
+        } catch (JwtException | IllegalArgumentException unusable) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * When the session a token belongs to was signed in to
      * ({@link #SIGNED_IN_AT_CLAIM}), or {@code null} for a token minted before
      * the claim existed, or one that does not parse. {@link SessionLifetime}

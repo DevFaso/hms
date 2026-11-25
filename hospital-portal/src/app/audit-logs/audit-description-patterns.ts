@@ -295,6 +295,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Session revoked on refresh token reuse \(sid=[^)]*\)$/,
   },
   {
+    key: 'AUDIT.DESC.SESSION_REVOKED_SECOND_FACTOR',
+    re: /^Session revoked on second-factor lapse \(sid=[^)]*\)$/,
+  },
+  {
     key: 'AUDIT.DESC.PASSWORD_REUSE_REJECTED',
     re: /^Password change rejected — matches a recent password$/,
   },

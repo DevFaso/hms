@@ -155,7 +155,8 @@ class IdleSessionRefreshIntegrationTest {
                 any(SessionLifetime.Live.class)))
             .thenReturn("cdx-new-refresh");
         // Signed in a moment ago: well within the absolute session lifetime.
-        when(jwtTokenProvider.getIssuedAt("cdx-refresh")).thenAnswer(invocation -> new java.util.Date());
+        when(jwtTokenProvider.presentedSession("cdx-refresh")).thenAnswer(invocation -> java.util.Optional.of(
+            SessionLifetimeTestSupport.presented(java.time.Instant.now(), java.time.Instant.now(), java.util.List.of("ROLE_NURSE"))));
         idleSessionGate.touchIfHuman(user.getId(), AuthorityUtils.createAuthorityList("ROLE_NURSE"));
     }
 

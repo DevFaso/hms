@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AuthControllerPropertiesRefreshCutoffTest {
 
     private static AuthControllerProperties with(String cutoff) {
-        return new AuthControllerProperties("https://localhost", List.of(), false, "", cutoff, "");
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", cutoff, "", "");
     }
 
     @Test
@@ -37,7 +37,7 @@ class AuthControllerPropertiesRefreshCutoffTest {
     }
 
     private static AuthControllerProperties lifetime(String value) {
-        return new AuthControllerProperties("https://localhost", List.of(), false, "", "", value);
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", "", value, "");
     }
 
     @Test
@@ -46,6 +46,24 @@ class AuthControllerPropertiesRefreshCutoffTest {
         assertThat(lifetime("").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
         assertThat(lifetime(null).sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
         assertThat(lifetime(" PT8H ").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(8));
+    }
+
+    private static AuthControllerProperties patientLifetime(String value) {
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", "", "", value);
+    }
+
+    @Test
+    @DisplayName("app.auth.patient-session-max-lifetime: 30 days when unset, the configured duration otherwise")
+    void patientSessionLifetime() {
+        assertThat(patientLifetime("").sessionLifetime().patientMaxLifetime()).isEqualTo(java.time.Duration.ofDays(30));
+        assertThat(patientLifetime("P14D").sessionLifetime().patientMaxLifetime()).isEqualTo(java.time.Duration.ofDays(14));
+        assertThat(patientLifetime("P14D").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
+        for (String bad : List.of("30d", "P0D", "-P1D")) {
+            assertThatThrownBy(() -> patientLifetime(bad))
+                .as(bad)
+                .isInstanceOf(BeanInitializationException.class)
+                .hasMessageContaining("app.auth.patient-session-max-lifetime");
+        }
     }
 
     @Test

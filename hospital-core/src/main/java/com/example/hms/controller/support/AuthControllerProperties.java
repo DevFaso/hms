@@ -45,7 +45,11 @@ public class AuthControllerProperties {
     private final String oidcIssuerUri;
     /** {@code app.auth.refresh-not-before}; {@code null} when unset. */
     private final Instant refreshNotBefore;
-    /** {@code app.auth.session-max-lifetime}: how long after its sign-in a session can be refreshed. */
+    /**
+     * {@code app.auth.session-max-lifetime} (staff) and
+     * {@code app.auth.patient-session-max-lifetime} (a patient-only session):
+     * how long after its sign-in a session can be refreshed.
+     */
     private final com.example.hms.security.SessionLifetime sessionLifetime;
 
     public AuthControllerProperties(
@@ -54,7 +58,8 @@ public class AuthControllerProperties {
             @Value("${app.auth.oidc.required:false}") boolean oidcRequired,
             @Value("${app.auth.oidc.issuer-uri:}") String oidcIssuerUri,
             @Value("${app.auth.refresh-not-before:}") String refreshNotBefore,
-            @Value("${app.auth.session-max-lifetime:PT12H}") String sessionMaxLifetime) {
+            @Value("${app.auth.session-max-lifetime:PT12H}") String sessionMaxLifetime,
+            @Value("${app.auth.patient-session-max-lifetime:P30D}") String patientSessionMaxLifetime) {
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles == null
                 ? Collections.emptyList()
@@ -65,28 +70,33 @@ public class AuthControllerProperties {
         // works against null / blank inputs.
         this.oidcIssuerUri = oidcIssuerUri == null ? "" : oidcIssuerUri.trim();
         this.refreshNotBefore = parseInstant(refreshNotBefore);
-        this.sessionLifetime = new com.example.hms.security.SessionLifetime(parseLifetime(sessionMaxLifetime));
+        this.sessionLifetime = new com.example.hms.security.SessionLifetime(
+            parseLifetime(sessionMaxLifetime, "app.auth.session-max-lifetime",
+                com.example.hms.security.SessionLifetime.DEFAULT_MAX_LIFETIME, "PT12H"),
+            parseLifetime(patientSessionMaxLifetime, "app.auth.patient-session-max-lifetime",
+                com.example.hms.security.SessionLifetime.DEFAULT_PATIENT_MAX_LIFETIME, "P30D"));
     }
 
     /**
-     * An ISO-8601 duration ({@code PT12H}); blank means the 12 h default. A
+     * An ISO-8601 duration ({@code PT12H}, {@code P30D}); blank means the default. A
      * value that does not parse, or is not positive, stops the start-up: a
      * lifetime silently dropped would let sessions run on unbounded.
      */
-    private static java.time.Duration parseLifetime(String value) {
+    private static java.time.Duration parseLifetime(String value, String property,
+                                                    java.time.Duration fallback, String example) {
         if (value == null || value.isBlank()) {
-            return com.example.hms.security.SessionLifetime.DEFAULT_MAX_LIFETIME;
+            return fallback;
         }
         try {
             java.time.Duration parsed = java.time.Duration.parse(value.trim());
             if (parsed.isNegative() || parsed.isZero()) {
                 throw new org.springframework.beans.factory.BeanInitializationException(
-                    "app.auth.session-max-lifetime must be positive, such as PT12H");
+                    property + " must be positive, such as " + example);
             }
             return parsed;
         } catch (DateTimeParseException ex) {
             throw new org.springframework.beans.factory.BeanInitializationException(
-                "app.auth.session-max-lifetime must be an ISO-8601 duration such as PT12H", ex);
+                property + " must be an ISO-8601 duration such as " + example, ex);
         }
     }
 
@@ -130,7 +140,11 @@ public class AuthControllerProperties {
         return refreshNotBefore;
     }
 
-    /** The absolute session lifetime ({@code AUTH_SESSION_MAX_LIFETIME}, 12 h by default). */
+    /**
+     * The absolute session lifetimes: {@code AUTH_SESSION_MAX_LIFETIME} (12 h by
+     * default) and, for a patient-only session, {@code AUTH_PATIENT_SESSION_MAX_LIFETIME}
+     * (30 days by default).
+     */
     public com.example.hms.security.SessionLifetime sessionLifetime() {
         return sessionLifetime;
     }

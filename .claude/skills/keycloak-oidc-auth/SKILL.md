@@ -88,9 +88,14 @@ second factor in the refresh token. `app.auth.refresh-not-before`
 (`AUTH_REFRESH_NOT_BEFORE`, ISO instant) refuses every older refresh token.
 `SessionRoleScopeGuardTest` holds all of this.
 `app.auth.session-max-lifetime` (`AUTH_SESSION_MAX_LIFETIME`, `PT12H`) ends a
-session that long after sign-in: the refresh token carries `auth_time` on
-(a token without it counts from its `iat`), and only `SessionLifetime.live`
-yields the `Live` the continuing refresh mint needs (`SessionLifetimeGuardTest`).
+session that long after sign-in; a session whose role set is exactly
+`ROLE_PATIENT` uses `app.auth.patient-session-max-lifetime`
+(`AUTH_PATIENT_SESSION_MAX_LIFETIME`, `P30D`). The refresh token carries
+`auth_time` on (a token without it counts from its `iat`).
+`SessionLifetime.live` takes only the `Presented` session
+`JwtTokenProvider.presentedSession` reads from a verified token, and yields
+the `Live` the continuing refresh mint needs (`SessionLifetimeGuardTest`).
+Login and refresh answers carry `sessionEndsAt` (epoch ms).
 A refresh token used again after the 30 s grace ends its whole session (`sid`).
 
 Enrollment lives on

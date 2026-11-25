@@ -1868,6 +1868,7 @@
       "REFRESH_REFUSED_LIFETIME": "Session renewal refused: the session reached its maximum length after sign-in",
       "REFRESH_REFUSED_REUSED": "Session renewal refused: an already-used renewal token was presented again, and the session was ended",
       "SESSION_REVOKED_REFRESH_REUSE": "Sign-in session ended after an already-used renewal token was presented again (every token of it revoked)",
+      "SESSION_REVOKED_SECOND_FACTOR": "Sign-in session ended: its two-step verification had lapsed (every token of it revoked)",
       "PASSWORD_REUSE_REJECTED": "Password change refused: it matches a recent password",
       "PASSWORD_RESET_COMPLETED": "Password reset completed",
       "PASSWORD_RESET_LINK_SMS": "Password reset link sent by SMS",

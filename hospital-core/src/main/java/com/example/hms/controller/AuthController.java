@@ -435,6 +435,7 @@ public class AuthController {
                     .tokenType("Bearer")
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
+                    .sessionEndsAt(sessionEndsAt(refreshToken, granted.roles()))
                     .id(user.getId())
                     .username(user.getUsername())
                     .email(user.getEmail())
@@ -926,6 +927,13 @@ public class AuthController {
     private static final String REFRESH_INVALID_MESSAGE =
             "auth.api.refreshInvalid";
 
+    /** When the session a sign-in just opened ends (no refresh after it), in epoch milliseconds. */
+    private Long sessionEndsAt(String refreshToken, List<String> roles) {
+        java.time.Instant signedIn = java.util.Optional.ofNullable(jwtTokenProvider.signedInAt(refreshToken))
+                .orElseGet(java.time.Instant::now);
+        return authProps.sessionLifetime().endsAt(signedIn, roles).toEpochMilli();
+    }
+
     /** The session reached its absolute lifetime (app.auth.session-max-lifetime): sign in again. */
     private static final String SESSION_LIFETIME_REACHED_KEY = "auth.refresh.sessionLifetimeReached";
 
@@ -1069,10 +1077,10 @@ public class AuthController {
         // sign-in, however often it was refreshed. A token minted before the
         // sign-in time was carried counts from its own issue time. Only a
         // session found within its lifetime can mint the rotated refresh token.
-        var liveSession = authProps.sessionLifetime().live(jwtTokenProvider.signedInAt(refreshToken),
-                java.util.Optional.ofNullable(jwtTokenProvider.getIssuedAt(refreshToken))
-                        .map(java.util.Date::toInstant).orElse(null),
-                java.time.Instant.now());
+        // The token's own signed times and role set, never a caller's: a
+        // patient-only session gets the patient lifetime, any other the staff one.
+        var liveSession = jwtTokenProvider.presentedSession(refreshToken)
+                .flatMap(authProps.sessionLifetime()::live);
         if (liveSession.isEmpty()) {
             log.warn("🔄 [REFRESH] Refused — the session reached its maximum lifetime");
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -1184,6 +1192,10 @@ public class AuthController {
             // normal sign-in and challenge take over.
             if (lapsedSecondFactor(user.getId(), username, roles, secondFactor)) {
                 // Left spent, not released: this token can never yield a pair again.
+                // Its session ends too, so a later use of the token reads as an
+                // ended session, not as a reused one.
+                revokeSession(jwtTokenProvider.getSessionId(refreshToken), username, request.getRemoteAddr(),
+                        "second-factor lapse");
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
                         .eventDescription("Refresh refused — second factor missing or expired")
@@ -1239,6 +1251,7 @@ public class AuthController {
                     .issuedAt(nowMs)
                     .accessTokenExpiresAt(accessExp)
                     .refreshTokenExpiresAt(refreshExp)
+                    .sessionEndsAt(liveSession.get().endsAt().toEpochMilli())
                     .id(user.getId())
                     .username(user.getUsername())
                     .roles(roles)

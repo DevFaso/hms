@@ -36,8 +36,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       password login ({@code AuthController.authenticateUser}) and the MFA
  *       step ({@code MfaController.verifyMfa}). Anywhere else, it would let a
  *       refresh restart the clock.</li>
- *   <li>The refresh endpoint itself asks {@code sessionLifetime().live(} and
+ *   <li>The refresh endpoint itself asks the lifetime about the session
+ *       {@code JwtTokenProvider.presentedSession(} read from the token, and
  *       mints its refresh token with the four-argument form.</li>
+ *   <li>No method reference ({@code ::generateRefreshToken}) hides a mint
+ *       from the argument count, and only {@code JwtTokenProvider} builds a
+ *       {@link SessionLifetime.Presented}, so no caller hands the check a
+ *       time of its own.</li>
  * </ul>
  */
 @DisplayName("Every refresh that mints a pair has passed the session lifetime check")
@@ -45,7 +50,10 @@ class SessionLifetimeGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final String PROVIDER = "security/JwtTokenProvider.java";
+    private static final String LIFETIME = "security/SessionLifetime.java";
     private static final Pattern REFRESH_MINT = Pattern.compile("\\bgenerateRefreshToken\\(");
+    private static final Pattern MINT_REFERENCE = Pattern.compile("::\\s*generateRefreshToken\\b");
+    private static final Pattern NEW_PRESENTED = Pattern.compile("\\bnew\\s+(?:[\\w.]+\\.)?Presented\\s*\\(");
     private static final String METHOD_END = "\n    }\n";
 
     /** The methods that open a session (sign-in time = now), by file. */
@@ -58,43 +66,77 @@ class SessionLifetimeGuardTest {
 
     static List<String> offenders(String file, String source) {
         String src = source.replace("\r\n", "\n");
+        List<String> out = new ArrayList<>(hiddenOffenders(file, src));
+        if (file.equals(PROVIDER)) {
+            return out; // its own mints are the ones under guard
+        }
+        out.addAll(clockRestarts(file, src));
+        if (file.equals(REFRESH_FILE)) {
+            out.addAll(refreshEndpointOffenders(file, src));
+        }
+        return out;
+    }
+
+    /** A method reference hides a mint from the argument count; a hand-built Presented, the token's own times. */
+    private static List<String> hiddenOffenders(String file, String src) {
+        List<String> out = new ArrayList<>();
+        Matcher reference = MINT_REFERENCE.matcher(src);
+        while (reference.find()) {
+            out.add(file + ":" + lineOf(src, reference.start())
+                + " mints a refresh token through a method reference the scan cannot check; call it");
+        }
+        if (file.equals(PROVIDER) || file.equals(LIFETIME)) {
+            return out;
+        }
+        Matcher presented = NEW_PRESENTED.matcher(src);
+        while (presented.find()) {
+            out.add(file + ":" + lineOf(src, presented.start())
+                + " builds the session the lifetime judges; only JwtTokenProvider.presentedSession reads one");
+        }
+        return out;
+    }
+
+    /** A three-argument mint (signed in now) outside the two sign-ins restarts the session clock. */
+    private static List<String> clockRestarts(String file, String src) {
         List<String> out = new ArrayList<>();
         Matcher mint = REFRESH_MINT.matcher(src);
         while (mint.find()) {
-            int args = topLevelArgs(src, mint.end());
-            if (args >= 4) {
+            if (topLevelArgs(src, mint.end()) >= 4) {
                 continue; // the type forces a SessionLifetime.Live: the check was passed
             }
-            String method = enclosingMethod(src, mint.start());
             String signIn = SIGN_INS.get(file);
-            if (signIn == null || !method.contains(signIn)) {
+            if (signIn == null || !enclosingMethod(src, mint.start()).contains(signIn)) {
                 out.add(file + ":" + lineOf(src, mint.start())
                     + " mints a refresh token that restarts the session clock outside a sign-in;"
                     + " continue a session with generateRefreshToken(..., SessionLifetime.Live)");
             }
         }
-        if (file.equals(REFRESH_FILE)) {
-            int at = src.indexOf(REFRESH_METHOD);
-            if (at < 0) {
-                out.add(file + " has no refresh endpoint method to check (" + REFRESH_METHOD + ")");
-            } else {
-                String refresh = src.substring(at, methodEnd(src, at));
-                if (!refresh.contains("sessionLifetime().live(")) {
-                    out.add(file + ":" + lineOf(src, at) + " the refresh does not check the session lifetime");
-                }
-                Matcher inRefresh = REFRESH_MINT.matcher(refresh);
-                boolean mints = false;
-                while (inRefresh.find()) {
-                    mints = true;
-                    if (topLevelArgs(refresh, inRefresh.end()) < 4) {
-                        out.add(file + ":" + lineOf(src, at + inRefresh.start())
-                            + " the refresh mints a refresh token without the checked session");
-                    }
-                }
-                if (!mints) {
-                    out.add(file + ":" + lineOf(src, at) + " the refresh mints no refresh token the scan can see");
-                }
+        return out;
+    }
+
+    /** The refresh reads the token's session, asks the lifetime, and mints only with the answer. */
+    private static List<String> refreshEndpointOffenders(String file, String src) {
+        int at = src.indexOf(REFRESH_METHOD);
+        if (at < 0) {
+            return List.of(file + " has no refresh endpoint method to check (" + REFRESH_METHOD + ")");
+        }
+        List<String> out = new ArrayList<>();
+        String refresh = src.substring(at, methodEnd(src, at));
+        boolean asks = refresh.contains("sessionLifetime()::live") || refresh.contains("sessionLifetime().live(");
+        if (!refresh.contains("presentedSession(") || !asks) {
+            out.add(file + ":" + lineOf(src, at) + " the refresh does not check the session lifetime");
+        }
+        Matcher inRefresh = REFRESH_MINT.matcher(refresh);
+        boolean mints = false;
+        while (inRefresh.find()) {
+            mints = true;
+            if (topLevelArgs(refresh, inRefresh.end()) < 4) {
+                out.add(file + ":" + lineOf(src, at + inRefresh.start())
+                    + " the refresh mints a refresh token without the checked session");
             }
+        }
+        if (!mints) {
+            out.add(file + ":" + lineOf(src, at) + " the refresh mints no refresh token the scan can see");
         }
         return out;
     }
@@ -142,7 +184,7 @@ class SessionLifetimeGuardTest {
     void catchesTheShapes() {
         String restarts = "class A {\n"
             + "    public ResponseEntity<Object> refreshToken(Map b) {\n"
-            + "        var live = authProps.sessionLifetime().live(a, i, now);\n"
+            + "        var live = jwtTokenProvider.presentedSession(t).flatMap(authProps.sessionLifetime()::live);\n"
             + "        String r = jwtTokenProvider.generateRefreshToken(d, f, sid);\n"
             + "    }\n"
             + "}\n";
@@ -167,17 +209,39 @@ class SessionLifetimeGuardTest {
             + "        String r = jwtTokenProvider.generateRefreshToken(d, null, sid);\n"
             + "    }\n"
             + "    public ResponseEntity<Object> refreshToken(Map b) {\n"
-            + "        var live = authProps.sessionLifetime().live(a, i, now);\n"
+            + "        var live = jwtTokenProvider.presentedSession(t).flatMap(authProps.sessionLifetime()::live);\n"
             + "        String r = jwtTokenProvider.generateRefreshToken(d, f, sid,\n"
             + "                live.get());\n"
             + "    }\n"
             + "}\n";
         assertThat(offenders(REFRESH_FILE, fixed)).isEmpty();
+
+        String reference = "class S {\n"
+            + "    public Function<D, String> minter() {\n"
+            + "        return d -> mint(jwtTokenProvider::generateRefreshToken, d);\n"
+            + "    }\n"
+            + "}\n";
+        assertThat(offenders("service/RenewService.java", reference)).hasSize(1);
+
+        String ownTimes = "class S {\n"
+            + "    public void x() {\n"
+            + "        var s = new SessionLifetime.Presented(Instant.now(), Instant.now(), roles);\n"
+            + "    }\n"
+            + "}\n";
+        assertThat(offenders("security/Other.java", ownTimes)).hasSize(1);
+        assertThat(offenders(PROVIDER, ownTimes)).isEmpty();
     }
 
     @Test
-    @DisplayName("only SessionLifetime can make a Live session")
+    @DisplayName("only SessionLifetime makes a Live session, and live takes no time of the caller's")
     void liveHasNoOtherMaker() {
+        assertThat(Arrays.stream(SessionLifetime.Presented.class.getDeclaredConstructors())
+            .noneMatch(c -> Modifier.isPublic(c.getModifiers()) || Modifier.isProtected(c.getModifiers())))
+            .as("SessionLifetime.Presented constructors are package-private at most").isTrue();
+        assertThat(Arrays.stream(SessionLifetime.class.getDeclaredMethods())
+            .filter(m -> m.getName().equals("live"))
+            .allMatch(m -> m.getParameterCount() == 1 && m.getParameterTypes()[0] == SessionLifetime.Presented.class))
+            .as("live takes only a presented session, never a time").isTrue();
         Constructor<?>[] constructors = SessionLifetime.Live.class.getDeclaredConstructors();
         assertThat(constructors).isNotEmpty();
         assertThat(Arrays.stream(constructors).allMatch(c -> Modifier.isPrivate(c.getModifiers())))
@@ -194,11 +258,10 @@ class SessionLifetimeGuardTest {
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(file).toString().replace('\\', '/');
-                if (rel.equals(PROVIDER)) {
-                    continue;
-                }
                 String source = Files.readString(file, StandardCharsets.UTF_8);
-                mints += (int) REFRESH_MINT.matcher(source).results().count();
+                if (!rel.equals(PROVIDER)) {
+                    mints += (int) REFRESH_MINT.matcher(source).results().count();
+                }
                 sawRefresh |= rel.equals(REFRESH_FILE);
                 offenders.addAll(offenders(rel, source));
             }
