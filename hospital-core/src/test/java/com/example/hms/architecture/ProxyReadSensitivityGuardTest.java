@@ -482,8 +482,17 @@ class ProxyReadSensitivityGuardTest {
         "registration: where the patient is registered and under which record number; no department, no visit",
         Set.of("hospitalId", "hospitalName", "mrn", "hospitalRecords"),
         "safety and logistics: blood group, what must not be given, where medicines are collected",
-        // QA D3901: bloodGroup is the same blood group, declared beside the laboratory's; no antibody on this read.
+        // QA D3901: bloodGroup is the same blood group, declared beside the laboratory's, narrowed for a proxy
+        // (PROFILE_NARROWED): its value only, no laboratory provenance, no antibody.
         Set.of("bloodType", "bloodGroup", "allergies", "preferredPharmacy"));
+
+    /**
+     * QA D3901 (Rex P2): profile fields a proxy receives NARROWED, and the call in proxyProfileOf that narrows each.
+     * The laboratory's grouping names the hospital that grouped the patient and when: activity at a hospital, which
+     * the proxy filter does not open.
+     */
+    private static final Map<String, String> PROFILE_NARROWED = Map.of(
+        "bloodGroup", "profile.setBloodGroup(com.example.hms.service.transfusion.PatientBloodGroupStatusService.forProxy(");
 
     private static final Pattern DTO_FIELD = Pattern.compile(
         "\\n    private (?!static)[\\w<>\\[\\],.? ]+?\\s(\\w+)\\s*(?:=[^;]*)?;");
@@ -532,6 +541,12 @@ class ProxyReadSensitivityGuardTest {
         }
         String proxyProfileOf = methods.get("proxyProfileOf");
         assertThat(proxyProfileOf).as("proxyProfileOf exists").isNotNull();
+        for (Map.Entry<String, String> narrowed : PROFILE_NARROWED.entrySet()) {
+            if (!proxyProfileOf.replaceAll("\\s+", "").contains(narrowed.getValue().replaceAll("\\s+", ""))) {
+                problems.add("proxyProfileOf no longer narrows PatientProfileDTO." + narrowed.getKey() + " (`"
+                    + narrowed.getValue() + "`)");
+            }
+        }
         for (String withheld : PROFILE_WITHHELD.keySet()) {
             String setter = "set" + Character.toUpperCase(withheld.charAt(0)) + withheld.substring(1) + "(null)";
             if (!proxyProfileOf.contains(setter)) {

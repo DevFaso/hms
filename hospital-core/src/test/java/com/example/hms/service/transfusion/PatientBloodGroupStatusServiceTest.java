@@ -211,6 +211,25 @@ class PatientBloodGroupStatusServiceTest {
     }
 
     @Test
+    @DisplayName("Rex P2: a proxy's copy keeps the value and the disagreement, drops the provenance and the antibody")
+    void forProxy() {
+        BloodGroupStatusDTO full = BloodGroupStatusDTO.builder().declared("A+").confirmed("B+").discrepancy(true)
+            .confirmedAt(groupedAt).confirmedHospitalName("Centre Medical Test").alloImmunised(true)
+            .antibodySpecificities("anti-E").build();
+
+        BloodGroupStatusDTO proxy = PatientBloodGroupStatusService.forProxy(full);
+
+        assertThat(proxy.getDeclared()).isEqualTo("A+");
+        assertThat(proxy.getConfirmed()).isEqualTo("B+");
+        assertThat(proxy.isDiscrepancy()).isTrue();
+        assertThat(proxy.getConfirmedAt()).isNull();
+        assertThat(proxy.getConfirmedHospitalName()).isNull();
+        assertThat(proxy.getAlloImmunised()).isNull();
+        assertThat(proxy.getAntibodySpecificities()).isNull();
+        assertThat(PatientBloodGroupStatusService.forProxy(null)).isNull();
+    }
+
+    @Test
     @DisplayName("the label is the chart's notation")
     void label() {
         assertThat(PatientBloodGroupStatusService.label(AboGroup.AB, RhFactor.NEGATIVE)).isEqualTo("AB-");

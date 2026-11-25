@@ -108,6 +108,22 @@ public class PatientBloodGroupStatusService {
         return build(patient.getBloodType(), newest);
     }
 
+    /**
+     * QA D3901 (Rex P2): the group as a proxy (a delegate of the patient) reads it: the value only, declared and
+     * confirmed and whether they differ. Where and when the laboratory grouped the patient is activity at a
+     * hospital, which the proxy sensitivity filter does not open, and the antibody is clinical detail: both dropped.
+     */
+    public static BloodGroupStatusDTO forProxy(BloodGroupStatusDTO status) {
+        if (status == null) {
+            return null;
+        }
+        return BloodGroupStatusDTO.builder()
+            .declared(status.getDeclared())
+            .confirmed(status.getConfirmed())
+            .discrepancy(status.isDiscrepancy())
+            .build();
+    }
+
     /** The declared group alone: the shape of a response built where no grouping can be looked up. */
     public static BloodGroupStatusDTO declaredOnly(String declared) {
         return build(declared, null);

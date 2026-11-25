@@ -1075,5 +1075,39 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getProfile().getChronicConditions()).isNull();
             assertThat(result.getAllergies()).containsExactly("Pénicilline");
         }
+
+        @Test
+        @DisplayName("QA D3901 (Rex P2): a proxy reads the blood group's value, never where and when the laboratory grouped the patient")
+        void theBloodGroupReachesAProxyWithoutItsProvenance() {
+            UUID caregiverId = UUID.randomUUID();
+            com.example.hms.model.PatientProxy grant = com.example.hms.model.PatientProxy.builder()
+                .grantorPatient(patient)
+                .status(com.example.hms.enums.ProxyStatus.ACTIVE)
+                .permissions("VIEW_RECORDS")
+                .build();
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(caregiverId));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                    patientId, caregiverId, com.example.hms.enums.ProxyStatus.ACTIVE))
+                .thenReturn(Optional.of(grant));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            com.example.hms.service.transfusion.PatientBloodGroupStatusService status =
+                org.mockito.Mockito.mock(com.example.hms.service.transfusion.PatientBloodGroupStatusService.class);
+            when(status.ofOwnRecord(patient)).thenReturn(com.example.hms.payload.dto.BloodGroupStatusDTO.builder()
+                .declared("A+").confirmed("B+").discrepancy(true)
+                .confirmedAt(java.time.LocalDateTime.of(2026, 11, 25, 9, 30)).confirmedHospitalName("Centre Test")
+                .alloImmunised(true).antibodySpecificities("anti-E").build());
+            service.setBloodGroupStatus(status);
+
+            com.example.hms.payload.dto.BloodGroupStatusDTO shown =
+                service.getProxyRecords(auth, patientId, Locale.FRENCH).getProfile().getBloodGroup();
+
+            assertThat(shown.getDeclared()).isEqualTo("A+");
+            assertThat(shown.getConfirmed()).isEqualTo("B+");
+            assertThat(shown.isDiscrepancy()).isTrue();
+            assertThat(shown.getConfirmedAt()).isNull();
+            assertThat(shown.getConfirmedHospitalName()).isNull();
+            assertThat(shown.getAlloImmunised()).isNull();
+            assertThat(shown.getAntibodySpecificities()).isNull();
+        }
     }
 }

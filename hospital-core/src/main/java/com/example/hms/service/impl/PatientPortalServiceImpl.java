@@ -536,10 +536,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * QA D2730: the grantor's profile as a proxy reads it - who the patient is
      * and how to reach them. The chronic conditions are free text that names
      * diagnoses (« VIH », « dépression ») with no tag, so they are left out.
+     * QA D3901 (Rex P2): the blood group keeps its value (declared, the laboratory's, and whether they differ), never
+     * the laboratory's provenance (which hospital grouped the patient, and when) nor any antibody.
      */
     private PatientProfileDTO proxyProfileOf(Patient grantor) {
         PatientProfileDTO profile = toProfileDTO(grantor);
         profile.setChronicConditions(null);
+        profile.setBloodGroup(com.example.hms.service.transfusion.PatientBloodGroupStatusService.forProxy(
+            profile.getBloodGroup()));
         return profile;
     }
 
