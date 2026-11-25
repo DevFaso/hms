@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.service.WristbandPdfService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,6 +69,8 @@ public class PrintLabelController {
         description = "QR encodes the BARE patient UUID — the eMAR five-rights scan contract. "
             + "MRN (per the caller's hospital) is printed human-readable.",
         security = @SecurityRequirement(name = "bearerAuth"))
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+        reason = "the identity wristband: name, number and barcode, nothing clinical")
     public ResponseEntity<byte[]> wristband(
         @PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId,

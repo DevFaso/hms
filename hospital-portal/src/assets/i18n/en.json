@@ -1145,6 +1145,7 @@
     "ARIA_LABEL": "Patient storyboard banner",
     "LOADING": "Loading patient summary…",
     "ERROR": "Could not load the patient summary. Refresh to retry.",
+    "RESTRICTED": "This chart is restricted. To open it, use « Declare break-the-glass » on the patient's page and state your reason.",
     "EMPTY": "No allergies, problems, encounter, or code status on file.",
     "MRN": "MRN",
     "AGE": "Age",

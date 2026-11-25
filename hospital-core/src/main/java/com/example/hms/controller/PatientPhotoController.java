@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.service.PatientPhotoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +41,8 @@ import java.util.UUID;
 @RequestMapping("/patients/{patientId}/photo")
 @RequiredArgsConstructor
 @Tag(name = "Patient Photo", description = "Authenticated patient photo capture and streaming")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the identity photo the header and the wristband show")
 public class PatientPhotoController {
 
     private static final String WRITE_ROLES =

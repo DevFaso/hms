@@ -15,6 +15,15 @@
         <span class="material-symbols-outlined" aria-hidden="true">error</span>
         {{ 'STORYBOARD.ERROR' | translate }}
       </p>
+    } @else if (state() === 'restricted') {
+      <p
+        class="storyboard__status storyboard__status--error"
+        data-testid="storyboard-restricted"
+        role="status"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        {{ 'STORYBOARD.RESTRICTED' | translate }}
+      </p>
     } @else if (state() === 'empty') {
       <p class="storyboard__status storyboard__status--empty" data-testid="storyboard-empty">
         <span class="material-symbols-outlined" aria-hidden="true">info</span>

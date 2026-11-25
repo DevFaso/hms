@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.BillingInvoiceRequestDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceSearchRequest;
@@ -45,6 +46,8 @@ import static com.example.hms.config.SecurityConstants.*;
 @RequestMapping("/billing-invoices")
 @Tag(name = "Billing Invoice Management", description = "APIs for managing billing invoices")
 @RequiredArgsConstructor
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "billing: what is owed and paid, read by the till and the accountant")
 public class BillingInvoiceController {
 
     private static final String STATUS = "status";

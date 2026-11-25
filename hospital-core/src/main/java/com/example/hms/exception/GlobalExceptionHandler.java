@@ -999,7 +999,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleChartRestricted(ChartRestrictedException ex, WebRequest request) {
         String path = logPath(request);
         log.warn("Restricted chart {} refused at path {}", ex.getPatientId(), path);
-        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        // QA D3864: in the caller's language, pointing to break-the-glass.
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            com.example.hms.utility.MessageUtil.resolve(ex.getMessage()), request);
         body.put("code", ChartRestrictedException.CODE);
         body.put("patientId", ex.getPatientId());
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);

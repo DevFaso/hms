@@ -172,6 +172,7 @@ public class EncounterMapper {
         }
         return EncounterNoteResponseDTO.builder()
             .id(note.getId())
+            .patientId(note.getPatient() != null ? note.getPatient().getId() : null)
             .authorUserId(note.getAuthor() != null ? note.getAuthor().getId() : null)
             .authorName(nullSafe(note.getAuthorName()))
             .authorCredentials(nullSafe(note.getAuthorCredentials()))

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.AppointmentFilterDTO;
 import com.example.hms.security.audit.PatientAccessAudited;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
@@ -246,6 +247,8 @@ public class AppointmentController {
     // ---- LIST ALL (with optional query-param filtering) ----
     @GetMapping
     @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "scheduling: the desk books a restricted patient too; the visit reasons are masked")
     public ResponseEntity<List<AppointmentResponseDTO>> getAllAppointments(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID staffId,
@@ -348,6 +351,8 @@ public class AppointmentController {
     // ---- LIST BY PATIENT ----
     @GetMapping("/patients/{patientId}")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "scheduling: the desk books a restricted patient too; the visit reasons are masked")
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientId(
         @PathVariable UUID patientId,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
