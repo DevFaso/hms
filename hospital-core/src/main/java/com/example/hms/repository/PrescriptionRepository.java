@@ -60,17 +60,33 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
 
     /**
      * QA D1314: the orders that can be on this hospital's MAR, for the whole
-     * ward in one statement: active, and either the patient has a stay here or
-     * the order was written on an open emergency visit (QA D514, D702).
-     * {@code NurseTaskServiceImpl.onWardMar} still decides each row.
+     * ward in one statement: standing, not for home, and either an order that can
+     * be of the patient's stay here or one written on an open emergency visit
+     * (QA D514, D702). {@code NurseTaskServiceImpl.onWardMar} still decides each
+     * row; this is a superset of it ({@code WardLoadPostgresIT}).
+     *
+     * <p>QA D3941: {@code :orderStatuses} is every status that stands, the
+     * pharmacy's supply statuses included, so a supplied ward order stays listed.
+     * A status list no longer narrows these rows to the live ones, so the stay
+     * does: an order of the stay is filed on its encounter, or written since the
+     * admission, or on an emergency visit still open at the admission
+     * ({@code InpatientOrderEnd.orderOfStay}). An admitted patient's years of
+     * supplied outpatient orders are not read.
      */
     @Query("""
         SELECT p FROM Prescription p
         LEFT JOIN FETCH p.encounter e
         WHERE p.hospital.id = :hospitalId
           AND p.status IN :orderStatuses
-          AND (p.patient.id IN (SELECT a.patient.id FROM Admission a
-                                WHERE a.hospital.id = :hospitalId AND a.status IN ('ACTIVE', 'ON_LEAVE'))
+          AND p.takeHome = false
+          AND (EXISTS (SELECT a.id FROM Admission a
+                       WHERE a.patient.id = p.patient.id AND a.hospital.id = :hospitalId
+                         AND a.status IN ('ACTIVE', 'ON_LEAVE')
+                         AND (e.admissionId = a.id
+                              OR p.createdAt IS NULL OR a.admissionDateTime IS NULL
+                              OR p.createdAt >= a.admissionDateTime
+                              OR (e.encounterType = :emergency
+                                  AND (e.checkoutTimestamp IS NULL OR e.checkoutTimestamp >= a.admissionDateTime))))
                OR (e.encounterType = :emergency AND e.status NOT IN :closedVisit))
         """)
     List<Prescription> findWardMarOrders(@Param("hospitalId") UUID hospitalId,

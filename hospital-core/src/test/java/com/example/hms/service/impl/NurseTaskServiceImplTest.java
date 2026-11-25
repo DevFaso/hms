@@ -4551,6 +4551,120 @@ class NurseTaskServiceImplTest {
         assertThat(service.activeStaysByPatient(null)).isEmpty();
     }
 
+    /* ── QA r77 (D3941): supplying a ward order is not giving it ──────── */
+
+    /** The one row the MAR lists for the ward order, after checking nothing else is listed. */
+    private static NurseMedicationTaskResponseDTO theWardRow(List<NurseMedicationTaskResponseDTO> rows) {
+        assertThat(rows).extracting(NurseMedicationTaskResponseDTO::getMedication)
+            .as("the take-home order of the stay is never a ward dose, supplied or not")
+            .containsExactly("Amoxicilline 250 mg");
+        return rows.get(0);
+    }
+
+    @Test
+    void d3941_aWardOrderStaysOnTheEmarThroughPartialAndFullSupplyUntilItIsDiscontinued() {
+        // QA D3941: R14/R15, ward orders of P06's stay (9 doses each), left the nurse's eMAR the
+        // moment the pharmacy supplied them, fully or 3 of 9, before any dose was given.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusHours(6));
+        Encounter stayEncounter = new Encounter();
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(EncounterStatus.IN_PROGRESS);
+        stayEncounter.setAdmissionId(stay.getId());
+
+        Prescription ward = scheduledRx(hospitalId, "q8h");
+        ward.setMedicationName("Amoxicilline 250 mg");
+        ward.setEncounter(stayEncounter);
+        ward.setQuantity(new java.math.BigDecimal("9"));
+        ward.setCreatedAt(LocalDateTime.now().minusMinutes(30));
+        Prescription forHome = scheduledRx(hospitalId, "q8h");
+        forHome.setPatient(ward.getPatient());
+        forHome.setMedicationName("Paracetamol 1 g");
+        forHome.setEncounter(stayEncounter);
+        forHome.setTakeHome(true);
+        forHome.setStatus(PrescriptionStatus.DISPENSED);
+        UUID patientId = ward.getPatient().getId();
+        UUID wardId = ward.getId();
+
+        doReturn(java.util.Map.of(patientId, stay)).when(service).activeStaysByPatient(hospitalId);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Rasmata Compaore", "Rasmata", "Compaore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(ward, forHome));
+        java.util.Map<UUID, java.math.BigDecimal> handedOver = new java.util.HashMap<>();
+        when(marWardReader.suppliedByPrescription(any())).thenAnswer(inv -> new java.util.HashMap<>(handedOver));
+        List<MedicationAdministrationRecord> doses = new java.util.ArrayList<>();
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(wardId)).thenAnswer(inv -> List.copyOf(doses));
+
+        // Signed, nothing supplied: the first dose is due.
+        NurseMedicationTaskResponseDTO row = theWardRow(service.getMedicationTasks(nurseId, hospitalId, null));
+        assertThat(row.getStatus()).isEqualTo("DUE");
+        assertThat(row.getSupplyStatus()).isEqualTo("NOT_SUPPLIED");
+
+        // The pharmacy supplies 3 of 9: still on the eMAR, still due, and the row says what was supplied.
+        ward.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+        handedOver.put(wardId, new java.math.BigDecimal("3.00"));
+        row = theWardRow(service.getMedicationTasks(nurseId, hospitalId, null));
+        assertThat(row.getStatus()).isEqualTo("DUE");
+        assertThat(row.getSupplyStatus()).isEqualTo("PARTIALLY_SUPPLIED");
+        assertThat(row.getQuantitySupplied()).isEqualByComparingTo("3");
+        assertThat(row.getQuantityOrdered()).isEqualByComparingTo("9");
+        assertThat(row.getSupplyLabel()).isEqualTo("Pharmacy: 3/9 supplied");
+
+        // The nurse gives the dose from the supplied stock.
+        when(prescriptionRepository.findByIdForUpdate(wardId)).thenReturn(Optional.of(ward));
+        marSaveEchoes();
+        NurseMedicationTaskResponseDTO answer =
+            service.recordMedicationAdministration(wardId, nurseId, hospitalId, givenRequest());
+        assertThat(answer.getStatus()).isEqualTo("GIVEN");
+        assertThat(answer.getSupplyStatus()).as("the answer reads the supply as the list does").isEqualTo("PARTIALLY_SUPPLIED");
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        MedicationAdministrationRecord given = saved.getValue();
+        assertThat(given.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        doses.add(given);
+
+        // Still on the eMAR: the next dose is the next slot, eight hours on.
+        row = theWardRow(service.getMedicationTasks(nurseId, hospitalId, null));
+        assertThat(row.getStatus()).isEqualTo("UPCOMING");
+        assertThat(row.getLastOutcome()).isEqualTo("GIVEN");
+
+        // The rest is supplied: still on the eMAR until the course ends or the prescriber stops it.
+        ward.setStatus(PrescriptionStatus.DISPENSED);
+        handedOver.put(wardId, new java.math.BigDecimal("9"));
+        row = theWardRow(service.getMedicationTasks(nurseId, hospitalId, null));
+        assertThat(row.getStatus()).isEqualTo("UPCOMING");
+        assertThat(row.getSupplyStatus()).isEqualTo("SUPPLIED");
+        assertThat(row.getSupplyLabel()).isEqualTo("Pharmacy: 9/9 supplied");
+
+        // The prescriber stops it: now it leaves the eMAR.
+        ward.setStatus(PrescriptionStatus.DISCONTINUED);
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, null)).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTIALLY_FILLED", "PENDING_STOCK", "PENDING_CLARIFICATION", "SENT_TO_PARTNER",
+            "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PARTNER_DISPENSED", "PRINTED_FOR_PATIENT", "TRANSMISSION_FAILED"})
+    void d3941_noSupplyStatusTakesAWardOrderOffTheMar(PrescriptionStatus supply) {
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusHours(6));
+        Encounter stayEncounter = new Encounter();
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(EncounterStatus.IN_PROGRESS);
+        stayEncounter.setAdmissionId(stay.getId());
+        Prescription rx = scheduledRx(UUID.randomUUID(), "q8h");
+        rx.setEncounter(stayEncounter);
+        rx.setStatus(supply);
+        assertThat(NurseTaskServiceImpl.onWardMar(rx, List.of(), stay)).as(supply.name()).isTrue();
+        rx.setTakeHome(true);
+        assertThat(NurseTaskServiceImpl.onWardMar(rx, List.of(), stay)).as("take-home, " + supply.name()).isFalse();
+    }
+
     /* ── QA round 8 (D514, D525) ─────────────────────────────────────── */
 
     @Test

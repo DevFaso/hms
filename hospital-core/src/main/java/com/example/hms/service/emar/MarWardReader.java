@@ -13,6 +13,7 @@ import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.service.pharmacy.PrescriptionControlledResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,14 @@ import java.util.UUID;
  * order is on the MAR only if it is active, and either its patient has a stay
  * here or it was written on an open emergency visit (QA D514, D702).
  * {@code WardLoadPostgresIT} proves the two agree.
+ *
+ * <p>QA D3941: what the pharmacy supplied never takes an order off the MAR.
+ * The list once read SIGNED and TRANSMITTED orders only, so a ward order left
+ * the nurse's list the moment the pharmacy supplied it, in full or in part (3 of
+ * 9), before a single dose was given. An order stays while it stands
+ * ({@link MarOrderStanding#stands}); the supply is what the row says
+ * ({@link #suppliedByPrescription}, {@link MarSupply}). {@code MarSupplyGuardTest}
+ * keeps the dispense statuses out of the MAR's reads.
  */
 @Component
 @RequiredArgsConstructor
@@ -51,9 +60,15 @@ public class MarWardReader {
     /** One IN list's size: well under PostgreSQL's limit on bind parameters. */
     static final int IN_LIST_CHUNK = 1_000;
 
-    /** Only prescriptions in these statuses are on the MAR. */
-    public static final Set<PrescriptionStatus> ON_MAR_STATUSES =
-        Collections.unmodifiableSet(EnumSet.of(PrescriptionStatus.SIGNED, PrescriptionStatus.TRANSMITTED));
+    /**
+     * The statuses an order can be on the MAR in: every status that stands
+     * ({@link MarOrderStanding#stands}), signed and not withdrawn, the pharmacy's
+     * supply statuses included (QA D3941). No draft, no order awaiting its
+     * signature, none withdrawn.
+     */
+    public static final Set<PrescriptionStatus> ON_MAR_STATUSES = Collections.unmodifiableSet(
+        java.util.Arrays.stream(PrescriptionStatus.values()).filter(MarOrderStanding::stands)
+            .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(PrescriptionStatus.class))));
 
     private final PrescriptionRepository prescriptionRepository;
     private final AdmissionRepository admissionRepository;
@@ -61,6 +76,7 @@ public class MarWardReader {
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository vitalSignRepository;
     private final PrescriptionControlledResolver controlledResolver;
+    private final DispenseRepository dispenseRepository;
 
     /**
      * The orders that can be on this hospital's MAR, by patient, for the
@@ -127,6 +143,23 @@ public class MarWardReader {
             }
         }
         return byPatient;
+    }
+
+    /**
+     * QA D3941: what the pharmacy has handed over on each order, for the row's
+     * supply reading ({@link MarSupply}): every fill but a cancelled one and a
+     * prepared one still waiting to be collected ({@link DispenseRepository#NOT_A_FILL},
+     * the sum the order's own status is computed from). An order with no fill has
+     * no entry. Information on the row only: it never decides whether the order is listed.
+     */
+    public Map<UUID, java.math.BigDecimal> suppliedByPrescription(Collection<UUID> prescriptionIds) {
+        Map<UUID, java.math.BigDecimal> byOrder = new HashMap<>();
+        for (List<UUID> chunk : chunks(prescriptionIds)) {
+            for (Object[] row : dispenseRepository.sumQuantityDispensedByPrescriptionIds(chunk, DispenseRepository.NOT_A_FILL)) {
+                byOrder.put((UUID) row[0], (java.math.BigDecimal) row[1]);
+            }
+        }
+        return byOrder;
     }
 
     /** The ids among {@code orders} that are controlled, on the rule of {@link PrescriptionControlledResolver}. */
