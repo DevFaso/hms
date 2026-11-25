@@ -122,6 +122,10 @@ class ActivationSmsD1123Test {
         lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         lenient().when(assignmentLinkService.buildProfileCompletionUrl("CHW-P-0042")).thenReturn(LINK);
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        lenient().when(userRepository.claimFirstPassword(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        lenient().when(userRepository.claimFirstPasswordNeverChanged(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(1);
         lenient().when(passwordEncoderProvider.getObject()).thenReturn(
             new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4));
     }

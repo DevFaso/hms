@@ -15,6 +15,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentResponseDTO;
 import com.example.hms.service.support.UserAccountAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,6 +75,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
         passwordEncoderProvider;
 
+    @Mock private PasswordResetService passwordResetService;
+
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
 
@@ -128,6 +131,12 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(accountAccess.requireMayGrant(any()))
             .thenReturn(anywhere);
+        // The first-password claim succeeds unless a test says a simultaneous activation won it.
+        org.mockito.Mockito.lenient()
+            .when(userRepository.claimFirstPassword(any(), any(), any())).thenReturn(1);
+        org.mockito.Mockito.lenient()
+            .when(userRepository.claimFirstPasswordNeverChanged(any(), any())).thenReturn(1);
+        service.setPasswordResetService(passwordResetService);
     }
 
     // -----------------------------------------------------------------------
@@ -202,6 +211,103 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isTrue();
         assertThat(assignee.isActive()).isTrue();
         verify(userRepository).save(assignee);
+    }
+
+    /** Registrar confirmation of a never-used account the holder can be reached at: a set-password link, no password. */
+    @Test
+    void confirmAssignment_ofANeverUsedAccount_sendsTheHolderASetPasswordLink() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(assignee.isActive()).isTrue();
+        // No transaction in a unit test: the after-commit send runs inline.
+        verify(passwordResetService).sendSetPasswordLink(assignee.getId(), java.util.Locale.FRENCH);
+        assertThat(dto.getTemporaryPassword()).as("nothing to hand over: the holder sets their own").isNull();
+        assertThat(assignee.getPasswordHash()).isEqualTo("hash-of-the-registration-password");
+        verify(passwordEncoderProvider, never()).getObject();
+    }
+
+    /** Registrar confirmation of a never-used account nothing reaches: the first password, in the response only. */
+    @Test
+    void confirmAssignment_ofANeverUsedAccountWithNoChannel_handsTheRegistrarAFirstPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setEmail(null);
+        assignee.setPhoneNumber(null);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+        org.springframework.security.crypto.password.PasswordEncoder encoder =
+            mock(org.springframework.security.crypto.password.PasswordEncoder.class);
+        when(passwordEncoderProvider.getObject()).thenReturn(encoder);
+        when(encoder.encode(anyString())).thenAnswer(inv -> "bcrypt(" + inv.getArgument(0) + ")");
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(dto.getTemporaryUsername()).isEqualTo("jdoe");
+        assertThat(dto.getTemporaryPassword()).hasSize(14);
+        assertThat(assignee.getPasswordHash()).isEqualTo("bcrypt(" + dto.getTemporaryPassword() + ")");
+        assertThat(assignee.getTemporaryPasswordExpiresAt()).isNotNull();
+        verify(passwordResetService, never()).sendSetPasswordLink(any(), any());
+    }
+
+    /** An account in use gets neither: its password is its holder's. */
+    @Test
+    void confirmAssignment_ofAnAccountInUse_touchesNoPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setLastLoginAt(LocalDateTime.now().minusDays(2));
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(dto.getTemporaryPassword()).isNull();
+        verify(passwordResetService, never()).sendSetPasswordLink(any(), any());
+    }
+
+    private UserRoleHospitalAssignmentResponseDTO confirmAsRegistrar() {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken("registrar", "n/a", java.util.List.of()));
+        try {
+            when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.lenient().when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.lenient().when(mapper.toResponseDTO(any()))
+                .thenAnswer(inv -> new UserRoleHospitalAssignmentResponseDTO());
+            return service.confirmAssignment(assignment.getId(), VALID_PIN);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    /**
+     * The same code sent twice at once: the request that loses the claim on the
+     * first password shows none and issues none, so no page shows a password
+     * the other request already replaced.
+     */
+    @Test
+    void verifyAssignmentByCode_aSimultaneousSecondRequestIssuesNoPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        LocalDateTime readAt = LocalDateTime.now().minusHours(1);
+        assignee.setPasswordChangedAt(readAt);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+        when(userRepository.claimFirstPassword(eq(assignee.getId()), eq(readAt), any())).thenReturn(0);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+
+        UserRoleAssignmentPublicViewDTO view = service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(view.getTempPassword()).isNull();
+        assertThat(assignee.getPasswordHash()).isEqualTo("hash-of-the-registration-password");
+        verify(passwordEncoderProvider, never()).getObject();
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test

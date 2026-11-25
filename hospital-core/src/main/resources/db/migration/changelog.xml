@@ -4011,8 +4011,8 @@
          V366: temporary passwords. security.users.temp_password_expires_at
          (72 hours after a password the holder did not choose was issued);
          every clear-text copy on user_role_hospital_assignment emptied; and
-         accounts still on an issued password given 72 hours from this
-         release. Additive, idempotent, no DO block.
+         accounts still on an issued password that never signed in given 72
+         hours from this release. Additive, idempotent, no DO block.
          ================================================================= -->
     <changeSet id="V366-temporary-password-expiry" author="hms-team" runOnChange="false">
         <sqlFile path="V366__temporary_password_expiry.sql"

@@ -25,9 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * V366 and V367 on a real PostgreSQL, through the real changelog: accounts still on a password someone else
- * issued get 72 hours from the release, a rotation of the holder's own password and a password the holder chose
- * get no expiry, a second run changes nothing, and the legacy clear-text column on assignments stays empty
- * whatever writes to it.
+ * issued and never signed in get 72 hours from the release; an account that has signed in (on either path), a
+ * rotation of the holder's own password and a password the holder chose get no expiry; a second run changes
+ * nothing; and the legacy clear-text column on assignments stays empty whatever writes to it.
  */
 @Testcontainers
 class TemporaryPasswordMigrationIT {
@@ -64,26 +64,36 @@ class TemporaryPasswordMigrationIT {
     }
 
     @Test
-    void anIssuedPasswordNotChangedYetGetsSeventyTwoHours_theHoldersOwnDoNot() throws Exception {
+    void anIssuedPasswordNeverUsedGetsSeventyTwoHours_signedInAndOwnPasswordsDoNot() throws Exception {
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
             // Registered by a desk, never signed in: the issued password.
             plantUser(stmt, 1, true, "now() - interval '200 days'", null, null);
-            // Signed in on the issued password, change still pending.
+            // Signed in on the issued password, change still pending: it keeps working as before (the apps).
             plantUser(stmt, 2, true, "now() - interval '3 days'", null, "now() - interval '1 day'");
             // The 90-day rotation of the holder's own password: must change it, but it does not expire.
             plantUser(stmt, 3, true, "now() - interval '120 days'", "now() - interval '25 days'",
                 "now() - interval '2 days'");
             // A password the holder chose.
             plantUser(stmt, 4, false, "now() - interval '10 days'", null, "now() - interval '1 day'");
+            // A rotation with no password change recorded: measured from the account's creation.
+            plantUser(stmt, 5, true, "NULL", "now() - interval '20 days'", null);
+            stmt.executeUpdate("UPDATE security.users SET created_at = now() - interval '200 days' WHERE id = '"
+                + id(5) + "'");
+            // Signed in through the other sign-in path only.
+            plantUser(stmt, 6, true, "now() - interval '3 days'", null, null);
+            stmt.executeUpdate("UPDATE security.users SET last_oidc_login_at = now() - interval '1 day' WHERE id = '"
+                + id(6) + "'");
 
             runV366(stmt);
 
             Timestamp first = expiry(stmt, 1);
             assertThat(first).isNotNull();
             assertThat(hoursFromNow(stmt, first)).isBetween(71.0, 72.1);
-            assertThat(expiry(stmt, 2)).isNotNull();
+            assertThat(expiry(stmt, 2)).as("an account that has signed in").isNull();
             assertThat(expiry(stmt, 3)).as("a rotation of the holder's own password").isNull();
             assertThat(expiry(stmt, 4)).as("the holder's own password").isNull();
+            assertThat(expiry(stmt, 5)).as("a rotation measured from the account's creation").isNull();
+            assertThat(expiry(stmt, 6)).as("an account that has signed in on the other path").isNull();
         }
     }
 

@@ -20,9 +20,10 @@ public interface HospitalUserDetails extends UserDetails {
     }
 
     /**
-     * Whether the account must set its own password before any other use: a
-     * temporary password, or a rotation the holder has not done yet. Enforced
-     * on every request by {@link PasswordChangeGate}.
+     * Whether the account must set its own password before any other use: it
+     * is on a temporary password (forced change with an expiry). A rotation
+     * of the holder's own password is not this. Enforced on every request by
+     * {@link PasswordChangeGate}.
      */
     default boolean isPasswordChangeRequired() {
         return false;

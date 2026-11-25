@@ -46,6 +46,8 @@ class PasswordChangeGateFilterTest {
 
     private final HospitalUserDetailsService userDetailsService = mock(HospitalUserDetailsService.class);
     private final TenantRoleAssignmentAccessor accessor = mock(TenantRoleAssignmentAccessor.class);
+    private final WsTicketService wsTicketService = mock(WsTicketService.class);
+    private final IdleSessionGate idleSessionGate = mock(IdleSessionGate.class);
     private JwtTokenProvider provider;
     private JwtAuthenticationFilter filter;
     private User account;
@@ -73,12 +75,12 @@ class PasswordChangeGateFilterTest {
         filter = new JwtAuthenticationFilter(
             provider,
             mock(TokenBlacklistService.class),
-            mock(WsTicketService.class),
+            wsTicketService,
             userDetailsService,
             new TenantLifecycleGate(organizationLifecycle, hospitalLifecycle),
             resolver,
             mock(GlobalSessionRevocationService.class),
-            mock(IdleSessionGate.class));
+            idleSessionGate);
 
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
             new TenantRoleAssignment(null, null, ROLE_PATIENT, "Patient", true, null)));
@@ -111,7 +113,7 @@ class PasswordChangeGateFilterTest {
         "GET,/me/patient/profile/../appointments",
     })
     void everyOtherRequestIsRefusedWithTheCode(String method, String path) throws Exception {
-        account.setForcePasswordChange(true);
+        onATemporaryPassword();
 
         Outcome outcome = send(method, path);
 
@@ -133,7 +135,7 @@ class PasswordChangeGateFilterTest {
         "GET,/auth/csrf-token",
     })
     void theAccountSetupRequestsStayOpen(String method, String path) throws Exception {
-        account.setForcePasswordChange(true);
+        onATemporaryPassword();
 
         Outcome outcome = send(method, path);
 
@@ -150,6 +152,78 @@ class PasswordChangeGateFilterTest {
 
         assertThat(outcome.reachedTheController()).isTrue();
         assertThat(outcome.status()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("a rotation of the holder's own password is advisory: the portal asks, the API does not refuse")
+    void aRotationIsNotGated() throws Exception {
+        account.setForcePasswordChange(true);
+        account.setTemporaryPasswordExpiresAt(null);
+
+        Outcome outcome = send("GET", "/me/patient/appointments");
+
+        assertThat(outcome.reachedTheController()).isTrue();
+        assertThat(outcome.status()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("a WebSocket ticket opens nothing for an account on a temporary password")
+    void aWebSocketTicketIsRefusedToo() throws Exception {
+        onATemporaryPassword();
+        when(wsTicketService.redeem("t-1")).thenReturn(account.getUsername());
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/ws-chat/info");
+        request.setContextPath("/api");
+        request.setParameter("ticket", "t-1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean reached = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, (req, resp) -> reached.set(true));
+
+        assertThat(reached.get()).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("\"code\":\"password_change_required\"");
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    @DisplayName("the same ticket works for an account on its own password")
+    void aWebSocketTicketWorksOtherwise() throws Exception {
+        when(wsTicketService.redeem("t-2")).thenReturn(account.getUsername());
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/ws-chat/info");
+        request.setContextPath("/api");
+        request.setParameter("ticket", "t-2");
+        AtomicBoolean reached = new AtomicBoolean(false);
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, resp) -> reached.set(true));
+
+        assertThat(reached.get()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a gate that fails after the token was read leaves the request unauthenticated, not half-checked")
+    void aFailingGateLeavesNoAuthenticationBehind() throws Exception {
+        when(idleSessionGate.shouldReject(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("idle store unavailable"));
+        String token = provider.generateAccessToken(
+            new TokenUserDescriptor(USER_ID, account.getUsername(), List.of(ROLE_PATIENT)));
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/me/patient/appointments");
+        request.setContextPath("/api");
+        request.addHeader("Authorization", "Bearer " + token);
+        java.util.concurrent.atomic.AtomicReference<Object> seen = new java.util.concurrent.atomic.AtomicReference<>("unset");
+        java.util.concurrent.atomic.AtomicReference<Object> principal = new java.util.concurrent.atomic.AtomicReference<>("unset");
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, resp) -> {
+            seen.set(SecurityContextHolder.getContext().getAuthentication());
+            principal.set(HospitalContextHolder.getContextOrEmpty().getPrincipalUserId());
+        });
+
+        assertThat(seen.get()).as("the chain ran, with no authentication").isNull();
+        assertThat(principal.get()).as("and no hospital context").isNull();
+    }
+
+    private void onATemporaryPassword() {
+        account.setForcePasswordChange(true);
+        account.setTemporaryPasswordExpiresAt(LocalDateTime.now().plusHours(70));
     }
 
     private record Outcome(int status, String body, boolean reachedTheController) { }

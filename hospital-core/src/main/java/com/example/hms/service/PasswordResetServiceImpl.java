@@ -205,6 +205,22 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         handleResetRequest(user, requestIp);
     }
 
+    @Override
+    @Transactional
+    public void sendSetPasswordLink(UUID userId, Locale locale) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.isDeleted()) {
+            return;
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            handleResetRequest(user, null);
+        } else if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+            issueBySms(user, locale, null);
+        } else {
+            log.warn("🔑 Set-password link not sent for user {}: no e-mail address or phone number", userId);
+        }
+    }
+
     /** The link by e-mail, to the account's own address. */
     private void handleResetRequest(User user, String requestIp) {
         // Enforce "one active token per user"

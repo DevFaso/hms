@@ -247,9 +247,8 @@ export function mfaStepUpRefusal(error: HttpErrorResponse): string | null {
 }
 
 /**
- * The 403 every API call gets while the account must set its own password (a
- * temporary password, or a rotation not done yet): the server refuses all but
- * the account-setup calls (PasswordChangeGate). It is neither a forbidden page
+ * The 403 every API call gets while the account is on a temporary password:
+ * the server refuses all but the account-setup calls (PasswordChangeGate). It is neither a forbidden page
  * nor a sign-out: the user is taken to the account-setup screen.
  */
 export const PASSWORD_CHANGE_REQUIRED = 'password_change_required';

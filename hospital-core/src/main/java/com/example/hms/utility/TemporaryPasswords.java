@@ -74,6 +74,20 @@ public final class TemporaryPasswords {
         user.setTemporaryPasswordExpiresAt(null);
     }
 
+    /**
+     * QA r70 D3201: whether activating this account must give its holder a first password. An account that has
+     * never been used (not active yet, never signed in, still on the password it was created with, not switched off
+     * by an administrator) is owed one by whoever activates it: the activation page shows it, or a set-password link
+     * goes to the holder. An account in use keeps its password.
+     */
+    public static boolean owedAtActivation(User holder) {
+        return holder != null
+            && !holder.isActive()
+            && holder.getLastLoginAt() == null
+            && holder.isForcePasswordChange()
+            && holder.getDeactivatedByAdminAt() == null;
+    }
+
     /** Whether the account's temporary password has expired at {@code now}; false for a password the holder chose. */
     public static boolean expired(LocalDateTime expiresAt, LocalDateTime now) {
         return expiresAt != null && !now.isBefore(expiresAt);

@@ -11,8 +11,9 @@ import java.io.IOException;
 import java.util.Set;
 
 /**
- * An account that must set its own password (a temporary password, or a
- * rotation not done yet) uses no API until it has. {@link JwtAuthenticationFilter}
+ * An account on a temporary password (one someone else chose, with an
+ * expiry) uses no API until it has set its own. A rotation of the holder's
+ * own password is advisory and not gated here. {@link JwtAuthenticationFilter}
  * refuses every other request with a 403 whose {@code code} is {@link #CODE};
  * the portal sends the user to its account-setup screen on that code.
  *
@@ -55,6 +56,11 @@ public final class PasswordChangeGate {
         "POST /auth/reset-password");
 
     private PasswordChangeGate() {
+    }
+
+    /** The admitted requests, as {@code "METHOD /path"} after the context path (PasswordChangeGateAllowlistTest). */
+    static Set<String> admittedRequests() {
+        return ADMITTED;
     }
 
     /**

@@ -71,7 +71,21 @@ class TemporaryPasswordGuardTest {
     /** A column name: group 1. */
     private static final Pattern COLUMN_NAME = Pattern.compile("@Column\\s*\\(\\s*name\\s*=\\s*\"(\\w+)\"");
 
-    private static final Pattern LOG_CALL = Pattern.compile("\\blog\\.(?:trace|debug|info|warn|error)\\(");
+    /** A logging call on any logger receiver ({@code log}, {@code logger}, {@code LOG}, {@code auditLog}, ...). */
+    private static final Pattern LOG_CALL = Pattern.compile("\\b(\\w+)\\.(?:trace|debug|info|warn|error)\\(");
+
+    /** A getter that returns a password: {@code getTempPassword()}, {@code getTemporaryPassword()}. */
+    private static final Pattern PASSWORD_GETTER = Pattern.compile("\\.get\\w*Password\\(\\)");
+
+    /** Message services and gateways: a password must never be a parameter of one. */
+    private static final java.util.List<String> MESSAGE_CLASS_WORDS = java.util.List.of(
+        "Sms", "Email", "Notification", "Gateway");
+
+    /**
+     * Named like a message service, sends no password: the self-service e-mail change takes the holder's CURRENT
+     * password to confirm it is them (the request body), and its mails carry a code, never the password.
+     */
+    private static final java.util.Set<String> NOT_MESSAGE_SENDERS = java.util.Set.of("OwnEmailChangeService.java");
 
     /** An identifier, not part of a qualified name. */
     private static final Pattern IDENTIFIER = Pattern.compile("(?<![\\w.])[A-Za-z_]\\w*");
@@ -105,10 +119,12 @@ class TemporaryPasswordGuardTest {
         int generators = 0;
         for (Path file : javaFiles()) {
             String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
-            if (GENERATES.matcher(code).find() && !file.endsWith("TemporaryPasswords.java")) {
+            int generated = count(GENERATES, code);
+            if (generated > 0 && !file.endsWith("TemporaryPasswords.java")) {
                 generators++;
-                if (!ASSIGNS.matcher(code).find()) {
-                    offenders.add(file.getFileName().toString());
+                int assigned = count(ASSIGNS, code);
+                if (assigned < generated) {
+                    offenders.add(file.getFileName() + ": " + generated + " generate, " + assigned + " assign");
                 }
             }
         }
@@ -117,12 +133,18 @@ class TemporaryPasswordGuardTest {
     }
 
     @Test
-    @DisplayName("no e-mail or SMS method takes a password")
+    @DisplayName("no e-mail, SMS, notification or gateway method takes a password")
     void noMessageCarriesAPassword() throws IOException {
         List<String> offenders = new ArrayList<>();
-        for (String name : List.of("service/EmailService.java", "service/EmailServiceImpl.java",
-                "service/SmsService.java")) {
-            String code = SourceScan.stripComments(Files.readString(MAIN.resolve(name), StandardCharsets.UTF_8));
+        int scanned = 0;
+        for (Path file : javaFiles()) {
+            String name = file.getFileName().toString();
+            if (MESSAGE_CLASS_WORDS.stream().noneMatch(name::contains) || name.endsWith("Controller.java")
+                    || NOT_MESSAGE_SENDERS.contains(name)) {
+                continue;
+            }
+            scanned++;
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
             Matcher m = STRING_PARAMETER.matcher(code);
             while (m.find()) {
                 if (m.group(1).toLowerCase(Locale.ROOT).contains("password")) {
@@ -130,6 +152,7 @@ class TemporaryPasswordGuardTest {
                 }
             }
         }
+        assertThat(scanned).as("the scan found the message services").isGreaterThan(10);
         assertThat(offenders)
             .as("a first password is shown once on the activation page; a lost one is replaced by a reset link")
             .isEmpty();
@@ -156,18 +179,22 @@ class TemporaryPasswordGuardTest {
     }
 
     @Test
-    @DisplayName("no log statement is handed a password variable")
+    @DisplayName("no log statement is handed a password variable or getter")
     void noPasswordIsLogged() throws IOException {
         List<String> offenders = new ArrayList<>();
         for (Path file : javaFiles()) {
             String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
             Matcher log = LOG_CALL.matcher(code);
             while (log.find()) {
+                if (!log.group(1).toLowerCase(Locale.ROOT).contains("log")) {
+                    continue;
+                }
                 int open = log.end() - 1;
                 int close = SourceScan.closingParen(code, open);
                 String args = withoutStringLiterals(code.substring(open + 1, Math.max(open + 1, close)));
-                boolean handsAPassword = groups(IDENTIFIER, args).stream()
-                    .anyMatch(id -> PASSWORD_VARIABLES.contains(id.toLowerCase(Locale.ROOT)));
+                boolean handsAPassword = PASSWORD_GETTER.matcher(args).find()
+                    || groups(IDENTIFIER, args).stream()
+                        .anyMatch(id -> PASSWORD_VARIABLES.contains(id.toLowerCase(Locale.ROOT)));
                 if (handsAPassword) {
                     offenders.add(file.getFileName() + ":" + SourceScan.lineOf(code, log.start()));
                 }

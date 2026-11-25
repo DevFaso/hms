@@ -123,6 +123,32 @@ public class UserServiceImpl implements UserService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
+    /**
+     * Sends a set-password link to the holder of an account activated by its
+     * e-mail link (no activation page, so no first password shown). Setter-
+     * injected so the unit tests that build this service with mocks keep
+     * their constructor.
+     */
+    private PasswordResetService passwordResetService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPasswordResetService(PasswordResetService passwordResetService) {
+        this.passwordResetService = passwordResetService;
+    }
+
+    /** After commit: a failed send never undoes the activation; the holder can still ask for a reset. */
+    private void sendSetPasswordLink(UUID holderId) {
+        if (passwordResetService == null) {
+            log.warn("🔑 No set-password link sent for user {}: no reset service", holderId);
+            return;
+        }
+        try {
+            passwordResetService.sendSetPasswordLink(holderId, EmailService.DEFAULT_RECIPIENT_LOCALE);
+        } catch (RuntimeException ex) {
+            log.warn("🔑 Set-password link for user {} failed: {}", holderId, ex.getClass().getSimpleName());
+        }
+    }
+
     /*
      * --------------------------------
      * Public Registration (Patient)
@@ -2231,10 +2257,19 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
+        // The link proves the address but shows no password: a never-used
+        // account gets a set-password link at that address. Read before the
+        // activation switches it on.
+        final boolean firstPasswordOwed = com.example.hms.utility.TemporaryPasswords.owedAtActivation(user);
+
         user.setActive(true);
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        if (firstPasswordOwed) {
+            final UUID holderId = user.getId();
+            TransactionCallbacks.afterCommit(() -> sendSetPasswordLink(holderId));
+        }
         // Refusals collected while the account was inactive must not outlive
         // the activation: the disabled arm of /auth/login counts toward the
         // lockout, so five attempts before verifying would otherwise leave the

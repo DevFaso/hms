@@ -39,7 +39,12 @@ public class CustomUserDetails implements HospitalUserDetails {
         this.active = user.isActive();
         this.authorities = authorities;
         this.passwordChangedAt = user.getPasswordChangedAt();
-        this.passwordChangeRequired = user.isForcePasswordChange();
+        // A temporary password (one someone else chose, with an expiry) is
+        // changed before any other use. A rotation of the holder's own
+        // password also sets forcePasswordChange but stays advisory: the
+        // portal asks for it, the API does not refuse (no expiry is set).
+        this.passwordChangeRequired = user.isForcePasswordChange()
+            && user.getTemporaryPasswordExpiresAt() != null;
         this.temporaryPasswordExpiresAt = user.getTemporaryPasswordExpiresAt();
     }
 

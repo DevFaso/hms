@@ -24,6 +24,14 @@ public interface PasswordResetService {
      * the caller cannot tell whether the account exists or how it was reached.
      */
     void requestResetByIdentifier(String identifier, Locale locale, String requestIp);
+    /**
+     * Sends the account's holder a link to set their own password, through the
+     * reset link mechanism: by e-mail when the account has an address, else by
+     * SMS when a real transport is configured, else nothing. Used when an account
+     * is activated without its holder seeing a first password.
+     */
+    void sendSetPasswordLink(UUID userId, Locale locale);
+
     boolean verifyToken(String token);           // hash + check exists, not expired, not consumed
     int cleanupExpiredTokens();                  // delete tokens past expiration
     void invalidateAllForUser(UUID userId);      // revoke all active tokens for a user

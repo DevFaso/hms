@@ -197,6 +197,44 @@ class PasswordResetServiceImplTest {
         verify(tokenRepository, never()).save(any());
     }
 
+    // ---- A set-password link for an account activated without seeing its first password ----
+
+    @Test
+    void sendSetPasswordLink_goesByEmailToAnAccountWithAnAddress() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        verify(tokenRepository).save(any(PasswordResetToken.class));
+        verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void sendSetPasswordLink_goesBySmsToAPhoneOnlyAccount() {
+        phoneOnly();
+        smsTransport(true);
+        smsBody();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        // The SMS service is a mock: nothing is really sent.
+        verify(smsService).send("+22670202020", "link");
+        verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
+    }
+
+    @Test
+    void sendSetPasswordLink_issuesNothingWithoutAChannel() {
+        user.setEmail(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        verify(tokenRepository, never()).save(any());
+    }
+
     // ---- QA D787: e-mail OR username OR phone, through the one identifier ----
 
     private void phoneOnly() {

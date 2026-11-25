@@ -22,6 +22,13 @@ public class UserRoleHospitalAssignmentResponseDTO {
      * with resendNotifications=true). Null when nothing was sent.
      */
     private java.util.List<NotificationDeliveryStatusDTO> activationDelivery;
+    /**
+     * A registrar's confirmation of a never-used account that no e-mail or SMS
+     * can reach: its username and first (temporary) password, in this response
+     * only, for the registrar to hand over. Never stored in clear, never sent.
+     */
+    private String temporaryUsername;
+    private String temporaryPassword;
     private UUID id;
     private String assignmentCode;
 

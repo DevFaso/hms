@@ -17,6 +17,21 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    /**
+     * Claims the issuing of an account's first password at activation: succeeds (1) only while the password is
+     * still the one read ({@code readAt}), so of two simultaneous activations one issues a password and the other
+     * gets 0 and issues none (no password shown that a second one already replaced).
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE User u SET u.passwordChangedAt = :claimedAt WHERE u.id = :id AND u.passwordChangedAt = :readAt")
+    int claimFirstPassword(@Param("id") UUID id, @Param("readAt") java.time.LocalDateTime readAt,
+                           @Param("claimedAt") java.time.LocalDateTime claimedAt);
+
+    /** As {@link #claimFirstPassword}, for an account with no password change recorded. */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE User u SET u.passwordChangedAt = :claimedAt WHERE u.id = :id AND u.passwordChangedAt IS NULL")
+    int claimFirstPasswordNeverChanged(@Param("id") UUID id, @Param("claimedAt") java.time.LocalDateTime claimedAt);
+
     /** Serialize every preference writer, including the insertion of the first choice. */
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")

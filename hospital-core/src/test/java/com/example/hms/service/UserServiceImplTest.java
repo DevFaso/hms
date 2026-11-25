@@ -3249,6 +3249,34 @@ class UserServiceImplTest {
         }
 
         @org.junit.jupiter.api.Test
+        @DisplayName("a never-used account activated by its link gets a set-password link; a self-chosen one does not")
+        void aNeverUsedAccountGetsASetPasswordLink() {
+            PasswordResetService resetService = org.mockito.Mockito.mock(PasswordResetService.class);
+            userService.setPasswordResetService(resetService);
+            User registeredByADesk = pending();
+            registeredByADesk.setForcePasswordChange(true);
+            when(assignmentRepository.findByUserId(registeredByADesk.getId())).thenReturn(List.of());
+
+            assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isTrue();
+
+            // No transaction in a unit test: afterCommit runs at once.
+            verify(resetService).sendSetPasswordLink(registeredByADesk.getId(), java.util.Locale.FRENCH);
+
+            User selfRegistered = new User();
+            selfRegistered.setId(UUID.randomUUID());
+            selfRegistered.setEmail("own@example.com");
+            selfRegistered.setActive(false);
+            selfRegistered.setActivationToken("tok-2");
+            selfRegistered.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+            when(userRepository.findByEmail("own@example.com")).thenReturn(Optional.of(selfRegistered));
+            when(assignmentRepository.findByUserId(selfRegistered.getId())).thenReturn(List.of());
+
+            assertThat(userService.verifyEmail("own@example.com", "tok-2")).isTrue();
+
+            verify(resetService, never()).sendSetPasswordLink(eq(selfRegistered.getId()), any());
+        }
+
+        @org.junit.jupiter.api.Test
         @DisplayName("an invalid token changes nothing and never clears the lockout (not an oracle)")
         void invalidTokenIsNotALockoutOracle() {
             User u = pending();

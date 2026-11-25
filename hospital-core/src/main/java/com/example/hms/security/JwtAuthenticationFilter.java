@@ -95,6 +95,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (RuntimeException ex) {
             log.error("Could not set user authentication in security context", ex);
+            // Whatever a gate had not finished checking, the request goes on
+            // unauthenticated: never with an authentication set before it failed.
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
             filterChain.doFilter(request, response);
         } finally {
             long elapsed = (System.nanoTime() - start) / 1_000_000;
@@ -130,6 +135,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // the path + the ticket-issuance trail let ops correlate when needed.
                     log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
                     respondUnauthorized(response);
+                    return true;
+                }
+                if (userDetails.isPasswordChangeRequired()) {
+                    // Same rule as a bearer (PasswordChangeGate): a temporary
+                    // password opens no chat until the holder sets their own.
+                    log.debug("[WS-TICKET] Refusing ticket until the account sets its own password on path={}", path);
+                    PasswordChangeGate.writeRefusal(response);
                     return true;
                 }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
@@ -289,8 +301,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // ── Password change first (PasswordChangeGate) ──────────────────
-        // An account on a temporary password, or due a rotation, sets its own
-        // password before anything else: every other request is refused here,
+        // An account on a temporary password sets its own password before
+        // anything else: every other request is refused here,
         // whatever the client does. The challenge token is no session and
         // is already confined to the MFA step.
         if (!challenge && PasswordChangeGate.applies(authentication) && !PasswordChangeGate.admits(request)) {
