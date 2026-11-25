@@ -197,7 +197,9 @@ class ImagingOrderServiceImplTest {
         // The form displayed an X-ray with no region; the catalogue exam is an ultrasound of the pelvis.
         ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder().patientId(patientId).hospitalId(hospitalId)
             .modality(ImagingModality.XRAY).studyType("affiché").catalogueItemId(examId)
-            .priority(ImagingOrderPriority.ROUTINE).build();
+            .priority(ImagingOrderPriority.ROUTINE)
+            // QA D3903: a duplicate is placed only with its reason.
+            .duplicateOverrideReason(com.example.hms.enums.ImagingDuplicateOverrideReason.CLINICAL_CHANGE).build();
         ImagingOrder order = new ImagingOrder();
         order.setPatient(patient);
         order.setHospital(hospital);
@@ -243,6 +245,8 @@ class ImagingOrderServiceImplTest {
             .studyType("CT Chest with contrast")
             .bodyRegion(BODY_REGION_CHEST)
             .priority(ImagingOrderPriority.ROUTINE)
+            // QA D3903: a duplicate is placed only with its reason.
+            .duplicateOverrideReason(com.example.hms.enums.ImagingDuplicateOverrideReason.PRIOR_INADEQUATE_OR_UNAVAILABLE)
             .build();
 
         ImagingOrder order = new ImagingOrder();
@@ -1993,6 +1997,123 @@ class ImagingOrderServiceImplTest {
                 assertThat(e.getField()).isEqualTo("duplicateOverrideReason");
             });
         verify(imagingOrderRepository, never()).save(any());
+    }
+
+    /**
+     * QA D3903: a chest X-ray posted without the flag, a minute after an identical one, was saved
+     * as a duplicate with no reason. The server's own finding decides: no flag, no reason, refused.
+     */
+    @Test
+    void aDuplicateTheServerFindsNeedsAReasonWithoutTheFlag_D3903() {
+        stubCreate(null);
+        stubDuplicate();
+        ImagingOrderRequestDTO noFlag = requestWithVisit(null);
+
+        assertThatThrownBy(() -> imagingOrderService.createOrder(noFlag, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("imaging.order.duplicateOverride.reasonRequired");
+                assertThat(e.getField()).isEqualTo("duplicateOverrideReason");
+            });
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void aReasonWithoutTheFlagIsStoredWithWhoAndWhen_D3903() {
+        ImagingOrder order = stubCreate(null);
+        stubDuplicate();
+        UUID orderer = UUID.randomUUID();
+        signer(orderer, "Awa", "Traoré");
+        ImagingOrderRequestDTO request = requestWithVisit(null);
+        request.setDuplicateOverrideReason(com.example.hms.enums.ImagingDuplicateOverrideReason.CLINICAL_CHANGE);
+
+        imagingOrderService.createOrder(request, orderer);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isTrue();
+        assertThat(order.getDuplicateOverride()).isTrue();
+        assertThat(order.getDuplicateOverrideReason())
+            .isEqualTo(com.example.hms.enums.ImagingDuplicateOverrideReason.CLINICAL_CHANGE);
+        assertThat(order.getDuplicateOverrideByUserId()).isEqualTo(orderer);
+        assertThat(order.getDuplicateOverrideAt()).isNotNull();
+    }
+
+    /** QA D3903: a client cannot shrink the window the server checks below its default. */
+    @Test
+    void aNarrowedLookbackDoesNotHideTheDuplicate_D3903() {
+        stubCreate(null);
+        stubDuplicate();
+        ImagingOrderRequestDTO request = requestWithVisit(null);
+        request.setDuplicateLookbackDays(1);
+
+        assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        ArgumentCaptor<LocalDateTime> after = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(hospitalId), any(), any(),
+            after.capture());
+        assertThat(after.getValue()).isBefore(LocalDateTime.now().minusDays(29));
+    }
+
+    /** QA D3903, same class: an edit that turns the order into a recently ordered study needs the reason. */
+    @Test
+    void anEditIntoARecentlyOrderedStudyNeedsAReason_D3903() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        order.setBodyRegion("Genou");
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).modality(ImagingModality.CT)
+            .studyType("CT Chest").bodyRegion(BODY_REGION_CHEST).priority(ImagingOrderPriority.ROUTINE).build();
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.doAnswer(call -> {
+            order.setModality(ImagingModality.CT);
+            order.setBodyRegion(BODY_REGION_CHEST);
+            return null;
+        }).when(imagingOrderMapper).updateEntityFromRequest(order, request);
+        ImagingOrder earlier = new ImagingOrder();
+        earlier.setId(UUID.randomUUID());
+        lenient().when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId),
+            eq(ImagingModality.CT), eq(BODY_REGION_CHEST), any(LocalDateTime.class))).thenReturn(List.of(earlier));
+        lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("duplicateOverrideReason"));
+        verify(imagingOrderRepository, never()).save(any());
+
+        request.setDuplicateOverrideReason(com.example.hms.enums.ImagingDuplicateOverrideReason.DIFFERENT_REGION_OR_QUESTION);
+        order.setModality(ImagingModality.XRAY);
+        order.setBodyRegion("Genou");
+        imagingOrderService.updateOrder(orderId, request, null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isTrue();
+        assertThat(order.getDuplicateOverrideReason())
+            .isEqualTo(com.example.hms.enums.ImagingDuplicateOverrideReason.DIFFERENT_REGION_OR_QUESTION);
+    }
+
+    /** QA D3903: an edit that keeps the study (a date, a note) decides nothing new and needs no reason. */
+    @Test
+    void anEditThatKeepsTheStudyNeedsNoReason_D3903() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).modality(ImagingModality.XRAY)
+            .studyType("XR Knee").priority(ImagingOrderPriority.ROUTINE).build();
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
+        ImagingOrder earlier = new ImagingOrder();
+        earlier.setId(UUID.randomUUID());
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId), eq(ImagingModality.XRAY),
+            isNull(), any(LocalDateTime.class))).thenReturn(List.of(earlier));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        imagingOrderService.updateOrder(orderId, request, null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isTrue();
+        verify(imagingOrderRepository).save(order);
     }
 
     @Test
