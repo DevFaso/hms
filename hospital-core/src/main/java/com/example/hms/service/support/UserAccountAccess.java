@@ -434,8 +434,12 @@ public class UserAccountAccess {
      *   <li>Anyone else: the hospitals where it registers staff (those it
      *       administers, its organisation's, the provider facilities it
      *       administers), and there an account that already holds a staff
-     *       (non-patient) assignment, active or not. A patient's account, or
-     *       an account known only to another hospital, is not.</li>
+     *       (non-patient) assignment, active or not. An account known only
+     *       to another hospital or organisation is not.</li>
+     *   <li>A hospital admin also names a patient of a hospital it
+     *       administers (a PATIENT row there): its own patient, whom it
+     *       already reads. Never another hospital's patient, and never
+     *       through an organisation or provider scope.</li>
      * </ul>
      */
     public HolderReach holderReach() {
@@ -443,23 +447,27 @@ public class UserAccountAccess {
         if (caller.superAdmin()) {
             return HolderReach.EVERYWHERE;
         }
-        Set<UUID> hospitals = new java.util.HashSet<>(administeredHospitals(caller));
+        Set<UUID> administered = administeredHospitals(caller);
+        Set<UUID> hospitals = new java.util.HashSet<>(administered);
         hospitals.addAll(organisationHospitals(caller));
         hospitals.addAll(providerAdministeredHospitals(caller));
-        return new HolderReach(false, hospitals);
+        return new HolderReach(false, hospitals, administered);
     }
 
     /** What {@link #holderReach} allows. */
     public static final class HolderReach {
 
-        static final HolderReach EVERYWHERE = new HolderReach(true, Set.of());
+        static final HolderReach EVERYWHERE = new HolderReach(true, Set.of(), Set.of());
 
         private final boolean everywhere;
         private final Set<UUID> hospitals;
+        /** The hospitals whose own patients the caller may name: those it administers as HOSPITAL_ADMIN. */
+        private final Set<UUID> patientHospitals;
 
-        HolderReach(boolean everywhere, Set<UUID> hospitals) {
+        HolderReach(boolean everywhere, Set<UUID> hospitals, Set<UUID> patientHospitals) {
             this.everywhere = everywhere;
             this.hospitals = Set.copyOf(hospitals);
+            this.patientHospitals = Set.copyOf(patientHospitals);
         }
 
         public boolean everywhere() {
@@ -473,7 +481,23 @@ public class UserAccountAccess {
          * @param holderRows every assignment the account holds, active or not
          */
         public boolean mayName(List<UserRoleHospitalAssignment> holderRows) {
-            return everywhere || holderRows.stream().anyMatch(row -> isStaffRowAt(row, hospitals));
+            return everywhere || holderRows.stream().anyMatch(row -> isStaffRowAt(row, hospitals))
+                || isOwnPatient(holderRows);
+        }
+
+        /**
+         * Is this account a patient of a hospital the caller administers (a
+         * PATIENT row there, active or not)? Never true for a super-admin's
+         * reach: the super-admin does not make a patient staff.
+         *
+         * @param holderRows every assignment the account holds, active or not
+         */
+        public boolean isOwnPatient(List<UserRoleHospitalAssignment> holderRows) {
+            return holderRows.stream().anyMatch(row -> {
+                UUID hospitalId = hospitalIdOf(row);
+                return hospitalId != null && patientHospitals.contains(hospitalId)
+                    && PATIENT.equals(roleCode(row.getRole()));
+            });
         }
 
         /**
@@ -503,9 +527,10 @@ public class UserAccountAccess {
 
     /**
      * QA D4020: an account that is a patient and nothing else (a patient role
-     * or record, and no staff assignment anywhere). No {@code /assignments}
-     * write gives such an account a staff role, whoever asks: a patient
-     * account is never made staff through that path.
+     * or record, and no staff assignment anywhere). An {@code /assignments}
+     * write gives such an account a staff role only when the caller is the
+     * hospital admin of a hospital where it is a patient
+     * ({@link HolderReach#isOwnPatient}); never otherwise, whoever asks.
      *
      * @param holderRows every assignment the account holds, active or not
      */

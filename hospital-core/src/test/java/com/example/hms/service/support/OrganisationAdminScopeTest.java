@@ -361,8 +361,10 @@ class OrganisationAdminScopeTest {
         // A nurse at the sister hospital; a doctor whose invitation still waits for its code.
         assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalB, true)))).isTrue();
         assertThat(reach.mayName(rows(assignment("ROLE_DOCTOR", hospitalA, false)))).isTrue();
-        // A patient of its own hospital; another organisation's clinician; someone with no assignment.
+        // A patient of its own hospital (an organisation admin reads no patient); another
+        // organisation's clinician; someone with no assignment.
         assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
+        assertThat(reach.isOwnPatient(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
         assertThat(reach.mayName(rows(assignment("ROLE_DOCTOR", hospitalC, true)))).isFalse();
         assertThat(reach.mayName(rows())).isFalse();
         // A clinician of another organisation who is ALSO a patient at A is still not its staff.
@@ -381,7 +383,11 @@ class OrganisationAdminScopeTest {
         assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalA, true)))).isTrue();
         // The sister hospital is the organisation admin's, not this hospital admin's.
         assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalB, true)))).isFalse();
-        assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
+        // Its own hospital's patient it may name; another hospital's patient it may not.
+        assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isTrue();
+        assertThat(reach.isOwnPatient(rows(assignment("ROLE_PATIENT", hospitalA, false)))).isTrue();
+        assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalB, true)))).isFalse();
+        assertThat(reach.isOwnPatient(rows(assignment("ROLE_PATIENT", hospitalB, true)))).isFalse();
     }
 
     @Test

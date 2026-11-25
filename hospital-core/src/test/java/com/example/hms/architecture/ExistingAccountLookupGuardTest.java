@@ -104,8 +104,10 @@ class ExistingAccountLookupGuardTest {
             .contains("if (adminRequest) {\n            requireHolderInCallersReach(user);");
         String rule = service.substring(service.indexOf("private void requireHolderInCallersReach("));
         rule = rule.substring(0, rule.indexOf("\n    }\n"));
-        assertThat(rule).contains("accountAccess.holderReach().mayName(holderRows)")
-            .contains("accountAccess.isPatientOnly(holder, holderRows)")
+        assertThat(rule).contains("UserAccountAccess.HolderReach reach = accountAccess.holderReach();")
+            .contains("!reach.mayName(holderRows)")
+            // A patient-only account only when it is the caller's own hospital's patient.
+            .contains("(accountAccess.isPatientOnly(holder, holderRows) && !reach.isOwnPatient(holderRows))")
             .contains("throw holderNotFound();");
         // Unknown, out of reach and patient-only: one answer, nothing typed echoed back.
         String answer = service.substring(service.indexOf("private static ResourceNotFoundException holderNotFound()"));

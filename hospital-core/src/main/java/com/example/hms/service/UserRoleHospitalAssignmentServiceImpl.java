@@ -401,9 +401,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * QA D4020: an {@code /assignments} write (single, multi-scope, bulk)
      * names an EXISTING account only when the caller could already see it as
      * staff ({@link UserAccountAccess#holderReach}): an account that holds a
-     * staff assignment at a hospital where the caller registers staff. Never
-     * an account known only to another hospital, never a patient-only
-     * account, and never a deleted one (but for the super-admin). Decided
+     * staff assignment at a hospital where the caller registers staff, or (a
+     * hospital admin only) a patient of a hospital it administers. Never an
+     * account known only to another hospital or organisation, never any other
+     * patient-only account, and never a deleted one (but for the super-admin). Decided
      * from the caller's own assignments, whatever {@code X-Hospital-Id} says,
      * and before anything is saved or sent: a refused holder gets no
      * invitation. A brand-new person is registered through admin-register,
@@ -411,8 +412,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     private void requireHolderInCallersReach(User holder) {
         List<UserRoleHospitalAssignment> holderRows = assignmentRepository.findByUserId(holder.getId());
-        boolean refused = !accountAccess.holderReach().mayName(holderRows)
-            || accountAccess.isPatientOnly(holder, holderRows)
+        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
+        boolean refused = !reach.mayName(holderRows)
+            || (accountAccess.isPatientOnly(holder, holderRows) && !reach.isOwnPatient(holderRows))
             || (holder.isDeleted() && !accountAccess.callerSeesDeletedAccounts());
         if (refused) {
             throw holderNotFound();

@@ -328,14 +328,28 @@ class AssignmentHolderReachTest {
     }
 
     @Test
-    @DisplayName("this hospital's own patient is not made staff through /assignments either")
-    void ownPatientIsNotMadeStaff() {
+    @DisplayName("this hospital's own patient may be given a staff role by its hospital admin, invited as any holder")
+    void ownPatientMayBeMadeStaffByItsHospitalAdmin() {
         signInAsHospitalAdminOfB(false);
         targetHolds(row(target, patient, hospitalB, true));
 
-        Throwable refused = catchThrowable(() -> service.assignRole(receptionistAtB(Named.PHONE, target)));
+        service.assignRole(receptionistAtB(Named.PHONE, target));
 
-        assertAnsweredAsUnknown(refused, Named.PHONE);
+        verify(assignmentRepository).save(any());
+        verify(eventPublisher).publishEvent(any(com.example.hms.event.AssignmentCreatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("a patient of this hospital AND of another is still this hospital's patient; one of the other only is not")
+    void onlyTheCallersOwnPatientsCount() {
+        signInAsHospitalAdminOfB(true);
+        targetHolds(row(target, patient, hospitalA, true));
+        Throwable refused = catchThrowable(() -> service.assignRole(receptionistAtB(Named.ID, target)));
+        assertAnsweredAsUnknown(refused, Named.ID);
+
+        targetHolds(row(target, patient, hospitalA, true), row(target, patient, hospitalB, false));
+        service.assignRole(receptionistAtB(Named.ID, target));
+        verify(assignmentRepository).save(any());
     }
 
     @Test
@@ -356,10 +370,10 @@ class AssignmentHolderReachTest {
     }
 
     @Test
-    @DisplayName("a staff member of another hospital who is also a patient here is still another hospital's")
-    void staffElsewhereAndPatientHereIsUnknown() {
+    @DisplayName("a staff member of another hospital who is a patient nowhere here is still another hospital's")
+    void staffElsewhereAndPatientElsewhereIsUnknown() {
         signInAsHospitalAdminOfB(true);
-        targetHolds(row(target, nurse, hospitalA, true), row(target, patient, hospitalB, true));
+        targetHolds(row(target, nurse, hospitalA, true), row(target, patient, hospitalA, true));
 
         Throwable refused = catchThrowable(() -> service.assignRole(receptionistAtB(Named.USERNAME, target)));
 
