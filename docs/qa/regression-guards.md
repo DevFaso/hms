@@ -1207,3 +1207,9 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/LabDefinitionSensitivityChangePersistenceTest` (new) | D2902: a lab-definition entry point that audits after the commit without a transaction: `repository.save` commits alone and the audit reads a lazy proxy out of session (500, saved, no audit row). Runs against a real persistence context with no transaction around the call, and pins the four entry points that audit as `@Transactional`. | none |
 | `i18n/LabourMaternalAlertProvisionalWordingTest` (new) | D2939: a `labor-maternal-*` alert of the partograph whose text does not end with the provisional-rule sentence, in any of the four bundles (codes read from `LaborServiceImpl`). | none |
 | portal `shared/styles/overflow-class.spec.ts` (widened) and `e2e/helpers/layout-audit.ts` rule `dialog-height` (new) | D2938: a dialog taller than the screen, or an action button of a dialog that nothing scrolls to. Every dialog family of the shared modal layer is capped at the screen and scrolls with its action row stuck to the bottom; the layout e2e measures every dialog it opens, 1366 px at 768 px high and 390 px at 844. | none |
+
+## Guards added by r77 (fix/emar-keeps-supplied-orders)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| `architecture/MarSupplyGuardTest` (new) | D3941: an eMAR read that filters on what the pharmacy supplied. The MAR's statuses must be every status that stands (`MarOrderStanding.stands`, the dose gate's own rule), the supply statuses included; the ward query must be asked for them and its text must not name a supply status or a dispense; `NurseTaskServiceImpl` keeps no status list of its own and its MAR reads (list, tiles, workboard, `onWardMar`) name no supply status and read no dispense. What was supplied is said on the row (`MarSupply`), never used to hide it. | none |

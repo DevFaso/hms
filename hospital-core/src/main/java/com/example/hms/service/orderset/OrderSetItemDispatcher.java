@@ -231,6 +231,14 @@ public class OrderSetItemDispatcher {
         req.setPriority(parsePriority(string(item.get("priority"))));
         req.setClinicalQuestion(NARRATIVE_PREFIX + ctx.orderSetName());
 
+        // QA D3903: a recent order of the same study is placed again only with a reason, which a
+        // protocol cannot give. The item is skipped (and counted) instead of failing the whole set;
+        // the clinician orders it on its own, with the reason, if it is really needed again.
+        if (!imagingOrderService.previewDuplicates(ctx.patientId(), ctx.hospitalId(), modality,
+                req.getBodyRegion(), null).isEmpty()) {
+            return DispatchResult.skipped("imaging duplicate of a recent order: order it on its own with a reason");
+        }
+
         ImagingOrderResponseDTO created = imagingOrderService.createOrder(req, ctx.orderingStaffId());
         return DispatchResult.imaging(created.getId());
     }

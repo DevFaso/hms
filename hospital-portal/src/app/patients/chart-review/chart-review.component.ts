@@ -36,8 +36,9 @@ import { Router } from '@angular/router';
 import { RoleContextService } from '../../core/role-context.service';
 import { IMAGING_PAGE_ROLES } from '../../shared/imaging-access';
 import { ImagingImagesComponent } from '../../imaging/imaging-images/imaging-images.component';
+import { isChartRestricted } from '../chart-restricted';
 
-type LoadState = 'loading' | 'ready' | 'empty' | 'error';
+type LoadState = 'loading' | 'ready' | 'empty' | 'error' | 'restricted';
 
 export type ChartReviewTab =
   'timeline' | 'encounters' | 'notes' | 'results' | 'medications' | 'imaging' | 'procedures';
@@ -381,9 +382,10 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
               (c.procedures?.length ?? 0) === 0);
           this.state.set(empty ? 'empty' : 'ready');
         },
-        error: () => {
+        error: (err: unknown) => {
           this.chart.set(null);
-          this.state.set('error');
+          // QA D3864: a restricted chart is not a load failure; reloading cannot open it.
+          this.state.set(isChartRestricted(err) ? 'restricted' : 'error');
         },
       });
   }

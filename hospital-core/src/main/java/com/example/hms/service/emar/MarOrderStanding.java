@@ -30,6 +30,18 @@ public final class MarOrderStanding {
     private MarOrderStanding() {
     }
 
+    /**
+     * QA D3941: whether an order in this status stands, the one rule the ward MAR lists by
+     * ({@link MarWardReader#ON_MAR_STATUSES}) and every dose is recorded by ({@link #requireStands}):
+     * signed and not withdrawn. The pharmacy's supply statuses (DISPENSED, PARTIALLY_FILLED, PENDING_STOCK,
+     * the partner statuses...) all stand: a ward order the pharmacy supplied is still to be given, and the
+     * row says how much was supplied ({@link MarSupply}), it does not leave the list.
+     */
+    public static boolean stands(PrescriptionStatus status) {
+        return status != null && !status.isWithdrawn()
+            && status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
+    }
+
     public static void requireStands(Prescription rx) {
         PrescriptionStatus status = rx == null ? null : rx.getStatus();
         if (status == null) {

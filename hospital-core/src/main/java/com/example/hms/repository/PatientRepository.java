@@ -283,6 +283,22 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     @Query("SELECT p FROM Patient p WHERE p.id = :id")
     Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
 
+    /**
+     * QA D3863: the chart-restriction flag alone (E8 #54), for the central
+     * restricted-chart gate. Unscoped like {@link #findByIdUnscoped}: the gate
+     * only ever narrows what a caller receives.
+     */
+    @Query("SELECT p.chartRestricted FROM Patient p WHERE p.id = :id")
+    Optional<Boolean> findChartRestrictedById(@Param("id") UUID id);
+
+    /** QA D3863: the restricted charts among {@code ids} (one query per response the gate masks). */
+    @Query("SELECT p.id FROM Patient p WHERE p.id IN :ids AND p.chartRestricted = true")
+    List<UUID> findChartRestrictedIdsAmong(@Param("ids") Collection<UUID> ids);
+
+    /** QA D3863: is any chart restricted at all? The gate skips every response while none is (V368 index). */
+    @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE p.chartRestricted = true")
+    boolean existsAnyChartRestricted();
+
     /** Consent provenance needs only the account id, and only for a registration at the delivery's hospital. */
     @Query("select p.user.id from Patient p where p.id = :patientId and exists "
         + "(select r.id from PatientHospitalRegistration r where r.patient.id = p.id and r.hospital.id = :hospitalId)")

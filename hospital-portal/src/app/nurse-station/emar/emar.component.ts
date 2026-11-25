@@ -267,6 +267,22 @@ export class EmarComponent implements OnInit, OnDestroy {
     return isServerTimeToday(dueTime);
   }
 
+  /**
+   * QA D3941: the supply chip is information, never a filter; it is marked when
+   * the ward may not have the medicine (nothing or only part supplied, out of
+   * stock, a pharmacy question pending, or sent outside and not confirmed
+   * supplied), so the nurse can ask before the round.
+   */
+  protected supplyNeedsAttention(task: NurseMedicationTask): boolean {
+    return (
+      task.supplyStatus === 'NOT_SUPPLIED' ||
+      task.supplyStatus === 'PARTIALLY_SUPPLIED' ||
+      task.supplyStatus === 'OUT_OF_STOCK' ||
+      task.supplyStatus === 'PHARMACY_QUERY' ||
+      task.supplyStatus === 'EXTERNAL_PENDING'
+    );
+  }
+
   protected loadTasks(): void {
     this.state.set('loading');
     this.loadSub?.unsubscribe();

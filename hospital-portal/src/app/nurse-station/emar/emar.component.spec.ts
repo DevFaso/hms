@@ -699,6 +699,62 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(root().querySelector('[data-testid="emar-prn"]')?.textContent?.trim()).toBe(label);
   });
 
+  // QA D3941: a ward order the pharmacy supplied, even in part, stays in the queue;
+  // the supply is said on the row as information, never used to filter it.
+  it('QA D3941: a partly supplied order stays in the queue and says what was supplied', () => {
+    const partly: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-partly',
+      supplyStatus: 'PARTIALLY_SUPPLIED',
+      quantitySupplied: 3,
+      quantityOrdered: 9,
+      supplyLabel: 'Pharmacie : fourni 3/9',
+    };
+    const supplied: NurseMedicationTask = {
+      ...sampleTask,
+      supplyStatus: 'SUPPLIED',
+      quantitySupplied: 9,
+      quantityOrdered: 9,
+      supplyLabel: 'Pharmacie : fourni 9/9',
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([partly, supplied]));
+    fixture.detectChanges();
+    const partlyChip = root().querySelector('[data-testid="emar-supply-chip-task-partly"]');
+    expect(partlyChip?.textContent?.trim()).toBe('Pharmacie : fourni 3/9');
+    expect(partlyChip?.classList).toContain('emar__queue-chip--advisory');
+    const suppliedChip = root().querySelector(`[data-testid="emar-supply-chip-${supplied.id}"]`);
+    expect(suppliedChip?.textContent?.trim()).toBe('Pharmacie : fourni 9/9');
+    expect(suppliedChip?.classList).not.toContain('emar__queue-chip--advisory');
+    component['selectTask'](partly);
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-supply"]')?.textContent?.trim()).toBe(
+      'Pharmacie : fourni 3/9',
+    );
+  });
+
+  // Review of #1335: sent to a partner or printed is not supplied; only the partner's dispense is.
+  it('QA D3941: an external supply not yet confirmed is marked, a confirmed one is not', () => {
+    const pending: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-external-pending',
+      supplyStatus: 'EXTERNAL_PENDING',
+      supplyLabel: 'Fourniture externe non confirmée (pharmacie partenaire ou ordonnance remise)',
+    };
+    const confirmed: NurseMedicationTask = {
+      ...sampleTask,
+      supplyStatus: 'EXTERNAL_SUPPLIED',
+      supplyLabel: 'Fourni par une pharmacie partenaire',
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([pending, confirmed]));
+    fixture.detectChanges();
+    expect(
+      root().querySelector('[data-testid="emar-supply-chip-task-external-pending"]')?.classList,
+    ).toContain('emar__queue-chip--advisory');
+    expect(
+      root().querySelector(`[data-testid="emar-supply-chip-${confirmed.id}"]`)?.classList,
+    ).not.toContain('emar__queue-chip--advisory');
+  });
+
   it('QA D1237: a frequency the MAR cannot read is shown on the row and its refusal opens the reason dialog', () => {
     const unread: NurseMedicationTask = { ...sampleTask, id: 'task-unread', frequencyUnread: true };
     const unreadRefusal = throwError(

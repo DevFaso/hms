@@ -490,7 +490,7 @@ public class UserServiceImpl implements UserService {
         final boolean attachedByLicence = !isPatient && existingByLicense.isPresent();
         final boolean administersAttached = attachedByLicence && accountAccess.canAdminister(existingByLicense.get());
         if (attachedByLicence) {
-            requireMayAttachByLicence(existingByLicense.get(), staffContextHospitalId, lic, administersAttached);
+            requireMayAttachByLicence(existingByLicense.get(), lic, administersAttached);
         }
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, request.getUsername(), email, phone, roles));
@@ -635,28 +635,30 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Review round 2 of #1246: who may attach an EXISTING account found by its
-     * licence number. The lookup is platform-wide (a clinician works at more
-     * than one hospital, and the number is theirs everywhere), so the match
+     * Review round 2 of #1246, QA D4020: who may attach an EXISTING account
+     * found by its licence number. The lookup is platform-wide, so the match
      * alone decides nothing.
      *
      * <ul>
-     *   <li>A caller who reaches the hospital through its organisation scope
-     *       alone (the organisation admin) attaches only its organisation's
-     *       own staff. Another organisation's clinician is refused as a
-     *       licence number already in use: the answer any registrar gets for
-     *       a taken number, with nothing about the account behind it.</li>
+     *   <li>The caller attaches only an account it could already name as staff
+     *       ({@link UserAccountAccess#holderReach}): one holding a staff
+     *       assignment at a hospital where the caller registers staff (the
+     *       hospitals it administers, its organisation's, its provider
+     *       facilities). An account known only to another hospital is refused
+     *       as a licence number already in use: the answer any registrar gets
+     *       for a taken number, with nothing about the account behind it, and
+     *       no invitation is sent to it. The super-admin attaches anyone.</li>
      *   <li>A soft-deleted account comes back through a registration only
      *       when the caller administers it. Restoring an account is the
      *       super-admin's ({@code PATCH /users/{id}/restore}); a licence
      *       number typed into the register form is no way round that.</li>
      * </ul>
      */
-    private void requireMayAttachByLicence(User held, UUID hospitalId, String licence, boolean administersIt) {
-        boolean outsideTheOrganisation = accountAccess.reachesOnlyThroughOrganisation(hospitalId)
-            && !accountAccess.isStaffOfCallersOrganisation(held);
+    private void requireMayAttachByLicence(User held, String licence, boolean administersIt) {
+        boolean outOfReach = !accountAccess.holderReach()
+            .mayName(assignmentRepository.findByUserId(held.getId()));
         boolean deletedAndNotTheirs = held.isDeleted() && !administersIt;
-        if (outsideTheOrganisation || deletedAndNotTheirs) {
+        if (outOfReach || deletedAndNotTheirs) {
             throw new com.example.hms.exception.FieldBusinessException(
                 "licenseNumber", "staff.license.duplicate", licence);
         }

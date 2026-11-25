@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.PatientPrimaryCareRequestDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.service.PatientPrimaryCareService;
@@ -36,6 +37,8 @@ import java.util.UUID;
 // the effective lists are unchanged. Whether receptionists should assign a
 // PCP and clinicians read one, as the original author evidently meant, is
 // an open decision recorded on the tasklist, not a change made here.
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the assigned primary-care clinician: administrative")
 public class PatientPrimaryCareController {
 
     private final PatientPrimaryCareService service;

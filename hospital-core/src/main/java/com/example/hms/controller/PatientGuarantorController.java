@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.GuarantorRequestDTO;
 import com.example.hms.payload.dto.GuarantorResponseDTO;
@@ -39,6 +40,8 @@ import java.util.UUID;
 @RequestMapping("/patients/{patientId}/guarantors")
 @RequiredArgsConstructor
 @Tag(name = "Guarantors", description = "Financially responsible parties (deactivate, never delete)")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "who pays: administrative")
 public class PatientGuarantorController {
 
     private static final String ROLES =
