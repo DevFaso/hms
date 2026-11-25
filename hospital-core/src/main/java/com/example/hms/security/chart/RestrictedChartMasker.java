@@ -51,13 +51,16 @@ public final class RestrictedChartMasker {
             + "|study|modality|body|indication|content|title|subject|message|oxygen|saturation|spo2|pulse|heart"
             + "|pressure|weight|height|temp|glucose).*");
 
-    /** The receptionist vocabulary (RCPT-CLIN) plus the patient record's vital fields: off a patient's identity. */
+    /**
+     * The receptionist vocabulary (RCPT-CLIN): off a patient's identity. The death flags stay, as for
+     * the desk: they decide whether care may be given at all.
+     */
     static final Pattern CLINICAL_ON_IDENTITY = Pattern.compile(
         "(?i).*(chronic|condition|risk|flag|allerg|diagnos|vital|medication|prescri|labresult|imaging|narrative"
             + "|organism|acuity|esiscore|soap|assessment|chiefcomplaint|problem|complaint|clinical|historysummary"
             + "|careteamnotes|reason|notes?|followupinstruction|treatment|symptom|immuniz|procedure|bloodtype"
             + "|gestation|bloodgroup|abogroup|rhfactor|antibody|triage|isolation|highrisk|encounterdescription"
-            + "|visitdescription|hospitalcourse|encountersummary|sensitiv|program|pregnan|deceas|death).*");
+            + "|visitdescription|hospitalcourse|encountersummary|sensitiv|program|pregnan).*");
 
     /** Off a patient's identity by exact name: the header's last vital signs. */
     static final Set<String> VITALS_ON_IDENTITY = Set.of("hr", "bp", "spo2", "rr", "temp", "temperature", "weight",
@@ -135,13 +138,15 @@ public final class RestrictedChartMasker {
         if (!(node instanceof ObjectNode object)) {
             return;
         }
+        // The patient record first: PatientMapper fills both its id and its patientId with the
+        // patient's own id, and the record keeps its identity (name, contact, status), not a row's.
+        if (isIdentityOf(object, blocked)) {
+            shapeIdentity(object, blocked);
+            return;
+        }
         UUID owner = patientOf(object);
         if (owner != null && blocked.contains(owner)) {
             maskRow(object, blocked);
-            return;
-        }
-        if (isIdentityOf(object, blocked)) {
-            shapeIdentity(object, blocked);
             return;
         }
         for (Map.Entry<String, JsonNode> child : object.properties()) {

@@ -45,6 +45,10 @@ class RestrictedChartResponseMaskingTest {
             return null;
         }
 
+        public com.example.hms.payload.dto.PatientResponseDTO patient() {
+            return null;
+        }
+
         public List<EncounterResponseDTO> list() {
             return null;
         }
@@ -114,6 +118,24 @@ class RestrictedChartResponseMaskingTest {
     void singleRecordIsRefused() {
         assertThatThrownBy(() -> write(visit(RESTRICTED, "B99"), "single", "GET"))
             .isInstanceOf(ChartRestrictedException.class);
+    }
+
+    @Test
+    @DisplayName("the patient's own record is shaped to its identity, never refused")
+    void patientRecordIsShapedNotRefused() throws Exception {
+        com.example.hms.payload.dto.PatientResponseDTO patient = new com.example.hms.payload.dto.PatientResponseDTO();
+        patient.setId(RESTRICTED);
+        patient.setPatientId(RESTRICTED);
+        patient.setFirstName("Test");
+        patient.setPhoneNumberPrimary("+226 00 00 00 01");
+        patient.setActive(true);
+        patient.setBloodType("O+");
+        JsonNode shaped = (JsonNode) write(patient, "patient", "GET");
+        assertThat(shaped.get("firstName").asString()).isEqualTo("Test");
+        assertThat(shaped.get("phoneNumberPrimary").asString()).isEqualTo("+226 00 00 00 01");
+        assertThat(shaped.get("active").asBoolean()).isTrue();
+        assertThat(shaped.has("bloodType")).isFalse();
+        assertThat(shaped.get("chartRestricted").asBoolean()).isTrue();
     }
 
     @Test

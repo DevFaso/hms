@@ -1,5 +1,9 @@
 package com.example.hms.security.chart;
 
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.mapper.PatientMapper;
+import com.example.hms.model.Patient;
+import com.example.hms.payload.dto.PatientResponseDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -95,6 +99,37 @@ class RestrictedChartMaskerTest {
         assertThat(patient.has("bp")).isFalse();
         assertThat(patient.has("careTeamNotes")).isFalse();
         assertThat(patient.get("flags")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a real patient record (id and patientId both the patient) keeps identity, contact and status")
+    void aMappedPatientRecordKeepsItsIdentity() {
+        Patient patient = Patient.builder()
+            .firstName("Test").lastName("Patient")
+            .phoneNumberPrimary("+226 00 00 00 01")
+            .addressLine1("Secteur 1").city("Ouagadougou")
+            .emergencyContactName("Contact Person").emergencyContactPhone("+226 00 00 00 02")
+            .bloodType("O+").medicalHistorySummary("DX-SENSITIVE history").careTeamNotes("DX-SENSITIVE note")
+            .build();
+        patient.setId(RESTRICTED);
+        patient.setChartRestricted(true);
+        PatientResponseDTO dto = new PatientMapper(TestMessageSources.bundles()).toPatientDTO(patient);
+        assertThat(dto.getId()).isEqualTo(RESTRICTED);
+        JsonNode record = JsonMapper.builder().findAndAddModules().build().valueToTree(dto);
+        assertThat(record.get("patientId").asString()).as("the mapper fills both ids").isEqualTo(RESTRICTED.toString());
+
+        RestrictedChartMasker.mask(record, Set.of(RESTRICTED));
+
+        assertThat(record.get("firstName").asString()).isEqualTo("Test");
+        assertThat(record.get("phoneNumberPrimary").asString()).isEqualTo("+226 00 00 00 01");
+        assertThat(record.get("addressLine1").asString()).isEqualTo("Secteur 1");
+        assertThat(record.get("emergencyContactName").asString()).isEqualTo("Contact Person");
+        assertThat(record.get("emergencyContactPhone").asString()).isEqualTo("+226 00 00 00 02");
+        assertThat(record.get("active").asBoolean()).as("not shown as inactive").isTrue();
+        assertThat(record.has("deceased")).isTrue();
+        assertThat(record.get("chartRestricted").asBoolean()).isTrue();
+        assertThat(record.has("bloodType")).isFalse();
+        assertThat(record.toString()).doesNotContain("DX-SENSITIVE");
     }
 
     @Test

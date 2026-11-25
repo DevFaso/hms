@@ -97,8 +97,10 @@ public class RestrictedChartResponseMasking implements ResponseBodyAdvice<Object
             return body;
         }
         if (request.getMethod() == HttpMethod.GET && policyOf(returnType) == null) {
-            UUID owner = RestrictedChartMasker.patientOf(singleRecord(body, tree));
-            if (owner != null && blocked.contains(owner)) {
+            JsonNode record = singleRecord(body, tree);
+            UUID owner = RestrictedChartMasker.patientOf(record);
+            // The patient's own record is their identity, shaped below, never refused.
+            if (owner != null && blocked.contains(owner) && !RestrictedChartMasker.isIdentityOf(record, blocked)) {
                 throw gate.refusal(owner);
             }
         }
