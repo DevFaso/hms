@@ -354,15 +354,7 @@ public class PatientServiceImpl implements PatientService {
             }
         }
 
-        PatientResponseDTO dto = buildPatientDto(patient, effectiveHospitalId);
-        if (dto != null && bloodGroupStatus != null
-                && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
-            // QA D3901: one chart is being read, so its safety facts are complete: the confirmed group and the
-            // allo-immunisation flag, which follows the patient from every hospital. Not for the front desk, whose
-            // answer has the group removed (RCPT-CLIN): a flag it never sees is not read, nor accounted, for it.
-            dto.setBloodGroup(bloodGroupStatus.withAntibodies(patient, effectiveHospitalId));
-        }
-        return dto;
+        return chartDto(patient, effectiveHospitalId);
     }
 
     @Override
@@ -380,7 +372,7 @@ public class PatientServiceImpl implements PatientService {
                 return new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id);
             });
 
-        return buildPatientDto(patient, null);
+        return chartDto(patient, null);
     }
 
     @Override
@@ -425,7 +417,7 @@ public class PatientServiceImpl implements PatientService {
             patientInsuranceService.addInsuranceToPatient(insuranceDTO, locale);
         }
 
-        return buildPatientDto(patient, hospital.getId());
+        return chartDto(patient, hospital.getId());
     }
 
     @Override
@@ -454,7 +446,7 @@ public class PatientServiceImpl implements PatientService {
             patient.setChartRestrictedByUserId(null);
         }
         log.warn("[CHART_RESTRICTION] patient={} restricted={} by user={}", id, request.isRestricted(), actorUserId);
-        return buildPatientDto(patientRepository.save(patient), hospitalId);
+        return chartDto(patientRepository.save(patient), hospitalId);
     }
 
     @Override
@@ -508,7 +500,7 @@ public class PatientServiceImpl implements PatientService {
         // opts out of the generic write audit on the strength of this row).
         auditPatientUpdate(updatedPatient, phoneHospitalId, "Patient demographics replaced");
 
-        return buildPatientDto(updatedPatient, dto.getHospitalId());
+        return chartDto(updatedPatient, dto.getHospitalId());
     }
 
     @Override
@@ -555,7 +547,7 @@ public class PatientServiceImpl implements PatientService {
 
         // The caller's hospital's view (its MRN, its sharing opt-out), not the
         // patient's first hospital: the chart merges this answer.
-        return buildPatientDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
+        return chartDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
     }
 
     /** QA D926: the identity the desk corrects. A required field sent blank is refused rather than cleared. */
@@ -1120,7 +1112,7 @@ public class PatientServiceImpl implements PatientService {
             patientInsuranceService.addInsuranceToPatient(insuranceDTO, locale);
         }
 
-        return buildPatientDto(patient, hospital.getId());
+        return chartDto(patient, hospital.getId());
     }
 
     /** QA D1403 + D1414: judged before anything is written; a stored value sent back is not a change. */
@@ -1562,7 +1554,7 @@ public class PatientServiceImpl implements PatientService {
         int maxItems = resolveTimelineLimit(request.getMaxItems());
         int notesLimit = resolveNotesLimit(request.getNotesLimit(), maxItems);
 
-        PatientResponseDTO patientDto = buildPatientDto(patient, resolvedHospitalId);
+        PatientResponseDTO patientDto = chartDto(patient, resolvedHospitalId);
         String hospitalMrn = patientRepository.findMrnForHospital(patientId, resolvedHospitalId)
             .orElseGet(() -> patient.getMrnForHospital(resolvedHospitalId));
 
@@ -3505,6 +3497,23 @@ public class PatientServiceImpl implements PatientService {
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_");
+    }
+
+    /**
+     * QA D3901: the answer about ONE chart, read or just written, carries its complete safety facts: the
+     * laboratory's confirmed group and the allo-immunisation flag, which follows the patient from every hospital.
+     * A screen replaces the patient it shows with a write's answer (the demographics edit, the chart restriction),
+     * so a write that answered without the flag took the alert off the header until a reload. Lists keep
+     * {@link #buildPatientDto}: the flag is read, and accounted, per chart shown, never per row of a list. Not for
+     * the front desk, whose answer has the group removed (RCPT-CLIN): a flag it never sees is not read for it.
+     */
+    private PatientResponseDTO chartDto(Patient patient, UUID hospitalId) {
+        PatientResponseDTO dto = buildPatientDto(patient, hospitalId);
+        if (dto != null && patient != null && bloodGroupStatus != null
+                && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
+            dto.setBloodGroup(bloodGroupStatus.withAntibodies(patient, hospitalId));
+        }
+        return dto;
     }
 
     private PatientResponseDTO buildPatientDto(Patient patient, UUID hospitalId) {
