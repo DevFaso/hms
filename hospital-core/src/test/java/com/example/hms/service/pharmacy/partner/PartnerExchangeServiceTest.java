@@ -117,7 +117,7 @@ class PartnerExchangeServiceTest {
         assertThat(updated).isPresent();
         assertThat(updated.get().getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
-        verify(channel).notifyPatientAccepted(any(), eq(partner));
+        verify(channel).notifyPatientAccepted(any(), any(), eq(partner));
     }
 
     @Test
@@ -129,8 +129,8 @@ class PartnerExchangeServiceTest {
         service.handleInboundReply(PARTNER_PHONE, "2 " + token);
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
-        verify(channel, times(0)).notifyPatientAccepted(any(), any());
-        verify(channel, times(0)).notifyPatientDispensed(any(), any());
+        verify(channel, times(0)).notifyPatientAccepted(any(), any(), any());
+        verify(channel, times(0)).notifyPatientDispensed(any(), any(), any());
     }
 
     @Test
@@ -162,7 +162,7 @@ class PartnerExchangeServiceTest {
         assertThat(updated).isPresent();
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
-        verify(channel).notifyPatientDispensed(any(), eq(partner));
+        verify(channel).notifyPatientDispensed(any(), any(), eq(partner));
     }
 
     @Test
@@ -685,7 +685,7 @@ class PartnerExchangeServiceTest {
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
         verify(prescriptionRepository, never()).save(any());
-        verify(channel, never()).notifyPatientAccepted(any(), any());
+        verify(channel, never()).notifyPatientAccepted(any(), any(), any());
         verifyNoInteractions(prescriberNotifier);
     }
 
@@ -720,7 +720,7 @@ class PartnerExchangeServiceTest {
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         verify(prescriptionRepository, never()).save(any());
-        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(channel, never()).notifyPatientDispensed(any(), any(), any());
         verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
         verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
         ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
@@ -746,7 +746,7 @@ class PartnerExchangeServiceTest {
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
-        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(channel, never()).notifyPatientDispensed(any(), any(), any());
         verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
     }
 
@@ -762,7 +762,7 @@ class PartnerExchangeServiceTest {
 
             assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
-            verify(channel, times(0)).notifyPatientAccepted(any(), any());
+            verify(channel, times(0)).notifyPatientAccepted(any(), any(), any());
         } finally {
             com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
         }

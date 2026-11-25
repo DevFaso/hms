@@ -8,6 +8,8 @@ import { installLocalIconFonts } from './helpers/local-icon-fonts';
 import { signInAs } from './helpers/role-session';
 import { routedPages } from './helpers/routed-page-inventory';
 import './a11y-journey-forms';
+import './a11y-keyboard-care';
+import './a11y-main-refusals';
 
 /**
  * v1.0 / Accessibility / axe-core/playwright smoke (roadmap row 10).

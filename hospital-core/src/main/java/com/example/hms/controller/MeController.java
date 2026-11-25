@@ -110,7 +110,7 @@ public class MeController {
                 ? pinned.hospitalId()
                 : null;
         if (hospitalId == null) {
-            throw new BusinessException("Unable to resolve hospital from your context.");
+            throw new BusinessException("request.hospitalContext.required");
         }
 
         Hospital h = hospitalRepository.findById(hospitalId)
@@ -336,9 +336,9 @@ public class MeController {
                                 .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal,
                                         principal)
                                 .map(User::getId)
-                                .orElseThrow(() -> new BusinessException("Unable to resolve user ID"));
+                                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
                     }
-                    throw new BusinessException("Unable to resolve user ID from authentication");
+                    throw new BusinessException("request.userContext.unavailable");
                 });
     }
 

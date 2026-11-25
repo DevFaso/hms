@@ -423,10 +423,13 @@ public class PriceListService {
         plan.predecessor().ifPresent(previous -> previous.setEffectiveTo(from.minusDays(1)));
     }
 
-    /** A new item and its first version, persisted without a flush (the import flushes once per batch). */
-    public PriceListPrice stageItem(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from,
+    /**
+     * Import-only staging: the caller holds the hospital share lock for its whole transaction.
+     * Package-private so callers outside the billing batch cannot bypass the standalone create path's lock.
+     * No query or flush here: the import flushes once per batch.
+     */
+    PriceListPrice stageItemWithHospitalLockHeld(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from,
                                     String reason, UUID importId) {
-        itemRepository.lockHospitalWhilePricing(actor.hospitalId());
         PriceListItem item = itemRepository.save(newItem(actor, fields));
         return priceRepository.save(firstVersion(actor, item, unitPrice, from, reason, importId));
     }

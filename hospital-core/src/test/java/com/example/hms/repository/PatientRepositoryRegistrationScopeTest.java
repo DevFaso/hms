@@ -90,6 +90,45 @@ class PatientRepositoryRegistrationScopeTest {
     }
 
     @Test
+    void sameFamilyAndBirthDateQueryFoldsMixedSeparatorsAndKeepsHospitalScope() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        Patient target = patientRepository.findById(patientId).orElseThrow();
+        target.setLastName("Ouédraogo-N’Guessan");
+        patientRepository.saveAndFlush(target);
+        LocalDate dob = target.getDateOfBirth();
+        Set<String> keys = com.example.hms.utility.PatientMatchKeys.familyNameKeys("Ibrahim Ouedraogo N'Guessan");
+        scopedTo(first);
+        assertThat(patientRepository.findActiveFamilyBornAtHospital(keys, dob, first.getId(),
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)))
+            .extracting(Patient::getId).containsExactly(patientId);
+        scopedTo(second);
+        assertThat(patientRepository.findActiveFamilyBornAtHospital(keys, dob, second.getId(),
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)))
+            .extracting(Patient::getId).containsExactly(patientId);
+        scopedTo(elsewhere);
+        assertThat(patientRepository.findActiveFamilyBornAtHospital(keys, dob, elsewhere.getId(),
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)))
+            .isEmpty();
+    }
+
+    @Test
+    void familyCandidateQueryRequiresTheExactBirthDateAndAnActiveRegistration() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        Patient target = patientRepository.findById(patientId).orElseThrow();
+        Set<String> keys = com.example.hms.utility.PatientMatchKeys.familyNameKeys("Ibrahim Ouedraogo");
+        assertThat(patientRepository.findActiveFamilyBornAtHospital(keys, target.getDateOfBirth().plusDays(1),
+                first.getId(), org.springframework.data.domain.PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)))
+            .isEmpty();
+        PatientHospitalRegistration registration = registrationRepository.findAll().stream()
+            .filter(row -> row.getHospital().getId().equals(first.getId())).findFirst().orElseThrow();
+        registration.setActive(false);
+        registrationRepository.saveAndFlush(registration);
+        assertThat(patientRepository.findActiveFamilyBornAtHospital(keys, target.getDateOfBirth(), first.getId(),
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)))
+            .isEmpty();
+    }
+
+    @Test
     @DisplayName("a patient linked to a second hospital is found there by the scoped finders")
     void foundAtTheSecondHospital() {
         scopedTo(second);

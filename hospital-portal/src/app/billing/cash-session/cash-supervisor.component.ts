@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -46,6 +47,7 @@ interface PendingAction {
   selector: 'app-cash-supervisor',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     CommonModule,
     FormsModule,
     RouterLink,

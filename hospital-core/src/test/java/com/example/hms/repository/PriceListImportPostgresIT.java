@@ -117,6 +117,7 @@ class PriceListImportPostgresIT {
     @Autowired private PriceListImportRepository imports;
     @Autowired private InvoiceItemRepository invoiceLines;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private HospitalRepository hospitals;
     @Autowired private PlatformTransactionManager transactions;
 
     private final LabTestDefinitionRepository labTests = mock(LabTestDefinitionRepository.class);
@@ -141,11 +142,7 @@ class PriceListImportPostgresIT {
         hospitalA = UUID.randomUUID();
         hospitalB = UUID.randomUUID();
         actor = UUID.randomUUID();
-        PriceListLinks links = new PriceListLinks(labTests, treatments);
-        service = new PriceListService(items, prices, links, invoiceLines, labTests, treatments,
-            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
-            CLOCK, "Africa/Ouagadougou");
-        importer = new PriceListImportService(service, items, prices, imports, links, labTests, audit, jdbc, "1s");
+        wireServices(items);
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(actor);
@@ -170,6 +167,81 @@ class PriceListImportPostgresIT {
             return StreamSupport.stream(ids.spliterator(), false).filter(codes::containsKey)
                 .map(id -> labTest(codes.get(id), hospitalA)).toList();
         });
+    }
+
+    private void wireServices(PriceListItemRepository itemRepository) {
+        PriceListLinks links = new PriceListLinks(labTests, treatments);
+        service = new PriceListService(itemRepository, prices, links, invoiceLines, labTests, treatments,
+            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
+            CLOCK, "Africa/Ouagadougou");
+        importer = new PriceListImportService(service, itemRepository, prices, imports, links, labTests, audit, jdbc, "1s");
+    }
+
+    @Test
+    @DisplayName("bulk new items acquire one real hospital share lock for the transaction")
+    void newItemsLockHospitalOncePerImport() {
+        PriceListItemRepository observed = org.mockito.Mockito.mock(PriceListItemRepository.class,
+            org.mockito.AdditionalAnswers.delegatesTo(items));
+        useRealHospital();
+        wireServices(observed);
+        assertThat(apply(sixtyNewItems(), "batch.csv").getNewItems()).isEqualTo(60);
+        verify(observed, times(1)).lockHospitalWhilePricing(hospitalA);
+        // Reusing the same service in another transaction must acquire the lock again.
+        apply(utf8(HEADER + "\nNEXT;Article suivant;OTHER_SERVICE;250;01/12/2026;;\n"), "next.csv");
+        verify(observed, times(2)).lockHospitalWhilePricing(hospitalA);
+        assertThat(itemCount(hospitalA)).isEqualTo(61);
+    }
+
+    private void useRealHospital() {
+        Hospital hospital = new Hospital();
+        hospital.setName("Synthetic batch-lock hospital");
+        hospital.setCode("BATCH-" + UUID.randomUUID());
+        hospitalA = inTx(() -> hospitals.saveAndFlush(hospital)).getId();
+        actAt(hospitalA);
+    }
+
+    private static byte[] sixtyNewItems() {
+        StringBuilder csv = new StringBuilder(HEADER).append('\n');
+        for (int i = 0; i < 60; i++) {
+            csv.append("ROW-").append(i).append(";Article;OTHER_SERVICE;100;01/12/2026;;\n");
+        }
+        return utf8(csv.toString());
+    }
+
+    @Test
+    @DisplayName("the import's hospital share lock survives every batch flush until commit")
+    void hospitalShareLockIsHeldUntilCommit() {
+        useRealHospital();
+        inTx(() -> {
+            assertThat(importer.importFile(sixtyNewItems(), "locked.csv", false, false).getNewItems()).isEqualTo(60);
+            assertThat(exclusiveHospitalLockOnAnotherConnection()).isFalse();
+            return null;
+        });
+        assertThat(exclusiveHospitalLockOnAnotherConnection()).isTrue();
+    }
+
+    private boolean exclusiveHospitalLockOnAnotherConnection() {
+        try (var connection = java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var statement = connection.createStatement()) {
+                    statement.execute("SET LOCAL lock_timeout = '200ms'");
+                }
+                try (var statement = connection.prepareStatement("SELECT id FROM hospital.hospitals WHERE id = ? FOR UPDATE")) {
+                    statement.setObject(1, hospitalA);
+                    try (var result = statement.executeQuery()) {
+                        return result.next();
+                    }
+                }
+            } catch (java.sql.SQLException failure) {
+                if ("55P03".equals(failure.getSQLState())) return false;
+                throw failure;
+            } finally {
+                connection.rollback();
+            }
+        } catch (java.sql.SQLException failure) {
+            throw new IllegalStateException("Synthetic hospital lock check failed", failure);
+        }
     }
 
     private void actAt(UUID hospitalId) {
@@ -547,6 +619,13 @@ class PriceListImportPostgresIT {
         assertThat(apply(change, "hausse.csv").getNewPrices()).isEqualTo(1);
     }
 
+    /**
+     * The portal's nginx gives an API call 120 s before it gives up (hospital-portal/nginx.conf), so a
+     * 5 000-row import must finish well inside that. 90 s keeps a 30 s margin under the proxy while
+     * leaving room for shared CI runners, where the same import measured 67-70 s on 2026-11-24/25.
+     */
+    private static final java.time.Duration IMPORT_BUDGET = java.time.Duration.ofSeconds(90);
+
     @Test
     @DisplayName("review #1206: 5 000 rows (the maximum) apply, then re-price, within the time budget")
     void theMaximumFileAppliesWithinBudget() {
@@ -563,13 +642,13 @@ class PriceListImportPostgresIT {
         PriceListImportReportDTO first = apply(utf8(grid.toString()), "grand.csv");
         java.time.Duration firstTook = java.time.Duration.ofNanos(System.nanoTime() - started);
         assertThat(first.getNewItems()).isEqualTo(5_000);
-        assertThat(firstTook).as("5 000 new items").isLessThan(java.time.Duration.ofSeconds(60));
+        assertThat(firstTook).as("5 000 new items").isLessThan(IMPORT_BUDGET);
 
         started = System.nanoTime();
         PriceListImportReportDTO second = apply(utf8(raised.toString()), "hausse.csv");
         java.time.Duration secondTook = java.time.Duration.ofNanos(System.nanoTime() - started);
         assertThat(second.getNewPrices()).isEqualTo(5_000);
-        assertThat(secondTook).as("5 000 new prices").isLessThan(java.time.Duration.ofSeconds(60));
+        assertThat(secondTook).as("5 000 new prices").isLessThan(IMPORT_BUDGET);
         assertThat(versionCount(hospitalA)).isEqualTo(10_000);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM billing.price_list_prices WHERE hospital_id = ? "
             + "AND effective_to = DATE '2026-12-31'", Integer.class, hospitalA)).isEqualTo(5_000);

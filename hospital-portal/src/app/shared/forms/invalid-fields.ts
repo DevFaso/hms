@@ -104,8 +104,12 @@ export function refuseFields(
         msg.id = msgId;
         msg.className = 'invalid-field-msg';
         msg.setAttribute('role', 'alert');
-        // QA D1406: after a checkbox's whole label, never between the box and its words.
-        (el.closest('.checkbox-label') ?? el).insertAdjacentElement('afterend', msg);
+        // Keep feedback outside checkbox labels and icon/password input wrappers,
+        // so the message cannot become another item in their horizontal layout.
+        (el.closest('.checkbox-label, .input-wrapper') ?? el).insertAdjacentElement(
+          'afterend',
+          msg,
+        );
       }
       msg.textContent = reason;
       others.push(msgId);

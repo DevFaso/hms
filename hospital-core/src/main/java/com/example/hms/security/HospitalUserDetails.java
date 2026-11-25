@@ -18,4 +18,14 @@ public interface HospitalUserDetails extends UserDetails {
     default java.time.LocalDateTime getPasswordChangedAt() {
         return null;
     }
+
+    /**
+     * Whether the account must set its own password before any other use: it
+     * is on a temporary password (forced change with an expiry). A rotation
+     * of the holder's own password is not this. Enforced on every request by
+     * {@link PasswordChangeGate}.
+     */
+    default boolean isPasswordChangeRequired() {
+        return false;
+    }
 }

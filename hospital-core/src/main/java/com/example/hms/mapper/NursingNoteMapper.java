@@ -181,7 +181,7 @@ public class NursingNoteMapper {
                 return author.getEmail();
             }
         }
-        return "Unknown";
+        return com.example.hms.utility.MessageUtil.resolve("common.display.unknownAuthor");
     }
 
     private String resolveAuthorCredentials(NursingNote note, Staff staff) {
@@ -215,7 +215,7 @@ public class NursingNoteMapper {
         if (user != null) {
             return joinNames(user.getFirstName(), user.getLastName());
         }
-        return "Unknown";
+        return com.example.hms.utility.MessageUtil.resolve("common.display.unknownAuthor");
     }
 
     private String resolveAddendumAuthorCredentials(NursingNoteAddendum addendum) {

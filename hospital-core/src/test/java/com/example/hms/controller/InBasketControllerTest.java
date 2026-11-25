@@ -126,7 +126,7 @@ class InBasketControllerTest {
 
         assertThatThrownBy(() -> controller.list(null, null, null, pageable, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Hospital context is required");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("request.hospitalContext.required"));
     }
 
     @Test
@@ -138,6 +138,6 @@ class InBasketControllerTest {
 
         assertThatThrownBy(() -> controller.summary(null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Hospital context is required");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("request.hospitalContext.required"));
     }
 }

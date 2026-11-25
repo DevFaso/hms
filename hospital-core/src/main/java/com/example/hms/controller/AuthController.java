@@ -435,6 +435,7 @@ public class AuthController {
                     .tokenType("Bearer")
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
+                    .sessionEndsAt(sessionEndsAt(refreshToken, granted.roles()))
                     .id(user.getId())
                     .username(user.getUsername())
                     .email(user.getEmail())
@@ -509,6 +510,17 @@ public class AuthController {
             log.warn("🔐 [LOGIN] Sign-in refused: account not active.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.inactive")));
+        } catch (org.springframework.security.authentication.CredentialsExpiredException ex) {
+            // A temporary password past its lifetime (TemporaryPasswords). The
+            // provider checks this only after the password matched, so only
+            // its holder gets this answer; it is not a guess and is not counted.
+            // The way back is a reset link, by e-mail or SMS, or the registrar.
+            auditLoginFailure(loginRequest.getUsername(), "Login refused: temporary password expired");
+            log.warn("🔐 [LOGIN] Sign-in refused: temporary password expired.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of(
+                            "code", TEMPORARY_PASSWORD_EXPIRED_CODE,
+                            "message", MessageUtil.resolve("auth.login.temporaryPasswordExpired")));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure after {}ms : {} - {}",
@@ -528,6 +540,8 @@ public class AuthController {
      */
     /** A sign-in (or MFA step) whose role set is empty: no session without an active role. */
     public static final String NO_ACTIVE_ROLE_KEY = "auth.login.noActiveRole";
+    /** The sign-in refusal's code for a temporary password past its lifetime. */
+    public static final String TEMPORARY_PASSWORD_EXPIRED_CODE = "temporary_password_expired";
     private static final String NO_ACTIVE_ROLE_AUDIT = "Login refused: no active role";
 
     private void auditLoginFailure(String typedName, String description) {
@@ -832,9 +846,11 @@ public class AuthController {
     /**
      * Why this token may not mint a session, or {@code null} when it may
      * go on: not a refresh token, issued before a force-logout-all, or
-     * already spent (superseded by a sibling tab: 409; replayed: 401).
+     * already spent (superseded by a sibling tab: 409; replayed: 401, and its
+     * whole session ends).
      */
-    private ResponseEntity<Object> refreshRefusal(String refreshToken) {
+    private ResponseEntity<Object> refreshRefusal(String refreshToken,
+                                                  HttpServletRequest request, HttpServletResponse response) {
         // A refresh token, and nothing else the same key signs: the MFA
         // challenge token would mint a session past MFA, an impersonation
         // token an ordinary session that outlives the impersonation, and an
@@ -874,11 +890,41 @@ public class AuthController {
             if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
                 return refreshSuperseded(refreshJti);
             }
-            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used; ending its session", refreshJti);
+            endSessionOfReusedToken(refreshToken, refreshJti, request, response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.api.refreshUsed")));
         }
         return null;
+    }
+
+    /**
+     * A refresh token used again after its grace: whoever holds the newer
+     * tokens of its session, the session ends. Every access and refresh token
+     * of it is refused from now on ({@link #revokeSession}), so the holder of
+     * the newest pair signs in again too. A token minted before sessions were
+     * stamped names none: only its own refusal is recorded.
+     */
+    private void endSessionOfReusedToken(String refreshToken, String refreshJti,
+                                         HttpServletRequest request, HttpServletResponse response) {
+        String sessionId = jwtTokenProvider.getSessionId(refreshToken);
+        String subject;
+        try {
+            subject = jwtTokenProvider.getUsernameFromJWT(refreshToken);
+        } catch (RuntimeException expiredSinceChecked) {
+            subject = null; // the session still ends; the audit row just names no user
+        }
+        revokeSession(sessionId, subject, request.getRemoteAddr(), "refresh token reuse");
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.TOKEN_REFRESH)
+                .eventDescription("Refresh refused — a used refresh token was presented again (jti=" + refreshJti
+                        + "); its session was ended")
+                .ipAddress(request.getRemoteAddr())
+                .userName(subject)
+                .status(AuditStatus.FAILURE)
+                .build());
+        // This cookie can never yield a pair again.
+        refreshTokenCookieService.clear(response);
     }
 
     /**
@@ -893,6 +939,23 @@ public class AuthController {
 
     private static final String REFRESH_INVALID_MESSAGE =
             "auth.api.refreshInvalid";
+
+    /** When the session a sign-in just opened ends (no refresh after it), in epoch milliseconds. */
+    private Long sessionEndsAt(String refreshToken, List<String> roles) {
+        java.time.Instant signedIn = java.util.Optional.ofNullable(jwtTokenProvider.signedInAt(refreshToken))
+                .orElseGet(java.time.Instant::now);
+        return authProps.sessionLifetime().endsAt(signedIn, roles).toEpochMilli();
+    }
+
+    /** The session reached its absolute lifetime (app.auth.session-max-lifetime): sign in again. */
+    private static final String SESSION_LIFETIME_REACHED_KEY = "auth.refresh.sessionLifetimeReached";
+
+    /**
+     * Tells a client the 401 is the session's lifetime, not a fault, so it
+     * can say so on the sign-in page (as the idle timeout's challenge does).
+     */
+    public static final String SESSION_LIFETIME_CHALLENGE =
+            "Bearer realm=\"Hospital\", error=\"invalid_token\", error_description=\"session_lifetime\"";
 
     /** A provider user's refresh token without a (current) second factor: sign in, with the code. */
     private static final String REFRESH_SECOND_FACTOR_KEY = "auth.refresh.secondFactorRequired";
@@ -987,7 +1050,7 @@ public class AuthController {
                     .body(new MessageResponse(MessageUtil.resolve("auth.api.refreshRequired")));
         }
 
-        ResponseEntity<Object> refusal = refreshRefusal(refreshToken);
+        ResponseEntity<Object> refusal = refreshRefusal(refreshToken, request, response);
         if (refusal != null) {
             return refusal;
         }
@@ -1022,6 +1085,28 @@ public class AuthController {
             refreshTokenCookieService.clear(response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
+        }
+        // app.auth.session-max-lifetime: a session ends a fixed time after its
+        // sign-in, however often it was refreshed. A token minted before the
+        // sign-in time was carried counts from its own issue time. Only a
+        // session found within its lifetime can mint the rotated refresh token.
+        // The token's own signed times and role set, never a caller's: a
+        // patient-only session gets the patient lifetime, any other the staff one.
+        var liveSession = jwtTokenProvider.presentedSession(refreshToken)
+                .flatMap(authProps.sessionLifetime()::live);
+        if (liveSession.isEmpty()) {
+            log.warn("🔄 [REFRESH] Refused — the session reached its maximum lifetime");
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Refresh refused — the session reached its maximum lifetime")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            refreshTokenCookieService.clear(response);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header("WWW-Authenticate", SESSION_LIFETIME_CHALLENGE)
+                    .body(new MessageResponse(MessageUtil.resolve(SESSION_LIFETIME_REACHED_KEY)));
         }
 
         // Closes Copilot review #4 on PR #224 — refuse to mint a new
@@ -1120,6 +1205,10 @@ public class AuthController {
             // normal sign-in and challenge take over.
             if (lapsedSecondFactor(user.getId(), username, roles, secondFactor)) {
                 // Left spent, not released: this token can never yield a pair again.
+                // Its session ends too, so a later use of the token reads as an
+                // ended session, not as a reused one.
+                revokeSession(jwtTokenProvider.getSessionId(refreshToken), username, request.getRemoteAddr(),
+                        "second-factor lapse");
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
                         .eventDescription("Refresh refused — second factor missing or expired")
@@ -1141,7 +1230,8 @@ public class AuthController {
 
             // Rotate the refresh token so each use yields a fresh one, carrying
             // the same (possibly narrowed) role set on to the next refresh.
-            String newRefreshToken = jwtTokenProvider.generateRefreshToken(descriptor, secondFactor, sessionId);
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(descriptor, secondFactor, sessionId,
+                    liveSession.get());
 
             // ── Idle session timeout — touch on successful refresh ──────────
             // Only after the rotation has succeeded; touching pre-rotation
@@ -1174,6 +1264,7 @@ public class AuthController {
                     .issuedAt(nowMs)
                     .accessTokenExpiresAt(accessExp)
                     .refreshTokenExpiresAt(refreshExp)
+                    .sessionEndsAt(liveSession.get().endsAt().toEpochMilli())
                     .id(user.getId())
                     .username(user.getUsername())
                     .roles(roles)
@@ -1278,6 +1369,11 @@ public class AuthController {
             return true;
         } catch (BadCredentialsException ex) {
             return false;
+        } catch (org.springframework.security.authentication.CredentialsExpiredException expired) {
+            // Raised only after the password matched: a session opened before
+            // the temporary password expired may still replace it, which is
+            // the one thing that session can do (PasswordChangeGate).
+            return true;
         }
     }
 

@@ -573,7 +573,7 @@ class EmailServiceImplTest {
             emailService.sendRoleAssignmentConfirmationEmail(
                 "awa@example.com", "Awa Traore", "ROLE_PATIENT", "CHU Yalgado",
                 "123456", "AS-1", "https://dev.e-keneya.com/onboarding/role-welcome?assignment=AS-1",
-                "atraore", "Temp@1234");
+                true);
 
             String html = renderedHtml();
             assertThat(html)
@@ -583,8 +583,8 @@ class EmailServiceImplTest {
                 .contains("123456")
                 .contains("email.patient.welcome.button")
                 .contains("email.patient.welcome.body.expiry")
-                .contains("email.role.assignment.credentials.username")
-                .contains("atraore")
+                // A new account is told where its sign-in details appear; no password is in the mail.
+                .contains("email.role.assignment.credentials.atActivation")
                 .doesNotContain("email.role.assignment.subject");
             verify(messageSource).getMessage(eq("email.patient.welcome.subject"), any(), eq(Locale.FRENCH));
         }
@@ -595,7 +595,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendRoleAssignmentConfirmationEmail(
                 "nurse@example.com", "Awa Traore", "Nurse", "CHU Yalgado",
-                "654321", "AS-2", null, null, null);
+                "654321", "AS-2", null, false);
 
             String html = renderedHtml();
             assertThat(html)
@@ -603,10 +603,10 @@ class EmailServiceImplTest {
                 .contains("email.role.assignment.body.assigned[Nurse|CHU Yalgado]")
                 .contains("email.role.assignment.body.reference[AS-2]")
                 .contains("654321");
-            // No URL, no button; no temp credentials, no credentials box.
+            // No URL, no button; an account already in use is told nothing about sign-in details.
             assertThat(html)
                 .doesNotContain("email.role.assignment.button")
-                .doesNotContain("email.role.assignment.credentials.title");
+                .doesNotContain("email.role.assignment.credentials.atActivation");
         }
 
         @Test
@@ -614,7 +614,7 @@ class EmailServiceImplTest {
         void fallbacksComeFromTheBundle() {
             stubMailSender();
             emailService.sendRoleAssignmentConfirmationEmail(
-                "nurse@example.com", null, "", null, "111111", "AS-3", null, null, null);
+                "nurse@example.com", null, "", null, "111111", "AS-3", null, false);
 
             String html = renderedHtml();
             assertThat(html)
@@ -640,7 +640,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
-                "Temp@1234", "Hospital Admin", "City General Hospital",
+                "Hospital Admin", "City General Hospital",
                 "https://portal.example/onboarding/role-welcome?assignment=A-1", null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
         }
@@ -651,7 +651,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
-                "Temp@1234", "Super Admin", null,
+                "Super Admin", null,
                 "https://portal.example/onboarding/role-welcome?assignment=A-2", null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
@@ -667,7 +667,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", null, "janedoe",
-                "Temp@1234", "Doctor", "City Hospital", null, null);
+                "Doctor", "City Hospital", null, null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
@@ -679,7 +679,7 @@ class EmailServiceImplTest {
             String activationUrl = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-77";
             emailService.sendAdminWelcomeEmail(
                 "nurse@hospital.com", "Awa Traore", "atraore",
-                "Temp@1234", "Nurse", "City General Hospital", activationUrl, null);
+                "Nurse", "City General Hospital", activationUrl, null);
 
             String html = renderedHtml();
             assertThat(html)
@@ -703,7 +703,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "nurse@hospital.com", "Awa Traore", "atraore",
-                "Temp@1234", "Nurse", "City General Hospital", null, null);
+                "Nurse", "City General Hospital", null, null);
 
             String html = renderedHtml();
             assertThat(html)
@@ -726,7 +726,7 @@ class EmailServiceImplTest {
             String activationUrl = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-9";
             emailService.sendAdminWelcomeEmail(
                 "doc@hospital.com", "Awa Traore", "atraore",
-                "Temp@1234", "ROLE_DOCTOR", "City General Hospital", activationUrl, "482913");
+                "ROLE_DOCTOR", "City General Hospital", activationUrl, "482913");
 
             String html = renderedHtml();
             assertThat(html)
@@ -735,6 +735,8 @@ class EmailServiceImplTest {
                 .contains("email.role.assignment.body.expiry")
                 .contains(activationUrl)
                 .contains("email.admin.welcome.credentials.username")
+                // The password row says where it will be shown; the mail carries none.
+                .contains("email.admin.welcome.credentials.password.atActivation")
                 .contains("email.admin.welcome.security.body")
                 // No pointer to a second mail: there is none.
                 .doesNotContain("email.role.assignment.subject")
@@ -747,7 +749,7 @@ class EmailServiceImplTest {
         void rejectsNullRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null, null))
+                    null, "Jane Doe", "janedoe", "Admin", "Hospital", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -756,7 +758,7 @@ class EmailServiceImplTest {
         void rejectsInvalidRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null, null))
+                    "not-an-email", "Jane Doe", "janedoe", "Admin", "Hospital", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }

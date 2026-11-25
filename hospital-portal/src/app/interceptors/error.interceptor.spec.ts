@@ -46,6 +46,7 @@ describe('errorInterceptor', () => {
       [
         'getRefreshToken',
         'getUserProfile',
+        'setUserProfile',
         'logout',
         'refreshTokenRequest',
         'setToken',
@@ -253,6 +254,56 @@ describe('errorInterceptor', () => {
     });
   }
 
+  it('a refresh refused at the session lifetime signs in again with the reason', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 401,
+            headers: new HttpHeaders({
+              'WWW-Authenticate':
+                'Bearer realm="Hospital", error="invalid_token", error_description="session_lifetime"',
+            }),
+          }),
+      ),
+    );
+    http.get('/owner').subscribe({ error: () => undefined });
+    httpMock.expectOne('/owner').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login'], {
+      queryParams: { reason: 'session-ended' },
+    });
+  });
+
+  it("the refresh call's own lifetime 401 goes to the same sign-in page", () => {
+    http.post('/api/auth/token/refresh', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/api/auth/token/refresh').flush(null, {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {
+        'WWW-Authenticate':
+          'Bearer realm="Hospital", error="invalid_token", error_description="session_lifetime"',
+      },
+    });
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login'], {
+      queryParams: { reason: 'session-ended' },
+    });
+  });
+
+  it('any other refresh 401 (an idle timeout) goes to the sign-in page without the reason', () => {
+    http.post('/api/auth/token/refresh', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/api/auth/token/refresh').flush(null, {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {
+        'WWW-Authenticate':
+          'Bearer realm="Hospital", error="invalid_token", error_description="idle_timeout"',
+      },
+    });
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login']);
+  });
+
   for (const status of [404, 409, 422, 500]) {
     it(`a retried business response (${status}) does not sign out either refresh caller`, () => {
       auth.getRefreshToken.and.returnValue('r1');
@@ -372,6 +423,57 @@ describe('errorInterceptor', () => {
     expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
     expect(auth.logout).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  describe('the account must set its own password first (password_change_required)', () => {
+    const refusal = {
+      status: 403,
+      error: 'Forbidden',
+      code: 'password_change_required',
+      message: 'Set your own password before using your account.',
+    };
+
+    it('opens the account-setup screen, never the forbidden page or a sign-out', () => {
+      auth.getUserProfile.and.returnValue({ id: 'u1', username: 'awa.t' } as never);
+      let error: HttpErrorResponse | undefined;
+      http
+        .get('/me/patient/appointments')
+        .subscribe({ error: (e: HttpErrorResponse) => (error = e) });
+      httpMock
+        .expectOne('/me/patient/appointments')
+        .flush(refusal, { status: 403, statusText: 'Forbidden' });
+
+      expect(error?.status).toBe(403);
+      expect(router.navigate).toHaveBeenCalledOnceWith(['/account-setup']);
+      expect(router.navigate).not.toHaveBeenCalledWith(['/error/403']);
+      expect(auth.logout).not.toHaveBeenCalled();
+      // The stored profile now says so, so the account-setup guard keeps every page behind it.
+      expect(auth.setUserProfile).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ id: 'u1', forcePasswordChange: true }),
+      );
+    });
+
+    it('does not navigate again from the account-setup screen itself', () => {
+      Object.defineProperty(router, 'url', { value: '/account-setup', configurable: true });
+      auth.getUserProfile.and.returnValue({ id: 'u1', forcePasswordChange: true } as never);
+      http.get('/auth/whatever').subscribe({ error: () => undefined });
+      httpMock.expectOne('/auth/whatever').flush(refusal, { status: 403, statusText: 'Forbidden' });
+
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(auth.setUserProfile).not.toHaveBeenCalled();
+    });
+
+    it('a 403 with another code is not taken for it', () => {
+      http.post('/patients', {}).subscribe({ error: () => undefined });
+      httpMock
+        .expectOne('/patients')
+        .flush(
+          { message: 'Access denied', code: 'ACCESS_DENIED' },
+          { status: 403, statusText: 'Forbidden' },
+        );
+
+      expect(router.navigate).not.toHaveBeenCalledWith(['/account-setup']);
+    });
   });
 
   it('any other 403 on a step-up request goes the normal way: the not-allowed page', () => {

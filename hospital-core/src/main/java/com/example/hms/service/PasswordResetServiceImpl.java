@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.bootstrap.DeploymentProfiles;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -52,6 +53,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
      * reads the system clock.
      */
     private final Clock clock;
+    /** Its active profiles decide whether the developer-only debug line may print a reset link. */
+    private final org.springframework.core.env.Environment environment;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -61,7 +64,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     public static final String TOKEN_INVALID = "passwordReset.token.invalid";
     /** The change-password minimum ({@code auth.password.tooShort}), which the reset page also enforces. */
     private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final Pattern HEX_64 = Pattern.compile("^[0-9a-fA-F]{64}$");
     /** QA D787: a phone number as typed: digits, an optional leading +, spaces, dots, dashes, brackets. */
     private static final Pattern PHONE_SHAPED = Pattern.compile("[+\\d][\\d\\s().-]*");
     private static final SecureRandom FALLBACK_RANDOM = new SecureRandom();
@@ -206,6 +208,27 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         handleResetRequest(user, requestIp);
     }
 
+    /**
+     * Its own transaction: callers run it after their commit, where a joined
+     * (REQUIRED) transaction would be the finished one and the token would
+     * never be committed.
+     */
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void sendSetPasswordLink(UUID userId, Locale locale) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.isDeleted()) {
+            return;
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            handleResetRequest(user, null);
+        } else if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+            issueBySms(user, locale, null);
+        } else {
+            log.warn("🔑 Set-password link not sent for user {}: no e-mail address or phone number", userId);
+        }
+    }
+
     /** The link by e-mail, to the account's own address. */
     private void handleResetRequest(User user, String requestIp) {
         // Enforce "one active token per user"
@@ -232,7 +255,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.warn("🔑 Password reset email for user {} failed: {}", user.getId(), ex.getClass().getSimpleName());
         }
 
-        if (log.isDebugEnabled() && shouldLogRawToken()) {
+        if (log.isDebugEnabled() && shouldLogRawToken(environment.getActiveProfiles())) {
             log.debug("🔑 [DEV ONLY] Raw password reset token for user {}: {}", user.getId(), rawToken);
             log.debug("🔗 [DEV ONLY] Reset link: {}", resetLink);
         }
@@ -267,10 +290,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         User user = resetToken.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
-    user.setForcePasswordChange(false);
-    user.setPasswordChangedAt(LocalDateTime.now());
-    user.setPasswordRotationWarningAt(null);
-    user.setPasswordRotationForcedAt(null);
+        user.setForcePasswordChange(false);
+        com.example.hms.utility.TemporaryPasswords.retire(user);
+        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordRotationWarningAt(null);
+        user.setPasswordRotationForcedAt(null);
         userRepository.save(user);
 
         // Mark token consumed (preserve audit trail)
@@ -385,22 +409,22 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         }
     }
 
-    private String resolveTokenHash(String presentedToken) {
+    /**
+     * The stored form of a presented token: always its SHA-256. Only the raw
+     * token from the link is accepted; a value shaped like a stored hash is
+     * hashed like any other input, so it matches nothing.
+     */
+    private static String resolveTokenHash(String presentedToken) {
         Objects.requireNonNull(presentedToken, "Token must not be null");
-        if (HEX_64.matcher(presentedToken).matches()) {
-            if (log.isDebugEnabled()) {
-                log.debug("[PasswordReset] Accepting legacy pre-hashed token input");
-            }
-            return presentedToken.toLowerCase(Locale.ROOT);
-        }
         return sha256Hex(presentedToken);
     }
 
-    private boolean shouldLogRawToken() {
-        String profileProp = System.getProperty("spring.profiles.active", "");
-        String profileEnv = System.getenv("SPRING_PROFILES_ACTIVE");
-        String combined = (profileProp + "," + (profileEnv != null ? profileEnv : "")).toLowerCase();
-        return !combined.contains("prod");
+    /**
+     * Developer machines only (local, local-h2). A shared dev environment ships its logs to the
+     * same third-party stores as prod, so a reset token must not reach them there either.
+     */
+    static boolean shouldLogRawToken(String[] activeProfiles) {
+        return DeploymentProfiles.onlyDeveloper(activeProfiles);
     }
 
 }

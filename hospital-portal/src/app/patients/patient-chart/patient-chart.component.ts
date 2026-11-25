@@ -1,8 +1,10 @@
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { LabValuePipe, LabRangePipe } from '../../shared/pipes/lab-value.pipe';
 import { MaternityService } from '../../services/maternity.service';
 import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
   Component,
+  ElementRef,
   Input,
   OnChanges,
   OnInit,
@@ -121,6 +123,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
 
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly patientService = inject(PatientService);
   private readonly labService = inject(LabService);
   private readonly auth = inject(AuthService);
@@ -734,8 +737,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitAllergy(): void {
+    refuseFields(this.host.nativeElement, [], ['allergy-name']);
     if (!this.hospitalId()) return;
     if (!this.allergyForm.allergenDisplay.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['allergy-name'],
+        ['allergy-name'],
+        this.translate.instant('CHART.ALLERGEN_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.ALLERGEN_REQUIRED'));
       return;
     }
@@ -777,9 +787,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitDeactivateAllergy(): void {
+    refuseFields(this.host.nativeElement, [], ['deactivate-reason']);
     if (!this.hospitalId()) return;
     const target = this.deactivatingAllergy();
     if (!target || !this.deactivateReason.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['deactivate-reason'],
+        ['deactivate-reason'],
+        this.translate.instant('CHART.REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.REASON_REQUIRED'));
       return;
     }
@@ -867,8 +884,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitProblem(): void {
+    refuseFields(this.host.nativeElement, [], ['problem-name']);
     if (!this.hospitalId()) return;
     if (!this.problemForm.problemDisplay.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['problem-name'],
+        ['problem-name'],
+        this.translate.instant('CHART.PROBLEM_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.PROBLEM_REQUIRED'));
       return;
     }
@@ -910,9 +934,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitDeleteProblem(): void {
+    refuseFields(this.host.nativeElement, [], ['problem-delete-reason']);
     if (!this.hospitalId()) return;
     const target = this.deletingProblem();
     if (!target || !this.problemDeleteReason.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['problem-delete-reason'],
+        ['problem-delete-reason'],
+        this.translate.instant('CHART.REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.REASON_REQUIRED'));
       return;
     }
@@ -1023,8 +1054,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitUpdate(): void {
+    refuseFields(this.host.nativeElement, [], ['update-reason']);
     if (!this.hospitalId()) return;
     if (!this.updateForm.updateReason.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['update-reason'],
+        ['update-reason'],
+        this.translate.instant('CHART.UPDATE_REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.UPDATE_REASON_REQUIRED'));
       return;
     }
@@ -1240,7 +1278,14 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitTimelineReason(): void {
+    refuseFields(this.host.nativeElement, [], ['timeline-reason']);
     if (!this.timelineReason.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['timeline-reason'],
+        ['timeline-reason'],
+        this.translate.instant('CHART.REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CHART.REASON_REQUIRED'));
       return;
     }

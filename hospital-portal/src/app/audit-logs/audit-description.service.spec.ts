@@ -37,6 +37,16 @@ describe('AuditDescriptionService (QA D894)', () => {
     fr: ['ajouté', 'modifié', 'effacé', 'affiché en entier'],
     es: ['añadido', 'modificado', 'borrado', 'mostrado completo'],
   };
+  it('reads the duplicate decision audit in all three reader languages', () => {
+    const expected = {
+      en: 'Possible duplicate kept as a separate patient',
+      fr: 'Doublon possible conservé comme patient distinct',
+      es: 'Posible duplicado conservado como paciente distinto',
+    };
+    for (const [language, text] of Object.entries(expected)) {
+      expect(describeIn(language, 'Possible duplicate kept as a separate patient')).toBe(text);
+    }
+  });
   for (const [lang, labels] of Object.entries(nationalIuOperations)) {
     for (const [index, operation] of ['CREATE', 'UPDATE', 'CLEAR', 'SHOW_FULL'].entries()) {
       it(`reads the national IU ${operation} audit in ${lang} without the stored operation code`, () => {

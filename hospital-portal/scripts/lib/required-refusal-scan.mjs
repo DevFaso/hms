@@ -142,7 +142,8 @@ export function requiredRefusalFindings(source) {
     // QA D1302 (round 28): a method that BUILDS the refusals (`: FieldRefusal[]`)
     // hands them to its caller's refuseFields, which marks every field.
     if (owner.returns.includes('FieldRefusal')) continue;
-    if (HELPERS.some((h) => body.includes(h))) continue;
+    // A missing response token has no editable field; retain its explicit reason pin.
+    if (m[1] !== 'LOGIN.TOKEN_MISSING' && HELPERS.some((h) => body.includes(h))) continue;
     // QA D1158 (round 21): a submit guard's reason method RETURNS the text to
     // `[appSubmitGuard]`, which marks the blank fields (refuseFields) itself;
     // nothing is shown from here. Only a returned reason is exempt.

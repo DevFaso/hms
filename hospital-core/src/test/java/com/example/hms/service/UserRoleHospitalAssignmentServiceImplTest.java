@@ -15,6 +15,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentResponseDTO;
 import com.example.hms.service.support.UserAccountAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,6 +75,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
         passwordEncoderProvider;
 
+    @Mock private PasswordResetService passwordResetService;
+
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
 
@@ -84,7 +87,6 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     private static final String VALID_CODE   = "ASSIGN-001";
     private static final String VALID_PIN    = "123456";
-    private static final String TEMP_PASS    = "Temp@1234";
 
     @BeforeEach
     void setUp() {
@@ -129,6 +131,12 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(accountAccess.requireMayGrant(any()))
             .thenReturn(anywhere);
+        // The first-password claim succeeds unless a test says a simultaneous activation won it.
+        org.mockito.Mockito.lenient()
+            .when(userRepository.claimFirstPassword(any(), any(), any())).thenReturn(1);
+        org.mockito.Mockito.lenient()
+            .when(userRepository.claimFirstPasswordNeverChanged(any(), any())).thenReturn(1);
+        service.setPasswordResetService(passwordResetService);
     }
 
     // -----------------------------------------------------------------------
@@ -203,6 +211,103 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isTrue();
         assertThat(assignee.isActive()).isTrue();
         verify(userRepository).save(assignee);
+    }
+
+    /** Registrar confirmation of a never-used account the holder can be reached at: a set-password link, no password. */
+    @Test
+    void confirmAssignment_ofANeverUsedAccount_sendsTheHolderASetPasswordLink() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(assignee.isActive()).isTrue();
+        // No transaction in a unit test: the after-commit send runs inline.
+        verify(passwordResetService).sendSetPasswordLink(assignee.getId(), java.util.Locale.FRENCH);
+        assertThat(dto.getTemporaryPassword()).as("nothing to hand over: the holder sets their own").isNull();
+        assertThat(assignee.getPasswordHash()).isEqualTo("hash-of-the-registration-password");
+        verify(passwordEncoderProvider, never()).getObject();
+    }
+
+    /** Registrar confirmation of a never-used account nothing reaches: the first password, in the response only. */
+    @Test
+    void confirmAssignment_ofANeverUsedAccountWithNoChannel_handsTheRegistrarAFirstPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setEmail(null);
+        assignee.setPhoneNumber(null);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+        org.springframework.security.crypto.password.PasswordEncoder encoder =
+            mock(org.springframework.security.crypto.password.PasswordEncoder.class);
+        when(passwordEncoderProvider.getObject()).thenReturn(encoder);
+        when(encoder.encode(anyString())).thenAnswer(inv -> "bcrypt(" + inv.getArgument(0) + ")");
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(dto.getTemporaryUsername()).isEqualTo("jdoe");
+        assertThat(dto.getTemporaryPassword()).hasSize(14);
+        assertThat(assignee.getPasswordHash()).isEqualTo("bcrypt(" + dto.getTemporaryPassword() + ")");
+        assertThat(assignee.getTemporaryPasswordExpiresAt()).isNotNull();
+        verify(passwordResetService, never()).sendSetPasswordLink(any(), any());
+    }
+
+    /** An account in use gets neither: its password is its holder's. */
+    @Test
+    void confirmAssignment_ofAnAccountInUse_touchesNoPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setLastLoginAt(LocalDateTime.now().minusDays(2));
+
+        UserRoleHospitalAssignmentResponseDTO dto = confirmAsRegistrar();
+
+        assertThat(dto.getTemporaryPassword()).isNull();
+        verify(passwordResetService, never()).sendSetPasswordLink(any(), any());
+    }
+
+    private UserRoleHospitalAssignmentResponseDTO confirmAsRegistrar() {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken("registrar", "n/a", java.util.List.of()));
+        try {
+            when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.lenient().when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.lenient().when(mapper.toResponseDTO(any()))
+                .thenAnswer(inv -> new UserRoleHospitalAssignmentResponseDTO());
+            return service.confirmAssignment(assignment.getId(), VALID_PIN);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    /**
+     * The same code sent twice at once: the request that loses the claim on the
+     * first password shows none and issues none, so no page shows a password
+     * the other request already replaced.
+     */
+    @Test
+    void verifyAssignmentByCode_aSimultaneousSecondRequestIssuesNoPassword() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        LocalDateTime readAt = LocalDateTime.now().minusHours(1);
+        assignee.setPasswordChangedAt(readAt);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+        when(userRepository.claimFirstPassword(eq(assignee.getId()), eq(readAt), any())).thenReturn(0);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+
+        UserRoleAssignmentPublicViewDTO view = service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(view.getTempPassword()).isNull();
+        assertThat(assignee.getPasswordHash()).isEqualTo("hash-of-the-registration-password");
+        verify(passwordEncoderProvider, never()).getObject();
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
@@ -358,25 +463,34 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     // -----------------------------------------------------------------------
-    // 5. Temp credentials included in DTO and cleared from DB after verify
+    // 5. A new account's first password: shown once, stored only as a hash, expiring
     // -----------------------------------------------------------------------
 
     @Test
-    void verifyAssignmentByCode_withTempPassword_includesCredentialsAndClearsAfterward() {
-        assignment.setTempPlainPassword(TEMP_PASS);
-
-        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
-            .thenReturn(Optional.of(assignment));
+    void verifyAssignmentByCode_aNewAccountGetsAFirstPasswordStoredOnlyAsAHashThatExpires() {
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
+        assignee.setPasswordHash("hash-of-the-registration-password");
+        org.springframework.security.crypto.password.PasswordEncoder encoder =
+            mock(org.springframework.security.crypto.password.PasswordEncoder.class);
+        when(passwordEncoderProvider.getObject()).thenReturn(encoder);
+        when(encoder.encode(anyString())).thenAnswer(inv -> "bcrypt(" + inv.getArgument(0) + ")");
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        LocalDateTime before = LocalDateTime.now();
 
         UserRoleAssignmentPublicViewDTO dto = service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
 
-        // Credentials must be present in the one-time response
+        // Shown once, in this response only.
         assertThat(dto.getTempUsername()).isEqualTo("jdoe");
-        assertThat(dto.getTempPassword()).isEqualTo(TEMP_PASS);
-
-        // Plaintext must be cleared from the entity before the final save
-        assertThat(assignment.getTempPlainPassword()).isNull();
+        assertThat(dto.getTempPassword()).hasSize(14);
+        // Kept as its hash, never in clear.
+        assertThat(assignee.getPasswordHash()).isEqualTo("bcrypt(" + dto.getTempPassword() + ")");
+        // Replaced before any other use, and expires after 72 hours.
+        assertThat(assignee.isForcePasswordChange()).isTrue();
+        assertThat(assignee.getTemporaryPasswordExpiresAt())
+            .isBetween(before.plusHours(72), LocalDateTime.now().plusHours(72));
     }
 
     // ---- QA D418: anonymous re-send of a pending activation code ----
@@ -426,7 +540,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .thenReturn(Optional.of(assignment));
         doThrow(new RuntimeException("SMTP auth failed"))
             .when(emailService).sendRoleAssignmentConfirmationEmail(
-                any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
 
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
@@ -453,7 +567,9 @@ class UserRoleHospitalAssignmentServiceImplTest {
         // A child registered under a guardian's number: no login phone, no e-mail.
         assignee.setPhoneNumber(null);
         assignee.setEmail(null);
-        assignment.setTempPlainPassword("Temp@Secret123");
+        // A new account, never used: it is owed sign-in details no channel can carry.
+        assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         org.mockito.Mockito.lenient().when(smsService.deliversRealSms()).thenReturn(true);
 
@@ -484,7 +600,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.sendNotifications(assignment.getId(), true);
 
         verify(emailService, never()).sendRoleAssignmentConfirmationEmail(
-            any(), any(), any(), any(), any(), any(), any(), any(), any());
+            any(), any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -500,7 +616,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.sendNotifications(assignment.getId(), true);
 
         verify(emailService).sendRoleAssignmentConfirmationEmail(
-            any(), any(), any(), any(), any(), any(), any(), any(), any());
+            any(), any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -532,7 +648,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(emailService.deliversRealEmail()).thenReturn(true);
         doThrow(new RuntimeException("mailbox unavailable"))
             .when(emailService).sendRoleAssignmentConfirmationEmail(
-                any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
 
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
@@ -618,7 +734,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(smsService).send("+22670123456", "sms.activation.staff.platform");
         verify(smsService).send("+22699999999", "sms.activation.registrar.platform");
         verify(emailService).sendRoleAssignmentConfirmationEmail(eq("jdoe@hospital.com"), anyString(), anyString(),
-            org.mockito.ArgumentMatchers.isNull(), anyString(), anyString(), any(), any(), any());
+            org.mockito.ArgumentMatchers.isNull(), anyString(), anyString(), any(),
+            org.mockito.ArgumentMatchers.anyBoolean());
         org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
         verify(messageSource, org.mockito.Mockito.atLeastOnce()).getMessage(anyString(), args.capture(), any(), any());
         assertThat(args.getAllValues()).filteredOn(java.util.Objects::nonNull)
@@ -725,15 +842,14 @@ class UserRoleHospitalAssignmentServiceImplTest {
         // is then removed: the invitee's code used to re-enable the
         // assignment and the account through the public code-entry endpoint.
         assignment.setActive(false);
-        assignment.setTempPlainPassword("Temp@1234");
         assignee.setActive(false);
+        assignee.setForcePasswordChange(true);
         when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
         when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
 
         service.deleteAllAssignmentsForUser(assignee.getId());
 
         assertThat(assignment.getConfirmationCode()).isNull();
-        assertThat(assignment.getTempPlainPassword()).isNull();
         verify(assignmentRepository).saveAll(java.util.List.of(assignment));
         assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
             .isInstanceOf(BusinessException.class);

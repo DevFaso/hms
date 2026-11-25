@@ -77,30 +77,6 @@
       "count": 1,
       "why": "not a field: the photo comes from a hidden file input opened by a button; the refusal shows in the role=alert banner by the message box"
     },
-    "src/app/consultations/consultations.ts::unmarked-refusal::executeCancel::CONSULTATIONS.CANCEL_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/consultations/consultations.ts::unmarked-refusal::submitAssign::CONSULTATIONS.CONSULTANT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/consultations/consultations.ts::unmarked-refusal::submitAssign::CONSULTATIONS.REASSIGN_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/consultations/consultations.ts::unmarked-refusal::submitComplete::CONSULTATIONS.RECOMMENDATIONS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/consultations/consultations.ts::unmarked-refusal::submitDecline::CONSULTATIONS.DECLINE_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/consultations/consultations.ts::unmarked-refusal::submitSchedule::CONSULTATIONS.SCHEDULED_AT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/departments/department-list.ts::unmarked-refusal::submitForm::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
@@ -121,43 +97,11 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/discharge/discharge.ts::unmarked-refusal::submitDecision::DISCHARGE.DIAGNOSIS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/discharge/discharge.ts::unmarked-refusal::submitDecision::DISCHARGE.REJECTION_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/discharge/discharge.ts::unmarked-refusal::submitFinalize::DISCHARGE.SIGNATURE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/discharge/discharge.ts::unmarked-refusal::submitSummary::COMMON.SUBMIT_BLOCKED_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
-    },
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/imaging/imaging.ts::unmarked-refusal::submitStatusUpdate::IMAGING.VOID_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/lab/lab-results/lab-results.ts::unmarked-refusal::submitForm::LAB_RESULTS.SAVE_VALIDATION_ERROR": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/login/login.ts::unmarked-refusal::submit::LOGIN.CREDENTIALS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/login/login.ts::unmarked-refusal::submit::LOGIN.TOKEN_MISSING": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/login/login.ts::unmarked-refusal::submitBootstrap::LOGIN.ALL_FIELDS_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
@@ -184,30 +128,6 @@
     "src/app/mfa/mfa-enroll.ts::toast-only-refusal::showError::if(typeof code === 'string' && code.startsWith('mfa.stepup.'))": {
       "count": 1,
       "why": "not a field: a server step-up refusal shown in the enrolment banner"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::confirmHoldRefuse::NURSE.TOAST.REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::confirmHoldRefuse::NURSE.WITNESS.REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_SITUATION_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateTask::NURSE.TOAST.TASK_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/organizations/organization-detail.ts::unmarked-refusal::ngOnInit::TENANT_LIFECYCLE.TOAST.MISSING_ID": {
       "count": 1,
@@ -245,30 +165,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitAllergy::CHART.ALLERGEN_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitDeactivateAllergy::CHART.REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitDeleteProblem::CHART.REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitProblem::CHART.PROBLEM_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitTimelineReason::CHART.REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitUpdate::CHART.UPDATE_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/patients/patient-detail.ts::toast-only-refusal::reportDownloadFailure::if(!(err.error instanceof Blob))": {
       "count": 1,
       "why": "not a field: a server download error for the record PDF"
@@ -276,10 +172,6 @@
     "src/app/patients/patient-form.ts::toast-only-refusal::onSubmit::PATIENTS.MATCH_DECIDE": {
       "count": 1,
       "why": "not a field: a decision between the match card buttons (Link / Dismiss), which the card itself presents"
-    },
-    "src/app/patients/patient-form.ts::unmarked-refusal::sendPhoneVerification::PATIENTS.PHONE_TOO_SHORT": {
-      "count": 1,
-      "why": "QA D1281 class (round 27 widened the rule to TOO_SHORT refusals): the registration phone check; patients/patient-form.ts is owned by fix/r27-portal-search-forms (D1289, the phone field), which marks it and deletes this pin"
     },
     "src/app/profile/profile.ts::toast-only-refusal::onAvatarFileSelected::PROFILE.PHOTO_NOT_IMAGE": {
       "count": 1,
@@ -316,6 +208,10 @@
     "src/app/lab/lab-results/lab-results.ts::toast-only-refusal::sendRelease::LAB_RESULTS.RELEASE_FROM_WORKLIST": {
       "count": 1,
       "why": "r63 D2304/D2305: not a field on this screen: the server asked for a QC override reason or a critical call, which the release worklist collects"
+    },
+    "src/app/login/login.ts::unmarked-refusal::submit::LOGIN.TOKEN_MISSING": {
+      "count": 1,
+      "why": "No user field: the authentication response omitted its token; editing username or password cannot correct this server/session failure."
     }
   }
 }

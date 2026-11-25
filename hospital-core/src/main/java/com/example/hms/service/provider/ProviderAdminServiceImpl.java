@@ -273,13 +273,13 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     }
 
     /**
-     * A row deactivate would change: retire()'s own rule (active, any code
-     * still on it, or a temporary password). A row left inactive with a live
-     * code can still switch the account on, so it is something to retire.
+     * A row deactivate would change: retire()'s own rule (active, or any code
+     * still on it). A row left inactive with a live code can still switch the
+     * account on, so it is something to retire.
      */
     private static boolean hasSomethingToRetire(List<UserRoleHospitalAssignment> rows) {
         return rows.stream().anyMatch(row -> !Boolean.FALSE.equals(row.getActive())
-            || row.getConfirmationCode() != null || row.getTempPlainPassword() != null);
+            || row.getConfirmationCode() != null);
     }
 
     private static boolean isPendingInvitation(UserRoleHospitalAssignment row) {

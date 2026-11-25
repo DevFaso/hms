@@ -1,6 +1,8 @@
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
+  ElementRef,
   computed,
   DestroyRef,
   inject,
@@ -62,6 +64,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
   styleUrl: './discharge.scss',
 })
 export class DischargeComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly dischargeService = inject(DischargeService);
   private readonly authorship = inject(AuthorshipService);
   private readonly encounterService = inject(EncounterService);
@@ -330,15 +333,28 @@ export class DischargeComponent implements OnInit {
   }
 
   submitDecision(): void {
+    refuseFields(this.host.nativeElement, [], ['decision-note', 'decision-diagnosis']);
     const target = this.decisionTarget();
     if (!target || !this.requireStaffContext(true)) return;
     const mode = this.decisionMode();
     if (mode === 'reject' && !this.decisionNote.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['decision-note'],
+        ['decision-note'],
+        this.translate.instant('DISCHARGE.REJECTION_REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('DISCHARGE.REJECTION_REASON_REQUIRED'));
       return;
     }
     // QA D766: an approval discharges the stay, so it needs a diagnosis.
     if (mode === 'approve' && !this.decisionDiagnosis.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['decision-diagnosis'],
+        ['decision-diagnosis'],
+        this.translate.instant('DISCHARGE.DIAGNOSIS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('DISCHARGE.DIAGNOSIS_REQUIRED'));
       return;
     }
@@ -644,6 +660,8 @@ export class DischargeComponent implements OnInit {
   }
 
   submitSummary(): void {
+    const fieldIds = ['summary-patient', 'summary-encounter', 'summary-date', 'summary-diagnosis'];
+    refuseFields(this.host.nativeElement, [], fieldIds);
     if (!this.requireStaffContext(true)) return;
     const form = this.summaryForm;
     if (
@@ -652,6 +670,17 @@ export class DischargeComponent implements OnInit {
       !form.dischargeDate ||
       !form.dischargeDiagnosis.trim()
     ) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          ...(!form.patientId ? ['summary-patient'] : []),
+          ...(!form.encounterId ? ['summary-encounter'] : []),
+          ...(!form.dischargeDate ? ['summary-date'] : []),
+          ...(!form.dischargeDiagnosis.trim() ? ['summary-diagnosis'] : []),
+        ],
+        fieldIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       // QA D1358: name the blank fields, not a fixed list.
       this.toast.error(
         missingRequiredMessage(this.translate, [
@@ -717,9 +746,16 @@ export class DischargeComponent implements OnInit {
   }
 
   submitFinalize(): void {
+    refuseFields(this.host.nativeElement, [], ['finalize-signature']);
     const target = this.finalizeTarget();
     if (!target || !this.staffId) return;
     if (!this.finalizeSignature.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['finalize-signature'],
+        ['finalize-signature'],
+        this.translate.instant('DISCHARGE.SIGNATURE_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('DISCHARGE.SIGNATURE_REQUIRED'));
       return;
     }

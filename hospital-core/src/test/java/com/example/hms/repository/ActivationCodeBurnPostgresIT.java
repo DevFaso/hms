@@ -111,9 +111,9 @@ class ActivationCodeBurnPostgresIT {
             return entityManager.createNativeQuery(
                     "INSERT INTO security.user_role_hospital_assignment (id, user_id, role_id, hospital_id, "
                         + "is_active, assigned_at, created_at, updated_at, confirmation_code, confirmation_sent_at, "
-                        + "confirmation_verified_at, temp_plain_password) "
+                        + "confirmation_verified_at) "
                         + "VALUES (:id, :user, :role, NULL, FALSE, :at, :at, :at, :code, :at, "
-                        + "CAST(:verified AS timestamp), 'Temp@123')")
+                        + "CAST(:verified AS timestamp))")
                 .setParameter("id", id)
                 .setParameter("user", UUID.randomUUID())
                 .setParameter("role", UUID.randomUUID())

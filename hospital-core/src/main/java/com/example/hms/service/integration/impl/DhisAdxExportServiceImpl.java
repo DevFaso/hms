@@ -67,9 +67,7 @@ public class DhisAdxExportServiceImpl implements DhisAdxExportService {
             .orElseThrow(() -> new ResourceNotFoundException("dhis2.facilityConfig.activeNotFound", hospitalId));
 
         if (config.getDefaultPeriodType() != periodType) {
-            throw new BusinessException(
-                "periodType " + periodType + " does not match facility default "
-                    + config.getDefaultPeriodType());
+            throw new BusinessException("dhis.period.mismatch");
         }
 
         final PeriodResolver.Range range = PeriodResolver.resolve(periodType, periodIso);

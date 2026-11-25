@@ -43,6 +43,7 @@ class PasswordResetServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private SmsService smsService;
     @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private org.springframework.core.env.Environment environment;
 
     /** Fixed instant: token validity and cleanup are computed against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -197,6 +198,44 @@ class PasswordResetServiceImplTest {
         verify(tokenRepository, never()).save(any());
     }
 
+    // ---- A set-password link for an account activated without seeing its first password ----
+
+    @Test
+    void sendSetPasswordLink_goesByEmailToAnAccountWithAnAddress() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        verify(tokenRepository).save(any(PasswordResetToken.class));
+        verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void sendSetPasswordLink_goesBySmsToAPhoneOnlyAccount() {
+        phoneOnly();
+        smsTransport(true);
+        smsBody();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        // The SMS service is a mock: nothing is really sent.
+        verify(smsService).send("+22670202020", "link");
+        verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
+    }
+
+    @Test
+    void sendSetPasswordLink_issuesNothingWithoutAChannel() {
+        user.setEmail(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        service.sendSetPasswordLink(userId, Locale.FRENCH);
+
+        verify(tokenRepository, never()).save(any());
+    }
+
     // ---- QA D787: e-mail OR username OR phone, through the one identifier ----
 
     private void phoneOnly() {
@@ -332,8 +371,8 @@ class PasswordResetServiceImplTest {
         when(messageSource.getMessage(eq("sms.passwordReset.changed"), any(), any(Locale.class))).thenReturn("changed");
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
-            .user(user).tokenHash(rawToken.toLowerCase()).expiration(NOW.plusHours(1)).build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+            .user(user).tokenHash(hashOf(rawToken)).expiration(NOW.plusHours(1)).build();
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.confirmReset(rawToken, "newPassword"));
@@ -348,8 +387,8 @@ class PasswordResetServiceImplTest {
     void qaD787_aFailedConfirmationMailNeverUndoesTheReset() {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
-            .user(user).tokenHash(rawToken.toLowerCase()).expiration(NOW.plusHours(1)).build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+            .user(user).tokenHash(hashOf(rawToken)).expiration(NOW.plusHours(1)).build();
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
         doThrow(new IllegalArgumentException("bad address"))
             .when(emailService).sendPasswordResetConfirmationEmail(any(), any());
@@ -372,11 +411,11 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         service.confirmReset(rawToken, "newPassword");
@@ -394,10 +433,10 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         service.confirmReset(rawToken, "newPassword");
@@ -417,10 +456,10 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.minusHours(1))
             .build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPassword"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -450,11 +489,11 @@ class PasswordResetServiceImplTest {
         user.setLastName("Smith");
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         service.confirmReset(rawToken, "newPassword");
@@ -468,11 +507,11 @@ class PasswordResetServiceImplTest {
         user.setFirstName("Alice");
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         service.confirmReset(rawToken, "newPassword");
@@ -486,11 +525,11 @@ class PasswordResetServiceImplTest {
         // no firstName or lastName set on user
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
 
         service.confirmReset(rawToken, "newPassword");
@@ -504,11 +543,11 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.minusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -521,7 +560,7 @@ class PasswordResetServiceImplTest {
     @Test
     void confirmReset_invalidToken() {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.empty());
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -533,11 +572,11 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.minusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -550,11 +589,11 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .consumedAt(NOW.minusMinutes(5))
             .build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPassword"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -567,10 +606,10 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "short"))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
@@ -579,23 +618,86 @@ class PasswordResetServiceImplTest {
         verify(userRepository, never()).save(any());
     }
 
+    /**
+     * Only the raw token from the link resets a password. The stored value (its
+     * SHA-256, 64 hex characters) is refused like any unknown token: it is
+     * hashed again, so it matches nothing, and the password is not touched.
+     */
+    @Test
+    void confirmReset_theStoredHashIsNotAToken() {
+        String rawToken = "Zm9yLXRoZS1saW5rLW9ubHktMzItYnl0ZXMtb2YtZW50cm9weQ";
+        String storedHash = hashOf(rawToken);
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(storedHash)
+            .expiration(NOW.plusHours(1))
+            .build();
+        org.mockito.Mockito.lenient().when(tokenRepository.findByTokenHash(storedHash))
+            .thenReturn(Optional.of(resetToken));
+
+        assertThatThrownBy(() -> service.confirmReset(storedHash, "newPassword"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
+        assertThatThrownBy(() -> service.confirmReset(storedHash.toUpperCase(Locale.ROOT), "newPassword"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
+        assertThat(service.verifyToken(storedHash)).isFalse();
+
+        // What was looked up is the hash of what was presented, never the presented value itself.
+        verify(tokenRepository, never()).findByTokenHash(storedHash);
+        verify(tokenRepository, org.mockito.Mockito.atLeastOnce()).findByTokenHash(hashOf(storedHash));
+        verify(userRepository, never()).save(any());
+        verify(passwordEncoder, never()).encode(anyString());
+        assertThat(resetToken.getConsumedAt()).isNull();
+    }
+
+    @Test
+    void confirmReset_setsTheHoldersOwnPassword_nothingTemporaryLeft() {
+        String rawToken = "Zm9yLXRoZS1saW5rLW9ubHktMzItYnl0ZXMtb2YtZW50cm9weQ";
+        user.setForcePasswordChange(true);
+        user.setTemporaryPasswordExpiresAt(NOW.plusHours(10));
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(hashOf(rawToken))
+            .expiration(NOW.plusHours(1))
+            .build();
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        service.confirmReset(rawToken, "newPassword");
+
+        assertThat(user.isForcePasswordChange()).isFalse();
+        assertThat(user.getTemporaryPasswordExpiresAt()).isNull();
+    }
+
+    /** The stored form of a raw token: lower-case hex SHA-256, as the service writes it. */
+    private static String hashOf(String raw) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Test
     void verifyToken_valid() {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW.plusHours(1))
             .build();
 
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
         assertThat(service.verifyToken(rawToken)).isTrue();
     }
 
     @Test
     void verifyToken_notFound() {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.empty());
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.empty());
         assertThat(service.verifyToken(rawToken)).isFalse();
     }
 
@@ -611,10 +713,10 @@ class PasswordResetServiceImplTest {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
-            .tokenHash(rawToken.toLowerCase())
+            .tokenHash(hashOf(rawToken))
             .expiration(NOW)
             .build();
-        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(tokenRepository.findByTokenHash(hashOf(rawToken))).thenReturn(Optional.of(resetToken));
 
         // isAfter is strict: still valid at exactly the expiration instant ...
         assertThat(service.verifyToken(rawToken)).isTrue();
@@ -639,5 +741,18 @@ class PasswordResetServiceImplTest {
     void invalidateAllForUser_success() {
         service.invalidateAllForUser(userId);
         verify(tokenRepository).deleteByUser_IdAndConsumedAtIsNull(userId);
+    }
+
+    @Test
+    void theRawTokenIsLoggedOnADeveloperMachineOnly() {
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2", "local"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"dev"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2", "dev"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local", "prod"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"test"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[0])).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(null)).isFalse();
     }
 }

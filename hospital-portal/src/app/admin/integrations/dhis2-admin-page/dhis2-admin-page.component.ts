@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../../shared/forms/form-control-style.directive';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -36,6 +37,7 @@ type Tab = 'config' | 'mappings' | 'exports';
   selector: 'app-dhis2-admin-page',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
@@ -96,13 +98,14 @@ type Tab = 'config' | 'mappings' | 'exports';
         [hidden]="activeTab() !== 'config'"
       >
         <form
-          class="dhis2-admin__config-form"
+          class="dhis2-admin__config-form form-card"
           (ngSubmit)="onSaveConfig()"
           data-testid="dhis2-config-form"
         >
           <label>
             {{ 'DHIS2.CONFIG.BASE_URL' | translate }} *
             <input
+              appFormControl
               type="url"
               data-testid="dhis2-config-base-url"
               [(ngModel)]="configForm.baseUrl"
@@ -113,6 +116,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           <label>
             {{ 'DHIS2.CONFIG.AUTH_MODE' | translate }}
             <select
+              appFormControl
               data-testid="dhis2-config-auth-mode"
               [(ngModel)]="configForm.authMode"
               name="authMode"
@@ -124,6 +128,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           <label>
             {{ 'DHIS2.CONFIG.AUTH_SECRET_ENV_VAR' | translate }} *
             <input
+              appFormControl
               type="text"
               data-testid="dhis2-config-auth-env-var"
               [(ngModel)]="configForm.authSecretEnvVar"
@@ -135,6 +140,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           <label>
             {{ 'DHIS2.CONFIG.DEFAULT_PERIOD_TYPE' | translate }}
             <select
+              appFormControl
               data-testid="dhis2-config-period-type"
               [(ngModel)]="configForm.defaultPeriodType"
               name="defaultPeriodType"
@@ -148,6 +154,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           <label>
             {{ 'DHIS2.CONFIG.DEFAULT_DATASET_UID' | translate }}
             <input
+              appFormControl
               type="text"
               data-testid="dhis2-config-dataset-uid"
               [(ngModel)]="configForm.defaultDatasetUid"
@@ -218,6 +225,17 @@ type Tab = 'config' | 'mappings' | 'exports';
   `,
   styles: [
     `
+      .form-card {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .dhis2-admin__config-form > label {
+        min-width: 0;
+        flex: 1 1 14rem;
+      }
+
       .dhis2-admin {
         padding: 1rem;
       }

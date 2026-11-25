@@ -222,15 +222,9 @@ class StoredTextProseGuardTest {
 
     /** Sites as they stand: {@code file::literal}, how many places write it, why. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "service/ClinicalDashboardServiceImpl.java::Appointments Today", 1, PRE_EXISTING,
-        "service/ClinicalDashboardServiceImpl.java::Pending Results", 1, PRE_EXISTING,
-        "service/ClinicalDashboardServiceImpl.java::Active Patients", 1, PRE_EXISTING,
-        "service/ClinicalDashboardServiceImpl.java::Refill Requests", 1, PRE_EXISTING,
         "service/SecurityPolicyGovernanceServiceImpl.java::Security baseline", 1, PRE_EXISTING,
         "service/impl/PrescriptionSmsDispatchServiceImpl.java::Superseded: re-dispatched by SMS to ", 1, PRE_EXISTING,
         "service/impl/PrescriptionSmsDispatchServiceImpl.java::Not delivered: the SMS to the pharmacy failed", 1, PRE_EXISTING,
-        "service/impl/SuperAdminOrganizationOverviewServiceImpl.java::Policy is inactive and requires approval", 1, PRE_EXISTING,
-        "service/impl/SuperAdminOrganizationOverviewServiceImpl.java::Compliance evidence expires on ", 1, PRE_EXISTING,
         "service/pharmacy/DispenseServiceImpl.java::Dispense for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/DispenseServiceImpl.java::Dispense cancelled — stock returned for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/PreparedFillVoider.java::Prepared fill cancelled — stock returned for prescription ", 1, PRE_EXISTING,

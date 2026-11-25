@@ -77,8 +77,21 @@ class AppointmentStatusTransitionTest {
     private Appointment appointment;
     private UUID appointmentId;
 
+    private MessageSource previousTestMessageSource;
+    private org.springframework.context.i18n.LocaleContext previousTestLocale;
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreMessageContext() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousTestMessageSource);
+        org.springframework.context.i18n.LocaleContextHolder.setLocaleContext(previousTestLocale);
+    }
+
     @BeforeEach
     void setUp() {
+        previousTestMessageSource = (MessageSource) ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        previousTestLocale = org.springframework.context.i18n.LocaleContextHolder.getLocaleContext();
+        // These transition tests exercise the documented absent-label fallback.
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         ReflectionTestUtils.setField(appointmentService, "frontendBaseUrl", "http://localhost");
 

@@ -188,7 +188,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already exists");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("phrase.trigger.taken"));
         }
     }
 
@@ -453,7 +453,7 @@ class SmartPhraseServiceImplTest {
         void nullRequest() {
             assertThatThrownBy(() -> service.create(null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("required");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("phrase.request.required"));
         }
 
         @Test
@@ -481,7 +481,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining(hospitalId.toString());
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("hospital.notFound"); assertThat(((ResourceNotFoundException) error).getArgs()).containsExactly(hospitalId); });
         }
 
         @Test
@@ -500,7 +500,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining(userId.toString());
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("user.notFound"); assertThat(((ResourceNotFoundException) error).getArgs()).containsExactly(userId); });
         }
     }
 }

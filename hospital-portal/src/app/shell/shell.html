@@ -111,6 +111,7 @@
           @for (entry of group.entries; track entry.item.route) {
             <a
               class="nav-item"
+              [class.nav-item--wrap-label]="entry.item.wrapLabel"
               [class.dragging]="dragIndex() === entry.flatIndex"
               [class.drag-over]="
                 dragOverIndex() === entry.flatIndex && dragIndex() !== entry.flatIndex

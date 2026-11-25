@@ -123,6 +123,32 @@ public class UserServiceImpl implements UserService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
+    /**
+     * Sends a set-password link to the holder of an account activated by its
+     * e-mail link (no activation page, so no first password shown). Setter-
+     * injected so the unit tests that build this service with mocks keep
+     * their constructor.
+     */
+    private PasswordResetService passwordResetService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPasswordResetService(PasswordResetService passwordResetService) {
+        this.passwordResetService = passwordResetService;
+    }
+
+    /** After commit: a failed send never undoes the activation; the holder can still ask for a reset. */
+    private void sendSetPasswordLink(UUID holderId) {
+        if (passwordResetService == null) {
+            log.warn("🔑 No set-password link sent for user {}: no reset service", holderId);
+            return;
+        }
+        try {
+            passwordResetService.sendSetPasswordLink(holderId, EmailService.DEFAULT_RECIPIENT_LOCALE);
+        } catch (RuntimeException ex) {
+            log.warn("🔑 Set-password link for user {} failed: {}", holderId, ex.getClass().getSimpleName());
+        }
+    }
+
     /*
      * --------------------------------
      * Public Registration (Patient)
@@ -170,9 +196,9 @@ public class UserServiceImpl implements UserService {
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to send verification email to '{}': {}. "
+            log.warn("⚠️ Failed to send verification email to user {}: {}. "
                     + "Patient can request a new verification email later.",
-                    saved.getEmail(), e.getMessage());
+                    saved.getId(), e.getMessage());
         }
 
         User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
@@ -471,9 +497,10 @@ public class UserServiceImpl implements UserService {
         if (reclaimed) {
             reclaimDiscardedRegistration(user, request);
         }
-        // Only a password the SERVER generated is ever delivered to the user
-        // (mail, SMS or the one-time response). An admin-typed password is
-        // never sent anywhere: the admin already knows it.
+        // Only a password the SERVER generated is ever handed out, and only in
+        // the one-time registration response when no channel reaches the
+        // holder (6a). It is never mailed, sent by SMS or kept in clear. An
+        // admin-typed password is never sent anywhere: the admin knows it.
         final String generatedPassword = (newUserCreated || reclaimed) && !passwordSupplied
                 ? request.getPassword() : null;
 
@@ -504,19 +531,10 @@ public class UserServiceImpl implements UserService {
             assignmentService.reissuePendingInvitationsForRestoredUser(user.getId());
         }
 
-        // ---- 4a) Forward temp password to the PATIENT assignment ----
-        // The assignment notification email (AFTER_COMMIT) will expose these
-        // credentials once, then verifyAssignmentByCode() clears them.
-        if (isPatient && generatedPassword != null) {
-            ensuredAssignments.stream()
-                    .filter(a -> a.getRole() != null
-                            && ROLE_PATIENT.equalsIgnoreCase(a.getRole().getCode()))
-                    .findFirst()
-                    .ifPresent(patientAssignment -> {
-                        patientAssignment.setTempPlainPassword(generatedPassword);
-                        assignmentRepository.save(patientAssignment);
-                    });
-        }
+        // ---- 4a) No copy of the generated password is kept or mailed ----
+        // The account holds its hash only. The holder gets a first password
+        // when they confirm their code (verifyAssignmentByCode shows it once);
+        // only the no-channel case below hands this one to the registrar.
 
         auditIfNewUser(newUserCreated, user, ensuredAssignments);
 
@@ -596,12 +614,12 @@ public class UserServiceImpl implements UserService {
                             // each assignment mail carries its own code.
                             emailService.sendAdminWelcomeEmail(
                                 user.getEmail(), displayName,
-                                user.getUsername(), generatedPassword,
+                                user.getUsername(),
                                 roleName, hospitalName, null, null);
                         } else {
                             emailService.sendAdminWelcomeEmail(
                                 user.getEmail(), displayName,
-                                user.getUsername(), generatedPassword, welcomeRoles);
+                                user.getUsername(), welcomeRoles);
                         }
                     },
                     emailService::deliversRealEmail);
@@ -925,19 +943,20 @@ public class UserServiceImpl implements UserService {
         LocalDateTime passwordSetAt = LocalDateTime.now();
 
         // Auto-generate a temporary password when none is provided (e.g. patient
-        // registration by receptionist).  The user will be forced to change it on
-        // first login via forcePasswordChange flag.
+        // registration by receptionist). Either way the account starts on a
+        // password its holder did not choose: a temporary one, hashed, that
+        // expires and must be changed before any other use (TemporaryPasswords).
         String rawPassword = request.getPassword();
         boolean passwordChosenByAdmin = rawPassword != null && !rawPassword.isBlank();
         if (!passwordChosenByAdmin) {
             rawPassword = generateTempPassword();
             request.setForcePasswordChange(true);
         }
-        // Persist the raw password back onto the request so that callers
-        // (e.g. createUserWithRolesAndHospital) can forward it to the
-        // assignment's tempPlainPassword field for one-time email exposure.
+        // Back onto the request so createUserWithRolesAndHospital can hand a
+        // generated one to the registrar when no channel reaches the holder
+        // (step 6a). Nothing persists it.
         request.setPassword(rawPassword);
-        u.setPasswordHash(passwordEncoder.encode(rawPassword));
+        com.example.hms.utility.TemporaryPasswords.assign(u, passwordEncoder.encode(rawPassword), passwordSetAt);
 
         u.setFirstName(request.getFirstName());
         u.setLastName(request.getLastName());
@@ -986,8 +1005,8 @@ public class UserServiceImpl implements UserService {
 
         // Patient verification email is now handled by the assignment notification
         // flow (AssignmentCreatedEvent → sendRoleAssignmentConfirmationEmail) which
-        // includes the 6-digit confirmation code, temp credentials, and a link to
-        // the RoleWelcomeComponent verification page.
+        // includes the 6-digit confirmation code and a link to the
+        // RoleWelcomeComponent verification page, never a password.
 
         // saveAndFlush (vs save) forces the INSERT to hit the DB synchronously
         // here. If a unique constraint or NOT NULL fails, the caller gets a
@@ -1089,9 +1108,7 @@ public class UserServiceImpl implements UserService {
         }
         request.setPassword(rawPassword);
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
-        user.setPasswordHash(passwordEncoder.encode(rawPassword));
-        user.setPasswordChangedAt(now);
-        user.setForcePasswordChange(true);
+        com.example.hms.utility.TemporaryPasswords.assign(user, passwordEncoder.encode(rawPassword), now);
         user.setForceUsernameChange(true);
         user.setActive(false);
         userRepository.save(user);
@@ -1947,14 +1964,12 @@ public class UserServiceImpl implements UserService {
                 && !passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
             String encoded = passwordEncoder.encode(dto.getPassword());
             LocalDateTime passwordSetAt = LocalDateTime.now();
-            user.setPasswordHash(encoded);
-            user.setPasswordChangedAt(passwordSetAt);
-            user.setPasswordRotationWarningAt(null);
-            user.setPasswordRotationForcedAt(null);
             // Only an administrator reaches here (a self-edit cannot carry a
             // password), and a password someone else chose is a shared secret:
-            // the holder must replace it at the next sign-in (D38).
-            user.setForcePasswordChange(true);
+            // a temporary one, replaced at the next sign-in (D38), that expires.
+            com.example.hms.utility.TemporaryPasswords.assign(user, encoded, passwordSetAt);
+            user.setPasswordRotationWarningAt(null);
+            user.setPasswordRotationForcedAt(null);
             // An administrator handing out a new password means the holder
             // should sign in with it now: the lock collected on the old one
             // must not refuse it (D18). After commit, as above; a reactivation
@@ -2242,10 +2257,19 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
+        // The link proves the address but shows no password: a never-used
+        // account gets a set-password link at that address. Read before the
+        // activation switches it on.
+        final boolean firstPasswordOwed = com.example.hms.utility.TemporaryPasswords.owedAtActivation(user);
+
         user.setActive(true);
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        if (firstPasswordOwed) {
+            final UUID holderId = user.getId();
+            TransactionCallbacks.afterCommit(() -> sendSetPasswordLink(holderId));
+        }
         // Refusals collected while the account was inactive must not outlive
         // the activation: the disabled arm of /auth/login counts toward the
         // lockout, so five attempts before verifying would otherwise leave the
@@ -2366,6 +2390,7 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
         user.setForcePasswordChange(false);
+        com.example.hms.utility.TemporaryPasswords.retire(user);
         user.setPasswordRotationWarningAt(null);
         user.setPasswordRotationForcedAt(null);
         userRepository.save(user);
@@ -2413,6 +2438,7 @@ public class UserServiceImpl implements UserService {
             user.setPasswordHash(encodedPassword);
             user.setPasswordChangedAt(LocalDateTime.now());
             user.setForcePasswordChange(false);
+            com.example.hms.utility.TemporaryPasswords.retire(user);
             user.setPasswordRotationWarningAt(null);
             user.setPasswordRotationForcedAt(null);
         }

@@ -687,6 +687,8 @@ public class ReceptionServiceImpl implements ReceptionService {
     /** QA D2520: a near spelling of the name. With the same birth date 65, a day off 50; alone never offered. */
     private static final int SCORE_SIMILAR_NAME = 35;
     private static final int SCORE_SAME_DOB = 30;
+    /** A common family name and exact DOB is a low-confidence desk review (45), never a merge. */
+    private static final int SCORE_FAMILY_NAME = 15;
     /** QA D2520: a birth date one day off; with the same name 65, with a near spelling 50. */
     private static final int SCORE_NEAR_DOB = 15;
 
@@ -741,6 +743,15 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .filter(p -> PatientMatchKeys.similarName(name, p.getFirstName(), p.getMiddleName(), p.getLastName()))
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));
         }
+        if (bornOn != null) {
+            var familyKeys = PatientMatchKeys.familyNameKeys(name);
+            if (!familyKeys.isEmpty()) {
+                patientRepo.findActiveFamilyBornAtHospital(familyKeys, bornOn, hospitalId,
+                        PageRequest.of(0, PatientRepository.FAMILY_DOB_CAP)).stream()
+                    .filter(p -> PatientMatchKeys.sharedFamilyName(name, p.getLastName()))
+                    .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+            }
+        }
         String phoneKey = PatientMatchKeys.phoneKey(phone);
         if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
             patientRepo.findAllByPhoneSubscriberAtHospital("%" + phoneKey, hospitalId,
@@ -794,6 +805,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         } else if (PatientMatchKeys.similarName(name, p.getFirstName(), p.getMiddleName(), p.getLastName())) {
             // QA D2520: a near spelling is asked about, never as sure as the same name.
             score += SCORE_SIMILAR_NAME;
+        } else if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)
+                && PatientMatchKeys.sharedFamilyName(name, p.getLastName())) {
+            score += SCORE_FAMILY_NAME;
         }
         if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
             score += SCORE_SAME_DOB;

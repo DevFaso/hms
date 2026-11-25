@@ -32,6 +32,7 @@ import {
   timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { navigateToSignIn } from '../auth/session-lifetime';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
@@ -246,6 +247,37 @@ export function mfaStepUpRefusal(error: HttpErrorResponse): string | null {
     : null;
 }
 
+/**
+ * The 403 every API call gets while the account is on a temporary password:
+ * the server refuses all but the account-setup calls (PasswordChangeGate). It is neither a forbidden page
+ * nor a sign-out: the user is taken to the account-setup screen.
+ */
+export const PASSWORD_CHANGE_REQUIRED = 'password_change_required';
+
+export function isPasswordChangeRequired(error: HttpErrorResponse): boolean {
+  const body = error.error as { code?: unknown } | null;
+  return (
+    error.status === 403 &&
+    !!body &&
+    typeof body === 'object' &&
+    body.code === PASSWORD_CHANGE_REQUIRED
+  );
+}
+
+/**
+ * Remember the forced change on the stored profile, so the account-setup
+ * guard keeps every page behind it, and open the setup screen.
+ */
+function sendToAccountSetup(auth: AuthService, router: Router): void {
+  const profile = auth.getUserProfile();
+  if (profile && !profile.forcePasswordChange) {
+    auth.setUserProfile({ ...profile, forcePasswordChange: true });
+  }
+  if (!(router.url ?? '').startsWith('/account-setup')) {
+    void router.navigate(['/account-setup']);
+  }
+}
+
 function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
   const body = error.error as { code?: unknown; reason?: unknown } | null;
   if (body && typeof body === 'object' && body.code === HOSPITAL_SCOPE_REFUSED) {
@@ -364,7 +396,8 @@ function tryRefreshAndRetry(
         refreshDone$.next(null);
         if (isRefreshRejection(error)) {
           auth.logout();
-          void router.navigate(['/login']);
+          // A session past its lifetime is told so on the sign-in page.
+          void navigateToSignIn(router, error);
         }
         return throwError(() => callerError);
       }),
@@ -487,7 +520,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
         if (!isVerifyPassword && !isSilentBackground) {
           auth.logout();
-          void router.navigate(['/login']);
+          // The refresh call's own 401 reaches here first: the same page as
+          // the refresh's caller sends the user to, so neither replaces it.
+          void (isRefreshCall ? navigateToSignIn(router, error) : router.navigate(['/login']));
         }
       } else if (error.status === 503 && error.headers?.get('X-Readonly-Mode') === 'true') {
         // Downtime read-only mode (P3 #23a): flip the banner on immediately
@@ -506,6 +541,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         if (req.context.get(CSRF_REPLAY) && typeof message === 'string' && message.trim()) {
           toast.error(message.trim());
         }
+      } else if (isPasswordChangeRequired(error)) {
+        sendToAccountSetup(auth, router);
       } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
         // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {
