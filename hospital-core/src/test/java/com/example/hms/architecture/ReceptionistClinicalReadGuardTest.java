@@ -177,6 +177,7 @@ class ReceptionistClinicalReadGuardTest {
      * record, the desk's own administrative note, or a server that refuses or keeps the stored value.
      */
     private static final Map<String, String> THE_DESK_WRITES_IT = Map.ofEntries(
+        Map.entry("PatientRequestDTO#duplicateReviewReason", "administrative identity-review reason for KEEP_SEPARATE; audited in the registration transaction, never a clinical record or permission grant"),
         Map.entry("AppointmentRequestDTO#notes", "booking notes the desk writes"),
         Map.entry("InvoiceRefundRequestDTO#reason", "why the copay till asks to hand money back: no clinical content"),
         Map.entry("InvoiceRefundReasonRequestDTO#reason", "why a refund is rejected or withdrawn: money"),

@@ -140,6 +140,7 @@ describe('EmpiCandidatesPanelComponent', () => {
     confirmMatch: (m: EmpiCandidateMatch) => void;
     toggleMergeSelection: (m: EmpiCandidateMatch) => void;
     executeMerge: () => void;
+    mergeReason: string;
   } {
     empi.findCandidates.and.returnValue(of(matches));
     fixture.detectChanges();
@@ -149,6 +150,7 @@ describe('EmpiCandidatesPanelComponent', () => {
       confirmMatch: (m: EmpiCandidateMatch) => void;
       toggleMergeSelection: (m: EmpiCandidateMatch) => void;
       executeMerge: () => void;
+      mergeReason: string;
     };
     component.form['lastName'] = 'Diallo';
     component.search({ preventDefault: () => undefined } as unknown as Event);
@@ -177,12 +179,31 @@ describe('EmpiCandidatesPanelComponent', () => {
     component.toggleMergeSelection(sample);
     component.toggleMergeSelection(second);
 
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge(); // arms only
     expect(empi.mergeByPatient).not.toHaveBeenCalled();
 
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge(); // executes
-    expect(empi.mergeByPatient).toHaveBeenCalledWith('p-1', 'p-2');
+    expect(empi.mergeByPatient).toHaveBeenCalledWith(
+      'p-1',
+      'p-2',
+      'cdx Same person, documents reviewed',
+    );
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('does not arm or send a merge without its recorded reason', () => {
+    const component = searchWithResults([sample, second]);
+    component.toggleMergeSelection(sample);
+    component.toggleMergeSelection(second);
+    fixture.detectChanges();
+    component.mergeReason = ' ';
+    component.executeMerge();
+    expect(empi.mergeByPatient).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('#empi-merge-reason').getAttribute('aria-invalid'),
+    ).toBe('true');
   });
 
   it('merge failure surfaces the merge-failed toast', () => {
@@ -190,7 +211,9 @@ describe('EmpiCandidatesPanelComponent', () => {
     const component = searchWithResults([sample, second]);
     component.toggleMergeSelection(sample);
     component.toggleMergeSelection(second);
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge();
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge();
     expect(toast.error).toHaveBeenCalled();
   });
@@ -248,7 +271,9 @@ describe('EmpiCandidatesPanelComponent', () => {
     };
     component.toggleMergeSelection(sample);
     component.toggleMergeSelection(second);
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge();
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge();
     const reads = empi.findCandidates.calls.count();
     component.swapMergeSelection();
@@ -257,10 +282,15 @@ describe('EmpiCandidatesPanelComponent', () => {
     component.search(new Event('submit'));
     component.confirmMatch(second);
     component.newPatientFromForm();
+    component.mergeReason = 'cdx Same person, documents reviewed';
     component.executeMerge();
     fixture.detectChanges();
     expect(empi.findCandidates.calls.count()).toBe(reads);
-    expect(empi.mergeByPatient).toHaveBeenCalledOnceWith(sample.patientId, second.patientId);
+    expect(empi.mergeByPatient).toHaveBeenCalledOnceWith(
+      sample.patientId,
+      second.patientId,
+      'cdx Same person, documents reviewed',
+    );
     expect(router.navigate).not.toHaveBeenCalled();
     const bar = fixture.nativeElement.querySelector('[data-testid="empi-merge-bar"]');
     expect(bar.querySelector('strong').textContent).toContain(sample.displayName);

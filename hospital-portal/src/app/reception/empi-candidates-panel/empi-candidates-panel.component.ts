@@ -90,6 +90,7 @@ export class EmpiCandidatesPanelComponent {
   protected readonly mergeSelection = signal<EmpiCandidateMatch[]>([]);
   protected readonly merging = signal(false);
   protected readonly mergeArmed = signal(false);
+  protected mergeReason = '';
   protected readonly selectedMergeIds = computed(
     () => new Set(this.mergeSelection().map((match) => match.patientId)),
   );
@@ -203,6 +204,7 @@ export class EmpiCandidatesPanelComponent {
 
   protected toggleMergeSelection(match: EmpiCandidateMatch): void {
     if (this.merging()) return;
+    this.mergeReason = '';
     this.mergeArmed.set(false);
     this.mergeSelection.update((selection) => {
       if (selection.some((selected) => selected.patientId === match.patientId)) {
@@ -228,31 +230,42 @@ export class EmpiCandidatesPanelComponent {
     if (this.merging()) return;
     const selection = this.mergeSelection();
     if (selection.length !== 2) return;
+    if (!this.mergeReason.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['empi-merge-reason'],
+        ['empi-merge-reason'],
+        this.translate.instant('EMPI.MERGE_REASON_REQUIRED'),
+      );
+      return;
+    }
     if (!this.mergeArmed()) {
       this.mergeArmed.set(true);
       return;
     }
     this.merging.set(true);
     const [primary, secondary] = selection;
-    this.empi.mergeByPatient(primary.patientId, secondary.patientId).subscribe({
-      next: () => {
-        this.toast.success(
-          this.translate.instant('EMPI.TOAST.MERGED', { name: primary.displayName }),
-        );
-        this.merging.set(false);
-        this.mergeArmed.set(false);
-        this.mergeSelection.set([]);
-        // Drop the merged-away duplicate from the current result list.
-        this.results.update((matches) =>
-          matches.filter((match) => match.patientId !== secondary.patientId),
-        );
-      },
-      error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
-        this.merging.set(false);
-        this.mergeArmed.set(false);
-      },
-    });
+    this.empi
+      .mergeByPatient(primary.patientId, secondary.patientId, this.mergeReason.trim())
+      .subscribe({
+        next: () => {
+          this.toast.success(
+            this.translate.instant('EMPI.TOAST.MERGED', { name: primary.displayName }),
+          );
+          this.merging.set(false);
+          this.mergeArmed.set(false);
+          this.mergeSelection.set([]);
+          // Drop the merged-away duplicate from the current result list.
+          this.results.update((matches) =>
+            matches.filter((match) => match.patientId !== secondary.patientId),
+          );
+        },
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
+          this.merging.set(false);
+          this.mergeArmed.set(false);
+        },
+      });
   }
 
   protected trackByPatientId(_index: number, match: EmpiCandidateMatch): string {
