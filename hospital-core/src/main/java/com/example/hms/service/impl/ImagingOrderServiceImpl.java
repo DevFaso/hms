@@ -256,6 +256,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (RESULTED_STATES.contains(order.getStatus())) {
             throw new com.example.hms.exception.BusinessException("imaging.order.resulted.locked");
         }
+        // QA D3903: the study as it stood before ANY part of this edit (patient and hospital included),
+        // so an edit that moves the order onto another patient's or place's recent study is a change.
+        String studyKeyBefore = duplicateKeyOf(order);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -276,7 +279,6 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
-        String studyKeyBefore = duplicateKeyOf(order);
         UUID visitBefore = order.getEncounterId();
         UUID catalogueItemBefore = order.getCatalogueItemId();
         String studyBefore = order.getStudyType();

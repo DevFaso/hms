@@ -2091,6 +2091,36 @@ class ImagingOrderServiceImplTest {
             .isEqualTo(com.example.hms.enums.ImagingDuplicateOverrideReason.DIFFERENT_REGION_OR_QUESTION);
     }
 
+    /**
+     * QA D3903 (review of #1331): moving an order onto another patient who already has the same recent
+     * study is a new ordering decision for that patient, even with the modality and region unchanged.
+     */
+    @Test
+    void anEditOntoAnotherPatientsRecentStudyNeedsAReason_D3903() {
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(other);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).modality(ImagingModality.XRAY)
+            .studyType("XR Knee").priority(ImagingOrderPriority.ROUTINE).build();
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        lenient().doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
+        ImagingOrder earlier = new ImagingOrder();
+        earlier.setId(UUID.randomUUID());
+        lenient().when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId),
+            eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class))).thenReturn(List.of(earlier));
+
+        assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request, null))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("duplicateOverrideReason"));
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
     /** QA D3903: an edit that keeps the study (a date, a note) decides nothing new and needs no reason. */
     @Test
     void anEditThatKeepsTheStudyNeedsNoReason_D3903() {
