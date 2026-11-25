@@ -100,6 +100,22 @@ public class NurseMedicationTaskResponseDTO implements com.example.hms.payload.d
     /** True once verified. False plus the flag above means administration is refused. */
     private boolean pharmacistVerified;
 
+    /**
+     * QA D3941: what the pharmacy has supplied on this order ({@code MarSupply.State}: NOT_SUPPLIED,
+     * PARTIALLY_SUPPLIED, SUPPLIED, OUT_OF_STOCK, PHARMACY_QUERY, EXTERNAL). Information only: a supplied
+     * order stays on the MAR until the prescriber stops it or its course or stay ends.
+     */
+    private String supplyStatus;
+
+    /** QA D3941: the quantity the hospital's pharmacy handed over on this order (zero when none). */
+    private java.math.BigDecimal quantitySupplied;
+
+    /** QA D3941: the quantity the order asks for, or null when it states none. */
+    private java.math.BigDecimal quantityOrdered;
+
+    /** QA D3941: the supply in the reader's language (« Pharmacie : fourni 3/9 »). */
+    private String supplyLabel;
+
     /** QA D922: the clinician who witnessed this controlled dose, once it is recorded. */
     private String witnessName;
 

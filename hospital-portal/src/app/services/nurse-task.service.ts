@@ -120,6 +120,19 @@ export interface NurseMedicationTask {
   cdsAdvisories?: CdsCard[];
   /** QA D1584: the allergy stop's review state (awaiting, CONTINUE with the plan, STOP). */
   allergyReview?: AllergyReviewState | null;
+  /**
+   * QA D3941: what the pharmacy has supplied on this order: NOT_SUPPLIED,
+   * PARTIALLY_SUPPLIED, SUPPLIED, OUT_OF_STOCK, PHARMACY_QUERY or EXTERNAL.
+   * Information only: a supplied order stays on the MAR until the prescriber
+   * stops it or its course or stay ends.
+   */
+  supplyStatus?: string | null;
+  /** QA D3941: the quantity the hospital's pharmacy handed over (zero when none). */
+  quantitySupplied?: number | null;
+  /** QA D3941: the quantity the order asks for, or null when it states none. */
+  quantityOrdered?: number | null;
+  /** QA D3941: the supply in the reader's language, composed by the server (« Pharmacie : fourni 3/9 »). */
+  supplyLabel?: string | null;
 }
 
 /** Bedside five-rights barcode-scan check (P1 #8). */

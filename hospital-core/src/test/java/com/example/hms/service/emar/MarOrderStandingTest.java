@@ -55,6 +55,14 @@ class MarOrderStandingTest {
         }
     }
 
+    /** QA D3941: the MAR lists by the same rule a dose is recorded by; the supply statuses stand. */
+    @ParameterizedTest
+    @EnumSource(PrescriptionStatus.class)
+    void standsAgreesWithTheDoseGate(PrescriptionStatus status) {
+        org.assertj.core.api.Assertions.assertThat(MarOrderStanding.stands(status)).as(status.name())
+            .isEqualTo(STANDS.contains(status));
+    }
+
     @Test
     void aRowWhoseOrderIsGoneIsLeftToTheCallersOwnChecks() {
         assertThatCode(() -> MarOrderStanding.requireStands(null)).doesNotThrowAnyException();
