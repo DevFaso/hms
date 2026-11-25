@@ -27,11 +27,18 @@ public final class ProductStrength {
 
     /** A number as written, bounded so no input makes the match backtrack ("500", "62,5"). */
     private static final String NUMBER = "\\d{1,7}+(?:[.,]\\d{1,6}+)?+";
-    /** The amount and its unit; the further amounts of a combination ("250/125 mg") are skipped. */
+    /** The units an amount of active ingredient is written in. */
+    private static final String UNIT = "(mg|g|mcg|µg|ug|ui|iu|meq|mmol|%)(?!\\p{L})";
+    /** The amount and its unit, every amount of a combination written before the unit ("250/125 mg"). */
     private static final Pattern AMOUNT = Pattern.compile(
-        "(?<![\\w.,])(" + NUMBER + ")(?:\\s{0,3}+/\\s{0,3}+" + NUMBER + "){0,4}+\\s{0,3}+"
-            + "(mg|g|mcg|µg|ug|ui|iu|meq|mmol|%)(?!\\p{L})",
+        "(?<![\\w.,])(" + NUMBER + "(?:\\s{0,3}+/\\s{0,3}+" + NUMBER + "){0,4}+)\\s{0,3}+" + UNIT,
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** A further amount of a combination written with its own unit, right after ("500 mg/30 mg", "+ 125 mg"). */
+    private static final Pattern FURTHER = Pattern.compile(
+        "\\G\\s{0,3}+[/+]\\s{0,3}+(" + NUMBER + ")\\s{0,3}+" + UNIT,
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** The most amounts a combination is read with (a fixed-dose combination has two to four). */
+    private static final int MAX_COMPONENTS = 5;
     /** What a concentration is per, read right after the amount ("/5 ml", "/ml"). */
     private static final Pattern PER = Pattern.compile(
         "\\G\\s{0,3}+/\\s{0,3}+(" + NUMBER + ")?+\\s{0,3}+(ml|l|g|dose|h)(?!\\p{L})",
@@ -47,20 +54,34 @@ public final class ProductStrength {
         "µg", ONE_THOUSANDTH);
 
     /**
-     * A read strength: its first amount in the base unit, the unit, and for a concentration what it is per
-     * ({@code per} null for « 10 mg/ml », 5 for « 250 mg/5 ml »; {@code perUnit} null for an amount).
+     * A read strength: every amount in the base unit (one for a single drug, one per ingredient of a combination,
+     * in the order written), the unit, and for a concentration what it is per ({@code per} null for « 10 mg/ml »,
+     * 5 for « 250 mg/5 ml »; {@code perUnit} null for an amount).
      */
-    record Value(BigDecimal amount, String unit, BigDecimal per, String perUnit) {
+    record Value(java.util.List<BigDecimal> amounts, String unit, BigDecimal per, String perUnit) {
 
+        /**
+         * Review of #1336: EVERY amount is compared. « 500/15 mg » is not « 500/30 mg », and a combination is
+         * not its first ingredient alone.
+         */
         boolean sameAs(Value other) {
-            return unit.equals(other.unit) && amount.compareTo(other.amount) == 0
-                && java.util.Objects.equals(perUnit, other.perUnit)
-                && (per == null ? other.per == null : other.per != null && per.compareTo(other.per) == 0);
+            if (!unit.equals(other.unit) || amounts.size() != other.amounts.size()
+                    || !java.util.Objects.equals(perUnit, other.perUnit)) {
+                return false;
+            }
+            for (int i = 0; i < amounts.size(); i++) {
+                if (amounts.get(i).compareTo(other.amounts.get(i)) != 0) {
+                    return false;
+                }
+            }
+            return per == null ? other.per == null : other.per != null && per.compareTo(other.per) == 0;
         }
 
-        /** The strength as people write it in {@code locale}, "500 mg", "0,5 mg", "250 mg/5 ml". */
+        /** The strength as people write it in {@code locale}, "500 mg", "0,5 mg", "500/125 mg", "250 mg/5 ml". */
         String label(Locale locale) {
-            String text = com.example.hms.utility.DisplayNumbers.quantity(amount, locale) + " " + unit;
+            String text = amounts.stream()
+                .map(a -> com.example.hms.utility.DisplayNumbers.quantity(a, locale))
+                .collect(java.util.stream.Collectors.joining("/")) + " " + unit;
             if (perUnit == null) {
                 return text;
             }
@@ -116,7 +137,11 @@ public final class ProductStrength {
         return named.isPresent() ? named : inText(item.getBrandName());
     }
 
-    /** The first strength written in a text ("Amoxicilline 500 mg gélule" is 500 mg), or empty. */
+    /**
+     * The first strength written in a text ("Amoxicilline 500 mg gélule" is 500 mg, "Amoxicilline/acide
+     * clavulanique 500 mg/62,5 mg" is 500/62.5 mg), or empty. A combination whose amounts are not all in one unit
+     * cannot be compared and reads as no strength at all.
+     */
     static Optional<Value> inText(String text) {
         if (text == null || text.isBlank()) {
             return Optional.empty();
@@ -126,22 +151,41 @@ public final class ProductStrength {
         if (!m.find()) {
             return Optional.empty();
         }
-        BigDecimal amount = new BigDecimal(m.group(1).replace(',', '.'));
-        String unit = m.group(2).toLowerCase(Locale.ROOT);
-        BigDecimal milligrams = MILLIGRAMS.get(unit);
-        if (milligrams != null) {
-            amount = amount.multiply(milligrams);
-            unit = "mg";
-        } else if ("iu".equals(unit)) {
-            unit = "ui";
+        String unit = baseUnit(m.group(2));
+        java.util.List<BigDecimal> amounts = new java.util.ArrayList<>();
+        for (String written : m.group(1).split("/")) {
+            amounts.add(inBaseUnit(new BigDecimal(written.trim().replace(',', '.')), m.group(2)));
+        }
+        int end = m.end();
+        Matcher further = FURTHER.matcher(normalized);
+        while (amounts.size() < MAX_COMPONENTS && further.find(end)) {
+            if (!unit.equals(baseUnit(further.group(2)))) {
+                return Optional.empty();
+            }
+            amounts.add(inBaseUnit(new BigDecimal(further.group(1).replace(',', '.')), further.group(2)));
+            end = further.end();
         }
         BigDecimal per = null;
         String perUnit = null;
         Matcher concentration = PER.matcher(normalized);
-        if (concentration.find(m.end())) {
+        if (concentration.find(end)) {
             per = concentration.group(1) == null ? null : new BigDecimal(concentration.group(1).replace(',', '.'));
             perUnit = concentration.group(2).toLowerCase(Locale.ROOT);
         }
-        return Optional.of(new Value(amount, unit, per, perUnit));
+        return Optional.of(new Value(java.util.List.copyOf(amounts), unit, per, perUnit));
+    }
+
+    /** The unit an amount is compared in: milligrams for every mass unit, « ui » for « iu ». */
+    private static String baseUnit(String written) {
+        String unit = written.toLowerCase(Locale.ROOT);
+        if (MILLIGRAMS.containsKey(unit)) {
+            return "mg";
+        }
+        return "iu".equals(unit) ? "ui" : unit;
+    }
+
+    private static BigDecimal inBaseUnit(BigDecimal amount, String writtenUnit) {
+        BigDecimal milligrams = MILLIGRAMS.get(writtenUnit.toLowerCase(Locale.ROOT));
+        return milligrams == null ? amount : amount.multiply(milligrams);
     }
 }

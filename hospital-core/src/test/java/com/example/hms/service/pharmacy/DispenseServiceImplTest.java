@@ -3858,6 +3858,8 @@ class DispenseServiceImplTest {
             MedicationCatalogItem drug = new MedicationCatalogItem();
             drug.setId(UUID.randomUUID());
             drug.setGenericName(genericName);
+            // Review of #1336: the orders here state 500 mg, which an item of unknown strength does not meet.
+            drug.setNameFr(genericName + " 500 mg");
             InventoryItem item = InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(drug)
                     .quantityOnHand(BigDecimal.valueOf(100)).build();
             item.setId(UUID.randomUUID());

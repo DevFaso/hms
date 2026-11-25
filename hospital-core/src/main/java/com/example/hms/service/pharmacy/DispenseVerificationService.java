@@ -351,11 +351,17 @@ public class DispenseVerificationService {
         if (!molecule) {
             return DispensedProductMatch.OTHER_DRUG;
         }
-        // QA D3940: "Amoxicilline 500 mg" is not filled from a 250 mg lot.
+        // QA D3940: "Amoxicilline 500 mg" is not filled from a 250 mg lot. Review of #1336: an order that states
+        // a strength is filled only at that strength; a lot whose strength cannot be read (nobody recorded it, a
+        // combination not fully written) is not shown to be it. Only an order that states none compares the
+        // molecule alone, as before.
         String text = ProductStrength.inText(rx.getMedicationName()).isPresent()
             ? rx.getMedicationName() : rx.getMedicationDisplayName();
-        return ProductStrength.compare(text, item) == ProductStrength.Relation.DIFFERENT
-            ? DispensedProductMatch.OTHER_STRENGTH : DispensedProductMatch.PRESCRIBED;
+        if (ProductStrength.inText(text).isEmpty()) {
+            return DispensedProductMatch.PRESCRIBED;
+        }
+        return ProductStrength.compare(text, item) == ProductStrength.Relation.SAME
+            ? DispensedProductMatch.PRESCRIBED : DispensedProductMatch.OTHER_STRENGTH;
     }
 
     /**

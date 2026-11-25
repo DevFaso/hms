@@ -118,6 +118,34 @@ class DispensedProductRuleTest {
         }
 
         @Test
+        @DisplayName("review of #1336: a combination is compared on EVERY amount: 500/30 mg is not 500/15 mg")
+        void aCombinationComparesEveryAmount() {
+            MedicationCatalogItem fifteen = item("Paracétamol codéine 500/15 mg", "Paracétamol + codéine", "N02AJ06",
+                "TABLET", "500/15", "mg");
+            MedicationCatalogItem thirty = item("Paracétamol codéine 500/30 mg", "Paracétamol + codéine", "N02AJ06",
+                "TABLET", "500/30", "mg");
+            MedicationCatalogItem fifteenTwin = item("Codoliprane 500 mg/15 mg", "Paracétamol + codéine", "N02AJ06",
+                "TABLET", null, null);
+            DispensedProductMatch match = DispenseVerificationService.classify(linkedTo(fifteen), fifteen, thirty);
+            assertThat(match).isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            assertThat(match.mayBeDispensed(true)).isFalse();
+            // The same two amounts, written with a unit each in the name: the same product.
+            assertThat(DispenseVerificationService.classify(linkedTo(fifteen), fifteen, fifteenTwin))
+                .isEqualTo(DispensedProductMatch.EQUIVALENT);
+        }
+
+        @Test
+        @DisplayName("review of #1336: a combination recorded with its first amount only is not shown to be the same")
+        void aCombinationReadAsItsFirstAmountIsNotTheSame() {
+            MedicationCatalogItem full = item("Amoxicilline acide clavulanique", "Amoxicilline + acide clavulanique",
+                "J01CR02", "TABLET", "500/62.5", "mg");
+            MedicationCatalogItem firstOnly = item("Amoxicilline acide clavulanique 500", "Amoxicilline + acide clavulanique",
+                "J01CR02", "TABLET", "500", "mg");
+            assertThat(DispenseVerificationService.classify(linkedTo(full), full, firstOnly))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+        }
+
+        @Test
         @DisplayName("without ATC codes the generic names are read as their ingredients, in any spelling")
         void genericNamesWithoutAtc() {
             MedicationCatalogItem fr = item("Paracétamol 500 mg", "Paracétamol", null, "TABLET", "500", "mg");
@@ -142,6 +170,33 @@ class DispensedProductRuleTest {
             assertThat(DispenseVerificationService.classify(rx, null, AMOX_250))
                 .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
             assertThat(DispenseVerificationService.classify(rx, null, AMOX_500))
+                .isEqualTo(DispensedProductMatch.PRESCRIBED);
+        }
+
+        @Test
+        @DisplayName("review of #1336: an order that states a strength is not filled from a lot whose strength is unknown")
+        void aStatedStrengthIsNotMetByAnUnknownOne() {
+            MedicationCatalogItem unknown = item("Amoxicilline", "Amoxicilline", "J01CA04", "CAPSULE", null, null);
+            DispensedProductMatch match = DispenseVerificationService.classify(
+                freeText("Amoxicilline 500 mg"), null, unknown);
+            assertThat(match).isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            assertThat(match.mayBeDispensed(true)).isFalse();
+            // An order that states none still compares the molecule alone.
+            assertThat(DispenseVerificationService.classify(freeText("Amoxicilline"), null, unknown))
+                .isEqualTo(DispensedProductMatch.PRESCRIBED);
+        }
+
+        @Test
+        @DisplayName("review of #1336: a free-text combination is filled only at all its amounts")
+        void aFreeTextCombinationComparesEveryAmount() {
+            Prescription rx = freeText("Paracétamol codéine 500 mg/30 mg");
+            MedicationCatalogItem fifteen = item("Paracétamol codéine 500/15 mg", "Paracétamol codéine", null,
+                "TABLET", "500/15", "mg");
+            MedicationCatalogItem thirty = item("Paracétamol codéine 500/30 mg", "Paracétamol codéine", null,
+                "TABLET", "500/30", "mg");
+            assertThat(DispenseVerificationService.classify(rx, null, fifteen))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            assertThat(DispenseVerificationService.classify(rx, null, thirty))
                 .isEqualTo(DispensedProductMatch.PRESCRIBED);
         }
 
@@ -174,6 +229,21 @@ class DispensedProductRuleTest {
             assertThat(ProductStrength.labelOf(AMOX_500_TWIN, java.util.Locale.ENGLISH)).contains("500 mg");
             MedicationCatalogItem named = item("Morphine 10 mg/mL injectable", "Morphine", null, null, null, null);
             assertThat(ProductStrength.labelOf(named, java.util.Locale.ENGLISH)).contains("10 mg/ml");
+        }
+
+        @Test
+        @DisplayName("review of #1336: every amount of a combination is read, written before one unit or each with its own")
+        void everyAmountOfACombinationIsRead() {
+            assertThat(ProductStrength.inText("Augmentin 500/62,5 mg").map(v -> v.label(java.util.Locale.ENGLISH)))
+                .contains("500/62.5 mg");
+            assertThat(ProductStrength.inText("Amoxicilline 500 mg + acide clavulanique 125 mg")
+                .map(v -> v.label(java.util.Locale.ENGLISH))).contains("500 mg");
+            assertThat(ProductStrength.inText("Codoliprane 500 mg/30 mg").map(v -> v.label(java.util.Locale.ENGLISH)))
+                .contains("500/30 mg");
+            assertThat(ProductStrength.inText("Amoxicilline 1 g/125 mg").map(ProductStrength.Value::amounts))
+                .contains(java.util.List.of(new java.math.BigDecimal("1000"), new java.math.BigDecimal("125")));
+            // Amounts in different units cannot be compared: no strength at all.
+            assertThat(ProductStrength.inText("Vitamines 500 mg/400 UI")).isEmpty();
         }
 
         @Test
