@@ -348,64 +348,40 @@ class OrganisationAdminScopeTest {
         assertThat(scope.hospitalIds()).containsExactlyInAnyOrder(hospitalA.getId(), hospitalB.getId());
     }
 
-    @Test
-    @DisplayName("review of #1246: who reaches a hospital through its organisation alone")
-    void reachingThroughTheOrganisationAlone() {
-        organisationAdminOfOne();
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isTrue();
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalB.getId())).isTrue();
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalC.getId())).isFalse();
-        assertThat(access.reachesOnlyThroughOrganisation(null)).isFalse();
-
-        // Also the hospital's own administrator: at A it names whom it likes, at B it is the organisation's.
-        signIn("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN");
-        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true), assignment("ROLE_ADMIN", hospitalA, true));
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isFalse();
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalB.getId())).isTrue();
-
-        // A hospital admin alone reaches nothing through an organisation.
-        signIn("ROLE_HOSPITAL_ADMIN");
-        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
-        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isFalse();
-    }
-
-    private User accountHolding(UserRoleHospitalAssignment... rows) {
-        User account = new User();
-        account.setId(UUID.randomUUID());
-        when(assignmentRepository.findByUserId(account.getId())).thenReturn(List.of(rows));
-        return account;
+    private static List<UserRoleHospitalAssignment> rows(UserRoleHospitalAssignment... rows) {
+        return List.of(rows);
     }
 
     @Test
-    @DisplayName("review of #1246: an organisation's staff is whoever holds a non-patient assignment at one of its hospitals")
+    @DisplayName("QA D4020: an organisation admin names, as a holder, whoever holds a non-patient assignment in its organisation")
     void staffOfTheCallersOrganisation() {
         organisationAdminOfOne();
+        UserAccountAccess.HolderReach reach = access.holderReach();
 
         // A nurse at the sister hospital; a doctor whose invitation still waits for its code.
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_NURSE", hospitalB, true))))
-            .isTrue();
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_DOCTOR", hospitalA, false))))
-            .isTrue();
+        assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalB, true)))).isTrue();
+        assertThat(reach.mayName(rows(assignment("ROLE_DOCTOR", hospitalA, false)))).isTrue();
         // A patient of its own hospital; another organisation's clinician; someone with no assignment.
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_PATIENT", hospitalA, true))))
-            .isFalse();
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_DOCTOR", hospitalC, true))))
-            .isFalse();
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding())).isFalse();
-        assertThat(access.isStaffOfCallersOrganisation(null)).isFalse();
+        assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
+        assertThat(reach.mayName(rows(assignment("ROLE_DOCTOR", hospitalC, true)))).isFalse();
+        assertThat(reach.mayName(rows())).isFalse();
         // A clinician of another organisation who is ALSO a patient at A is still not its staff.
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(
+        assertThat(reach.mayName(rows(
             assignment("ROLE_DOCTOR", hospitalC, true), assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
     }
 
     @Test
-    @DisplayName("review of #1246: nobody but an organisation admin has 'its organisation's staff'")
-    void onlyAnOrganisationAdminHasOrganisationStaff() {
+    @DisplayName("QA D4020: a hospital admin names the staff of the hospitals it administers, never another hospital's")
+    void aHospitalAdminNamesItsOwnStaffOnly() {
         signIn("ROLE_HOSPITAL_ADMIN");
         callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+        UserAccountAccess.HolderReach reach = access.holderReach();
 
-        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_NURSE", hospitalA, true))))
-            .isFalse();
+        assertThat(reach.everywhere()).isFalse();
+        assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalA, true)))).isTrue();
+        // The sister hospital is the organisation admin's, not this hospital admin's.
+        assertThat(reach.mayName(rows(assignment("ROLE_NURSE", hospitalB, true)))).isFalse();
+        assertThat(reach.mayName(rows(assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
     }
 
     @Test

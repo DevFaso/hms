@@ -121,6 +121,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ROLE_NOT_FOUND_BY_NAME = "role.notfound.byname";
     private static final String MSG_ROLE_REQUIRED = "role.required";
     private static final String MSG_USER_NOT_FOUND = "user.notfound";
+    /** QA D4020: unknown, out of reach or patient-only holder: one answer. */
+    private static final String MSG_HOLDER_UNAVAILABLE = "assignment.holder.unavailable";
+    private static final String MSG_PATIENT_ROW_STAYS_PATIENT = "assignment.patientRow.staysPatient";
     private static final String MSG_HOSPITAL_NOT_FOUND = "hospital.notfound";
     private static final String MSG_ORGANIZATION_NOT_FOUND = "organization.notfound";
     private static final String DEFAULT_ROLE_ALREADY_ASSIGNED = "Role already assigned to this user for this hospital.";
@@ -325,7 +328,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         User user = resolveUser(dto);
         if (adminRequest) {
-            requireHolderWithinOrganisation(user, hospital, dto);
+            requireHolderInCallersReach(user);
             requireNotSelfGrant(user);
         }
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
@@ -369,7 +372,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
-            return userRepository.findById(dto.getUserId()).orElseThrow(() -> holderNotFound(dto));
+            return userRepository.findById(dto.getUserId()).orElseThrow(UserRoleHospitalAssignmentServiceImpl::holderNotFound);
         }
 
         String identifier = dto.getUserIdentifier();
@@ -378,39 +381,41 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return userRepository.findByUsername(trimmed)
                 .or(() -> userRepository.findByEmail(trimmed))
                 .or(() -> userRepository.findByPhoneNumber(trimmed))
-                .orElseThrow(() -> holderNotFound(dto));
+                .orElseThrow(UserRoleHospitalAssignmentServiceImpl::holderNotFound);
         }
 
         throw new BusinessException(MSG_USER_NOT_FOUND, (Object) null);
     }
 
-    /** The one answer for a holder that does not exist and for one the caller may not name. */
-    private static ResourceNotFoundException holderNotFound(UserRoleHospitalAssignmentRequestDTO dto) {
-        if (dto.getUserId() != null) {
-            return new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId());
-        }
-        String identifier = dto.getUserIdentifier();
-        return new ResourceNotFoundException(MSG_USER_NOT_FOUND, identifier == null ? null : identifier.trim());
+    /**
+     * QA D4020: the one answer for a holder that does not exist, for one the
+     * caller may not name, and for a patient's account: the same 404, the same
+     * localized sentence, and nothing typed echoed back, so the answer
+     * confirms nothing about any account.
+     */
+    private static ResourceNotFoundException holderNotFound() {
+        return new ResourceNotFoundException(MSG_HOLDER_UNAVAILABLE);
     }
 
     /**
-     * Review of #1246 (rule 1a): a caller who reaches this hospital through its
-     * organisation scope alone names an existing account only among the
-     * organisation's STAFF: an account that already holds a non-patient
-     * assignment (active or pending) at one of its hospitals. A patient's
-     * account, or another organisation's staff, found by a username, an e-mail
-     * or a phone number, answers exactly as a missing one: no assignment is
-     * created and the lookup confirms nothing. (A brand-new person is
-     * registered through admin-register, which creates the account.)
+     * QA D4020: an {@code /assignments} write (single, multi-scope, bulk)
+     * names an EXISTING account only when the caller could already see it as
+     * staff ({@link UserAccountAccess#holderReach}): an account that holds a
+     * staff assignment at a hospital where the caller registers staff. Never
+     * an account known only to another hospital, never a patient-only
+     * account, and never a deleted one (but for the super-admin). Decided
+     * from the caller's own assignments, whatever {@code X-Hospital-Id} says,
+     * and before anything is saved or sent: a refused holder gets no
+     * invitation. A brand-new person is registered through admin-register,
+     * which creates the account.
      */
-    private void requireHolderWithinOrganisation(User holder, Hospital hospital,
-                                                 UserRoleHospitalAssignmentRequestDTO dto) {
-        if (hospital == null || !accountAccess.reachesOnlyThroughOrganisation(hospital.getId())) {
-            return;
-        }
-        // One rule, shared with the licence lookup of admin-register (UserServiceImpl).
-        if (!accountAccess.isStaffOfCallersOrganisation(holder)) {
-            throw holderNotFound(dto);
+    private void requireHolderInCallersReach(User holder) {
+        List<UserRoleHospitalAssignment> holderRows = assignmentRepository.findByUserId(holder.getId());
+        boolean refused = !accountAccess.holderReach().mayName(holderRows)
+            || accountAccess.isPatientOnly(holder, holderRows)
+            || (holder.isDeleted() && !accountAccess.callerSeesDeletedAccounts());
+        if (refused) {
+            throw holderNotFound();
         }
     }
 
@@ -479,8 +484,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         // The row as it stands must be one the caller may change, and the row
         // after the change one the caller could have granted (the create rule,
-        // on the new role at the new hospital).
-        UserRoleHospitalAssignment target = findChangeable(id);
+        // on the new role at the new hospital). QA D4020: an update can
+        // restart the invitation, so the holder must be one the caller knows.
+        UserRoleHospitalAssignment target = findReinvitable(id);
         boolean verifiedSuperAdmin = roleValidator.isSuperAdminFromJwtClaim();
         // Before any user lookup: a 404 for an unknown id against a 400 for a
         // known one would tell the caller which user ids exist platform-wide.
@@ -495,6 +501,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (!isRoleCode(getRoleCode(target.getRole()), ROLE_PATIENT)) {
             requireNotPatientGrant(newRoleCode);
         }
+        requireNoStaffRoleForPatient(target, newUser, newRoleCode);
         facilityAssignmentGuard.requireCompatible(newRoleCode, newHospital);
         requireActivationThroughCode(dto, target);
         // Decided before the mapper overwrites the row's current role and hospital.
@@ -544,6 +551,25 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getId());
         return toDtoWithLinks(saved);
+    }
+
+    /**
+     * QA D4020: an edit gives no staff role to a patient either. A PATIENT row
+     * stays a PATIENT row (a staff member is registered from the staff form),
+     * and a row moved to another holder (the super-admin's edit) never lands a
+     * staff role on a patient-only account. Same answers as the create path.
+     */
+    private void requireNoStaffRoleForPatient(UserRoleHospitalAssignment target, User newUser, String newRoleCode) {
+        if (isRoleCode(newRoleCode, ROLE_PATIENT)) {
+            return;
+        }
+        if (isRoleCode(getRoleCode(target.getRole()), ROLE_PATIENT)) {
+            throw new BusinessException(MSG_PATIENT_ROW_STAYS_PATIENT);
+        }
+        boolean newHolder = target.getUser() == null || !Objects.equals(target.getUser().getId(), newUser.getId());
+        if (newHolder && accountAccess.isPatientOnly(newUser, assignmentRepository.findByUserId(newUser.getId()))) {
+            throw holderNotFound();
+        }
     }
 
     /**
@@ -697,7 +723,70 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(id)
             .filter(found -> accountAccess.assignmentScope().covers(found))
             .orElseThrow(() -> assignmentNotFound(id));
-        return toDtoWithLinks(assignment);
+        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
+        return showHolderOnlyIfKnown(toDtoWithLinks(assignment), assignment, reach, holderRowsOf(reach, assignment));
+    }
+
+    /**
+     * QA D4020: {@link #findChangeable}, for a change that invites the holder
+     * again or activates the row (update, regenerate the code, resend, reveal
+     * the code, the registrar's confirm). A pending staff row whose holder the
+     * caller could not have named ({@link UserAccountAccess.HolderReach#knowsHolderOf})
+     * answers exactly as a missing id: nothing more is sent to that account
+     * from here. Switching such a row off or deleting it stays open.
+     */
+    private UserRoleHospitalAssignment findReinvitable(UUID id) {
+        UserRoleHospitalAssignment row = findChangeable(id);
+        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
+        if (!reach.knowsHolderOf(row, holderRowsOf(reach, row))) {
+            throw assignmentNotFound(id);
+        }
+        return row;
+    }
+
+    /** Every row of this row's holder; none read for a super-admin, whom the answer never depends on. */
+    private List<UserRoleHospitalAssignment> holderRowsOf(UserAccountAccess.HolderReach reach,
+                                                          UserRoleHospitalAssignment row) {
+        User holder = row.getUser();
+        if (reach.everywhere() || holder == null || holder.getId() == null) {
+            return List.of();
+        }
+        return assignmentRepository.findByUserId(holder.getId());
+    }
+
+    /**
+     * QA D4020: no name or e-mail of a holder the caller could not have named
+     * is shown before that person accepts the row.
+     */
+    private static UserRoleHospitalAssignmentResponseDTO showHolderOnlyIfKnown(
+            UserRoleHospitalAssignmentResponseDTO dto, UserRoleHospitalAssignment row,
+            UserAccountAccess.HolderReach reach, List<UserRoleHospitalAssignment> holderRows) {
+        if (dto != null && !reach.knowsHolderOf(row, holderRows)) {
+            dto.setUserName(null);
+            dto.setUserEmail(null);
+        }
+        return dto;
+    }
+
+    /** {@link #showHolderOnlyIfKnown} for a page of rows, every holder's rows read at once. */
+    private Page<UserRoleHospitalAssignmentResponseDTO> toListingPage(Page<UserRoleHospitalAssignment> rows) {
+        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
+        if (reach.everywhere()) {
+            return rows.map(this::toDtoWithLinks);
+        }
+        Set<UUID> holderIds = rows.getContent().stream()
+            .map(UserRoleHospitalAssignment::getUser)
+            .filter(Objects::nonNull)
+            .map(User::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<UUID, List<UserRoleHospitalAssignment>> rowsByHolder = holderIds.isEmpty()
+            ? Map.of()
+            : assignmentRepository.findByUserIdIn(holderIds).stream()
+                .filter(row -> row.getUser() != null && row.getUser().getId() != null)
+                .collect(Collectors.groupingBy(row -> row.getUser().getId()));
+        return rows.map(row -> showHolderOnlyIfKnown(toDtoWithLinks(row), row, reach,
+            row.getUser() == null ? List.of() : rowsByHolder.getOrDefault(row.getUser().getId(), List.of())));
     }
 
     /**
@@ -829,14 +918,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (specification == null) {
             log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
                 pageable.getPageSize());
-            return assignmentRepository.findAll(pageable).map(this::toDtoWithLinks);
+            return toListingPage(assignmentRepository.findAll(pageable));
         }
 
         // The typed term and the code are not logged: the term often names a person.
         log.info("📄 Fetching assignments with filters hospitalId={}, active={}, term={}, assignmentCode={} (page {}, size {})",
             hospitalId, active, StringUtils.hasText(search) ? "given" : "none",
             StringUtils.hasText(assignmentCode) ? "given" : "none", pageable.getPageNumber(), pageable.getPageSize());
-        return assignmentRepository.findAll(specification, pageable).map(this::toDtoWithLinks);
+        return toListingPage(assignmentRepository.findAll(specification, pageable));
     }
 
     /**
@@ -1006,7 +1095,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        UserRoleHospitalAssignment target = findChangeable(assignmentId);
+        UserRoleHospitalAssignment target = findReinvitable(assignmentId);
         // Rule 1c: a fresh code is how a switched-off row comes back on, so
         // nobody sends one to their own account.
         requireNotSelfGrant(target.getUser());
@@ -1048,7 +1137,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // Confirming activates the row, so it takes the scope every other
         // change by id takes: a row the caller may not change answers exactly
         // as a missing id, before anything else about the row is checked.
-        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        UserRoleHospitalAssignment assignment = findReinvitable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
             throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
@@ -1143,7 +1232,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(UUID assignmentId) {
         // A row the caller may not change answers exactly as a missing id.
-        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        UserRoleHospitalAssignment assignment = findReinvitable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
             throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
@@ -3344,7 +3433,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void resendNotifications(UUID assignmentId) {
-        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        UserRoleHospitalAssignment assignment = findReinvitable(assignmentId);
         // QA D789 re-test: POST /assignments/{id}/resend-notification for a row
         // at an archived hospital queued an EMAIL and an SMS activation (200).
         // It is the same re-invitation as regenerate-code: the same 409.

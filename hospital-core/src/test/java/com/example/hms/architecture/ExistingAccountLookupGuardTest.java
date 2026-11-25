@@ -26,10 +26,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * number on {@code POST /users/admin-register}, which also echoed their
  * contact details, forced their password and restored a deleted account.
  *
- * <p>Both lookups are now held to one rule
- * ({@code UserAccountAccess.isStaffOfCallersOrganisation}). This keeps it so:
- * the platform-wide licence lookup has ONE caller, and each of the two
- * lookups is followed, in its own method, by the check that holds it.
+ * <p>QA D4020: a hospital admin did the same on {@code POST /assignments} with
+ * any account of another hospital. Both lookups are now held to one rule for
+ * every caller but the super-admin ({@code UserAccountAccess.holderReach}: an
+ * account that already holds a staff assignment where the caller registers
+ * staff). This keeps it so: the platform-wide licence lookup has ONE caller,
+ * each of the two lookups is followed, in its own method, by the check that
+ * holds it, and every {@code /assignments} write that creates a row goes
+ * through the one method that applies it.
  */
 class ExistingAccountLookupGuardTest {
 
@@ -81,8 +85,8 @@ class ExistingAccountLookupGuardTest {
         // What the rule is made of: the organisation's own staff, and no restore of a deleted account.
         String rule = service.substring(service.indexOf("private void requireMayAttachByLicence("));
         rule = rule.substring(0, rule.indexOf("\n    }\n"));
-        assertThat(rule).contains("accountAccess.reachesOnlyThroughOrganisation(")
-            .contains("accountAccess.isStaffOfCallersOrganisation(")
+        assertThat(rule).contains("accountAccess.holderReach()")
+            .contains(".mayName(assignmentRepository.findByUserId(held.getId()))")
             .contains("held.isDeleted()");
         // The answer about an account the caller does not administer is the confirmation only.
         assertThat(service).contains("attachedByLicence && !administersAttached")
@@ -95,12 +99,62 @@ class ExistingAccountLookupGuardTest {
         String service = read("service/UserRoleHospitalAssignmentServiceImpl.java");
         int found = service.indexOf("User user = resolveUser(dto);");
         assertThat(found).as("createAssignment resolves the holder").isPositive();
-        String next = service.substring(found, found + 260);
+        String next = service.substring(found, found + 200);
         assertThat(next).as("...and holds it before anything is done with it")
-            .contains("requireHolderWithinOrganisation(user, hospital, dto);");
-        String rule = service.substring(service.indexOf("private void requireHolderWithinOrganisation("));
+            .contains("if (adminRequest) {\n            requireHolderInCallersReach(user);");
+        String rule = service.substring(service.indexOf("private void requireHolderInCallersReach("));
         rule = rule.substring(0, rule.indexOf("\n    }\n"));
-        assertThat(rule).contains("accountAccess.reachesOnlyThroughOrganisation(")
-            .contains("accountAccess.isStaffOfCallersOrganisation(holder)");
+        assertThat(rule).contains("accountAccess.holderReach().mayName(holderRows)")
+            .contains("accountAccess.isPatientOnly(holder, holderRows)")
+            .contains("throw holderNotFound();");
+        // Unknown, out of reach and patient-only: one answer, nothing typed echoed back.
+        String answer = service.substring(service.indexOf("private static ResourceNotFoundException holderNotFound()"));
+        answer = answer.substring(0, answer.indexOf("\n    }\n"));
+        assertThat(answer).contains("new ResourceNotFoundException(MSG_HOLDER_UNAVAILABLE)");
+    }
+
+    /** The body of the first method whose declaration starts with {@code declaration}. */
+    private static String body(String source, String declaration) {
+        int start = source.indexOf(declaration);
+        assertThat(start).as(declaration + " is declared").isNotNegative();
+        String rest = source.substring(start);
+        return rest.substring(0, rest.indexOf("\n    }\n"));
+    }
+
+    @Test
+    @DisplayName("QA D4020: every /assignments write that creates a row, or invites its holder again, is held to the holder")
+    void everyAssignmentWriteGoesThroughTheHolderCheck() throws IOException {
+        String service = read("service/UserRoleHospitalAssignmentServiceImpl.java");
+        // The one place a NEW row is built from a request: the mapper's toEntity, in createAssignment.
+        assertThat(Pattern.compile("mapper\\.toEntity\\(").matcher(service).results().count())
+            .as("a second place that builds an assignment row would skip the holder check")
+            .isEqualTo(1);
+        String create = body(service, "private UserRoleHospitalAssignment createAssignment(");
+        int held = create.indexOf("requireHolderInCallersReach(user);");
+        assertThat(held).as("createAssignment holds the holder").isPositive()
+            .isLessThan(create.indexOf("mapper.toEntity("))
+            .isLessThan(create.indexOf("eventPublisher.publishEvent("));
+        // Single, multi-scope and bulk all create through createAssignment as an admin request.
+        for (String entry : List.of("public UserRoleHospitalAssignmentResponseDTO assignRole(",
+                "public UserRoleAssignmentBatchResponseDTO assignRoleToMultipleScopes(",
+                "private BulkImportOutcome handleBulkImportRow(")) {
+            assertThat(body(service, entry)).as(entry + " creates through createAssignment as an admin request")
+                .containsPattern("createAssignment\\([^;]*,\\s*true\\)");
+        }
+        // Outside the service no row is built by hand, but in the dev seeder.
+        assertThat(callers("UserRoleHospitalAssignment.builder", "mapper/UserRoleHospitalAssignmentMapper.java"))
+            .as("a new place that builds assignment rows must go through the holder check")
+            .containsOnlyKeys("bootstrap/DevSyntheticDataSeeder.java");
+        assertThat(callers("new UserRoleHospitalAssignment", "model/UserRoleHospitalAssignment.java"))
+            .as("nor with its constructor").isEmpty();
+        // A re-invitation (update, new code, resend, reveal, confirm) is held to the holder too.
+        for (String entry : List.of("public UserRoleHospitalAssignmentResponseDTO updateAssignment(",
+                "public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(",
+                "public void resendNotifications(",
+                "public com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(",
+                "public UserRoleHospitalAssignmentResponseDTO confirmAssignment(")) {
+            assertThat(body(service, entry)).as(entry + " finds its row through findReinvitable")
+                .contains("findReinvitable(").doesNotContain("findChangeable(");
+        }
     }
 }

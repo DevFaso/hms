@@ -134,6 +134,18 @@ class UserServiceImplTest {
         UserAccountAccess.Grant anywhere = mock(UserAccountAccess.Grant.class);
         lenient().when(anywhere.requireAt(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(accountAccess.requireMayGrant(any())).thenReturn(anywhere);
+        // ...and names any existing account (QA D4020: the licence attach is held to it).
+        UserAccountAccess.HolderReach everyone = mock(UserAccountAccess.HolderReach.class);
+        lenient().when(everyone.everywhere()).thenReturn(true);
+        lenient().when(everyone.mayName(any())).thenReturn(true);
+        lenient().when(accountAccess.holderReach()).thenReturn(everyone);
+    }
+
+    /** QA D4020: what the caller's holder reach says of every existing account. */
+    private void callerMayNameExistingAccounts(boolean mayName) {
+        UserAccountAccess.HolderReach reach = mock(UserAccountAccess.HolderReach.class);
+        lenient().when(reach.mayName(any())).thenReturn(mayName);
+        when(accountAccess.holderReach()).thenReturn(reach);
     }
 
     @Test
@@ -3106,11 +3118,10 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("an organisation admin typing another organisation's clinician's licence is told the number is taken, and nothing else")
-        void organisationAdminCannotAttachAnotherOrganisationsClinician() {
+        @DisplayName("QA D4020: an admin typing the licence of a clinician it cannot name (another hospital's, another organisation's) is told the number is taken, and nothing else")
+        void anAdminCannotAttachAClinicianOutOfItsReach() {
             User held = heldByLicence(false);
-            when(accountAccess.reachesOnlyThroughOrganisation(licenceHospitalId)).thenReturn(true);
-            when(accountAccess.isStaffOfCallersOrganisation(held)).thenReturn(false);
+            callerMayNameExistingAccounts(false);
             AdminSignupRequest req = registrationWithTheLicence();
 
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
@@ -3124,6 +3135,7 @@ class UserServiceImplTest {
             verify(userRepository, never()).save(held);
             verify(staffRepository, never()).save(any());
             verify(assignmentService, never()).assignRole(any());
+            verify(assignmentService, never()).assignRoleOnAccountCreation(any());
         }
 
         @Test
@@ -3145,8 +3157,7 @@ class UserServiceImplTest {
         @DisplayName("an organisation admin attaching its own organisation's clinician: no forced password change, and no contact detail in the answer")
         void organisationAdminAttachesItsOwnStaffAndIsToldTheNameOnly() {
             User held = heldByLicence(false);
-            when(accountAccess.reachesOnlyThroughOrganisation(licenceHospitalId)).thenReturn(true);
-            when(accountAccess.isStaffOfCallersOrganisation(held)).thenReturn(true);
+            callerMayNameExistingAccounts(true);
             when(accountAccess.canAdminister(held)).thenReturn(false);
 
             UserResponseDTO answer = userService.createUserWithRolesAndHospital(registrationWithTheLicence());
