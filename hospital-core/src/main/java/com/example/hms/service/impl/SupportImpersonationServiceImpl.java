@@ -95,7 +95,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             // and an impersonation token does not carry that role, so this
             // path should be unreachable. Block explicitly anyway so a
             // future role-claim regression cannot enable nested sessions.
-            throw new BusinessException("Cannot start impersonation while already impersonating");
+            throw new BusinessException("support.session.nested");
         }
 
         User actor = resolveCurrentSuperAdmin();
@@ -111,7 +111,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
         // session registered in the cross-process tracker (a second tab or a
         // duplicate browser would otherwise win this race).
         if (sessionTracker.hasActive(actor.getId())) {
-            throw new BusinessException("An impersonation session is already active for this account");
+            throw new BusinessException("support.session.active");
         }
 
         List<TenantRoleAssignment> targetAssignments =
@@ -123,7 +123,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             .anyMatch(code -> code.equalsIgnoreCase("SUPER_ADMIN")
                 || code.equalsIgnoreCase(ROLE_SUPER_ADMIN));
         if (targetIsSuperAdmin) {
-            throw new BusinessException("Cannot impersonate another super admin");
+            throw new BusinessException("support.target.superAdmin");
         }
 
         List<String> targetRoles = targetAssignments.stream()
@@ -133,8 +133,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             .distinct()
             .toList();
         if (targetRoles.isEmpty()) {
-            throw new BusinessException(
-                "Target user has no active role assignments and cannot be impersonated");
+            throw new BusinessException("support.target.noActiveRole");
         }
 
         // Last, once the request is known to be runnable: the step-up may
@@ -187,7 +186,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
     public ImpersonationActiveResponseDTO stop(String bearerJwt) {
         ImpersonationContext ctx = ImpersonationContextHolder.get().orElse(null);
         if (ctx == null) {
-            throw new BusinessException("No impersonation session is active for this token");
+            throw new BusinessException("support.session.missing");
         }
         // Resolve impersonator + target without trusting the JWT claims for
         // anything that ends up in the audit row beyond the username.

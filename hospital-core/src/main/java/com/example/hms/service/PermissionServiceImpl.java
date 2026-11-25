@@ -41,7 +41,7 @@ public class PermissionServiceImpl implements PermissionService {
             .existsByNameIgnoreCaseAndAssignment_Id(request.getName(), request.getAssignmentId());
 
         if (exists) {
-            throw new BusinessException("A permission with this name already exists for the specified assignment.");
+            throw new com.example.hms.exception.FieldBusinessException("name", "permission.name.taken");
         }
 
         Permission permission = permissionMapper.toEntity(request);
@@ -85,7 +85,7 @@ public class PermissionServiceImpl implements PermissionService {
                     p.getAssignment().getId().equals(request.getAssignmentId()));
 
         if (nameConflict) {
-            throw new BusinessException("Another permission with this name already exists for the specified assignment.");
+            throw new com.example.hms.exception.FieldBusinessException("name", "permission.name.taken");
         }
 
         permission.setName(request.getName());

@@ -135,7 +135,7 @@ public class InBasketServiceImpl implements InBasketService {
         InBasketItem item = findItemOwnedBy(itemId, userId);
 
         if (item.getStatus() == InBasketItemStatus.ACKNOWLEDGED) {
-            throw new BusinessException("In-Basket item is already acknowledged");
+            throw new BusinessException("inbasket.acknowledgement.finished");
         }
         requireClinicalAcknowledger(item);
         requireReadBackOfCriticalResult(item);
@@ -296,7 +296,7 @@ public class InBasketServiceImpl implements InBasketService {
         InBasketItem item = inBasketItemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("error.inBasketItem.notFound", itemId));
         if (!item.getRecipientUser().getId().equals(userId)) {
-            throw new BusinessException("In-Basket item does not belong to the current user");
+            throw new BusinessException("inbasket.item.otherOwner");
         }
         return item;
     }

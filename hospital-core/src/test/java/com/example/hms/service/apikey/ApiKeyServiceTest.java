@@ -240,7 +240,7 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.rotate(keyId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already revoked");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("apikey.revocation.finished"));
     }
 
     @Test
@@ -255,7 +255,7 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.revoke(keyId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reload and retry");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("apikey.change.concurrent"));
     }
 
     // ── misc ────────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.issue(dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital context");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("request.hospitalContext.required"));
     }
 
     @Test

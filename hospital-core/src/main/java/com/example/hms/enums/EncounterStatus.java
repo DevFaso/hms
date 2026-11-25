@@ -52,8 +52,7 @@ public enum EncounterStatus {
     /** {@link #localizedLabel()} in an explicit locale (the request's when null). */
     public String localizedLabel(java.util.Locale locale) {
         String key = "encounter.statusLabel." + name();
-        String label = com.example.hms.utility.MessageUtil.resolve(locale, key);
-        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+        return com.example.hms.utility.MessageUtil.resolveLabel(locale, key, name());
     }
 
     /** The label of {@code status}, or a dash for a visit that carries none. */
