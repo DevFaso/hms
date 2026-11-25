@@ -193,6 +193,24 @@ class PatientBloodGroupStatusServiceTest {
     }
 
     @Test
+    @DisplayName("no patient, no answer; no antibody service, the group alone; no hospital, no grouping read")
+    void edges() {
+        assertThat(service.of(null, hospitalId)).isNull();
+        assertThat(service.withAntibodies(null, hospitalId)).isNull();
+        assertThat(service.ofOwnRecord(null)).isNull();
+        assertThat(service.ofAll(List.of(patient), null).get(patient.getId()).getConfirmed()).isNull();
+        verify(repository, never()).findCurrentForPatients(any(), any());
+
+        when(provider.getIfAvailable()).thenReturn(null);
+        when(repository.findCurrentWithHospital(any(), any())).thenReturn(Optional.empty());
+        patient.setBloodType("A+");
+        BloodGroupStatusDTO status = service.withAntibodies(patient, hospitalId);
+        assertThat(status.getDeclared()).isEqualTo("A+");
+        assertThat(status.getAlloImmunised()).isNull();
+        assertThat(PatientBloodGroupStatusService.declaredOnly(" ").getDeclared()).isNull();
+    }
+
+    @Test
     @DisplayName("the label is the chart's notation")
     void label() {
         assertThat(PatientBloodGroupStatusService.label(AboGroup.AB, RhFactor.NEGATIVE)).isEqualTo("AB-");

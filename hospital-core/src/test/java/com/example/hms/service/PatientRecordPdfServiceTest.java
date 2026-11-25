@@ -167,6 +167,41 @@ class PatientRecordPdfServiceTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    @DisplayName("QA D3901: the printed group is the laboratory's; a typed one is declared, its disagreement and the antibody printed")
+    void printsTheConfirmedGroupTheDeclaredOneAndTheAntibody(String language) throws Exception {
+        var bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        var labels = PdfLabels.of(bundles, Locale.forLanguageTag(language));
+        var confirmed = PatientStoryboardDTO.builder().patient(PatientStoryboardDTO.PatientHeaderDTO.builder()
+            .fullName("Issouf Kabore").bloodType("A+")
+            .bloodGroup(com.example.hms.payload.dto.BloodGroupStatusDTO.builder().declared("A+").confirmed("B+")
+                .confirmedAt(LocalDateTime.of(2026, 11, 25, 9, 30)).confirmedHospitalName("Centre Test")
+                .discrepancy(true).alloImmunised(true).antibodySpecificities("anti-E").build())
+            .build()).build();
+        // A long line may wrap: compared with its whitespace folded.
+        String text = textOf(PatientRecordPdfService.write(confirmed, ChartReviewDTO.builder().build(), null, labels))
+            .replaceAll("\\s+", " ");
+        assertThat(text).contains(labels.get("pdf.record.field.bloodType.confirmed", "B+", "Centre Test",
+                labels.fmt(LocalDateTime.of(2026, 11, 25, 9, 30))))
+            .contains(labels.get("pdf.record.field.bloodType.differs", "A+"))
+            .contains(labels.get("pdf.record.field.alloImmunisation"))
+            .contains("anti-E");
+
+        var unidentified = PatientStoryboardDTO.builder().patient(PatientStoryboardDTO.PatientHeaderDTO.builder()
+            .fullName("Awa Kabore").bloodGroup(com.example.hms.payload.dto.BloodGroupStatusDTO.builder()
+                .alloImmunised(true).build()).build()).build();
+        assertThat(textOf(PatientRecordPdfService.write(unidentified, ChartReviewDTO.builder().build(), null, labels))
+            .replaceAll("\\s+", " "))
+            .contains(labels.get("pdf.record.field.alloImmunisation.unidentified"));
+
+        // A payload with the typed group alone (no status): printed as declared, never as the laboratory's.
+        var typedOnly = PatientStoryboardDTO.builder().patient(PatientStoryboardDTO.PatientHeaderDTO.builder()
+            .fullName("Rasmata Ouedraogo").bloodType("O-").build()).build();
+        String typed = textOf(PatientRecordPdfService.write(typedOnly, ChartReviewDTO.builder().build(), null, labels));
+        assertThat(typed).contains(labels.get("pdf.record.field.bloodType.declaredOnly", "O-"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
     void omittedReleaseFieldsNeverAssertClinicalAbsence(String language) throws Exception {
         var bundles = com.example.hms.i18n.TestMessageSources.bundles();
         var labels = PdfLabels.of(bundles, Locale.forLanguageTag(language));
