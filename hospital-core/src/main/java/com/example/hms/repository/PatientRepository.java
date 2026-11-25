@@ -407,6 +407,17 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                                                   @Param("hospitalId") UUID hospitalId,
                                                   Pageable pageable);
 
+    /** Same-family/same-DOB candidates are targeted before the general birth-date cap. */
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
+        + " WHERE r.hospital.id = :hospitalId AND r.active = true AND p.active = true"
+        + " AND p.dateOfBirth = :bornOn AND " + PatientMatchKeys.COMPACT_FAMILY_SQL_OPEN
+        + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + PatientMatchKeys.COMPACT_FAMILY_SQL_CLOSE + " IN :familyKeys"
+        + " ORDER BY p.createdAt DESC, p.id")
+    List<Patient> findActiveFamilyBornAtHospital(@Param("familyKeys") java.util.Set<String> familyKeys,
+            @Param("bornOn") java.time.LocalDate bornOn, @Param("hospitalId") UUID hospitalId, Pageable pageable);
+
+    int FAMILY_DOB_CAP = 50;
+
     /** The candidate cap of {@link #findActiveBornBetweenAtHospital}: three birth days at one hospital. */
     int BORN_NEAR_CAP = 200;
 

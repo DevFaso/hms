@@ -1769,7 +1769,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             try {
                 emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
             } catch (Exception e) {
-                log.warn("Failed to send refill email to {} for refill {}", email, refill.getId());
+                log.warn("Failed to send refill email to {} for refill {}",
+                    com.example.hms.utility.ActivationDeliveryTracker.maskEmail(email), refill.getId());
             }
         }
     }

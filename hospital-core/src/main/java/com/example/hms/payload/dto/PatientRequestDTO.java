@@ -20,6 +20,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class PatientRequestDTO {
+    /** The staff's reason for keeping a possible duplicate as a separate person. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    @Size(max = 2000)
+    private String duplicateReviewReason;
     /** Optional; null/omitted retains an existing IU, explicit empty clears it. */
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String nationalUniqueId;

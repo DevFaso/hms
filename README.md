@@ -27,16 +27,15 @@ Full-stack hospital management platform built with **Spring Boot 3.4** + **Angul
 
 ### Backend (zero-config with H2)
 ```bash
-cd hospital-core
-./gradlew bootRun -Pargs='--spring.profiles.active=local-h2'
+./gradlew :hospital-core:bootRun --args='--spring.profiles.active=local-h2'
 # → http://localhost:8081
+# The application has no default profile and refuses to start without one.
 ```
 
 ### Backend (with PostgreSQL)
 ```bash
 docker compose up -d            # starts PostgreSQL
-cd hospital-core
-./gradlew bootRun               # uses dev profile
+./gradlew :hospital-core:bootRun --args='--spring.profiles.active=local'
 ```
 
 ### Frontend
@@ -104,10 +103,10 @@ Copy `.env.example` and fill in values:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | Railway auto-provides | PostgreSQL connection |
-| `APP_JWTSECRET` | Yes | JWT signing secret (256-bit) |
+| `JWT_SECRET` | Yes (dev, prod) | JWT signing secret: private, random, 32+ characters. A deployed profile refuses a value committed in this repository. |
 | `APP_BOOTSTRAP_TOKEN` | Yes | First admin signup token |
 | `PORT` | Railway auto-provides | Server port |
-| `SPRING_PROFILES_ACTIVE` | Yes | `dev`, `prod`, etc. |
+| `SPRING_PROFILES_ACTIVE` | Yes | `dev`, `prod`, etc. There is no default: without it the application does not start. |
 
 ## Deployment
 

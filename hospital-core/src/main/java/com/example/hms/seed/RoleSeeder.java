@@ -1,5 +1,6 @@
 package com.example.hms.seed;
 
+import com.example.hms.bootstrap.DeploymentProfiles;
 import com.example.hms.model.Role;
 import com.example.hms.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 @Order(1) // roles must be seeded before assignments
-@Profile({"local-h2", "local"})
+@Profile(DeploymentProfiles.SEEDING)
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class RoleSeeder implements CommandLineRunner {
 

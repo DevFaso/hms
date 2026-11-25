@@ -1866,6 +1866,10 @@
       "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur est absent ou expiré",
       "REFRESH_REFUSED_ROLES_GONE": "Renouvellement de session refusé : les rôles de la session ne sont plus attribués",
       "REFRESH_REFUSED_CUTOFF": "Renouvellement de session refusé : la session a été ouverte avant la date limite de connexion",
+      "REFRESH_REFUSED_LIFETIME": "Renouvellement de session refusé : la session a atteint sa durée maximale depuis la connexion",
+      "REFRESH_REFUSED_REUSED": "Renouvellement de session refusé : un jeton de renouvellement déjà utilisé a été présenté de nouveau, et la session a été terminée",
+      "SESSION_REVOKED_REFRESH_REUSE": "Session de connexion terminée après la nouvelle présentation d’un jeton de renouvellement déjà utilisé (tous ses jetons révoqués)",
+      "SESSION_REVOKED_SECOND_FACTOR": "Session de connexion terminée : sa vérification en deux étapes n’était plus valide (tous ses jetons révoqués)",
       "PASSWORD_REUSE_REJECTED": "Changement de mot de passe refusé : identique à un mot de passe récent",
       "PASSWORD_RESET_COMPLETED": "Réinitialisation du mot de passe terminée",
       "PASSWORD_RESET_LINK_SMS": "Lien de réinitialisation du mot de passe envoyé par SMS",
@@ -2186,7 +2190,8 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
-      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
+      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -3889,7 +3894,9 @@
       "F": "Féminin",
       "M": "Masculin",
       "X": "X"
-    }
+    },
+    "MERGE_REASON": "Motif de la fusion",
+    "MERGE_REASON_REQUIRED": "Indiquez un motif avant de confirmer la fusion."
   },
   "ENCOUNTERS": {
     "ADDENDUM_ARIA": "Addendum à la note de consultation",
@@ -5231,6 +5238,7 @@
     "TOKEN_MISSING": "Jeton manquant dans la réponse.",
     "LOGIN_FAILED": "Échec de la connexion. Veuillez réessayer.",
     "LOCKED_FROM_LOCK_SCREEN": "Trop de mots de passe incorrects : vous avez été déconnecté et le compte est temporairement verrouillé. Réessayez plus tard.",
+    "SESSION_LIFETIME_REACHED": "Votre session a atteint sa durée maximale. Pour votre sécurité, veuillez vous reconnecter.",
     "ENTER_EMAIL": "Veuillez saisir votre adresse e-mail.",
     "RESEND_ACTIVATION": "Renvoyer l'e-mail d'activation",
     "RA_TITLE": "Activer votre compte",
@@ -6357,7 +6365,10 @@
     "MEWS_CONCERNS": "préoccupation supplémentaire signalée",
     "MEWS_ALERT_SEVERE_HYPERTENSION": "Tension sévère",
     "MEWS_ALERT_SHOCK": "Indice de choc : zone jaune",
-    "MEWS_ALERT_SEVERE_SHOCK": "Indice de choc : zone rouge"
+    "MEWS_ALERT_SEVERE_SHOCK": "Indice de choc : zone rouge",
+    "DUPLICATE_REASON": "Motif pour garder un dossier séparé",
+    "DUPLICATE_REASON_REQUIRED": "Indiquez un motif avant de créer un autre dossier.",
+    "DUPLICATE_REASON_HELP": "Vérifiez l’identité de la personne. Ce motif est conservé avec la décision ; aucun dossier n’est fusionné."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",

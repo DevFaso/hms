@@ -67,6 +67,7 @@ export default defineConfig({
         /keycloak-login\.spec\.ts/,
         /smoke\.spec\.ts/,
         /mobile\.spec\.ts/,
+        /identity-decisions\.spec\.ts/,
       ],
     },
 

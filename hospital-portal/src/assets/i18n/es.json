@@ -1866,6 +1866,10 @@
       "REFRESH_REFUSED_SECOND_FACTOR": "Renovación de sesión rechazada: falta el segundo factor o ha caducado",
       "REFRESH_REFUSED_ROLES_GONE": "Renovación de sesión rechazada: los roles de la sesión ya no están asignados",
       "REFRESH_REFUSED_CUTOFF": "Renovación de sesión rechazada: la sesión se abrió antes de la fecha límite de inicio de sesión",
+      "REFRESH_REFUSED_LIFETIME": "Renovación de sesión rechazada: la sesión alcanzó su duración máxima desde el inicio de sesión",
+      "REFRESH_REFUSED_REUSED": "Renovación de sesión rechazada: se volvió a presentar un token de renovación ya utilizado y se terminó la sesión",
+      "SESSION_REVOKED_REFRESH_REUSE": "Sesión terminada tras volver a presentarse un token de renovación ya utilizado (todos sus tokens revocados)",
+      "SESSION_REVOKED_SECOND_FACTOR": "Sesión terminada: su verificación en dos pasos ya no era válida (todos sus tokens revocados)",
       "PASSWORD_REUSE_REJECTED": "Cambio de contraseña rechazado: coincide con una contraseña reciente",
       "PASSWORD_RESET_COMPLETED": "Restablecimiento de contraseña completado",
       "PASSWORD_RESET_LINK_SMS": "Enlace de restablecimiento de contraseña enviado por SMS",
@@ -2186,7 +2190,8 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
       "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)",
-      "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}"
+      "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}",
+      "DUPLICATE_KEPT_SEPARATE": "Posible duplicado conservado como paciente distinto"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3889,7 +3894,9 @@
       "F": "Femenino",
       "M": "Masculino",
       "X": "X"
-    }
+    },
+    "MERGE_REASON": "Motivo de la fusión",
+    "MERGE_REASON_REQUIRED": "Indique un motivo antes de confirmar la fusión."
   },
   "ENCOUNTERS": {
     "ADDENDUM_ARIA": "Adenda a la nota de la consulta",
@@ -5231,6 +5238,7 @@
     "TOKEN_MISSING": "Falta el token en la respuesta.",
     "LOGIN_FAILED": "Error al iniciar sesión. Inténtelo de nuevo.",
     "LOCKED_FROM_LOCK_SCREEN": "Demasiadas contraseñas incorrectas: se ha cerrado su sesión y la cuenta está bloqueada temporalmente. Vuelva a intentarlo más tarde.",
+    "SESSION_LIFETIME_REACHED": "Su sesión ha alcanzado su duración máxima. Por su seguridad, vuelva a iniciar sesión.",
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
     "RESEND_ACTIVATION": "Reenviar el correo de activación",
     "RA_TITLE": "Activar su cuenta",
@@ -6357,7 +6365,10 @@
     "MEWS_CONCERNS": "preocupación adicional registrada",
     "MEWS_ALERT_SEVERE_HYPERTENSION": "Presión arterial grave",
     "MEWS_ALERT_SHOCK": "Índice de choque: zona amarilla",
-    "MEWS_ALERT_SEVERE_SHOCK": "Índice de choque: zona roja"
+    "MEWS_ALERT_SEVERE_SHOCK": "Índice de choque: zona roja",
+    "DUPLICATE_REASON": "Motivo para mantener un expediente separado",
+    "DUPLICATE_REASON_REQUIRED": "Indique un motivo antes de crear otro expediente.",
+    "DUPLICATE_REASON_HELP": "Compruebe la identidad de la persona. El motivo se conserva con la decisión; no se fusionan expedientes."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",

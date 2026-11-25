@@ -15,7 +15,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -57,7 +56,7 @@ public class PasswordRotationScheduler {
 
             RotationInfo info = computeRotationInfo(user, snapshot, today);
             countdown.computeIfAbsent(info.daysUntilDue(), key -> new ArrayList<>())
-                .add(user.getEmail().toLowerCase(Locale.ROOT));
+                .add(String.valueOf(user.getId()));
 
             UserRotationResult result = processUserRotation(user, info, snapshot);
             if (result.stateChanged()) dirtyUsers.add(user);
@@ -85,7 +84,7 @@ public class PasswordRotationScheduler {
                 dueOn
             );
         } catch (RuntimeException ex) {
-            log.warn("[PASSWORD ROTATION] Failed to send reminder to {}: {}", user.getEmail(), ex.getMessage());
+            log.warn("[PASSWORD ROTATION] Failed to send reminder to user {}: {}", user.getId(), ex.getMessage());
         }
     }
 
@@ -98,7 +97,7 @@ public class PasswordRotationScheduler {
                 daysOverdue
             );
         } catch (RuntimeException ex) {
-            log.warn("[PASSWORD ROTATION] Failed to send enforcement email to {}: {}", user.getEmail(), ex.getMessage());
+            log.warn("[PASSWORD ROTATION] Failed to send enforcement email to user {}: {}", user.getId(), ex.getMessage());
         }
     }
 
@@ -197,11 +196,12 @@ public class PasswordRotationScheduler {
     }
 
     private void logCountdown(Map<Long, List<String>> countdown) {
-        countdown.forEach((days, emails) -> {
+        // User ids, never e-mail addresses: these lines go to the log stores.
+        countdown.forEach((days, userIds) -> {
             if (days >= 0) {
-                log.info("[PASSWORD ROTATION] {} day(s) remaining -> {}", days, emails);
+                log.info("[PASSWORD ROTATION] {} day(s) remaining -> users {}", days, userIds);
             } else {
-                log.warn("[PASSWORD ROTATION] {} day(s) overdue -> {}", Math.abs(days), emails);
+                log.warn("[PASSWORD ROTATION] {} day(s) overdue -> users {}", Math.abs(days), userIds);
             }
         });
     }

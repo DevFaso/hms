@@ -254,6 +254,56 @@ describe('errorInterceptor', () => {
     });
   }
 
+  it('a refresh refused at the session lifetime signs in again with the reason', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 401,
+            headers: new HttpHeaders({
+              'WWW-Authenticate':
+                'Bearer realm="Hospital", error="invalid_token", error_description="session_lifetime"',
+            }),
+          }),
+      ),
+    );
+    http.get('/owner').subscribe({ error: () => undefined });
+    httpMock.expectOne('/owner').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login'], {
+      queryParams: { reason: 'session-ended' },
+    });
+  });
+
+  it("the refresh call's own lifetime 401 goes to the same sign-in page", () => {
+    http.post('/api/auth/token/refresh', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/api/auth/token/refresh').flush(null, {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {
+        'WWW-Authenticate':
+          'Bearer realm="Hospital", error="invalid_token", error_description="session_lifetime"',
+      },
+    });
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login'], {
+      queryParams: { reason: 'session-ended' },
+    });
+  });
+
+  it('any other refresh 401 (an idle timeout) goes to the sign-in page without the reason', () => {
+    http.post('/api/auth/token/refresh', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/api/auth/token/refresh').flush(null, {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {
+        'WWW-Authenticate':
+          'Bearer realm="Hospital", error="invalid_token", error_description="idle_timeout"',
+      },
+    });
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/login']);
+  });
+
   for (const status of [404, 409, 422, 500]) {
     it(`a retried business response (${status}) does not sign out either refresh caller`, () => {
       auth.getRefreshToken.and.returnValue('r1');

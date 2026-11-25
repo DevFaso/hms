@@ -112,6 +112,34 @@ class UserGovernanceServiceTest {
     }
 
     @Test
+    void aFailedInvitationDoesNotFailTheImport() {
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles
+            carol,carol@example.com,Carol,Ki,3333,DOCTOR""";
+        SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
+            .csvContent(csv)
+            .sendInviteEmails(true)
+            .build();
+        when(userService.createUserWithRolesAndHospital(any(AdminSignupRequest.class)))
+            .thenAnswer(invocation -> {
+                AdminSignupRequest signup = invocation.getArgument(0);
+                return UserResponseDTO.builder()
+                    .id(UUID.randomUUID())
+                    .email(signup.getEmail())
+                    .username(signup.getUsername())
+                    .build();
+            });
+        org.mockito.Mockito.doThrow(new IllegalStateException("mail down"))
+            .when(passwordResetService).requestReset(any(String.class), any(Locale.class));
+
+        SuperAdminUserBulkImportResponseDTO response = service.importUsers(request);
+
+        assertThat(response.getImported()).isEqualTo(1);
+        assertThat(response.getFailed()).isZero();
+        verify(passwordResetService).requestReset("carol@example.com", Locale.ENGLISH);
+    }
+
+    @Test
     void forcePasswordResetToleratesOmittedTargetLists() {
         // D32: a body with only usernames left userIds/emails null -> NPE -> 500.
         User user = new User();

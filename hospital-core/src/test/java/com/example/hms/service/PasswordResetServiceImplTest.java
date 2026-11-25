@@ -43,6 +43,7 @@ class PasswordResetServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private SmsService smsService;
     @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private org.springframework.core.env.Environment environment;
 
     /** Fixed instant: token validity and cleanup are computed against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -740,5 +741,18 @@ class PasswordResetServiceImplTest {
     void invalidateAllForUser_success() {
         service.invalidateAllForUser(userId);
         verify(tokenRepository).deleteByUser_IdAndConsumedAtIsNull(userId);
+    }
+
+    @Test
+    void theRawTokenIsLoggedOnADeveloperMachineOnly() {
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2", "local"})).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"dev"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local-h2", "dev"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"local", "prod"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[] {"test"})).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(new String[0])).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(null)).isFalse();
     }
 }

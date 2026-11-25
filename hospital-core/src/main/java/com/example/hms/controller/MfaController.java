@@ -79,6 +79,8 @@ public class MfaController {
     /** Providers, like {@code AuthController}'s gate: a {@code @WebMvcTest} slice has neither bean. */
     private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.DowntimeStateService> downtimeState;
     private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.provider.ProviderMfaGate> providerMfaGate;
+    /** The session lifetimes, for the sign-in answer's sessionEndsAt; a provider so a slice need not build it. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.controller.support.AuthControllerProperties> authProps;
 
     /**
      * Why {@link #honouredPick} refused, told apart: a challenge that no longer
@@ -440,6 +442,7 @@ public class MfaController {
                 .profilePictureUrl(user.getProfileImageUrl())
                 .forcePasswordChange(user.isForcePasswordChange())
                 .forceUsernameChange(user.isForceUsernameChange())
+                .sessionEndsAt(sessionEndsAt(refreshToken, roles))
                 .build();
 
         // S-01: deliver refresh token via HttpOnly cookie
@@ -498,5 +501,15 @@ public class MfaController {
     /** A bundle message in the reader's language (the request's Accept-Language). */
     private String message(String key) {
         return messageSource.getMessage(key, null, org.springframework.context.i18n.LocaleContextHolder.getLocale());
+    }
+
+    /** When the session this sign-in opened ends (epoch ms); null when the lifetimes are not configured here. */
+    private Long sessionEndsAt(String refreshToken, List<String> roles) {
+        var props = authProps.getIfAvailable();
+        if (props == null) {
+            return null;
+        }
+        Instant signedIn = java.util.Optional.ofNullable(jwtTokenProvider.signedInAt(refreshToken)).orElseGet(Instant::now);
+        return props.sessionLifetime().endsAt(signedIn, roles).toEpochMilli();
     }
 }

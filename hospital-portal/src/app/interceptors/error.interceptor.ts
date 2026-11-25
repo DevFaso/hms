@@ -32,6 +32,7 @@ import {
   timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { navigateToSignIn } from '../auth/session-lifetime';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
@@ -395,7 +396,8 @@ function tryRefreshAndRetry(
         refreshDone$.next(null);
         if (isRefreshRejection(error)) {
           auth.logout();
-          void router.navigate(['/login']);
+          // A session past its lifetime is told so on the sign-in page.
+          void navigateToSignIn(router, error);
         }
         return throwError(() => callerError);
       }),
@@ -518,7 +520,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
         if (!isVerifyPassword && !isSilentBackground) {
           auth.logout();
-          void router.navigate(['/login']);
+          // The refresh call's own 401 reaches here first: the same page as
+          // the refresh's caller sends the user to, so neither replaces it.
+          void (isRefreshCall ? navigateToSignIn(router, error) : router.navigate(['/login']));
         }
       } else if (error.status === 503 && error.headers?.get('X-Readonly-Mode') === 'true') {
         // Downtime read-only mode (P3 #23a): flip the banner on immediately

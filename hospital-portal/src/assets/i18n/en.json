@@ -1866,6 +1866,10 @@
       "REFRESH_REFUSED_SECOND_FACTOR": "Session renewal refused: the second factor is missing or expired",
       "REFRESH_REFUSED_ROLES_GONE": "Session renewal refused: the roles of the session are no longer assigned",
       "REFRESH_REFUSED_CUTOFF": "Session renewal refused: the session was opened before the sign-in cutoff",
+      "REFRESH_REFUSED_LIFETIME": "Session renewal refused: the session reached its maximum length after sign-in",
+      "REFRESH_REFUSED_REUSED": "Session renewal refused: an already-used renewal token was presented again, and the session was ended",
+      "SESSION_REVOKED_REFRESH_REUSE": "Sign-in session ended after an already-used renewal token was presented again (every token of it revoked)",
+      "SESSION_REVOKED_SECOND_FACTOR": "Sign-in session ended: its two-step verification had lapsed (every token of it revoked)",
       "PASSWORD_REUSE_REJECTED": "Password change refused: it matches a recent password",
       "PASSWORD_RESET_COMPLETED": "Password reset completed",
       "PASSWORD_RESET_LINK_SMS": "Password reset link sent by SMS",
@@ -2186,7 +2190,8 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
       "CROSS_HOSPITAL_INSURANCE_READ": "Insurance policy of another hospital read to verify at the desk (identity only)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Insurance policy of another hospital taken over as this hospital's own coverage (identity only)",
-      "ROI_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries) under record request {{request}}"
+      "ROI_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries) under record request {{request}}",
+      "DUPLICATE_KEPT_SEPARATE": "Possible duplicate kept as a separate patient"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3889,7 +3894,9 @@
       "F": "Female",
       "M": "Male",
       "X": "X"
-    }
+    },
+    "MERGE_REASON": "Reason for merging",
+    "MERGE_REASON_REQUIRED": "Enter a reason before confirming the merge."
   },
   "ENCOUNTERS": {
     "ADDENDUM_ARIA": "Encounter note addendum",
@@ -5231,6 +5238,7 @@
     "TOKEN_MISSING": "Token missing in response.",
     "LOGIN_FAILED": "Login failed. Please try again.",
     "LOCKED_FROM_LOCK_SCREEN": "Too many incorrect passwords: you have been signed out and the account is temporarily locked. Try again later.",
+    "SESSION_LIFETIME_REACHED": "Your session has reached its maximum length. For your security, please sign in again.",
     "ENTER_EMAIL": "Please enter your email address.",
     "RESEND_ACTIVATION": "Resend activation e-mail",
     "RA_TITLE": "Activate your account",
@@ -6357,7 +6365,10 @@
     "MEWS_CONCERNS": "additional concern recorded",
     "MEWS_ALERT_SEVERE_HYPERTENSION": "Severe blood pressure",
     "MEWS_ALERT_SHOCK": "Shock index: yellow range",
-    "MEWS_ALERT_SEVERE_SHOCK": "Shock index: red range"
+    "MEWS_ALERT_SEVERE_SHOCK": "Shock index: red range",
+    "DUPLICATE_REASON": "Reason for keeping a separate record",
+    "DUPLICATE_REASON_REQUIRED": "Enter a reason before creating another record.",
+    "DUPLICATE_REASON_HELP": "Check the person’s identity. This reason is retained with the decision; no records are merged."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
