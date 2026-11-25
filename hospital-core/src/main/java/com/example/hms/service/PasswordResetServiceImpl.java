@@ -205,8 +205,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         handleResetRequest(user, requestIp);
     }
 
+    /**
+     * Its own transaction: callers run it after their commit, where a joined
+     * (REQUIRED) transaction would be the finished one and the token would
+     * never be committed.
+     */
     @Override
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void sendSetPasswordLink(UUID userId, Locale locale) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null || user.isDeleted()) {
