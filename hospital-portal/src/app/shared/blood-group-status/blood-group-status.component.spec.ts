@@ -79,9 +79,10 @@ describe('BloodGroupStatusComponent', () => {
 
   it('shows the allo-immunisation alert, with the antibody or as not identified', () => {
     let el = show({ confirmed: 'B+', alloImmunised: true, antibodySpecificities: 'anti-E' });
-    expect(text(el, 'blood-group-antibody')).toBe('BLOOD_GROUP.ALLO_IMMUNISED');
+    // The text follows the aria-hidden icon's ligature.
+    expect(text(el, 'blood-group-antibody')).toMatch(/BLOOD_GROUP\.ALLO_IMMUNISED$/);
     el = show({ confirmed: 'B+', alloImmunised: true });
-    expect(text(el, 'blood-group-antibody')).toBe('BLOOD_GROUP.ALLO_IMMUNISED_UNIDENTIFIED');
+    expect(text(el, 'blood-group-antibody')).toMatch(/BLOOD_GROUP\.ALLO_IMMUNISED_UNIDENTIFIED$/);
   });
 
   it('leaves the antibody alert out where the host asks it to', () => {

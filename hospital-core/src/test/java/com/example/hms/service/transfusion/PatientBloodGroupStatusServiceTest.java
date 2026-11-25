@@ -170,6 +170,29 @@ class PatientBloodGroupStatusServiceTest {
     }
 
     @Test
+    @DisplayName("a ward's list reads every card's laboratory group at once, and keeps a card with none")
+    void ofAllReadsOnce() {
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        other.setBloodType("O+");
+        patient.setBloodType("A+");
+        Hospital hospital = new Hospital();
+        hospital.setName("Centre Medical Test");
+        when(repository.findCurrentForPatients(any(), any())).thenReturn(List.of(PatientBloodGroup.builder()
+            .patient(patient).hospital(hospital).aboGroup(AboGroup.B).rhFactor(RhFactor.POSITIVE)
+            .performedAt(groupedAt).build()));
+
+        var groups = service.ofAll(List.of(patient, other), hospitalId);
+
+        assertThat(groups.get(patient.getId()).getConfirmed()).isEqualTo("B+");
+        assertThat(groups.get(patient.getId()).isDiscrepancy()).isTrue();
+        assertThat(groups.get(other.getId()).getDeclared()).isEqualTo("O+");
+        assertThat(groups.get(other.getId()).getConfirmed()).isNull();
+        verify(repository, org.mockito.Mockito.times(1)).findCurrentForPatients(any(), any());
+        verify(repository, never()).findCurrentWithHospital(any(), any());
+    }
+
+    @Test
     @DisplayName("the label is the chart's notation")
     void label() {
         assertThat(PatientBloodGroupStatusService.label(AboGroup.AB, RhFactor.NEGATIVE)).isEqualTo("AB-");

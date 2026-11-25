@@ -2226,10 +2226,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // Each card reads its order against its own stay, so no map of stays here.
         WardOrders ward = readWardOrders(patientIds, hospitalId, java.util.Map.of());
         ObstetricWard obstetric = obstetricPatientIds(hospitalId, new ArrayList<>(patientIds), now);
+        // QA D3901: the laboratory's group of every card, in one read.
+        java.util.Map<UUID, com.example.hms.payload.dto.BloodGroupStatusDTO> groups = bloodGroupStatus == null
+            ? java.util.Map.of()
+            : bloodGroupStatus.ofAll(admissions.stream().map(Admission::getPatient).filter(Objects::nonNull)
+                .filter(p -> p.getId() != null).collect(Collectors.toMap(Patient::getId, p -> p, (x, y) -> x,
+                    java.util.LinkedHashMap::new)).values(), hospitalId);
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now, latest, ward, obstetric);
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now, latest, ward, obstetric, groups);
             if (card != null) {
                 result.add(card);
             }
@@ -2239,7 +2245,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now,
                                                      java.util.Map<UUID, PatientVitalSign> latest, WardOrders ward,
-                                                     ObstetricWard obstetric) {
+                                                     ObstetricWard obstetric,
+                                                     java.util.Map<UUID, com.example.hms.payload.dto.BloodGroupStatusDTO> groups) {
         UUID admissionId = a.getId();
         Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
@@ -2275,8 +2282,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA r70 D3220: the group where the nurse works, not only on the chart.
             .bloodType(patient.getBloodType())
             // QA D3901: the laboratory's confirmed group of this hospital beside it.
-            .bloodGroup(bloodGroupStatus != null ? bloodGroupStatus.of(patient, hospitalId)
-                : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType()))
+            .bloodGroup(groups.getOrDefault(patient.getId(),
+                com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType())))
             .roomBed(a.getRoomBed())
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .admissionId(a.getId())

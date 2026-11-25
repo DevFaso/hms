@@ -482,7 +482,8 @@ class ProxyReadSensitivityGuardTest {
         "registration: where the patient is registered and under which record number; no department, no visit",
         Set.of("hospitalId", "hospitalName", "mrn", "hospitalRecords"),
         "safety and logistics: blood group, what must not be given, where medicines are collected",
-        Set.of("bloodType", "allergies", "preferredPharmacy"));
+        // QA D3901: bloodGroup is the same blood group, declared beside the laboratory's; no antibody on this read.
+        Set.of("bloodType", "bloodGroup", "allergies", "preferredPharmacy"));
 
     private static final Pattern DTO_FIELD = Pattern.compile(
         "\\n    private (?!static)[\\w<>\\[\\],.? ]+?\\s(\\w+)\\s*(?:=[^;]*)?;");

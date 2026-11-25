@@ -42,6 +42,14 @@ public interface PatientBloodGroupRepository extends JpaRepository<PatientBloodG
                                                         @Param("hospitalId") UUID hospitalId);
 
     /**
+     * QA D3901: the current groupings of many patients at one hospital, in one read (the nurse workboard).
+     */
+    @Query("SELECT g FROM PatientBloodGroup g JOIN FETCH g.hospital WHERE g.hospital.id = :hospitalId "
+        + "AND g.superseded = false AND g.patient.id IN :patientIds")
+    List<PatientBloodGroup> findCurrentForPatients(@Param("hospitalId") UUID hospitalId,
+                                                   @Param("patientIds") java.util.Collection<UUID> patientIds);
+
+    /**
      * QA D3901: the patient's current grouping at every hospital, the newest first, for the patient's OWN record
      * (patient portal), which belongs to no single hospital.
      */

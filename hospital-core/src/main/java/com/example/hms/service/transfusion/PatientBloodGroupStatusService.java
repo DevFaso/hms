@@ -55,6 +55,26 @@ public class PatientBloodGroupStatusService {
     }
 
     /**
+     * {@link #of} for many patients at one hospital, in one read: a ward's list must not read per row (QA D1314).
+     * Keyed by patient id; every patient given has an entry.
+     */
+    public java.util.Map<UUID, BloodGroupStatusDTO> ofAll(java.util.Collection<Patient> patients, UUID hospitalId) {
+        java.util.Map<UUID, PatientBloodGroup> current = new java.util.HashMap<>();
+        java.util.List<UUID> ids = patients.stream().map(Patient::getId).filter(java.util.Objects::nonNull).toList();
+        if (hospitalId != null && !ids.isEmpty()) {
+            bloodGroupRepository.findCurrentForPatients(hospitalId, ids)
+                .forEach(group -> current.put(group.getPatient().getId(), group));
+        }
+        java.util.Map<UUID, BloodGroupStatusDTO> out = new java.util.HashMap<>();
+        for (Patient patient : patients) {
+            if (patient.getId() != null) {
+                out.put(patient.getId(), build(patient.getBloodType(), current.get(patient.getId())));
+            }
+        }
+        return out;
+    }
+
+    /**
      * {@link #of} with the allo-immunisation flag and the antibody identified, for the reads of one chart (the
      * patient record, the safety strip). The flag is read for the patient at every hospital.
      */
