@@ -10,6 +10,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.recordaccess.BreakGlassGate;
 import jakarta.persistence.EntityManager;
@@ -178,7 +179,7 @@ public class RestrictedChartGate {
      * Refuse the read when the chart is blocked for the caller: 403
      * {@code CHART_RESTRICTED} (the portal answers it with the declaration
      * prompt) when the patient is known at a hospital the caller acts at, or
-     * the caller is a super-admin; otherwise 404, so the refusal tells a
+     * the caller is a super-admin in global view; otherwise 404, so the refusal tells a
      * stranger nothing (the same rule as {@code RecordAccessPolicyImpl}, which
      * reads the flag only once a relationship exists).
      */
@@ -193,7 +194,7 @@ public class RestrictedChartGate {
     @Transactional(readOnly = true)
     public RuntimeException refusal(UUID patientId) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        if (isGlobal(context)) {
             return new ChartRestrictedException(patientId);
         }
         for (UUID hospitalId : actingHospitals(context)) {
@@ -281,11 +282,16 @@ public class RestrictedChartGate {
         for (BreakGlassSession session : sessionRepository.findLiveForUserAndPatient(actor, patientId,
                 LocalDateTime.now(clock))) {
             if (session.getHospital() != null
-                && (context.isSuperAdmin() || (works != null && works.contains(session.getHospital().getId())))) {
+                && (isGlobal(context) || (works != null && works.contains(session.getHospital().getId())))) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** A verified super-admin in global view, through the one scope resolver. */
+    private static boolean isGlobal(HospitalContext context) {
+        return ActingScopeResolver.scopeOf(context) instanceof ActingScope.Global;
     }
 
     private static Collection<UUID> actingHospitals(HospitalContext context) {
