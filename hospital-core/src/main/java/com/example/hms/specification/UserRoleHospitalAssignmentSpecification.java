@@ -4,9 +4,14 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
@@ -14,6 +19,7 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 public final class UserRoleHospitalAssignmentSpecification {
@@ -96,6 +102,25 @@ public final class UserRoleHospitalAssignmentSpecification {
 
     @Nullable
     public static Specification<UserRoleHospitalAssignment> matchesSearch(@Nullable String rawTerm) {
+        return matchesSearch(rawTerm, null, Set.of());
+    }
+
+    /**
+     * QA D4020: {@link #matchesSearch(String)} for a caller who may not see
+     * every holder. The holder's username, e-mail and names are matched only
+     * on rows whose holder the caller may see (the rule of
+     * {@code UserAccountAccess.HolderReach.knowsHolderOf}): an accepted row, a
+     * patient row, or a holder with another accepted staff row in reach, a
+     * patient row at a hospital the caller administers, or no row out of
+     * reach. A pending invitation to someone the caller could not have named
+     * is found by its role, code or hospital only, never by who holds it.
+     *
+     * @param reachHospitals   the hospitals where the caller registers staff; {@code null} for every holder
+     * @param patientHospitals the hospitals whose own patients the caller may name
+     */
+    @Nullable
+    public static Specification<UserRoleHospitalAssignment> matchesSearch(@Nullable String rawTerm,
+            @Nullable Set<UUID> reachHospitals, Set<UUID> patientHospitals) {
         if (!StringUtils.hasText(rawTerm)) {
             return null;
         }
@@ -113,11 +138,15 @@ public final class UserRoleHospitalAssignmentSpecification {
             // registrar (registeredBy) is not searched: typing a username
             // also listed every row that user had registered for others,
             // which read as that user holding them (QA D193).
+            Predicate holder = cb.or(
+                cb.like(cb.lower(userJoin.get("username")), pattern),
+                cb.like(cb.lower(userJoin.get("email")), pattern),
+                cb.like(cb.lower(userJoin.get("firstName")), pattern),
+                cb.like(cb.lower(userJoin.get("lastName")), pattern));
             List<Predicate> predicates = new ArrayList<>();
-            predicates.add(cb.like(cb.lower(userJoin.get("username")), pattern));
-            predicates.add(cb.like(cb.lower(userJoin.get("email")), pattern));
-            predicates.add(cb.like(cb.lower(userJoin.get("firstName")), pattern));
-            predicates.add(cb.like(cb.lower(userJoin.get("lastName")), pattern));
+            predicates.add(reachHospitals == null
+                ? holder
+                : cb.and(holder, holderVisible(root, query, cb, roleJoin, reachHospitals, patientHospitals)));
             predicates.add(cb.like(cb.lower(roleJoin.get("name")), pattern));
             predicates.add(cb.like(cb.lower(roleJoin.get("code")), pattern));
             predicates.add(cb.like(cb.lower(root.get("assignmentCode")), pattern));
@@ -126,6 +155,54 @@ public final class UserRoleHospitalAssignmentSpecification {
 
             return cb.or(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    private static final String USER = "user";
+    private static final String ROLE = "role";
+    private static final String CODE = "code";
+    private static final String VERIFIED_AT = "confirmationVerifiedAt";
+    private static final List<String> PATIENT_CODES = List.of("PATIENT", "ROLE_PATIENT");
+
+    /** The SQL form of {@code HolderReach.knowsHolderOf} for the row at {@code root}. */
+    private static Predicate holderVisible(Root<UserRoleHospitalAssignment> root, CriteriaQuery<?> query,
+            CriteriaBuilder cb, Join<UserRoleHospitalAssignment, Role> roleJoin,
+            Set<UUID> reach, Set<UUID> patientHospitals) {
+        // Another accepted (or live) staff row of the same holder, in reach.
+        Subquery<UUID> accepted = query.subquery(UUID.class);
+        Root<UserRoleHospitalAssignment> a = accepted.from(UserRoleHospitalAssignment.class);
+        accepted.select(a.get("id")).where(
+            cb.equal(a.get(USER), root.get(USER)),
+            cb.notEqual(a.get("id"), root.get("id")),
+            in(cb, a.join(HOSPITAL, JoinType.LEFT).get("id"), reach),
+            cb.not(cb.upper(a.join(ROLE, JoinType.LEFT).get(CODE)).in(PATIENT_CODES)),
+            cb.or(cb.isNotNull(a.get(VERIFIED_AT)), cb.isTrue(a.get("active"))));
+        // A patient row of the same holder at a hospital the caller administers.
+        Subquery<UUID> ownPatient = query.subquery(UUID.class);
+        Root<UserRoleHospitalAssignment> p = ownPatient.from(UserRoleHospitalAssignment.class);
+        ownPatient.select(p.get("id")).where(
+            cb.equal(p.get(USER), root.get(USER)),
+            cb.notEqual(p.get("id"), root.get("id")),
+            in(cb, p.join(HOSPITAL, JoinType.LEFT).get("id"), patientHospitals),
+            cb.upper(p.join(ROLE, JoinType.LEFT).get(CODE)).in(PATIENT_CODES));
+        // Any other row of the same holder out of reach (or global).
+        Subquery<UUID> outside = query.subquery(UUID.class);
+        Root<UserRoleHospitalAssignment> o = outside.from(UserRoleHospitalAssignment.class);
+        Path<UUID> outsideHospital = o.join(HOSPITAL, JoinType.LEFT).get("id");
+        outside.select(o.get("id")).where(
+            cb.equal(o.get(USER), root.get(USER)),
+            cb.notEqual(o.get("id"), root.get("id")),
+            cb.or(cb.isNull(outsideHospital), cb.not(in(cb, outsideHospital, reach))));
+        return cb.or(
+            cb.isNotNull(root.get(VERIFIED_AT)),
+            cb.upper(roleJoin.get(CODE)).in(PATIENT_CODES),
+            cb.exists(accepted),
+            cb.exists(ownPatient),
+            cb.not(cb.exists(outside)));
+    }
+
+    /** {@code path IN ids}; an empty set matches nothing (never "no filter"). */
+    private static Predicate in(CriteriaBuilder cb, Path<UUID> path, Set<UUID> ids) {
+        return ids == null || ids.isEmpty() ? cb.disjunction() : path.in(ids);
     }
 
     @Nullable
