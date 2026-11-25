@@ -175,6 +175,17 @@
                       >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span
                     >
                   }
+                  <!-- QA D3941: what the pharmacy supplied, as information; a supplied
+                       order stays in the queue until it is stopped or its course ends. -->
+                  @if (task.supplyLabel) {
+                    {{ ' '
+                    }}<span
+                      class="emar__queue-chip"
+                      [class.emar__queue-chip--advisory]="supplyNeedsAttention(task)"
+                      [attr.data-testid]="'emar-supply-chip-' + task.id"
+                      >{{ task.supplyLabel }}</span
+                    >
+                  }
                 </button>
               </li>
             }
@@ -233,6 +244,12 @@
             @if (task.prnLabel) {
               <p class="emar__detail-meta" role="note" data-testid="emar-prn">
                 {{ task.prnLabel }}
+              </p>
+            }
+            <!-- QA D3941: the pharmacy's supply, as information next to the Give button. -->
+            @if (task.supplyLabel) {
+              <p class="emar__detail-meta" role="note" data-testid="emar-supply">
+                {{ task.supplyLabel }}
               </p>
             }
             <!-- QA D1254: inside the minimum interval; Give asks for a reason. -->

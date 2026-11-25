@@ -65,6 +65,7 @@ class MicroCultureServiceImplTest {
     // read them in English through the real bundles (set up in setUp).
     @org.junit.jupiter.api.AfterEach
     void resetRefusalLocale() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         com.example.hms.utility.MessageUtil.setMessageSource(null);
         org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
@@ -90,8 +91,19 @@ class MicroCultureServiceImplTest {
     private LabOrder order;
     private MicroCultureResult culture;
 
+    /** QA D3902: the caller, by their own roles (no hospital context: their authorities as they are). */
+    private static void actAs(String... roles) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("caller", "n/a",
+                java.util.Arrays.stream(roles)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+    }
+
     @BeforeEach
     void setUp() {
+        // Corrections of a final report are the laboratory scientist's (QA D3902); tests that
+        // check who is refused switch the caller themselves.
+        actAs("ROLE_LAB_SCIENTIST");
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         service = new MicroCultureServiceImpl(
@@ -337,6 +349,83 @@ class MicroCultureServiceImplTest {
         assertThat(corrected.getStatus()).isEqualTo(MicroCultureStatus.CORRECTED);
         assertThat(culture.getCorrectedAt()).isNotNull();
         assertThat(culture.getCorrectionReason()).isEqualTo("Stain re-read by senior scientist");
+    }
+
+    /**
+     * QA D3902: a final antibiogram is the laboratory's. A doctor, nurse or midwife (whatever reached
+     * the service), a technician and the quality manager cannot change it, even with a reason:
+     * nothing is written, no correction row, the report stays FINAL.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_LAB_TECHNICIAN", "ROLE_QUALITY_MANAGER"})
+    void onlyTheLaboratorysValidatingTierChangesAFinalReport_D3902(String role) {
+        actAs(role);
+        culture.setStatus(MicroCultureStatus.FINAL);
+        MicroIsolate isolate = storedIsolate();
+        when(isolateRepository.findById(isolate.getId())).thenReturn(Optional.of(isolate));
+        MicroSusceptibility row = MicroSusceptibility.builder().isolate(isolate)
+            .antibioticName("Ciprofloxacine").interpretation(MicroSusceptibilityInterpretation.SUSCEPTIBLE).build();
+        row.setId(UUID.randomUUID());
+        when(susceptibilityRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        String reason = "Lecture corrigee";
+
+        List<org.assertj.core.api.ThrowableAssert.ThrowingCallable> changes = List.of(
+            () -> service.updateCulture(cultureId, hospitalId,
+                MicroCultureUpdateDTO.builder().notes("x").correctionReason(reason).build()),
+            () -> service.addIsolate(cultureId, hospitalId, MicroIsolateRequestDTO.builder()
+                .organismName("Klebsiella").correctionReason(reason).build()),
+            () -> service.updateIsolate(cultureId, isolate.getId(), hospitalId, MicroIsolateRequestDTO.builder()
+                .organismName("Klebsiella").correctionReason(reason).build()),
+            () -> service.deleteIsolate(cultureId, isolate.getId(), hospitalId, reason),
+            () -> service.addSusceptibility(cultureId, isolate.getId(), hospitalId, MicroSusceptibilityRequestDTO
+                .builder().antibioticName("Imipeneme").interpretation(MicroSusceptibilityInterpretation.SUSCEPTIBLE)
+                .correctionReason(reason).build()),
+            () -> service.deleteSusceptibility(cultureId, isolate.getId(), row.getId(), hospitalId, reason));
+        for (org.assertj.core.api.ThrowableAssert.ThrowingCallable change : changes) {
+            assertThatThrownBy(change)
+                .isInstanceOf(com.example.hms.exception.UnauthorizedAccessException.class)
+                .hasMessage("micro.culture.correctionLabOnly");
+        }
+
+        assertThat(culture.getStatus()).isEqualTo(MicroCultureStatus.FINAL);
+        verify(correctionRepository, never()).save(any());
+        verify(isolateRepository, never()).save(any());
+        verify(isolateRepository, never()).delete(any());
+        verify(susceptibilityRepository, never()).save(any());
+        verify(susceptibilityRepository, never()).delete(any());
+    }
+
+    @Test
+    void aTechnicianStillEntersAPreliminaryReport_D3902() {
+        actAs("ROLE_LAB_TECHNICIAN");
+
+        MicroCultureResponseDTO saved = service.updateCulture(cultureId, hospitalId,
+            MicroCultureUpdateDTO.builder().gramStain("BGN").build());
+
+        assertThat(saved.getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
+        assertThat(culture.getGramStain()).isEqualTo("BGN");
+    }
+
+    @Test
+    void aScientistsCorrectionIsRecordedAndNamedOnTheReport_D3902() {
+        UUID scientist = UUID.randomUUID();
+        culture.setStatus(MicroCultureStatus.FINAL);
+        User user = new User();
+        user.setId(scientist);
+        user.setFirstName("Test");
+        user.setLastName("Biologiste A");
+        when(userRepository.findById(scientist)).thenReturn(Optional.of(user));
+        when(correctionRepository.findByCultureResult_IdOrderByCorrectedAtDesc(cultureId)).thenReturn(List.of(
+            com.example.hms.model.MicroCultureCorrection.builder().cultureResult(culture)
+                .correctedAt(java.time.LocalDateTime.now()).correctedByUserId(scientist).reason("Relu").build()));
+
+        MicroCultureResponseDTO corrected = service.updateCulture(cultureId, hospitalId,
+            MicroCultureUpdateDTO.builder().notes("Relu").correctionReason("Relu").build());
+
+        assertThat(corrected.getStatus()).isEqualTo(MicroCultureStatus.CORRECTED);
+        assertThat(corrected.getCorrectedByName()).isEqualTo("Test Biologiste A");
+        verify(correctionRepository).save(any(com.example.hms.model.MicroCultureCorrection.class));
     }
 
     /* ── isolates + susceptibilities ───────────────────────────────────── */

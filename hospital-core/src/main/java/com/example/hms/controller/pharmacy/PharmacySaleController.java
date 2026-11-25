@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.pharmacy.PharmacySaleRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacySaleResponseDTO;
 import com.example.hms.service.pharmacy.PharmacySaleService;
@@ -38,6 +39,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Pharmacy Sales", description = "OTC walk-in cash sales (no prescription)")
 @SecurityRequirement(name = "bearerAuth")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "pharmacy over-the-counter sales: money")
 public class PharmacySaleController {
 
     private final PharmacySaleService saleService;

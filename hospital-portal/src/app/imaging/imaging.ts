@@ -163,6 +163,16 @@ export const RELEASED_REPORT_STATUSES: readonly ImagingReportStatus[] = [
   'AMENDED',
 ];
 
+/** QA D3903: the server refused an order because it found a recent one of the same study. */
+function serverFoundDuplicate(err: unknown): boolean {
+  const body = (err as { error?: unknown } | null)?.error as
+    { fieldErrors?: Record<string, unknown> } | null | undefined;
+  const fieldErrors = body?.fieldErrors;
+  return (
+    !!fieldErrors && typeof fieldErrors === 'object' && 'duplicateOverrideReason' in fieldErrors
+  );
+}
+
 /** Provisional rule 2: the note « Autre » requires, in the duplicate warning. */
 const DUPLICATE_NOTE_ID = 'img-duplicate-note';
 /** Provisional rule 1: the drawer's pre-authorisation number field. */
@@ -1160,8 +1170,31 @@ export class ImagingComponent implements OnInit {
         }
         this.formError.set(reason);
         this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
+        // QA D3903: the server found a recent order of the same study that this dialog did not
+        // show (placed since the check, a failed check, or an edit that changed the study): show
+        // it with the reasons, so « Commander quand même » can be chosen with one.
+        if (!acknowledgedDuplicate && serverFoundDuplicate(err)) this.revealServerDuplicate();
       },
     });
+  }
+
+  private revealServerDuplicate(): void {
+    const key = this.duplicateKey();
+    const session = this.dialogSession;
+    this.imagingService
+      .checkDuplicates(this.form.patientId, this.form.modality, this.form.bodyRegion)
+      .subscribe({
+        next: (matches) => {
+          if (session !== this.dialogSession || !this.showModal() || key !== this.duplicateKey()) {
+            return;
+          }
+          if (Array.isArray(matches) && matches.length > 0) {
+            this.duplicateWarningKey = key;
+            this.duplicateMatches.set(matches);
+          }
+        },
+        error: () => undefined,
+      });
   }
 
   confirmCancel(o: ImagingOrderResponse): void {

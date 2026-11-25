@@ -112,7 +112,7 @@ class WardLoadPostgresIT {
     static final int WORKBOARD_STATEMENTS = 25;
     static final int WHOLE_TAB_STATEMENTS = 1_500;
     /** The orders of {@code shapesTheRuleTellsApart} written at this hospital. */
-    static final int SHAPE_ORDERS = 12;
+    static final int SHAPE_ORDERS = 16;
     static final int STAFF_WITH_ANOTHER_NAME = 3;
     static final int PATIENT_WITH_A_MIDDLE_NAME = 8;
     /** The seed gives every fifth ward patient a penicillin allergy; the next one has none. */
@@ -815,6 +815,18 @@ class WardLoadPostgresIT {
             UUID leaveEncounter = encounter(onLeave, HOSPITAL, leaveStay, "INPATIENT", "IN_PROGRESS");
             prescription(onLeave, HOSPITAL, leaveEncounter, 9, "SIGNED", now.minusDays(1));
             wardRowsExpected++;
+            // QA D3941: ward orders the pharmacy supplied, in full and in part, are still to be given.
+            prescription(onLeave, HOSPITAL, leaveEncounter, 25, "DISPENSED", now.minusDays(1));
+            wardRowsExpected++;
+            prescription(onLeave, HOSPITAL, leaveEncounter, 27, "PARTIALLY_FILLED", now.minusDays(1));
+            wardRowsExpected++;
+            // A take-home order of the stay, handed over: never a ward dose.
+            Map<String, Object> homeCourse = rxRow(onLeave, HOSPITAL, leaveEncounter, 29, "DISPENSED", now.minusDays(1));
+            homeCourse.put("take_home", true);
+            insert("clinical.prescriptions", homeCourse);
+            // An outpatient order supplied before the stay: the patient's history, not this stay's dose.
+            UUID oldVisit = encounter(onLeave, HOSPITAL, null, "OUTPATIENT", "COMPLETED");
+            prescription(onLeave, HOSPITAL, oldVisit, 31, "DISPENSED", now.minusDays(30));
             // No bed: a closed emergency visit's order, and a live outpatient order, are nobody's dose.
             UUID noBed = patients.get(WARD_PATIENTS + 21);
             UUID closedEmergency = encounter(noBed, HOSPITAL, null, "EMERGENCY", "COMPLETED");

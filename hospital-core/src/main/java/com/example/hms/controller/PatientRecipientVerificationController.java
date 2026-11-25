@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -19,6 +20,8 @@ import java.util.UUID;
 @RestController @RequiredArgsConstructor
 @RequestMapping("/patients/{patientId}/recipient-verification")
 @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN')")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "verifying the patient's phone or e-mail: administrative")
 public class PatientRecipientVerificationController {
     private final PatientRecipientChallengeService service;
     private final PatientHospitalRegistrationRepository registrations;

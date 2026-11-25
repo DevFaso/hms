@@ -136,6 +136,10 @@ class AssignmentGrantScopeTest {
             when(hospitalRepository.findById(h.getId())).thenReturn(Optional.of(h));
         }
         when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        // QA D4020: the assignee is already staff at A, so A's admin may name them
+        // (the holder rule itself: AssignmentHolderReachTest).
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(List.of(row(assignee, doctor, hospitalA, true)));
         when(mapper.toEntity(any(), any(), any(), any())).thenAnswer(inv -> {
             UserRoleHospitalAssignmentRequestDTO dto = inv.getArgument(0);
             UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();

@@ -203,9 +203,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         DEFAULT_ADMINISTRATION_STATUS, "HELD", "REFUSED", "MISSED"
     );
 
-    /** Only prescriptions in these statuses are shown on the MAR. */
     private static final String MEDICATION_TASK_FIELD = "medicationTaskId";
     private static final String GIVEN_BEFORE_HOLD_FIELD = "givenBeforeHoldAt";
+    /**
+     * The statuses an order can be on the MAR in: every order that stands, the
+     * pharmacy's supply statuses included (QA D3941: supplying an order is not
+     * giving it). Never a status list of its own ({@code MarSupplyGuardTest}).
+     */
     private static final Set<PrescriptionStatus> ACTIVE_RX_STATUSES = com.example.hms.service.emar.MarWardReader.ON_MAR_STATUSES;
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
@@ -501,7 +505,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                               java.util.Map<UUID, List<Admission>> closedStays,
                               java.util.Map<UUID, List<MedicationAdministrationRecord>> doseRows,
                               Set<UUID> controlled,
-                              Set<UUID> heldForReview) {
+                              Set<UUID> heldForReview,
+                              java.util.Map<UUID, java.math.BigDecimal> supplied) {
 
         List<Prescription> ordersOf(UUID patientId) {
             return orders.getOrDefault(patientId, List.of());
@@ -522,6 +527,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Admission stayOf(UUID patientId) {
             return stays.get(patientId);
         }
+
+        /** QA D3941: what the pharmacy handed over on the order; information on the row, never a filter. */
+        java.math.BigDecimal suppliedOn(Prescription rx) {
+            return supplied.get(rx.getId());
+        }
     }
 
     private static List<UUID> patientIdsOf(List<PatientContext> patients) {
@@ -536,14 +546,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // The rows and the catalogue are read only for the orders still running.
         List<Prescription> running = new ArrayList<>();
         orders.forEach((patientId, rows) -> rows.stream()
-            .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus())
+            .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !rx.isTakeHome()
                 && !endedWithAStay(rx, closedStays.getOrDefault(patientId, List.of())))
             .forEach(running::add));
+        List<UUID> runningIds = running.stream().map(Prescription::getId).filter(Objects::nonNull).toList();
+        java.util.Map<UUID, java.math.BigDecimal> supplied = runningIds.isEmpty()
+            ? java.util.Map.of() : marWardReader.suppliedByPrescription(runningIds);
         return new WardOrders(stays, orders, closedStays,
-            marWardReader.doseRowsByPrescription(running.stream().map(Prescription::getId).filter(Objects::nonNull).toList()),
+            marWardReader.doseRowsByPrescription(runningIds),
             marWardReader.controlledOrders(running),
             com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(com.example.hms.enums.OrderReviewType.PRESCRIPTION, hospitalId,
-                running.stream().map(Prescription::getId).filter(Objects::nonNull).toList()));
+                runningIds),
+            supplied == null ? java.util.Map.of() : supplied);
     }
 
     /** Build medication tasks for a single patient from their real prescriptions. */
@@ -575,7 +589,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(dueTime)
                     .status(marStatus)
-                    .build(), rx, due, now, ward.controlled().contains(rx.getId())), closed));
+                    .build(), rx, due, now, ward.controlled().contains(rx.getId()), ward.suppliedOn(rx)), closed));
             }
         }
         return result;
@@ -1416,12 +1430,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /**
-     * Whether an order belongs on the ward MAR (QA D514, D702): active, not
-     * ended by a stay, and either an order of the patient's current stay or
+     * Whether an order belongs on the ward MAR (QA D514, D702): it stands, it is
+     * not ended by a stay, and either an order of the patient's current stay or
      * one given during an open emergency visit.
+     *
+     * <p>QA D3941: what the pharmacy supplied is no part of this. A ward order
+     * supplied in full or in part is still to be given: it stays until the
+     * prescriber stops it, its course ends or its stay ends, and the row says
+     * what was supplied. The old status list hid it once supplied, and that was
+     * also what kept a handed-over take-home order of the stay off the ward. A
+     * take-home order is never a ward dose (QA D757, D3303: it starts when the
+     * stay's ward orders end), so that is said here, supplied or not.
      */
     static boolean onWardMar(Prescription rx, List<Admission> closedStays, Admission currentStay) {
-        return ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !endedWithAStay(rx, closedStays)
+        return ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !rx.isTakeHome() && !endedWithAStay(rx, closedStays)
             && (orderOfCurrentStay(rx, currentStay) || givenDuringOpenEmergencyVisit(rx));
     }
 
@@ -1573,7 +1595,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * to rebuild a subset by hand, so a PRN order came back asNeeded=false.
      */
     private NurseMedicationTaskResponseDTO withOrderReading(NurseMedicationTaskResponseDTO task, Prescription rx,
-                                                             MarNextDose.Due due, LocalDateTime now, boolean controlled) {
+                                                             MarNextDose.Due due, LocalDateTime now, boolean controlled,
+                                                             java.math.BigDecimal supplied) {
         task.setFrequencyUnread(MarNextDose.flaggedUnread(rx, due));
         task.setContinuousInfusion(due.continuous());
         // QA round 30: an as-needed order, with the prescriber's minimum interval.
@@ -1585,6 +1608,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         task.setControlledSubstance(controlled);
         task.setRequiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx, controlled));
         task.setPharmacistVerified(pharmacistVerificationService.isVerified(rx));
+        // QA D3941: what the pharmacy supplied, said on the row; it never takes the order off the MAR.
+        com.example.hms.service.emar.MarSupply.Reading supply = com.example.hms.service.emar.MarSupply.of(rx, supplied);
+        task.setSupplyStatus(supply.state().name());
+        task.setQuantitySupplied(supply.supplied());
+        task.setQuantityOrdered(supply.ordered());
+        task.setSupplyLabel(supply.label());
         return task;
     }
 
@@ -1602,7 +1631,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // The same server clock the list reads (Sonar: the zone made explicit).
             LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
-                pharmacistVerificationService.isControlledSubstance(rx));
+                pharmacistVerificationService.isControlledSubstance(rx), suppliedOn(rx));
             allergyCardsFor(rx, rx.getMedicationName(), actingHospitalId).applyTo(task);
             // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
             if (recorded == MedicationAdministrationStatus.GIVEN) {
@@ -1611,6 +1640,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
         return withDoseHistory(task, closedDoses(rows));
+    }
+
+    /** QA D3941: what the pharmacy handed over on one order, for the answer to a recorded dose. */
+    private java.math.BigDecimal suppliedOn(Prescription rx) {
+        if (rx.getId() == null) {
+            return null;
+        }
+        java.util.Map<UUID, java.math.BigDecimal> supplied = marWardReader.suppliedByPrescription(List.of(rx.getId()));
+        return supplied == null ? null : supplied.get(rx.getId());
     }
 
     /**

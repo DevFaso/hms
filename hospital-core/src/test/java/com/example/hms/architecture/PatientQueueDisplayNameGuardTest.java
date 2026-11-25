@@ -41,6 +41,9 @@ class PatientQueueDisplayNameGuardTest {
 
     private static final Map<String, String> ID_ONLY = Map.ofEntries(
         Map.entry("dto/AdvanceDirectiveResponseDTO.java", CHART),
+        // QA D3863: the patientId is for the restricted-chart masking; notes and reports are read inside one chart.
+        Map.entry("dto/EncounterNoteResponseDTO.java", CHART),
+        Map.entry("dto/ultrasound/UltrasoundReportResponseDTO.java", CHART),
         Map.entry("dto/cds/CdsAcknowledgementResponseDTO.java", CHART + " (GET /cds-acknowledgements?patientId=)"),
         Map.entry("dto/clinical/labor/DeliveryRecordResponseDTO.java", CHART),
         Map.entry("dto/clinical/labor/PartographEntryResponseDTO.java", CHART),

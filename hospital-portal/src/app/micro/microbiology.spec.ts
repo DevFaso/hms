@@ -131,6 +131,97 @@ describe('MicrobiologyComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="finalize-culture"]')).toBeNull();
   });
 
+  const finalWithAntibiogram = () =>
+    culture({
+      status: 'FINAL',
+      growthResult: 'GROWTH',
+      isolates: [
+        {
+          id: 'i1',
+          isolateNumber: 1,
+          organismName: 'E. coli',
+          organismCode: null,
+          growthQuantity: null,
+          notes: null,
+          susceptibilities: [
+            {
+              id: 's1',
+              antibioticName: 'Ciprofloxacine',
+              antibioticCode: null,
+              method: null,
+              micValue: null,
+              interpretation: 'SUSCEPTIBLE',
+              notes: null,
+            },
+          ],
+        },
+      ],
+    });
+
+  const editControls = [
+    'new-culture',
+    'correction-reason',
+    'save-culture',
+    'add-isolate',
+    'add-susceptibility',
+    'delete-susceptibility',
+  ];
+
+  it('QA D3902: a doctor, nurse or midwife reads a final report with no edit control at all', () => {
+    scope.set({ roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'] });
+    microServiceSpy.list.and.returnValue(of(page([finalWithAntibiogram()])));
+    fixture.detectChanges();
+    component.select(component.cultures()[0]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="culture-detail"]')).toBeTruthy();
+    for (const id of editControls) {
+      expect(fixture.nativeElement.querySelector(`[data-testid="${id}"]`))
+        .withContext(id)
+        .toBeNull();
+    }
+  });
+
+  it('QA D3902: a lab technician edits a preliminary report but not a final one', () => {
+    scope.set({ roles: ['ROLE_LAB_TECHNICIAN'] });
+    microServiceSpy.list.and.returnValue(of(page([finalWithAntibiogram()])));
+    fixture.detectChanges();
+    component.select(component.cultures()[0]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="save-culture"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="correction-lab-only"]')).toBeTruthy();
+
+    component.select(culture({ id: 'c2' }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="save-culture"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="correction-lab-only"]')).toBeNull();
+  });
+
+  it('QA D3902: the scientist tier corrects a final report, and the banner names who corrected it', () => {
+    scope.set({ roles: ['ROLE_LAB_SCIENTIST'] });
+    microServiceSpy.list.and.returnValue(
+      of(
+        page([
+          culture({
+            status: 'CORRECTED',
+            correctedAt: '2026-11-25T10:00:00',
+            correctionReason: 'Re-read',
+            correctedByName: 'Test Biologiste A',
+          }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+    component.select(component.cultures()[0]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="correction-reason"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="save-culture"]')).toBeTruthy();
+    const banner = fixture.nativeElement.querySelector('[data-testid="correction-banner"]');
+    expect(banner?.textContent).toContain('Test Biologiste A');
+  });
+
   it('refuses a locked-report mutation client-side until a correction reason is given', () => {
     microServiceSpy.list.and.returnValue(of(page([culture({ status: 'FINAL' })])));
     fixture.detectChanges();

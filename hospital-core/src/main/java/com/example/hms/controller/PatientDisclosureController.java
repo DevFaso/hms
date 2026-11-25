@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.portal.DisclosureAccountingDTO;
@@ -51,6 +52,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Disclosure Accounting",
      description = "Who has seen, received or exported a patient's record")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the disclosure log: who read the record, not the record")
 public class PatientDisclosureController {
 
     private final DisclosureAccountingService disclosureAccountingService;

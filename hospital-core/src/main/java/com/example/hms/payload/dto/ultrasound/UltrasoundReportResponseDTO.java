@@ -24,6 +24,9 @@ public class UltrasoundReportResponseDTO extends UltrasoundReportBaseDTO {
 
     private UUID ultrasoundOrderId;
 
+    /** QA D3863: whose chart the report is in, for the restricted-chart masking. */
+    private UUID patientId;
+
     // Report finalization
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime reportFinalizedAt;

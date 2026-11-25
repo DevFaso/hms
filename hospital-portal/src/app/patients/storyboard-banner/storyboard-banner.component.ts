@@ -26,8 +26,9 @@ import { PatientChartChanges } from '../../interceptors/patient-chart-change.int
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
 import { BloodGroupStatusComponent } from '../../shared/blood-group-status/blood-group-status.component';
+import { isChartRestricted } from '../chart-restricted';
 
-type LoadState = 'loading' | 'ready' | 'empty' | 'error';
+type LoadState = 'loading' | 'ready' | 'empty' | 'error' | 'restricted';
 
 const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE_THREATENING']);
 
@@ -182,9 +183,10 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
               !(s.codeStatus?.status || (s.codeStatus?.directives?.length ?? 0) > 0));
           this.state.set(empty ? 'empty' : 'ready');
         },
-        error: () => {
+        error: (err: unknown) => {
           this.summary.set(null);
-          this.state.set('error');
+          // QA D3864: a restricted chart is not a load failure; reloading cannot open it.
+          this.state.set(isChartRestricted(err) ? 'restricted' : 'error');
         },
       });
   }

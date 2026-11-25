@@ -154,6 +154,8 @@ public class UltrasoundMapper {
         return UltrasoundReportResponseDTO.builder()
             .id(report.getId())
             .ultrasoundOrderId(report.getUltrasoundOrder() != null ? report.getUltrasoundOrder().getId() : null)
+            .patientId(report.getUltrasoundOrder() != null && report.getUltrasoundOrder().getPatient() != null
+                ? report.getUltrasoundOrder().getPatient().getId() : null)
             .scanDate(report.getScanDate())
             .scanPerformedBy(report.getScanPerformedBy())
             .scanPerformedByCredentials(report.getScanPerformedByCredentials())

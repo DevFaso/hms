@@ -684,11 +684,41 @@ public class CriticalValueNotificationService {
      * matches, as before.
      */
     private boolean readBackConfirms(LabResult result, String repeatedValue) {
+        return readBackConfirmsResult(result, repeatedValue);
+    }
+
+    /**
+     * QA D3900: the one read-back check, for every place a read-back is recorded: the clinician's
+     * read-back ({@link #recordReadBack}) and the laboratory's call log on release
+     * ({@code LabResultServiceImpl.documentCriticalCommunication}). A single test's read-back may
+     * name the test first, by its own name or code ("Kaliemie : 2,1 mmol/L", "K 2,1" when K is its
+     * code): that label is set aside and the number, unit and comparator are what must match.
+     * Another test's name is a confused read-back and is refused. A panel names its components
+     * ({@link PanelReadBack}).
+     */
+    public static boolean readBackConfirmsResult(LabResult result, String repeatedValue) {
+        if (result == null || repeatedValue == null || repeatedValue.isBlank()) {
+            return false;
+        }
         if (readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
             return true;
         }
-        return result.hasComponents()
-            && PanelReadBack.matches(LabResultMapper.gradedComponentsOf(result), repeatedValue);
+        if (result.hasComponents()) {
+            return PanelReadBack.matches(LabResultMapper.gradedComponentsOf(result), repeatedValue);
+        }
+        com.example.hms.model.LabTestDefinition test =
+            result.getLabOrder() != null ? result.getLabOrder().getLabTestDefinition() : null;
+        if (test == null) {
+            return false;
+        }
+        String repeated = repeatedValue.trim();
+        int label = Math.max(PanelReadBack.prefixLength(test.getTestCode(), repeated),
+            PanelReadBack.prefixLength(test.getName(), repeated));
+        if (label == 0) {
+            return false;
+        }
+        String value = PanelReadBack.LABEL_SEPARATOR.matcher(repeated.substring(label)).replaceFirst("");
+        return !value.isBlank() && readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), value);
     }
 
     /**

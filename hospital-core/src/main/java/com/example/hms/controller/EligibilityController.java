@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EligibilityCheckType;
@@ -37,6 +38,8 @@ import java.util.UUID;
      description = "Real-time coverage and prior-authorization checks against West-African public payers "
                  + "(NHIS, NHIA, CNAMGS, mutuelle) and generic private payers. Each call is persisted as an "
                  + "EligibilityCheck row and emits a PATIENT_ACCESS audit event.")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "insurance eligibility: administrative")
 public class EligibilityController {
 
     private static final String CLINICAL_ROLES =

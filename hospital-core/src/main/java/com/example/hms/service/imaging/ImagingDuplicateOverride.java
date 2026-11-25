@@ -61,6 +61,21 @@ public class ImagingDuplicateOverride {
     }
 
     /**
+     * QA D3903: the server's own finding decides, not the client's flag. When the server finds a
+     * recent order of the same study, the order is placed only with a reason (and OTHER's note),
+     * whether or not the request said « Commander quand même ». Refused before anything is written.
+     */
+    public static void requireReasonForDuplicate(ImagingOrderRequestDTO request, List<ImagingOrder> matches) {
+        if (matches == null || matches.isEmpty()) {
+            return;
+        }
+        if (request == null || request.getDuplicateOverrideReason() == null) {
+            throw new FieldBusinessException("duplicateOverrideReason", "imaging.order.duplicateOverride.reasonRequired");
+        }
+        requireReason(request);
+    }
+
+    /**
      * Stores the override on a new order the server found a duplicate for. An
      * override claimed when the server finds none is not stored: there was
      * nothing to override.

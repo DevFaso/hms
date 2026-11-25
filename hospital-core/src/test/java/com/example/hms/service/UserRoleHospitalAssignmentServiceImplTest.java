@@ -131,6 +131,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(accountAccess.requireMayGrant(any()))
             .thenReturn(anywhere);
+        // ...and names any existing account (QA D4020; the real rule: AssignmentHolderReachTest).
+        callerReach(true);
         // The first-password claim succeeds unless a test says a simultaneous activation won it.
         org.mockito.Mockito.lenient()
             .when(userRepository.claimFirstPassword(any(), any(), any())).thenReturn(1);
@@ -2001,17 +2003,20 @@ class UserRoleHospitalAssignmentServiceImplTest {
         return dto;
     }
 
-    /** The caller is an organisation admin here; {@code staff} is what the shared rule says of the holder. */
-    private void callerReachesTheHospitalThroughItsOrganisationAlone(boolean holderIsItsStaff) {
-        when(accountAccess.reachesOnlyThroughOrganisation(hospital.getId())).thenReturn(true);
-        org.mockito.Mockito.lenient().when(accountAccess.isStaffOfCallersOrganisation(assignee))
-            .thenReturn(holderIsItsStaff);
+    /** What the caller's holder reach (QA D4020) says of every existing account and pending row. */
+    private void callerReach(boolean mayName) {
+        com.example.hms.service.support.UserAccountAccess.HolderReach reach =
+            mock(com.example.hms.service.support.UserAccountAccess.HolderReach.class);
+        org.mockito.Mockito.lenient().when(reach.everywhere()).thenReturn(mayName);
+        org.mockito.Mockito.lenient().when(reach.mayName(any())).thenReturn(mayName);
+        org.mockito.Mockito.lenient().when(reach.knowsHolderOf(any(), any())).thenReturn(mayName);
+        org.mockito.Mockito.lenient().when(accountAccess.holderReach()).thenReturn(reach);
     }
 
     @Test
     void review2_aPatientFoundByPhoneAnswersExactlyAsAnUnknownNumber() {
-        // The number belongs to a patient of this very hospital: not its staff (OrganisationAdminScopeTest).
-        callerReachesTheHospitalThroughItsOrganisationAlone(false);
+        // The number belongs to a patient of this very hospital: not staff the caller may name.
+        callerReach(false);
         UserRoleHospitalAssignmentRequestDTO known = grantByIdentifier(assignee, "+22670000001");
         UserRoleHospitalAssignmentRequestDTO unknown = grantByIdentifier(null, "+22670000002");
 
@@ -2020,15 +2025,15 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         assertThat(aPatient).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         assertThat(nobody).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
-        // The same sentence but for the number typed: nothing says which of the two exists.
-        assertThat(aPatient.getMessage().replace("+22670000001", "<n>"))
-            .isEqualTo(nobody.getMessage().replace("+22670000002", "<n>"));
+        // QA D4020: the same sentence, and the number typed is not echoed in either.
+        assertThat(aPatient.getMessage()).isEqualTo(nobody.getMessage())
+            .doesNotContain("22670000001").doesNotContain("22670000002");
         verify(assignmentRepository, never()).save(any());
     }
 
     @Test
     void review2_staffOfAnotherOrganisationAnswersAsUnknown() {
-        callerReachesTheHospitalThroughItsOrganisationAlone(false);
+        callerReach(false);
         UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000003");
 
         assertThatThrownBy(() -> service.assignRole(dto))
@@ -2037,8 +2042,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
-    void review2_staffOfTheOrganisationMayBeNamedPendingInvitationIncluded() {
-        callerReachesTheHospitalThroughItsOrganisationAlone(true);
+    void review2_staffTheCallerMayNameIsAcceptedPendingInvitationIncluded() {
+        callerReach(true);
         UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000004");
 
         // The fixture stubs no further than this rule: whatever stops the grant after it is not this rule.
@@ -2049,14 +2054,15 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
-    void review2_aHospitalAdminOrSuperAdminIsNotHeldToTheOrganisationsStaff() {
-        // reachesOnlyThroughOrganisation answers false for them (the fixture's default).
+    void d4020_aPatientOnlyAccountIsRefusedEvenWhenTheReachWouldNameIt() {
+        callerReach(true);
+        when(accountAccess.isPatientOnly(org.mockito.ArgumentMatchers.eq(assignee), any())).thenReturn(true);
         UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000005");
 
-        Throwable later = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(dto));
-
-        assertThat(later).isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
-        verify(accountAccess, never()).isStaffOfCallersOrganisation(any());
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(assignmentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     /** Runs the specification the listing was asked with against a recording criteria root. */

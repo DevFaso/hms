@@ -524,6 +524,13 @@
                             m.prnLabel
                           }}</span>
                         }
+                        <!-- QA D3941: the pharmacy's supply, as information on the row. -->
+                        @if (m.supplyLabel) {
+                          {{ ' '
+                          }}<span class="cell-sub" [attr.data-testid]="'med-supply-' + m.id">{{
+                            m.supplyLabel
+                          }}</span>
+                        }
                         @if (m.cdsAdvisories?.length) {
                           {{ ' '
                           }}<span

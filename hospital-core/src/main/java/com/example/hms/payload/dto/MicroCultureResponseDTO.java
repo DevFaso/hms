@@ -42,6 +42,8 @@ public class MicroCultureResponseDTO {
     private String finalizedByName;
     private LocalDateTime correctedAt;
     private String correctionReason;
+    /** QA D3902: who made the latest correction of a final report (the laboratory). */
+    private String correctedByName;
     private String reportedByName;
     private String notes;
     private LocalDateTime createdAt;
