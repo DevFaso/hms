@@ -200,8 +200,10 @@ subprojects {
         // gets the cap too - without it, live heap grows with every distinct
         // context in a fork until the ceiling above is hit (#740, #748, #750).
 
-        // Restart test JVM every 250 classes to prevent metaspace/heap accumulation
-        forkEvery = 250
+        // Bound retained Spring/Mockito/bundle state: the 250-class lifetime exhausted
+        // the unchanged 2 GiB heap in the patient-message contract CI shard.
+        // Recycling changes no test selection, assertions or coverage aggregation.
+        forkEvery = 50
 
         // Fork-level parallelism. Safe because every test JVM is its own
         // process and every Spring context already gets its OWN in-memory H2

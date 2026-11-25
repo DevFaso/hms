@@ -121,7 +121,7 @@ class PostCommitLazyAssociationGuardTest {
         "controller/LookupController.java", ".getUser().getEmail(", 1, LOADED_HERE,
         "controller/OrganizationSecurityController.java", ".getOrganization().getId(", 2, LOADED_HERE,
         "controller/ReportController.java", ".getHospital().getId(", 1, LOADED_HERE,
-        "controller/integration/Dhis2ExportController.java", ".getHospital().getId(", 3, LOADED_HERE);
+        "controller/integration/Dhis2ExportController.java", ".getHospital().getId(", 2, LOADED_HERE);
 
     static Map<String, Integer> controllerChains(String rawSource) {
         Map<String, Integer> counts = new TreeMap<>();

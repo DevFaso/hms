@@ -49,8 +49,8 @@ public class InvoiceEmailController {
         if (!isValidEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of(
                 STATUS_KEY, 400,
-                "error", "Invalid email",
-                "message", "Invalid email address: " + email
+                "error", com.example.hms.utility.MessageUtil.resolve("response.email.invalid"),
+                "message", com.example.hms.utility.MessageUtil.resolve("response.email.addressInvalid", email)
             ));
         }
 

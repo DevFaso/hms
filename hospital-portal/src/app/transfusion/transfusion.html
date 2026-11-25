@@ -41,6 +41,7 @@
     <div class="results-filters">
       @if (tab() === 'requests') {
         <select
+          appFormControl
           [ngModel]="requestStatusFilter()"
           (ngModelChange)="onRequestStatusFilter($event)"
           [attr.aria-label]="'COMMON.STATUS' | translate"
@@ -52,6 +53,7 @@
         </select>
       } @else {
         <select
+          appFormControl
           [ngModel]="unitStatusFilter()"
           (ngModelChange)="onUnitStatusFilter($event)"
           [attr.aria-label]="'COMMON.STATUS' | translate"

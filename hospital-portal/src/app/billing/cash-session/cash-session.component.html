@@ -121,6 +121,7 @@
                       class="numeric"
                     >
                       <input
+                        appFormControl
                         type="number"
                         min="0"
                         step="1"
@@ -148,6 +149,7 @@
                     <td [attr.data-label]="'BILLING.CASH_SESSION.EXPLANATION' | translate">
                       @if ((differenceOf(s, line) ?? 0) !== 0) {
                         <input
+                          appFormControl
                           type="text"
                           maxlength="500"
                           [id]="explanationId(s, line)"

@@ -19,6 +19,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import frenchCatalog from '../../assets/i18n/fr.json';
 
 function mockInvoice(overrides: Partial<BillingInvoiceResponse> = {}): BillingInvoiceResponse {
   return {
@@ -1549,6 +1550,31 @@ describe('BillingComponent', () => {
       fixture.detectChanges();
       component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 0, balanceDue: 0 }));
       fixture.detectChanges();
+    });
+
+    it('D r72: shows the stored imaging category in both display and editor without changing the line', () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', frenchCatalog);
+      translate.use('fr');
+      const imaging = { ...zeroLine, coverageCategory: 'IMAGING' };
+      component.items.set([imaging]);
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('.lines-table .cell-secondary').textContent.trim(),
+      ).toBe('Imagerie');
+      component.startEditLine(imaging);
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('.lines-table .cell-secondary').textContent.trim(),
+      ).toBe('Imagerie');
+      expect(imaging.unitPrice).toBe(0);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      component.cancelEditLine();
+      component.items.set([zeroLine]);
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('.lines-table .cell-secondary').textContent.trim(),
+      ).toBe('Prestation');
     });
 
     it('offers to edit each line of a draft, not only to delete it', () => {

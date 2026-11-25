@@ -12,15 +12,27 @@ public class MllpFieldWidthException extends MllpProtocolException {
 
     /** The header to answer on, or null when MSH-10 itself was refused. */
     private final transient Hl7MessageHeader replyHeader;
+    /** Structured display arguments; protocol/ACK diagnostic text remains unchanged. */
+    private final String fieldName;
+    private final Integer maximum;
 
     public MllpFieldWidthException(String message) {
         this(message, null);
     }
 
     public MllpFieldWidthException(String message, Hl7MessageHeader replyHeader) {
+        this(message, replyHeader, null, null);
+    }
+
+    public MllpFieldWidthException(String message, Hl7MessageHeader replyHeader, String fieldName, Integer maximum) {
         super(message);
         this.replyHeader = replyHeader;
+        this.fieldName = fieldName;
+        this.maximum = maximum;
     }
+
+    public String fieldName() { return fieldName; }
+    public Integer maximum() { return maximum; }
 
     /**
      * The parsed header with each refused field replaced by {@code ?}, so the

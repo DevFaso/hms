@@ -219,7 +219,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
 
     private void validateRequest(SmartPhraseRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("SmartPhraseRequest is required");
+            throw new BusinessException("phrase.request.required");
         }
         if (request.getScope() == SmartPhraseScope.GLOBAL
             && (request.getHospitalId() != null || request.getOwnerUserId() != null)) {
@@ -252,9 +252,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         };
         conflict.ifPresent(existing -> {
             if (excludeId == null || !existing.getId().equals(excludeId)) {
-                throw new BusinessException(
-                    "A SmartPhrase already exists for trigger '" + trigger
-                        + "' at scope " + request.getScope());
+                throw new com.example.hms.exception.FieldBusinessException("trigger", "phrase.trigger.taken", trigger);
             }
         });
     }

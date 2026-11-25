@@ -97,7 +97,7 @@ class DhisAdxExportServiceImplTest {
         assertThatThrownBy(() -> service.triggerImmunizationsExport(
             hospitalId, datasetUid, Dhis2PeriodType.WEEKLY, "2026W17", null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("does not match facility default");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("dhis.period.mismatch"));
 
         verify(httpClient, never()).postDataValueSet(any(), any(), any(), any(), any());
     }

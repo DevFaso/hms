@@ -118,11 +118,6 @@
     ],
     "control": "input"
   },
-  "src/app/admin/order-sets/order-set-list.component.ts::input::6723a585212b845369c9::0": {
-    "reason": "Existing module-specific control styling sets padding via .order-set-admin__search. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".order-set-admin__search"],
-    "control": "input"
-  },
   "src/app/admin-governance/credentials-tab.html::input::70bfb101d2836cdf4142::0": {
     "reason": "Existing module-specific control styling sets padding via :where(.search-box) and .panel-actions .search-box. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [":where(.search-box)", ".panel-actions .search-box"],
@@ -438,26 +433,6 @@
     ],
     "control": "emergency-downtime-message"
   },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::bd1af2f0898876adda97::0": {
-    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".pa-field select,\n.pa-field input"],
-    "control": "pa-org"
-  },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::3c9ef0c045dd6d030b2f::0": {
-    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".pa-field select,\n.pa-field input"],
-    "control": "pa-plan"
-  },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::input::bf345cfff619a5b6f857::0": {
-    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".pa-field select,\n.pa-field input"],
-    "control": "pa-seats"
-  },
-  "src/app/super-admin/subscriptions/plan-assignments.component.ts::select::b19f8c233213f6b33d85::0": {
-    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".pa-field select,\n.pa-field input"],
-    "control": "pa-period"
-  },
   "src/app/super-admin/subscriptions/subscriptions.html::input::0baca07e25613fb7945a::0": {
     "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
@@ -497,5 +472,30 @@
     "reason": "Existing module-specific control styling sets padding via .audit-period select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".audit-period select"],
     "control": "select"
+  },
+  "src/app/admin/order-sets/order-set-list.component.ts::OrderSetListComponent::input::6723a585212b845369c9::0": {
+    "reason": "Existing module-specific control styling sets padding via .order-set-admin__search. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".order-set-admin__search"],
+    "control": "input"
+  },
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::PlanAssignmentsComponent::select::bd1af2f0898876adda97::0": {
+    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".pa-field select,\n.pa-field input"],
+    "control": "pa-org"
+  },
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::PlanAssignmentsComponent::select::3c9ef0c045dd6d030b2f::0": {
+    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".pa-field select,\n.pa-field input"],
+    "control": "pa-plan"
+  },
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::PlanAssignmentsComponent::input::bf345cfff619a5b6f857::0": {
+    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".pa-field select,\n.pa-field input"],
+    "control": "pa-seats"
+  },
+  "src/app/super-admin/subscriptions/plan-assignments.component.ts::PlanAssignmentsComponent::select::b19f8c233213f6b33d85::0": {
+    "reason": "Existing module-specific control styling sets padding via .pa-field select,\n.pa-field input. Preserve that styled layout instead of adding a second form-control skin.",
+    "evidence": [".pa-field select,\n.pa-field input"],
+    "control": "pa-period"
   }
 }

@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -66,6 +67,7 @@ const PAN_STEP = 40;
   selector: 'app-imaging-images',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     FormsModule,
     TranslateModule,
     ModalDialogDirective,

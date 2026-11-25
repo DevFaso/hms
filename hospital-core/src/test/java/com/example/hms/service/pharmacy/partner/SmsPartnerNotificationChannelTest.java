@@ -95,6 +95,11 @@ class SmsPartnerNotificationChannelTest {
         prescription.setId(UUID.randomUUID());
         prescription.setMedicationName("Amoxicilline 500mg");
         prescription.setPatient(patient);
+        patient.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        prescription.setHospital(hospital);
+        decision.setPrescription(prescription);
     }
 
     // ---------- buildRefToken ----------
@@ -431,8 +436,8 @@ class SmsPartnerNotificationChannelTest {
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
     void bothPatientNoticesRequireCurrentPrimaryProofAndConsent(boolean dispensed) {
         patient.setPhoneNumberPrimary("+22670999999"); // setter invalidates old proof
-        if (dispensed) channel.notifyPatientDispensed(patient, partner);
-        else channel.notifyPatientAccepted(patient, partner);
+        if (dispensed) channel.notifyPatientDispensed(decision, patient, partner);
+        else channel.notifyPatientAccepted(decision, patient, partner);
         verify(smsService, never()).send(anyString(), anyString());
         verifyNoInteractions(smsServiceProvider);
     }
@@ -442,8 +447,8 @@ class SmsPartnerNotificationChannelTest {
     void bothPatientNoticesRespectOptOut(boolean dispensed) {
         when(consent.decision(any(), any(), any()))
             .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
-        if (dispensed) channel.notifyPatientDispensed(patient, partner);
-        else channel.notifyPatientAccepted(patient, partner);
+        if (dispensed) channel.notifyPatientDispensed(decision, patient, partner);
+        else channel.notifyPatientAccepted(decision, patient, partner);
         verify(smsService, never()).send(anyString(), anyString());
     }
 
@@ -453,7 +458,7 @@ class SmsPartnerNotificationChannelTest {
     @DisplayName("notifyPatientAccepted sends SMS to patient primary phone")
     void notifyPatientAcceptedPrimary() {
 
-        channel.notifyPatientAccepted(patient, partner);
+        channel.notifyPatientAccepted(decision, patient, partner);
 
         ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
         verify(smsService).send(eq("+22670111111"), msg.capture());
@@ -467,7 +472,7 @@ class SmsPartnerNotificationChannelTest {
         patient.setPhoneNumberPrimary("   ");
         patient.setPhoneNumberSecondary("+22671222222");
 
-        channel.notifyPatientAccepted(patient, partner);
+        channel.notifyPatientAccepted(decision, patient, partner);
 
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -478,7 +483,7 @@ class SmsPartnerNotificationChannelTest {
         patient.setPhoneNumberPrimary(null);
         patient.setPhoneNumberSecondary("");
 
-        channel.notifyPatientAccepted(patient, partner);
+        channel.notifyPatientAccepted(decision, patient, partner);
 
         verifyNoInteractions(smsServiceProvider);
         verify(smsService, never()).send(anyString(), anyString());
@@ -487,7 +492,7 @@ class SmsPartnerNotificationChannelTest {
     @Test
     @DisplayName("notifyPatientAccepted is a no-op when patient is null")
     void notifyPatientAcceptedNullPatient() {
-        channel.notifyPatientAccepted(null, partner);
+        channel.notifyPatientAccepted(decision, null, partner);
         verifyNoInteractions(smsServiceProvider);
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -495,7 +500,7 @@ class SmsPartnerNotificationChannelTest {
     @Test
     @DisplayName("notifyPatientAccepted is a no-op when partner is null")
     void notifyPatientAcceptedNullPartner() {
-        channel.notifyPatientAccepted(patient, null);
+        channel.notifyPatientAccepted(decision, patient, null);
         verifyNoInteractions(smsServiceProvider);
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -505,7 +510,7 @@ class SmsPartnerNotificationChannelTest {
     void notifyPatientAcceptedBlankPartnerName() {
         partner.setName("   ");
 
-        channel.notifyPatientAccepted(patient, partner);
+        channel.notifyPatientAccepted(decision, patient, partner);
 
         ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
         verify(smsService).send(anyString(), msg.capture());
@@ -518,7 +523,7 @@ class SmsPartnerNotificationChannelTest {
     @DisplayName("notifyPatientDispensed sends SMS containing partner name")
     void notifyPatientDispensedSuccess() {
 
-        channel.notifyPatientDispensed(patient, partner);
+        channel.notifyPatientDispensed(decision, patient, partner);
 
         ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
         verify(smsService).send(eq("+22670111111"), msg.capture());
@@ -529,7 +534,7 @@ class SmsPartnerNotificationChannelTest {
     @Test
     @DisplayName("notifyPatientDispensed no-op when patient null")
     void notifyPatientDispensedNullPatient() {
-        channel.notifyPatientDispensed(null, partner);
+        channel.notifyPatientDispensed(decision, null, partner);
         verifyNoInteractions(smsServiceProvider);
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -537,7 +542,7 @@ class SmsPartnerNotificationChannelTest {
     @Test
     @DisplayName("notifyPatientDispensed no-op when partner null")
     void notifyPatientDispensedNullPartner() {
-        channel.notifyPatientDispensed(patient, null);
+        channel.notifyPatientDispensed(decision, patient, null);
         verifyNoInteractions(smsServiceProvider);
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -548,7 +553,7 @@ class SmsPartnerNotificationChannelTest {
         doThrow(new RuntimeException("boom")).when(smsService).send(anyString(), anyString());
 
         // Must not throw
-        channel.notifyPatientDispensed(patient, partner);
+        channel.notifyPatientDispensed(decision, patient, partner);
 
         verify(smsService).send(anyString(), anyString());
     }

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { GoodsReceiptComponent } from './goods-receipt';
 import { PharmacyService } from '../services/pharmacy.service';
@@ -133,6 +133,35 @@ describe('GoodsReceiptComponent', () => {
     fixture = TestBed.createComponent(GoodsReceiptComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('D3650 renders received and remaining counts with the shared French plural rules', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.use('fr').subscribe();
+    component.recentLots.set([
+      {
+        id: 'plural',
+        inventoryItemId: 'inv-pack',
+        lotNumber: 'CDX-PLURAL',
+        initialQuantity: 24,
+        remainingQuantity: 2,
+      },
+      {
+        id: 'singular',
+        inventoryItemId: 'inv-pack',
+        lotNumber: 'CDX-SINGULAR',
+        initialQuantity: 1,
+        remainingQuantity: 0,
+      },
+    ] as any);
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+    const plural = rows.find((row) => row.textContent?.includes('CDX-PLURAL'))!;
+    const singular = rows.find((row) => row.textContent?.includes('CDX-SINGULAR'))!;
+    expect(plural.textContent).toContain('24 comprimés');
+    expect(plural.textContent).toContain('2 comprimés');
+    expect(singular.textContent).toContain('1 comprimé');
+    expect(singular.textContent).toContain('0 comprimé');
   });
 
   function fillForm(itemId: string): void {

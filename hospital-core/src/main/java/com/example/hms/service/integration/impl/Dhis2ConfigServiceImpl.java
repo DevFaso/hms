@@ -113,8 +113,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
             .orElseThrow(() -> new ResourceNotFoundException("dhis2.mapping.notFound", mappingId));
         if (!existing.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException(
-                "Cross-tenant edit blocked: mapping belongs to another hospital");
+            throw new BusinessException("dhis.mapping.otherOwner");
         }
         mappingMapper.applyToEntity(request, hospital, existing);
         return mappingMapper.toResponseDTO(mappingRepository.save(existing));
@@ -125,8 +124,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
             .orElseThrow(() -> new ResourceNotFoundException("dhis2.mapping.notFound", mappingId));
         if (!existing.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException(
-                "Cross-tenant delete blocked: mapping belongs to another hospital");
+            throw new BusinessException("dhis.mapping.otherOwner");
         }
         mappingRepository.delete(existing);
     }

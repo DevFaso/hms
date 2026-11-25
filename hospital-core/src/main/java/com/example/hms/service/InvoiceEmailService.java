@@ -115,9 +115,9 @@ public class InvoiceEmailService {
         String dates = messageSource.getMessage("email.invoice.dates", new Object[] {
             DisplayDates.date(inv.getInvoiceDate(), locale), DisplayDates.date(inv.getDueDate(), locale)}, locale);
         String total = messageSource.getMessage("email.invoice.total",
-            new Object[] {PdfInvoiceService.money(inv.getTotalAmount())}, locale);
+            new Object[] {PdfInvoiceService.money(inv.getTotalAmount(), locale)}, locale);
         String balance = messageSource.getMessage("email.invoice.balance",
-            new Object[] {"<strong>" + PdfInvoiceService.money(InvoiceBalance.dueOf(inv)) + "</strong>"}, locale);
+            new Object[] {"<strong>" + PdfInvoiceService.money(InvoiceBalance.dueOf(inv), locale) + "</strong>"}, locale);
         String thanks = messageSource.getMessage("email.invoice.thanks", null, locale);
         return "<!DOCTYPE html><html lang=\"" + locale.getLanguage() + "\"><body>"
             + "<h2>" + heading + "</h2>"

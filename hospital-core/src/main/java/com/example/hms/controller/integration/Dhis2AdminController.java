@@ -48,7 +48,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return configService.getFacilityConfig(hospitalId)
             .map(ResponseEntity::ok)
@@ -65,7 +65,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(configService.upsertFacilityConfig(hospitalId, body));
     }
@@ -81,7 +81,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(configService.listMappings(hospitalId, datasetUid, pageable));
     }
@@ -96,7 +96,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(configService.createMapping(hospitalId, body));
     }
@@ -112,7 +112,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(configService.updateMapping(id, hospitalId, body));
     }
@@ -127,7 +127,7 @@ public class Dhis2AdminController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         configService.deleteMapping(id, hospitalId);
         return ResponseEntity.noContent().build();

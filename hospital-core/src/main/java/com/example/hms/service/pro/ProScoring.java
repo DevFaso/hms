@@ -53,11 +53,11 @@ public final class ProScoring {
             itemsByNo.put(item.getItemNo(), item);
         }
         if (itemsByNo.isEmpty()) {
-            throw new BusinessException("Instrument " + instrument.getCode() + " has no items loaded");
+            throw new BusinessException("pro.items.missing", instrument.getCode());
         }
         for (Integer itemNo : safeAnswers.keySet()) {
             if (itemNo == null || !itemsByNo.containsKey(itemNo)) {
-                throw new BusinessException("Instrument " + instrument.getCode() + " has no item " + itemNo);
+                throw new BusinessException("pro.item.unknown", instrument.getCode(), itemNo);
             }
         }
 
@@ -94,7 +94,6 @@ public final class ProScoring {
                 return option;
             }
         }
-        throw new BusinessException("Instrument " + instrument.getCode()
-            + " item " + item.getItemNo() + " has no option " + optionNo);
+        throw new BusinessException("pro.option.unknown", instrument.getCode(), item.getItemNo(), optionNo);
     }
 }
