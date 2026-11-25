@@ -22,8 +22,24 @@ import java.util.regex.Pattern;
  */
 public final class ProductStrength {
 
-    /** How two strengths relate. UNKNOWN when either side states none that can be read. */
-    public enum Relation { SAME, DIFFERENT, UNKNOWN }
+    /**
+     * How two strengths relate. UNKNOWN when either side states no strength at all; UNREADABLE when either side
+     * states one (a number and a unit) that is not fully understood, which never counts as the same (fail closed).
+     */
+    public enum Relation { SAME, DIFFERENT, UNKNOWN, UNREADABLE }
+
+    /** Review of #1336: what a text says about strength: nothing, a strength read in full, or one not understood. */
+    enum Kind { NONE, READ, UNREADABLE }
+
+    /** A text's strength: {@code value} is set only when {@code kind} is READ. */
+    record Reading(Kind kind, Value value) {
+        static final Reading NONE = new Reading(Kind.NONE, null);
+        static final Reading UNREADABLE = new Reading(Kind.UNREADABLE, null);
+
+        static Reading of(Value value) {
+            return new Reading(Kind.READ, value);
+        }
+    }
 
     /** A number as written, bounded so no input makes the match backtrack ("500", "62,5"). */
     private static final String NUMBER = "\\d{1,7}+(?:[.,]\\d{1,6}+)?+";
@@ -36,6 +52,10 @@ public final class ProductStrength {
     /** A further amount of a combination written with its own unit, right after ("500 mg/30 mg", "+ 125 mg"). */
     private static final Pattern FURTHER = Pattern.compile(
         "\\G\\s{0,3}+[/+]\\s{0,3}+(" + NUMBER + ")\\s{0,3}+" + UNIT,
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** Any amount with a unit anywhere in a text: each must belong to the strength read, or it is unreadable. */
+    private static final Pattern ANY_AMOUNT = Pattern.compile(
+        "(?<![\\w.,])" + NUMBER + "\\s{0,3}+" + UNIT,
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     /** The most amounts a combination is read with (a fixed-dose combination has two to four). */
     private static final int MAX_COMPONENTS = 5;
@@ -95,62 +115,86 @@ public final class ProductStrength {
 
     /** The relation between the strengths of two catalogue items. */
     public static Relation compare(MedicationCatalogItem a, MedicationCatalogItem b) {
-        return compare(of(a), of(b));
+        return compare(readItem(a), readItem(b));
     }
 
     /** The relation between the strength an order's text states and a catalogue item's. */
     public static Relation compare(String orderText, MedicationCatalogItem item) {
-        return compare(inText(orderText), of(item));
+        return compare(read(orderText), readItem(item));
     }
 
-    private static Relation compare(Optional<Value> a, Optional<Value> b) {
-        if (a.isEmpty() || b.isEmpty()) {
+    private static Relation compare(Reading a, Reading b) {
+        if (a.kind() == Kind.UNREADABLE || b.kind() == Kind.UNREADABLE) {
+            return Relation.UNREADABLE;
+        }
+        if (a.kind() == Kind.NONE || b.kind() == Kind.NONE) {
             return Relation.UNKNOWN;
         }
-        return a.get().sameAs(b.get()) ? Relation.SAME : Relation.DIFFERENT;
+        return a.value().sameAs(b.value()) ? Relation.SAME : Relation.DIFFERENT;
     }
 
-    /** The item's strength as the reader writes it ("500 mg"), or empty when it states none. */
+    /** Whether a text states a strength at all (one read in full, or one not understood). */
+    public static boolean statesStrength(String text) {
+        return read(text).kind() != Kind.NONE;
+    }
+
+    /** The item's strength as the reader writes it ("500 mg"), or empty when it states none it can be read as. */
     public static Optional<String> labelOf(MedicationCatalogItem item) {
         return labelOf(item, com.example.hms.utility.DisplayNumbers.requestLocale());
     }
 
-    /** The item's strength as a reader of {@code locale} writes it, or empty when it states none. */
+    /** The item's strength as a reader of {@code locale} writes it, or empty when none is read in full. */
     public static Optional<String> labelOf(MedicationCatalogItem item, Locale locale) {
-        return of(item).map(v -> v.label(locale));
+        return Optional.ofNullable(readItem(item).value()).map(v -> v.label(locale));
     }
 
-    /** The strength of a catalogue item: its strength fields, else the strength written in its names. */
-    static Optional<Value> of(MedicationCatalogItem item) {
+    /**
+     * The strength of a catalogue item: its strength fields, else the strength written in its names. A strength
+     * field that states a strength not understood is unreadable; the names do not stand in for it.
+     */
+    static Reading readItem(MedicationCatalogItem item) {
         if (item == null) {
-            return Optional.empty();
+            return Reading.NONE;
         }
         String strength = item.getStrength();
         if (strength != null && !strength.isBlank()) {
             String unit = item.getStrengthUnit() == null ? "" : item.getStrengthUnit().trim();
-            Optional<Value> stated = inText(strength.trim() + " " + unit);
-            if (stated.isPresent()) {
+            Reading stated = read(strength.trim() + " " + unit);
+            if (stated.kind() != Kind.NONE) {
                 return stated;
             }
         }
-        Optional<Value> named = inText(item.getNameFr());
-        return named.isPresent() ? named : inText(item.getBrandName());
+        Reading named = read(item.getNameFr());
+        return named.kind() != Kind.NONE ? named : read(item.getBrandName());
+    }
+
+    /** {@link #readItem}, the strength read in full or empty. */
+    static Optional<Value> of(MedicationCatalogItem item) {
+        return Optional.ofNullable(readItem(item).value());
+    }
+
+    /** {@link #read}, the strength read in full or empty (none stated, or not understood). */
+    static Optional<Value> inText(String text) {
+        return Optional.ofNullable(read(text).value());
     }
 
     /**
-     * The first strength written in a text ("Amoxicilline 500 mg gélule" is 500 mg, "Amoxicilline/acide
-     * clavulanique 500 mg/62,5 mg" is 500/62.5 mg), or empty. A combination whose amounts are not all in one unit
-     * cannot be compared and reads as no strength at all.
+     * The strength a text states ("Amoxicilline 500 mg gélule" is 500 mg, "Amoxicilline/acide clavulanique
+     * 500 mg/62,5 mg" is 500/62.5 mg). Review of #1336, fail closed: a text with an amount and a unit that is not
+     * all read as one strength is UNREADABLE, never « no strength »: amounts in different units (« 500 mg/400 UI »),
+     * or an amount the strength does not take in (« Amoxicilline 500 mg + acide clavulanique 125 mg », where the
+     * ingredient name stops the combination).
      */
-    static Optional<Value> inText(String text) {
+    static Reading read(String text) {
         if (text == null || text.isBlank()) {
-            return Optional.empty();
+            return Reading.NONE;
         }
         String normalized = Normalizer.normalize(text, Normalizer.Form.NFC);
         Matcher m = AMOUNT.matcher(normalized);
         if (!m.find()) {
-            return Optional.empty();
+            return Reading.NONE;
         }
+        int start = m.start();
         String unit = baseUnit(m.group(2));
         java.util.List<BigDecimal> amounts = new java.util.ArrayList<>();
         for (String written : m.group(1).split("/")) {
@@ -160,7 +204,7 @@ public final class ProductStrength {
         Matcher further = FURTHER.matcher(normalized);
         while (amounts.size() < MAX_COMPONENTS && further.find(end)) {
             if (!unit.equals(baseUnit(further.group(2)))) {
-                return Optional.empty();
+                return Reading.UNREADABLE;
             }
             amounts.add(inBaseUnit(new BigDecimal(further.group(1).replace(',', '.')), further.group(2)));
             end = further.end();
@@ -171,8 +215,15 @@ public final class ProductStrength {
         if (concentration.find(end)) {
             per = concentration.group(1) == null ? null : new BigDecimal(concentration.group(1).replace(',', '.'));
             perUnit = concentration.group(2).toLowerCase(Locale.ROOT);
+            end = concentration.end();
         }
-        return Optional.of(new Value(java.util.List.copyOf(amounts), unit, per, perUnit));
+        Matcher any = ANY_AMOUNT.matcher(normalized);
+        while (any.find()) {
+            if (any.start() < start || any.start() >= end) {
+                return Reading.UNREADABLE;
+            }
+        }
+        return Reading.of(new Value(java.util.List.copyOf(amounts), unit, per, perUnit));
     }
 
     /** The unit an amount is compared in: milligrams for every mass unit, « ui » for « iu ». */

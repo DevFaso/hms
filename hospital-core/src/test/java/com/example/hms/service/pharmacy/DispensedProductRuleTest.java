@@ -201,6 +201,37 @@ class DispensedProductRuleTest {
         }
 
         @Test
+        @DisplayName("review of #1336: combinations with ingredient names between the amounts never match each other")
+        void interleavedCombinationsAreUnreadableAndRefused() {
+            MedicationCatalogItem withClav125 = item("Amoxicilline 500 mg + acide clavulanique 125 mg",
+                "Amoxicilline + acide clavulanique", "J01CR02", "TABLET", null, null);
+            MedicationCatalogItem withClav62 = item("Amoxicilline 500 mg + acide clavulanique 62.5 mg",
+                "Amoxicilline + acide clavulanique", "J01CR02", "TABLET", null, null);
+            assertThat(DispenseVerificationService.classify(linkedTo(withClav125), withClav125, withClav62))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            // The order's own item is still its own product.
+            assertThat(DispenseVerificationService.classify(linkedTo(withClav125), withClav125, withClav125))
+                .isEqualTo(DispensedProductMatch.PRESCRIBED);
+            // A free-text order written that way is not filled from either.
+            assertThat(DispenseVerificationService.classify(
+                freeText("Amoxicilline 500 mg + acide clavulanique 125 mg"), null, withClav125))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+        }
+
+        @Test
+        @DisplayName("review of #1336: a mixed-unit strength is stated, not absent: refused whatever the lot's strength")
+        void aMixedUnitStrengthIsRefusedNotIgnored() {
+            Prescription rx = freeText("Calcium 500 mg/400 UI");
+            MedicationCatalogItem calcium = item("Calcium 1000 mg", "Calcium", "A12AA04", "TABLET", "1000", "mg");
+            MedicationCatalogItem mixed = item("Calcium vitamine D3", "Calcium", "A12AA04", "TABLET", "500 mg/400",
+                "UI");
+            assertThat(DispenseVerificationService.classify(rx, null, calcium))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            assertThat(DispenseVerificationService.classify(freeText("Calcium 1000 mg"), null, mixed))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+        }
+
+        @Test
         @DisplayName("a text that states no strength compares the molecule, as before")
         void noStrengthComparesTheMolecule() {
             assertThat(DispenseVerificationService.classify(freeText("Amoxicilline"), null, AMOX_250))
@@ -236,14 +267,18 @@ class DispensedProductRuleTest {
         void everyAmountOfACombinationIsRead() {
             assertThat(ProductStrength.inText("Augmentin 500/62,5 mg").map(v -> v.label(java.util.Locale.ENGLISH)))
                 .contains("500/62.5 mg");
-            assertThat(ProductStrength.inText("Amoxicilline 500 mg + acide clavulanique 125 mg")
-                .map(v -> v.label(java.util.Locale.ENGLISH))).contains("500 mg");
+            // An ingredient name between the amounts: not read as 500 mg alone, but as unreadable (fail closed).
+            assertThat(ProductStrength.read("Amoxicilline 500 mg + acide clavulanique 125 mg").kind())
+                .isEqualTo(ProductStrength.Kind.UNREADABLE);
+            assertThat(ProductStrength.statesStrength("Amoxicilline 500 mg + acide clavulanique 125 mg")).isTrue();
             assertThat(ProductStrength.inText("Codoliprane 500 mg/30 mg").map(v -> v.label(java.util.Locale.ENGLISH)))
                 .contains("500/30 mg");
             assertThat(ProductStrength.inText("Amoxicilline 1 g/125 mg").map(ProductStrength.Value::amounts))
                 .contains(java.util.List.of(new java.math.BigDecimal("1000"), new java.math.BigDecimal("125")));
-            // Amounts in different units cannot be compared: no strength at all.
-            assertThat(ProductStrength.inText("Vitamines 500 mg/400 UI")).isEmpty();
+            // Amounts in different units cannot be compared: a strength is stated, and it is unreadable.
+            assertThat(ProductStrength.read("Calcium 500 mg/400 UI").kind()).isEqualTo(ProductStrength.Kind.UNREADABLE);
+            assertThat(ProductStrength.statesStrength("Calcium 500 mg/400 UI")).isTrue();
+            assertThat(ProductStrength.read("Amoxicilline").kind()).isEqualTo(ProductStrength.Kind.NONE);
         }
 
         @Test

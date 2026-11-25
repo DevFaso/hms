@@ -355,9 +355,10 @@ public class DispenseVerificationService {
         // a strength is filled only at that strength; a lot whose strength cannot be read (nobody recorded it, a
         // combination not fully written) is not shown to be it. Only an order that states none compares the
         // molecule alone, as before.
-        String text = ProductStrength.inText(rx.getMedicationName()).isPresent()
+        // A strength stated but not understood (« 500 mg/400 UI ») is never read as none: it is refused.
+        String text = ProductStrength.statesStrength(rx.getMedicationName())
             ? rx.getMedicationName() : rx.getMedicationDisplayName();
-        if (ProductStrength.inText(text).isEmpty()) {
+        if (!ProductStrength.statesStrength(text)) {
             return DispensedProductMatch.PRESCRIBED;
         }
         return ProductStrength.compare(text, item) == ProductStrength.Relation.SAME
@@ -461,7 +462,7 @@ public class DispenseVerificationService {
     /** {@link #withStrength(String, MedicationCatalogItem)} with the strength written for a reader of {@code locale}. */
     public static String withStrength(String name, MedicationCatalogItem item, Locale locale) {
         java.util.Optional<String> strength = ProductStrength.labelOf(item, locale);
-        if (name == null || strength.isEmpty() || ProductStrength.inText(name).isPresent()) {
+        if (name == null || strength.isEmpty() || ProductStrength.statesStrength(name)) {
             return name;
         }
         return name + " " + strength.get();
