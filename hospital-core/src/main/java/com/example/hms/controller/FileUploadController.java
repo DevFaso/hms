@@ -42,7 +42,7 @@ public class FileUploadController {
     private final FileUploadService fileUploadService;
     private final UserService userService;
     private final org.springframework.context.MessageSource messageSource;
-    private static final String USER_NOT_FOUND_MESSAGE = "User not found";
+    private static final String USER_NOT_FOUND_MESSAGE = "response.user.notFound";
 
     @Operation(summary = "Upload profile image", description = "Upload a profile image for the authenticated user")
     @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -58,7 +58,7 @@ public class FileUploadController {
 
             if (userId == null) {
                 return ResponseEntity.badRequest()
-                        .body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+                        .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(USER_NOT_FOUND_MESSAGE)));
             }
 
             // Upload the file
@@ -81,7 +81,7 @@ public class FileUploadController {
         } catch (IOException | RuntimeException e) {
             log.error("Failed to upload profile image", e);
             return ResponseEntity.internalServerError()
-                    .body(new MessageResponse("Failed to upload profile image"));
+                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.profile.uploadFailed")));
         }
     }
 
@@ -97,7 +97,7 @@ public class FileUploadController {
 
             if (userId == null) {
                 return ResponseEntity.badRequest()
-                        .body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+                        .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(USER_NOT_FOUND_MESSAGE)));
             }
 
             // Get current profile image URL
@@ -119,7 +119,7 @@ public class FileUploadController {
         } catch (RuntimeException e) {
             log.error("Failed to delete profile image", e);
             return ResponseEntity.internalServerError()
-                    .body(new MessageResponse("Failed to delete profile image"));
+                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.profile.deleteFailed")));
         }
     }
 
@@ -138,7 +138,7 @@ public class FileUploadController {
         try {
             UUID userId = userService.getUserIdByUsername(authentication.getName());
             if (userId == null) {
-                return ResponseEntity.badRequest().body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+                return ResponseEntity.badRequest().body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(USER_NOT_FOUND_MESSAGE)));
             }
 
             FileUploadService.StoredFileDescriptor descriptor =
@@ -160,7 +160,7 @@ public class FileUploadController {
         } catch (IOException | RuntimeException ex) {
             log.error("Failed to upload referral attachment", ex);
             return ResponseEntity.internalServerError()
-                .body(new MessageResponse("Failed to upload referral attachment"));
+                .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.referral.uploadFailed")));
         }
     }
 
@@ -179,7 +179,7 @@ public class FileUploadController {
         try {
             UUID userId = userService.getUserIdByUsername(authentication.getName());
             if (userId == null) {
-                return ResponseEntity.badRequest().body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+                return ResponseEntity.badRequest().body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(USER_NOT_FOUND_MESSAGE)));
             }
 
             FileUploadService.StoredFileDescriptor descriptor =
@@ -203,7 +203,7 @@ public class FileUploadController {
         } catch (IOException | RuntimeException ex) {
             log.error("Failed to upload chart attachment", ex);
             return ResponseEntity.internalServerError()
-                .body(new MessageResponse("Failed to upload chart attachment"));
+                .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.chart.uploadFailed")));
         }
     }
 
@@ -231,17 +231,17 @@ public class FileUploadController {
         try {
             UUID userId = userService.getUserIdByUsername(authentication.getName());
             if (userId == null) {
-                return ResponseEntity.badRequest().body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+                return ResponseEntity.badRequest().body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(USER_NOT_FOUND_MESSAGE)));
             }
 
             if (kind == ChatAttachmentKind.AUDIO
                 && (durationSeconds == null || durationSeconds < 1 || durationSeconds > 90)) {
                 return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Voice memo duration must be between 1 and 90 seconds"));
+                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.voice.durationInvalid")));
             }
             if (kind == ChatAttachmentKind.PHOTO && durationSeconds != null) {
                 return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Photo attachments must not carry a duration"));
+                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.photo.durationInvalid")));
             }
 
             FileUploadService.StoredFileDescriptor descriptor =
@@ -265,7 +265,7 @@ public class FileUploadController {
         } catch (IOException | RuntimeException ex) {
             log.error("Failed to upload chat attachment", ex);
             return ResponseEntity.internalServerError()
-                .body(new MessageResponse("Failed to upload chat attachment"));
+                .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.chat.uploadFailed")));
         }
     }
 }

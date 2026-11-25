@@ -84,22 +84,8 @@ class ResponseProseGuardTest {
         return words >= 2;
     }
 
-    private static final String PRE_EXISTING = "pre-existing English response (class of QA D940/D977); key it with the next touch";
-
-    /** Sites as they stand: {@code file::sentence}, how many times it is written, why it is tolerated. Shrink only. */
-    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "controller/BillingInvoiceController.java::Mail service unavailable", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::User not found", 5, PRE_EXISTING + " (USER_NOT_FOUND_MESSAGE constant)",
-        "controller/FileUploadController.java::Failed to upload profile image", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Failed to delete profile image", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Failed to upload referral attachment", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Failed to upload chart attachment", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Voice memo duration must be between 1 and 90 seconds", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Photo attachments must not carry a duration", 1, PRE_EXISTING,
-        "controller/FileUploadController.java::Failed to upload chat attachment", 1, PRE_EXISTING,
-        "controller/InvoiceEmailController.java::Invalid email", 1, PRE_EXISTING,
-        "controller/InvoiceEmailController.java::Invalid email address: ", 1, PRE_EXISTING + " (concatenated with the address)",
-        "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING);
+    /** All former response literals are translated; new prose has no allowance. */
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 
     /** {@code file::sentence} → how many places write it (comments stripped). */
     static Map<String, Integer> sites(String file, String rawSource) {

@@ -1,3 +1,4 @@
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -44,6 +45,7 @@ import { missingRequiredMessage } from '../shared/required-fields';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CountUnitPipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,

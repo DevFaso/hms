@@ -20,8 +20,7 @@ public enum AppointmentStatus {
      */
     public String localizedLabel() {
         String key = "appointment.statusLabel." + name();
-        String label = com.example.hms.utility.MessageUtil.resolve(key);
-        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+        return com.example.hms.utility.MessageUtil.resolveLabel(null, key, name());
     }
 
     /**

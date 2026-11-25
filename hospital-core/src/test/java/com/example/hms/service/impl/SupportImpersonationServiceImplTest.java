@@ -155,7 +155,7 @@ class SupportImpersonationServiceImplTest {
             "12345678",
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no active role");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.target.noActiveRole"));
         verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
@@ -192,7 +192,7 @@ class SupportImpersonationServiceImplTest {
             "irrelevant",
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot impersonate another super admin");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.target.superAdmin"));
         verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
@@ -210,7 +210,7 @@ class SupportImpersonationServiceImplTest {
             "irrelevant",
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already impersonating");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.session.nested"));
     }
 
     @Test
@@ -334,7 +334,7 @@ class SupportImpersonationServiceImplTest {
             null,
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already active");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.session.active"));
     }
 
     @Test
@@ -379,7 +379,7 @@ class SupportImpersonationServiceImplTest {
         // No ImpersonationContextHolder set — calling stop is a no-op error.
         assertThatThrownBy(() -> service.stop("any-bearer"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("No impersonation session");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.session.missing"));
     }
 
     private void authenticateSuperAdmin() {

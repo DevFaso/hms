@@ -44,7 +44,7 @@
   },
   "ADT_INTAKE": {
     "TITLE": "Admissions automatiques depuis un autre logiciel",
-    "SUBTITLE": "Définissez les valeurs utilisées lorsqu’un autre logiciel transmet une admission ou une visite sans dossier de visite correspondant. La création nécessite l’activation de cet hôpital et celle du service d’admissions automatiques pour la plateforme.",
+    "SUBTITLE": "Définissez les valeurs utilisées quand un autre logiciel envoie une admission ou une visite sans dossier de visite correspondant. Activez la création automatique pour cet hôpital et pour la plateforme.",
     "LOADING": "Chargement des paramètres d’admission automatique…",
     "ERROR": "Impossible de charger les paramètres d’admission automatique.",
     "EMPTY": "Aucun hôpital n’a encore de paramètres d’admission automatique. Utilisez le formulaire ci-dessous pour en configurer un.",
@@ -71,7 +71,7 @@
       "ACUITY": "Niveau de gravité par défaut",
       "ENCOUNTER_TYPE": "Type de consultation par défaut",
       "CHIEF_COMPLAINT": "Motif principal par défaut",
-      "ENABLED": "Activer la création automatique pour cet hôpital",
+      "ENABLED": "Autoriser les admissions et visites automatiques pour cet hôpital",
       "ASSIGNMENT": "Affectation du médecin pour les visites automatiques",
       "ASSIGNMENT_NONE": "— Aucune : admissions uniquement —"
     },
@@ -5413,12 +5413,12 @@
     "SETTINGS_DESC": "Choisissez comment vous souhaitez être notifié pour chaque type d'événement.",
     "SETTINGS_TITLE": "Préférences de notification",
     "TITLE": "Notifications",
-    "TYPE_APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+    "TYPE_APPOINTMENT_REMINDER": "Rendez-vous et suivi (tous les messages)",
     "TYPE_BILLING": "Facturation",
     "TYPE_DISCHARGE_SUMMARY": "Résumé de sortie",
     "TYPE_GENERAL": "Général",
     "TYPE_LAB_RESULT": "Résultat de laboratoire",
-    "TYPE_MEDICATION_REFILL": "Renouvellement d'ordonnance",
+    "TYPE_MEDICATION_REFILL": "Pharmacie (tous les messages)",
     "TYPE_PROXY_ACCESS": "Accès délégué",
     "TYPE_SYSTEM": "Système",
     "UNREAD": "Non lu",
@@ -15130,7 +15130,7 @@
       "MAIL_SEND_FAILED": "Le serveur de messagerie n’a pas accepté l’e-mail",
       "SEND_FAILED": "Échec de l’envoi",
       "ATTEMPTS_EXHAUSTED": "Toutes les tentatives ont été utilisées",
-      "RECIPIENT_NOT_ALLOWED": "Numéro absent de la liste de test de cet environnement",
+      "RECIPIENT_NOT_ALLOWED": "Cette coordonnée ne figure pas dans la liste de test de cet environnement.",
       "OPTED_OUT": "Le patient a désactivé ce canal",
       "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
       "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
@@ -15820,7 +15820,8 @@
     "PICK_HINT": "Examen du catalogue de l'établissement : il est tarifé d'après la grille tarifaire.",
     "FREE_TEXT_HINT": "Choisissez l'examen dans le catalogue quand il y figure. Hors catalogue, la ligne peut rester à tarifer à la caisse, et l'examen peut être masqué aux proches par prudence.",
     "EMPTY_HINT": "Le catalogue d'imagerie de l'établissement est vide : saisissez l'examen en texte libre.",
-    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre."
+    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre.",
+    "READ_ONLY_FIELDS": "Ces champs sont en lecture seule avec votre accès actuel à ce catalogue."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Ouvrir les demandes de renouvellement",
@@ -16326,7 +16327,11 @@
     "CODE": "Code à six chiffres",
     "CONFIRM": "Confirmer le code",
     "ERROR": "Impossible de vérifier ces coordonnées. Réessayez.",
-    "CODE_REQUIRED": "Saisissez le code à six chiffres."
+    "CODE_REQUIRED": "Saisissez le code à six chiffres.",
+    "CONTACT": "Coordonnée : {{contact}}",
+    "CODE_SENT": "Un code a été envoyé à {{contact}}.",
+    "CODE_SENT_GENERIC": "Un code a été envoyé.",
+    "EXPIRES": "Valable jusqu’à {{time}}."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",

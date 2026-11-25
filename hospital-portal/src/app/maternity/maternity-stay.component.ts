@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -56,6 +57,7 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
   selector: 'app-maternity-stay',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     RuleStatusComponent,
     FormsModule,
     TranslateModule,
@@ -84,6 +86,7 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
                 >{{ 'MATERNITY_STAY.ACUITY' | translate }} *</label
               >
               <select
+                appFormControl
                 [id]="'stay-acuity-' + patientId()"
                 name="acuity"
                 required
@@ -146,6 +149,7 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
                   >{{ 'MATERNITY_STAY.BED' | translate }} *</label
                 >
                 <select
+                  appFormControl
                   [id]="'stay-bed-' + patientId()"
                   name="bed"
                   required

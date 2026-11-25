@@ -105,8 +105,7 @@ public class PharmacyDirectoryController {
             resolved = authUtils.contextHospitalId();
         }
         if (resolved == null) {
-            throw new BusinessException(
-                "Hospital context is required. Provide hospitalId parameter or select an active hospital.");
+            throw new BusinessException("request.hospitalContext.required");
         }
         return resolved;
     }

@@ -135,7 +135,7 @@ class ControllerAuthUtilsScopeTest {
 
         assertThatThrownBy(() -> authUtils.resolveHospitalScope(receptionist, null, true))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Receptionist must be affiliated");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("request.hospitalContext.required"));
     }
 
     @Test

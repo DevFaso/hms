@@ -30,7 +30,25 @@ class NativeForm {
   disabled = false;
 }
 
+@Component({
+  template:
+    '<input appFormControl><select appFormControl><option>One</option></select><textarea appFormControl></textarea>',
+})
+class AttributeOnlyForm {}
+
 describe('design-system native form controls', () => {
+  it('styles the native attribute even when the optional directive import is missing', () => {
+    const fixture = TestBed.createComponent(AttributeOnlyForm);
+    fixture.detectChanges();
+    for (const control of fixture.nativeElement.querySelectorAll('input, select, textarea')) {
+      expect(control.classList.contains('keneya-form-control')).toBeFalse();
+      expect(parseFloat(getComputedStyle(control).minHeight)).toBeGreaterThanOrEqual(44);
+      expect(getComputedStyle(control).boxSizing).toBe('border-box');
+    }
+    expect(
+      parseFloat(getComputedStyle(fixture.nativeElement.querySelector('textarea')).minHeight),
+    ).toBeGreaterThanOrEqual(80);
+  });
   it('retains native elements, existing classes, validators and disabled state', async () => {
     const fixture = TestBed.createComponent(NativeForm);
     fixture.detectChanges();

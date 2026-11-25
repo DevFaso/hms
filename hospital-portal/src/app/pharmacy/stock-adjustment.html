@@ -461,7 +461,7 @@
                   : ('PHARMACY.QUARANTINE.NO_LOT' | translate)
               }}</small>
             </span>
-            <span class="quarantine-qty">{{ line.heldQuantity }} {{ line.unit ?? '' }}</span>
+            <span class="quarantine-qty">{{ line.heldQuantity | countUnit: line.unit }}</span>
             <button
               type="button"
               class="btn-secondary"

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom, of, throwError } from 'rxjs';
+import es from '../../assets/i18n/es.json';
 
 import { PatientNotificationsComponent } from './patient-notifications';
 import {
@@ -73,6 +74,21 @@ describe('PatientNotificationsComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  it('renders the delivery heading, event, failure and reason in Spanish', async () => {
+    setup(pageOf([delivery({})]));
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('es', es);
+    await firstValueFrom(translate.use('es'));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('h1')?.textContent).toContain('Notificaciones a pacientes');
+    const row = host.querySelector('[data-testid="pn-row-d-1"]')?.textContent ?? '';
+    expect(row).toContain('Resultado de laboratorio disponible');
+    expect(row).toContain('Fallido');
+    expect(row).toContain('No se puede contactar con el proveedor de SMS');
+    expect(host.querySelector('[data-testid="pn-count-SENT"]')?.textContent).toContain('12');
+  });
 
   it('lists FAILED sends by default, with every status counted', () => {
     setup(pageOf([delivery({})]));

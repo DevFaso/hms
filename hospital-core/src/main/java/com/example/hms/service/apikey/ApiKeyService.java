@@ -190,7 +190,7 @@ public class ApiKeyService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital context is required.");
+            throw new BusinessException("request.hospitalContext.required");
         }
         return hospitalId;
     }
@@ -201,7 +201,7 @@ public class ApiKeyService {
             .filter(k -> k.getHospital() != null && hospitalId.equals(k.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("apiKey.notFound", keyId));
         if (key.getStatus() != ApiKeyStatus.ACTIVE) {
-            throw new BusinessException("The key is already revoked.");
+            throw new BusinessException("apikey.revocation.finished");
         }
         return key;
     }
@@ -214,8 +214,7 @@ public class ApiKeyService {
             // surfaces as the @Version conflict HERE (the #549 lesson).
             apiKeyRepository.saveAndFlush(key);
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException(
-                "The key was changed at the same time by someone else - reload and retry.");
+            throw new BusinessException("apikey.change.concurrent");
         }
     }
 

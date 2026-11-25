@@ -469,7 +469,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // T-61: notify the patient when the partner accepts
         if (accepted) {
             try {
-                partnerChannel.notifyPatientAccepted(prescription.getPatient(), decision.getTargetPharmacy());
+                partnerChannel.notifyPatientAccepted(decision, prescription.getPatient(), decision.getTargetPharmacy());
             } catch (Exception ex) {
                 log.warn("Patient accept SMS failed: {}", ex.getMessage());
             }
@@ -523,7 +523,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // T-61: notify the patient their medication has been dispensed by the partner
         try {
-            partnerChannel.notifyPatientDispensed(prescription.getPatient(), decision.getTargetPharmacy());
+            partnerChannel.notifyPatientDispensed(decision, prescription.getPatient(), decision.getTargetPharmacy());
         } catch (Exception ex) {
             log.warn("Patient dispense SMS failed: {}", ex.getMessage());
         }

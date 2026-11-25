@@ -17,6 +17,7 @@
     "coverage:check": "node scripts/check-coverage.mjs",
     "coverage:report": "node scripts/check-coverage.mjs --report-only",
     "e2e": "playwright test",
+    "e2e:r73-presentation": "playwright test --config=playwright.r73.config.ts",
     "e2e:a11y": "playwright test a11y.spec.ts",
     "e2e:slow-network": "playwright test --config=playwright.slow-network.config.ts",
     "e2e:form-display": "playwright test --config=playwright.form-display.config.ts",
@@ -49,7 +50,8 @@
     "guard:design-tokens": "node scripts/check-design-tokens.mjs",
     "guards": "node scripts/check-guards.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
-    "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
+    "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only",
+    "e2e:clinical-form-display": "playwright test --config=playwright.clinical-form-display.config.ts"
   },
   "prettier": {
     "printWidth": 100,
@@ -125,6 +127,7 @@
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
+    "postcss": "8.5.28",
     "prettier": "^3.10.1",
     "puppeteer": "^25.18.1",
     "typescript": "6.0.3",

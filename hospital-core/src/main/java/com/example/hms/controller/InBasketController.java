@@ -75,7 +75,7 @@ public class InBasketController {
         // caller. For every other role we still require a scope — a
         // clinician without one is a misconfigured token, not a feature.
         if (resolvedHospitalId == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
+            throw new BusinessException("request.hospitalContext.required");
         }
 
         if (disputeReviewOnly(auth)) {
@@ -103,7 +103,7 @@ public class InBasketController {
         // caller. For every other role we still require a scope — a
         // clinician without one is a misconfigured token, not a feature.
         if (resolvedHospitalId == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
+            throw new BusinessException("request.hospitalContext.required");
         }
 
         InBasketSummaryDTO summary = disputeReviewOnly(auth)
@@ -162,7 +162,7 @@ public class InBasketController {
     private UUID requireUserId(Authentication auth) {
         authUtils.requireAuth(auth);
         return authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication token."));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
     }
 
     private UUID resolveHospital(Authentication auth, UUID hospitalId) {

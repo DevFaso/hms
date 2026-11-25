@@ -813,7 +813,8 @@
                           </td>
                           <td>{{ d.medicationName || '—' }}</td>
                           <td>
-                            {{ d.quantityDispensed }} / {{ d.quantityRequested }} {{ d.unit }}
+                            {{ d.quantityDispensed }} /
+                            {{ d.quantityRequested | countUnit: d.unit }}
                           </td>
                           <td>
                             <span class="status-badge">{{

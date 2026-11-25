@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -59,6 +60,7 @@ interface Typed {
   selector: 'app-cash-session',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     CommonModule,
     FormsModule,
     TranslateModule,

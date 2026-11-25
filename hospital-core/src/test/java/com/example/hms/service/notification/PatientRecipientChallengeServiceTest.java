@@ -88,6 +88,31 @@ class PatientRecipientChallengeServiceTest {
         verifyNoInteractions(email);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = NotificationChannel.class, names = {"SMS", "EMAIL"})
+    void successfulRequestsDescribeOnlyTheMaskedContactActuallySentTo(NotificationChannel channel) {
+        String destination = channel == NotificationChannel.SMS ? patient.getPhoneNumberPrimary() : patient.getEmail();
+        var response = service.request(patient.getId(), channel, actor, Locale.FRENCH);
+        assertThat(response.channel()).isEqualTo(channel);
+        assertThat(response.verified()).isFalse();
+        assertThat(response.maskedRecipient()).isEqualTo(PatientContactMask.of(destination, channel));
+        assertThat(response.expiresAt()).isEqualTo(java.time.LocalDateTime.of(2026, 11, 23, 8, 10));
+        assertThat(response.toString()).doesNotContain(destination, code);
+        if (channel == NotificationChannel.SMS) verify(sms).send(eq(destination), eq("Code " + code));
+        else verify(email).sendWithAttachment(eq(java.util.List.of(destination)), eq(java.util.List.of()),
+            eq(java.util.List.of()), anyString(), eq("Code " + code), isNull(), isNull(), isNull());
+    }
+
+    @Test void feedbackStaysBoundToTheSentContactIfTheProfileChangesDuringDelivery() {
+        String original = patient.getPhoneNumberPrimary();
+        doAnswer(call -> { patient.setPhoneNumberPrimary("+22671112233"); return null; })
+            .when(sms).send(anyString(), anyString());
+        var response = service.request(patient.getId(), NotificationChannel.SMS, actor, Locale.FRENCH);
+        assertThat(response.maskedRecipient()).isEqualTo(PatientContactMask.of(original, NotificationChannel.SMS))
+            .isNotEqualTo(PatientContactMask.of(patient.getPhoneNumberPrimary(), NotificationChannel.SMS));
+        verify(sms).send(eq(original), anyString());
+    }
+
     @Test void emailUsesOnlyTheExistingContactAndDoesNotVerifySms() {
         service.request(patient.getId(), NotificationChannel.EMAIL, actor, Locale.FRENCH);
         service.confirm(patient.getId(), NotificationChannel.EMAIL, actor, code);
