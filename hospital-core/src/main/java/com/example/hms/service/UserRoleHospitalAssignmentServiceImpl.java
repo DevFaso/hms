@@ -771,8 +771,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     /** {@link #showHolderOnlyIfKnown} for a page of rows, every holder's rows read at once. */
-    private Page<UserRoleHospitalAssignmentResponseDTO> toListingPage(Page<UserRoleHospitalAssignment> rows) {
-        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
+    private Page<UserRoleHospitalAssignmentResponseDTO> toListingPage(Page<UserRoleHospitalAssignment> rows,
+                                                                    UserAccountAccess.HolderReach reach) {
         if (reach.everywhere()) {
             return rows.map(this::toDtoWithLinks);
         }
@@ -897,7 +897,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         String assignmentCode = criteria != null ? criteria.getAssignmentCode() : null;
 
         Specification<UserRoleHospitalAssignment> specification = buildAssignmentSpec(
-            hospitalId, active, search, assignmentCode);
+            hospitalId, active, search, assignmentCode, null);
 
         // Review of #1246: anyone but a super-admin lists what their assignment
         // scope reaches and nothing else. The acting hospital alone used to
@@ -906,13 +906,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // organisation scope is empty) read every row of that hospital, the
         // patients' included.
         UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        UserAccountAccess.HolderReach reach = accountAccess.holderReach();
         if (!scope.everywhere()) {
-            Specification<UserRoleHospitalAssignment> reach =
+            Specification<UserRoleHospitalAssignment> within =
                 scopedListing(scope, activeHospitalId, requestedHospitalId);
-            if (reach == null) {
+            if (within == null) {
                 return Page.empty(pageable);
             }
-            specification = combineSpec(buildAssignmentSpec(null, active, search, assignmentCode), reach);
+            // QA D4020: the typed term matches a holder's identity only where the caller may see it.
+            specification = combineSpec(buildAssignmentSpec(null, active, search, assignmentCode, reach), within);
             // QA D3062 (review of #1264): the platform's own accounts are not a hospital's to list.
             specification = combineSpec(specification, UserRoleHospitalAssignmentSpecification.notAPlatformAccount());
         }
@@ -920,14 +922,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (specification == null) {
             log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
                 pageable.getPageSize());
-            return toListingPage(assignmentRepository.findAll(pageable));
+            return toListingPage(assignmentRepository.findAll(pageable), reach);
         }
 
         // The typed term and the code are not logged: the term often names a person.
         log.info("📄 Fetching assignments with filters hospitalId={}, active={}, term={}, assignmentCode={} (page {}, size {})",
             hospitalId, active, StringUtils.hasText(search) ? "given" : "none",
             StringUtils.hasText(assignmentCode) ? "given" : "none", pageable.getPageNumber(), pageable.getPageSize());
-        return toListingPage(assignmentRepository.findAll(specification, pageable));
+        return toListingPage(assignmentRepository.findAll(specification, pageable), reach);
     }
 
     /**
@@ -980,15 +982,20 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             : null;
     }
 
+    /** @param reach whose holders the search may match by identity; {@code null} for every holder */
     private Specification<UserRoleHospitalAssignment> buildAssignmentSpec(
-            UUID hospitalId, Boolean active, String search, String assignmentCode) {
+            UUID hospitalId, Boolean active, String search, String assignmentCode,
+            UserAccountAccess.HolderReach reach) {
         Specification<UserRoleHospitalAssignment> spec = null;
         spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.belongsToHospital(hospitalId));
         spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.hasActive(active));
 
         String trimmedSearch = search == null ? null : search.trim();
         if (StringUtils.hasText(trimmedSearch)) {
-            spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.matchesSearch(trimmedSearch));
+            spec = combineSpec(spec, reach == null || reach.everywhere()
+                ? UserRoleHospitalAssignmentSpecification.matchesSearch(trimmedSearch)
+                : UserRoleHospitalAssignmentSpecification.matchesSearch(trimmedSearch,
+                    reach.hospitals(), reach.patientHospitals()));
         }
 
         String trimmedCode = assignmentCode == null ? null : assignmentCode.trim();

@@ -951,6 +951,59 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "hospitalId", hospitalA.getId().toString()))).isEqualTo(200);
     }
 
+    /** QA D4020: a pending staff row at {@code hospital} that its holder never accepted. */
+    private UserRoleHospitalAssignment pendingRow(User holder, String roleCode, Hospital hospital) {
+        return assignmentRepository.save(UserRoleHospitalAssignment.builder()
+            .assignmentCode("UG-" + next())
+            .description(roleCode)
+            .user(holder)
+            .hospital(hospital)
+            .role(ensureRole(roleCode))
+            .startDate(LocalDate.now())
+            .assignedAt(LocalDateTime.now())
+            .active(false)
+            .build());
+    }
+
+    private List<UUID> termSearch(String token, String term) throws Exception {
+        MvcResult result = perform(post("/assignments/term-search")
+            .param("size", "200").param("hospitalId", hospitalB.getId().toString()), token, Map.of("search", term));
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        return ids(objectMapper.readTree(result.getResponse().getContentAsString()));
+    }
+
+    @Test
+    @DisplayName("QA D4020: a pending invitation to another hospital's account gives no reach, and is never found by who holds it")
+    void aStrayPendingInvitationOpensNothing() throws Exception {
+        User adminB = account("hadmB", "ROLE_HOSPITAL_ADMIN", hospitalB);
+        String token = hms(adminB, "ROLE_HOSPITAL_ADMIN");
+        UserRoleHospitalAssignment stray = pendingRow(nurseA, "ROLE_RECEPTIONIST", hospitalB);
+
+        // It does not make A's nurse B's to name: another role for them is refused like an unknown account.
+        assertThat(status(post("/assignments"), token, grantOf(nurseA, hospitalB))).isEqualTo(404);
+        assertThat(status(post("/assignments"), token, Map.of(
+            "userIdentifier", emailOf(nurseA), "roleId", ensureRole("ROLE_NURSE").getId().toString(),
+            "hospitalId", hospitalB.getId().toString()))).isEqualTo(404);
+        assertThat(assignmentRepository.findByUserId(nurseA.getId())).hasSize(2);
+
+        // The search never finds it by the holder's e-mail, username or name...
+        User storedNurse = userRepository.findById(nurseA.getId()).orElseThrow();
+        assertThat(termSearch(token, storedNurse.getEmail())).doesNotContain(stray.getId());
+        assertThat(termSearch(token, storedNurse.getUsername())).doesNotContain(stray.getId());
+        assertThat(termSearch(token, storedNurse.getLastName())).doesNotContain(stray.getId());
+        // ...only by what the row itself says, and then without the holder's name or e-mail.
+        MvcResult byCode = perform(post("/assignments/term-search")
+            .param("size", "200").param("hospitalId", hospitalB.getId().toString()), token,
+            Map.of("search", stray.getAssignmentCode()));
+        tools.jackson.databind.JsonNode rows = objectMapper.readTree(byCode.getResponse().getContentAsString());
+        assertThat(ids(rows)).containsExactly(stray.getId());
+        assertThat(byCode.getResponse().getContentAsString())
+            .doesNotContain(storedNurse.getEmail(), storedNurse.getUsername());
+
+        // B's own staff is still found by e-mail.
+        assertThat(termSearch(token, emailOf(doctorB))).contains(rowOf(doctorB));
+    }
+
     /** A clinician's staff record with a licence number, at the hospital of their one assignment. */
     private String licensed(User clinician, Hospital hospital) {
         String licence = "LIC-UG-" + next();

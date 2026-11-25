@@ -456,6 +456,40 @@ class AssignmentHolderReachTest {
     }
 
     @Test
+    @DisplayName("a pending row given to another hospital's account gives no reach: a new role for that holder is refused")
+    void aStrayPendingRowGivesNoReach() {
+        signInAsHospitalAdminOfB(false);
+        targetHolds(row(target, nurse, hospitalA, true), row(target, receptionist, hospitalB, false));
+
+        Throwable refused = catchThrowable(() -> service.assignRole(receptionistAtB(Named.EMAIL, target)));
+
+        assertAnsweredAsUnknown(refused, Named.EMAIL);
+    }
+
+    @Test
+    @DisplayName("two pending rows given to another hospital's account do not vouch for each other")
+    void twoStrayPendingRowsDoNotVouchForEachOther() {
+        signInAsHospitalAdminOfB(false);
+        UserRoleHospitalAssignment first = row(target, receptionist, hospitalB, false);
+        UserRoleHospitalAssignment second = row(target, nurse, hospitalB, false);
+        for (UserRoleHospitalAssignment stray : List.of(first, second)) {
+            stray.setRegisteredBy(new User());
+            stray.getRegisteredBy().setId(callerId);
+            when(assignmentRepository.findById(stray.getId())).thenReturn(Optional.of(stray));
+        }
+        targetHolds(row(target, patient, hospitalA, true), first, second);
+
+        for (UUID id : List.of(first.getId(), second.getId())) {
+            assertThat(catchThrowable(() -> service.revealActivationCode(id)))
+                .isExactlyInstanceOf(ResourceNotFoundException.class);
+            assertThat(catchThrowable(() -> service.confirmAssignment(id, "123456")))
+                .isExactlyInstanceOf(ResourceNotFoundException.class);
+            assertThat(service.getAssignmentById(id).getUserEmail()).isNull();
+        }
+        assertNothingSavedOrSent();
+    }
+
+    @Test
     @DisplayName("a pending row given to another hospital's account shows no name or e-mail, in the list or by id")
     void aStrayPendingRowShowsNoHolder() {
         signInAsHospitalAdminOfB(true);

@@ -158,5 +158,12 @@ class ExistingAccountLookupGuardTest {
             assertThat(body(service, entry)).as(entry + " finds its row through findReinvitable")
                 .contains("findReinvitable(").doesNotContain("findChangeable(");
         }
+        // A scoped listing's search matches a holder's identity only where the caller may see it.
+        String listing = body(service, "public Page<UserRoleHospitalAssignmentResponseDTO> getAllAssignments(Pageable pageable,\n");
+        assertThat(listing).as("the scoped listing searches with the caller's holder reach")
+            .contains("buildAssignmentSpec(null, active, search, assignmentCode, reach)")
+            .contains("toListingPage(assignmentRepository.findAll(specification, pageable), reach)");
+        assertThat(body(service, "private Specification<UserRoleHospitalAssignment> buildAssignmentSpec("))
+            .contains("matchesSearch(trimmedSearch,\n                    reach.hospitals(), reach.patientHospitals())");
     }
 }

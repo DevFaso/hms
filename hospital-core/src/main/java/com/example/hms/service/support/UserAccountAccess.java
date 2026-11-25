@@ -434,8 +434,10 @@ public class UserAccountAccess {
      *   <li>Anyone else: the hospitals where it registers staff (those it
      *       administers, its organisation's, the provider facilities it
      *       administers), and there an account that already holds a staff
-     *       (non-patient) assignment, active or not. An account known only
-     *       to another hospital or organisation is not.</li>
+     *       (non-patient) assignment it accepted or that is live (a former
+     *       employee's included). A pending invitation counts only for a
+     *       person whose every row is in reach (one the caller registered). An
+     *       account known only to another hospital or organisation is not.</li>
      *   <li>A hospital admin also names a patient of a hospital it
      *       administers (a PATIENT row there): its own patient, whom it
      *       already reads. Never another hospital's patient, and never
@@ -474,6 +476,16 @@ public class UserAccountAccess {
             return everywhere;
         }
 
+        /** The hospitals where the caller registers staff (empty for the super-admin, who reaches everything). */
+        public Set<UUID> hospitals() {
+            return hospitals;
+        }
+
+        /** The hospitals whose own patients the caller may name ({@link #isOwnPatient}). */
+        public Set<UUID> patientHospitals() {
+            return patientHospitals;
+        }
+
         /**
          * May the caller name this existing account as the holder of a new
          * staff assignment?
@@ -481,8 +493,28 @@ public class UserAccountAccess {
          * @param holderRows every assignment the account holds, active or not
          */
         public boolean mayName(List<UserRoleHospitalAssignment> holderRows) {
-            return everywhere || holderRows.stream().anyMatch(row -> isStaffRowAt(row, hospitals))
+            if (everywhere) {
+                return true;
+            }
+            // A pending staff row counts only when every row of the holder is in
+            // reach (a person the caller registered): a pending invitation sent to
+            // someone of another hospital, accepted by nobody, establishes nothing.
+            boolean allInReach = !holderRows.isEmpty() && allInReach(holderRows);
+            return holderRows.stream()
+                    .anyMatch(row -> isStaffRowAt(row, hospitals) && (isAccepted(row) || allInReach))
                 || isOwnPatient(holderRows);
+        }
+
+        private boolean allInReach(List<UserRoleHospitalAssignment> rows) {
+            return rows.stream().allMatch(row -> {
+                UUID hospitalId = hospitalIdOf(row);
+                return hospitalId != null && hospitals.contains(hospitalId);
+            });
+        }
+
+        /** A row its holder accepted (its code confirmed), or one that is live. */
+        private static boolean isAccepted(UserRoleHospitalAssignment row) {
+            return row.getConfirmationVerifiedAt() != null || Boolean.TRUE.equals(row.getActive());
         }
 
         /**
@@ -518,10 +550,7 @@ public class UserAccountAccess {
             List<UserRoleHospitalAssignment> others = holderRows.stream()
                 .filter(other -> other != row && (other.getId() == null || !other.getId().equals(row.getId())))
                 .toList();
-            return mayName(others) || others.stream().allMatch(other -> {
-                UUID hospitalId = hospitalIdOf(other);
-                return hospitalId != null && hospitals.contains(hospitalId);
-            });
+            return mayName(others) || allInReach(others);
         }
     }
 
