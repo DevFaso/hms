@@ -492,7 +492,8 @@ public class DispenseServiceImpl implements DispenseService {
         if (Boolean.TRUE.equals(dto.getSubstitution())) {
             String reason = dto.getSubstitutionReason() != null ? dto.getSubstitutionReason() : "(no reason provided)";
             logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
-                    "Substituted dispense for " + dto.getMedicationName() + " — reason: " + reason,
+                    "Substituted dispense: " + dto.getMedicationName() + " for " + prescription.getMedicationName()
+                            + " — reason: " + reason,
                     saved.getId().toString());
         }
 
@@ -544,7 +545,8 @@ public class DispenseServiceImpl implements DispenseService {
                 saved.getId().toString());
         if (Boolean.TRUE.equals(dto.getSubstitution())) {
             logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
-                    "Substitution recorded on a prepared fill, prescription " + prescriptionId,
+                    "Substitution recorded on a prepared fill, prescription " + prescriptionId + ": "
+                            + dto.getMedicationName() + " for " + fill.prescription().getMedicationName(),
                     saved.getId().toString());
         }
 
@@ -602,8 +604,12 @@ public class DispenseServiceImpl implements DispenseService {
         com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription);
 
         String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
-        requireHandOverChecksPass(dispenseVerificationService.verify(
-                prescription, dispense.getStockLot(), patientScan, null));
+        DispenseVerificationResult handOverChecks = dispenseVerificationService.verify(
+                prescription, dispense.getStockLot(), patientScan, null);
+        requireHandOverChecksPass(handOverChecks);
+        // QA D3940: a fill prepared from another product than the order's leaves only as a recorded substitute,
+        // and that product is read against the allergies recorded since it was prepared.
+        requirePreparedProductDispensable(dispense, prescription, handOverChecks, allergyAck);
 
         LocalDateTime now = LocalDateTime.now(clock);
         User handedOverBy = resolveCurrentUser();
@@ -951,6 +957,28 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
+     * QA D3940: the hand-over runs the fill's product check again ({@link #requireDispensedProduct}'s rule): a
+     * preparation written before it (a 250 mg lot against a 500 mg order) is not handed over, and a substitute is
+     * read against the patient's current allergies.
+     */
+    private void requirePreparedProductDispensable(Dispense dispense, Prescription prescription,
+            DispenseVerificationResult checks,
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck) {
+        MedicationCatalogItem prepared = dispense.getStockLot() != null && dispense.getStockLot().getInventoryItem() != null
+                ? dispense.getStockLot().getInventoryItem().getMedicationCatalogItem()
+                : dispense.getMedicationCatalogItem();
+        DispensedProductMatch match = dispense.getStockLot() != null ? checks.productMatch()
+                : prepared != null ? dispenseVerificationService.classify(prescription, prepared) : null;
+        boolean substitution = dispense.isSubstitution() && dispense.getSubstitutionReason() != null
+                && !dispense.getSubstitutionReason().isBlank();
+        if (match != null && !match.mayBeDispensed(substitution)) {
+            throw new BusinessException("pharmacy.dispense.handOverRefused",
+                    dispenseVerificationService.refusalOf(match, prescription, prepared));
+        }
+        requireDispensedProductAllergyFree(prescription, prepared, match, allergyAck);
+    }
+
+    /**
      * Rule 5: OVERRIDDEN stays OVERRIDDEN (its override reason is kept, which
      * V138's ck_dispense_override_reason requires); otherwise VERIFIED when a
      * scan was supplied at either step, else the honest NOT_VERIFIED.
@@ -1202,13 +1230,14 @@ public class DispenseServiceImpl implements DispenseService {
         DispenseVerificationResult verification =
                 dispenseVerificationService.verify(prescription, stockLot,
                         dto.getPatientScanValue(), dto.getProductScanValue());
-        applyVerificationOutcome(dto, verification);
+        // QA D3940 (r77): the product that leaves is the lot's, compared with the order's whatever the client sent.
+        MedicationCatalogItem catalogItem = requireDispensedProduct(dto, prescription, stockLot, verification,
+                allergyAck);
         // QA D1163 (round 21): a "flacon" order is not filled from a tablet lot.
         if (stockLot != null && stockLot.getInventoryItem() != null) {
             DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());
         }
         requireWholeUnitsOfFill(dto, stockLot, prescription);
-        MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
         // fill with no lot used to be accepted as DISPENSED with no stock
         // movement at all, so the shelf and the ledger drifted apart.
@@ -1427,6 +1456,105 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
+     * QA D3940 (r77): THE product check of every fill (one-step and prepared; DispensedProductGuardTest). The
+     * dispensed product is derived on the server, from the lot (or the catalogue item named when stock is not kept
+     * in lots), never taken from the client's text, and compared with the order's
+     * ({@link DispenseVerificationService#classify}, rule in {@link DispensedProductMatch}):
+     * <ul>
+     *   <li>the prescribed product (or an equivalent) is dispensed as such;</li>
+     *   <li>a substitute leaves only as a recorded substitution (the flag and a reason);</li>
+     *   <li>another strength or another active ingredient is refused, a substitution included;</li>
+     *   <li>a product other than the order's own item is read against the patient's CURRENT allergies, as the
+     *       order's drug was ({@link #requireDispensedProductAllergyFree});</li>
+     *   <li>the fill is named after the product dispensed, so the record, the price, the queue, the hand-over
+     *       card, the invoice line and the prescriber's notice name what left the shelf.</li>
+     * </ul>
+     * A 250 mg lot left against a 500 mg order with no product id sent; with {@code substitution:true} a
+     * diclofenac lot replaced ibuprofen, and amoxicillin replaced ibuprofen for a penicillin-allergic patient.
+     *
+     * @return the catalogue item of the fill, or null when stock is not kept in lots and none was named
+     */
+    private MedicationCatalogItem requireDispensedProduct(DispenseRequestDTO dto, Prescription prescription,
+            StockLot stockLot, DispenseVerificationResult verification,
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck) {
+        // QA D416: a body that names another item than the lot is refused.
+        MedicationCatalogItem dispensed = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
+        boolean substitution = isRecordedSubstitution(dto);
+        if (Boolean.TRUE.equals(dto.getSubstitution()) && dispensed == null) {
+            throw new com.example.hms.exception.FieldBusinessException("substitution",
+                    "pharmacy.dispense.substitutionNeedsProduct");
+        }
+        DispensedProductMatch match = stockLot != null ? verification.productMatch()
+                : dispensed != null ? dispenseVerificationService.classify(prescription, dispensed) : null;
+        if (substitution && match == DispensedProductMatch.OTHER_DRUG) {
+            throw new com.example.hms.exception.FieldBusinessException("substitution",
+                    "pharmacy.dispense.substitutionOtherDrug",
+                    DispenseVerificationService.describeProduct(dispensed),
+                    DispenseVerificationService.describePrescribed(prescription));
+        }
+        // The lot's checks (EXPIRY, PATIENT, DRUG with its scan); the DRUG failure gives way only to a substitute.
+        applyVerificationOutcome(dto, verification);
+        if (stockLot == null && match != null && !match.mayBeDispensed(substitution)) {
+            // No lot: the product is the catalogue item the request named.
+            throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId",
+                    "pharmacy.dispense.refused", dispenseVerificationService.refusalOf(match, prescription, dispensed));
+        }
+        requireDispensedProductAllergyFree(prescription, dispensed, match, allergyAck);
+        dto.setMedicationName(dispensedName(prescription, dispensed, dto.getMedicationName()));
+        return dispensed;
+    }
+
+    /**
+     * QA D3940: a product other than the order's own item is read against the patient's CURRENT allergies
+     * ({@link com.example.hms.service.allergy.CurrentAllergyRecheck#stopForProduct}). The order's drug was already
+     * read ({@link #requireAllergyAcknowledged}); a stop on the substitute passes only when it is the very allergy
+     * the prescriber reviewed and continued for this order. Nothing the pharmacist writes releases it.
+     */
+    private void requireDispensedProductAllergyFree(Prescription prescription, MedicationCatalogItem dispensed,
+            DispensedProductMatch match,
+            com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck) {
+        if (allergyRecheck == null || dispensed == null || match == DispensedProductMatch.PRESCRIBED
+                || (dispensed.getId() != null && dispensed.getId().equals(prescription.getMedicationCatalogItemId()))) {
+            return;
+        }
+        allergyRecheck.stopForProduct(prescription, dispensed).ifPresent(stop -> {
+            boolean reviewed = allergyAck != null && allergyAck.stop() != null && allergyAck.stop().allergy() != null
+                    && stop.allergy() != null && allergyAck.stop().allergy().getId() != null
+                    && allergyAck.stop().allergy().getId().equals(stop.allergy().getId());
+            if (!reviewed) {
+                // A plain refusal on the lot: no override field and no prescriber hold to wait for. The product is
+                // the pharmacist's choice; the prescribed one (or a new order) is the way on.
+                throw new com.example.hms.exception.FieldBusinessException("stockLotId",
+                        "pharmacy.dispense.substituteAllergy",
+                        DispenseVerificationService.describeProduct(dispensed), stop.allergen());
+            }
+        });
+    }
+
+    /**
+     * QA D3940: the name a fill is recorded under, the product that left the shelf: the order's own name for its
+     * own item (or when no product is known), else the dispensed item's catalogue name with its strength. Stored
+     * once for every reader, so in the catalogue's display language.
+     */
+    static String dispensedName(Prescription prescription, MedicationCatalogItem dispensed, String sent) {
+        String ordered = firstNonBlank(prescription.getMedicationName(), sent);
+        if (dispensed == null
+                || (dispensed.getId() != null && dispensed.getId().equals(prescription.getMedicationCatalogItemId()))) {
+            return ordered;
+        }
+        String name = DispenseVerificationService.withStrength(
+                com.example.hms.utility.DrugDisplayNames.forReader(dispensed, java.util.Locale.FRENCH), dispensed,
+                java.util.Locale.FRENCH);
+        if (name == null || name.isBlank()) {
+            return ordered;
+        }
+        return name.length() > DISPENSED_NAME_MAX ? name.substring(0, DISPENSED_NAME_MAX) : name;
+    }
+
+    /** {@code Dispense.medicationName} holds at most this many characters. */
+    static final int DISPENSED_NAME_MAX = 255;
+
+    /**
      * QA D416: the dispensing screen sends the lot, not the catalog id, so
      * its fills were saved with no medication, had no price and could never
      * be paid. The medication of a fill from a lot is the lot's; a body that
@@ -1554,7 +1682,9 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         Set<DispenseCheck> blocking = EnumSet.copyOf(failed);
-        if (isRecordedSubstitution(dto)) {
+        // QA D3940: a substitution carries only a substitute through: the same active ingredient at the prescribed
+        // strength. Another molecule, another strength, a product scan that is not the lot named: never.
+        if (isRecordedSubstitution(dto) && verification.productMatch() == DispensedProductMatch.SUBSTITUTE) {
             blocking.remove(DispenseCheck.DRUG);
         }
         if (blocking.isEmpty()) {
@@ -1673,9 +1803,13 @@ public class DispenseServiceImpl implements DispenseService {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
                 .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
-        // Only the prescribed drug, by the same rule the DRUG check applies
+        // Only the prescribed product, by the same rule the DRUG check applies
         // to the lot at the counter: the picker used to list every lot of the
-        // pharmacy, morphine included, for a paracetamol order.
+        // pharmacy, morphine included, for a paracetamol order. QA D3940: the
+        // rule compares the strength too, and a substitute (the same active
+        // ingredient at the prescribed strength, another form) is listed after
+        // the prescribed product, labelled, never first.
+        MedicationCatalogItem prescribed = dispenseVerificationService.prescribedItemOf(prescription);
         return stockLotRepository.findByInventoryItemPharmacyId(pharmacy.getId(), Pageable.unpaged()).stream()
                 .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity().signum() > 0)
                 // QA D335: an expired lot is not dispensable (the fill refuses
@@ -1685,13 +1819,28 @@ public class DispenseServiceImpl implements DispenseService {
                         // same rule as the receipt, the check and the report.
                         && lot.getExpiryDate().isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
                 .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
-                        && lot.getInventoryItem().getMedicationCatalogItem() != null
-                        && dispenseVerificationService.matchesPrescribedDrug(prescription,
-                                lot.getInventoryItem().getMedicationCatalogItem()))
-                .sorted(java.util.Comparator.comparing(StockLot::getExpiryDate)
-                        .thenComparing(StockLot::getLotNumber, java.util.Comparator.nullsLast(String::compareTo)))
-                .map(stockLotMapper::toResponseDTO)
+                        && lot.getInventoryItem().getMedicationCatalogItem() != null)
+                .map(lot -> java.util.Map.entry(lot, DispenseVerificationService.classify(prescription, prescribed,
+                        lot.getInventoryItem().getMedicationCatalogItem())))
+                .filter(e -> e.getValue().mayBeDispensed(true))
+                .sorted(java.util.Comparator.<Map.Entry<StockLot, DispensedProductMatch>, Boolean>comparing(
+                                e -> !e.getValue().isPrescribedProduct())
+                        .thenComparing(e -> e.getKey().getExpiryDate())
+                        .thenComparing(e -> e.getKey().getLotNumber(), java.util.Comparator.nullsLast(String::compareTo)))
+                .map(e -> withProduct(stockLotMapper.toResponseDTO(e.getKey()),
+                        e.getKey().getInventoryItem().getMedicationCatalogItem(), e.getValue()))
                 .toList();
+    }
+
+    /** QA D3940: the lot's product, strength, form and match, so the picker shows what it offers. */
+    private static com.example.hms.payload.dto.pharmacy.StockLotResponseDTO withProduct(
+            com.example.hms.payload.dto.pharmacy.StockLotResponseDTO dto, MedicationCatalogItem item,
+            DispensedProductMatch match) {
+        dto.setProductName(DispenseVerificationService.describeProduct(item));
+        dto.setStrength(ProductStrength.labelOf(item).orElse(null));
+        dto.setForm(item.getForm());
+        dto.setProductMatch(match.name());
+        return dto;
     }
 
     @Override
@@ -2035,6 +2184,10 @@ public class DispenseServiceImpl implements DispenseService {
                 .preparedByName(DispenseMapper.displayNameOf(prepared.getPreparedByUser()))
                 .quantity(prepared.getQuantityDispensed())
                 .unit(prepared.getUnit())
+                // QA D3942: the product prepared, and whether it replaces the prescribed one.
+                .medicationName(prepared.getMedicationName())
+                .substitution(prepared.isSubstitution())
+                .substitutionReason(prepared.getSubstitutionReason())
                 .reminderSentAt(prepared.getReadyReminderSentAt())
                 // Review of #1285: a controlled fill set aside or lost on cancel is witnessed.
                 .controlled(prepared.getStockLot() != null && prepared.getStockLot().getInventoryItem() != null

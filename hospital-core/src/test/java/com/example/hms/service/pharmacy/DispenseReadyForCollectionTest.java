@@ -1808,4 +1808,68 @@ class DispenseReadyForCollectionTest {
             assertThat(rows.get(0).getClarificationResolvedAt()).isNull();
         }
     }
+
+    @Nested
+    @DisplayName("QA D3940 / D3942: the prepared product is the prescribed one, at ready and at hand-over")
+    class PreparedProduct {
+
+        private void twoHundredFiftyMilligramLot() {
+            prescription.setMedicationName("Amoxicillin 500 mg");
+            MedicationCatalogItem lotItem = inventoryItem.getMedicationCatalogItem();
+            lotItem.setNameFr("P77 Amoxicilline 250 mg");
+            lotItem.setStrength("250");
+            lotItem.setStrengthUnit("mg");
+        }
+
+        @Test
+        @DisplayName("a 250 mg lot is not prepared for a 500 mg order; nothing is set aside")
+        void anotherStrengthIsNotPrepared() {
+            twoHundredFiftyMilligramLot();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("another strength");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a fill prepared from another strength before the check is not handed over")
+        void aMismatchedPreparationIsNotHandedOver() {
+            twoHundredFiftyMilligramLot();
+            Dispense d = preparedFill();
+            stubLocked(d);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("another strength");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D3942: the queue row names the product prepared and the substitution")
+        void theQueueRowNamesThePreparedProduct() {
+            Dispense d = preparedFill();
+            d.setMedicationName("Amoxicilline 500 mg comprimé");
+            d.setSubstitution(true);
+            d.setSubstitutionReason("Rupture des gélules");
+            com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO.ReadyForCollection ready =
+                    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                            DispenseServiceImpl.class, "toReadyForCollection", d);
+
+            assertThat(ready.getMedicationName()).isEqualTo("Amoxicilline 500 mg comprimé");
+            assertThat(ready.isSubstitution()).isTrue();
+            assertThat(ready.getSubstitutionReason()).isEqualTo("Rupture des gélules");
+        }
+    }
 }

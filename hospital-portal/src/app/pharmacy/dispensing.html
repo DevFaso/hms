@@ -30,8 +30,8 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
-      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong
+      >{{ ' ' }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -180,13 +180,49 @@
               (ngModelChange)="onLotChange()"
             >
               <option value="">— {{ 'PHARMACY.NO_LOT' | translate }} —</option>
-              @for (lot of dispensableLots(); track lot.id) {
+              <!-- QA D3940: each lot says its product and strength; the prescribed product
+                   first, a substitute apart and labelled, never preselected. -->
+              @for (lot of prescribedLots(); track lot.id) {
                 <option [value]="lot.id">
+                  @if (lot.productName) {
+                    {{ lot.productName }} ·
+                  }
                   {{ lot.lotNumber }} · {{ 'PHARMACY.EXP_SHORT' | translate }}
                   {{ lot.expiryDate | serverTime | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
                 </option>
               }
+              @if (substituteLots().length > 0) {
+                <optgroup [label]="'PHARMACY.LOT_GROUP_SUBSTITUTE' | translate">
+                  @for (lot of substituteLots(); track lot.id) {
+                    <option [value]="lot.id">
+                      {{ lot.productName }} · {{ lot.lotNumber }} ·
+                      {{ 'PHARMACY.EXP_SHORT' | translate }}
+                      {{ lot.expiryDate | serverTime | date: 'MMM yyyy' }} ({{
+                        lot.remainingQuantity
+                      }})
+                    </option>
+                  }
+                </optgroup>
+              }
             </select>
+            @if (selectedLot(); as lot) {
+              <!-- QA D3940: the product that will leave, said beside the picker. -->
+              @if (lot.productName) {
+                <small class="field-hint" data-testid="lot-product">{{
+                  'PHARMACY.LOT_PRODUCT' | translate: { product: lot.productName }
+                }}</small>
+              }
+            }
+            @if (lotIsSubstitute()) {
+              <small class="field-hint" role="alert" data-testid="lot-substitute">{{
+                'PHARMACY.LOT_SUBSTITUTE_HINT'
+                  | translate
+                    : {
+                        product: selectedLot()?.productName ?? '',
+                        prescribed: form.medicationName,
+                      }
+              }}</small>
+            }
             @if (otherFormLots() > 0) {
               <!-- QA D1163: lots of another form than the order are not offered. -->
               <small class="field-hint" data-testid="other-form-lots">{{
@@ -367,15 +403,18 @@
           }
         </div>
 
-        @if (form.substitution) {
+        @if (form.substitution || lotIsSubstitute()) {
           <div class="form-row">
             <div class="field full-width">
-              <label for="subReason">{{ 'PHARMACY.SUBSTITUTION_REASON' | translate }}</label>
+              <label for="subReason">{{ 'PHARMACY.SUBSTITUTION_REASON' | translate }} *</label>
               <input
                 id="subReason"
                 type="text"
+                maxlength="500"
+                data-server-field="substitutionReason"
                 [(ngModel)]="form.substitutionReason"
                 name="substitutionReason"
+                required
               />
             </div>
           </div>
@@ -490,12 +529,34 @@
         </button>
       </div>
       <div class="rx-summary">
-        <strong>{{ action.rx.medicationName }}</strong>
+        <!-- QA D3942: the card names the product prepared, the one handed over, and says
+             when it replaces the prescribed one. -->
+        <strong data-testid="ready-product">{{ preparedProduct(action.rx) }}</strong>
+        @if (action.rx.readyForCollection?.quantity; as qty) {
+          {{ ' '
+          }}<span class="rx-meta" data-testid="ready-quantity"
+            >{{ qty }} {{ action.rx.readyForCollection?.unit ?? '' }}</span
+          >
+        }
         {{ ' '
         }}<span class="rx-meta">
           {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ action.rx.patient | personName }}
         </span>
+        @if (isSubstitutedReady(action.rx)) {
+          <p class="field-hint" role="note" data-testid="ready-substitution">
+            <span class="badge badge-warning">{{ 'PHARMACY.SUBSTITUTION' | translate }}</span>
+            {{ ' '
+            }}{{
+              'PHARMACY.READY_SUBSTITUTED_FOR'
+                | translate: { prescribed: action.rx.medicationName ?? '' }
+            }}
+            @if (action.rx.readyForCollection?.substitutionReason; as why) {
+              — {{ 'PHARMACY.SUBSTITUTION_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ why }}
+            }
+          </p>
+        }
       </div>
       @if (action.kind === 'handOver') {
         <!-- QA D1584: the hand-over shows the allergy cards and the prescriber's review too. -->
@@ -876,6 +937,18 @@
                       'PHARMACY.READY_SINCE'
                         | translate: { date: (ready.readyAt | serverTime | date: 'short') }
                     }}</span>
+                    @if (preparedAsOther(rx)) {
+                      <!-- QA D3942: the queue says what was prepared when it is not the order's name. -->
+                      {{ ' '
+                      }}<span
+                        class="badge"
+                        [class.badge-warning]="isSubstitutedReady(rx)"
+                        [attr.data-testid]="'rx-ready-sub-' + rx.id"
+                        >{{
+                          'PHARMACY.READY_PREPARED_AS' | translate: { product: preparedProduct(rx) }
+                        }}</span
+                      >
+                    }
                   }
                   <!-- G13: who is preparing this order (advisory) -->
                   @if (queueClaimEnabled() && rx.claim; as claim) {

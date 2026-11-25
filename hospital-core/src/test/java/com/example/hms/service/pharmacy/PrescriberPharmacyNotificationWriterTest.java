@@ -72,6 +72,24 @@ class PrescriberPharmacyNotificationWriterTest {
     }
 
     @Test
+    @DisplayName("QA D3940: a fill of a substitute names the product dispensed")
+    void dispensedWithASubstitute() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        com.example.hms.repository.pharmacy.DispenseRepository dispenses =
+                org.mockito.Mockito.mock(com.example.hms.repository.pharmacy.DispenseRepository.class);
+        when(dispenses.findSubstitutedProductNames(prescriptionId))
+                .thenReturn(java.util.List.of("Amoxicilline 500 mg comprimé"));
+        writer.setDispenseRepository(dispenses);
+
+        assertThat(writer.write(prescriptionId, PrescriptionStatus.DISPENSED)).isTrue();
+
+        verify(notificationService).created(
+                "Pharmacie : Amoxicilline 500 mg (Aminata Diallo) a été entièrement délivré, remplacé par "
+                        + "Amoxicilline 500 mg comprimé.",
+                "dr.awa", "PHARMACY_EVENT");
+    }
+
+    @Test
     @DisplayName("a partner outcome names the partner pharmacy")
     void partnerRejected() {
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
