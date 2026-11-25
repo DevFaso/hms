@@ -43,8 +43,13 @@ import java.util.UUID;
  * {@code anyRequest().authenticated()} and the annotations here are the
  * authoritative gate.
  *
- * <p>Result-entry roles mirror POST /lab-results; finalize narrows to the lab
- * scientist tier, mirroring the order state machine's VERIFIED transition.
+ * <p>QA D3902: a culture report is the laboratory's. Entry is the laboratory
+ * ({@link #ENTRY_ROLES}: no doctor, nurse or midwife — they read it, they never
+ * write into it); finalize narrows to the lab scientist tier, mirroring the
+ * order state machine's VERIFIED transition; and once FINAL, only that same tier
+ * may correct it ({@code MicroCultureServiceImpl.applyCorrectionGuard}), which
+ * records who, when and why and marks the report CORRECTED.
+ * {@code LabResultEntryEndpointsGuardTest} holds every result-entry endpoint to it.
  */
 @RestController
 @RequestMapping("/micro-cultures")
@@ -53,7 +58,7 @@ import java.util.UUID;
 public class MicroCultureController {
 
     private static final String ENTRY_ROLES =
-        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER','DOCTOR','NURSE','MIDWIFE')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')";
 
     private static final String FINALIZE_ROLES =
         "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR')";

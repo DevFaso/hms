@@ -85,6 +85,8 @@ export interface MicroCultureResponse {
   finalizedByName: string | null;
   correctedAt: string | null;
   correctionReason: string | null;
+  /** QA D3902: who made the latest correction of the final report (the laboratory). */
+  correctedByName?: string | null;
   reportedByName: string | null;
   notes: string | null;
   corrections?: MicroCultureCorrection[];

@@ -116,8 +116,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         // QA D3450 / D3254: the duplicate rule compares the order as it is stored: with a catalogue exam, the
         // exam's own modality and body region, not what the form displayed.
+        // QA D3903: the server finds the duplicate itself, over at least the default window (a
+        // client cannot narrow it away), and a duplicate is placed only with its reason, flag or no flag.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(),
-            imagingOrder.getModality(), imagingOrder.getBodyRegion(), request.getDuplicateLookbackDays());
+            imagingOrder.getModality(), imagingOrder.getBodyRegion(),
+            enforcedLookback(request.getDuplicateLookbackDays()));
+        com.example.hms.service.imaging.ImagingDuplicateOverride.requireReasonForDuplicate(request, duplicateMatches);
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
@@ -252,6 +256,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (RESULTED_STATES.contains(order.getStatus())) {
             throw new com.example.hms.exception.BusinessException("imaging.order.resulted.locked");
         }
+        // QA D3903: the study as it stood before ANY part of this edit (patient and hospital included),
+        // so an edit that moves the order onto another patient's or place's recent study is a change.
+        String studyKeyBefore = duplicateKeyOf(order);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -286,21 +293,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
                 order.getHospital().getId()));
         }
 
-        // QA D970 (sibling): the order being edited is not a duplicate of itself.
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
-            order.getPatient() != null ? order.getPatient().getId() : null,
-            order.getHospital() != null ? order.getHospital().getId() : null,
-            order.getModality(),
-            order.getBodyRegion(),
-            request.getDuplicateLookbackDays()
-        ).stream().filter(match -> order.getId() == null || !order.getId().equals(match.getId())).toList();
-        if (!duplicateMatches.isEmpty()) {
-            order.setDuplicateOfRecentOrder(true);
-            order.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
-        } else {
-            order.setDuplicateOfRecentOrder(false);
-            order.setDuplicateReferenceOrderId(null);
-        }
+        List<ImagingOrder> duplicateMatches = reconcileDuplicateOnEdit(order, request, studyKeyBefore, callerUserId);
         // Provisional rule 1: an edit that records the number clears the flag.
         ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
@@ -953,6 +946,53 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         LocalDateTime orderedAfter = LocalDateTime.now().minusDays(duplicateWindowDays(lookbackDays));
         String normalizedBodyRegion = normalizeBodyRegion(bodyRegion);
         return imagingOrderRepository.findPotentialDuplicates(patientId, hospitalId, modality, normalizedBodyRegion, orderedAfter);
+    }
+
+    /**
+     * The edited order's duplicates (QA D970 sibling: never itself) and its duplicate flag. QA D3903
+     * (same class): an edit that turns the order into another study (patient, place, modality or
+     * region) is a new ordering decision; if that study was ordered recently, the edit needs the
+     * reason a new order would, stored with who and when. An edit that leaves the study as it was
+     * decides nothing new.
+     */
+    private List<ImagingOrder> reconcileDuplicateOnEdit(ImagingOrder order, ImagingOrderRequestDTO request,
+                                                       String studyKeyBefore, UUID callerUserId) {
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
+            order.getPatient() != null ? order.getPatient().getId() : null,
+            order.getHospital() != null ? order.getHospital().getId() : null,
+            order.getModality(),
+            order.getBodyRegion(),
+            enforcedLookback(request.getDuplicateLookbackDays())
+        ).stream().filter(match -> order.getId() == null || !order.getId().equals(match.getId())).toList();
+        boolean studyChanged = !java.util.Objects.equals(studyKeyBefore, duplicateKeyOf(order));
+        if (studyChanged) {
+            com.example.hms.service.imaging.ImagingDuplicateOverride.requireReasonForDuplicate(request, duplicateMatches);
+        }
+        order.setDuplicateOfRecentOrder(!duplicateMatches.isEmpty());
+        order.setDuplicateReferenceOrderId(duplicateMatches.isEmpty() ? null : duplicateMatches.get(0).getId());
+        if (studyChanged) {
+            com.example.hms.model.User editor = resolveOrderingUser(callerUserId);
+            com.example.hms.service.imaging.ImagingDuplicateOverride.apply(order, duplicateMatches, request,
+                editor != null ? editor.getId() : null, editor != null ? displayName(editor) : null,
+                LocalDateTime.now());
+        }
+        return duplicateMatches;
+    }
+
+    /**
+     * QA D3903: the window a placed or edited order is checked over: what the caller asked when it
+     * is wider than the default, never narrower (a client must not shrink the check away).
+     */
+    private static Integer enforcedLookback(Integer lookbackDays) {
+        return lookbackDays == null || lookbackDays < DEFAULT_DUPLICATE_LOOKBACK_DAYS ? null : lookbackDays;
+    }
+
+    /** What a duplicate is judged on (patient, hospital, modality, region), as one comparable key. */
+    private String duplicateKeyOf(ImagingOrder order) {
+        return (order.getPatient() != null ? order.getPatient().getId() : null) + "|"
+            + (order.getHospital() != null ? order.getHospital().getId() : null) + "|"
+            + order.getModality() + "|" + java.util.Optional.ofNullable(normalizeBodyRegion(order.getBodyRegion()))
+                .map(region -> region.toLowerCase(java.util.Locale.ROOT)).orElse(null);
     }
 
     /** The window in days: the default when none or a non-positive one is asked, never above the cap. */

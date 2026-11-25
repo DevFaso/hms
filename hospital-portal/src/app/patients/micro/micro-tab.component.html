@@ -60,7 +60,11 @@
               {{ ' '
               }}<span>
                 {{ 'MICRO.CORRECTED_AT' | translate }}
-                {{ culture.correctedAt | serverTime | date: 'short' }} —
+                {{ culture.correctedAt | serverTime | date: 'short' }}
+                @if (culture.correctedByName) {
+                  ({{ culture.correctedByName }})
+                }
+                —
                 {{ 'COMMON.REASON_VALUE' | translate: { reason: culture.correctionReason } }}
               </span>
             </div>

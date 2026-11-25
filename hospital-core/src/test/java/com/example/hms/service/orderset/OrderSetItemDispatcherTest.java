@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -363,6 +364,24 @@ class OrderSetItemDispatcherTest {
         assertThat(sent.getClinicalQuestion()).contains("Sepsis bundle");
         // QA D3154: the order set's imaging order is placed in the visit the set was applied in.
         assertThat(sent.getEncounterId()).isEqualTo(ENCOUNTER_ID);
+    }
+
+    /**
+     * QA D3903: a recent order of the same study is placed again only with a reason, which a
+     * protocol cannot give; the item is skipped and counted, never placed as a silent duplicate.
+     */
+    @Test
+    void skipsAnImagingItemThatDuplicatesARecentOrder_D3903() {
+        when(imagingOrderService.previewDuplicates(PATIENT_ID, HOSPITAL_ID, ImagingModality.CT, "abdomen", null))
+            .thenReturn(List.of(com.example.hms.payload.dto.imaging.ImagingOrderDuplicateMatchDTO.builder().build()));
+
+        DispatchResult result = dispatcher.dispatch(Map.of(
+            "orderType", "IMAGING", "modality", "CT", "studyType", "CT abdomen", "bodyRegion", "abdomen"),
+            ctx(), Locale.ENGLISH);
+
+        assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
+        assertThat(result.skipReason()).contains("duplicate");
+        verify(imagingOrderService, never()).createOrder(any(), any());
     }
 
     @Test
