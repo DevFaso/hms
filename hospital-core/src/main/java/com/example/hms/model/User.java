@@ -125,6 +125,16 @@ public class User extends BaseEntity {
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
+    /**
+     * When the account's temporary password stops working, or {@code null}
+     * when the password is one the holder chose. Set only through
+     * {@link com.example.hms.utility.TemporaryPasswords#assign}; cleared when
+     * the holder sets their own password (change, first sign-in setup, reset).
+     * A sign-in after this instant is refused (V366).
+     */
+    @Column(name = "temp_password_expires_at")
+    private LocalDateTime temporaryPasswordExpiresAt;
+
     @Column(name = "password_rotation_warning_at")
     private LocalDateTime passwordRotationWarningAt;
 

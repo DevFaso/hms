@@ -55,7 +55,7 @@ class OnboardingEmailRenderingTest {
     @Test
     @DisplayName("new staff welcome: one French mail, e-Keneya, Médecin, the code, no unsubscribe")
     void welcomeIsBrandedTranslatedAndSelfContained() {
-        service.sendAdminWelcomeEmail("doc@hospital.test", "Awa Traore", "atraore", "Temp@1234",
+        service.sendAdminWelcomeEmail("doc@hospital.test", "Awa Traore", "atraore",
             "ROLE_DOCTOR", "CHU Test",
             "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-1", "482913");
 
@@ -67,6 +67,9 @@ class OnboardingEmailRenderingTest {
             .contains("48 heures")
             .contains("onboarding/role-welcome?assignment=A-1")
             .contains("e-Keneya")
+            // No password in the mail: the row says where it is shown.
+            .contains("Affiché une seule fois sur la page de confirmation")
+            .contains("Cet e-mail ne contient aucun mot de passe")
             .doesNotContain("ROLE_DOCTOR")
             .doesNotContain(">Doctor<")
             .doesNotContain("HMS")
@@ -79,7 +82,7 @@ class OnboardingEmailRenderingTest {
     @Test
     @DisplayName("new staff with two roles: ONE French mail listing each role with its own code and link")
     void multiRoleWelcomeListsEveryRole() {
-        service.sendAdminWelcomeEmail("rec@hospital.test", "Awa Traore", "atraore", "Temp@1234", java.util.List.of(
+        service.sendAdminWelcomeEmail("rec@hospital.test", "Awa Traore", "atraore", java.util.List.of(
             new EmailService.WelcomeRole("ROLE_NURSE", "CHU Test", "111111",
                 "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-1"),
             new EmailService.WelcomeRole("ROLE_DOCTOR", "CHU Test", "222222",
@@ -109,7 +112,7 @@ class OnboardingEmailRenderingTest {
     void assignmentMailTranslatesTheRole() {
         service.sendRoleAssignmentConfirmationEmail("doc@hospital.test", "Awa Traore", "ROLE_NURSE",
             "CHU Test", "123456", "A-2", "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-2",
-            null, null);
+            false);
 
         String[] mail = captured();
         assertThat(mail[0]).doesNotContain("HMS");
@@ -124,7 +127,7 @@ class OnboardingEmailRenderingTest {
     void platformWideAssignmentMailNamesThePlatform() {
         service.sendRoleAssignmentConfirmationEmail("root@e-keneya.test", "Awa Traore", "ROLE_SUPER_ADMIN",
             null, "123456", "A-3", "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-3",
-            null, null);
+            false);
 
         String[] mail = captured();
         assertThat(mail[0]).isEqualTo("Action requise : confirmez votre affectation de rôle sur la plateforme")

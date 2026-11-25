@@ -189,6 +189,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Login refused: no active role$/,
   },
   {
+    key: 'AUDIT.DESC.LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED',
+    re: /^Login refused: temporary password expired$/,
+  },
+  {
     key: 'AUDIT.DESC.LOGIN_REJECTED_LOCKED',
     re: /^Login rejected — account locked$/,
   },

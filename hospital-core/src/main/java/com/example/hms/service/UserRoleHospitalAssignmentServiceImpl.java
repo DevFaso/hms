@@ -234,6 +234,32 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         this.patientLocaleResolver = patientLocaleResolver;
     }
 
+    /**
+     * Sends a set-password link to the holder of an account activated by its
+     * registrar (no activation page, so no first password shown to them).
+     * Setter-injected so the unit tests that build this service with mocks
+     * keep their constructor.
+     */
+    private PasswordResetService passwordResetService;
+
+    @Autowired
+    void setPasswordResetService(PasswordResetService passwordResetService) {
+        this.passwordResetService = passwordResetService;
+    }
+
+    /** After commit: a failed send never undoes the activation; the holder can still ask for a reset. */
+    private void sendSetPasswordLink(UUID holderId) {
+        if (passwordResetService == null) {
+            log.warn("🔑 No set-password link sent for user {}: no reset service", holderId);
+            return;
+        }
+        try {
+            passwordResetService.sendSetPasswordLink(holderId, EmailService.DEFAULT_RECIPIENT_LOCALE);
+        } catch (RuntimeException ex) {
+            log.warn("🔑 Set-password link for user {} failed: {}", holderId, ex.getClass().getSimpleName());
+        }
+    }
+
     /* ===================== Create ===================== */
 
     private UserRoleHospitalAssignmentResponseDTO toDtoWithLinks(UserRoleHospitalAssignment assignment) {
@@ -1045,6 +1071,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             throw new BusinessException(MSG_ASSIGNMENT_INVALID_CODE);
         }
 
+        // The holder of a never-used account sees no activation page here, so
+        // no first password: read before the activation switches it on.
+        User holder = assignment.getUser();
+        boolean firstPasswordOwed = com.example.hms.utility.TemporaryPasswords.owedAtActivation(holder);
+        boolean holderReachable = firstPasswordOwed && reachableForSetPasswordLink(holder);
+        if (firstPasswordOwed && !holderReachable && !claimFirstPassword(holder)) {
+            // A second confirm of the same account at the same time: the first one issues the password.
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
+        }
+
         // Registrar confirmation presents the SAME confirmation code the
         // assignee received, so it completes verification outright. Since
         // option A every account starts inactive; a confirm that only stamped
@@ -1053,9 +1089,48 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // through the advertised path.
         activateVerifiedAssignment(assignment, "registrar confirmation");
 
+        // The holder gets their way to a password of their own: a set-password
+        // link by e-mail or SMS (after commit, so a rollback sends nothing), or,
+        // when nothing reaches them, a first password in this response only, for
+        // the registrar to hand over (as a registration with no channel does).
+        String handedOver = null;
+        if (holderReachable) {
+            final UUID holderId = holder.getId();
+            TransactionCallbacks.afterCommit(() -> sendSetPasswordLink(holderId));
+        } else if (firstPasswordOwed) {
+            handedOver = issueFirstPasswordAtActivation(holder);
+        }
+
         recordAssignmentConfirmationAudit(assignment, actor);
         log.info("✅ Assignment '{}' confirmed by actor '{}'", assignment.getId(), actor.getId());
-        return toDtoWithLinks(assignment);
+        UserRoleHospitalAssignmentResponseDTO dto = toDtoWithLinks(assignment);
+        if (handedOver != null) {
+            dto.setTemporaryUsername(holder.getUsername());
+            dto.setTemporaryPassword(handedOver);
+        }
+        return dto;
+    }
+
+    /** Whether a set-password link can reach the holder: an address, or a phone and a real SMS transport. */
+    private boolean reachableForSetPasswordLink(User holder) {
+        boolean hasEmail = holder.getEmail() != null && !holder.getEmail().isBlank();
+        boolean hasPhone = holder.getPhoneNumber() != null && !holder.getPhoneNumber().isBlank();
+        return hasEmail || (hasPhone && smsService != null && smsService.deliversRealSms());
+    }
+
+    /**
+     * Claims the issuing of the holder's first password: of two activations of
+     * the same account at once, only one gets true (a conditional update keyed
+     * on the password-change time read), so no page shows a password that the
+     * other one replaced.
+     */
+    private boolean claimFirstPassword(User holder) {
+        LocalDateTime readAt = holder.getPasswordChangedAt();
+        LocalDateTime claimedAt = LocalDateTime.now(ZoneId.systemDefault());
+        int claimed = readAt == null
+            ? userRepository.claimFirstPasswordNeverChanged(holder.getId(), claimedAt)
+            : userRepository.claimFirstPassword(holder.getId(), readAt, claimedAt);
+        return claimed == 1;
     }
 
     /**
@@ -1297,21 +1372,30 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         verifyCodeNotExpiredAndMatches(assignment, sanitizedConfirmation);
         codeActivationFailures.remove(sanitizedCode);
 
-        // Capture one-time temp credentials BEFORE clearing them
         String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
-        String tempPassword = assignment.getTempPlainPassword();
         // QA r70 D3201: read before the activation switches the account on.
-        boolean firstPasswordOwed = tempPassword == null && owesFirstPassword(assignment.getUser());
+        boolean firstPasswordOwed = owesFirstPassword(assignment.getUser());
+        if (firstPasswordOwed && !claimFirstPassword(assignment.getUser())) {
+            // The same code sent twice at once: the other request activates the
+            // account and shows its first password; this one shows none.
+            log.info("⏭️ Assignment '{}' is being activated by a simultaneous request.", sanitizedCode);
+            return buildPublicViewDTO(assignment, null, null);
+        }
 
         activateVerifiedAssignment(assignment, "assignee code entry");
 
+        // A never-used account gets its first password here, from the holder
+        // who just proved the code: no password is e-mailed or kept in clear,
+        // so this page is where it is shown, once. It replaces any password
+        // the account was created with.
+        String tempPassword = null;
         boolean reissued = false;
         if (firstPasswordOwed) {
             tempPassword = issueFirstPasswordAtActivation(assignment.getUser());
             reissued = true;
         }
 
-        // Include credentials if this was a new-user assignment (temp creds were set)
+        // Include credentials only when a first password was issued just now
         String exposedUsername = tempPassword != null ? tempUsername : null;
         UserRoleAssignmentPublicViewDTO view = buildPublicViewDTO(assignment, exposedUsername, tempPassword);
         view.setCredentialsReissued(reissued);
@@ -1327,23 +1411,19 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * the e-mail. An account in use keeps its password.
      */
     private static boolean owesFirstPassword(User holder) {
-        return holder != null
-            && !Boolean.TRUE.equals(holder.isActive())
-            && holder.getLastLoginAt() == null
-            && holder.isForcePasswordChange()
-            && holder.getDeactivatedByAdminAt() == null;
+        return com.example.hms.utility.TemporaryPasswords.owedAtActivation(holder);
     }
 
     /**
-     * A fresh one-time password, shown once on the activation page (the same path as a patient's) and replaced at
-     * first sign-in. It supersedes the e-mailed one, which the page says. Never logged, never kept in clear.
+     * A fresh one-time password, shown once on the activation page and replaced at first sign-in. It supersedes
+     * any password the account was created with, which the page says. Stored as a hash only, expires after
+     * {@link com.example.hms.utility.TemporaryPasswords#LIFETIME}, never logged.
      */
     private String issueFirstPasswordAtActivation(User holder) {
         String password = com.example.hms.utility.TemporaryPasswords.generate();
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
-        holder.setPasswordHash(passwordEncoderProvider.getObject().encode(password));
-        holder.setPasswordChangedAt(now);
-        holder.setForcePasswordChange(true);
+        com.example.hms.utility.TemporaryPasswords.assign(
+            holder, passwordEncoderProvider.getObject().encode(password), now);
         userRepository.save(holder);
         log.info("🔑 First password issued at code activation for user '{}'", holder.getId());
         return password;
@@ -1560,7 +1640,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             assignment.setConfirmationVerifiedAt(LocalDateTime.now());
         }
         assignment.setActive(true);
-        assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
         restoreLinkedStaff(assignment);
         log.info("✅ Assignment '{}' verified and activated via {}.", assignment.getId(), source);
@@ -1787,23 +1866,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * user account back on. A row that is only flagged inactive therefore came
      * back on its old invitation code for as long as that code was valid - a
      * deactivated invitation, or a removed user's assignment, re-enabled by
-     * whoever held the code. Clearing the code (and the one-time temporary
-     * password the verification would hand out) makes the refusal final;
-     * re-inviting goes through the resend path, which issues a new code.
+     * whoever held the code. Clearing the code makes the refusal final (no
+     * code, no first password at activation); re-inviting goes through the
+     * resend path, which issues a new code.
      */
     private static boolean retire(UserRoleHospitalAssignment assignment) {
         boolean changed = stillGrantsAccess(assignment);
         assignment.setActive(false);
         assignment.setConfirmationCode(null);
-        assignment.setTempPlainPassword(null);
         return changed;
     }
 
     /** Active, or still able to come on through its code: what {@link #retire} takes away. */
     private static boolean stillGrantsAccess(UserRoleHospitalAssignment assignment) {
         return !Boolean.FALSE.equals(assignment.getActive())
-            || assignment.getConfirmationCode() != null
-            || assignment.getTempPlainPassword() != null;
+            || assignment.getConfirmationCode() != null;
     }
 
     /**
@@ -2957,9 +3034,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * reported: QA D1061, a dependant registered under a guardian's number,
      * whose registration response carries the credentials instead.
      */
-    private void reportCredentialsRoute(UserRoleHospitalAssignment assignment, User user) {
-        String tempPassword = assignment.getTempPlainPassword();
-        if (tempPassword == null || tempPassword.isBlank()) {
+    private void reportCredentialsRoute(User user) {
+        // Only a never-used account is owed sign-in details at all.
+        if (!owesFirstPassword(user)) {
             return;
         }
         if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
@@ -2986,7 +3063,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
                     NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
                     NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
-                reportCredentialsRoute(assignment, user);
+                reportCredentialsRoute(user);
                 return;
             }
 
@@ -3013,8 +3090,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 confirmationCode,
                 assignment.getAssignmentCode(),
                 completionUrl,
-                assignment.getTempPlainPassword() != null ? user.getUsername() : null,
-                assignment.getTempPlainPassword()
+                owesFirstPassword(user)
             );
             // QUEUED: the mail is in the outbox, not yet at the SMTP server.
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,

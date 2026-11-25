@@ -64,12 +64,17 @@ class ActivationSmsD1123Test {
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
     @Mock private com.example.hms.repository.PatientRepository patientRepository;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+    @Mock private org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
+        passwordEncoderProvider;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
 
     private static final String CODE = "482913";
-    private static final String TEMP_PASSWORD = "Temp@Secret123";
+    /** What a temporary password looks like: none may reach an SMS. */
+    private static final String TEMP_PASSWORD_SHAPE = "(?=\\S*\\d)(?=\\S*[!@#$%&*])[A-Za-z0-9!@#$%&*]{14}";
+    private static final java.util.regex.Pattern TEMP_PASSWORD_IN_TEXT =
+        java.util.regex.Pattern.compile("(^|\\s)" + TEMP_PASSWORD_SHAPE + "(\\s|$)");
     private static final String LINK = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=CHW-P-0042";
 
     private UserRoleHospitalAssignment assignment;
@@ -90,6 +95,9 @@ class ActivationSmsD1123Test {
         patient.setLastName("Nana");
         patient.setPhoneNumber("+22670003201");
         patient.setActive(false);
+        // A new account, never used: it is owed its first password at activation.
+        patient.setForcePasswordChange(true);
+        patient.setPasswordHash("{bcrypt}hash-of-the-registration-password");
 
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
@@ -105,7 +113,6 @@ class ActivationSmsD1123Test {
         assignment.setAssignmentCode("CHW-P-0042");
         assignment.setConfirmationCode(CODE);
         assignment.setConfirmationSentAt(LocalDateTime.now());
-        assignment.setTempPlainPassword(TEMP_PASSWORD);
         assignment.setUser(patient);
         assignment.setRole(role("ROLE_PATIENT"));
         assignment.setHospital(hospital);
@@ -115,6 +122,12 @@ class ActivationSmsD1123Test {
         lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         lenient().when(assignmentLinkService.buildProfileCompletionUrl("CHW-P-0042")).thenReturn(LINK);
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        lenient().when(userRepository.claimFirstPassword(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        lenient().when(userRepository.claimFirstPasswordNeverChanged(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        lenient().when(passwordEncoderProvider.getObject()).thenReturn(
+            new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4));
     }
 
     @AfterEach
@@ -157,7 +170,7 @@ class ActivationSmsD1123Test {
         String sms = smsTo("+22670003201");
         assertThat(sms).contains(sentence).contains(CODE).contains(LINK)
             .as("no raw role code").doesNotContain("ROLE_").doesNotContain("PATIENT")
-            .as("no secret beyond the one-time code").doesNotContain(TEMP_PASSWORD)
+            .as("no secret beyond the one-time code").doesNotContainPattern(TEMP_PASSWORD_IN_TEXT)
             .as("no emoji: they force UCS-2 and split the SMS").matches("[\\x{0000}-\\x{FFFF}]*");
         assertThat(sms.length()).as("one SMS segment for a short hospital name").isLessThanOrEqualTo(160);
     }
@@ -170,7 +183,8 @@ class ActivationSmsD1123Test {
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(smsService, atLeastOnce()).send(anyString(), body.capture());
-        assertThat(body.getAllValues()).isNotEmpty().noneMatch(text -> text.contains(TEMP_PASSWORD));
+        assertThat(body.getAllValues()).isNotEmpty()
+            .noneMatch(text -> TEMP_PASSWORD_IN_TEXT.matcher(text).find());
     }
 
     @Test
@@ -201,6 +215,8 @@ class ActivationSmsD1123Test {
 
     @Test
     void thePhoneAndTheCodeActivateTheAccount() {
+        when(passwordEncoderProvider.getObject()).thenReturn(
+            new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4));
         when(userRepository.findByPhoneNumber("+22670003201")).thenReturn(Optional.of(patient));
         when(assignmentRepository.findByUserId(patient.getId())).thenReturn(List.of(assignment));
         when(assignmentRepository.findByAssignmentCode("CHW-P-0042")).thenReturn(Optional.of(assignment));
@@ -210,7 +226,12 @@ class ActivationSmsD1123Test {
         assertThat(assignment.getActive()).isTrue();
         assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
         assertThat(patient.isActive()).isTrue();
-        assertThat(view.getTempPassword()).as("the sign-in details are shown once, here").isEqualTo(TEMP_PASSWORD);
+        assertThat(view.getTempPassword()).as("the sign-in details are shown once, here").matches(TEMP_PASSWORD_SHAPE);
+        assertThat(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
+            .matches(view.getTempPassword(), patient.getPasswordHash()))
+            .as("the account keeps only the hash of the password shown").isTrue();
+        assertThat(patient.getTemporaryPasswordExpiresAt()).as("and it expires").isNotNull();
+        assertThat(patient.isForcePasswordChange()).isTrue();
     }
 
     @Test

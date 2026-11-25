@@ -64,7 +64,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     public static final String TOKEN_INVALID = "passwordReset.token.invalid";
     /** The change-password minimum ({@code auth.password.tooShort}), which the reset page also enforces. */
     private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final Pattern HEX_64 = Pattern.compile("^[0-9a-fA-F]{64}$");
     /** QA D787: a phone number as typed: digits, an optional leading +, spaces, dots, dashes, brackets. */
     private static final Pattern PHONE_SHAPED = Pattern.compile("[+\\d][\\d\\s().-]*");
     private static final SecureRandom FALLBACK_RANDOM = new SecureRandom();
@@ -209,6 +208,27 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         handleResetRequest(user, requestIp);
     }
 
+    /**
+     * Its own transaction: callers run it after their commit, where a joined
+     * (REQUIRED) transaction would be the finished one and the token would
+     * never be committed.
+     */
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void sendSetPasswordLink(UUID userId, Locale locale) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.isDeleted()) {
+            return;
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            handleResetRequest(user, null);
+        } else if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+            issueBySms(user, locale, null);
+        } else {
+            log.warn("🔑 Set-password link not sent for user {}: no e-mail address or phone number", userId);
+        }
+    }
+
     /** The link by e-mail, to the account's own address. */
     private void handleResetRequest(User user, String requestIp) {
         // Enforce "one active token per user"
@@ -270,10 +290,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         User user = resetToken.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
-    user.setForcePasswordChange(false);
-    user.setPasswordChangedAt(LocalDateTime.now());
-    user.setPasswordRotationWarningAt(null);
-    user.setPasswordRotationForcedAt(null);
+        user.setForcePasswordChange(false);
+        com.example.hms.utility.TemporaryPasswords.retire(user);
+        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setPasswordRotationWarningAt(null);
+        user.setPasswordRotationForcedAt(null);
         userRepository.save(user);
 
         // Mark token consumed (preserve audit trail)
@@ -388,14 +409,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         }
     }
 
-    private String resolveTokenHash(String presentedToken) {
+    /**
+     * The stored form of a presented token: always its SHA-256. Only the raw
+     * token from the link is accepted; a value shaped like a stored hash is
+     * hashed like any other input, so it matches nothing.
+     */
+    private static String resolveTokenHash(String presentedToken) {
         Objects.requireNonNull(presentedToken, "Token must not be null");
-        if (HEX_64.matcher(presentedToken).matches()) {
-            if (log.isDebugEnabled()) {
-                log.debug("[PasswordReset] Accepting legacy pre-hashed token input");
-            }
-            return presentedToken.toLowerCase(Locale.ROOT);
-        }
         return sha256Hex(presentedToken);
     }
 

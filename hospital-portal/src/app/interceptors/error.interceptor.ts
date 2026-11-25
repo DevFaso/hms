@@ -247,6 +247,37 @@ export function mfaStepUpRefusal(error: HttpErrorResponse): string | null {
     : null;
 }
 
+/**
+ * The 403 every API call gets while the account is on a temporary password:
+ * the server refuses all but the account-setup calls (PasswordChangeGate). It is neither a forbidden page
+ * nor a sign-out: the user is taken to the account-setup screen.
+ */
+export const PASSWORD_CHANGE_REQUIRED = 'password_change_required';
+
+export function isPasswordChangeRequired(error: HttpErrorResponse): boolean {
+  const body = error.error as { code?: unknown } | null;
+  return (
+    error.status === 403 &&
+    !!body &&
+    typeof body === 'object' &&
+    body.code === PASSWORD_CHANGE_REQUIRED
+  );
+}
+
+/**
+ * Remember the forced change on the stored profile, so the account-setup
+ * guard keeps every page behind it, and open the setup screen.
+ */
+function sendToAccountSetup(auth: AuthService, router: Router): void {
+  const profile = auth.getUserProfile();
+  if (profile && !profile.forcePasswordChange) {
+    auth.setUserProfile({ ...profile, forcePasswordChange: true });
+  }
+  if (!(router.url ?? '').startsWith('/account-setup')) {
+    void router.navigate(['/account-setup']);
+  }
+}
+
 function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
   const body = error.error as { code?: unknown; reason?: unknown } | null;
   if (body && typeof body === 'object' && body.code === HOSPITAL_SCOPE_REFUSED) {
@@ -510,6 +541,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         if (req.context.get(CSRF_REPLAY) && typeof message === 'string' && message.trim()) {
           toast.error(message.trim());
         }
+      } else if (isPasswordChangeRequired(error)) {
+        sendToAccountSetup(auth, router);
       } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
         // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {

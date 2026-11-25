@@ -449,8 +449,7 @@ public class EmailServiceImpl implements EmailService {
                                                     String confirmationCode,
                                                     String assignmentCode,
                                                     String profileCompletionUrl,
-                                                    String tempUsername,
-                                                    String tempPassword) {
+                                                    boolean firstSignIn) {
         validateAddresses(List.of(to));
         // The assignee is a User, which records no language (see
         // EmailService#DEFAULT_RECIPIENT_LOCALE). A patient at this point has
@@ -481,17 +480,12 @@ public class EmailServiceImpl implements EmailService {
                 + "<br /><a href=\"" + url + "\">" + url + "</a></p>";
         }
 
-        String credentialsSection = "";
-        if (hasText(tempUsername) && hasText(tempPassword)) {
-            credentialsSection = "<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;\">"
-                + "<p style=\"margin:0 0 8px;font-weight:600;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.title") + CLOSE_PARAGRAPH
-                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.username") + HTML_STRONG_CLOSE_SP
-                + escapeHtml(tempUsername) + CLOSE_PARAGRAPH
-                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.password") + HTML_STRONG_CLOSE_SP
-                + "<code style=\"background:#e0f2fe;padding:2px 6px;border-radius:4px;\">" + escapeHtml(tempPassword) + "</code></p>"
-                + "<p style=\"margin:8px 0 0;font-size:13px;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.change") + CLOSE_PARAGRAPH
-                + CLOSE_DIV;
-        }
+        // No password in a mail: a new account's sign-in details are shown
+        // once on the page the link opens, after the code is confirmed.
+        String credentialsSection = firstSignIn
+            ? "<p style=\"margin:16px 0;font-size:14px;color:#0369a1;\">"
+                + text(l, "email.role.assignment.credentials.atActivation") + CLOSE_PARAGRAPH
+            : "";
 
         String subject;
         String body;
@@ -972,7 +966,6 @@ public class EmailServiceImpl implements EmailService {
     public void sendAdminWelcomeEmail(String to,
                                       String displayName,
                                       String username,
-                                      String tempPassword,
                                       String roleName,
                                       String hospitalName,
                                       String activationUrl,
@@ -985,7 +978,6 @@ public class EmailServiceImpl implements EmailService {
         String escapedRole     = hasText(roleName)     ? escapeHtml(roleLabel(l, roleName)) : text(l, "email.admin.welcome.fallback.role");
         String escapedHospital = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
         String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
-        String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
         String loginUrl        = loginUrl();
 
         String greeting = hasText(displayName)
@@ -1040,8 +1032,8 @@ public class EmailServiceImpl implements EmailService {
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
             + escapedUsername + "</td></tr>"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.password") + "</td>"
-            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
-            + escapedPassword + "</td></tr>"
+            + "<td style=\"padding:6px 0 6px 16px;color:#1e293b;\">"
+            + text(l, "email.admin.welcome.credentials.password.atActivation") + "</td></tr>"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.role") + "</td>"
             + "<td style=\"padding:6px 0 6px 16px;\">" + escapedRole + "</td></tr>"
             + hospitalLine
@@ -1065,15 +1057,14 @@ public class EmailServiceImpl implements EmailService {
     public void sendAdminWelcomeEmail(String to,
                                       String displayName,
                                       String username,
-                                      String tempPassword,
                                       List<WelcomeRole> roles) {
         if (roles == null || roles.isEmpty()) {
-            sendAdminWelcomeEmail(to, displayName, username, tempPassword, null, null, null, null);
+            sendAdminWelcomeEmail(to, displayName, username, null, null, null, null);
             return;
         }
         if (roles.size() == 1) {
             WelcomeRole only = roles.get(0);
-            sendAdminWelcomeEmail(to, displayName, username, tempPassword, only.roleCode(),
+            sendAdminWelcomeEmail(to, displayName, username, only.roleCode(),
                 only.hospitalName(), only.activationUrl(), only.confirmationCode());
             return;
         }
@@ -1084,7 +1075,6 @@ public class EmailServiceImpl implements EmailService {
             roles.size(), ActivationDeliveryTracker.maskEmail(to));
 
         String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
-        String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
         String greeting = hasText(displayName)
             ? text(l, KEY_GREETING_HI, HTML_STRONG_OPEN + escapeHtml(displayName) + HTML_STRONG_CLOSE)
             : text(l, KEY_GREETING_ANONYMOUS);
@@ -1121,8 +1111,8 @@ public class EmailServiceImpl implements EmailService {
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
             + escapedUsername + "</td></tr>"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.password") + "</td>"
-            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
-            + escapedPassword + "</td></tr>"
+            + "<td style=\"padding:6px 0 6px 16px;color:#1e293b;\">"
+            + text(l, "email.admin.welcome.credentials.password.atActivation") + "</td></tr>"
             + "</table></div>"
             + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
             + "border-radius:0 8px 8px 0;margin-top:24px;\">"

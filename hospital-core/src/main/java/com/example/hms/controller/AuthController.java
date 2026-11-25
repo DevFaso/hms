@@ -510,6 +510,17 @@ public class AuthController {
             log.warn("🔐 [LOGIN] Sign-in refused: account not active.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.inactive")));
+        } catch (org.springframework.security.authentication.CredentialsExpiredException ex) {
+            // A temporary password past its lifetime (TemporaryPasswords). The
+            // provider checks this only after the password matched, so only
+            // its holder gets this answer; it is not a guess and is not counted.
+            // The way back is a reset link, by e-mail or SMS, or the registrar.
+            auditLoginFailure(loginRequest.getUsername(), "Login refused: temporary password expired");
+            log.warn("🔐 [LOGIN] Sign-in refused: temporary password expired.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of(
+                            "code", TEMPORARY_PASSWORD_EXPIRED_CODE,
+                            "message", MessageUtil.resolve("auth.login.temporaryPasswordExpired")));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure after {}ms : {} - {}",
@@ -529,6 +540,8 @@ public class AuthController {
      */
     /** A sign-in (or MFA step) whose role set is empty: no session without an active role. */
     public static final String NO_ACTIVE_ROLE_KEY = "auth.login.noActiveRole";
+    /** The sign-in refusal's code for a temporary password past its lifetime. */
+    public static final String TEMPORARY_PASSWORD_EXPIRED_CODE = "temporary_password_expired";
     private static final String NO_ACTIVE_ROLE_AUDIT = "Login refused: no active role";
 
     private void auditLoginFailure(String typedName, String description) {
@@ -1356,6 +1369,11 @@ public class AuthController {
             return true;
         } catch (BadCredentialsException ex) {
             return false;
+        } catch (org.springframework.security.authentication.CredentialsExpiredException expired) {
+            // Raised only after the password matched: a session opened before
+            // the temporary password expired may still replace it, which is
+            // the one thing that session can do (PasswordChangeGate).
+            return true;
         }
     }
 
