@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
+import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-status';
 
 export interface NurseVitalTask {
   id: string;
@@ -243,6 +244,8 @@ export interface NurseWorkboardPatient {
   mrn: string;
   /** QA r70 D3220: the blood group recorded on the chart. */
   bloodType?: string | null;
+  /** QA D3901: the declared group beside the laboratory's confirmed one. */
+  bloodGroup?: BloodGroupStatus | null;
   roomBed: string;
   acuityLevel: string;
   admissionId: string;

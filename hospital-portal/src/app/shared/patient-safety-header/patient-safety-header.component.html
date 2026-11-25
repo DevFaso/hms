@@ -51,14 +51,14 @@
             }
           </dd>
         </div>
-        <div class="psh-fact psh-fact-blood" [class.psh-fact-missing]="!p.bloodType">
+        <!-- QA D3901: the laboratory's group, a typed one labelled « non vérifié », and the antibody alert. -->
+        <div
+          class="psh-fact psh-fact-blood"
+          [class.psh-fact-missing]="!p.bloodType && !p.bloodGroup?.confirmed"
+        >
           <dt>{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}</dt>
           <dd data-testid="patient-safety-blood-group">
-            @if (p.bloodType) {
-              <span class="psh-blood">{{ p.bloodType }}</span>
-            } @else {
-              <span class="psh-muted">{{ 'PATIENT_SAFETY.NOT_DOCUMENTED' | translate }}</span>
-            }
+            <app-blood-group-status [status]="p.bloodGroup" [declared]="p.bloodType" />
           </dd>
         </div>
         <div class="psh-fact psh-fact-allergies" [class.psh-fact-alert]="hasSevereAllergy()">

@@ -273,6 +273,61 @@ class PatientServiceImplTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("QA D3901 (Rex P2): a write about one chart answers with its antibody alert, as the read does; the desk's does not read it")
+    void aChartWriteAnswersWithTheAntibodyAlert() {
+        com.example.hms.service.transfusion.PatientBloodGroupStatusService status =
+            org.mockito.Mockito.mock(com.example.hms.service.transfusion.PatientBloodGroupStatusService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(patientService, "bloodGroupStatus", status);
+        com.example.hms.payload.dto.BloodGroupStatusDTO flagged = com.example.hms.payload.dto.BloodGroupStatusDTO
+            .builder().declared("A+").confirmed("B+").discrepancy(true).alloImmunised(true)
+            .antibodySpecificities("anti-E").build();
+        when(status.withAntibodies(patient, hospitalId)).thenReturn(flagged);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.save(patient)).thenReturn(patient);
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenAnswer(call -> PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+        try {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
+                    List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+
+            PatientResponseDTO written = patientService.setChartRestriction(patientId,
+                com.example.hms.payload.dto.ChartRestrictionRequestDTO.builder().restricted(false).build(),
+                UUID.randomUUID(), hospitalId);
+            assertThat(written.getBloodGroup()).isSameAs(flagged);
+            assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getBloodGroup())
+                .isSameAs(flagged);
+
+            // The front desk's answer has the group removed: the flag is not read, nor accounted, for it.
+            org.mockito.Mockito.clearInvocations(status);
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
+                    List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_RECEPTIONIST"))));
+            patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH);
+            verify(status, never()).withAntibodies(any(), any());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D3901 (Rex P2): no answer about one chart is built without its safety facts")
+    void everyOneChartAnswerIsEnriched() throws java.io.IOException {
+        String source = java.nio.file.Files.readString(
+            java.nio.file.Path.of("src/main/java/com/example/hms/service/PatientServiceImpl.java"));
+        // Lists build per row (no flag read per row); one chart's answer, read or written, goes through chartDto.
+        assertThat(source).doesNotContain("return buildPatientDto(");
+        // The one assignment left is chartDto's own, the method that adds the alert.
+        assertThat(source.split("= buildPatientDto\\(", -1)).hasSize(2);
+        assertThat(source).containsPattern("private PatientResponseDTO chartDto\\(Patient patient, UUID hospitalId\\) \\{"
+            + "\\s+PatientResponseDTO dto = buildPatientDto\\(patient, hospitalId\\);");
+        assertThat(source).contains("return chartDto(patientRepository.save(patient), hospitalId);");
+    }
+
+    @Test
     void getPatientByIdThrowsWhenNotRegistered() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);

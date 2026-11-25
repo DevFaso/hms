@@ -41,13 +41,11 @@
         <span class="storyboard__blood-label">{{
           'PATIENT_SAFETY.BLOOD_GROUP' | translate
         }}</span>{{ 'COMMON.COLON' | translate }}
-        @if (s.patient?.bloodType) {
-          <strong class="storyboard__blood-value">{{ s.patient.bloodType }}</strong>
-        } @else {
-          <span class="storyboard__blood-missing">{{
-            'PATIENT_SAFETY.NOT_DOCUMENTED' | translate
-          }}</span>
-        }
+        <!-- QA D3901: the laboratory's group, a typed one « non vérifié », a disagreement, the antibody. -->
+        <app-blood-group-status
+          [status]="s.patient?.bloodGroup"
+          [declared]="s.patient?.bloodType"
+        />
       </p>
       <div class="storyboard__sections">
         <!-- Allergies -->

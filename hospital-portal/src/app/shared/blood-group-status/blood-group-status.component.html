@@ -1,0 +1,46 @@
+<span class="bgs" [class.bgs-compact]="compact()" data-testid="blood-group-status">
+  @if (confirmed(); as group) {
+    <strong class="bgs-group bgs-confirmed" data-testid="blood-group-confirmed">{{ group }}</strong>
+    <span class="bgs-note" data-testid="blood-group-source">
+      @if (compact()) {
+        {{ 'BLOOD_GROUP.CONFIRMED_SHORT' | translate }}
+      } @else if (status()?.confirmedAt) {
+        {{
+          'BLOOD_GROUP.CONFIRMED_BY_LAB'
+            | translate
+              : {
+                  lab: status()?.confirmedHospitalName || ('BLOOD_GROUP.THE_LAB' | translate),
+                  date: (status()?.confirmedAt | serverTime | date: 'shortDate'),
+                }
+        }}
+      } @else {
+        {{ 'BLOOD_GROUP.CONFIRMED_SHORT' | translate }}
+      }
+    </span>
+    @if (discrepancy()) {
+      <span class="bgs-warning" data-testid="blood-group-discrepancy">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        {{ 'BLOOD_GROUP.DIFFERS_FROM_DECLARED' | translate: { declared: declaredGroup() } }}
+      </span>
+    }
+  } @else if (declaredGroup(); as group) {
+    <span class="bgs-group bgs-declared" data-testid="blood-group-declared">{{ group }}</span>
+    <span class="bgs-note bgs-unverified">{{ 'BLOOD_GROUP.DECLARED_UNVERIFIED' | translate }}</span>
+  } @else {
+    <span class="bgs-missing" data-testid="blood-group-missing">{{
+      'PATIENT_SAFETY.NOT_DOCUMENTED' | translate
+    }}</span>
+  }
+  @if (alloImmunised()) {
+    <span class="bgs-antibody" data-testid="blood-group-antibody">
+      <span class="material-symbols-outlined" aria-hidden="true">emergency</span>
+      @if (status()?.antibodySpecificities) {
+        {{
+          'BLOOD_GROUP.ALLO_IMMUNISED' | translate: { antibody: status()?.antibodySpecificities }
+        }}
+      } @else {
+        {{ 'BLOOD_GROUP.ALLO_IMMUNISED_UNIDENTIFIED' | translate }}
+      }
+    </span>
+  }
+</span>

@@ -218,6 +218,24 @@ describe('PatientListComponent directory', () => {
     }
   });
 
+  it('QA D3901: filters on the laboratory group, not the typed one behind it', () => {
+    const c = make().componentInstance;
+    c.patients.set([
+      row({
+        id: 'lab-b',
+        bloodType: 'A+',
+        bloodGroup: { declared: 'A+', confirmed: 'B+', discrepancy: true },
+      }),
+      row({ id: 'typed-a', bloodType: 'A+' }),
+    ]);
+    c.bloodTypeFilter = 'B+';
+    c.applyFilter();
+    expect(c.filtered().map((p) => p.id)).toEqual(['lab-b']);
+    c.bloodTypeFilter = 'A+';
+    c.applyFilter();
+    expect(c.filtered().map((p) => p.id)).toEqual(['typed-a']);
+  });
+
   it('displays a secondary phone when the primary is blank and suppresses blank contact lines', () => {
     patients.list.and.returnValue(
       of([

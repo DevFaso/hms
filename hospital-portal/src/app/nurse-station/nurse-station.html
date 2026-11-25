@@ -988,11 +988,13 @@
                     <span class="meta-item" data-testid="workboard-blood-group"
                       >{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate
                       }}{{ 'COMMON.COLON' | translate }}
-                      @if (p.bloodType) {
-                        <strong>{{ p.bloodType }}</strong>
-                      } @else {
-                        {{ 'PATIENT_SAFETY.NOT_DOCUMENTED' | translate }}
-                      }
+                      <!-- QA D3901: the laboratory's group; a typed one is labelled « non vérifié ». -->
+                      <app-blood-group-status
+                        [status]="p.bloodGroup"
+                        [declared]="p.bloodType"
+                        [compact]="true"
+                        [showAntibodies]="false"
+                      />
                     </span>
                     @if (p.departmentName) {
                       <span class="meta-item">{{ p.departmentName }}</span>
@@ -1116,8 +1118,12 @@
                           >{{ p.mrn }} · {{ p.roomBed || '—' }} ·
                           {{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate
                           }}{{ 'COMMON.COLON' | translate }}
-                          {{ p.bloodType || ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate) }}</small
-                        >
+                          <app-blood-group-status
+                            [status]="p.bloodGroup"
+                            [declared]="p.bloodType"
+                            [compact]="true"
+                            [showAntibodies]="false"
+                        /></small>
                         @if (p.acuityLevel) {
                           {{ ' '
                           }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">{{

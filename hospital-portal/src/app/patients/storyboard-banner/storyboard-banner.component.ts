@@ -25,6 +25,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { BloodGroupStatusComponent } from '../../shared/blood-group-status/blood-group-status.component';
 import { isChartRestricted } from '../chart-restricted';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error' | 'restricted';
@@ -46,6 +47,7 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
   selector: 'app-storyboard-banner',
   standalone: true,
   imports: [
+    BloodGroupStatusComponent,
     DashPipe,
     KeyLabelPipe,
     ServerTimePipe,

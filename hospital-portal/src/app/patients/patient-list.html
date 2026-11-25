@@ -411,8 +411,14 @@
                 <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
                 @if (!frontDeskOnly()) {
                   <td>
-                    @if (patient.bloodType) {
-                      <span class="blood-badge">{{ patient.bloodType }}</span>
+                    <!-- QA D3901: the laboratory's group; a typed one is labelled « non vérifié ». -->
+                    @if (patient.bloodType || patient.bloodGroup?.confirmed) {
+                      <app-blood-group-status
+                        [status]="patient.bloodGroup"
+                        [declared]="patient.bloodType"
+                        [compact]="true"
+                        [showAntibodies]="false"
+                      />
                     } @else {
                       —
                     }

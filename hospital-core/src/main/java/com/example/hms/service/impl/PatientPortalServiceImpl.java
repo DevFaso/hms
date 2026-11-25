@@ -170,6 +170,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private static final List<RefillStatus> OPEN_REFILL_STATUSES =
             List.of(RefillStatus.REQUESTED, RefillStatus.PAUSED);
 
+    /**
+     * QA D3901: the laboratory's confirmed group beside the typed one. Optional for the hand-built services of the
+     * unit tests (they get the declared group alone); in the application the bean always exists.
+     */
+    private com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBloodGroupStatus(com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus) {
+        this.bloodGroupStatus = bloodGroupStatus;
+    }
+
     private final PatientRepository patientRepository;
     private final com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
     private final com.example.hms.service.roi.RoiRequestService roiRequestService;
@@ -525,10 +536,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * QA D2730: the grantor's profile as a proxy reads it - who the patient is
      * and how to reach them. The chronic conditions are free text that names
      * diagnoses (« VIH », « dépression ») with no tag, so they are left out.
+     * QA D3901 (Rex P2): the blood group keeps its value (declared, the laboratory's, and whether they differ), never
+     * the laboratory's provenance (which hospital grouped the patient, and when) nor any antibody.
      */
     private PatientProfileDTO proxyProfileOf(Patient grantor) {
         PatientProfileDTO profile = toProfileDTO(grantor);
         profile.setChronicConditions(null);
+        profile.setBloodGroup(com.example.hms.service.transfusion.PatientBloodGroupStatusService.forProxy(
+            profile.getBloodGroup()));
         return profile;
     }
 
@@ -1531,6 +1546,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .emergencyContactPhone(p.getEmergencyContactPhone())
                 .emergencyContactRelationship(p.getEmergencyContactRelationship())
                 .bloodType(p.getBloodType())
+                // QA D3901: the patient's own laboratory grouping (the newest of any hospital) beside the typed one.
+                .bloodGroup(bloodGroupStatus != null ? bloodGroupStatus.ofOwnRecord(p)
+                        : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(p.getBloodType()))
                 .allergies(p.getAllergies())
                 .chronicConditions(p.getChronicConditions())
                 .preferredPharmacy(p.getPreferredPharmacy())

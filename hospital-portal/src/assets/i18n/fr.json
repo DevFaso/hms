@@ -16165,6 +16165,18 @@
     "HISTORY_ADD": "Renseigner les antécédents",
     "HISTORY_EDIT": "Modifier les antécédents"
   },
+  "BLOOD_GROUP": {
+    "CONFIRMED_SHORT": "confirmé par le laboratoire",
+    "CONFIRMED_BY_LAB": "confirmé par le laboratoire ({{lab}}, {{date}})",
+    "THE_LAB": "laboratoire",
+    "DIFFERS_FROM_DECLARED": "Diffère du groupe déclaré ({{declared}}, non vérifié)",
+    "DECLARED_UNVERIFIED": "déclaré, non vérifié",
+    "ALLO_IMMUNISED": "Allo-immunisation : {{antibody}}",
+    "ALLO_IMMUNISED_UNIDENTIFIED": "Allo-immunisation : RAI positive, anticorps non identifié",
+    "DECLARED_FIELD": "Groupe sanguin déclaré (non vérifié)",
+    "DECLARED_FIELD_HINT": "Ce que dit le patient ou une carte. Seul le groupage du laboratoire confirme le groupe ; cette valeur ne le remplace jamais.",
+    "CONFIRMED_ON_RECORD": "Confirmé par le laboratoire : {{group}}"
+  },
   "PORTAL_ACTIVATION": {
     "TITLE": "Accès au portail patient",
     "HELP": "Si le SMS d’activation n’est pas arrivé, affichez le code et remettez-le au patient en main propre, ou renvoyez l’activation.",

@@ -24,11 +24,15 @@
               {{ summary()!.profile.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
-          @if (summary()!.profile.bloodType) {
+          <!-- QA D3901: the laboratory's group; a typed one is labelled « non vérifié ». -->
+          @if (summary()!.profile.bloodType || summary()!.profile.bloodGroup?.confirmed) {
             <span class="profile-stat"
               >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}
-              {{ summary()!.profile.bloodType }}</span
-            >
+              <app-blood-group-status
+                [status]="summary()!.profile.bloodGroup"
+                [declared]="summary()!.profile.bloodType"
+                [showAntibodies]="false"
+            /></span>
           }
           @if (summary()!.profile.gender) {
             <span class="profile-stat"

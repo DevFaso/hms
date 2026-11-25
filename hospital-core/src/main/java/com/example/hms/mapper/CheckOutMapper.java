@@ -23,6 +23,17 @@ public class CheckOutMapper {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
+     * QA D3901: the laboratory's confirmed group beside the typed one. Optional for the hand-built services of the
+     * unit tests (they get the declared group alone); in the application the bean always exists.
+     */
+    private com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBloodGroupStatus(com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus) {
+        this.bloodGroupStatus = bloodGroupStatus;
+    }
+
+    /**
      * Builds an After-Visit Summary from the encounter, the original request,
      * and an optional follow-up appointment ID.
      */
@@ -80,6 +91,12 @@ public class CheckOutMapper {
             builder.patientDateOfBirth(encounter.getPatient().getDateOfBirth())
                    // QA r70 D3220: the blood group on the printed summary (clinical: the desk loses it).
                    .patientBloodType(encounter.getPatient().getBloodType())
+                   // QA D3901: the laboratory's confirmed group of the visit's hospital beside the typed one.
+                   .patientBloodGroup(bloodGroupStatus != null
+                       ? bloodGroupStatus.of(encounter.getPatient(),
+                           encounter.getHospital() != null ? encounter.getHospital().getId() : null)
+                       : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(
+                           encounter.getPatient().getBloodType()))
                    .patientMrn(encounter.getHospital() != null
                        ? encounter.getPatient().getMrnForHospital(encounter.getHospital().getId()) : null);
         }

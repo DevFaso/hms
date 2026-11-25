@@ -227,8 +227,14 @@
       </div>
       @if (writesClinicalFields()) {
         <div class="form-group">
-          <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
-          <select id="bloodType" [(ngModel)]="form.bloodType" name="bloodType">
+          <!-- QA D3901: what is typed here is declared; only the laboratory's grouping confirms it. -->
+          <label for="bloodType">{{ 'BLOOD_GROUP.DECLARED_FIELD' | translate }}</label>
+          <select
+            id="bloodType"
+            [(ngModel)]="form.bloodType"
+            name="bloodType"
+            aria-describedby="bloodType-declared-hint"
+          >
             <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
             <option value="A+">A+</option>
             <option value="A-">A-</option>
@@ -239,6 +245,9 @@
             <option value="O+">O+</option>
             <option value="O-">O-</option>
           </select>
+          <small class="field-hint" id="bloodType-declared-hint">{{
+            'BLOOD_GROUP.DECLARED_FIELD_HINT' | translate
+          }}</small>
         </div>
       }
       <div class="form-group">

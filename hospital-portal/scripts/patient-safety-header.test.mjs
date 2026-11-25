@@ -47,7 +47,12 @@ test('the safety header renders the blood group, labelled, and says when none is
   const html = read(HEADER_TEMPLATE);
   assert.match(html, /'PATIENT_SAFETY\.BLOOD_GROUP' \| translate/);
   assert.match(html, /p\.bloodType/);
-  assert.match(html, /'PATIENT_SAFETY\.NOT_DOCUMENTED' \| translate/);
+  // QA D3901: through the shared component, which says « Non renseigné » when no group is recorded.
+  assert.match(html, /<app-blood-group-status\b[^>]*\[status\]="p\.bloodGroup"/);
+  assert.match(
+    read('../src/app/shared/blood-group-status/blood-group-status.component.html'),
+    /'PATIENT_SAFETY\.NOT_DOCUMENTED' \| translate/,
+  );
   // The other safety items the brief names: allergies and weight.
   assert.match(html, /'PATIENT_SAFETY\.ALLERGIES' \| translate/);
   assert.match(html, /latestWeightKg/);

@@ -45,7 +45,10 @@ public class PatientResponseDTO {
     private String emergencyContactName;
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
+    /** The group typed on the chart: declared, never verified. Shown through {@link #bloodGroup}. */
     private String bloodType;
+    /** QA D3901: the declared group beside the laboratory's confirmed one, and the antibody flag on a chart read. */
+    private BloodGroupStatusDTO bloodGroup;
     private String allergies;
     /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
     private boolean allergiesWithheld;

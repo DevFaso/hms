@@ -5,6 +5,7 @@ import { Observable, map, catchError, of, defer } from 'rxjs';
 import { allRows, PageSlice } from '../shared/all-pages';
 import type { AfterVisitSummary as EncounterAfterVisitSummary } from './encounter.service';
 import { MobileMoneyOperator } from '../shared/mobile-money-operator';
+import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-status';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
@@ -35,6 +36,8 @@ export interface PatientProfileDTO {
   insuranceMemberId: string;
   insurancePlan: string;
   bloodType: string;
+  /** QA D3901: the declared group beside the laboratory's confirmed one (the newest of any hospital). */
+  bloodGroup?: BloodGroupStatus | null;
   allergies: string[];
   preferredLanguage: string;
   primaryCareProvider: string;
