@@ -227,9 +227,24 @@ class InvoiceEmailServiceTest {
 
         String[] mail = mailed();
         assertThat(mail[0]).isEqualTo("Invoice INV-1 - Centre Hospitalier Wend-Panga");
-        assertThat(mail[1]).contains("lang=\"en\"", "Due: Dec 7, 2026", "Balance due: <strong>4 300 F CFA</strong>")
+        assertThat(mail[1]).contains("lang=\"en\"", "Due: Dec 7, 2026", "Balance due: <strong>4,300 F CFA</strong>")
             .doesNotContain("Échéance");
         verify(pdfInvoiceService).generateMailedInvoicePdf(any(), any(), any(), any(), eq(java.util.Locale.ENGLISH));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "fr|4 300 F CFA", "en|4,300 F CFA", "es|4.300 F CFA"
+    })
+    void patientAmountGroupingMatchesThePatientsLanguage(String language, String expected) {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        when(patientLocaleResolver.resolve(any(), any())).thenReturn(java.util.Locale.forLanguageTag(language));
+        service.emailInvoice(invoice.getId(), new EmailInvoiceRequest(List.of("billing@example.test"), null, null, null, "fr", false));
+        String[] mail = mailed();
+        assertThat(mail[1]).contains(expected);
+        assertThat(invoice.getTotalAmount()).isEqualByComparingTo("4300.00");
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.SENT);
     }
 
     // ---------- QA D2201 class: the patient's BILLING e-mail choice ----------

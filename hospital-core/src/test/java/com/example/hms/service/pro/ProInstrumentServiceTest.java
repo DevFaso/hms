@@ -144,7 +144,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Item 1 is defined twice");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.item.repeated"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[0]).isEqualTo(1); });
         }
 
         @Test
@@ -154,7 +154,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("defines option 1 twice");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.option.repeated"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(1); });
         }
 
         @Test
@@ -164,7 +164,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("numbered 1..3 without gaps");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.options.sequence"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(3); });
         }
 
         @Test
@@ -198,7 +198,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Language en is given twice");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.language.repeated"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[0]).isEqualTo("en"); });
         }
 
         @Test
@@ -209,7 +209,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("item 3, which the instrument does not define");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.language.itemUnknown"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(3); });
         }
 
         @Test
@@ -220,7 +220,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("gives item 1 twice");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.language.itemRepeated"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(1); });
         }
 
         @Test
@@ -231,7 +231,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("has 2 option labels; the item has 3 options");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.language.optionsCount"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[2]).isEqualTo(2); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[3]).isEqualTo(3); });
         }
 
         @Test
@@ -241,7 +241,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("covers 1 of 2 items");
+                .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("pro.language.itemsCount"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[1]).isEqualTo(1); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()[2]).isEqualTo(2); });
         }
     }
 
@@ -314,7 +314,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> service.render("TEST", "en"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no text loaded");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("pro.text.missing"));
         }
 
         @Test

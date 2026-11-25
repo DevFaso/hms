@@ -3,6 +3,5 @@ import base from './playwright.slow-network.config';
 
 export default defineConfig({
   ...base,
-  testMatch: ['a11y-keyboard-care.ts', 'a11y-main-refusals.ts'],
-  timeout: 90000,
+  testMatch: ['go-live-record-rights.spec.ts', 'go-live-recipient-verification.spec.ts'],
 });

@@ -1,0 +1,74 @@
+# Codex display fixes awaiting a dev re-test
+
+These entries describe code and local evidence. They are **fixed-pending-retest**,
+not scorecard passes or proof of a dev deployment. Claude owns the dev re-test.
+
+| Defect | Class and sibling paths | Evidence and guard | Status |
+|---|---|---|---|
+| D3650 | Quantities joined directly to an uninflected dosage unit: received/remaining lots, medication history, held stock, prescription quantity | Shared `countUnit`; real goods-receipt DOM and production rollback test; `presentation-regressions` scans every template | fixed-pending-retest |
+| D3651 | Unknown patient-directory counts displayed as zero during loading or failure | Matching count now follows the existing unknown-state KPI behavior; patient-list tests and template guard | fixed-pending-retest |
+| r72 imaging category | An invoice line's coarse SERVICE code hid its already stored IMAGING tariff category, both while displaying and editing | Read-only stored-category DTO projection; all categories/null and unchanged-amount mapper tests; billing DOM and template guard. No price lookup, coverage rule or calculation changes | fixed-pending-retest |
+| r72 read-only timeout | A failed read described an uncertain write | Existing read-only behavior verified by three locale banner tests; this branch adds regression evidence | fixed-pending-retest |
+| D3701 | Nested record-rights form controls exceeded their phone-width card | Bounded form/card/control sizing; real request and desk journey at 390/1440 px | fixed-pending-retest |
+| D3703 | The delivery administration namespace copied English into Spanish | Full Spanish namespace translated; copied/missing-leaf guard without a prose exemption baseline | fixed-pending-retest |
+| D3704 | Two consent labels implied a narrower effect than their shared sender categories | All three locales now say appointments/follow-up and pharmacy cover **all messages**; shared label tests. Sender behavior is unchanged | fixed-pending-retest |
+| D3705 | Verification gave neither a sent acknowledgement nor the destination | Patient/desk live status announces the masked actual destination and expiry; safe backend mask, stale-response and role-loss tests, real browser flow. Raw recipients/codes are never returned | fixed-pending-retest |
+
+## #1318 remaining required-refusal exceptions
+
+The clinical form fixes remove 24 obsolete entries. The remaining 52 entries below are exceptions or debt, not a claim of fixes or test coverage. LOGIN.TOKEN_MISSING has no user field to correct.
+
+| Source / refusal | Count | Reason / remaining debt |
+|---|---:|---|
+| `src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitCreate::ASSIGN_ADMIN.FORM_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitImport::ASSIGN_ADMIN.IMPORT_FILE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitMulti::ASSIGN_ADMIN.MULTI_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/matrix-tab.ts::unmarked-refusal::submitCreate::ADMIN_GOV.MATRIX_ROWS_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/policies-tab.ts::unmarked-refusal::submitPolicy::ADMIN_GOV.POLICY_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/policies-tab.ts::unmarked-refusal::submitRule::ADMIN_GOV.RULE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/security-tab.ts::unmarked-refusal::runSimulation::ADMIN_GOV.SCENARIO_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/security-tab.ts::unmarked-refusal::runSimulation::ADMIN_GOV.SIM_RULES_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/security-tab.ts::unmarked-refusal::submitBaseline::ADMIN_GOV.BASELINE_TITLE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/users-tab.ts::unmarked-refusal::submitImport::ASSIGN_ADMIN.IMPORT_FILE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admin-governance/users-tab.ts::unmarked-refusal::submitReset::ADMIN_GOV.RESET_IDENTIFIERS_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/admissions/admissions.ts::unmarked-refusal::openOrderSetPicker::ORDER_SETS.MISSING_ORDERING_STAFF` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/announcements/announcement-list.ts::unmarked-refusal::submitForm::ANNOUNCEMENTS.TOAST.TEXT_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/bed-management/bed-management.ts::unmarked-refusal::submitBed::BEDS.TOAST.BED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/bed-management/bed-management.ts::unmarked-refusal::submitWard::BEDS.TOAST.WARD_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/chat/chat.ts::toast-only-refusal::finalizeVoiceMemo::CHAT.VOICE_MEMO_EMPTY` | 1 | not a field: the microphone recorded nothing (a device result) |
+| `src/app/chat/chat.ts::toast-only-refusal::onPhotoSelected::CHAT.PHOTO_TOO_LARGE` | 1 | not a field: the photo comes from a hidden file input opened by a button; the refusal shows in the role=alert banner by the message box |
+| `src/app/departments/department-list.ts::unmarked-refusal::submitForm::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doRevoke::SIGNATURES.REVOKE_REASON_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doSign::SIGNATURES.SIGN_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doVerify::SIGNATURES.VERIFY_VALUE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::runLookup::SIGNATURES.LOOKUP_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/imaging/imaging.ts::unmarked-refusal::submitStatusUpdate::IMAGING.VOID_REASON_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/lab/lab-results/lab-results.ts::toast-only-refusal::releaseResult::LAB_RESULTS.RELEASE_CRITICAL_FROM_WORKLIST` | 1 | r63 D2305: not a field: a critical result is released from the release worklist, where the call is recorded; the reader is taken there |
+| `src/app/lab/lab-results/lab-results.ts::toast-only-refusal::sendRelease::LAB_RESULTS.RELEASE_FROM_WORKLIST` | 1 | r63 D2304/D2305: not a field on this screen: the server asked for a QC override reason or a critical call, which the release worklist collects |
+| `src/app/lab/lab.ts::toast-only-refusal::openLinkedOrder::LAB.LINKED_ORDER_NOT_FOUND` | 1 | Not a form refusal: a /lab?order= link (from the lab result drawer) names an order out of the reader's scope; there is no field to mark |
+| `src/app/login/login.ts::unmarked-refusal::submit::LOGIN.TOKEN_MISSING` | 1 | No user field: the authentication response omitted its token; editing username or password cannot correct this server/session failure. |
+| `src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitPlan::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitReview::BIRTH_PLAN.SIGNATURE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::MATERNITY.URGENCY_ATTACHMENT_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/mfa/mfa-enroll.ts::toast-only-refusal::showError::if(typeof code === 'string' && code.startsWith('mfa.stepup.'))` | 1 | not a field: a server step-up refusal shown in the enrolment banner |
+| `src/app/organizations/organization-detail.ts::unmarked-refusal::ngOnInit::TENANT_LIFECYCLE.TOAST.MISSING_ID` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/organizations/organization-list.ts::unmarked-refusal::submitCreate::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/patient-education/patient-education.ts::unmarked-refusal::submitResource::EDUCATION.TITLE_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/patients/bpa-panel/bpa-panel.component.ts::unmarked-refusal::override::BPA.OVERRIDE_REASON_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitEdit::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitGuarantor::COVERAGE.GUARANTOR_NAME_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitLink::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitRevoke::COVERAGE.CONSENT_REVOKE_REASON_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitFamily::COMMON.SUBMIT_BLOCKED_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads) |
+| `src/app/patients/patient-detail.ts::toast-only-refusal::reportDownloadFailure::if(!(err.error instanceof Blob))` | 1 | not a field: a server download error for the record PDF |
+| `src/app/patients/patient-form.ts::toast-only-refusal::onSubmit::PATIENTS.MATCH_DECIDE` | 1 | not a field: a decision between the match card buttons (Link / Dismiss), which the card itself presents |
+| `src/app/profile/profile.ts::toast-only-refusal::onAvatarFileSelected::PROFILE.PHOTO_NOT_IMAGE` | 1 | not a field: the chosen avatar file comes from a hidden file input opened by the camera label |
+| `src/app/profile/profile.ts::toast-only-refusal::onAvatarFileSelected::PROFILE.PHOTO_TOO_LARGE` | 1 | not a field: the chosen avatar file comes from a hidden file input opened by the camera label |
+| `src/app/reception/checkin-dialog/checkin-dialog.component.ts::toast-only-refusal::submit::RECEPTION.NO_APPOINTMENT_SELECTED` | 1 | not a field: the appointment comes from the queue item the dialog was opened on |
+| `src/app/registries/registries.ts::unmarked-refusal::submitEnroll::REGISTRIES.ENROLL_FIELDS_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/registries/registries.ts::unmarked-refusal::submitStatus::REGISTRIES.REASON_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/roles/role-list.ts::unmarked-refusal::submitCreate::ROLES.TOAST.NAME_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |
+| `src/app/staff/staff-list.ts::unmarked-refusal::submitForm::STAFF.USER_AND_HOSPITAL_REQUIRED` | 1 | QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only |

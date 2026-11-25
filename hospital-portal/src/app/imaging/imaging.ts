@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { textMatches } from '../shared/person-search';
 import {
@@ -212,6 +213,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
   selector: 'app-imaging',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,

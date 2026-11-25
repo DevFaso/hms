@@ -493,7 +493,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
             .complianceType(policy.getName())
             .severity(SEVERITY_CRITICAL)
             .expiresOn(null)
-            .notes("Policy is inactive and requires approval")
+            .notes(com.example.hms.utility.MessageUtil.resolve("organization.policy.inactiveNote"))
             .build();
     }
 
@@ -512,7 +512,8 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
             .complianceType(rule.getName())
             .severity(severity)
             .expiresOn(expiry)
-            .notes("Compliance evidence expires on " + expiry)
+            .notes(com.example.hms.utility.MessageUtil.resolve("organization.evidence.expiryNote",
+                com.example.hms.utility.DisplayDates.date(expiry, org.springframework.context.i18n.LocaleContextHolder.getLocale())))
             .build();
     }
 

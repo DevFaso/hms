@@ -80,7 +80,7 @@ class PatientControllerTest {
         // E9 #55: the controller no longer resolves scope itself — one resolver.
         when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
 
-        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, null, auth);
+        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
 
         assertEquals(expected, response.getBody());
         verify(patientService).getAllPatients(eq(hospitalId), any(Locale.class));
@@ -160,9 +160,9 @@ class PatientControllerTest {
     }
 
     @Test
-    void theSearchParameterFiltersInsteadOfBeingDropped() {
-        // QA D79: the admission typeahead sends ?search=, which used to be
-        // ignored, so the first patients of the hospital were offered.
+    void theTypedTermFiltersInsteadOfBeingDropped() {
+        // QA D79: the admission typeahead's term used to be ignored, so the
+        // first patients of the hospital were offered. QA D3750: it is in the body.
         UUID hospitalId = UUID.randomUUID();
         Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
             .claim("sub", UUID.randomUUID().toString()).build();
@@ -176,7 +176,8 @@ class PatientControllerTest {
             any(Locale.class))).thenReturn(expected);
 
         ResponseEntity<List<PatientResponseDTO>> response =
-            controller.getAllPatients(null, null, null, " QAH5769 ", null, auth);
+            controller.termSearchPatients(
+                new com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO(" QAH5769 "), null, null, auth);
 
         assertEquals(expected, response.getBody());
         assertEquals("QAH5769", criteria.getValue().getName());
@@ -199,7 +200,7 @@ class PatientControllerTest {
         when(authUtils.resolveHospitalScope(auth, null, true))
             .thenThrow(new BusinessException("Receptionist must be affiliated with a hospital."));
 
-        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, null, auth));
+        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, auth));
     }
 
     // QA D504: an allergy list narrowed by the patient's sharing opt-out says so in a header;

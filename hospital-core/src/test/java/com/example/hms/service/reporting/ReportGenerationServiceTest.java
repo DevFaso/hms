@@ -97,7 +97,7 @@ class ReportGenerationServiceTest {
         assertThatThrownBy(() ->
             ReportGenerationService.parseToken(ReportPeriod.DAILY, "next Tuesday"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unparseable");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("report.period.invalid"));
     }
 
     /* ── canned CSVs ───────────────────────────────────────────────── */

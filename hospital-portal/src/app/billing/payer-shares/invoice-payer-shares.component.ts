@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -49,6 +50,7 @@ export const PAYER_SHARE_REASON_ID = 'payer-share-reject-reason';
   selector: 'app-invoice-payer-shares',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     CommonModule,
     FormsModule,
     TranslateModule,

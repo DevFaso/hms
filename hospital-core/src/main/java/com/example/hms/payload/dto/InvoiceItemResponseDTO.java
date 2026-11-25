@@ -23,6 +23,8 @@ public class InvoiceItemResponseDTO {
     private String itemDescription;
 
     private String itemCategory;
+    /** Existing stored tariff category, for display only; never inferred from description or price. */
+    private String coverageCategory;
     private String relatedServiceName;
 
     private Integer quantity;

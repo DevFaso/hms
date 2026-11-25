@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { PatientListComponent } from './patient-list';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -197,6 +197,11 @@ describe('PatientListComponent directory', () => {
       cards.every((b) => b.querySelector('.card-value')?.textContent?.trim() === '—'),
     ).toBeTrue();
     expect(toast.error).not.toHaveBeenCalled();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PATIENTS: { MATCHING_RECORDS: '{{count}} dossiers correspondants' },
+    });
+    translate.use('fr').subscribe();
     const pending = new Subject<PatientResponse[]>();
     patients.list.and.returnValue(pending);
     el.querySelector<HTMLButtonElement>('.load-error button')!.click();
@@ -289,12 +294,39 @@ describe('PatientListComponent directory', () => {
 
   it('stops a pending list from updating the destroyed page', () => {
     const fixture = make();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PATIENTS: { MATCHING_RECORDS: '{{count}} dossiers correspondants' },
+    });
+    translate.use('fr').subscribe();
     const pending = new Subject<PatientResponse[]>();
     patients.list.and.returnValue(pending);
     fixture.detectChanges();
     fixture.destroy();
     pending.next([row()]);
     expect(fixture.componentInstance.patients()).toEqual([]);
+  });
+
+  it('keeps the matching count unknown during loading and failure, then accepts a real empty result', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PATIENTS: { MATCHING_RECORDS: '{{count}} dossiers correspondants' },
+    });
+    translate.use('fr').subscribe();
+    const pending = new Subject<PatientResponse[]>();
+    patients.list.and.returnValue(pending);
+    const fixture = make();
+    fixture.detectChanges();
+    const status = () =>
+      fixture.nativeElement.querySelector('.directory-heading [role="status"]') as HTMLElement;
+    expect(status().textContent).toContain('—');
+    pending.error(new Error('timeout'));
+    fixture.detectChanges();
+    expect(status().textContent).toContain('—');
+    patients.list.and.returnValue(of([]));
+    fixture.componentInstance.loadPatients();
+    fixture.detectChanges();
+    expect(status().textContent).toContain('0 dossiers correspondants');
   });
 
   it('sorts without mutating the response and resets pagination', () => {

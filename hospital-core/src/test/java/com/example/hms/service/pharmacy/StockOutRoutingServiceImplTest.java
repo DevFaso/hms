@@ -1496,7 +1496,7 @@ class StockOutRoutingServiceImplTest {
             verify(withdrawnOrders).recordDispenseOfWithdrawn(eq(decision), eq(prescription), anyString());
             assertThat(prescription.getStatus()).isEqualTo(withdrawn);
             verify(prescriptionRepository, never()).save(any());
-            verify(partnerChannel, never()).notifyPatientDispensed(any(), any());
+            verify(partnerChannel, never()).notifyPatientDispensed(any(), any(), any());
             verifyNoInteractions(prescriberNotifier);
         }
 
@@ -1570,7 +1570,7 @@ class StockOutRoutingServiceImplTest {
             assertThat(prescription.getStatus()).isEqualTo(withdrawn);
             assertThat(prescription.getPharmacyId()).isEqualTo(partnerId);
             verify(prescriptionRepository, never()).save(any());
-            verify(partnerChannel, never()).notifyPatientAccepted(any(), any());
+            verify(partnerChannel, never()).notifyPatientAccepted(any(), any(), any());
             verifyNoInteractions(prescriberNotifier);
         }
     }

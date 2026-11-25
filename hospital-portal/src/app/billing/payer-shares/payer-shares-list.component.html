@@ -126,6 +126,7 @@
             <form class="share-reject" (ngSubmit)="submitReject(row)">
               <label [for]="reasonId(row)">{{ 'R70_MONEY.SHARES.REASON' | translate }} *</label>
               <input
+                appFormControl
                 type="text"
                 maxlength="500"
                 required

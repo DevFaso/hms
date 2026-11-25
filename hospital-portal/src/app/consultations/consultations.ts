@@ -426,8 +426,15 @@ export class ConsultationsComponent implements OnInit {
     this.deletingItem.set(null);
   }
   executeCancel(): void {
+    refuseFields(this.host.nativeElement, [], ['cancel-reason']);
     const reason = this.cancelReason().trim();
     if (!reason) {
+      refuseFields(
+        this.host.nativeElement,
+        ['cancel-reason'],
+        ['cancel-reason'],
+        this.translate.instant('CONSULTATIONS.CANCEL_REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_REASON_REQUIRED'));
       return;
     }
@@ -624,8 +631,15 @@ export class ConsultationsComponent implements OnInit {
   }
 
   submitAssign(): void {
+    refuseFields(this.host.nativeElement, [], ['assign-consultant', 'assign-note']);
     const consultantId = this.assignConsultantId();
     if (!consultantId) {
+      refuseFields(
+        this.host.nativeElement,
+        ['assign-consultant'],
+        ['assign-consultant'],
+        this.translate.instant('CONSULTATIONS.CONSULTANT_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CONSULTATIONS.CONSULTANT_REQUIRED'));
       return;
     }
@@ -634,6 +648,12 @@ export class ConsultationsComponent implements OnInit {
     if (this.isReassign()) {
       const reason = this.assignNote().trim();
       if (!reason) {
+        refuseFields(
+          this.host.nativeElement,
+          ['assign-note'],
+          ['assign-note'],
+          this.translate.instant('CONSULTATIONS.REASSIGN_REASON_REQUIRED'),
+        );
         this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_REASON_REQUIRED'));
         this.assigning.set(false);
         return;
@@ -737,7 +757,14 @@ export class ConsultationsComponent implements OnInit {
   }
 
   submitSchedule(): void {
+    refuseFields(this.host.nativeElement, [], ['sched-at']);
     if (!this.scheduleForm.scheduledAt) {
+      refuseFields(
+        this.host.nativeElement,
+        ['sched-at'],
+        ['sched-at'],
+        this.translate.instant('CONSULTATIONS.SCHEDULED_AT_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULED_AT_REQUIRED'));
       return;
     }
@@ -808,7 +835,14 @@ export class ConsultationsComponent implements OnInit {
   }
 
   submitComplete(): void {
+    refuseFields(this.host.nativeElement, [], ['complete-recommendations']);
     if (!this.completeForm.recommendations.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['complete-recommendations'],
+        ['complete-recommendations'],
+        this.translate.instant('CONSULTATIONS.RECOMMENDATIONS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CONSULTATIONS.RECOMMENDATIONS_REQUIRED'));
       return;
     }
@@ -849,8 +883,15 @@ export class ConsultationsComponent implements OnInit {
   }
 
   submitDecline(): void {
+    refuseFields(this.host.nativeElement, [], ['decline-reason']);
     const reason = this.declineReasonValue().trim();
     if (!reason) {
+      refuseFields(
+        this.host.nativeElement,
+        ['decline-reason'],
+        ['decline-reason'],
+        this.translate.instant('CONSULTATIONS.DECLINE_REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_REASON_REQUIRED'));
       return;
     }

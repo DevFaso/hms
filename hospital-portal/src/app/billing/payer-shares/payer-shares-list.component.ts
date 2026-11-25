@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -44,7 +45,15 @@ export function payerShareReasonId(share: { id: string }): string {
 @Component({
   selector: 'app-payer-shares-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DayMonthPipe, KeyLabelPipe],
+  imports: [
+    FormControlStyleDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    DayMonthPipe,
+    KeyLabelPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './payer-shares-list.component.html',
   styleUrl: './payer-shares-list.component.scss',

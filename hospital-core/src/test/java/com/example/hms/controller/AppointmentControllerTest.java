@@ -47,6 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -307,6 +308,66 @@ class AppointmentControllerTest {
                         .principal(auth))
                 .andExpect(status().isOk());
     }
+    // ---- QA D3750 / D3753: the list's typed term travels in the body ----
+
+    @Test
+    void termSearch_sendsTheBodysTermAndTheQueryFiltersToTheService() throws Exception {
+        when(appointmentService.searchAppointments(any(), any(Pageable.class), any(Locale.class), eq("testuser")))
+                .thenReturn(new PageImpl<>(List.of(responseDTO)));
+
+        mockMvc.perform(post("/appointments/term-search")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"search\":\"  Patient Test 02 \"}")
+                        .param("hospitalId", hospitalId.toString())
+                        .param("size", "50")
+                        .principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(header().string("X-Total-Count", "1"));
+
+        org.mockito.ArgumentCaptor<AppointmentFilterDTO> filter = org.mockito.ArgumentCaptor.forClass(AppointmentFilterDTO.class);
+        verify(appointmentService).searchAppointments(filter.capture(), any(Pageable.class), any(Locale.class), eq("testuser"));
+        org.assertj.core.api.Assertions.assertThat(filter.getValue().getSearch()).isEqualTo("Patient Test 02");
+        org.assertj.core.api.Assertions.assertThat(filter.getValue().getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test
+    void termSearch_refusesAMisspeltField_neverEveryRow() throws Exception {
+        mockMvc.perform(post("/appointments/term-search")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"serch\":\"Awa\"}")
+                        .principal(auth))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("serch"));
+
+        verify(appointmentService, never()).searchAppointments(any(), any(), any(), any());
+        verify(appointmentService, never()).getAppointmentsForUser(any(), any());
+    }
+
+    @Test
+    void termSearch_refusesABlankOrMissingTerm() throws Exception {
+        for (String body : List.of("{}", "{\"search\":\"   \"}")) {
+            mockMvc.perform(post("/appointments/term-search")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body)
+                            .principal(auth))
+                    .andExpect(status().isBadRequest());
+        }
+        verify(appointmentService, never()).searchAppointments(any(), any(), any(), any());
+    }
+
+    @Test
+    void searchFilter_refusesAMisspeltCriterion() throws Exception {
+        mockMvc.perform(post("/appointments/search")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"patientNam\":\"Awa\"}")
+                        .principal(auth))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.field").value("patientNam"));
+
+        verify(appointmentService, never()).searchAppointments(any(), any(), any(), any());
+    }
+
     @Test
     void getAllAppointments_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsForUser(eq("testuser"), any(Locale.class)))

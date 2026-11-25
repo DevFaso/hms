@@ -238,7 +238,7 @@ class CredentialRenewalServiceTest {
 
         assertThatThrownBy(() -> service.recordRenewal(staff.getId(), NEW_EXPIRY, null, null, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot record their own");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("credential.renewal.otherRecorder"));
 
         verify(renewalRepository, never()).save(any());
         assertThat(staff.getLicenseExpiryDate()).isEqualTo(OLD_EXPIRY);
