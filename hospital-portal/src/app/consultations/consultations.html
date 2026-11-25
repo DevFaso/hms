@@ -865,12 +865,15 @@
           }
         </div>
         <div class="field">
-          <label for="assign-note">{{
-            isReassign()
-              ? ('CONSULTATIONS.REASSIGNMENT_REASON' | translate)
-              : ('CONSULTATIONS.ASSIGNMENT_NOTE' | translate)
-          }}</label>
+          <label for="assign-note"
+            >{{
+              isReassign()
+                ? ('CONSULTATIONS.REASSIGNMENT_REASON' | translate)
+                : ('CONSULTATIONS.ASSIGNMENT_NOTE' | translate)
+            }}{{ isReassign() ? ' *' : '' }}</label
+          >
           <textarea
+            [required]="isReassign()"
             id="assign-note"
             [value]="assignNote()"
             (input)="assignNote.set($any($event.target).value)"

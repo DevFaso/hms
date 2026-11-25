@@ -175,3 +175,22 @@ export class F {
 `;
   assert.deepEqual(requiredRefusalFindings(src), []);
 });
+
+test('missing authentication response token remains a no-user-field finding beside marked credentials', () => {
+  const source = `class Login {
+  submit(): void {
+    if (!this.username) {
+      refuseFields(this.host, ['username'], ['username'], message);
+      return;
+    }
+    if (!response.token) {
+      this.error = this.translate.instant('LOGIN.TOKEN_MISSING');
+      return;
+    }
+  }
+}`;
+  assert.deepEqual(
+    requiredRefusalFindings(source).map((f) => f.anchor),
+    ['submit::LOGIN.TOKEN_MISSING'],
+  );
+});

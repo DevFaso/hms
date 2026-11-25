@@ -416,8 +416,18 @@ export class PatientFormComponent implements OnInit {
 
   /** Send (or re-send) the SMS verification code to the typed primary phone. */
   sendPhoneVerification(): void {
+    if (
+      this.serverFieldErrors['phoneNumberPrimary'] ===
+      this.translate.instant('PATIENTS.PHONE_TOO_SHORT')
+    ) {
+      delete this.serverFieldErrors['phoneNumberPrimary'];
+    }
     const phone = (this.form.phoneNumberPrimary ?? '').trim();
     if (phone.length < 8) {
+      this.serverFieldErrors['phoneNumberPrimary'] = this.translate.instant(
+        'PATIENTS.PHONE_TOO_SHORT',
+      );
+      focusFirstInvalid(this.host.nativeElement, ['phonePrimary']);
       this.toast.error(this.translate.instant('PATIENTS.PHONE_TOO_SHORT'));
       return;
     }

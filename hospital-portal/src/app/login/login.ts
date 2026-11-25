@@ -27,6 +27,7 @@ import { toE164 } from '../shared/phone-number';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
@@ -215,6 +216,22 @@ export class Login implements OnInit, AfterViewInit {
       !this.bootstrap.phoneNumber
     ) {
       this.error = this.translate.instant('LOGIN.ALL_FIELDS_REQUIRED');
+      const fields = [
+        'firstName',
+        'lastName',
+        'username',
+        'email',
+        'phoneNumber',
+        'password',
+      ] as const;
+      const id = (field: (typeof fields)[number]) =>
+        field === 'phoneNumber' ? 'bs-phone' : `bs-${field}`;
+      refuseFields(
+        this.hostEl.nativeElement,
+        fields.filter((field) => !this.bootstrap[field]).map(id),
+        [...fields.map(id), 'bs-confirm'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       return;
     }
     // QA D906: the server's rule (PhoneNumbers.toE164), checked here so the
@@ -226,10 +243,22 @@ export class Login implements OnInit, AfterViewInit {
     }
     if (this.bootstrap.password.length < 8) {
       this.error = this.translate.instant('LOGIN.PASSWORD_MIN_LENGTH');
+      refuseFields(
+        this.hostEl.nativeElement,
+        ['bs-password'],
+        ['bs-password', 'bs-confirm'],
+        this.error,
+      );
       return;
     }
     if (this.bootstrap.password !== this.bootstrap.confirmPassword) {
       this.error = this.translate.instant('LOGIN.PASSWORDS_MISMATCH');
+      refuseFields(
+        this.hostEl.nativeElement,
+        ['bs-confirm'],
+        ['bs-password', 'bs-confirm'],
+        this.error,
+      );
       return;
     }
 
@@ -270,6 +299,12 @@ export class Login implements OnInit, AfterViewInit {
     this.bootstrapSuccess = '';
     if (!this.username || !this.password) {
       this.error = this.translate.instant('LOGIN.CREDENTIALS_REQUIRED');
+      refuseFields(
+        this.hostEl.nativeElement,
+        [...(!this.username ? ['username'] : []), ...(!this.password ? ['password'] : [])],
+        ['username', 'password'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       return;
     }
     this.loading = true;
@@ -547,6 +582,7 @@ export class Login implements OnInit, AfterViewInit {
     const identifier = this.forgotPasswordEmail.trim();
     if (!identifier) {
       this.error = this.translate.instant('LOGIN.ENTER_RESET_IDENTIFIER');
+      refuseFields(this.hostEl.nativeElement, ['fp-email'], ['fp-email'], this.error);
       return;
     }
     this.forgotPasswordLoading = true;
@@ -604,6 +640,7 @@ export class Login implements OnInit, AfterViewInit {
     const contact = this.resendActivationEmail.trim();
     if (!contact) {
       this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
+      refuseFields(this.hostEl.nativeElement, ['ra-email'], ['ra-email'], this.error);
       return;
     }
     // QA D542: the contact goes in the body, never the URL (logs, history).

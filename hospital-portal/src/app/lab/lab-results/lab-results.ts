@@ -1,3 +1,4 @@
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { ResultEvolutionComponent } from '../shared/result-evolution.component';
 import { ResultRangeComponent } from '../shared/result-range.component';
 import { refusalReason } from '../../shared/refusal-reason';
@@ -5,6 +6,7 @@ import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.comp
 import { textMatches } from '../../shared/person-search';
 import {
   Component,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -114,6 +116,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   styleUrl: './lab-results.scss',
 })
 export class LabResultsComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -654,6 +657,7 @@ export class LabResultsComponent implements OnInit {
   }
 
   submitForm(): void {
+    refuseFields(this.host.nativeElement, [], ['lr-orderId']);
     const selectedOrder = this.orders().find((o) => o.id === this.form.labOrderId);
     this.form.assignmentId = this.activeAssignmentId;
     this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
@@ -663,6 +667,13 @@ export class LabResultsComponent implements OnInit {
       this.form.resultUnit = this.selectedTestUnit();
     }
     if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
+      // Assignment/patient context is not editable here; only a missing order is a field error.
+      refuseFields(
+        this.host.nativeElement,
+        !this.form.labOrderId ? ['lr-orderId'] : [],
+        ['lr-orderId'],
+        this.translate.instant('LAB_RESULTS.SAVE_VALIDATION_ERROR'),
+      );
       this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_VALIDATION_ERROR'));
       return;
     }

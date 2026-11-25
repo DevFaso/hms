@@ -787,14 +787,27 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   confirmHoldRefuse(): void {
     if (!this.canDocumentCare()) return;
+    refuseFields(this.host.nativeElement, [], ['mar-reason-input', 'mar-witness']);
     const prompt = this.reasonPrompt();
     if (!prompt) return;
     const reason = this.reasonText().trim();
     if (!reason) {
+      refuseFields(
+        this.host.nativeElement,
+        ['mar-reason-input'],
+        ['mar-reason-input'],
+        this.translate.instant('NURSE.TOAST.REASON_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.TOAST.REASON_REQUIRED'));
       return;
     }
     if (this.promptNeedsWitness() && !this.witnessUserId()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['mar-witness'],
+        ['mar-witness'],
+        this.translate.instant('NURSE.WITNESS.REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.WITNESS.REQUIRED'));
       return;
     }
@@ -1251,18 +1264,41 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   submitCreateHandoff(): void {
     if (!this.canCreateNursing()) return;
+    refuseFields(this.host.nativeElement, [], ['ho-patient', 'ho-direction']);
+    refuseFields(this.host.nativeElement, [], ['ho-situation', 'ho-recipient']);
     const form = this.handoffForm();
     if (!form.patientId || !form.direction?.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          ...(!form.patientId ? ['ho-patient'] : []),
+          ...(!form.direction?.trim() ? ['ho-direction'] : []),
+        ],
+        ['ho-patient', 'ho-direction'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_REQUIRED'));
       return;
     }
     // QA D331: the S of SBAR is required; the server refuses a blank one too.
     if (!form.situation?.trim()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['ho-situation'],
+        ['ho-situation'],
+        this.translate.instant('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED'));
       return;
     }
     // QA D776: a handoff is handed to a named colleague; the server refuses none.
     if (!form.recipientUserId) {
+      refuseFields(
+        this.host.nativeElement,
+        ['ho-recipient'],
+        ['ho-recipient'],
+        this.translate.instant('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED'));
       return;
     }
@@ -1361,8 +1397,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   submitCreateTask(): void {
     if (!this.canCreateNursing()) return;
+    refuseFields(this.host.nativeElement, [], ['tc-patient', 'tc-category']);
     const form = this.taskForm();
     if (!form.patientId || !form.category) {
+      refuseFields(
+        this.host.nativeElement,
+        [...(!form.patientId ? ['tc-patient'] : []), ...(!form.category ? ['tc-category'] : [])],
+        ['tc-patient', 'tc-category'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('NURSE.TOAST.TASK_REQUIRED'));
       return;
     }
