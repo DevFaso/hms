@@ -15,10 +15,15 @@ import java.util.regex.Pattern;
  * ("Amoxicilline 500 mg"). A 250 mg lot was dispensed against a 500 mg order because the dispense check compared
  * the molecule and never the strength.
  *
- * <p>Two strengths are compared on their first amount and their unit, the unit including what a concentration is
- * per ("250 mg/5 ml" is not "250 mg"). Grams and micrograms are read in milligrams, so "1 g" is "1000 mg". The
- * further amounts of a combination ("250/125 mg") are not compared: the active ingredients already tell a
- * combination from a single drug. Pure functions.
+ * <p>Two strengths are compared on every amount and their unit, the unit including what a concentration is per
+ * ("250 mg/5 ml" is not "250 mg", « 500/15 mg » is not « 500/30 mg »). Grams and micrograms are read in milligrams,
+ * so "1 g" is "1000 mg".
+ *
+ * <p>Review of #1336 (three rounds of parse holes), the class rule: a text is normalised first (NFKC, every Unicode
+ * space to a plain space), and it states NO strength only when it holds no digit at all. A text with a digit is
+ * either read in full as one strength, every number in it taken in (a number glued to letters, « P77 », « B12 », is
+ * part of a name), or it is UNREADABLE, and an unreadable strength never matches anything (fail closed). A number
+ * that reads two ways (« 1.000 mg »: one milligram, or a thousand) is unreadable too. Pure functions.
  */
 public final class ProductStrength {
 
@@ -41,28 +46,34 @@ public final class ProductStrength {
         }
     }
 
+    /** Case-insensitive, Unicode-aware classes ({@code \\s}, {@code \\w}, {@code \\d}) in every strength pattern. */
+    private static final int FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS;
+    /** Every space a text may carry (no-break, narrow no-break, figure, tab, line breaks): read as one plain space. */
+    private static final Pattern SPACES = Pattern.compile("[\\p{Z}\\s\\u00A0\\u2007\\u202F]+", FLAGS);
     /** A number as written, bounded so no input makes the match backtrack ("500", "62,5"). */
     private static final String NUMBER = "\\d{1,7}+(?:[.,]\\d{1,6}+)?+";
+    /** The micro sign and the Greek mu (NFKC turns the first into the second). */
+    private static final String MICRO = "[\\u00B5\\u03BC]g";
     /** The units an amount of active ingredient is written in. */
-    private static final String UNIT = "(mg|g|mcg|µg|ug|ui|iu|meq|mmol|%)(?!\\p{L})";
+    private static final String UNIT = "(mg|g|mcg|" + MICRO + "|ug|ui|iu|meq|mmol|%)(?!\\p{L})";
+    /** A run of digits (with its decimal part), to check every number of a text is taken in. */
+    private static final Pattern DIGITS = Pattern.compile(NUMBER, FLAGS);
+    /** A number read two ways: « 1.000 » or « 2,500 », a thousands separator or three decimals. */
+    private static final Pattern AMBIGUOUS = Pattern.compile("[1-9]\\d{0,2}+[.,]\\d{3}+", FLAGS);
     /** The amount and its unit, every amount of a combination written before the unit ("250/125 mg"). */
     private static final Pattern AMOUNT = Pattern.compile(
         "(?<![\\w.,])(" + NUMBER + "(?:\\s{0,3}+/\\s{0,3}+" + NUMBER + "){0,4}+)\\s{0,3}+" + UNIT,
-        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        FLAGS);
     /** A further amount of a combination written with its own unit, right after ("500 mg/30 mg", "+ 125 mg"). */
     private static final Pattern FURTHER = Pattern.compile(
         "\\G\\s{0,3}+[/+]\\s{0,3}+(" + NUMBER + ")\\s{0,3}+" + UNIT,
-        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    /** Any amount with a unit anywhere in a text: each must belong to the strength read, or it is unreadable. */
-    private static final Pattern ANY_AMOUNT = Pattern.compile(
-        "(?<![\\w.,])" + NUMBER + "\\s{0,3}+" + UNIT,
-        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        FLAGS);
     /** The most amounts a combination is read with (a fixed-dose combination has two to four). */
     private static final int MAX_COMPONENTS = 5;
     /** What a concentration is per, read right after the amount ("/5 ml", "/ml"). */
     private static final Pattern PER = Pattern.compile(
         "\\G\\s{0,3}+/\\s{0,3}+(" + NUMBER + ")?+\\s{0,3}+(ml|l|g|dose|h)(?!\\p{L})",
-        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        FLAGS);
 
     private static final BigDecimal ONE_THOUSANDTH = new BigDecimal("0.001");
 
@@ -71,7 +82,8 @@ public final class ProductStrength {
         "g", BigDecimal.valueOf(1000),
         "mcg", ONE_THOUSANDTH,
         "ug", ONE_THOUSANDTH,
-        "µg", ONE_THOUSANDTH);
+        "\u00b5g", ONE_THOUSANDTH,
+        "\u03bcg", ONE_THOUSANDTH);
 
     /**
      * A read strength: every amount in the base unit (one for a single drug, one per ingredient of a combination,
@@ -133,6 +145,11 @@ public final class ProductStrength {
         return a.value().sameAs(b.value()) ? Relation.SAME : Relation.DIFFERENT;
     }
 
+    /** Whether a text states a strength read in full (a name that already says it needs no strength added). */
+    public static boolean readsAStrength(String text) {
+        return read(text).kind() == Kind.READ;
+    }
+
     /** Whether a text states a strength at all (one read in full, or one not understood). */
     public static boolean statesStrength(String text) {
         return read(text).kind() != Kind.NONE;
@@ -186,19 +203,19 @@ public final class ProductStrength {
      * ingredient name stops the combination).
      */
     static Reading read(String text) {
-        if (text == null || text.isBlank()) {
+        String normalized = normalize(text);
+        if (normalized.chars().noneMatch(Character::isDigit)) {
             return Reading.NONE;
         }
-        String normalized = Normalizer.normalize(text, Normalizer.Form.NFC);
         Matcher m = AMOUNT.matcher(normalized);
         if (!m.find()) {
-            return Reading.NONE;
+            return Reading.UNREADABLE;
         }
         int start = m.start();
         String unit = baseUnit(m.group(2));
         java.util.List<BigDecimal> amounts = new java.util.ArrayList<>();
         for (String written : m.group(1).split("/")) {
-            amounts.add(inBaseUnit(new BigDecimal(written.trim().replace(',', '.')), m.group(2)));
+            amounts.add(inBaseUnit(number(written.trim()), m.group(2)));
         }
         int end = m.end();
         Matcher further = FURTHER.matcher(normalized);
@@ -206,24 +223,52 @@ public final class ProductStrength {
             if (!unit.equals(baseUnit(further.group(2)))) {
                 return Reading.UNREADABLE;
             }
-            amounts.add(inBaseUnit(new BigDecimal(further.group(1).replace(',', '.')), further.group(2)));
+            amounts.add(inBaseUnit(number(further.group(1)), further.group(2)));
             end = further.end();
         }
         BigDecimal per = null;
         String perUnit = null;
         Matcher concentration = PER.matcher(normalized);
         if (concentration.find(end)) {
-            per = concentration.group(1) == null ? null : new BigDecimal(concentration.group(1).replace(',', '.'));
+            per = concentration.group(1) == null ? null : number(concentration.group(1));
             perUnit = concentration.group(2).toLowerCase(Locale.ROOT);
             end = concentration.end();
         }
-        Matcher any = ANY_AMOUNT.matcher(normalized);
-        while (any.find()) {
-            if (any.start() < start || any.start() >= end) {
-                return Reading.UNREADABLE;
-            }
+        if (!everyNumberTakenIn(normalized, start, end)
+                || AMBIGUOUS.matcher(normalized.substring(start, end)).find()) {
+            return Reading.UNREADABLE;
         }
         return Reading.of(new Value(java.util.List.copyOf(amounts), unit, per, perUnit));
+    }
+
+    /** NFKC, then every kind of space as one plain space. */
+    static String normalize(String text) {
+        if (text == null) {
+            return "";
+        }
+        return SPACES.matcher(Normalizer.normalize(text, Normalizer.Form.NFKC)).replaceAll(" ").trim();
+    }
+
+    /**
+     * Whether every number of the text belongs to the strength read ({@code [start, end)}), or is glued to letters
+     * after letters, as part of a name (« P77 », « B12 », « D3 »). Any other number (a second amount the strength did not take in,
+     * a count, a bare « 500 ») leaves the strength unreadable.
+     */
+    private static boolean everyNumberTakenIn(String text, int start, int end) {
+        Matcher digits = DIGITS.matcher(text);
+        while (digits.find()) {
+            boolean inStrength = digits.start() >= start && digits.end() <= end;
+            boolean glued = digits.start() > 0 && Character.isLetter(text.charAt(digits.start() - 1));
+            if (!inStrength && !glued) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A written number, a decimal comma read as a point. */
+    private static BigDecimal number(String written) {
+        return new BigDecimal(written.replace(',', '.'));
     }
 
     /** The unit an amount is compared in: milligrams for every mass unit, « ui » for « iu ». */

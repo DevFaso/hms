@@ -281,6 +281,95 @@ class DispensedProductRuleTest {
             assertThat(ProductStrength.read("Amoxicilline").kind()).isEqualTo(ProductStrength.Kind.NONE);
         }
 
+        /**
+         * Review of #1336 (NBSP round): real-world spellings, each read as the strength it is, or as UNREADABLE.
+         * Never « no strength » when the text holds a digit.
+         */
+        static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> spellings() {
+            return java.util.stream.Stream.of(
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline\u00A0500\u00A0mg", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 500\u202Fmg", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 500\u2007mg", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline\t500 mg", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 500mg", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("AMOXICILLINE 500 MG", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 0,5 g", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 0.5 g", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Ceftriaxone 1 g", "1000 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Ceftriaxone 1\u00A0g poudre", "1000 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 250 mg/5 ml", "250 mg/5 ml"),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 250\u00A0mg\u00A0/\u00A05\u00A0ml", "250 mg/5 ml"),
+                org.junit.jupiter.params.provider.Arguments.of("Morphine 10 mg/mL", "10 mg/ml"),
+                org.junit.jupiter.params.provider.Arguments.of("Paracétamol 500 mg cp", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Paracétamol 500 mg comprimé sécable", "500 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Augmentin 500/62,5 mg", "500/62.5 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Codoliprane 500 mg/30 mg", "500/30 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Vitamine B12 1000 \u00B5g", "1 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Vitamine B12 1000 \u03BCg", "1 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Vitamine B12 1000 mcg", "1 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("P77 Amoxicilline 250 mg", "250 mg"),
+                org.junit.jupiter.params.provider.Arguments.of("Povidone iodée 10 %", "10 %"),
+                org.junit.jupiter.params.provider.Arguments.of("Insuline 100 UI/ml", "100 ui/ml"),
+                // UNREADABLE: a digit, and no complete strength that takes every number in.
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 500 mg + acide clavulanique 125 mg", null),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline\u00A0500\u00A0mg + acide clavulanique 62,5\u00A0mg", null),
+                org.junit.jupiter.params.provider.Arguments.of("Calcium 500 mg/400 UI", null),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 1.000 mg", null),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 1,000 mg", null),
+                org.junit.jupiter.params.provider.Arguments.of("Paracétamol 500", null),
+                org.junit.jupiter.params.provider.Arguments.of("Paracétamol 500 mg 3 fois par jour", null),
+                org.junit.jupiter.params.provider.Arguments.of("Amoxicilline 500 mg boîte de 20", null),
+                org.junit.jupiter.params.provider.Arguments.of("P77 Ibuprofène", null),
+                org.junit.jupiter.params.provider.Arguments.of("Paracétamol 5 gélules", null));
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0} -> {1}")
+        @org.junit.jupiter.params.provider.MethodSource("spellings")
+        @DisplayName("review of #1336: every spelling reads as its strength or as UNREADABLE, never as none")
+        void everySpellingReadsAsItsStrengthOrUnreadable(String text, String expected) {
+            ProductStrength.Reading reading = ProductStrength.read(text);
+            if (expected == null) {
+                assertThat(reading.kind()).as(text).isEqualTo(ProductStrength.Kind.UNREADABLE);
+            } else {
+                assertThat(reading.kind()).as(text).isEqualTo(ProductStrength.Kind.READ);
+                assertThat(canonical(reading.value())).as(text).isEqualTo(expected);
+            }
+            // The class rule: a text with a digit never states « no strength ».
+            assertThat(reading.kind()).as(text).isNotEqualTo(ProductStrength.Kind.NONE);
+            assertThat(ProductStrength.statesStrength(text)).as(text).isTrue();
+        }
+
+        @Test
+        @DisplayName("review of #1336: only a text with no digit at all states no strength")
+        void onlyATextWithoutDigitsStatesNone() {
+            for (String text : java.util.Arrays.asList(null, "", "\u00A0", "Amoxicilline", "Paracétamol comprimé")) {
+                assertThat(ProductStrength.read(text).kind()).as(String.valueOf(text))
+                    .isEqualTo(ProductStrength.Kind.NONE);
+            }
+        }
+
+        @Test
+        @DisplayName("review of #1336: « Amoxicilline 500 mg » with a no-break space is not filled from a 250 mg lot")
+        void aNoBreakSpaceOrderIsStillComparedOnItsStrength() {
+            assertThat(DispenseVerificationService.classify(freeText("Amoxicilline 500\u00A0mg"), null, AMOX_250))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+            assertThat(DispenseVerificationService.classify(freeText("Amoxicilline 500\u202Fmg"), null, AMOX_500))
+                .isEqualTo(DispensedProductMatch.PRESCRIBED);
+            // A free-text order whose strength cannot be read is not filled from any lot.
+            assertThat(DispenseVerificationService.classify(freeText("Amoxicilline 1.000 mg"), null, AMOX_500))
+                .isEqualTo(DispensedProductMatch.OTHER_STRENGTH);
+        }
+
+        private static String canonical(ProductStrength.Value v) {
+            String amounts = v.amounts().stream().map(a -> a.stripTrailingZeros().toPlainString())
+                .collect(java.util.stream.Collectors.joining("/"));
+            String text = amounts + " " + v.unit();
+            if (v.perUnit() == null) {
+                return text;
+            }
+            return text + "/" + (v.per() == null ? "" : v.per().stripTrailingZeros().toPlainString() + " ") + v.perUnit();
+        }
+
         @Test
         @DisplayName("a number that is part of a word (P77, B12) is not a strength")
         void numbersInsideWordsAreNotStrengths() {

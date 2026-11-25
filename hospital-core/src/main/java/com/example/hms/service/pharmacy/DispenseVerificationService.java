@@ -462,7 +462,7 @@ public class DispenseVerificationService {
     /** {@link #withStrength(String, MedicationCatalogItem)} with the strength written for a reader of {@code locale}. */
     public static String withStrength(String name, MedicationCatalogItem item, Locale locale) {
         java.util.Optional<String> strength = ProductStrength.labelOf(item, locale);
-        if (name == null || strength.isEmpty() || ProductStrength.statesStrength(name)) {
+        if (name == null || strength.isEmpty() || ProductStrength.readsAStrength(name)) {
             return name;
         }
         return name + " " + strength.get();
