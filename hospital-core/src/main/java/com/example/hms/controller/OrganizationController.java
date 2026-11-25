@@ -236,7 +236,7 @@ public class OrganizationController {
         organizationSecurityService.applyDefaultSecurityPolicies(id, organization.getType());
         
         log.info("Applied default security policies to organization: {}", organization.getCode());
-        return ResponseEntity.ok(new MessageResponse("Default security policies applied successfully"));
+        return ResponseEntity.ok(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("response.organization.securityApplied")));
     }
 
     /** QA D435: an organisation name is unique, ignoring case and surrounding spaces. */

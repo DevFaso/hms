@@ -96,9 +96,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
             // acting scope, never from the request.
             UUID activeScope = roleValidator.requireActiveHospitalId();
             if (activeScope == null) {
-                throw new BusinessException(
-                    "Hospital ID is required. Only super-admins may create global "
-                        + "(platform-wide) medication catalog entries.");
+                throw new BusinessException("catalog.hospital.required");
             }
             targetHospitalId = activeScope;
         }
@@ -108,8 +106,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         if (!superAdmin) {
             UUID activeScope = roleValidator.requireActiveHospitalId();
             if (!hospital.getId().equals(activeScope)) {
-                throw new BusinessException(
-                    "Hospital admins can only add medications to their own hospital's catalog.");
+                throw new BusinessException("catalog.hospital.otherOwner");
             }
         }
         return hospital;

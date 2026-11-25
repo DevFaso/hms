@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { checkClinicalFormControls } from './check-clinical-form-controls.mjs';
 /**
  * The round-16 regression gates (and the round-17 person-search and translate-params gates, and
  * the round-18 required-refusal gate, the round-29 form-behaviour gate, the
@@ -17,6 +18,7 @@
  *
  * The gates and what each catches: docs/qa/regression-guards.md.
  */
+import { checkPresentation } from './check-presentation-regressions.mjs';
 import { checkFormControls } from './check-form-controls.mjs';
 import { evaluateGate } from './lib/baseline.mjs';
 import { loadTemplates } from './lib/template-gate.mjs';
@@ -45,6 +47,7 @@ const components = componentSources();
 const ctx = { components, templates: loadTemplates(components) };
 
 let failed = 0;
+if (!checkClinicalFormControls(ctx)) failed++;
 for (const gate of [
   dialogs,
   names,
@@ -65,6 +68,7 @@ for (const gate of [
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }
+if (!checkPresentation(ctx)) failed++;
 if (!checkFormControls(ctx)) failed++;
 if (failed > 0) {
   console.error(`\n${failed} regression gate(s) failed — see docs/qa/regression-guards.md`);

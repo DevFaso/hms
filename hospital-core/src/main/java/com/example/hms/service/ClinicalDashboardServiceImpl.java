@@ -275,9 +275,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
 
         kpis.add(DashboardKPI.builder()
                 .key("appointments")
-                .label("Appointments Today")
+                .label(com.example.hms.utility.MessageUtil.resolve("dashboard.kpi.appointments"))
                 .value(appointmentsToday)
-                .unit("scheduled")
+                .unit(com.example.hms.utility.MessageUtil.resolve("dashboard.unit.scheduled"))
                 .trend(TREND_STABLE)
                 .build());
 
@@ -291,9 +291,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
 
         kpis.add(DashboardKPI.builder()
                 .key("pending_results")
-                .label("Pending Results")
+                .label(com.example.hms.utility.MessageUtil.resolve("dashboard.kpi.results"))
                 .value((int) Math.min(pendingLabs, Integer.MAX_VALUE))
-                .unit("results")
+                .unit(com.example.hms.utility.MessageUtil.resolve("dashboard.unit.results"))
                 .trend(pendingLabs > 0 ? "up" : TREND_STABLE)
                 .build());
 
@@ -305,9 +305,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
 
         kpis.add(DashboardKPI.builder()
                 .key("patients_today")
-                .label("Active Patients")
+                .label(com.example.hms.utility.MessageUtil.resolve("dashboard.kpi.patients"))
                 .value(activeEncounters)
-                .unit("patients")
+                .unit(com.example.hms.utility.MessageUtil.resolve("dashboard.unit.patients"))
                 .trend(TREND_STABLE)
                 .build());
 
@@ -319,9 +319,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
 
         kpis.add(DashboardKPI.builder()
                 .key("tasks")
-                .label("Refill Requests")
+                .label(com.example.hms.utility.MessageUtil.resolve("dashboard.kpi.refills"))
                 .value((int) Math.min(pendingRefills, Integer.MAX_VALUE))
-                .unit("requests")
+                .unit(com.example.hms.utility.MessageUtil.resolve("dashboard.unit.requests"))
                 .trend(pendingRefills > 0 ? "up" : TREND_STABLE)
                 .build());
 

@@ -101,6 +101,38 @@ class PdfInvoiceServiceTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "fr|1 500 F CFA", "en|1,500 F CFA", "es|1.500 F CFA"
+    })
+    void invoiceAndReceiptAmountsUseTheDocumentLocaleWithoutChangingValues(String language, String expected) throws Exception {
+        Locale locale = Locale.forLanguageTag(language);
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 9, 14))
+            .paymentMethod(PaymentMethod.CASH).referenceNumber("cdx-REC").status(PaymentStatus.CONFIRMED).build();
+        assertThat(textOf(service.generateInvoicePdf(invoice, items, locale))).contains(expected);
+        assertThat(textOf(service.generateReceiptPdf(invoice, payment, locale))).contains(expected);
+        assertThat(payment.getAmount()).isEqualByComparingTo("1500.00");
+        assertThat(invoice.getTotalAmount()).isEqualByComparingTo("1500.00");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "1250.49|1,250 F CFA", "1250.50|1,251 F CFA", "-1250.50|-1,251 F CFA",
+        "100000000000000000001|100,000,000,000,000,000,001 F CFA"
+    })
+    void localeFormattingPreservesWholeFrancRoundingAndBigDecimalPrecision(String amount, String expected) {
+        BigDecimal original = new BigDecimal(amount);
+        assertThat(PdfInvoiceService.money(original, Locale.ENGLISH)).isEqualTo(expected);
+        assertThat(original.toPlainString()).isEqualTo(amount);
+    }
+
+    @Test void amountCompatibilityDefaultsRemainFrenchAndNullSafe() {
+        assertThat(PdfInvoiceService.money(new BigDecimal("1250"))).isEqualTo("1 250 F CFA");
+        assertThat(PdfInvoiceService.money(new BigDecimal("1250"), null)).isEqualTo("1 250 F CFA");
+        assertThat(PdfInvoiceService.money(null, Locale.ENGLISH)).isEqualTo("0 F CFA");
+    }
+
     private List<Locale> localesAskedOfTheBundle() {
         ArgumentCaptor<Locale> locales = ArgumentCaptor.forClass(Locale.class);
         verify(messageSource, atLeastOnce()).getMessage(anyString(), any(), locales.capture());
@@ -118,8 +150,8 @@ class PdfInvoiceServiceTest {
                 "pdf.invoice.patient Awa Kaboré OUA-1234",
                 "pdf.invoice.hospital Hospital B",
                 "pdf.invoice.col.description", "pdf.invoice.col.qty", "pdf.invoice.col.total",
-                "Consultation", "cat:SERVICE", "1 500 F CFA",
-                "pdf.invoice.grandTotal 1 500 F CFA")
+                "Consultation", "cat:SERVICE", "1,500 F CFA",
+                "pdf.invoice.grandTotal 1,500 F CFA")
             .doesNotContain("INVOICE", "Grand Total", "2026-09-14");
         assertThat(localesAskedOfTheBundle()).containsOnly(Locale.ENGLISH);
     }
@@ -258,8 +290,8 @@ class PdfInvoiceServiceTest {
         assertThat(text).contains(
             "pdf.invoice.hospital Hospital B",
             "pdf.invoice.status pdf.invoice.statusValue.PAID",
-            "pdf.invoice.grandTotal 1 500 F CFA",
-            "pdf.invoice.amountPaid 1 500 F CFA",
+            "pdf.invoice.grandTotal 1,500 F CFA",
+            "pdf.invoice.amountPaid 1,500 F CFA",
             "pdf.invoice.balanceDue 0 F CFA",
             "REC-7")
             .doesNotContain("999 F CFA");
@@ -274,7 +306,7 @@ class PdfInvoiceServiceTest {
 
         String text = textOf(service.generateInvoicePdf(invoice, many, Locale.ENGLISH));
 
-        assertThat(text).contains("Line 79", "pdf.invoice.grandTotal 1 500 F CFA", "pdf.invoice.balanceDue");
+        assertThat(text).contains("Line 79", "pdf.invoice.grandTotal 1,500 F CFA", "pdf.invoice.balanceDue");
     }
 
     @Test
@@ -296,7 +328,7 @@ class PdfInvoiceServiceTest {
         String text = textOf(service.generateReceiptPdf(invoice, payment, Locale.ENGLISH));
 
         assertThat(text).contains("pdf.receipt.title", "pdf.invoice.hospital Hospital B",
-            "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1 000 F CFA",
+            "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1,000 F CFA",
             // Billing plan PR 9: an older Mobile Money row says its operator was not stated.
             "pdf.receipt.methodWithReference pdf.payment.operator.NOT_STATED MM-42",
             "pdf.invoice.balanceDue 500 F CFA");
@@ -359,7 +391,7 @@ class PdfInvoiceServiceTest {
         String text = textOf(service.generateReceiptPdf(invoice, copay, "INV-2042-R1", new BigDecimal("1500.00"),
             new BigDecimal("3450.00"), true, Locale.ENGLISH));
 
-        assertThat(text).contains("3 450 F CFA", "pdf.invoice.balanceDue 1 950 F CFA", "pdf.receipt.carriedOver")
+        assertThat(text).contains("3,450 F CFA", "pdf.invoice.balanceDue 1,950 F CFA", "pdf.receipt.carriedOver")
             .doesNotContain("pdf.invoice.balanceDue 0 F CFA");
     }
 

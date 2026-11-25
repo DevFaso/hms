@@ -110,8 +110,14 @@ class AssignmentGrantScopeTest {
     private final Role superAdmin = role("ROLE_SUPER_ADMIN");
     private final User assignee = account(UUID.randomUUID());
 
+    private MessageSource previousTestMessageSource;
+    private org.springframework.context.i18n.LocaleContext previousTestLocale;
+
     @BeforeEach
     void setUp() {
+        previousTestMessageSource = (MessageSource) ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        previousTestLocale = org.springframework.context.i18n.LocaleContextHolder.getLocaleContext();
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         RoleValidator roleValidator = new RoleValidator(assignmentRepository, ActingScopeTestSupport.resolver());
         UserAccountAccess access = new UserAccountAccess(assignmentRepository, patientRepository,
             registrationRepository, staffRepository, roleValidator);
@@ -144,6 +150,8 @@ class AssignmentGrantScopeTest {
 
     @AfterEach
     void tearDown() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousTestMessageSource);
+        org.springframework.context.i18n.LocaleContextHolder.setLocaleContext(previousTestLocale);
         SecurityContextHolder.clearContext();
         HospitalContextHolder.clear();
     }

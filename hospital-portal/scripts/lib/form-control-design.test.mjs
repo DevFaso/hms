@@ -101,7 +101,12 @@ test('removing cited CSS or leaving it only in comments invalidates an exception
       evidence: ['.special'],
     },
   };
-  for (const css of ['', '/* .special { padding: 12px; } */', '.unrelated { padding: 12px; }']) {
+  for (const css of [
+    '',
+    '/* .special { padding: 12px; } */',
+    '.unrelated { padding: 12px; }',
+    '.retired-panel .special { padding: 12px; }',
+  ]) {
     assert.match(
       bareControlFindings(
         fixture(text),
@@ -113,4 +118,70 @@ test('removing cited CSS or leaving it only in comments invalidates an exception
     );
   }
   assert.deepEqual(checked(fixture(text), exception), []);
+});
+
+test('whole selectors in comma lists count, but an ancestor prefix never does', () => {
+  const text = '<input class="special">';
+  const key = controlsIn(text, 'src/app/admin/example.ts')[0].key;
+  const exceptions = {
+    [key]: {
+      reason: 'Search control has an independently styled surrounding surface.',
+      evidence: ['.special'],
+    },
+  };
+  assert.deepEqual(
+    bareControlFindings(
+      fixture(text),
+      exceptions,
+      () => true,
+      new Map([[fixture(text)[0].rel, '.other, .special { padding: 12px }']]),
+    ),
+    [],
+  );
+  exceptions[key].evidence = ['.other,\n .special'];
+  assert.deepEqual(
+    bareControlFindings(
+      fixture(text),
+      exceptions,
+      () => true,
+      new Map([[fixture(text)[0].rel, '.other, .special { padding: 12px }']]),
+    ),
+    [],
+  );
+  exceptions[key].evidence = ['.special'];
+  assert.equal(
+    bareControlFindings(
+      fixture(text),
+      exceptions,
+      () => true,
+      new Map([[fixture(text)[0].rel, '.retired-panel .special { padding: 12px }']]),
+    ).length,
+    1,
+  );
+});
+
+test('one inline-component exception cannot cover another component in the same file', () => {
+  const text = '<input class="special">',
+    rel = 'src/app/admin/example.ts';
+  const templates = ['First', 'Second'].map((componentIdentity) => ({
+    rel,
+    text,
+    componentIdentity,
+  }));
+  const first = controlsIn(text, rel, 'First')[0];
+  const exception = {
+    [first.key]: {
+      reason: 'Search control within its separately styled surrounding surface.',
+      evidence: ['.special'],
+    },
+  };
+  const styles = new Map(
+    templates.map((t) => [`${rel}::${t.componentIdentity}`, '.special { padding: 12px }']),
+  );
+  assert.equal(bareControlFindings(templates, exception, () => true, styles).length, 1);
+  const unidentified = fixture(text).concat(fixture(text));
+  assert.equal(
+    checked(unidentified, { [controlsIn(text, rel)[0].key]: exception[first.key] }).length,
+    1,
+  );
 });

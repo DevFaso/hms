@@ -66,6 +66,7 @@ public class InvoiceItemMapper {
         dto.setUnitPrice(item.getUnitPrice());
         dto.setTotalPrice(item.getTotalPrice());
         dto.setItemCategory(String.valueOf(item.getItemCategory()));
+        dto.setCoverageCategory(item.getCoverageCategory() != null ? item.getCoverageCategory().name() : null);
 
         if (item.getAssignment() != null) {
             dto.setAssignmentId(item.getAssignment().getId());
@@ -137,6 +138,6 @@ public class InvoiceItemMapper {
         } catch (RuntimeException ignored) {
             // Best-effort display name construction; ignore lookup issues.
         }
-        return "Staff";
+        return com.example.hms.utility.MessageUtil.resolve("common.display.staff");
     }
 }
