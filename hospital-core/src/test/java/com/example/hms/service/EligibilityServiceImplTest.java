@@ -81,6 +81,9 @@ class EligibilityServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // The not-found refusals resolve their key through MessageUtil: real bundles here, not whatever
+        // message source an earlier test in the same JVM left behind (the assertions read the message).
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         checkRepository = mock(EligibilityCheckRepository.class);
         patientRepository = mock(PatientRepository.class);
         hospitalRepository = mock(HospitalRepository.class);

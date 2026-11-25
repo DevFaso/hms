@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import java.util.Optional;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.tenant.ActingScopeResolver;
@@ -122,6 +123,8 @@ public class ReceptionController {
     @GetMapping("/patients/{patientId}/snapshot")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Front-desk patient snapshot: demographics, insurance, billing alerts")
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "the desk snapshot: identity, appointments and balance; clinical fields masked")
     public ResponseEntity<FrontDeskPatientSnapshotDTO> getPatientSnapshot(@PathVariable UUID patientId) {
         UUID hospitalId = resolveHospitalId();
         return ResponseEntity.ok(receptionService.getPatientSnapshot(patientId, hospitalId));

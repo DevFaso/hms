@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { StoryboardBannerComponent } from './storyboard-banner.component';
@@ -173,6 +174,33 @@ describe('StoryboardBannerComponent', () => {
     setPatient('p-err');
     expect(bannerEl()?.dataset['state']).toBe('error');
     expect(fixture.nativeElement.querySelector('[data-testid="storyboard-error"]')).not.toBeNull();
+  });
+
+  it('QA D3864 — a restricted chart points to break-the-glass, never to reloading', () => {
+    storyboardSpy.getStoryboard.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { code: 'CHART_RESTRICTED', message: 'restricted' },
+          }),
+      ) as Observable<PatientStoryboard>,
+    );
+    setPatient('p-restricted');
+    expect(bannerEl()?.dataset['state']).toBe('restricted');
+    const notice = fixture.nativeElement.querySelector('[data-testid="storyboard-restricted"]');
+    expect(notice?.textContent).toContain('STORYBOARD.RESTRICTED');
+    expect(fixture.nativeElement.querySelector('[data-testid="storyboard-error"]')).toBeNull();
+  });
+
+  it('QA D3864 — any other 403 is still the error state', () => {
+    storyboardSpy.getStoryboard.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 403, error: { code: 'OTHER' } }),
+      ) as Observable<PatientStoryboard>,
+    );
+    setPatient('p-forbidden');
+    expect(bannerEl()?.dataset['state']).toBe('error');
   });
 
   it('E9 #64 — a chart with only restricted rows is not empty, and the open action reaches the host', () => {

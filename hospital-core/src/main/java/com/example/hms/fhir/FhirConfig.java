@@ -56,6 +56,7 @@ public class FhirConfig {
         FhirOperationsProperties fhirOperationsProperties,
         FhirBulkExportOperationProvider fhirBulkExportOperationProvider,
         FhirTenantBoundaryInterceptor fhirTenantBoundaryInterceptor,
+        FhirRestrictedChartInterceptor fhirRestrictedChartInterceptor,
         @Value("${app.fhir.serverBaseUrl:/api/fhir}") String serverBaseUrl
     ) {
         RestfulServer server = new RestfulServer(fhirContext);
@@ -79,6 +80,8 @@ public class FhirConfig {
         // Registered first and ordered first: nothing reaches a provider, and
         // nothing leaves the server, without passing the tenant boundary.
         server.registerInterceptor(fhirTenantBoundaryInterceptor);
+        // QA D3863: a restricted chart, right after the boundary (its own order).
+        server.registerInterceptor(fhirRestrictedChartInterceptor);
         server.registerInterceptor(new ResponseHighlighterInterceptor());
         server.registerInterceptor(smartConfigurationInterceptor);
         server.setServerConformanceProvider(

@@ -1145,6 +1145,7 @@
     "ARIA_LABEL": "Banner de resumen del paciente",
     "LOADING": "Cargando resumen del paciente…",
     "ERROR": "No se pudo cargar el resumen del paciente. Recargue para reintentar.",
+    "RESTRICTED": "Esta historia clínica está restringida. Para abrirla, use « Declarar acceso de emergencia » en la página del paciente e indique su motivo.",
     "EMPTY": "Sin alergias, problemas, consulta activa ni estado de RCP en el expediente.",
     "MRN": "NHC",
     "AGE": "Edad",

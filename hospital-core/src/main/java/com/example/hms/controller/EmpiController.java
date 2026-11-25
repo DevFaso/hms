@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
@@ -35,6 +36,8 @@ import java.util.UUID;
 @WriteAudited(skip = true, reason = "service emits PATIENT_MERGE and identity events")
 @RequestMapping("/empi")
 @Tag(name = "EMPI Administration", description = "Master patient identity lookup and duplicate merge")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "identity matching (EMPI): identifiers, no clinical content")
 public class EmpiController {
 
     private static final String ADMIN_ROLES = "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')";

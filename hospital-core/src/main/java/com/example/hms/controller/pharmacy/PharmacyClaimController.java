@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.enums.PharmacyClaimStatus;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.PharmacyClaimRequestDTO;
@@ -39,6 +40,8 @@ import java.util.UUID;
 @RequestMapping("/pharmacy/claims")
 @Tag(name = "Pharmacy Claims", description = "Pharmacy insurance / AMU claim workflow")
 @RequiredArgsConstructor
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "pharmacy insurance claims: money")
 public class PharmacyClaimController {
 
     /**

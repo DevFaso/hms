@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.LinkPatientInsuranceRequestDTO;
 import com.example.hms.payload.dto.OtherHospitalInsuranceDTO;
 import com.example.hms.payload.dto.PatientInsuranceResponseDTO;
@@ -32,6 +33,8 @@ import java.util.UUID;
 @RequestMapping("/patient-insurances")
 @Tag(name = "Patient Insurance Management", description = "APIs for managing patient insurance records")
 @RequiredArgsConstructor
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "insurance policies: administrative")
 public class PatientInsuranceController {
 
     private final PatientInsuranceService patientInsuranceService;

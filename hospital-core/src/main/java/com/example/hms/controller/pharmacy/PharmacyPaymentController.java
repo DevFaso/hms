@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.PharmacyPaymentRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyPaymentResponseDTO;
@@ -35,6 +36,8 @@ import java.util.UUID;
 @RequestMapping("/pharmacy/payments")
 @Tag(name = "Pharmacy Payments", description = "Pharmacy checkout & payment history")
 @RequiredArgsConstructor
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "pharmacy payments: money")
 public class PharmacyPaymentController {
 
     private final PharmacyPaymentService pharmacyPaymentService;

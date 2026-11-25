@@ -99,7 +99,10 @@ class FhirServletStubContractIntegrationTest {
         server = new FhirConfig().fhirServletRegistration(context, providers,
             new SmartConfigurationInterceptor(builder, json), builder, new FhirWriteProperties(),
             new FhirOperationsProperties(), new FhirBulkExportOperationProvider(mock(FhirBulkExportService.class)),
-            new FhirTenantBoundaryInterceptor(context, boundary), "/api/fhir").getServlet();
+            new FhirTenantBoundaryInterceptor(context, boundary),
+            new FhirRestrictedChartInterceptor(context, new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                .getBeanProvider(com.example.hms.security.chart.RestrictedChartGate.class)),
+            "/api/fhir").getServlet();
         var servletContext = new MockServletContext();
         servletContext.setContextPath("/api");
         server.init(new MockServletConfig(servletContext, "cdx-fhir"));

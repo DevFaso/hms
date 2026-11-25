@@ -1145,6 +1145,7 @@
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
     "LOADING": "Chargement du résumé patient…",
     "ERROR": "Impossible de charger le résumé patient. Actualisez pour réessayer.",
+    "RESTRICTED": "Ce dossier est restreint. Pour l'ouvrir, utilisez « Déclencher l'accès d'urgence » sur la page du patient et indiquez votre motif.",
     "EMPTY": "Aucune allergie, aucun problème, aucune visite ni statut de réanimation au dossier.",
     "MRN": "N° de dossier",
     "AGE": "Âge",

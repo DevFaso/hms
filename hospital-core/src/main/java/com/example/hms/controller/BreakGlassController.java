@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
@@ -39,6 +40,8 @@ import java.util.UUID;
      description = "Emergency-access overrides that grant a clinician temporary read access to a patient's chart "
                  + "without a pre-existing consent. Every read served under a live session emits a "
                  + "BREAK_GLASS_ACCESS audit event.")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the break-the-glass flow itself: declaring, listing and revoking the sessions that open a restricted chart")
 public class BreakGlassController {
 
     private final BreakGlassService breakGlassService;

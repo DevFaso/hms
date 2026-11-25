@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.bed.BedBoardDTO;
 import com.example.hms.payload.dto.bed.BedRequestDTO;
 import com.example.hms.payload.dto.bed.BedResponseDTO;
@@ -102,6 +103,8 @@ public class BedManagementController {
     @GetMapping("/beds/available")
     @PreAuthorize(READ_ROLES)
     @Operation(summary = "List assignable beds (active + AVAILABLE) across the active hospital")
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "free beds for a placement: the patient only filters the list")
     public ResponseEntity<List<BedResponseDTO>> getAvailableBeds(
         @org.springframework.web.bind.annotation.RequestParam(required = false) UUID patientId
     ) {

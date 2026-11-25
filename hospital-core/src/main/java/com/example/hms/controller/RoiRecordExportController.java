@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.service.PatientRecordPdfService;
 import com.example.hms.service.roi.RoiRequestService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,8 @@ import java.util.UUID;
 
 /** Reuses the chart export's clinical permissions and redaction; never widens them to the worklist's readers. */
 @RestController @RequiredArgsConstructor
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the record released under an approved release-of-information request")
 public class RoiRecordExportController {
     private final RoiRequestService requests;
     private final PatientRecordPdfService pdf;

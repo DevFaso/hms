@@ -87,7 +87,8 @@ class PatientChartAccessRestrictedTest {
 
         assertThatThrownBy(() -> access.require(patientId, hospitalId))
             .isInstanceOf(ChartRestrictedException.class)
-            .hasMessageContaining("break-the-glass");
+            // QA D3864: a bundle key, resolved in the caller's language by the exception handler.
+            .hasMessage(ChartRestrictedException.MESSAGE_KEY);
     }
 
     @Test
