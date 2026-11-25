@@ -259,8 +259,9 @@ class LabResultReleaseDocumentationTest {
             .criticalCommunicatedTo("Dr Ouedraogo")
             .criticalCommunicatedAt(LocalDateTime.now().minusMinutes(2));
 
-        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), false, false,
-            call.criticalReadBack("Négatif").build(), Locale.ENGLISH))
+        LabResultReleaseRequestDTO wrong = call.criticalReadBack("Négatif").build();
+        UUID id = result.getId();
+        assertThatThrownBy(() -> service.releaseLabResult(id, false, false, wrong, Locale.ENGLISH))
             .isInstanceOf(FieldBusinessException.class);
 
         service.releaseLabResult(result.getId(), false, false, call.criticalReadBack("positif").build(), Locale.ENGLISH);

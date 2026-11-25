@@ -105,8 +105,7 @@ class MicroCultureOutcomePostgresIT {
     private final UUID culture = UUID.randomUUID();
 
     /** QA D3902: a final report is corrected by the laboratory's validating tier only. */
-    @BeforeEach
-    void actAsTheLabScientist() {
+    private static void actAsTheLabScientist() {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("cx9.scientist", "n/a",
                 List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_LAB_SCIENTIST"))));
@@ -119,6 +118,7 @@ class MicroCultureOutcomePostgresIT {
 
     @BeforeEach
     void seed() {
+        actAsTheLabScientist();
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
             String tag = UUID.randomUUID().toString().substring(0, 8);
