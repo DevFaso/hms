@@ -8,6 +8,7 @@ import re
 import subprocess
 import os
 import time
+from urllib.parse import urlsplit, parse_qs, urlencode, unquote
 from email.utils import parsedate_to_datetime
 
 REPO = 'DevFaso/hms'
@@ -216,7 +217,9 @@ def stable_content(content):
     return before + EVIDENCE_START + EVIDENCE_END + after
 
 
-def select_event(event_name, event, sync_ref='', sync_number=''):
+def select_event(event_name, event, sync_ref='', sync_number='', execution_ref=None):
+    if event_name == 'workflow_dispatch' and execution_ref != 'refs/heads/main':
+        raise ValueError('Manual record generation requires refs/heads/main')
     if event_name == 'workflow_run':
         workflow = event['workflow_run']
         if workflow['head_branch'] != 'main' or workflow['event'] != 'push':
@@ -242,6 +245,44 @@ def write_selection(selection, output):
             stream.write(f'sha={selection[0]}\nnumber={selection[1]}\n')
 
 
+def public_evidence_link(link, sha):
+    """Publish code/check references only; never infrastructure-provider URLs."""
+    fallback = f'https://github.com/{REPO}/commit/{sha}/checks'
+    if not link:
+        return fallback
+    try:
+        parsed = urlsplit(link)
+    except ValueError:
+        return None
+    if parsed.scheme != 'https' or parsed.username or parsed.password:
+        return None
+    if parsed.netloc == 'github.com' and re.fullmatch(
+            rf'/{REPO}/(?:actions/runs/[0-9]+(?:/(?:job|attempts)/[0-9]+)?|runs/[0-9]+|commit/[0-9a-f]{{40}}/checks)', parsed.path):
+        return 'https://github.com' + parsed.path
+    if parsed.netloc == 'sonarcloud.io':
+        query = parse_qs(parsed.query)
+        if query.get('id') != ['DevFaso_hms']:
+            return None
+        safe = {'id': 'DevFaso_hms'}
+        if query.get('branch') in [['main'], ['develop']]:
+            safe['branch'] = query['branch'][0]
+        if len(query.get('pullRequest', [])) == 1 and query['pullRequest'][0].isdigit():
+            safe['pullRequest'] = query['pullRequest'][0]
+        return 'https://sonarcloud.io/dashboard?' + urlencode(safe)
+    return None
+
+
+def public_evidence_rows(rows, sha):
+    for name, state, link in rows:
+        safe_link = public_evidence_link(link, sha)
+        # Free-form third-party labels can carry deployment identifiers too.
+        if (safe_link is None or 'railway' in name.lower()
+                or re.search(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', unquote(unquote(name)))):
+            continue
+        public_state = state if state in PENDING | {'success', 'failure', 'error', 'cancelled', 'timed_out', 'neutral', 'skipped', 'action_required', 'stale', 'startup_failure', 'unknown'} else 'unknown'
+        yield name, public_state, safe_link
+
+
 def render(data, prs, evidence):
     url = f'https://github.com/{REPO}'
     lines = [f'# Sync #{data["number"]} — {data["date"]}', '',
@@ -251,7 +292,7 @@ def render(data, prs, evidence):
              f'- Rollback point (previous main): [`{data["rollback"]}`]({url}/commit/{data["rollback"]})', '',
              'The rollback point identifies code only. Database migrations and data changes require the reviewed recovery runbook; this record never reverses them.', '',
              '## Included pull requests', '']
-    lines.extend(f'- [#{number}]({url}/pull/{number}) — {one_line(title)}' for number, title in prs)
+    lines.extend(f'- [#{number}]({url}/pull/{number})' for number, title in prs)
     if not prs:
         lines.append('No pull-request merge commits were found in the included range.')
     lines += ['', '## Added migrations', '']
@@ -266,11 +307,10 @@ def render(data, prs, evidence):
     lines += ['', EVIDENCE_START]
     for name, sha in [('Main', data['main']), ('Develop', data['develop'])]:
         lines += ['', f'## {name} CI and Sonar evidence', '', f'Commit: `{sha}`', '', '| Check | Observed state | Evidence |', '|---|---|---|']
-        for check, state, link in evidence[sha]:
-            # External status URLs are data from GitHub, never shell arguments or Markdown syntax.
-            safe_link = link if link and re.fullmatch(r'https://[A-Za-z0-9./?=&_%:#~+@-]+', link) else f'{url}/commit/{sha}/checks'
+        public_rows = list(public_evidence_rows(evidence[sha], sha))
+        for check, state, safe_link in public_rows:
             lines.append(f'| {one_line(check)} | {one_line(state)} | [Open]({safe_link}) |')
-        if not evidence[sha]:
+        if not public_rows:
             lines.append('| No retained check evidence | Unknown | Inspect commit checks manually |')
     lines += ['', 'Check states are a snapshot of GitHub evidence, not an assertion that every check passed. Re-running generation refreshes that evidence.', EVIDENCE_END, '']
     return '\n'.join(lines)
@@ -288,7 +328,7 @@ def main():
         parser.error('wait-seconds must be between 0 and 900')
     if args.from_event:
         selected = select_event(os.environ['GITHUB_EVENT_NAME'], json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')),
-                                os.environ.get('SYNC_COMMIT', ''), os.environ.get('SYNC_NUMBER', ''))
+                                os.environ.get('SYNC_COMMIT', ''), os.environ.get('SYNC_NUMBER', ''), os.environ.get('GITHUB_REF', ''))
         write_selection(selected, Path(os.environ['GITHUB_OUTPUT']))
         return
     if not args.sync_commit:

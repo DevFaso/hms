@@ -49,7 +49,7 @@ public class Dhis2ExportController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, body.hospitalId(), false);
         if (scoped == null || !scoped.equals(body.hospitalId())) {
-            throw new BusinessException("Access denied for hospital: " + body.hospitalId());
+            throw new BusinessException("request.hospitalContext.denied");
         }
         final UUID staffId = authUtils.resolveUserId(auth).orElse(null);
         final Dhis2ExportRun run = exportService.triggerImmunizationsExport(
@@ -71,7 +71,7 @@ public class Dhis2ExportController {
         authUtils.requireAuth(auth);
         final UUID scoped = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (scoped == null || !scoped.equals(hospitalId)) {
-            throw new BusinessException("Access denied for hospital: " + hospitalId);
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(runRepository
             .findByHospital_IdOrderByStartedAtDesc(hospitalId, pageable)
@@ -89,8 +89,7 @@ public class Dhis2ExportController {
             .orElseThrow(() -> new ResourceNotFoundException("dhis2.run.notFound", id));
         final UUID scoped = authUtils.resolveHospitalScope(auth, run.getHospital().getId(), false);
         if (scoped == null || !scoped.equals(run.getHospital().getId())) {
-            throw new BusinessException(
-                "Access denied for hospital: " + run.getHospital().getId());
+            throw new BusinessException("request.hospitalContext.denied");
         }
         return ResponseEntity.ok(runMapper.toResponseDTO(run));
     }

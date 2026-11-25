@@ -25,7 +25,17 @@ permissions:
   contents: read
 
 jobs:
+  refuse-non-main-dispatch:
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Refuse a manual run outside main
+        run: |
+          echo 'Manual record generation requires refs/heads/main' >&2
+          exit 1
   test:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -37,7 +47,7 @@ jobs:
           python-version: '3.14'
       - run: python -m unittest discover -s scripts/release -p 'test_*.py' -v
   select:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -61,7 +71,7 @@ jobs:
           SYNC_NUMBER: ${{ inputs.sync_number }}
         run: python scripts/release/sync_record.py --from-event
   record:
-    if: needs.select.outputs.created == 'true'
+    if: needs.select.outputs.created == 'true' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     needs: select
     concurrency:
       group: sync-record-${{ needs.select.outputs.sha }}

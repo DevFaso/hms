@@ -292,7 +292,7 @@
                   </td>
                   <td>{{ f.fillDate ? (f.fillDate | serverTime | date: 'mediumDate') : '—' }}</td>
                   <td>
-                    {{ f.quantityDispensed ?? '—' }} {{ f.quantityUnit || '' }}
+                    {{ f.quantityDispensed ?? '—' | countUnit: f.quantityUnit }}
                     @if (f.daysSupply) {
                       <span class="muted"
                         >({{

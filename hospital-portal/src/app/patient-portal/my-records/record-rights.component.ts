@@ -136,7 +136,15 @@ import { actionRoles } from '../../core/action-permissions';
   `,
   styles: [
     `
+      :host {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+      }
       .rights-card {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
         margin-block: 1.5rem;
         padding: 1.25rem;
         background: var(--color-surface, white);
@@ -144,13 +152,21 @@ import { actionRoles } from '../../core/action-permissions';
         border-radius: 0.75rem;
       }
       form {
+        box-sizing: border-box;
+        min-width: 0;
+        width: 100%;
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: 0.6rem;
         max-width: 40rem;
       }
       select,
       textarea,
       button {
+        box-sizing: border-box;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
         min-height: 44px;
         max-width: 100%;
         padding: 0.6rem;

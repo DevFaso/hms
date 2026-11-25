@@ -102,7 +102,7 @@ public class ProInstrumentService {
     private ProInstrumentViewDTO render(ProInstrument instrument, String language) {
         List<String> available = textRepository.findLanguages(instrument.getId());
         if (available.isEmpty()) {
-            throw new BusinessException("Instrument " + instrument.getCode() + " has no text loaded.");
+            throw new BusinessException("pro.text.missing", instrument.getCode());
         }
         String served = pickLanguage(language, available);
         Map<String, String> texts = new HashMap<>();
@@ -258,19 +258,17 @@ public class ProInstrumentService {
         Map<Integer, Integer> optionCounts = new HashMap<>();
         for (ProInstrumentDefinitionDTO.Item item : definition.getItems()) {
             if (optionCounts.put(item.getItemNo(), item.getOptions().size()) != null) {
-                throw new BusinessException("Item " + item.getItemNo() + " is defined twice.");
+                throw new BusinessException("pro.item.repeated", item.getItemNo());
             }
             Set<Integer> optionNos = new HashSet<>();
             for (ProInstrumentDefinitionDTO.Option option : item.getOptions()) {
                 if (!optionNos.add(option.getOptionNo())) {
-                    throw new BusinessException("Item " + item.getItemNo() + " defines option "
-                        + option.getOptionNo() + " twice.");
+                    throw new BusinessException("pro.option.repeated", item.getItemNo(), option.getOptionNo());
                 }
             }
             for (int expected = 1; expected <= item.getOptions().size(); expected++) {
                 if (!optionNos.contains(expected)) {
-                    throw new BusinessException("Item " + item.getItemNo()
-                        + " options must be numbered 1.." + item.getOptions().size() + " without gaps.");
+                    throw new BusinessException("pro.options.sequence", item.getItemNo(), item.getOptions().size());
                 }
             }
         }
@@ -286,28 +284,23 @@ public class ProInstrumentService {
         for (ProInstrumentDefinitionDTO.Translation translation : definition.getTexts()) {
             String language = normalizeLanguage(translation.getLanguage());
             if (!languages.add(language)) {
-                throw new BusinessException("Language " + language + " is given twice.");
+                throw new BusinessException("pro.language.repeated", language);
             }
             Set<Integer> covered = new HashSet<>();
             for (ProInstrumentDefinitionDTO.ItemText itemText : translation.getItems()) {
                 Integer expectedOptions = optionCounts.get(itemText.getItemNo());
                 if (expectedOptions == null) {
-                    throw new BusinessException("Language " + language + " has text for item "
-                        + itemText.getItemNo() + ", which the instrument does not define.");
+                    throw new BusinessException("pro.language.itemUnknown", language, itemText.getItemNo());
                 }
                 if (!covered.add(itemText.getItemNo())) {
-                    throw new BusinessException("Language " + language + " gives item "
-                        + itemText.getItemNo() + " twice.");
+                    throw new BusinessException("pro.language.itemRepeated", language, itemText.getItemNo());
                 }
                 if (itemText.getOptions().size() != expectedOptions) {
-                    throw new BusinessException("Language " + language + " item " + itemText.getItemNo()
-                        + " has " + itemText.getOptions().size() + " option labels; the item has "
-                        + expectedOptions + " options.");
+                    throw new BusinessException("pro.language.optionsCount", language, itemText.getItemNo(), itemText.getOptions().size(), expectedOptions);
                 }
             }
             if (covered.size() != optionCounts.size()) {
-                throw new BusinessException("Language " + language + " covers " + covered.size()
-                    + " of " + optionCounts.size() + " items; every language must cover every item.");
+                throw new BusinessException("pro.language.itemsCount", language, covered.size(), optionCounts.size());
             }
         }
     }

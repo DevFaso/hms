@@ -339,7 +339,7 @@ public class PartnerExchangeService {
             case ACCEPT -> {
                 decision.setStatus(RoutingDecisionStatus.ACCEPTED);
                 rx.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
-                channel.notifyPatientAccepted(decision.getDecidedForPatient(), decision.getTargetPharmacy());
+                channel.notifyPatientAccepted(decision, decision.getDecidedForPatient(), decision.getTargetPharmacy());
                 audit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                         "Partner SMS reply accepted prescription " + rx.getId(),
                         decision);
@@ -358,7 +358,7 @@ public class PartnerExchangeService {
             case CONFIRM_DISPENSE -> {
                 decision.setStatus(RoutingDecisionStatus.COMPLETED);
                 rx.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
-                channel.notifyPatientDispensed(decision.getDecidedForPatient(), decision.getTargetPharmacy());
+                channel.notifyPatientDispensed(decision, decision.getDecidedForPatient(), decision.getTargetPharmacy());
                 audit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                         "Partner SMS confirmed dispense for prescription " + rx.getId(),
                         decision);

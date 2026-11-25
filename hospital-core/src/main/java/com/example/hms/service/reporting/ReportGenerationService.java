@@ -143,8 +143,7 @@ public class ReportGenerationService {
                 }
             };
         } catch (RuntimeException ex) {
-            throw new BusinessException("Unparseable period token '" + token
-                + "' for a " + period + " report.");
+            throw new BusinessException("report.period.invalid");
         }
     }
 

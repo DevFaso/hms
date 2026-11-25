@@ -76,6 +76,7 @@ POST /me/patient/appointments/{appointmentId}/pre-checkin
 POST /me/patient/billing/invoices/{invoiceId}/pay
 POST /me/patient/documents
 POST /me/patient/education/questions
+POST /me/patient/notifications/term-search
 POST /me/patient/pro-screenings
 POST /me/patient/proxies
 POST /me/patient/recipient-verification/{channel}/confirm

@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -23,7 +24,7 @@ interface WindowState {
 @Component({
   selector: 'app-cost-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DecimalPipe],
+  imports: [FormControlStyleDirective, CommonModule, FormsModule, TranslateModule, DecimalPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cost-panel" data-testid="cost-panel">
@@ -32,10 +33,15 @@ interface WindowState {
         <p class="cost-panel__subtitle">{{ 'COST_PANEL.SUBTITLE' | translate }}</p>
       </header>
 
-      <form class="cost-panel__filters" (submit)="reload($event)" data-testid="cost-panel-filters">
-        <div class="form-row">
+      <form
+        class="cost-panel__filters form-card"
+        (submit)="reload($event)"
+        data-testid="cost-panel-filters"
+      >
+        <div class="form-row form-group">
           <label for="cost-from">{{ 'COST_PANEL.FROM' | translate }}</label>
           <input
+            appFormControl
             id="cost-from"
             name="from"
             type="date"
@@ -43,9 +49,10 @@ interface WindowState {
             data-testid="cost-from"
           />
         </div>
-        <div class="form-row">
+        <div class="form-row form-group">
           <label for="cost-to">{{ 'COST_PANEL.TO' | translate }}</label>
           <input
+            appFormControl
             id="cost-to"
             name="to"
             type="date"

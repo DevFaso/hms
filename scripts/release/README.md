@@ -56,3 +56,5 @@ included as the worked example in this PR.
 
 A rollback SHA does **not** reverse database migrations. Operators must use the
 reviewed recovery procedure and owner approval for any actual rollback.
+
+Manual workflow_dispatch runs are accepted only from refs/heads/main. Other refs fail before selection or write jobs, with a second guard in the Python entrypoint. Manual runs generate/publish only the evidence-record draft; they never invoke deployment. Public records omit provider deployment links and free-form PR titles; retained links are limited to this repository’s commits, PRs, Actions/checks and canonical Sonar evidence. No infrastructure project/service/environment identifiers are emitted.

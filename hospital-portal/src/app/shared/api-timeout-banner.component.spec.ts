@@ -17,6 +17,17 @@ describe('D3602 shared API timeout notice', () => {
     fixture = TestBed.createComponent(ApiTimeoutBannerComponent);
   });
   for (const [lang, translations] of Object.entries({ en, fr, es })) {
+    it(`never claims a read may have saved data in ${lang}`, () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(lang, translations);
+      translate.use(lang).subscribe();
+      notice.noteTimeout('GET');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="api-timeout-write"]')).toBeNull();
+      expect(fixture.nativeElement.textContent).not.toContain(
+        translations.API_TIMEOUT.WRITE_UNKNOWN,
+      );
+    });
     it(`shows a translated timeout and deliberate reload in ${lang}`, () => {
       const translate = TestBed.inject(TranslateService);
       translate.setTranslation(lang, translations);

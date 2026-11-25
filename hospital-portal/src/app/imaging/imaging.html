@@ -58,6 +58,7 @@
     <div class="filter-bar hospital-filter">
       <label for="imaging-hospital-filter">{{ 'IMAGING.HOSPITAL_FILTER' | translate }}</label>
       <select
+        appFormControl
         id="imaging-hospital-filter"
         data-testid="imaging-hospital-filter"
         [ngModel]="hospitalFilter()"

@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -43,6 +44,7 @@ function localIsoDate(d: Date): string {
   selector: 'app-pharmacy-reconciliation',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     CommonModule,
     FormsModule,
     TranslateModule,

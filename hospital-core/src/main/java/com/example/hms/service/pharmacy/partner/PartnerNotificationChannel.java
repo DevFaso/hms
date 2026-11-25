@@ -54,8 +54,8 @@ public interface PartnerNotificationChannel {
     void sendHeldForReview(PrescriptionRoutingDecision decision, Pharmacy partner);
 
     /** Outbound to patient: partner accepted. */
-    void notifyPatientAccepted(Patient patient, Pharmacy partner);
+    void notifyPatientAccepted(PrescriptionRoutingDecision decision, Patient patient, Pharmacy partner);
 
     /** Outbound to patient: partner dispensed. */
-    void notifyPatientDispensed(Patient patient, Pharmacy partner);
+    void notifyPatientDispensed(PrescriptionRoutingDecision decision, Patient patient, Pharmacy partner);
 }

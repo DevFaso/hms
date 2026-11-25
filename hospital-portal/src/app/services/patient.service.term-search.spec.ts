@@ -30,7 +30,12 @@ describe('PatientService term search (QA D1274)', () => {
     let got: PatientResponse[] = [];
     service.list('h1', '15/03/2020').subscribe((r) => (got = r));
     http
-      .expectOne((r) => r.url === '/patients' && r.params.get('search') === '15/03/2020')
+      .expectOne(
+        (r) =>
+          r.method === 'POST' &&
+          r.url === '/patients/term-search' &&
+          r.body?.search === '15/03/2020',
+      )
       .flush([]);
     const byDob = http.expectOne((r) => r.method === 'POST' && r.url === '/patients/search');
     // The identifier travels in the body; only the scope and the flags stay in the query.
@@ -45,7 +50,7 @@ describe('PatientService term search (QA D1274)', () => {
   it('list(): an e-mail, or a piece of one, also searches by e-mail', () => {
     let got: PatientResponse[] = [];
     service.list('h1', 'awa.kabore').subscribe((r) => (got = r));
-    http.expectOne((r) => r.url === '/patients').flush([awa]);
+    http.expectOne((r) => r.url === '/patients/term-search').flush([awa]);
     const byEmail = http.expectOne((r) => r.url === '/patients/search');
     expect(byEmail.request.body).toEqual({ email: 'awa.kabore' });
     expect(byEmail.request.urlWithParams).not.toContain('awa.kabore');
@@ -56,19 +61,43 @@ describe('PatientService term search (QA D1274)', () => {
   it('list(): a name or a phone number is one request, as before', () => {
     service.list('h1', 'Awa').subscribe();
     service.list('h1', '70002781').subscribe();
-    http.expectOne((r) => r.url === '/patients' && r.params.get('search') === 'Awa').flush([]);
-    http.expectOne((r) => r.url === '/patients' && r.params.get('search') === '70002781').flush([]);
+    http.expectOne((r) => r.url === '/patients/term-search' && r.body?.search === 'Awa').flush([]);
+    http
+      .expectOne((r) => r.url === '/patients/term-search' && r.body?.search === '70002781')
+      .flush([]);
     http.expectNone('/patients/search');
   });
 
   it('list(): a failed birth-date search still shows what the list found', () => {
     let got: PatientResponse[] = [];
     service.list('h1', '2020-03-15').subscribe((r) => (got = r));
-    http.expectOne((r) => r.url === '/patients').flush([awa]);
+    http.expectOne((r) => r.url === '/patients/term-search').flush([awa]);
     http
       .expectOne((r) => r.url === '/patients/search')
       .flush('x', { status: 500, statusText: 'Server Error' });
     expect(got.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('list(): QA D3750, the typed term is posted in the body and never reaches the URL', () => {
+    service.list('h1', '  Patient Test 02 ').subscribe();
+    const req = http.expectOne((r) => r.url === '/patients/term-search');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ search: 'Patient Test 02' });
+    expect(req.request.params.get('hospitalId')).toBe('h1');
+    expect(req.request.params.has('search')).toBeFalse();
+    expect(req.request.urlWithParams).not.toContain('Patient');
+    req.flush([]);
+  });
+
+  it('list(): without a term it is the plain GET list', () => {
+    service.list('h1').subscribe();
+    service.list('h1', '   ').subscribe();
+    const lists = http.match((r) => r.method === 'GET' && r.url === '/patients');
+    expect(lists.length).toBe(2);
+    lists.forEach((r) => {
+      expect(r.request.params.has('search')).toBeFalse();
+      r.flush([]);
+    });
   });
 
   it('searchPatientsByTerm: an ISO or day-first date is searched by birth date only', () => {

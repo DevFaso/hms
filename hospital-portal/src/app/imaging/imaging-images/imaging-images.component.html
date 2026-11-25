@@ -47,6 +47,7 @@
             <label class="caption-field" [for]="captionId + '-' + f.key">
               <span>{{ 'IMAGING_IMAGES.CAPTION' | translate }}</span>
               <input
+                appFormControl
                 [id]="captionId + '-' + f.key"
                 type="text"
                 maxlength="500"
@@ -282,6 +283,7 @@
           <div class="caption-edit">
             <label [for]="captionId + '-edit'">{{ 'IMAGING_IMAGES.CAPTION' | translate }}</label>
             <input
+              appFormControl
               [id]="captionId + '-edit'"
               type="text"
               maxlength="500"

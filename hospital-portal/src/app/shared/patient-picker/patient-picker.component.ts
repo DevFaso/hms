@@ -94,7 +94,13 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         // scope, /patients/lookup matches exact identifiers (phone/email/MRN)
         // across hospitals — the previous /patients?search call was silently
         // unfiltered because the backend never implemented that param.
-        switchMap((q) => {
+        switchMap((typed) => {
+          const q = typed.trim();
+          // QA D3753: nothing typed (a mode switch clears the box) asks the server nothing.
+          if (!q) {
+            this.searchLoading.set(false);
+            return of([[], []] as PatientResponse[][]);
+          }
           this.searchLoading.set(true);
           this.noMatch.set(false);
           if (this.nationalUniqueIdMode()) {
@@ -144,7 +150,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         const items = rankPeopleByName(merged, this.query()).slice(0, SHOWN);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
-        this.noMatch.set(items.length === 0);
+        // Nothing typed is not "no match".
+        this.noMatch.set(items.length === 0 && this.query().trim().length > 0);
         this.searchLoading.set(false);
       });
   }
@@ -172,7 +179,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   onQueryChange(q: string): void {
     this.query.set(q);
-    if (q.length >= 2) {
+    if (q.trim().length >= 2) {
       this.search$.next(q);
     } else {
       this.suggestions.set([]);

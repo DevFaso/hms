@@ -128,7 +128,7 @@ class SyncRecordTest(unittest.TestCase):
     def test_event_selection_uses_triggering_head_and_normalizes_dispatch_hash(self):
         event = {'workflow_run': {'event': 'push', 'head_branch': 'main', 'head_sha': self.head}}
         self.assertEqual(m.select_event('workflow_run', event), (self.head, 10))
-        self.assertEqual(m.select_event('workflow_dispatch', {}, self.head[:9], '10'), (self.head, 10))
+        self.assertEqual(m.select_event('workflow_dispatch', {}, self.head[:9], '10', 'refs/heads/main'), (self.head, 10))
         event['workflow_run']['head_sha'] = self.develop
         self.assertIsNone(m.select_event('workflow_run', event))
         event['workflow_run']['head_branch'] = 'develop'
@@ -136,7 +136,7 @@ class SyncRecordTest(unittest.TestCase):
         self.assertIsNone(m.select_event('pull_request', {}))
         for number in ['', '0', '10\nsha=evil', '11']:
             with self.assertRaises(ValueError):
-                m.select_event('workflow_dispatch', {}, self.head, number)
+                m.select_event('workflow_dispatch', {}, self.head, number, 'refs/heads/main')
         output = self.repo / 'outputs'
         m.write_selection((self.head, 10), output)
         self.assertEqual(output.read_text(), f'created=true\nsha={self.head}\nnumber=10\n')

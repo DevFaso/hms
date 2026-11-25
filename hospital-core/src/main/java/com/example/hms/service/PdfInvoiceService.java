@@ -150,8 +150,8 @@ public class PdfInvoiceService {
                     mailed ? mailedDesignation(t, it) : designation(t, it),
                     categoryLabel(t, it.getItemCategory()),
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
-                    money(it.getUnitPrice()),
-                    money(lineTotal(it)));
+                    money(it.getUnitPrice(), t.locale()),
+                    money(lineTotal(it), t.locale()));
                 lineShares(w, t, invoice, it);
             }
 
@@ -160,9 +160,9 @@ public class PdfInvoiceService {
                 String kind = t.get("pdf.invoice.adjustment." + adjustment.getType().name());
                 // QA D1091: the mandatory reason is printed whole, wrapped, never cut.
                 w.paragraph(BODY, 10, MARGIN, adjustment.getReason() == null || adjustment.getReason().isBlank()
-                    ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount()))
+                    ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount(), t.locale()))
                     : t.get("pdf.invoice.adjustmentLine", kind, adjustment.getReason().strip(),
-                        money(adjustment.getAmount())));
+                        money(adjustment.getAmount(), t.locale())));
             }
 
             BigDecimal total = nz(invoice.getTotalAmount());
@@ -171,24 +171,24 @@ public class PdfInvoiceService {
             w.down(18);
             w.rule();
             w.down(18);
-            w.right(BOLD, 12, t.get(GRAND_TOTAL, money(total)));
+            w.right(BOLD, 12, t.get(GRAND_TOTAL, money(total, t.locale())));
             payerShareBlock(w, t, invoice, payerShares, mailed);
             w.down(16);
-            w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid)));
+            w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid, t.locale())));
             w.down(16);
             // QA D1104: the shared balance rule: nothing is owed on a cancelled invoice.
-            w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
+            w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice), t.locale())));
             // QA D1466: a copay above the visit total: what the hospital owes back.
             BigDecimal refundDue = com.example.hms.utility.InvoiceBalance.refundDueOf(invoice);
             // Billing-money plan PR 8 (QA D1900): what refunds already handed back.
             BigDecimal refunded = nz(invoice.getAmountRefunded());
             if (refunded.signum() > 0) {
                 w.down(16);
-                w.right(BODY, 11, t.get("pdf.invoice.refunded", money(refunded)));
+                w.right(BODY, 11, t.get("pdf.invoice.refunded", money(refunded, t.locale())));
             }
             if (refundDue.signum() > 0) {
                 w.down(16);
-                w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue)));
+                w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue, t.locale())));
             }
 
             List<PaymentTransaction> confirmed = payments.stream()
@@ -203,7 +203,7 @@ public class PdfInvoiceService {
                     w.down(15);
                     w.text(BODY, 10, MARGIN, t.get("pdf.invoice.paymentLine",
                         t.fmt(p.getPaymentDate()), methodLabel(t, p), safe(p.getReferenceNumber()),
-                        money(p.getAmount())));
+                        money(p.getAmount(), t.locale())));
                 }
             }
             return w.finish();
@@ -223,9 +223,9 @@ public class PdfInvoiceService {
         BigDecimal payerShare = com.example.hms.utility.InvoiceBalance.payerShareOf(invoice);
         if (payerShare.signum() > 0) {
             w.down(16);
-            w.right(BODY, 11, t.get(PAYER_SHARE, money(payerShare)));
+            w.right(BODY, 11, t.get(PAYER_SHARE, money(payerShare, t.locale())));
             w.down(16);
-            w.right(BODY, 11, t.get(PATIENT_SHARE, money(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice))));
+            w.right(BODY, 11, t.get(PATIENT_SHARE, money(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice), t.locale())));
         }
         for (var share : shares == null ? List.<com.example.hms.payload.dto.billing.InvoicePayerShareDTO>of() : shares) {
             if (!com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.getStatus())) {
@@ -237,7 +237,7 @@ public class PdfInvoiceService {
             if (mailed && com.example.hms.service.notification.SensitiveWording.reveals(reason)) {
                 reason = ""; // K4: the payer's words can name the condition; the desk explains it
             }
-            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount()), reason));
+            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount(), t.locale()), reason));
         }
     }
 
@@ -254,7 +254,7 @@ public class PdfInvoiceService {
         BigDecimal patient = nz(lineTotal(item)).subtract(payer).max(BigDecimal.ZERO);
         w.ensureRoom(16);
         w.down(13);
-        w.paragraph(BODY, 9, MARGIN + 12, t.get("pdf.invoice.lineShares", money(payer), money(patient)));
+        w.paragraph(BODY, 9, MARGIN + 12, t.get("pdf.invoice.lineShares", money(payer, t.locale()), money(patient, t.locale())));
     }
 
     /**
@@ -394,10 +394,10 @@ public class PdfInvoiceService {
             BigDecimal before = nz(paidAsOfPayment).subtract(nz(payment.getAmount()));
             if (before.signum() > 0) {
                 w.down(15);
-                w.text(BODY, 10, MARGIN + 12, t.get("pdf.receipt.paidBefore", money(before)));
+                w.text(BODY, 10, MARGIN + 12, t.get("pdf.receipt.paidBefore", money(before, t.locale())));
             }
             w.down(28);
-            w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
+            w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount(), t.locale())));
             // QA D228: the total when this money was received, not today's.
             BigDecimal total;
             if (totalOverride != null) {
@@ -410,17 +410,17 @@ public class PdfInvoiceService {
             BigDecimal payerShare = nz(payerShareThen).max(BigDecimal.ZERO);
             BigDecimal patientShare = total.subtract(payerShare).max(BigDecimal.ZERO);
             w.down(24);
-            w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));
+            w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total, t.locale())));
             if (payerShare.signum() > 0) {
                 w.down(15);
-                w.text(BODY, 11, MARGIN, t.get(PAYER_SHARE, money(payerShare)));
+                w.text(BODY, 11, MARGIN, t.get(PAYER_SHARE, money(payerShare, t.locale())));
                 w.down(15);
-                w.text(BODY, 11, MARGIN, t.get(PATIENT_SHARE, money(patientShare)));
+                w.text(BODY, 11, MARGIN, t.get(PATIENT_SHARE, money(patientShare, t.locale())));
             }
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get(AMOUNT_PAID, money(paid)));
+            w.text(BODY, 11, MARGIN, t.get(AMOUNT_PAID, money(paid, t.locale())));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get(BALANCE_DUE, money(patientShare.subtract(paid).max(BigDecimal.ZERO))));
+            w.text(BODY, 11, MARGIN, t.get(BALANCE_DUE, money(patientShare.subtract(paid).max(BigDecimal.ZERO), t.locale())));
             return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate receipt PDF", e);
@@ -489,7 +489,7 @@ public class PdfInvoiceService {
                 }
             }
             w.down(28);
-            w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
+            w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount(), t.locale())));
             w.down(36);
             w.text(BODY, 11, MARGIN, t.get("pdf.refund.paidBy", safe(paidByName)));
             w.down(40);
@@ -504,21 +504,21 @@ public class PdfInvoiceService {
     }
 
     /**
-     * Whole francs with an ASCII-space thousands separator and the currency: "2 500 F CFA".
+     * Whole francs grouped in the document language, followed by the currency.
      * The franc CFA has no minor unit; the locale's own grouping character (a narrow
      * no-break space in French) is not a WinAnsi glyph, so it is not used.
      */
     static String money(BigDecimal amount) {
+        return money(amount, Locale.FRENCH);
+    }
+
+    static String money(BigDecimal amount, Locale locale) {
         BigDecimal v = nz(amount).setScale(0, RoundingMode.HALF_UP);
-        String digits = v.abs().toPlainString();
-        StringBuilder grouped = new StringBuilder();
-        for (int i = 0; i < digits.length(); i++) {
-            if (i > 0 && (digits.length() - i) % 3 == 0) {
-                grouped.append(' ');
-            }
-            grouped.append(digits.charAt(i));
-        }
-        return (v.signum() < 0 ? "-" : "") + grouped + " F CFA";
+        Locale effective = locale != null ? locale : Locale.FRENCH;
+        java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(effective);
+        format.setMaximumIntegerDigits(Integer.MAX_VALUE);
+        // Standard Helvetica cannot encode the French non-breaking grouping spaces.
+        return format.format(v).replace('\u202f', ' ').replace('\u00a0', ' ') + " F CFA";
     }
 
     private static BigDecimal nz(BigDecimal v) {
@@ -603,10 +603,10 @@ public class PdfInvoiceService {
                 // QA D3251 (r70): the patient settles the line's patient share, not its full total.
                 BigDecimal total = lineTotal(line);
                 w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLineShared", designation(t, line),
-                    quantity, money(total), money(payer), money(total.subtract(payer).max(BigDecimal.ZERO))));
+                    quantity, money(total, t.locale()), money(payer, t.locale()), money(total.subtract(payer).max(BigDecimal.ZERO), t.locale())));
             } else {
                 w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLine", designation(t, line), quantity,
-                    money(lineTotal(line))));
+                    money(lineTotal(line), t.locale())));
             }
         }
         if (lines.size() > RECEIPT_PURPOSE_LINES) {
@@ -841,13 +841,13 @@ public class PdfInvoiceService {
                 .filter(c -> c.getCloseRound() == round && java.util.Objects.equals(c.getMethod(), line.getMethod())
                     && java.util.Objects.equals(c.getOperator(), line.getOperator()))
                 .findFirst().orElse(null);
-            cashRow(w, BODY, cashMethodLabel(t, line.getMethod(), line.getOperator()), money(line.getInAmount()),
-                money(line.getOutAmount()), money(line.getExpected()),
-                count != null ? money(count.getCounted()) : "-", count != null ? money(count.getDifference()) : "-");
+            cashRow(w, BODY, cashMethodLabel(t, line.getMethod(), line.getOperator()), money(line.getInAmount(), t.locale()),
+                money(line.getOutAmount(), t.locale()), money(line.getExpected(), t.locale()),
+                count != null ? money(count.getCounted(), t.locale()) : "-", count != null ? money(count.getDifference(), t.locale()) : "-");
         }
-        cashRow(w, BOLD, t.get("pdf.cash.total"), money(s.getTotalIn()), money(s.getTotalOut()),
-            money(s.getTotalExpected()), "", s.getTotalDifference() != null ? money(s.getTotalDifference()) : "-");
-        w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashToCount", money(s.getCashToCount())));
+        cashRow(w, BOLD, t.get("pdf.cash.total"), money(s.getTotalIn(), t.locale()), money(s.getTotalOut(), t.locale()),
+            money(s.getTotalExpected(), t.locale()), "", s.getTotalDifference() != null ? money(s.getTotalDifference(), t.locale()) : "-");
+        w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashToCount", money(s.getCashToCount(), t.locale())));
         w.down(14);
         cashDifferenceLines(w, t, s);
         if ("OPEN".equals(s.getStatus())) {
@@ -871,7 +871,7 @@ public class PdfInvoiceService {
     private static void cashDifferenceLines(Writer w, PdfLabels t,
                                             com.example.hms.payload.dto.billing.CashSessionDTO s) throws IOException {
         if (s.getCashDifference() != null) {
-            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashDifference", money(s.getCashDifference())));
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashDifference", money(s.getCashDifference(), t.locale())));
             w.down(14);
         }
         if (s.getDifferenceLines() <= 0) {
@@ -880,7 +880,7 @@ public class PdfInvoiceService {
         int round = s.getCloseRound();
         String differing = s.getCounts().stream()
             .filter(c -> c.getCloseRound() == round && c.getDifference() != null && c.getDifference().signum() != 0)
-            .map(c -> cashMethodLabel(t, c.getMethod(), c.getOperator()) + " " + money(c.getDifference()))
+            .map(c -> cashMethodLabel(t, c.getMethod(), c.getOperator()) + " " + money(c.getDifference(), t.locale()))
             .collect(java.util.stream.Collectors.joining(" ; "));
         w.paragraph(BOLD, 10, MARGIN, t.get("pdf.cash.differenceLines", s.getDifferenceLines(), differing));
         w.down(14);
@@ -913,10 +913,10 @@ public class PdfInvoiceService {
             t.get("pdf.cash.expected"));
         for (var e : totals.entrySet()) {
             String[] l = labels.get(e.getKey());
-            cashRow(w, BODY, cashMethodLabel(t, l[0], l[1]), money(e.getValue()[0]), money(e.getValue()[1]),
-                money(e.getValue()[0].subtract(e.getValue()[1])));
+            cashRow(w, BODY, cashMethodLabel(t, l[0], l[1]), money(e.getValue()[0], t.locale()), money(e.getValue()[1], t.locale()),
+                money(e.getValue()[0].subtract(e.getValue()[1]), t.locale()));
         }
-        cashRow(w, BOLD, t.get("pdf.cash.total"), money(in), money(out), money(in.subtract(out)));
+        cashRow(w, BOLD, t.get("pdf.cash.total"), money(in, t.locale()), money(out, t.locale()), money(in.subtract(out), t.locale()));
         long open = sessions.stream().filter(s -> "OPEN".equals(s.getStatus())).count();
         if (open > 0) {
             w.text(BOLD, 10, MARGIN, t.get("pdf.cash.openSessions", open));
@@ -945,7 +945,7 @@ public class PdfInvoiceService {
         }
         for (var l : lines) {
             w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.removedLine", safe(l.getInvoiceNumber()),
-                safe(l.getLine()), l.getQuantity(), money(l.getUnitPrice()), safe(l.getReason())));
+                safe(l.getLine()), l.getQuantity(), money(l.getUnitPrice(), t.locale()), safe(l.getReason())));
             w.down(13);
         }
     }
@@ -964,7 +964,7 @@ public class PdfInvoiceService {
         }
         for (var l : lines) {
             w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.pricedLine", safe(l.invoiceNumber()), safe(l.line()),
-                l.gridPrice() != null ? money(l.gridPrice()) : "-", money(l.price()), safe(l.reason())));
+                l.gridPrice() != null ? money(l.gridPrice(), t.locale()) : "-", money(l.price(), t.locale()), safe(l.reason())));
             w.down(13);
         }
     }

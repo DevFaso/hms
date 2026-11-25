@@ -100,8 +100,7 @@ public class CredentialRenewalService {
                 "Unable to determine who is recording this renewal."));
 
         if (staff.getUser() != null && currentUserId.equals(staff.getUser().getId())) {
-            throw new BusinessException(
-                "A practitioner cannot record their own credential renewal.");
+            throw new BusinessException("credential.renewal.otherRecorder");
         }
 
         // Captured BEFORE the staff row is mutated — this pair is the whole

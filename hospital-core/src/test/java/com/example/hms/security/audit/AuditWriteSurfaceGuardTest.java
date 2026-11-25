@@ -50,7 +50,9 @@ class AuditWriteSurfaceGuardTest {
     void auditLogControllerIsReadOnly() {
         List<String> writes = new ArrayList<>();
         for (Method m : AuditEventLogController.class.getDeclaredMethods()) {
-            if (isWriteHandler(m)) {
+            // QA D3750: the search box's POST only reads (its term stays out of the URL); a
+            // declared read is reviewed in ReadOnlyPostGuardTest and composes no audit row.
+            if (isWriteHandler(m) && !AnnotatedElementUtils.hasAnnotation(m, com.example.hms.security.ReadsOnly.class)) {
                 writes.add(m.getName());
             }
         }

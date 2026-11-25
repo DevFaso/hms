@@ -1,3 +1,4 @@
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { allRows } from '../shared/all-pages';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { refusalReason } from '../shared/refusal-reason';
@@ -120,6 +121,7 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    CountUnitPipe,
     FocusOnRenderDirective,
     DateTimePipe,
     DashPipe,
