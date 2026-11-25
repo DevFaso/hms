@@ -48,18 +48,27 @@ class ContactDataLogGuardTest {
         "\\.\\s*(?:get\\w*(?:Email|Emails|Phone|PhoneNumber|Phones|Msisdn|Mobile)"
             + "|email|emails|phone|phoneNumber|msisdn|mobile|\\w+Email|\\w+Phone|\\w+PhoneNumber)\\s*\\(\\s*\\)");
 
-    /** A variable named for an e-mail or phone value (not a method name, not a field read off it). */
+    /**
+     * A variable named for an e-mail or phone value, or for where a message goes ({@code to},
+     * {@code recipient}, {@code destination}). Not a method name, not a count, size or presence
+     * check, and not its id ({@code recipient.getId()}).
+     */
     private static final Pattern CONTACT_VARIABLE = Pattern.compile(
-        "(?<![.\\w])(?:email|emails|phone|phones|phoneNumber|e164|msisdn|mobile"
+        "(?<![.\\w])(?:email|emails|phone|phones|phoneNumber|e164|msisdn|mobile|to|recipient|recipients|destination"
             + "|[a-z]\\w*(?:Email|Emails|Phone|Phones|PhoneNumber|Msisdn))\\b"
             + "(?!\\s*\\()(?!\\s*\\.\\s*(?:size|length|isEmpty|isBlank)\\s*\\()"
-            + "(?!\\s*(?:!=|==)\\s*null)");
+            + "(?!\\s*(?:!=|==)\\s*null)(?!\\s*\\.\\s*(?:getId|id)\\s*\\(\\s*\\))");
 
     /**
      * Reviewed exceptions, "path:argument" → why it is acceptable. Keep this short: an entry is a
      * decision that the value is not a person's contact detail.
      */
-    private static final Map<String, String> ALLOWED = Map.of();
+    private static final Map<String, String> ALLOWED = Map.of(
+        "com/example/hms/security/WebSocketSubscriptionInterceptor.java:destination",
+        "a STOMP destination: a topic path such as /topic/…, not a person's address",
+        "com/example/hms/service/impl/TransferServiceImpl.java:"
+            + "destination.getWard() != null ? destination.getWard().getId() : null",
+        "the bed a patient is transferred to; only its ward id is logged");
 
     /** The log calls of {@code source} that print a contact value, as "line: argument". */
     static List<String> offenders(String source) {
@@ -71,6 +80,10 @@ class ContactDataLogGuardTest {
             int close = SourceScan.closingParen(code, open);
             for (String argument : arguments(code, open + 1, close)) {
                 String judged = withoutMaskedCalls(withoutLiterals(argument));
+                if (judged.contains("::MASKED")) {
+                    // every element goes through a masking method: to.stream().map(Tracker::maskEmail)
+                    continue;
+                }
                 if (CONTACT_ACCESSOR.matcher(judged).find() || CONTACT_VARIABLE.matcher(judged).find()) {
                     found.add(SourceScan.lineOf(code, call.start()) + ": " + argument.replaceAll("\\s+", " "));
                 }
@@ -181,7 +194,9 @@ class ContactDataLogGuardTest {
                 newUser.getEmail());
             log.info("contact {}", recipientEmail);
             log.info("number {}", e164);
-            """)).hasSize(8);
+            log.info("queued for {}", to);
+            log.warn("notify {} failed", recipients);
+            """)).hasSize(10);
         assertThat(offenders("""
             log.warn("Failed to send reminder to user {}: {}", user.getId(), ex.getMessage());
             log.info("queued for {}", ActivationDeliveryTracker.maskEmail(user.getEmail()));
@@ -194,6 +209,8 @@ class ContactDataLogGuardTest {
             log.info("sent by {}", emailService.getClass().getSimpleName());
             // log.info("x {}", user.getEmail());
             log.info("the user's email changed");
+            log.info("item for recipient={}", recipient.getId());
+            log.info("from {} to {}", start, end);
             """)).isEmpty();
     }
 }

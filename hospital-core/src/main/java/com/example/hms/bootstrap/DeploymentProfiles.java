@@ -42,9 +42,21 @@ public final class DeploymentProfiles {
             && Arrays.stream(activeProfiles).allMatch(p -> DEVELOPER.contains(p) || TEST.equals(p));
     }
 
+    /** Whether every active profile is a developer profile. False when none is active. */
+    public static boolean onlyDeveloper(String[] activeProfiles) {
+        return activeProfiles != null && activeProfiles.length > 0
+            && Arrays.stream(activeProfiles).allMatch(DEVELOPER::contains);
+    }
+
     /** Whether any active profile is a developer profile. */
     public static boolean anyDeveloper(String[] activeProfiles) {
         return activeProfiles != null && Arrays.stream(activeProfiles).anyMatch(DEVELOPER::contains);
+    }
+
+    /** Whether any active profile carries committed credentials: a developer profile or {@code test}. */
+    public static boolean anyWithCommittedCredentials(String[] activeProfiles) {
+        return anyDeveloper(activeProfiles)
+            || (activeProfiles != null && Arrays.asList(activeProfiles).contains(TEST));
     }
 
     /** Whether any active profile is a deployed profile. */

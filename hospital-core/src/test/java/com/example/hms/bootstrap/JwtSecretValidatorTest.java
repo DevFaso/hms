@@ -1,6 +1,7 @@
 package com.example.hms.bootstrap;
 
 import com.example.hms.config.JwtProperties;
+import com.example.hms.security.JwtSecretBytes;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -12,9 +13,12 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.mock.env.MockEnvironment;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -57,7 +61,7 @@ class JwtSecretValidatorTest {
         for (String[] profiles : List.of(PROD, DEV, LOCAL_H2, TEST)) {
             assertThatThrownBy(() -> JwtSecretValidator.validate(secret, profiles))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("JWT secret too short (min 32 chars)");
+                .hasMessageContaining("JWT secret too short (min 32 bytes once decoded)");
         }
     }
 
@@ -67,6 +71,57 @@ class JwtSecretValidatorTest {
         String secret = PRIVATE_SECRET.repeat(9).substring(0, length);
         assertThatCode(() -> JwtSecretValidator.validate(secret, PROD)).doesNotThrowAnyException();
         assertThatCode(() -> JwtSecretValidator.validate(secret, DEV)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("the length is the decoded key's: a short base64 or hex value is refused, a long one accepted")
+    void theLengthIsTheDecodedKeys() {
+        // 39 characters of text, but a 24-byte key
+        String twentyFourBytes = "base64:" + Base64.getEncoder().encodeToString(new byte[24]);
+        assertThatThrownBy(() -> JwtSecretValidator.validate(twentyFourBytes, PROD))
+            .isInstanceOf(StartupConfigurationException.class)
+            .hasMessageContaining("too short");
+        assertThatThrownBy(() -> JwtSecretValidator.validate("hex:" + "ab".repeat(20), PROD))
+            .isInstanceOf(StartupConfigurationException.class)
+            .hasMessageContaining("too short");
+        assertThatCode(() -> JwtSecretValidator.validate("hex:" + HexFormat.of().formatHex(
+            PRIVATE_SECRET.getBytes(StandardCharsets.UTF_8)), PROD)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> JwtSecretValidator.validate("hex:" + "zz".repeat(32), PROD))
+            .isInstanceOf(StartupConfigurationException.class);
+        assertThatThrownBy(() -> JwtSecretValidator.validate("base64:%%%%" + "A".repeat(40), PROD))
+            .isInstanceOf(StartupConfigurationException.class);
+    }
+
+    @Test
+    @DisplayName("a published secret is refused in every encoding: plain, base64 and hex")
+    void aPublishedSecretIsRefusedInEveryEncoding() {
+        for (String published : JwtSecretValidator.PUBLISHED_SECRETS) {
+            byte[] key = JwtSecretBytes.decode(published);
+            List<String> variants = List.of(
+                new String(key, StandardCharsets.UTF_8),
+                "base64:" + Base64.getEncoder().encodeToString(key),
+                "hex:" + HexFormat.of().formatHex(key),
+                "hex:" + HexFormat.of().withUpperCase().formatHex(key));
+            for (String variant : variants) {
+                assertThatThrownBy(() -> JwtSecretValidator.validate(variant, PROD))
+                    .as(variant)
+                    .isInstanceOf(StartupConfigurationException.class)
+                    .hasMessageContaining("published in the source tree");
+                assertThatCode(() -> JwtSecretValidator.validate(variant, TEST)).as(variant)
+                    .doesNotThrowAnyException();
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("placeholder wording is found after decoding too")
+    void placeholderWordingIsFoundAfterDecoding() {
+        byte[] placeholder = "please-change-me-before-going-live-01".getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> JwtSecretValidator.validate(
+            "base64:" + Base64.getEncoder().encodeToString(placeholder), PROD))
+            .isInstanceOf(StartupConfigurationException.class);
+        assertThatThrownBy(() -> JwtSecretValidator.validate("hex:" + HexFormat.of().formatHex(placeholder), DEV))
+            .isInstanceOf(StartupConfigurationException.class);
     }
 
     // ── published secrets ────────────────────────────────────────

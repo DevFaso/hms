@@ -61,14 +61,21 @@ class StartupProfileGuardTest {
     }
 
     @Test
-    @DisplayName("a developer profile on a hosted platform is refused; a deployed one is not")
+    @DisplayName("a developer or test profile on a hosted platform is refused; a deployed one is not")
     void aDeveloperProfileNeverRunsOnAHostedPlatform() {
         for (String marker : StartupProfileGuard.HOSTED_PLATFORM_MARKERS) {
-            MockEnvironment hosted = environment("local-h2");
-            hosted.setProperty(marker, "some-value");
-            assertThatThrownBy(() -> StartupProfileGuard.check(hosted))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(marker);
+            for (String committed : List.of("local-h2", "local", "test")) {
+                MockEnvironment hosted = environment(committed);
+                hosted.setProperty(marker, "some-value");
+                assertThatThrownBy(() -> StartupProfileGuard.check(hosted))
+                    .as(committed + " with " + marker)
+                    .isInstanceOf(StartupConfigurationException.class)
+                    .hasMessageContaining(marker);
+            }
+            MockEnvironment testAndProd = environment("prod", "test");
+            testAndProd.setProperty(marker, "some-value");
+            assertThatThrownBy(() -> StartupProfileGuard.check(testAndProd))
+                .isInstanceOf(StartupConfigurationException.class);
 
             MockEnvironment deployed = environment("dev");
             deployed.setProperty(marker, "some-value");

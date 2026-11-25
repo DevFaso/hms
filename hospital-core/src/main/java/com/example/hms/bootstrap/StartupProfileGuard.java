@@ -20,8 +20,8 @@ import java.util.List;
  *   <li>A developer profile ({@code local}, {@code local-h2}) together with a deployed one
  *       ({@code dev}, {@code prod}, …): the developer profile would bring its committed
  *       credentials and seeders into a shared environment.</li>
- *   <li>A developer profile on a hosted platform (Railway sets {@code RAILWAY_PROJECT_ID} /
- *       {@code RAILWAY_ENVIRONMENT_NAME} on every service).</li>
+ *   <li>A developer or test profile on a hosted platform (Railway sets {@code RAILWAY_PROJECT_ID} /
+ *       {@code RAILWAY_ENVIRONMENT_NAME} on every service): both carry committed credentials.</li>
  * </ul>
  *
  * <p>Runs after the config-data post-processor, so the active profiles are final. Registered in
@@ -51,11 +51,11 @@ public class StartupProfileGuard implements EnvironmentPostProcessor, Ordered {
                     + "deployed one. A developer profile carries committed credentials and seeds data; "
                     + "activate only the deployed profile.");
         }
-        if (DeploymentProfiles.anyDeveloper(active)) {
+        if (DeploymentProfiles.anyWithCommittedCredentials(active)) {
             for (String marker : HOSTED_PLATFORM_MARKERS) {
                 if (StringUtils.hasText(environment.getProperty(marker))) {
                     throw new StartupConfigurationException(
-                        "A developer profile " + Arrays.toString(active) + " is active on a hosted platform ("
+                        "A developer or test profile " + Arrays.toString(active) + " is active on a hosted platform ("
                             + marker + " is set). Set SPRING_PROFILES_ACTIVE to the environment's own "
                             + "profile (dev or prod).");
                 }

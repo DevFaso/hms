@@ -122,7 +122,7 @@ Export the issuer URI and start the backend:
 ```powershell
 $env:OIDC_ISSUER_URI = "http://localhost:8081/realms/hms"
 $env:OIDC_AUDIENCE   = "hms-backend"
-.\gradlew :hospital-core:bootRun
+.\gradlew :hospital-core:bootRun --args='--spring.profiles.active=local-h2'
 ```
 
 When `OIDC_ISSUER_URI` is unset, the resource-server bean graph is
