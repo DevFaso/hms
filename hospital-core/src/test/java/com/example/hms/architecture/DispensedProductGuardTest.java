@@ -111,14 +111,17 @@ class DispensedProductGuardTest {
         assertThat(body)
             .as("the product is the lot's (catalogItemOfFill), never the client's text")
             .contains("catalogItemOfFill(")
-            .as("compared with the order's (classify, or the lot's verification)")
-            .contains("classify(")
-            .contains("productMatch()")
+            .as("compared with the order's (productMatchOf: the lot's verification, else classify)")
+            .contains("productMatchOf(")
             .as("a substitute is read against the current allergies")
             .contains("requireDispensedProductAllergyFree(")
             .as("the fill is named after the product dispensed")
             .contains("dispensedName(");
+        assertThat(bodiesOf(gate, "productMatchOf").get(0))
+            .contains("verification.productMatch()")
+            .contains("classify(");
         assertThat(bodiesOf(gate, "requirePreparedProductDispensable").get(0))
+            .contains("productMatchOf(")
             .contains("mayBeDispensed(")
             .contains("requireDispensedProductAllergyFree(");
         assertThat(bodiesOf(gate, "applyVerificationOutcome").get(0))

@@ -25,19 +25,26 @@ public final class ProductStrength {
     /** How two strengths relate. UNKNOWN when either side states none that can be read. */
     public enum Relation { SAME, DIFFERENT, UNKNOWN }
 
-    private static final String NUMBER = "\\d+(?:[.,]\\d+)?";
-    private static final Pattern STRENGTH = Pattern.compile(
-        "(?<![\\w.,])(" + NUMBER + ")((?:\\s*/\\s*" + NUMBER + ")*)\\s*"
-            + "(mg|g|mcg|µg|ug|ui|iu|meq|mmol|%)"
-            + "(?:\\s*/\\s*(" + NUMBER + ")?\\s*(ml|l|g|dose|h))?(?![\\p{L}])",
+    /** A number as written, bounded so no input makes the match backtrack ("500", "62,5"). */
+    private static final String NUMBER = "\\d{1,7}+(?:[.,]\\d{1,6}+)?+";
+    /** The amount and its unit; the further amounts of a combination ("250/125 mg") are skipped. */
+    private static final Pattern AMOUNT = Pattern.compile(
+        "(?<![\\w.,])(" + NUMBER + ")(?:\\s{0,3}+/\\s{0,3}+" + NUMBER + "){0,4}+\\s{0,3}+"
+            + "(mg|g|mcg|µg|ug|ui|iu|meq|mmol|%)(?!\\p{L})",
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** What a concentration is per, read right after the amount ("/5 ml", "/ml"). */
+    private static final Pattern PER = Pattern.compile(
+        "\\G\\s{0,3}+/\\s{0,3}+(" + NUMBER + ")?+\\s{0,3}+(ml|l|g|dose|h)(?!\\p{L})",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    private static final BigDecimal ONE_THOUSANDTH = new BigDecimal("0.001");
 
     /** Milligrams in one unit of each mass unit a strength may be written in. */
     private static final java.util.Map<String, BigDecimal> MILLIGRAMS = java.util.Map.of(
         "g", BigDecimal.valueOf(1000),
-        "mcg", new BigDecimal("0.001"),
-        "ug", new BigDecimal("0.001"),
-        "µg", new BigDecimal("0.001"));
+        "mcg", ONE_THOUSANDTH,
+        "ug", ONE_THOUSANDTH,
+        "µg", ONE_THOUSANDTH);
 
     /**
      * A read strength: its first amount in the base unit, the unit, and for a concentration what it is per
@@ -114,12 +121,13 @@ public final class ProductStrength {
         if (text == null || text.isBlank()) {
             return Optional.empty();
         }
-        Matcher m = STRENGTH.matcher(Normalizer.normalize(text, Normalizer.Form.NFC));
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFC);
+        Matcher m = AMOUNT.matcher(normalized);
         if (!m.find()) {
             return Optional.empty();
         }
         BigDecimal amount = new BigDecimal(m.group(1).replace(',', '.'));
-        String unit = m.group(3).toLowerCase(Locale.ROOT);
+        String unit = m.group(2).toLowerCase(Locale.ROOT);
         BigDecimal milligrams = MILLIGRAMS.get(unit);
         if (milligrams != null) {
             amount = amount.multiply(milligrams);
@@ -127,8 +135,13 @@ public final class ProductStrength {
         } else if ("iu".equals(unit)) {
             unit = "ui";
         }
-        BigDecimal per = m.group(4) == null ? null : new BigDecimal(m.group(4).replace(',', '.'));
-        String perUnit = m.group(5) == null ? null : m.group(5).toLowerCase(Locale.ROOT);
+        BigDecimal per = null;
+        String perUnit = null;
+        Matcher concentration = PER.matcher(normalized);
+        if (concentration.find(m.end())) {
+            per = concentration.group(1) == null ? null : new BigDecimal(concentration.group(1).replace(',', '.'));
+            perUnit = concentration.group(2).toLowerCase(Locale.ROOT);
+        }
         return Optional.of(new Value(amount, unit, per, perUnit));
     }
 }

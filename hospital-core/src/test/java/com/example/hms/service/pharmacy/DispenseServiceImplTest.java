@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import com.example.hms.enums.AuditEventType;
@@ -1749,7 +1750,7 @@ class DispenseServiceImplTest {
             prescribed.setStrengthUnit("mg");
             prescription.setMedicationCatalogItemId(prescribed.getId());
             prescription.setMedicationName("Amoxicilline 500 mg gélule");
-            org.mockito.Mockito.doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
+            doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
             catalogItem.setNameFr("Amoxicilline 500 mg comprimé");
             catalogItem.setAtcCode("J01CA04");
             catalogItem.setForm("TABLET");
@@ -3523,7 +3524,7 @@ class DispenseServiceImplTest {
             prescribed.setStrengthUnit("mg");
             prescription.setMedicationCatalogItemId(prescribed.getId());
             prescription.setMedicationName(nameFr);
-            org.mockito.Mockito.doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
+            doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
             return prescribed;
         }
 

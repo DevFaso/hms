@@ -967,8 +967,7 @@ public class DispenseServiceImpl implements DispenseService {
         MedicationCatalogItem prepared = dispense.getStockLot() != null && dispense.getStockLot().getInventoryItem() != null
                 ? dispense.getStockLot().getInventoryItem().getMedicationCatalogItem()
                 : dispense.getMedicationCatalogItem();
-        DispensedProductMatch match = dispense.getStockLot() != null ? checks.productMatch()
-                : prepared != null ? dispenseVerificationService.classify(prescription, prepared) : null;
+        DispensedProductMatch match = productMatchOf(prescription, prepared, dispense.getStockLot(), checks);
         boolean substitution = dispense.isSubstitution() && dispense.getSubstitutionReason() != null
                 && !dispense.getSubstitutionReason().isBlank();
         if (match != null && !match.mayBeDispensed(substitution)) {
@@ -1484,8 +1483,7 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("substitution",
                     "pharmacy.dispense.substitutionNeedsProduct");
         }
-        DispensedProductMatch match = stockLot != null ? verification.productMatch()
-                : dispensed != null ? dispenseVerificationService.classify(prescription, dispensed) : null;
+        DispensedProductMatch match = productMatchOf(prescription, dispensed, stockLot, verification);
         if (substitution && match == DispensedProductMatch.OTHER_DRUG) {
             throw new com.example.hms.exception.FieldBusinessException("substitution",
                     "pharmacy.dispense.substitutionOtherDrug",
@@ -1502,6 +1500,18 @@ public class DispenseServiceImpl implements DispenseService {
         requireDispensedProductAllergyFree(prescription, dispensed, match, allergyAck);
         dto.setMedicationName(dispensedName(prescription, dispensed, dto.getMedicationName()));
         return dispensed;
+    }
+
+    /**
+     * QA D3940: how the fill's product relates to the order's: the lot's, as its verification compared it; else
+     * the item named when stock is not kept in lots; null when no product is known (the order's own drug).
+     */
+    private DispensedProductMatch productMatchOf(Prescription prescription, MedicationCatalogItem product,
+                                                 StockLot stockLot, DispenseVerificationResult verification) {
+        if (stockLot != null) {
+            return verification.productMatch();
+        }
+        return product == null ? null : dispenseVerificationService.classify(prescription, product);
     }
 
     /**

@@ -192,14 +192,17 @@ public class DispenseVerificationService {
     public String refusalOf(DispensedProductMatch match, Prescription rx, MedicationCatalogItem item) {
         String product = describeProduct(item);
         String prescribed = describePrescribed(rx);
-        return switch (match) {
-            case SUBSTITUTE -> com.example.hms.utility.MessageUtil.resolve(
-                "pharmacy.check.substituteNeedsRecord", product, prescribed);
-            case OTHER_STRENGTH -> ProductStrength.labelOf(item).isPresent()
-                ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.otherStrength", product, prescribed)
-                : com.example.hms.utility.MessageUtil.resolve("pharmacy.check.strengthUnknown", product, prescribed);
-            default -> com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wrongDrug", product, prescribed);
-        };
+        if (match == DispensedProductMatch.SUBSTITUTE) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.substituteNeedsRecord", product,
+                prescribed);
+        }
+        if (match == DispensedProductMatch.OTHER_STRENGTH && ProductStrength.labelOf(item).isPresent()) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.otherStrength", product, prescribed);
+        }
+        if (match == DispensedProductMatch.OTHER_STRENGTH) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.strengthUnknown", product, prescribed);
+        }
+        return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wrongDrug", product, prescribed);
     }
 
     /** Fit to give: the lot must not have passed its expiry date. */

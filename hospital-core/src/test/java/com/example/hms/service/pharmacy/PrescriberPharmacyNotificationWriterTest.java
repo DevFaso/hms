@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -76,7 +77,7 @@ class PrescriberPharmacyNotificationWriterTest {
     void dispensedWithASubstitute() {
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
         com.example.hms.repository.pharmacy.DispenseRepository dispenses =
-                org.mockito.Mockito.mock(com.example.hms.repository.pharmacy.DispenseRepository.class);
+                mock(com.example.hms.repository.pharmacy.DispenseRepository.class);
         when(dispenses.findSubstitutedProductNames(prescriptionId))
                 .thenReturn(java.util.List.of("Amoxicilline 500 mg comprimé"));
         writer.setDispenseRepository(dispenses);
