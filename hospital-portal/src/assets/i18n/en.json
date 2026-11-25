@@ -13243,6 +13243,7 @@
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "Remove this susceptibility result?",
     "ISOLATE_REMOVE_CONFIRM": "Remove this isolate and its susceptibilities?",
     "CORRECTION_HISTORY": "Correction history",
+    "CORRECTION_LAB_ONLY": "This report is final. Only the laboratory's biologist, manager or director can correct it.",
     "CORRECTION_BEFORE": "Before this correction",
     "NO_GROWTH_CONFIRM_TITLE": "Declare no growth?",
     "NO_GROWTH_CONFIRM_MESSAGE": "The {{count}} organism(s) on this report and their susceptibilities are taken off it. They stay readable in the correction history.",

@@ -13243,6 +13243,7 @@
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "Retirer ce résultat d'antibiogramme ?",
     "ISOLATE_REMOVE_CONFIRM": "Retirer cet isolat et ses antibiogrammes ?",
     "CORRECTION_HISTORY": "Historique des corrections",
+    "CORRECTION_LAB_ONLY": "Ce résultat est définitif. Seul le biologiste, le responsable ou le directeur du laboratoire peut le corriger.",
     "CORRECTION_BEFORE": "Avant cette correction",
     "NO_GROWTH_CONFIRM_TITLE": "Déclarer le résultat stérile ?",
     "NO_GROWTH_CONFIRM_MESSAGE": "Le ou les germes de ce résultat ({{count}}) et leurs antibiogrammes en sont retirés. Ils restent lisibles dans l'historique des corrections.",

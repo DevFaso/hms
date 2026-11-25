@@ -78,6 +78,13 @@ public class MicroCultureServiceImpl implements MicroCultureService {
 
     private static final String POSITIVE_CULTURE_TYPE = "POSITIVE_CULTURE_RESULT";
 
+    /**
+     * QA D3902: who may change a report once FINAL — the laboratory's validating tier, the same
+     * roles that may finalize it (MicroCultureController.FINALIZE_ROLES). A technician enters a
+     * preliminary report; a doctor, nurse or midwife never writes into the laboratory's report.
+     */
+    static final String[] CORRECTION_ROLES = {"LAB_SCIENTIST", "LAB_MANAGER", "LAB_DIRECTOR"};
+
     private final MicroCultureResultRepository cultureRepository;
     private final MicroIsolateRepository isolateRepository;
     private final MicroSusceptibilityRepository susceptibilityRepository;
@@ -421,6 +428,13 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (!culture.isLocked()) {
             return;
         }
+        // QA D3902: a final report is corrected by the laboratory's validating tier only, whatever
+        // the endpoint's gate let through. Checked before the reason, so nobody else is invited to give one.
+        if (!com.example.hms.security.ClinicalActor.holdsOwnRoleQuietly(
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication(),
+                CORRECTION_ROLES)) {
+            throw new com.example.hms.exception.UnauthorizedAccessException("micro.culture.correctionLabOnly");
+        }
         if (correctionReason == null || correctionReason.isBlank()) {
             throw new com.example.hms.exception.FieldBusinessException("correctionReason", "micro.culture.correctionReasonRequired");
         }
@@ -568,6 +582,10 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .collect(Collectors.groupingBy(s -> s.getIsolate().getId()));
 
         LabOrder order = culture.getLabOrder();
+        List<MicroCultureResponseDTO.Correction> corrections =
+            correctionRepository.findByCultureResult_IdOrderByCorrectedAtDesc(culture.getId()).stream()
+                .map(this::toCorrectionDto)
+                .toList();
         return MicroCultureResponseDTO.builder()
             .id(culture.getId())
             .labOrderId(order != null ? order.getId() : null)
@@ -590,6 +608,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             .finalizedByName(resolveUserName(culture.getFinalizedByUserId()))
             .correctedAt(culture.getCorrectedAt())
             .correctionReason(culture.getCorrectionReason())
+            .correctedByName(corrections.isEmpty() ? null : corrections.get(0).getCorrectedByName())
             .reportedByName(resolveStaffName(culture.getReportedByStaff()))
             .notes(culture.getNotes())
             .createdAt(culture.getCreatedAt())
@@ -597,9 +616,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             .isolates(isolates.stream()
                 .map(isolate -> toIsolateDto(isolate, byIsolate.getOrDefault(isolate.getId(), List.of())))
                 .toList())
-            .corrections(correctionRepository.findByCultureResult_IdOrderByCorrectedAtDesc(culture.getId()).stream()
-                .map(this::toCorrectionDto)
-                .toList())
+            .corrections(corrections)
             .build();
     }
 

@@ -104,6 +104,19 @@ class MicroCultureOutcomePostgresIT {
     private final UUID order = UUID.randomUUID();
     private final UUID culture = UUID.randomUUID();
 
+    /** QA D3902: a final report is corrected by the laboratory's validating tier only. */
+    @BeforeEach
+    void actAsTheLabScientist() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("cx9.scientist", "n/a",
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_LAB_SCIENTIST"))));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCaller() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void seed() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -205,7 +218,9 @@ class MicroCultureOutcomePostgresIT {
     void concurrentRemovalsLeaveOne() throws Exception {
         UUID first = isolate(1, "Escherichia coli");
         UUID second = isolate(2, "Klebsiella pneumoniae");
-        ExecutorService pool = Executors.newSingleThreadExecutor();
+        // QA D3902: the correction is the laboratory's; the second writer acts as the same scientist.
+        ExecutorService pool = new org.springframework.security.concurrent.DelegatingSecurityContextExecutorService(
+            Executors.newSingleThreadExecutor());
         List<Future<MicroCultureResponseDTO>> other = new ArrayList<>();
 
         // The second removal starts while the first has removed but not committed. It
@@ -236,7 +251,9 @@ class MicroCultureOutcomePostgresIT {
     @Test
     @DisplayName("two corrections at once both stay: the second reads the report after the first")
     void concurrentCorrectionsDoNotOverwriteEachOther() throws Exception {
-        ExecutorService pool = Executors.newSingleThreadExecutor();
+        // QA D3902: the correction is the laboratory's; the second writer acts as the same scientist.
+        ExecutorService pool = new org.springframework.security.concurrent.DelegatingSecurityContextExecutorService(
+            Executors.newSingleThreadExecutor());
         List<Future<MicroCultureResponseDTO>> other = new ArrayList<>();
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
