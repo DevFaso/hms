@@ -172,7 +172,7 @@ class Dhis2ConfigServiceImplTest {
         assertThatThrownBy(() ->
             service.updateMapping(mappingId, hospitalId, mappingRequest()))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cross-tenant");
+            .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("dhis.mapping.otherOwner"));
         verify(mappingRepository, never()).save(any());
     }
 

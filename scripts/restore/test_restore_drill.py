@@ -51,6 +51,7 @@ class OfflineBundleTest(unittest.TestCase):
             (directory / 'manifest.json').write_text(json.dumps({'snapshotAt': date}), encoding='utf-8')
         self.assertEqual(m.latest_bundle(self.root).name, 'a-newer')
         db = m.Scratch.__new__(m.Scratch)
+        db.endpoint = "unix:///var/run/docker.sock"
         db.name, db.token = 'hms-restore-cdx', 'expected-owner'
         inspected = [{'Config': {'Labels': {m.LABEL: 'another-owner'}}, 'Name': '/hms-restore-cdx', 'HostConfig': {'NetworkMode': 'none'}}]
         with patch.object(m, 'text', return_value=json.dumps(inspected)), patch.object(m, 'docker') as docker:
@@ -98,6 +99,7 @@ class OfflineBundleTest(unittest.TestCase):
 
     def test_each_container_isolation_property_is_required_and_original_error_survives(self):
         db = m.Scratch.__new__(m.Scratch)
+        db.endpoint = "unix:///var/run/docker.sock"
         db.name, db.token = m.PREFIX + 'a' * 32, 'a' * 32
         for field, value in [('PortBindings', {'5432/tcp': [{}]}), ('Binds', ['/host:/data']), ('NetworkMode', 'bridge'), ('Mounts', [{'Type': 'bind', 'Source': '/host'}]), ('VolumesFrom', ['other']), ('Privileged', True), ('Devices', [{'PathOnHost': '/dev/sda'}]), ('DeviceRequests', [{'Driver': 'nvidia'}]), ('CapAdd', ['SYS_ADMIN']), ('PidMode', 'host'), ('IpcMode', 'host'), ('UTSMode', 'host'), ('UsernsMode', 'host')]:
             inspected = {'Config': {'Labels': {m.LABEL: db.token}}, 'Name': '/' + db.name, 'HostConfig': {'NetworkMode': 'none'}}
@@ -128,6 +130,7 @@ class OfflineBundleTest(unittest.TestCase):
         original = m.sha256(archive)
         archive.write_bytes(b'cdx substituted archive')
         db = m.Scratch.__new__(m.Scratch)
+        db.endpoint = "unix:///var/run/docker.sock"
         db.name = m.PREFIX + 'a' * 32
         with patch.object(db, 'owned'), patch.object(m.subprocess, 'Popen') as popen:
             process = popen.return_value.__enter__.return_value

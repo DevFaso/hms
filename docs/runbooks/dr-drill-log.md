@@ -7,6 +7,14 @@ accepts a database URL, mounts a host directory in Docker, publishes a port, pul
 an image, deploys, or touches a pre-existing application database. It creates and removes only
 its newly labelled, network-isolated scratch container and its anonymous volumes.
 
+## Ownership boundary
+
+Producing, scheduling and retaining backups, and collecting the independent source-side manifest, are **owner/O3 work**. The owner supplies an existing approved backup to the drill. `restore_drill.py` only reads that bundle, restores it into a new local scratch Postgres and writes the validation report; it never calls the producer or creates a replacement backup. Codex does not produce or approve hospital backups.
+
+`capture_manifest.py` and `capture_bundle` are separate **owner/O3-only engineering utilities**, not drill steps. Their reconstructed scratch evidence is not an independent source baseline and cannot establish production RPO. Running the consumer never invokes them.
+
+Only a locally selected Unix-socket or Windows named-pipe Docker endpoint is allowed. A remote DOCKER_HOST or remote selected context is refused before any daemon request or container creation. TCP/SSH endpoints, including loopback forwarders, are refused. The verified endpoint is pinned via `--host` for every operation; Docker host/context overrides are removed from the subprocess environment so a context switch cannot redirect a running drill. The same restriction applies to the separate owner utility.
+
 ## Preparation
 
 - [ ] Owner/operator and independent observer identified.
@@ -59,7 +67,7 @@ imports that same snapshot for every table digest/reference read, and passes
 a new row after snapshot export and proves it is absent from both dump and digest.
 The producer and consumer therefore share the actual serialization implementation.
 
-For **local engineering only**, `scripts/restore/capture_manifest.py` reconstructs
+For **owner/O3 local engineering only**, outside the drill, `scripts/restore/capture_manifest.py` reconstructs
 an offline dump in a **new** tool-created scratch source and then invokes the
 canonical producer. It accepts `--source-dump`, `--postgres-image`, `--bundle`
 and `--objects-index`; no caller-chosen container name, ownership token or DSN is

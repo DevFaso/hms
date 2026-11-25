@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -18,12 +19,52 @@ CANONICAL = "SET TIME ZONE 'UTC'; SET extra_float_digits=3; SET IntervalStyle='p
 PHYSICAL = "c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%' ESCAPE '\\'"
 
 
-def docker(*args, **kwargs):
-    return subprocess.run(['docker', *args], check=True, **kwargs)
+def is_local_endpoint(endpoint):
+    if not isinstance(endpoint, str) or any(c in endpoint for c in ['\r', '\n', '?', '#', '@']):
+        return False
+    # No TCP (including loopback/forwarders), SSH, remote pipes or socket hosts.
+    return bool(re.fullmatch(r'unix:///(?!/)[^\\]+', endpoint)
+                or re.fullmatch(r'npipe:////[.]/pipe/[A-Za-z0-9_.-]+', endpoint))
 
 
-def text(*args):
-    return docker(*args, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8').strip()
+def docker_environment():
+    return {key: value for key, value in os.environ.items()
+            if key.upper() not in {'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH'}}
+
+
+def local_docker_endpoint():
+    supplied = os.environ.get('DOCKER_HOST')
+    if supplied and not is_local_endpoint(supplied):
+        raise ValueError('Remote Docker daemons are refused; use a local Unix socket or named pipe')
+    # Context metadata is read locally; these commands do not contact the daemon.
+    def metadata(*args):
+        result = subprocess.run(['docker', 'context', *args], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=30, check=False)
+        if result.returncode:
+            raise RuntimeError('Cannot verify the local Docker context')
+        return result.stdout.decode('utf-8').strip()
+    context = os.environ.get('DOCKER_CONTEXT') or metadata('show')
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', context):
+        raise ValueError('Cannot verify the selected Docker context')
+    endpoint = json.loads(metadata('inspect', context, '--format', '{{json .Endpoints.docker.Host}}'))
+    if not is_local_endpoint(endpoint):
+        raise ValueError('Remote Docker contexts are refused; select a local Docker context')
+    return endpoint if os.environ.get('DOCKER_CONTEXT') or not supplied else supplied
+
+
+def docker_command(endpoint, *args):
+    if not is_local_endpoint(endpoint):
+        raise ValueError('Remote Docker daemons are refused')
+    return ['docker', '--host', endpoint, *args]
+
+
+def docker(*args, endpoint=None, **kwargs):
+    return subprocess.run(docker_command(endpoint or local_docker_endpoint(), *args),
+                          check=True, env=docker_environment(), **kwargs)
+
+
+def text(*args, endpoint=None):
+    return docker(*args, endpoint=endpoint, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8').strip()
 
 
 def quoted(identifier):
@@ -32,16 +73,17 @@ def quoted(identifier):
 
 class Scratch:
     def __init__(self, image):
+        self.endpoint = local_docker_endpoint()
         self.token = uuid.uuid4().hex
         self.name = PREFIX + self.token
         # Resolve a locally installed image to its immutable ID: no pull or prod network.
-        inspected = json.loads(text('image', 'inspect', image))[0]
+        inspected = json.loads(text('image', 'inspect', image, endpoint=self.endpoint))[0]
         self.image = inspected['Id']
         if not re.fullmatch(r'sha256:[0-9a-f]{64}', self.image):
             raise ValueError('An immutable local image ID is required')
 
     def owned(self):
-        item = json.loads(text('container', 'inspect', self.name))[0]
+        item = json.loads(text('container', 'inspect', self.name, endpoint=self.endpoint))[0]
         host = item['HostConfig']
         mounts = item.get('Mounts') or []
         unsafe_volume = any(
@@ -61,13 +103,13 @@ class Scratch:
     def sql(self, sql, snapshot=None):
         self.owned()
         sql = snapshot_sql(snapshot) + sql
-        return text('exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql)
+        return text('exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql, endpoint=self.endpoint)
 
     def __enter__(self):
         docker('run', '--detach', '--pull=never', '--network=none', '--name', self.name,
                '--label', f'{LABEL}={self.token}', '--env', 'POSTGRES_DB=hms_drill',
                '--env', 'POSTGRES_HOST_AUTH_METHOD=trust', self.image,
-               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, endpoint=self.endpoint)
         try:
             until = time.monotonic() + 60
             while time.monotonic() < until:
@@ -84,7 +126,7 @@ class Scratch:
     def __exit__(self, exception_type=None, error=None, traceback=None):
         try:
             self.owned()
-            docker('rm', '--force', '--volumes', self.name, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            docker('rm', '--force', '--volumes', self.name, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, endpoint=self.endpoint)
         except Exception:
             # Never delete an unverified container or replace the useful drill error.
             if error is not None:
@@ -97,8 +139,8 @@ class Scratch:
         # Stream only into the freshly owned container; never mount a host path.
         digest = hashlib.sha256()
         with archive.open('rb') as source, subprocess.Popen(
-                ['docker', 'exec', '-i', self.name, 'pg_restore', '-U', 'postgres', '-d', 'hms_drill',
-                 '--no-owner', '--no-privileges', '--exit-on-error'], stdin=subprocess.PIPE,
+                docker_command(self.endpoint, 'exec', '-i', self.name, 'pg_restore', '-U', 'postgres', '-d', 'hms_drill',
+                 '--no-owner', '--no-privileges', '--exit-on-error'), stdin=subprocess.PIPE, env=docker_environment(),
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as process:
             try:
                 for block in iter(lambda: source.read(1024 * 1024), b''):
@@ -126,7 +168,7 @@ class Scratch:
             identifier = quoted(table['schema']) + '.' + quoted(table['name'])
             sql = snapshot_sql(snapshot) + CANONICAL + f"COPY (SELECT row_to_json(t)::text FROM ONLY {identifier} t ORDER BY row_to_json(t)::text COLLATE \"C\") TO STDOUT"
             digest, count = hashlib.sha256(), 0
-            with subprocess.Popen(['docker', 'exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as process:
+            with subprocess.Popen(docker_command(self.endpoint, 'exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=docker_environment()) as process:
                 for row in process.stdout:
                     digest.update(row)
                     count += 1
@@ -152,8 +194,8 @@ class Scratch:
     @contextmanager
     def snapshot(self):
         self.owned()
-        with subprocess.Popen(['docker', 'exec', '-i', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
-                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8') as holder:
+        with subprocess.Popen(docker_command(self.endpoint, 'exec', '-i', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'),
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', env=docker_environment()) as holder:
             try:
                 holder.stdin.write(CANONICAL + "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT json_build_object('snapshot', pg_export_snapshot(), 'at', transaction_timestamp());\n")
                 holder.stdin.flush()
@@ -183,7 +225,7 @@ def snapshot_sql(snapshot):
 
 
 def capture_bundle(db, bundle, objects):
-    """Canonical producer for an owned scratch source only, never an external DSN."""
+    """Owner/O3-only producer for an owned scratch source; never called by the drill."""
     db.owned()
     bundle = local_path(bundle, strict=True)
     archive = bundle / 'database.dump'
@@ -197,7 +239,7 @@ def capture_bundle(db, bundle, objects):
         db.owned()
         with archive.open('xb') as stream:
             docker('exec', db.name, 'pg_dump', '-U', 'postgres', '-d', 'hms_drill', '-Fc', '--snapshot=' + snapshot['snapshot'],
-                   stdout=stream, stderr=subprocess.DEVNULL)
+                   stdout=stream, stderr=subprocess.DEVNULL, endpoint=db.endpoint)
     metadata = {'snapshotAt': snapshot['at'], 'sourceObservedAt': snapshot['observedAt'],
                 'sourceKind': SCRATCH_CAPTURE_KIND,
                 'tables': tables, 'objects': objects, 'archiveSha256': sha256(archive)}

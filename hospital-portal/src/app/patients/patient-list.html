@@ -53,7 +53,10 @@
       <div>
         <h2>{{ 'PATIENTS.DIRECTORY' | translate }}</h2>
         <p role="status">
-          {{ 'PATIENTS.MATCHING_RECORDS' | translate: { count: filtered().length } }}
+          {{
+            'PATIENTS.MATCHING_RECORDS'
+              | translate: { count: loading() || loadError() ? '—' : filtered().length }
+          }}
         </p>
       </div>
       @if (hospitals().length > 0) {

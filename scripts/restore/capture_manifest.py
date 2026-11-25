@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reconstruct an offline dump in a newly isolated source, then capture its canonical manifest."""
+"""Owner/O3-only engineering utility: reconstruct an existing offline dump; never part of the drill."""
 import argparse
 import json
 from pathlib import Path

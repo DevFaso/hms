@@ -121,7 +121,7 @@ public class EncounterController {
         boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, ROLE_RECEPTIONIST);
         if (isReceptionist) {
             if (contextHospitalId == null) {
-                throw new BusinessException("Receptionist must be affiliated with a hospital (no active hospital in the request context).");
+                throw new BusinessException("request.hospitalContext.required");
             }
             dto.setHospitalId(contextHospitalId); // receptionist cannot override
         } else {
@@ -199,7 +199,7 @@ public class EncounterController {
                 resolvedHospitalId = contextHospitalId;
             }
             if (resolvedHospitalId == null) {
-                throw new BusinessException("Hospital context required to list encounters. Please select an active hospital.");
+                throw new BusinessException("request.hospitalContext.required");
             }
         } else {
             // super-admin: allow unscoped (null = global/all)

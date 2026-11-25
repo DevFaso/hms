@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -27,12 +28,13 @@ import {
 @Component({
   selector: 'app-witness-picker',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [FormControlStyleDirective, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="witness-picker" data-testid="witness-picker">
       <label [for]="inputId()">{{ 'NURSE.WITNESS.LABEL' | translate }} *</label>
       <select
+        appFormControl
         [id]="inputId()"
         data-testid="witness-select"
         [value]="selected() ?? ''"

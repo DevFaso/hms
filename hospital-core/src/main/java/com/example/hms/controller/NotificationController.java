@@ -41,10 +41,31 @@ public class NotificationController {
     public ResponseEntity<Page<Notification>> getNotifications(
             Principal principal,
             @RequestParam(required = false) Boolean read,
-            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        return notificationPage(principal, read, null, page, size);
+    }
+
+    /**
+     * The caller's notifications narrowed to a typed term. A notification names patients, so the
+     * term travels in the body, never in the URL; the read filter and the paging stay in the query.
+     */
+    @com.example.hms.security.ReadsOnly("a search of the caller's notifications, under POST so the typed term"
+        + " stays out of the URL")
+    @PostMapping("/term-search")
+    public ResponseEntity<Page<Notification>> termSearchNotifications(
+            Principal principal,
+            @Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+            @RequestParam(required = false) Boolean read,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return notificationPage(principal, read, body.term(), page, size);
+    }
+
+    private ResponseEntity<Page<Notification>> notificationPage(Principal principal, Boolean read, String search,
+                                                                int page, int size) {
         if (principal == null) {
             return ResponseEntity.status(401).build();
         }
@@ -102,7 +123,7 @@ public class NotificationController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<NotificationPreferenceDTO>> getMyPreferences(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         return ResponseEntity.ok(notificationService.getPreferences(userId));
     }
 
@@ -112,7 +133,7 @@ public class NotificationController {
             Authentication auth,
             @Valid @RequestBody List<NotificationPreferenceUpdateDTO> updates) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         return ResponseEntity.ok(notificationService.updatePreferences(userId, updates));
     }
 }

@@ -46,7 +46,7 @@ public class PatientTrackerController {
 
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required for the patient tracker board.");
+            throw new BusinessException("request.hospitalContext.required");
         }
 
         PatientTrackerBoardDTO board = trackerService.getTrackerBoard(resolvedHospitalId, departmentId, date);

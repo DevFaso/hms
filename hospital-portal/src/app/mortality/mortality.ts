@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import {
   Component,
   computed,
@@ -54,6 +55,7 @@ import { RuleStatusComponent } from '../shared/rule-status/rule-status.component
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     RuleStatusComponent,
     DateTimePipe,
     SubmitGuardDirective,

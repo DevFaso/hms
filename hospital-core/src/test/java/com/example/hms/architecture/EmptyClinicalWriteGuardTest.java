@@ -127,6 +127,7 @@ class EmptyClinicalWriteGuardTest {
         NOT_FINDINGS.put("EncounterController.byDoctor", "a read over POST: the doctor's identifier, not findings");
         NOT_FINDINGS.put("PatientController.searchPatients", "a read over POST: search identifiers, not findings");
         NOT_FINDINGS.put("PatientController.lookupPatients", "a read over POST: lookup identifiers, not findings");
+        NOT_FINDINGS.put("PatientController.termSearchPatients", "a read over POST: the typed term, not findings");
         NOT_FINDINGS.put("PatientController.registrationMatch", "a read over POST: the form's identity, not findings");
         NOT_FINDINGS.put("EncounterController.create", "opens a visit (patient, staff, type); its notes come later");
         NOT_FINDINGS.put("EncounterController.update", "edits the visit's administrative fields");

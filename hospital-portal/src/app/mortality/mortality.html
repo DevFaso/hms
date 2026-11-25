@@ -61,9 +61,16 @@
   <div class="filter-bar">
     <div class="period-picker">
       <label for="mort-from">{{ 'MORTALITY.FROM' | translate }}</label>
-      <input id="mort-from" type="date" [(ngModel)]="from" (change)="loadRegister()" />
+      <input
+        appFormControl
+        id="mort-from"
+        type="date"
+        [(ngModel)]="from"
+        (change)="loadRegister()"
+      />
       <label for="mort-to">{{ 'MORTALITY.TO' | translate }}</label>
       <input
+        appFormControl
         id="mort-to"
         type="date"
         [attr.min]="from || null"

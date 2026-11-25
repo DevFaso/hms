@@ -123,7 +123,7 @@ public class Hl7InboundController {
         java.util.List<ParsedObservation> observations = hl7v2MessageBuilder.parseOruR01(hl7Message);
         if (observations == null || observations.isEmpty()) {
             throw new com.example.hms.exception.BusinessException(
-                "Unable to parse HL7v2 message. Ensure the message is a valid ORU^R01.");
+                "hl7.message.unreadable");
         }
         ParsedObservation obs = observations.get(0);
         // OBX-5 is stored as sent into lab_results.result_value (2048), so it
@@ -134,7 +134,7 @@ public class Hl7InboundController {
         if (!com.example.hms.utility.Hl7FieldBounds.fits(
                 obs.resultValue(), com.example.hms.utility.Hl7FieldBounds.RESULT_VALUE_MAX)) {
             throw new com.example.hms.exception.BusinessException(
-                "OBX-5 exceeds " + com.example.hms.utility.Hl7FieldBounds.RESULT_VALUE_MAX + " characters");
+                "hl7.field.tooLong", "OBX-5", com.example.hms.utility.Hl7FieldBounds.RESULT_VALUE_MAX);
         }
 
         // Who is sending, resolved the way the MLLP transport resolves it.
@@ -212,8 +212,12 @@ public class Hl7InboundController {
             // value. An empty or non-MSH body is a different exception and
             // still falls through to the DEBUG line below.
             log.warn("Inbound HL7v2 ORU^R01 MSH refused: {}", refused.getMessage());
+            if (refused.fieldName() != null && refused.maximum() != null) {
+                throw new com.example.hms.exception.BusinessException(
+                    "hl7.field.tooLong", refused.fieldName(), refused.maximum());
+            }
             throw new com.example.hms.exception.BusinessException(
-                "Invalid MSH: " + refused.getMessage());
+                "hl7.header.invalid");
         } catch (RuntimeException notReadable) {
             log.debug("Inbound HL7v2 body carries no readable MSH; no replay identity: {}",
                 notReadable.getMessage());

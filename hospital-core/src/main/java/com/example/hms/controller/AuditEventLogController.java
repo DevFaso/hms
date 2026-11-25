@@ -17,7 +17,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,12 +29,14 @@ import org.springframework.http.ResponseEntity;
 import com.example.hms.controller.support.AuditEventTypeParams;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.controller.support.StrictQueryParams;
+import com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -78,8 +79,6 @@ public class AuditEventLogController {
      */
     private static final String AUDIT_READ_ROLES =
         "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
-    /** Longest free-text search accepted (QA D794). */
-    private static final int MAX_SEARCH_LENGTH = 200;
     /** The same set as {@link #AUDIT_READ_ROLES}, as authorities, for the in-method check. */
     private static final List<String> AUDIT_READER_AUTHORITIES = List.of(
         "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
@@ -148,28 +147,60 @@ public class AuditEventLogController {
         @RequestParam(required = false) List<String> eventType,
         @Parameter(description = "Same filter as eventType; both may be given and a row matches any value")
         @RequestParam(required = false) List<String> eventTypes,
-        @Parameter(description = "Free text matched against the actor, description, entity type and resource name")
-        @RequestParam(required = false) @Size(max = MAX_SEARCH_LENGTH) String search,
         @PageableDefault(size = 20) Pageable pageable
     ) {
+        return ResponseEntity.ok(auditPage(fromDate, toDate, eventType, eventTypes, null, pageable));
+    }
+
+    /**
+     * The same list narrowed to a free-text term matched against the actor, the description, the
+     * entity type and the resource name (QA D794). The term names people (an actor's login, a
+     * patient in a description), so it travels in the body, never in the URL; the dates, the event
+     * types and the paging stay in the query. Same roles and the same row scope as the list.
+     */
+    @com.example.hms.security.ReadsOnly("the audit log's search box, under POST so the typed term stays out of"
+        + " the URL")
+    @PostMapping("/term-search")
+    @PreAuthorize(AUDIT_READ_ROLES)
+    @Operation(summary = "Search Audit Logs",
+        description = "The list filtered as GET /audit-logs, narrowed to the body's free-text term (at most "
+            + "200 characters). An unknown parameter, body field or event type is a 400.")
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
+    @ApiResponse(responseCode = "400", description = "Unknown event type, parameter or body field")
+    public ResponseEntity<Page<AuditEventLogResponseDTO>> termSearchAuditLogs(
+        @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody SearchTermRequestDTO body,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
+        @RequestParam(required = false) List<String> eventType,
+        @RequestParam(required = false) List<String> eventTypes,
+        @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return ResponseEntity.ok(auditPage(fromDate, toDate, eventType, eventTypes, body.term(), pageable));
+    }
+
+    private Page<AuditEventLogResponseDTO> auditPage(LocalDateTime fromDate, LocalDateTime toDate,
+                                                     List<String> eventType, List<String> eventTypes,
+                                                     String search, Pageable pageable) {
         Set<AuditEventType> types = AuditEventTypeParams.parse(eventType, eventTypes);
         Specification<AuditEventLog> filter = AuditEventLogSpecifications.between(fromDate, toDate)
             .and(AuditEventLogSpecifications.ofTypes(types))
             .and(AuditEventLogSpecifications.matching(search));
         Set<UUID> scope = auditScope();
         if (scope != null) {
-            return ResponseEntity.ok(scopedPage(scope, filter, pageable));
+            return scopedPage(scope, filter, pageable);
         }
         if (!types.isEmpty() || (search != null && !search.isBlank())) {
-            return ResponseEntity.ok(auditRepository.findAll(
+            return auditRepository.findAll(
                     AuditEventLogSpecifications.everyRow().and(filter), newestFirst(pageable))
-                .map(auditMapper::toDto));
+                .map(auditMapper::toDto);
         }
         if (fromDate != null || toDate != null) {
-            return ResponseEntity.ok(auditService.getAuditLogsByDateRange(fromDate, toDate, pageable));
+            return auditService.getAuditLogsByDateRange(fromDate, toDate, pageable);
         }
         Page<AuditEventLog> page = auditRepository.findAll(pageable);
-        return ResponseEntity.ok(page.map(auditMapper::toDto));
+        return page.map(auditMapper::toDto);
     }
 
     @GetMapping("/hospital/{hospitalId}")

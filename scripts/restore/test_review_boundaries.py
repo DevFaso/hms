@@ -21,6 +21,7 @@ class RestoreReviewBoundaryTest(unittest.TestCase):
 
     def test_only_declared_anonymous_local_volumes_are_accepted(self):
         db = m.Scratch.__new__(m.Scratch)
+        db.endpoint = "unix:///var/run/docker.sock"
         db.name, db.token = m.PREFIX + 'a' * 32, 'a' * 32
         safe = {'Config': {'Labels': {m.LABEL: db.token}, 'Volumes': {'/var/lib/postgresql': {}}},
                 'Name': '/' + db.name, 'HostConfig': {'NetworkMode': 'none'},
@@ -42,6 +43,7 @@ class RestoreReviewBoundaryTest(unittest.TestCase):
             archive = root / 'source.dump'
             archive.write_bytes(b'cdx archive')
             db = m.Scratch.__new__(m.Scratch)
+            db.endpoint = "unix:///var/run/docker.sock"
             db.name = m.PREFIX + 'a' * 32
             with patch.object(db, 'owned'), patch.object(m.subprocess, 'Popen') as popen:
                 process = popen.return_value.__enter__.return_value

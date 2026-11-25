@@ -1,0 +1,2121 @@
+{
+  "src/app/admin-assignments/admin-assignments.html::input::daeed5b9fa1055fba1cd::0": {
+    "reason": "Existing module-specific control styling supplies padding via :where(.search-box), .filters-bar .search-box,\n.filters-bar .filter-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [":where(.search-box)", ".filters-bar .search-box,\n.filters-bar .filter-input"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::input::9bc931c8c94d25482847::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::select::38506aee9ceacf1dedc8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "select"
+  },
+  "src/app/admin-assignments/admin-assignments.html::select::0906b876a3df61fadc83::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "select"
+  },
+  "src/app/admin-assignments/admin-assignments.html::input::b1f9a5309cac09212892::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::input::9c9ac5541392bbea02a4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::select::bff4839778598cb0ed1c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "select"
+  },
+  "src/app/admin-assignments/admin-assignments.html::input::3b889796c45d4c9cb68e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::input::5f9bb5303aaa89d51067::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "input"
+  },
+  "src/app/admin-assignments/admin-assignments.html::select::4881ac6221412e0a5740::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "select"
+  },
+  "src/app/admin-assignments/admin-assignments.html::select::d81453d0ed29989a6ae5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::13823f59c8ec9e46cba7::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::9c400a1426d81edbc343::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::b56388d541eaa1ad635f::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::fbdd9c4c09d10ac0aea2::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::362c6bd134f2fd1a9a56::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/admissions/admissions.html::select::124277139ef23902b0bb::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/announcements/announcement-list.html::input::9d5e5664f6437b0927bc::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/appointments/appointment-form.html::input::41ae3aa2b5023a1a5dd5::0": {
+    "reason": "Existing module-specific control styling supplies padding via :where(.patient-picker-wrap) :where(.picker-input), :where(.patient-picker-wrap) :where(.picker-input). Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ":where(.patient-picker-wrap) :where(.picker-input)",
+      ":where(.patient-picker-wrap) :where(.picker-input)"
+    ],
+    "control": "apptPatientSearch"
+  },
+  "src/app/appointments/appointment-form.html::input::46e0eb05cc0c1d556749::0": {
+    "reason": "Existing module-specific control styling supplies padding via :where(.patient-picker-wrap) :where(.picker-input), :where(.patient-picker-wrap) :where(.picker-input). Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ":where(.patient-picker-wrap) :where(.picker-input)",
+      ":where(.patient-picker-wrap) :where(.picker-input)"
+    ],
+    "control": "apptStaffSearch"
+  },
+  "src/app/appointments/appointment-list.html::input::e97c8baf99520c3dd7a5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/bed-board/bed-board.html::input::1c8469cb295ae6a38f2d::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; adding an independent full-width skin would duplicate its border and icon spacing.",
+    "evidence": [".board-search input"],
+    "control": "input"
+  },
+  "src/app/bed-board/bed-board.html::input::641d01aa741af95a63a0::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; adding an independent full-width skin would duplicate its border and icon spacing.",
+    "evidence": [".board-search input"],
+    "control": "bed-board-search"
+  },
+  "src/app/bed-board/bed-board.html::select::3dd1447c9af6bae9005d::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; adding an independent full-width skin would duplicate its border and icon spacing.",
+    "evidence": [".filters select"],
+    "control": "ward-filter"
+  },
+  "src/app/bed-management/bed-management.html::input::bc95d45d112bd7943880::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".dashboard-filters .dashboard-search input"],
+    "control": "input"
+  },
+  "src/app/bed-management/bed-management.html::select::1b8023a1285ba0f03af4::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/bed-management/bed-management.html::select::643c0047be33ceee10b6::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/bed-management/bed-management.html::input::024eb2435409313d9299::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".dashboard-filters .dashboard-search input"],
+    "control": "input"
+  },
+  "src/app/bed-management/bed-management.html::select::61e3a20ed767a1b5fe51::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/bed-management/bed-management.html::select::ff5af4db77c774d2fafa::0": {
+    "reason": "Deliberately borderless search input inside the padded shared care-workspace search container; preserve its icon, clear action and existing wrapper focus treatment.",
+    "evidence": [".status-select", ".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/billing/billing.html::select::e241b7fb3676b3e39742::0": {
+    "reason": "Existing module-specific control styling supplies padding via .server-filters select,\n.server-filters input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".server-filters select,\n.server-filters input"],
+    "control": "select"
+  },
+  "src/app/billing/billing.html::input::08026cf87ed039879788::0": {
+    "reason": "Existing module-specific control styling supplies padding via .server-filters select,\n.server-filters input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".server-filters select,\n.server-filters input"],
+    "control": "input"
+  },
+  "src/app/billing/billing.html::input::35dc5824f30a4536567f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .server-filters select,\n.server-filters input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".server-filters select,\n.server-filters input"],
+    "control": "input"
+  },
+  "src/app/billing/billing.html::input::db4f433aef0d86e1cc56::0": {
+    "reason": "Existing module-specific control styling supplies padding via .line-edit-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".line-edit-input"],
+    "control": "line-edit-qty"
+  },
+  "src/app/billing/billing.html::input::3ef818c1341a72c0bf2b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .line-edit-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".line-edit-input"],
+    "control": "line-edit-price"
+  },
+  "src/app/billing/billing.html::input::12e8f9d2c4f11ecb4e82::0": {
+    "reason": "Existing module-specific control styling supplies padding via .line-edit-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".line-edit-input"],
+    "control": "line-edit-override-reason"
+  },
+  "src/app/billing/billing.html::input::206be6acd594998db33b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .line-edit-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".line-edit-input"],
+    "control": "line-remove-reason"
+  },
+  "src/app/billing/cash-session/cash-session.component.html::input::86435aaa7842ef51748b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cash-session-day__input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cash-session-day__input"],
+    "control": "cash-session-date"
+  },
+  "src/app/break-glass-review/break-glass-review.html::select::730867072d9c669b5f2b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .review-form select,\n.review-form textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".review-form select,\n.review-form textarea"],
+    "control": "select"
+  },
+  "src/app/break-glass-review/break-glass-review.html::textarea::0393647f1cb6ffccee9b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .review-form select,\n.review-form textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".review-form select,\n.review-form textarea"],
+    "control": "textarea"
+  },
+  "src/app/chat/chat.html::input::ec7c0b68f29cab7b82f5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .conv-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".conv-search input"],
+    "control": "input"
+  },
+  "src/app/chat/chat.html::input::24cd8088cefbddbcd715::0": {
+    "reason": "Existing module-specific control styling supplies padding via .new-conv-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".new-conv-search input"],
+    "control": "input"
+  },
+  "src/app/chat/chat.html::input::6c25c7607d2bad0b5b95::0": {
+    "reason": "Existing module-specific control styling supplies padding via .msg-input-area input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".msg-input-area input"],
+    "control": "input"
+  },
+  "src/app/dashboard/credential-renewal/credential-renewal.component.html::input::139bc8b2081f3029e145::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cred-field input,\n.cred-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cred-field input,\n.cred-field textarea"],
+    "control": "credential-expiry"
+  },
+  "src/app/dashboard/credential-renewal/credential-renewal.component.html::input::fd43e91074cfaa14c397::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cred-field input,\n.cred-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cred-field input,\n.cred-field textarea"],
+    "control": "credential-number"
+  },
+  "src/app/dashboard/credential-renewal/credential-renewal.component.html::input::ba64fdb489e37ce43b9c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cred-field input,\n.cred-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cred-field input,\n.cred-field textarea"],
+    "control": "credential-authority"
+  },
+  "src/app/dashboard/credential-renewal/credential-renewal.component.html::textarea::aacf9a4a1767cca71db0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cred-field input,\n.cred-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cred-field input,\n.cred-field textarea"],
+    "control": "credential-note"
+  },
+  "src/app/dashboard/dashboard.html::input::d370780abdf1d694dea6::0": {
+    "reason": "The header-search-input is a compact transparent header search inside its padded toolbar container, not a standalone form field; preserve its existing responsive search design.",
+    "evidence": [".header-search-input"],
+    "control": "input"
+  },
+  "src/app/dashboard/doctor-worklist/doctor-worklist.html::input::f184f6a3e70a1a5bd865::0": {
+    "reason": "Existing module-specific control styling supplies padding via .wl-filter-date. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".wl-filter-date"],
+    "control": "input"
+  },
+  "src/app/dashboard/doctor-worklist/doctor-worklist.html::select::daec58ac2297dd39509d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .wl-filter-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".wl-filter-select"],
+    "control": "select"
+  },
+  "src/app/dashboard/doctor-worklist/doctor-worklist.html::select::30bf5bfdaed78d54c5c3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .wl-filter-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".wl-filter-select"],
+    "control": "select"
+  },
+  "src/app/departments/department-detail.html::select::034f68c8b3c111067a13::0": {
+    "reason": "Existing module-specific control styling supplies padding via .sensitivity-card .sensitivity-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".sensitivity-card .sensitivity-select"],
+    "control": "default-sensitivity"
+  },
+  "src/app/departments/department-list.html::input::5886221c857bac075008::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/digital-signatures/digital-signatures.html::select::cfc63272a65efdd3df18::0": {
+    "reason": "Existing module-specific control styling supplies padding via .lookup-panel select,\n.lookup-panel input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".lookup-panel select,\n.lookup-panel input"],
+    "control": "known-report"
+  },
+  "src/app/digital-signatures/digital-signatures.html::select::37ab527564a628829c72::0": {
+    "reason": "Existing module-specific control styling supplies padding via .lookup-panel select,\n.lookup-panel input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".lookup-panel select,\n.lookup-panel input"],
+    "control": "lookup-type"
+  },
+  "src/app/digital-signatures/digital-signatures.html::input::f0cbe2cf046db4e6d7cc::0": {
+    "reason": "Existing module-specific control styling supplies padding via .lookup-panel select,\n.lookup-panel input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".lookup-panel select,\n.lookup-panel input"],
+    "control": "lookup-id"
+  },
+  "src/app/digital-signatures/digital-signatures.html::input::72a9e7275f7dddea1929::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .filter-bar .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".filter-bar .search-bar input"],
+    "control": "input"
+  },
+  "src/app/digital-signatures/digital-signatures.html::select::4a54c411c9a21033cc37::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar select"],
+    "control": "select"
+  },
+  "src/app/digital-signatures/digital-signatures.html::select::d433e9fb3359b88645ce::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar select"],
+    "control": "select"
+  },
+  "src/app/discharge/discharge.html::input::d40f824e4b4d2bb6cfc3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-toolbar .dashboard-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-toolbar .dashboard-search input"],
+    "control": "input"
+  },
+  "src/app/discharge/discharge.html::input::a38ad15e2d935558e2a0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .range-picker input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".range-picker input[type=date]"],
+    "control": "input"
+  },
+  "src/app/discharge/discharge.html::input::b0d73afd08d213d852f2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .range-picker input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".range-picker input[type=date]"],
+    "control": "input"
+  },
+  "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::select::28dc6563d2a605893319::0": {
+    "reason": "Existing module-specific control styling supplies padding via .elig-dialog__field select,\n.elig-dialog__field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".elig-dialog__field select,\n.elig-dialog__field input"],
+    "control": "scheme"
+  },
+  "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::select::56636f0a2f927e0760b2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .elig-dialog__field select,\n.elig-dialog__field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".elig-dialog__field select,\n.elig-dialog__field input"],
+    "control": "checkType"
+  },
+  "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::input::15bf993906f896e8418f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .elig-dialog__field select,\n.elig-dialog__field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".elig-dialog__field select,\n.elig-dialog__field input"],
+    "control": "elig-member-id"
+  },
+  "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::input::952fe48b2cc1fbc49ac9::0": {
+    "reason": "Existing module-specific control styling supplies padding via .elig-dialog__field select,\n.elig-dialog__field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".elig-dialog__field select,\n.elig-dialog__field input"],
+    "control": "elig-service-code"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::fd7fd02fc5880f3401a4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "chiefComplaint"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::d2f39545ff051f3116cd::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "hpi"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::f1b2e3641680cb0a115b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "ros"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::a3e98d466119aec9c4e5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "exam"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::29190f3ab24fc94dc0de::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "diag"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::2780278d3b5687ef7d1a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "note-subjective"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::04f7745979362ab0c8ca::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "objective"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::e532fd4e58dd02145210::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "assessment"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::a00e7fe5ffe4e3453869::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "plan"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::f9ebeadd01c2a3f8ffd8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "implementation"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::cd75c2323bdc41d57d0f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "evaluation"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::textarea::db7ddf10664df5032056::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "instructions"
+  },
+  "src/app/encounters/encounter-note-form/encounter-note-form.component.html::input::a62e5fe8c040141598c7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".enc-note-form__field textarea,\n.enc-note-form__field input[type=text],\n.enc-note-form__field input[type=datetime-local]"
+    ],
+    "control": "eventOccurredAt"
+  },
+  "src/app/encounters/encounters.html::select::eafdbdfede5635e2b462::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/encounters/encounters.html::select::85a0f29f309d0e2cdf96::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/encounters/encounters.html::select::dbd4d145b61a45b9c657::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/encounters/encounters.html::select::a3efc3021dd2969d3587::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/encounters/encounters.html::select::9cc28f90ff5aedea9475::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/encounters/encounters.html::textarea::716546366ff99705ac8a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .note-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".note-input"],
+    "control": "addendum-content"
+  },
+  "src/app/feature-flags/feature-flags.html::input::94649857fdf6e6c73390::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/hospitals/hospital-list.html::input::496920f43af1cbc1d601::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/imaging/imaging.html::input::f407e897f7d71755273a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .date-filters input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".date-filters input[type=date]"],
+    "control": "imaging-date-from"
+  },
+  "src/app/imaging/imaging.html::input::d9cf20d106b28e55ad74::0": {
+    "reason": "Existing module-specific control styling supplies padding via .date-filters input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".date-filters input[type=date]"],
+    "control": "imaging-date-to"
+  },
+  "src/app/imaging/imaging.html::select::02a2ed679b31bd1899a5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .results-filters select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".results-filters select"],
+    "control": "select"
+  },
+  "src/app/imaging/pacs-settings/pacs-settings.component.html::select::75328615273042e725c7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select"
+    ],
+    "control": "pacs-hospital"
+  },
+  "src/app/imaging/pacs-settings/pacs-settings.component.html::input::884666587ef650937e99::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select"
+    ],
+    "control": "pacs-base-url"
+  },
+  "src/app/imaging/pacs-settings/pacs-settings.component.html::input::41f80ff9d9d349ca98af::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select"
+    ],
+    "control": "pacs-username"
+  },
+  "src/app/imaging/pacs-settings/pacs-settings.component.html::input::2b990d8f73767b71e0de::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select"
+    ],
+    "control": "pacs-password"
+  },
+  "src/app/imaging/pacs-settings/pacs-settings.component.html::input::5dde6423753c40608d68::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pacs-field input[type=url],\n.pacs-field input[type=text],\n.pacs-field input[type=password],\n.pacs-field select"
+    ],
+    "control": "pacs-viewer-template"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::input::fe8144a6594f907e8d33::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "name"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::input::5338899a08c8c84bf703::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "serialNumber"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::input::fa645bc7702f31cbbd57::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "manufacturer"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::input::9fefa7687d3378516d6a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "modelNumber"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::select::41d39923bfc0647188d3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "status"
+  },
+  "src/app/lab/lab-instruments/lab-instruments.html::textarea::4b41871749abaad3d639::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "notes"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::e4f92bf8c04e63ed2350::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "name"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::f3b30bfbb3149649604c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "itemCode"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::4d84013806a973d19c43::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "category"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::05daac944a1155c89216::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "quantity"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::1d3dbb757ce44b47fea3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "unit"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::e5b0b7b02b5828e6ebbf::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "reorderThreshold"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::d551ad20d33577229489::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "supplier"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::945aad30b64c27c3ebfa::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "lotNumber"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::input::5f713fc2fdec94059ca6::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "expirationDate"
+  },
+  "src/app/lab/lab-inventory/lab-inventory.html::textarea::b3db62c939057473cebe::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "notes"
+  },
+  "src/app/lab/lab-outbox/lab-outbox.html::select::76afc715a353a13e2767::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar select"],
+    "control": "outbox-status-filter"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::select::dba4d090a0b1c9c86b78::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-test"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::select::f1f1d4c66d82dff9e679::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-level"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::6afe63435fb02653881b::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "input"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::1f99863042d734c077ba::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-lot"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::d9ede7915d8b40d08599::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-measured"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::4de82f3ac0438c5ba1bf::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-expected"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::textarea::681d4a8adf0c3c7a78d9::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "textarea"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::fc13eb65ce418034be35::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-target-mean"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::346c06baff6450181fd6::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "qc-target-sd"
+  },
+  "src/app/lab/lab-qc-dashboard/lab-qc-dashboard.html::input::5afa6d20b2e587c9a543::0": {
+    "reason": "Existing module-specific control styling supplies padding via *, *, *, .qc-field input,\n.qc-field select,\n.qc-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["*", "*", "*", ".qc-field input,\n.qc-field select,\n.qc-field textarea"],
+    "control": "input"
+  },
+  "src/app/lab/lab-release-worklist/lab-release-worklist.html::input::2917ce146b08762a16dd::0": {
+    "reason": "Existing module-specific control styling supplies padding via .release-field input,\n.release-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".release-field input,\n.release-field textarea"],
+    "control": "release-critical-to"
+  },
+  "src/app/lab/lab-release-worklist/lab-release-worklist.html::input::27878e48a34066f1f28c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .release-field input,\n.release-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".release-field input,\n.release-field textarea"],
+    "control": "release-critical-at"
+  },
+  "src/app/lab/lab-release-worklist/lab-release-worklist.html::input::604ceefd14c0fa6d55e9::0": {
+    "reason": "Existing module-specific control styling supplies padding via .release-field input,\n.release-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".release-field input,\n.release-field textarea"],
+    "control": "release-critical-read-back"
+  },
+  "src/app/lab/lab-release-worklist/lab-release-worklist.html::textarea::5f2cec34207e0cfbe276::0": {
+    "reason": "Existing module-specific control styling supplies padding via .release-field input,\n.release-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".release-field input,\n.release-field textarea"],
+    "control": "release-qc-override-reason"
+  },
+  "src/app/lab/lab-results/lab-results.html::select::2fb765f04f029424deb2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .diagnostics-workspace .results-pagination select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".diagnostics-workspace .results-pagination select"],
+    "control": "select"
+  },
+  "src/app/lab/lab-staff-list/lab-staff-list.html::select::4b72c612a26c7d91c97c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .role-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".role-select"],
+    "control": "select"
+  },
+  "src/app/lab/lab-test-config/lab-test-config.html::input::a1f5d42b623d62de6821::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-input, .diagnostics-workspace .search-box input,\n.diagnostics-workspace .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".search-bar input",
+      ".search-input",
+      ".diagnostics-workspace .search-box input,\n.diagnostics-workspace .search-bar input"
+    ],
+    "control": "input"
+  },
+  "src/app/lock-screen/lock-screen.html::input::2082c34ebf107a1703d2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .input-wrapper input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".input-wrapper input"],
+    "control": "unlock-password"
+  },
+  "src/app/maternity/maternity.html::input::0eeb1e7e7d0be3c07f83::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "input"
+  },
+  "src/app/maternity/maternity.html::input::18fca5dd38ab85f4bb54::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "input"
+  },
+  "src/app/maternity/maternity.html::select::bd73fec480507f337510::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "select"
+  },
+  "src/app/maternity/maternity.html::select::fc7c87d7c9f3a6f0c5a7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "select"
+  },
+  "src/app/maternity/ultrasound-tab.html::input::e56406ceaeb734a565d3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "input"
+  },
+  "src/app/maternity/ultrasound-tab.html::select::ef6a5e9e60e46f7e5298::0": {
+    "reason": "Existing module-specific control styling supplies padding via .workspace-tools input,\n.workspace-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".workspace-tools input,\n.workspace-tools select"],
+    "control": "select"
+  },
+  "src/app/medication-history/medication-history.html::input::cf1ee3cc455033acd772::0": {
+    "reason": "Existing module-specific control styling supplies padding via .range-picker input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".range-picker input[type=date]"],
+    "control": "input"
+  },
+  "src/app/medication-history/medication-history.html::input::24e1753869fe87d95d66::0": {
+    "reason": "Existing module-specific control styling supplies padding via .range-picker input[type=date]. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".range-picker input[type=date]"],
+    "control": "input"
+  },
+  "src/app/mfa/mfa-challenge.html::input::e4d4caf31bf01ee61bcf::0": {
+    "reason": "Existing module-specific control styling supplies padding via .totp-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".totp-input"],
+    "control": "mfa-challenge-code"
+  },
+  "src/app/mfa/mfa-enroll.html::input::de8c8c6f0c3108fb3f5b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .totp-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".totp-input"],
+    "control": "mfa-enroll-code"
+  },
+  "src/app/micro/microbiology.html::input::76a8e41b711548c143e6::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "correction-reason"
+  },
+  "src/app/micro/microbiology.html::select::ff54f99f14dc52329e2b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "edit-growth"
+  },
+  "src/app/micro/microbiology.html::input::8c84401bc01527ac61ed::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "edit-gram"
+  },
+  "src/app/micro/microbiology.html::textarea::850c4a46eba2cbcaaa71::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "edit-notes"
+  },
+  "src/app/micro/microbiology.html::select::0bf61edb8206c064d9bb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "create-order"
+  },
+  "src/app/micro/microbiology.html::input::13ad4e57cafd1f2e0469::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "create-source"
+  },
+  "src/app/micro/microbiology.html::input::a7a3b0768ef9000c34d1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "create-collected"
+  },
+  "src/app/micro/microbiology.html::input::d6a3f55f4131821716de::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "create-gram"
+  },
+  "src/app/micro/microbiology.html::textarea::c82986306292975d9e82::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "create-notes"
+  },
+  "src/app/micro/microbiology.html::input::a8570f71a90a5224afd2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "iso-organism"
+  },
+  "src/app/micro/microbiology.html::input::db656273835c6b05a464::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "iso-code"
+  },
+  "src/app/micro/microbiology.html::input::69b9856a57c0ab73b15b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "iso-quantity"
+  },
+  "src/app/micro/microbiology.html::textarea::e47659f5dbd1eb4c38f3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "iso-notes"
+  },
+  "src/app/micro/microbiology.html::input::0f22944edb9629c8d84f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "susc-antibiotic"
+  },
+  "src/app/micro/microbiology.html::select::76d48601922d979eba03::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "susc-method"
+  },
+  "src/app/micro/microbiology.html::input::c7bb51d0125b9d5085c8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "susc-mic"
+  },
+  "src/app/micro/microbiology.html::select::7f0a60b30bb435c813d7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "susc-interp"
+  },
+  "src/app/micro/microbiology.html::textarea::58125536b51fa27805b8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "susc-notes"
+  },
+  "src/app/nurse-station/emar/emar.component.html::input::b7bb18bff13ecb9e4948::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".care-search input"],
+    "control": "input"
+  },
+  "src/app/nurse-station/emar/emar.component.html::input::e286e62aa5f288d82cf9::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-patient-scan"
+  },
+  "src/app/nurse-station/emar/emar.component.html::input::cf477e9ac57c9815f446::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-med-scan"
+  },
+  "src/app/nurse-station/emar/emar.component.html::input::7d13f2c28c5f8846cd09::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-dose"
+  },
+  "src/app/nurse-station/emar/emar.component.html::input::648a41b5cf9263ccdf05::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-route"
+  },
+  "src/app/nurse-station/emar/emar.component.html::textarea::46b3df0c7a53deb92dbf::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-override-reason"
+  },
+  "src/app/nurse-station/emar/emar.component.html::textarea::0f74868dbc318c7fe0a3::0": {
+    "reason": "Existing eMAR scan controls use emar__input with 0.5rem 0.75rem padding, border and focus styling; its search uses the padded care-workspace search wrapper. Preserve those specialized layouts.",
+    "evidence": [".emar__input"],
+    "control": "emar-hold-reason"
+  },
+  "src/app/nurse-station/nurse-station.html::select::db5d233c05dfba834ca3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .section-picker select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".section-picker select"],
+    "control": "select"
+  },
+  "src/app/nurse-station/nurse-station.html::input::83559d8aa6631d855d83::0": {
+    "reason": "Existing module-specific control styling supplies padding via .queue-search input,\n.task-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".queue-search input,\n.task-search input"],
+    "control": "input"
+  },
+  "src/app/nurse-station/nurse-station.html::input::6b4fadc4444245ca5599::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar input,\n.board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar input,\n.board-toolbar select"],
+    "control": "input"
+  },
+  "src/app/nurse-station/nurse-station.html::select::24d5cab40606ae0f756e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar input,\n.board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar input,\n.board-toolbar select"],
+    "control": "select"
+  },
+  "src/app/nurse-station/nurse-station.html::select::484d950f6ba379debc16::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar input,\n.board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar input,\n.board-toolbar select"],
+    "control": "select"
+  },
+  "src/app/nurse-station/nurse-station.html::textarea::3955939c858fc7f68142::0": {
+    "reason": "Existing module-specific control styling supplies padding via .reason-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".reason-input"],
+    "control": "mar-reason-input"
+  },
+  "src/app/nurse-station/nurse-station.html::input::feaeab657cebe2014608::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-temp"
+  },
+  "src/app/nurse-station/nurse-station.html::input::079e6056a72a812e11b7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-hr"
+  },
+  "src/app/nurse-station/nurse-station.html::input::25277d09f8db5c13d399::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-rr"
+  },
+  "src/app/nurse-station/nurse-station.html::input::627e37b7ce2d892ee809::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-sbp"
+  },
+  "src/app/nurse-station/nurse-station.html::input::8811a7296c607efb6343::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-dbp"
+  },
+  "src/app/nurse-station/nurse-station.html::input::ace863196740adab9ae5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-spo2"
+  },
+  "src/app/nurse-station/nurse-station.html::input::485bbb106d1ab05ca15d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-glucose"
+  },
+  "src/app/nurse-station/nurse-station.html::input::e09e2d70a5ebfdb7d646::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-weight"
+  },
+  "src/app/nurse-station/nurse-station.html::input::915afe74e30d17692298::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-height"
+  },
+  "src/app/nurse-station/nurse-station.html::input::8eb00b2cd34a3f545e51::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-head-circumference"
+  },
+  "src/app/nurse-station/nurse-station.html::input::cec6c7cbbb800db77853::0": {
+    "reason": "Existing module-specific control styling supplies padding via .vitals-field input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".vitals-field input"],
+    "control": "vf-pain"
+  },
+  "src/app/nurse-station/nurse-station.html::textarea::9d34d37208ab4f6c482a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .reason-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".reason-input"],
+    "control": "vf-notes"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::eb688d3a9e2ee62c1c9f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::1dd7f761f2d013ec59b4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::select::b5218f7016f1401022b0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "select"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::eb8e4ea5a22e58df0fe9::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::987b3c47ea6e00724038::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::3ddabd74dbbf46b269bf::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::7954a25ea0b686551f61::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::input::d7576a3543220f136fc6::0": {
+    "reason": "Existing module-specific control styling supplies padding via .intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".intake-dialog .allergy-row input:not([type=checkbox]),\n.intake-dialog .allergy-row select,\n.intake-dialog .medication-row input:not([type=checkbox]),\n.intake-dialog .medication-row select"
+    ],
+    "control": "input"
+  },
+  "src/app/on-call/on-call.html::input::3bcc8b3203aa98627c0f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input"],
+    "control": "oncall-from"
+  },
+  "src/app/on-call/on-call.html::input::39656f7f575435cffbed::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input"],
+    "control": "oncall-to"
+  },
+  "src/app/on-call/on-call.html::select::c248da8022b0a80e8b83::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "oncall-staff"
+  },
+  "src/app/on-call/on-call.html::select::e530f36e45a474a17809::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "oncall-department"
+  },
+  "src/app/on-call/on-call.html::input::a104141bbaa7c1162577::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "oncall-start"
+  },
+  "src/app/on-call/on-call.html::input::86eda8a2bcd808a84fb4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "oncall-end"
+  },
+  "src/app/on-call/on-call.html::textarea::155964d8dc0bc5028cd8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "oncall-notes"
+  },
+  "src/app/onboarding/role-welcome/role-welcome.html::input::0c88a00d79f545feb6f7::0": {
+    "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
+    "evidence": [".rw-input"],
+    "control": "rw-phone"
+  },
+  "src/app/onboarding/role-welcome/role-welcome.html::input::3b13c871ba3979a2a1aa::0": {
+    "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
+    "evidence": [".rw-input"],
+    "control": "rw-phone-code"
+  },
+  "src/app/onboarding/role-welcome/role-welcome.html::input::dfee7797e4bb17c5989f::0": {
+    "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
+    "evidence": [".rw-digit"],
+    "control": "input"
+  },
+  "src/app/organizations/organization-list.html::input::46c7f5913aca773227de::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/panel/panel.html::input::4e8ec434744b01836ceb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .care-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".care-search input"],
+    "control": "input"
+  },
+  "src/app/panel/panel.html::select::41ccbdbb4ec32d76e9db::0": {
+    "reason": "Existing module-specific control styling supplies padding via .care-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".care-toolbar select"],
+    "control": "select"
+  },
+  "src/app/patient-education/patient-education.html::select::e7a7fdd4123ef85bcf89::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-selects select, .filter-selects select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-selects select", ".filter-selects select"],
+    "control": "select"
+  },
+  "src/app/patient-education/patient-education.html::select::1f969967127ec34789b0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-selects select, .filter-selects select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-selects select", ".filter-selects select"],
+    "control": "select"
+  },
+  "src/app/patient-notifications/patient-notifications.html::select::f094575d2734dc5b50e0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar select"],
+    "control": "pn-status-filter"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::select::7b6316bc6d2380e7b21f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "hospital"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::select::ad893604109b4c652ca1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "department"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::select::28c16f6b7440860c0165::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "provider"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::input::1a2763ba7a80bba32bfb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "apptDate"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::select::b92f70897cf11ce0996d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "apptTime"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::input::cbdc036df6a7b181b6a1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "reason"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::textarea::6794464e8a411a29fbcf::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "notes"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::textarea::40bf5c709e272d3bd1d5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "cancelReason"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::input::05d0cbde416aa5bffdaa::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "reschedDate"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::select::bc94ef800192e33874db::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "reschedStart"
+  },
+  "src/app/patient-portal/my-appointments/my-appointments.component.html::textarea::318fc40ad4ee5de0466c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".booking-field select,\n.booking-field input[type=date],\n.booking-field input[type=time],\n.booking-field input[type=text],\n.booking-field textarea"
+    ],
+    "control": "reschedReason"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::76a63a5d50c51284fd48::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "phone"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::f140dc50d2f2f8d2f547::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "email"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::497ade21fe6b04163a50::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "address"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::50594fd7b33f815f2d26::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "city"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::a7b81e6f6724f464f1e5::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "state"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::96541590f93d70ce8f7f::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "zip"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::c284fa1f0f41135b08ed::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "ecName"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::f90a7359d8273ef53541::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "ecPhone"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::f15881da9d658fefb3da::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "ecRelation"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::e65c61b4e5b54dbac77d::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "insProvider"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::cd4cc5de820dae5cc481::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "insMember"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::ebf669a3993da3982291::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input,\n.form-row textarea,\n.form-row select"],
+    "control": "insPlan"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::f3d96619bfb968bc9f1f::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::767d327492f9a81a1278::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::input::9a6c812f3ffb2c42e6d8::0": {
+    "reason": "Existing field-group input/select/textarea rules supply full-width padding, border, radius and focus styling within the pre-check-in card; another control skin would duplicate the field layout.",
+    "evidence": [".form-row input, .form-row textarea, .form-row select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-billing/my-billing.component.html::input::f69a60a1a50589c0678e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pay-field input,\n.pay-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pay-field input,\n.pay-field select"],
+    "control": "payAmount"
+  },
+  "src/app/patient-portal/my-billing/my-billing.component.html::select::bfc982ac37daba5d1046::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pay-field input,\n.pay-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pay-field input,\n.pay-field select"],
+    "control": "payMethod"
+  },
+  "src/app/patient-portal/my-billing/my-billing.component.html::select::e6b7bb54fb6c491b09f2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pay-field input,\n.pay-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pay-field input,\n.pay-field select"],
+    "control": "payOperator"
+  },
+  "src/app/patient-portal/my-billing/my-billing.component.html::input::f8ac19f88933e2d0cbea::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pay-field input,\n.pay-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pay-field input,\n.pay-field select"],
+    "control": "payRef"
+  },
+  "src/app/patient-portal/my-documents/my-documents.component.html::select::ad866798c1b21b9c80cb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .upload-form label input,\n.upload-form label select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".upload-form label input,\n.upload-form label select"],
+    "control": "select"
+  },
+  "src/app/patient-portal/my-documents/my-documents.component.html::input::38ffcceb39f27b5645db::0": {
+    "reason": "Existing module-specific control styling supplies padding via .upload-form label input,\n.upload-form label select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".upload-form label input,\n.upload-form label select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-documents/my-documents.component.html::input::29cd7a14c7d2d26485e1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .upload-form label input,\n.upload-form label select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".upload-form label input,\n.upload-form label select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-documents/my-documents.component.html::select::9201616ac60a4fd5c884::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar label select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar label select"],
+    "control": "select"
+  },
+  "src/app/patient-portal/my-education/my-education.component.html::textarea::d5c7c51a04f460e2c50f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .booking-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".booking-field textarea"],
+    "control": "askText"
+  },
+  "src/app/patient-portal/my-family-access/my-family-access.component.html::input::b10a478ac32dd5e44c1f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-grid input,\n.form-grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-grid input,\n.form-grid select"],
+    "control": "family-proxy-username"
+  },
+  "src/app/patient-portal/my-family-access/my-family-access.component.html::select::258d2f30f75077c357bb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-grid input,\n.form-grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-grid input,\n.form-grid select"],
+    "control": "family-relationship"
+  },
+  "src/app/patient-portal/my-family-access/my-family-access.component.html::select::09019d040bc68b1e7b00::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-grid input,\n.form-grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-grid input,\n.form-grid select"],
+    "control": "select"
+  },
+  "src/app/patient-portal/my-family-access/my-family-access.component.html::input::aa16392304ba035a1bf1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-grid input,\n.form-grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-grid input,\n.form-grid select"],
+    "control": "proxy-expires"
+  },
+  "src/app/patient-portal/my-family-access/my-family-access.component.html::input::7b5b79168e408934773a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-grid input,\n.form-grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-grid input,\n.form-grid select"],
+    "control": "input"
+  },
+  "src/app/patient-portal/my-medical-history/my-medical-history.component.html::textarea::a1090f0c2031582b4439::0": {
+    "reason": "Existing module-specific control styling supplies padding via .notes-textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".notes-textarea"],
+    "control": "textarea"
+  },
+  "src/app/patient-portal/my-medical-history/my-medical-history.component.html::textarea::0b6abeadf2c5524b9295::0": {
+    "reason": "Existing module-specific control styling supplies padding via .notes-textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".notes-textarea"],
+    "control": "textarea"
+  },
+  "src/app/patient-portal/my-medical-history/my-medical-history.component.html::textarea::f630d21fa1acf58cf3e7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .notes-textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".notes-textarea"],
+    "control": "textarea"
+  },
+  "src/app/patient-portal/my-medical-history/my-medical-history.component.html::textarea::6dd019dcf30273f10a6f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .notes-textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".notes-textarea"],
+    "control": "textarea"
+  },
+  "src/app/patient-portal/my-screenings/my-screenings.component.html::select::e085675f385e7689f803::0": {
+    "reason": "Existing module-specific control styling supplies padding via .screen-field select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".screen-field select"],
+    "control": "my-screen-language"
+  },
+  "src/app/patient-portal/my-sharing/my-sharing.component.html::textarea::451effab0827f2d53d81::0": {
+    "reason": "Existing module-specific control styling supplies padding via .opt-out-form textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".opt-out-form textarea"],
+    "control": "opt-out-reason"
+  },
+  "src/app/patient-tracker/patient-tracker.component.html::input::e7778a31965bb5fc29b3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-search input"],
+    "control": "input"
+  },
+  "src/app/patient-tracker/patient-tracker.component.html::select::fcc76571a66bfaea421b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar select"],
+    "control": "select"
+  },
+  "src/app/patient-tracker/patient-tracker.component.html::select::16b9984dfd45e887ae4f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar select"],
+    "control": "select"
+  },
+  "src/app/patient-tracker/patient-tracker.component.html::select::39531e195822db6fb438::0": {
+    "reason": "Existing module-specific control styling supplies padding via .board-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".board-toolbar select"],
+    "control": "select"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::select::37e3f41c3cbc97b882f3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-type"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::select::b04b5688037e33783cfb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-status"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::textarea::a34475b42a62ae94ec80::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-description"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::input::d769405277fa6b18e899::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-effective"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::input::a6398dd163d17b53d254::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-expiration"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::input::b56de7b392c15f2bb4e7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-physician"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::input::04f7220099164818b65c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-witness"
+  },
+  "src/app/patients/advance-directives/advance-directives-tab.component.html::input::cdaad56e4d00742045bc::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "directive-document"
+  },
+  "src/app/patients/bpa-panel/bpa-panel.component.html::textarea::d3b9490cfde448d691e4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .bpa-modal__reason textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".bpa-modal__reason textarea"],
+    "control": "bpa-critical-reason"
+  },
+  "src/app/patients/break-glass-banner/break-glass-banner.component.html::textarea::74829c3419a1aee887b0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .bg-modal__input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".bg-modal__input"],
+    "control": "bgReason"
+  },
+  "src/app/patients/break-glass-banner/break-glass-banner.component.html::select::34dcd2e0f68998e2ed44::0": {
+    "reason": "Existing module-specific control styling supplies padding via .bg-modal__input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".bg-modal__input"],
+    "control": "bgTtl"
+  },
+  "src/app/patients/family-release/family-release.component.html::select::c8efa929555b2dddd6eb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .family-release__control. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".family-release__control"],
+    "control": "family-release-guardian"
+  },
+  "src/app/patients/family-release/family-release.component.html::textarea::86dd250df94b789e425b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .family-release__control. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".family-release__control"],
+    "control": "family-release-reason"
+  },
+  "src/app/patients/fluid-balance/fluid-balance-tab.component.html::select::ead36e059b87fc46f392::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "io-route"
+  },
+  "src/app/patients/fluid-balance/fluid-balance-tab.component.html::input::35660c893a00f8f636ee::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "io-volume"
+  },
+  "src/app/patients/fluid-balance/fluid-balance-tab.component.html::input::fcc8abf3726c13147389::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "io-time"
+  },
+  "src/app/patients/fluid-balance/fluid-balance-tab.component.html::textarea::594a472aa6c4dfd47383::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-field input,\n.form-field select,\n.form-field textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-field input,\n.form-field select,\n.form-field textarea"],
+    "control": "io-notes"
+  },
+  "src/app/patients/patient-detail.html::input::2fe6df25cd0490aa980a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .restriction-card input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".restriction-card input"],
+    "control": "restriction-reason"
+  },
+  "src/app/patients/patient-list.html::select::428fcd1f1a0012080aed::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "directoryHospital"
+  },
+  "src/app/patients/patient-list.html::input::c4759c6df375cbb4962a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/patients/patient-list.html::select::7dd339694177eb173e27::0": {
+    "reason": "Existing module-specific control styling supplies padding via select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select"],
+    "control": "select"
+  },
+  "src/app/pharmacy/counter-sale.html::select::348817920cbddd6a2960::0": {
+    "reason": "Existing module-specific control styling supplies padding via input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea, .pharmacy-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea",
+      ".pharmacy-select"
+    ],
+    "control": "salePharmacy"
+  },
+  "src/app/pharmacy/dispensing.html::select::dd94c5cb9961e240a89b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-select, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-select",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "select"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::27796c564d0f9ca2fd9c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar .search-input, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".filter-bar .search-input",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "input"
+  },
+  "src/app/pharmacy/drug-interactions.html::select::20f15880bd4269dca8a5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".filter-bar select",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-severity"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::1c7e861c8bd21602a2ff::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-drug1-name"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::57b62917d24163de5608::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-drug1-code"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::368c68ea896fbafd3047::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-drug2-name"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::9adf408be7a781323558::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-drug2-code"
+  },
+  "src/app/pharmacy/drug-interactions.html::select::490a58ba49ea9ae20f81::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-severity-select"
+  },
+  "src/app/pharmacy/drug-interactions.html::textarea::a73e27d19009209a822a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-recommendation"
+  },
+  "src/app/pharmacy/drug-interactions.html::textarea::ac2dca10ea5c9aa9a368::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-description"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::45574772edef3fc698ff::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-mechanism"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::5cbaa9a8048d455250f2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-effects"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::7f3f4c867f62d99c3a43::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-monitoring"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::0de8026814007c0b4182::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-interval"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::3d87294967d4a9e23412::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-source"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::f034aa41054f06c1157c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-evidence"
+  },
+  "src/app/pharmacy/drug-interactions.html::input::ca9b760575c1bdc5b68b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-references"
+  },
+  "src/app/pharmacy/drug-interactions.html::textarea::43bde9404e2eb3e505f5::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-card input,\n.form-card select,\n.form-card textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ddi-notes"
+  },
+  "src/app/pharmacy/goods-receipt.html::select::a60a88eb680df0adeae8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-select, .pharmacy-workspace .pharmacy-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pharmacy-select", ".pharmacy-workspace .pharmacy-select"],
+    "control": "select"
+  },
+  "src/app/pharmacy/goods-receipt.html::input::e59164675d2f19e6b892::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input"
+    ],
+    "control": "input"
+  },
+  "src/app/pharmacy/inventory-dashboard.html::select::a60a88eb680df0adeae8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-select, .pharmacy-workspace .pharmacy-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".pharmacy-select", ".pharmacy-workspace .pharmacy-select"],
+    "control": "select"
+  },
+  "src/app/pharmacy/inventory-dashboard.html::input::85cc4b053eca3535e226::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input"
+    ],
+    "control": "input"
+  },
+  "src/app/pharmacy/inventory-dashboard.html::input::2c3d2e3a05d0b3e89116::0": {
+    "reason": "Existing module-specific control styling supplies padding via .price-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".price-input"],
+    "control": "input"
+  },
+  "src/app/pharmacy/inventory-dashboard.html::input::3c36743cf74f0b9a91f1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .price-reason-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".price-reason-input"],
+    "control": "input"
+  },
+  "src/app/pharmacy/inventory-dashboard.html::select::6dd1200da982deda0779::0": {
+    "reason": "Existing module-specific control styling supplies padding via .expiry-controls select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".expiry-controls select"],
+    "control": "expiryDays"
+  },
+  "src/app/pharmacy/medication-catalog.html::input::bfd83ed48b37cf41cfa7::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input, .pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".search-bar input",
+      ".search-bar input",
+      ".pharmacy-workspace .workspace-search input,\n.pharmacy-workspace .search-bar input,\n.pharmacy-workspace .search-box input"
+    ],
+    "control": "input"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::select::71eb878943515bf2482d::0": {
+    "reason": "Existing module-specific control styling supplies padding via input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"],
+    "control": "checkoutPharmacy"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::select::88ded4b4b1e746f5e27a::0": {
+    "reason": "Existing module-specific control styling supplies padding via input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"],
+    "control": "dispenseId"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::input::7a4971978f79008f6353::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "amount"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::select::8f66e10c49232442b04a::0": {
+    "reason": "Existing module-specific control styling supplies padding via input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"],
+    "control": "operator"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::input::c5a72d1488cabb52c3d1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "ref"
+  },
+  "src/app/pharmacy/pharmacy-checkout.html::textarea::a922e868e5ea6fd1012a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-checkout .form-row input,\n.pharmacy-checkout .form-row textarea",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "notes"
+  },
+  "src/app/pharmacy/pharmacy-claims.html::select::c914902031c7c0df9c5d::0": {
+    "reason": "Existing module-specific control styling supplies padding via input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"],
+    "control": "filter"
+  },
+  "src/app/pharmacy/pharmacy-registry.html::input::1a662a64d562d708201d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/pharmacy/stock-adjustment.html::select::dd94c5cb9961e240a89b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .pharmacy-select, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".pharmacy-select",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "select"
+  },
+  "src/app/pharmacy/stock-adjustment.html::select::1baa8a24b96b1d462987::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar select, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".filter-bar select",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "txFilterType"
+  },
+  "src/app/pharmacy/stock-routing.html::input::1140ec869c6564d7487d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-control, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ".form-control",
+      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
+    ],
+    "control": "rxSearchInput"
+  },
+  "src/app/platform/platform.html::select::e4c2466b845316c5d46e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-select"],
+    "control": "orgSelect"
+  },
+  "src/app/platform/platform.html::select::3810c51e0af8f7c72a44::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-select"],
+    "control": "statusSelect"
+  },
+  "src/app/procedure-orders/procedure-orders.html::input::5ba9be0d8fe646af8f6a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .procedure-tools input,\n.procedure-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".procedure-tools input,\n.procedure-tools select"],
+    "control": "input"
+  },
+  "src/app/procedure-orders/procedure-orders.html::select::73558a62ac1c3501d1fb::0": {
+    "reason": "Existing module-specific control styling supplies padding via .procedure-tools input,\n.procedure-tools select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".procedure-tools input,\n.procedure-tools select"],
+    "control": "select"
+  },
+  "src/app/profile/profile.html::input::9c95e853eb60058bd532::0": {
+    "reason": "Existing module-specific control styling supplies padding via .mfa-enroll-inline .mfa-verify-form .totp-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".mfa-enroll-inline .mfa-verify-form .totp-input"],
+    "control": "mfaStepUpCode"
+  },
+  "src/app/profile/profile.html::input::f33d4ae91c2298f94a15::0": {
+    "reason": "Existing module-specific control styling supplies padding via .mfa-enroll-inline .mfa-verify-form .totp-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".mfa-enroll-inline .mfa-verify-form .totp-input"],
+    "control": "mfaTotpCode"
+  },
+  "src/app/profile/profile.html::select::2b8e607bb11741ade9e8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .recovery-form .form-control. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".recovery-form .form-control"],
+    "control": "recovery-type"
+  },
+  "src/app/profile/profile.html::input::686ef2326a638fca85ad::0": {
+    "reason": "Existing module-specific control styling supplies padding via .recovery-form .form-control. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".recovery-form .form-control"],
+    "control": "recovery-value"
+  },
+  "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::input::b2f061363702b687f4ec::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-row input,\n.form-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-row input,\n.form-row select"],
+    "control": "empi-first"
+  },
+  "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::input::e7f5e8dbb13870557205::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-row input,\n.form-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-row input,\n.form-row select"],
+    "control": "empi-last"
+  },
+  "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::input::ad222288b2d34482973c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-row input,\n.form-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-row input,\n.form-row select"],
+    "control": "empi-dob"
+  },
+  "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::select::0cfe9653b26f2573d3bf::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-row input,\n.form-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-row input,\n.form-row select"],
+    "control": "empi-sex"
+  },
+  "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.html::input::6cc551f7b22c5664795b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-row input,\n.form-row select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-row input,\n.form-row select"],
+    "control": "empi-national-id"
+  },
+  "src/app/reception/patient-snapshot-drawer/patient-snapshot-drawer.component.html::textarea::5582f17c734bac957431::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-textarea"],
+    "control": "attest-notes"
+  },
+  "src/app/reception/reception-cockpit/reception-cockpit.component.html::input::f140137394faaaa6b3c3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .date-picker, .cockpit-actions button,\n.date-picker. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".date-picker", ".cockpit-actions button,\n.date-picker"],
+    "control": "reception-cockpit-date"
+  },
+  "src/app/reception/reception-cockpit/reception-cockpit.component.html::input::7cf37b6478c81ced2b52::0": {
+    "reason": "Existing module-specific control styling supplies padding via .queue-search input,\n.task-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".queue-search input,\n.task-search input"],
+    "control": "input"
+  },
+  "src/app/reception/reception-cockpit/reception-cockpit.component.html::select::a86c1b95aeec4c4e6542::0": {
+    "reason": "Existing module-specific control styling supplies padding via .queue-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".queue-toolbar select"],
+    "control": "select"
+  },
+  "src/app/refills/refill-approval-list.component.html::textarea::8f90237c2a4469d3b2d1::0": {
+    "reason": "Existing module-specific control styling supplies padding via .refill-card__notes textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".refill-card__notes textarea"],
+    "control": "textarea"
+  },
+  "src/app/refills/refill-approval-list.component.html::textarea::27762fd688183d95d38a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .refill-card__notes textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".refill-card__notes textarea"],
+    "control": "textarea"
+  },
+  "src/app/registrations/registrations.html::input::5176df1352f96df89f9a::0": {
+    "reason": "The care-workspace padded search container owns the border and icon spacing; its transparent native input intentionally has no independent text-field skin.",
+    "evidence": [".dashboard-filters .dashboard-search input"],
+    "control": "input"
+  },
+  "src/app/registrations/registrations.html::select::f57a7f0f42476e8b4f6f::0": {
+    "reason": "The care-workspace padded search container owns the border and icon spacing; its transparent native input intentionally has no independent text-field skin.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/registrations/registrations.html::select::c629b9047fed008ef645::0": {
+    "reason": "The care-workspace padded search container owns the border and icon spacing; its transparent native input intentionally has no independent text-field skin.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/registrations/registrations.html::select::0d31f03e2b6286340f5e::0": {
+    "reason": "The care-workspace padded search container owns the border and icon spacing; its transparent native input intentionally has no independent text-field skin.",
+    "evidence": [".operations-dashboard select"],
+    "control": "select"
+  },
+  "src/app/registries/registries.html::select::62f28c1e71f5988de51e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .care-toolbar select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".care-toolbar select"],
+    "control": "select"
+  },
+  "src/app/registries/registries.html::input::1d66c4bb9d0f0d6204c2::0": {
+    "reason": "Existing module-specific control styling supplies padding via .care-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".care-search input"],
+    "control": "input"
+  },
+  "src/app/reset-password/reset-password.html::input::9d97cdae1956c6b6d06a::0": {
+    "reason": "Existing module-specific control styling supplies padding via .rp-input-wrapper input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".rp-input-wrapper input"],
+    "control": "newPassword"
+  },
+  "src/app/reset-password/reset-password.html::input::da9eb293da55a9e80615::0": {
+    "reason": "Existing module-specific control styling supplies padding via .rp-input-wrapper input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".rp-input-wrapper input"],
+    "control": "confirmPassword"
+  },
+  "src/app/roi/roi.html::input::75ae57647ef6dab3ccc4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .queue-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".queue-search input"],
+    "control": "input"
+  },
+  "src/app/roi/roi.html::select::28915a8b493c6d31937f::0": {
+    "reason": "Existing module-specific control styling supplies padding via .operations-dashboard select, .requester-filter select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".operations-dashboard select", ".requester-filter select"],
+    "control": "select"
+  },
+  "src/app/roles/role-list.html::input::372717903d475777e65d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/shared/hospital-network-workspace/hospital-network-workspace.html::input::4dc4c28dbcb7c164136b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .network-search input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".network-search input"],
+    "control": "input"
+  },
+  "src/app/shared/hospital-typeahead/hospital-typeahead.component.html::input::c395a199f8fa079620ac::0": {
+    "reason": "The hospital-typeahead input shares a styled combobox wrapper with its search icon and clear action; the wrapper owns padding and border so a second input skin would duplicate them.",
+    "evidence": [".hospital-typeahead__input"],
+    "control": "hospital-typeahead-input"
+  },
+  "src/app/shared/patient-picker/patient-picker.component.html::input::2be5f7e3d67eaf9d0cb6::0": {
+    "reason": "Existing module-specific control styling supplies padding via :where(.patient-picker-wrap) :where(.picker-input), .patient-picker-wrap .picker-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [
+      ":where(.patient-picker-wrap) :where(.picker-input)",
+      ".patient-picker-wrap .picker-input"
+    ],
+    "control": "input"
+  },
+  "src/app/shell/shell.html::input::294c641275243fd15401::0": {
+    "reason": "Existing module-specific control styling supplies padding via .nav-search-input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".nav-search-input"],
+    "control": "nav-search-input"
+  },
+  "src/app/shell/shell.html::select::b27a7f3cf41aed37fa23::0": {
+    "reason": "Existing module-specific control styling supplies padding via .lang-select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".lang-select"],
+    "control": "topbar-lang-select"
+  },
+  "src/app/slot-admin/slot-admin.html::input::391fb21972565505881e::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "gen-from"
+  },
+  "src/app/slot-admin/slot-admin.html::input::7b07ceba69064724b0fa::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "gen-to"
+  },
+  "src/app/slot-admin/slot-admin.html::select::dcdd78e694bb3bf2ee1d::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "slot-staff"
+  },
+  "src/app/slot-admin/slot-admin.html::select::8b0528920290f880cde8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "slot-department"
+  },
+  "src/app/slot-admin/slot-admin.html::input::d600d9961e0a2c0d7728::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "slot-from"
+  },
+  "src/app/slot-admin/slot-admin.html::input::30dd62060ea64a578633::0": {
+    "reason": "Existing module-specific control styling supplies padding via .filter-bar input,\n.filter-bar select,\n.generate-controls input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".filter-bar input,\n.filter-bar select,\n.generate-controls input"],
+    "control": "slot-to"
+  },
+  "src/app/slot-admin/slot-admin.html::input::f49474493596b1670590::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "vt-code"
+  },
+  "src/app/slot-admin/slot-admin.html::input::41008b30be2f2c068711::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "vt-duration"
+  },
+  "src/app/slot-admin/slot-admin.html::input::9d3c7ad2c0b3683f4340::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "vt-name"
+  },
+  "src/app/slot-admin/slot-admin.html::select::851c57baaa615c66a4e3::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "vt-department"
+  },
+  "src/app/slot-admin/slot-admin.html::textarea::e4d5b1adec4ae7899d81::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "vt-description"
+  },
+  "src/app/slot-admin/slot-admin.html::select::a2fcc3c8653b90b8d7b4::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-staff"
+  },
+  "src/app/slot-admin/slot-admin.html::select::b190268703cacc652d55::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-department"
+  },
+  "src/app/slot-admin/slot-admin.html::select::79c8f467df9914a8f1fe::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-visit-type"
+  },
+  "src/app/slot-admin/slot-admin.html::select::ceeec2e0d4e2b1b6fd28::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-day"
+  },
+  "src/app/slot-admin/slot-admin.html::input::d2feb01d1806b98314a8::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-start"
+  },
+  "src/app/slot-admin/slot-admin.html::input::27f988c9dbcc6c7e0603::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-end"
+  },
+  "src/app/slot-admin/slot-admin.html::input::2521794fb67c16ea2c71::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-slot-minutes"
+  },
+  "src/app/slot-admin/slot-admin.html::input::2d7d9a75480983fe824b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-effective-from"
+  },
+  "src/app/slot-admin/slot-admin.html::input::51bb408fab613ece2d81::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-effective-to"
+  },
+  "src/app/slot-admin/slot-admin.html::textarea::893a2e2493f67e3b9f03::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "tpl-notes"
+  },
+  "src/app/slot-admin/slot-admin.html::input::7b1dc4f6761de0efd0ca::0": {
+    "reason": "Existing module-specific control styling supplies padding via .form-card input,\n.form-card select,\n.form-card textarea. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
+    "control": "block-reason"
+  },
+  "src/app/staff/staff-list.html::input::010cf55c15d9932d1733::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/users/user-list.html::input::0d4d32f53707e15add82::0": {
+    "reason": "Existing module-specific control styling supplies padding via .search-bar input, .search-bar input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".search-bar input", ".search-bar input"],
+    "control": "input"
+  },
+  "src/app/verify-email/verify-email.html::input::cf2c6a430fad05f83985::0": {
+    "reason": "The resend form reuses reset-password.scss: rp-input-wrapper owns the icon layout and its input padding/border. Preserve the shared authentication design rather than introducing a second skin.",
+    "evidence": [".rp-input-wrapper input"],
+    "control": "verify-email"
+  },
+  "src/app/admissions/order-set-picker/order-set-picker.component.ts::OrderSetPickerComponent::input::361e82cdfd6e536ee84b::0": {
+    "reason": "Existing module-specific control styling supplies padding via .order-set-picker__search. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".order-set-picker__search"],
+    "control": "order-set-picker-search"
+  },
+  "src/app/appointments/calendar/appointment-calendar.component.ts::AppointmentCalendarComponent::select::99c1d7265ba24f499b1c::0": {
+    "reason": "Existing module-specific control styling supplies padding via .cal-page__filter select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".cal-page__filter select"],
+    "control": "provider-filter"
+  },
+  "src/app/billing/cash-closing/cash-closing.component.ts::CashClosingComponent::input::7f8e4f312d27a9c9321b::0": {
+    "reason": "Unrouted legacy CashClosingComponent: the live billing route renders CashSessionComponent instead. This inactive component has no page to restyle or screenshot; retain until explicit retirement. Its existing cash-closing-controls layout remains present; the guard separately verifies that no template mounts its selector.",
+    "evidence": [".cash-closing-controls"]
+  },
+  "src/app/lab/lab-critical-pending/critical-escalation-settings.component.ts::CriticalEscalationSettingsComponent::input::7b4cc4f19305f04a6b85::0": {
+    "reason": "Existing module-specific control styling supplies padding via .escalation-settings__grid input,\n.escalation-settings__grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".escalation-settings__grid input,\n.escalation-settings__grid select"],
+    "control": "esc-cover"
+  },
+  "src/app/lab/lab-critical-pending/critical-escalation-settings.component.ts::CriticalEscalationSettingsComponent::input::758236a5ed3cb2b63c19::0": {
+    "reason": "Existing module-specific control styling supplies padding via .escalation-settings__grid input,\n.escalation-settings__grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".escalation-settings__grid input,\n.escalation-settings__grid select"],
+    "control": "esc-lead"
+  },
+  "src/app/lab/lab-critical-pending/critical-escalation-settings.component.ts::CriticalEscalationSettingsComponent::input::c37da2320c09328d7548::0": {
+    "reason": "Existing module-specific control styling supplies padding via .escalation-settings__grid input,\n.escalation-settings__grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".escalation-settings__grid input,\n.escalation-settings__grid select"],
+    "control": "esc-unresolved"
+  },
+  "src/app/lab/lab-critical-pending/critical-escalation-settings.component.ts::CriticalEscalationSettingsComponent::select::f142b06ac5edecfbafb0::0": {
+    "reason": "Existing module-specific control styling supplies padding via .escalation-settings__grid input,\n.escalation-settings__grid select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".escalation-settings__grid input,\n.escalation-settings__grid select"],
+    "control": "esc-chief"
+  },
+  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::select::29816b6013c5ed48f56b::0": {
+    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select,\ntextarea,\nbutton"],
+    "control": "rights-hospital"
+  },
+  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::select::e145a1470f2768c55b79::0": {
+    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select,\ntextarea,\nbutton"],
+    "control": "rights-kind"
+  },
+  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::textarea::382c557c417e667b8e97::0": {
+    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select,\ntextarea,\nbutton"],
+    "control": "rights-purpose"
+  },
+  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::textarea::e4acd886fe5302f807c0::0": {
+    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": ["select,\ntextarea,\nbutton"],
+    "control": "rights-description"
+  },
+  "src/app/shared/card-sort/card-sort.component.ts::CardSortComponent::select::71676353002235a642b9::0": {
+    "reason": "Existing module-specific control styling supplies padding via .card-sort__select. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".card-sort__select"],
+    "control": "card-sort-field"
+  },
+  "src/app/shared/sensitivity/adolescent-age-setting.ts::AdolescentAgeSettingComponent::input::b0a9032e0e19ac8106fa::0": {
+    "reason": "Existing module-specific control styling supplies padding via .adolescent-age__input. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".adolescent-age__input"],
+    "control": "adolescent-age-input"
+  },
+  "src/app/shared/sensitivity/sensitivity-select.ts::SensitivitySelectComponent::select::64cfa54826ed5cf60909::0": {
+    "reason": "Existing module-specific control styling supplies padding via .sensitivity-select__control. Preserve this established field layout rather than applying a second visual skin.",
+    "evidence": [".sensitivity-select__control"],
+    "control": "select"
+  }
+}

@@ -50,6 +50,35 @@ describe('RecordRightsComponent own-account requests', () => {
     expect(component.purpose).toBe('');
     expect(component.saving()).toBeFalse();
   });
+  it('keeps every request control inside a narrow form even with a long hospital name', () => {
+    const fixture = create();
+    fixture.componentRef.setInput('hospitals', [
+      {
+        hospitalId: 'hospital-a',
+        hospitalName:
+          'cdx Centre hospitalier régional de Ouagadougou — consultation et suivi des dossiers',
+      },
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.width = '280px';
+    host.style.maxWidth = '280px';
+    host.style.display = 'block';
+    const form = host.querySelector('form')!.getBoundingClientRect();
+    const outer = host.getBoundingClientRect();
+    expect(form.width).toBeGreaterThan(0);
+    expect(form.right).toBeLessThanOrEqual(outer.right + 1);
+    for (const control of host.querySelectorAll('select, textarea, button[type="submit"]')) {
+      const box = control.getBoundingClientRect();
+      expect(box.left)
+        .withContext(control.id || control.tagName)
+        .toBeGreaterThanOrEqual(form.left - 1);
+      expect(box.right)
+        .withContext(control.id || control.tagName)
+        .toBeLessThanOrEqual(form.right + 1);
+    }
+  });
+
   it('requires a correction description and preserves it when the server refuses', () => {
     const component = create().componentInstance;
     component.hospitalId = 'hospital-a';

@@ -75,6 +75,11 @@ class ClientSuppliedIdentityGuardTest {
             "ignored: QA D1226 class, the actor is the session (CallerIdentity.resolveActor with no claim)"),
         Map.entry("AppointmentController#createAppointment{staffId}", SUBJECT),
         Map.entry("AppointmentController#searchAppointments{staffId}", "read: a search filter sent as a POST body"),
+        Map.entry("PrescriptionController#search?staffId",
+            "read: the prescriptions list's staff filter (refused beside a typed term), sent beside the POST body"
+                + " term (QA D3750)"),
+        Map.entry("AppointmentController#termSearchAppointments?staffId",
+            "read: the list's staff filter, beside the typed term sent as a POST body (QA D3750)"),
         Map.entry("AppointmentController#updateAppointment{staffId}", SUBJECT),
         Map.entry("DigitalSignatureController#signReport{signedByStaffId}", "checked: QA D71, must equal the caller's staff record"),
         Map.entry("HospitalClinicalRulesController#sign{signerUserId}",

@@ -98,6 +98,7 @@ import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { patientSearchState } from '../shared/patient-search-handoff';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -2422,7 +2423,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const q = input.value.trim();
     input.value = '';
     if (q) {
-      this.router.navigate(['/patients'], { queryParams: { q } });
+      // QA D3750: the typed term travels in the navigation state, never in the URL.
+      this.router.navigate(['/patients'], patientSearchState(q));
     } else {
       this.router.navigate(['/patients']);
     }

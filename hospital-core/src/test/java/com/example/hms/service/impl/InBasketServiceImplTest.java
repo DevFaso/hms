@@ -192,7 +192,7 @@ class InBasketServiceImplTest {
 
             assertThatThrownBy(() -> service.markAsRead(itemId, otherUserId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("does not belong");
+                    .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("inbasket.item.otherOwner"));
         }
     }
 
@@ -317,7 +317,7 @@ class InBasketServiceImplTest {
 
             assertThatThrownBy(() -> service.acknowledge(itemId, userId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already acknowledged");
+                    .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("inbasket.acknowledgement.finished"));
         }
     }
 

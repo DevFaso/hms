@@ -164,10 +164,22 @@ class PatientPortalServiceImplPhase2Test {
     private Patient patient;
     private User user;
 
+    private MessageSource savedMessageSource;
+    private org.springframework.context.i18n.LocaleContext savedLocaleContext;
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreMessageContext() {
+        com.example.hms.utility.MessageUtil.setMessageSource(savedMessageSource);
+        org.springframework.context.i18n.LocaleContextHolder.setLocaleContext(savedLocaleContext);
+    }
+
     @BeforeEach
     void setUp() {
-        // The refusals below assert the key: another class may have left a bundle in the static holder.
-        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        // Resolve the explicit caller locale using real bundles, independent of the previous test.
+        savedMessageSource = (MessageSource) org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        savedLocaleContext = org.springframework.context.i18n.LocaleContextHolder.getLocaleContext();
+        com.example.hms.utility.MessageUtil.setMessageSource(TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.ENGLISH);
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         com.example.hms.testsupport.SlotPolicyStubs.publishedSlots(slotPolicy);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
@@ -1378,7 +1390,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("patient.refill.cancel.notPending");
+                    .hasMessage("Only a pending refill request can be cancelled.");
         }
 
         @Test
@@ -1393,7 +1405,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("patient.refill.cancel.notPending");
+                    .hasMessage("Only a pending refill request can be cancelled.");
         }
     }
 
@@ -1736,7 +1748,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("patient.refill.decision.userUnresolved");
+                    .hasMessage("Unable to resolve user from authentication.");
         }
 
         @Test
@@ -1997,8 +2009,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                            .containsAnyOf("portal.booking.notRegistered", "not registered"));
+                    .hasMessage("You are not registered at this hospital, so you cannot book there.");
         }
 
         @Test
@@ -2019,8 +2030,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                            .containsAnyOf("portal.booking.departmentOtherHospital", "does not belong"));
+                    .hasMessage("This department does not belong to the selected hospital.");
         }
 
         @Test
@@ -2043,8 +2053,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                            .containsAnyOf("portal.booking.providerOtherHospital", "does not work"));
+                    .hasMessage("This provider does not work at the selected hospital.");
         }
 
         @Test
@@ -2064,8 +2073,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                            .containsAnyOf("portal.booking.providerUnavailable", "not available"));
+                    .hasMessage("The selected provider is not available at that time.");
         }
 
         @Test
@@ -2093,8 +2101,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
-                            .containsAnyOf("portal.booking.providerBusy", "already has an appointment"));
+                    .hasMessage("The selected provider already has an appointment at that time.");
         }
 
         @Test

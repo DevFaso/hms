@@ -686,6 +686,44 @@ div.data-table {
   border-top: 1px solid #f1f5f9;
 }
 
+// Standalone native controls use the same visual system as .field / .form-group.
+// This class has no value accessor, event handler or validation behavior.
+:where(
+  .keneya-form-control,
+  input[appFormControl],
+  select[appFormControl],
+  textarea[appFormControl]
+) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    background: #f8fafc;
+    color: var(--text-secondary);
+    cursor: not-allowed;
+  }
+}
+
+:where(textarea.keneya-form-control, textarea[appFormControl]) {
+  min-height: 80px;
+  resize: vertical;
+}
+
 // ---------- Forms ----------
 .form-card {
   background: #fff;

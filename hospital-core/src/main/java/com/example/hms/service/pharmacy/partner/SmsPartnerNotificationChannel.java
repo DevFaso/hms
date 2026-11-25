@@ -121,21 +121,36 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
     }
 
     @Override
-    public void notifyPatientAccepted(Patient patient, Pharmacy partner) {
+    public void notifyPatientAccepted(PrescriptionRoutingDecision decision, Patient patient, Pharmacy partner) {
         if (patient == null || partner == null) return;
+        var notice = patientNotice(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, decision, patient);
+        if (notice == null) return;
         Locale locale = patientLocale(patient);
         patientMessages.smsAfterCommit(patient,
-            new PatientMessageGate.Notice(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, null, null),
+            notice,
             templates.patientAccepted(safeName(partner.getName(), locale), locale));
     }
 
     @Override
-    public void notifyPatientDispensed(Patient patient, Pharmacy partner) {
+    public void notifyPatientDispensed(PrescriptionRoutingDecision decision, Patient patient, Pharmacy partner) {
         if (patient == null || partner == null) return;
+        var notice = patientNotice(PatientNotificationEvent.PHARMACY_DISPENSED, decision, patient);
+        if (notice == null) return;
         Locale locale = patientLocale(patient);
         patientMessages.smsAfterCommit(patient,
-            new PatientMessageGate.Notice(PatientNotificationEvent.PHARMACY_DISPENSED, null, null),
+            notice,
             templates.patientDispensed(safeName(partner.getName(), locale), locale));
+    }
+
+    /** Trace the originating hospital and this offer, never the partner's hospital or a patient-wide key. */
+    private static PatientMessageGate.Notice patientNotice(PatientNotificationEvent event,
+            PrescriptionRoutingDecision decision, Patient patient) {
+        Prescription prescription = decision != null ? decision.getPrescription() : null;
+        if (decision == null || decision.getId() == null || prescription == null
+                || prescription.getHospital() == null || prescription.getHospital().getId() == null
+                || prescription.getPatient() == null || patient.getId() == null
+                || !patient.getId().equals(prescription.getPatient().getId())) return null;
+        return new PatientMessageGate.Notice(event, prescription.getHospital().getId(), decision.getId());
     }
 
     /**
