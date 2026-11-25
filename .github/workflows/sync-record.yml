@@ -1,0 +1,123 @@
+name: Sync evidence record
+
+on:
+  pull_request:
+    paths:
+      - 'docs/releases/**'
+      - 'scripts/release/**'
+      - '.github/workflows/sync-record.yml'
+  workflow_run:
+    workflows: ['Project Quality Gates']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sync_commit:
+        description: Existing main sync commit hash
+        required: true
+        type: string
+      sync_number:
+        description: Sync number recorded in that commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  refuse-non-main-dispatch:
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Refuse a manual run outside main
+        run: |
+          echo 'Manual record generation requires refs/heads/main' >&2
+          exit 1
+  test:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - run: python -m unittest discover -s scripts/release -p 'test_*.py' -v
+  select:
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      created: ${{ steps.select.outputs.created }}
+      sha: ${{ steps.select.outputs.sha }}
+      number: ${{ steps.select.outputs.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - id: select
+        env:
+          SYNC_COMMIT: ${{ inputs.sync_commit }}
+          SYNC_NUMBER: ${{ inputs.sync_number }}
+        run: python scripts/release/sync_record.py --from-event
+  record:
+    if: needs.select.outputs.created == 'true' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    needs: select
+    concurrency:
+      group: sync-record-${{ needs.select.outputs.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Generate existing-sync evidence
+        id: generate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_COMMIT: ${{ needs.select.outputs.sha }}
+          SYNC_NUMBER: ${{ needs.select.outputs.number }}
+        shell: python
+        run: |
+          import os, subprocess
+          subprocess.run(['python', 'scripts/release/sync_record.py', '--sync-commit', os.environ['SYNC_COMMIT'], '--sync-number', os.environ['SYNC_NUMBER'], '--wait-seconds', '900', '--output-dir', 'sync-record/docs/releases'], check=True)
+      - name: Persist through a draft record PR
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_COMMIT: ${{ needs.select.outputs.sha }}
+          SYNC_NUMBER: ${{ needs.select.outputs.number }}
+        shell: python
+        run: |
+          import os, subprocess
+          subprocess.run(['gh', 'auth', 'setup-git'], check=True)
+          subprocess.run(['python', 'scripts/release/publish_sync_record.py', '--sync-commit', os.environ['SYNC_COMMIT'], '--sync-number', os.environ['SYNC_NUMBER']], check=True)
+      - name: Retain generated record
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sync-evidence-${{ github.run_id }}
+          path: sync-record/
+          if-no-files-found: error
+          retention-days: 90
