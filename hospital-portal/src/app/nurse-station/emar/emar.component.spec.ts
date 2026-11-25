@@ -732,6 +732,29 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     );
   });
 
+  // Review of #1335: sent to a partner or printed is not supplied; only the partner's dispense is.
+  it('QA D3941: an external supply not yet confirmed is marked, a confirmed one is not', () => {
+    const pending: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-external-pending',
+      supplyStatus: 'EXTERNAL_PENDING',
+      supplyLabel: 'Fourniture externe non confirmée (pharmacie partenaire ou ordonnance remise)',
+    };
+    const confirmed: NurseMedicationTask = {
+      ...sampleTask,
+      supplyStatus: 'EXTERNAL_SUPPLIED',
+      supplyLabel: 'Fourni par une pharmacie partenaire',
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([pending, confirmed]));
+    fixture.detectChanges();
+    expect(
+      root().querySelector('[data-testid="emar-supply-chip-task-external-pending"]')?.classList,
+    ).toContain('emar__queue-chip--advisory');
+    expect(
+      root().querySelector(`[data-testid="emar-supply-chip-${confirmed.id}"]`)?.classList,
+    ).not.toContain('emar__queue-chip--advisory');
+  });
+
   it('QA D1237: a frequency the MAR cannot read is shown on the row and its refusal opens the reason dialog', () => {
     const unread: NurseMedicationTask = { ...sampleTask, id: 'task-unread', frequencyUnread: true };
     const unreadRefusal = throwError(

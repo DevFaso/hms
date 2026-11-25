@@ -64,17 +64,31 @@ class MarSupplyTest {
     }
 
     @Test
-    void outOfStockAQuestionAndAnExternalSupplyAreSaid() {
+    void outOfStockAndAQuestionAreSaid() {
         assertThat(MarSupply.of(order(PrescriptionStatus.PENDING_STOCK, "9"), null).state())
             .isEqualTo(MarSupply.State.OUT_OF_STOCK);
         assertThat(MarSupply.of(order(PrescriptionStatus.PENDING_STOCK, "9"), new BigDecimal("3")).state())
             .as("a partial fill waiting for the rest").isEqualTo(MarSupply.State.PARTIALLY_SUPPLIED);
         assertThat(MarSupply.of(order(PrescriptionStatus.PENDING_CLARIFICATION, "9"), null).state())
             .isEqualTo(MarSupply.State.PHARMACY_QUERY);
-        for (PrescriptionStatus external : java.util.List.of(PrescriptionStatus.SENT_TO_PARTNER,
-                PrescriptionStatus.PARTNER_ACCEPTED, PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT)) {
-            assertThat(MarSupply.of(order(external, "9"), null).state()).as(external.name())
-                .isEqualTo(MarSupply.State.EXTERNAL);
+    }
+
+    /**
+     * Review of #1335: an order routed to a partner, accepted by one, or printed for the family is not
+     * supplied until the partner confirms its dispense; the row must not reassure the nurse before that.
+     */
+    @Test
+    void anExternalSupplyIsSaidSuppliedOnlyOnThePartnersConfirmedDispense() {
+        for (PrescriptionStatus pending : java.util.List.of(PrescriptionStatus.SENT_TO_PARTNER,
+                PrescriptionStatus.PARTNER_ACCEPTED, PrescriptionStatus.PRINTED_FOR_PATIENT)) {
+            MarSupply.Reading r = MarSupply.of(order(pending, "9"), null);
+            assertThat(r.state()).as(pending.name()).isEqualTo(MarSupply.State.EXTERNAL_PENDING);
+            assertThat(r.label()).as(pending.name())
+                .isEqualTo("External supply not confirmed (partner pharmacy or printed prescription)")
+                .doesNotContainIgnoringCase("supplied by");
         }
+        MarSupply.Reading confirmed = MarSupply.of(order(PrescriptionStatus.PARTNER_DISPENSED, "9"), null);
+        assertThat(confirmed.state()).isEqualTo(MarSupply.State.EXTERNAL_SUPPLIED);
+        assertThat(confirmed.label()).isEqualTo("Supplied by a partner pharmacy");
     }
 }

@@ -30,8 +30,13 @@ public final class MarSupply {
         OUT_OF_STOCK,
         /** The pharmacy asked the prescriber a question about the order. */
         PHARMACY_QUERY,
-        /** Supplied outside the hospital's pharmacy: a partner pharmacy, or an ordonnance printed for the family. */
-        EXTERNAL
+        /**
+         * Sent outside the hospital's pharmacy and not confirmed supplied: offered to or accepted by a partner
+         * pharmacy, or an ordonnance printed for the family to buy. Nothing says the medicine reached the ward.
+         */
+        EXTERNAL_PENDING,
+        /** A partner pharmacy confirmed it dispensed the order. */
+        EXTERNAL_SUPPLIED
     }
 
     /**
@@ -63,9 +68,14 @@ public final class MarSupply {
         if (status == PrescriptionStatus.PENDING_CLARIFICATION) {
             return State.PHARMACY_QUERY;
         }
+        // Review of #1335: routing, a partner's acceptance or a printed ordonnance is not a supply; only the
+        // partner's dispense confirms one. Saying "supplied" before that would reassure the nurse falsely.
+        if (status == PrescriptionStatus.PARTNER_DISPENSED) {
+            return State.EXTERNAL_SUPPLIED;
+        }
         if (status == PrescriptionStatus.SENT_TO_PARTNER || status == PrescriptionStatus.PARTNER_ACCEPTED
-                || status == PrescriptionStatus.PARTNER_DISPENSED || status == PrescriptionStatus.PRINTED_FOR_PATIENT) {
-            return State.EXTERNAL;
+                || status == PrescriptionStatus.PRINTED_FOR_PATIENT) {
+            return State.EXTERNAL_PENDING;
         }
         // The pharmacy's own word on the order first: its status is computed from the same fills.
         if (status == PrescriptionStatus.DISPENSED) {
@@ -85,7 +95,8 @@ public final class MarSupply {
             case PARTIALLY_SUPPLIED, SUPPLIED -> quantityLabel(state, supplied, ordered);
             case OUT_OF_STOCK -> MessageUtil.resolve("nurse.mar.supply.outOfStock");
             case PHARMACY_QUERY -> MessageUtil.resolve("nurse.mar.supply.pharmacyQuery");
-            case EXTERNAL -> MessageUtil.resolve("nurse.mar.supply.external");
+            case EXTERNAL_PENDING -> MessageUtil.resolve("nurse.mar.supply.externalPending");
+            case EXTERNAL_SUPPLIED -> MessageUtil.resolve("nurse.mar.supply.externalSupplied");
             case NOT_SUPPLIED -> MessageUtil.resolve("nurse.mar.supply.notSupplied");
         };
     }

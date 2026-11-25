@@ -102,7 +102,7 @@ public class NurseMedicationTaskResponseDTO implements com.example.hms.payload.d
 
     /**
      * QA D3941: what the pharmacy has supplied on this order ({@code MarSupply.State}: NOT_SUPPLIED,
-     * PARTIALLY_SUPPLIED, SUPPLIED, OUT_OF_STOCK, PHARMACY_QUERY, EXTERNAL). Information only: a supplied
+     * PARTIALLY_SUPPLIED, SUPPLIED, OUT_OF_STOCK, PHARMACY_QUERY, EXTERNAL_PENDING, EXTERNAL_SUPPLIED). Information only: a supplied
      * order stays on the MAR until the prescriber stops it or its course or stay ends.
      */
     private String supplyStatus;
