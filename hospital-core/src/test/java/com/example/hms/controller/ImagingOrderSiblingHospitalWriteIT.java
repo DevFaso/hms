@@ -318,7 +318,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     @Test
     @DisplayName("QA D1920: a new order's duplicate matches are its own hospital's orders only")
     void createdOrderIsNotMatchedAgainstAnotherHospital() throws Exception {
-        ImagingOrderRequestDTO request = updateRequest(hospitalA.getId(), "Chest PA");
+        ImagingOrderRequestDTO request = newOrderRequest("Chest PA");
         request.setPatientId(patient.getId());
         String body = mockMvc.perform(post(API + "/imaging/orders")
                 .with(acting(doctorA, hospitalA))
@@ -344,7 +344,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     @Test
     @DisplayName("at its own hospital the doctor still creates, edits, re-statuses and signs")
     void inHospitalFlowStillWorks() throws Exception {
-        ImagingOrderRequestDTO create = updateRequest(hospitalA.getId(), "Abdomen US");
+        ImagingOrderRequestDTO create = newOrderRequest("Abdomen US");
         mockMvc.perform(post(API + "/imaging/orders")
                 .with(acting(doctorA, hospitalA))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -485,7 +485,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         MvcResult created = mockMvc.perform(post(API + "/imaging/orders")
                 .with(acting(user, hospitalA))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateRequest(hospitalA.getId(), "Abdomen US"))))
+                .content(objectMapper.writeValueAsString(newOrderRequest("Abdomen US"))))
             .andExpect(status().isCreated())
             .andReturn();
         return UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText());
@@ -523,6 +523,16 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     /** Fixture reads and clean-up run unfiltered, so the tenant filter never hides a row from them. */
     private static void asUnscopedFixture() {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+    }
+
+    /**
+     * A new X-ray at A for this patient, who already has one there (the fixture's order): since QA
+     * D3903 the server finds that duplicate itself, so the order is placed with its reason.
+     */
+    private ImagingOrderRequestDTO newOrderRequest(String studyType) {
+        ImagingOrderRequestDTO request = updateRequest(hospitalA.getId(), studyType);
+        request.setDuplicateOverrideReason(com.example.hms.enums.ImagingDuplicateOverrideReason.CLINICAL_CHANGE);
+        return request;
     }
 
     private ImagingOrderRequestDTO updateRequest(UUID hospitalId, String studyType) {
