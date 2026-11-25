@@ -16163,6 +16163,18 @@
     "HISTORY_ADD": "Registrar los antecedentes",
     "HISTORY_EDIT": "Modificar los antecedentes"
   },
+  "BLOOD_GROUP": {
+    "CONFIRMED_SHORT": "confirmado por el laboratorio",
+    "CONFIRMED_BY_LAB": "confirmado por el laboratorio ({{lab}}, {{date}})",
+    "THE_LAB": "laboratorio",
+    "DIFFERS_FROM_DECLARED": "Difiere del grupo declarado ({{declared}}, no verificado)",
+    "DECLARED_UNVERIFIED": "declarado, no verificado",
+    "ALLO_IMMUNISED": "Aloinmunización: {{antibody}}",
+    "ALLO_IMMUNISED_UNIDENTIFIED": "Aloinmunización: escrutinio de anticuerpos positivo, anticuerpo no identificado",
+    "DECLARED_FIELD": "Grupo sanguíneo declarado (no verificado)",
+    "DECLARED_FIELD_HINT": "Lo que dice el paciente o una tarjeta. Solo el agrupamiento del laboratorio confirma el grupo; este valor nunca lo reemplaza.",
+    "CONFIRMED_ON_RECORD": "Confirmado por el laboratorio: {{group}}"
+  },
   "PORTAL_ACTIVATION": {
     "TITLE": "Acceso al portal del paciente",
     "HELP": "Si el SMS de activación no llegó, muestre el código y entrégueselo al paciente en persona, o vuelva a enviar la activación.",

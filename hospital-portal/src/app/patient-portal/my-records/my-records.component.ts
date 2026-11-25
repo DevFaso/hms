@@ -1,3 +1,4 @@
+import { BloodGroupStatusComponent } from '../../shared/blood-group-status/blood-group-status.component';
 import {
   Component,
   OnInit,
@@ -32,6 +33,7 @@ export const CONDITION_CARD_ROWS = 5;
   selector: 'app-my-records',
   standalone: true,
   imports: [
+    BloodGroupStatusComponent,
     ServerTimePipe,
     CommonModule,
     DatePipe,

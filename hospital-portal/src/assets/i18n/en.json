@@ -16163,6 +16163,18 @@
     "HISTORY_ADD": "Record the medical history",
     "HISTORY_EDIT": "Edit the medical history"
   },
+  "BLOOD_GROUP": {
+    "CONFIRMED_SHORT": "confirmed by the laboratory",
+    "CONFIRMED_BY_LAB": "confirmed by the laboratory ({{lab}}, {{date}})",
+    "THE_LAB": "laboratory",
+    "DIFFERS_FROM_DECLARED": "Differs from the declared group ({{declared}}, not verified)",
+    "DECLARED_UNVERIFIED": "declared, not verified",
+    "ALLO_IMMUNISED": "Allo-immunisation: {{antibody}}",
+    "ALLO_IMMUNISED_UNIDENTIFIED": "Allo-immunisation: positive antibody screen, antibody not identified",
+    "DECLARED_FIELD": "Declared blood group (not verified)",
+    "DECLARED_FIELD_HINT": "What the patient or a card says. Only the laboratory's grouping confirms the group; this value never replaces it.",
+    "CONFIRMED_ON_RECORD": "Confirmed by the laboratory: {{group}}"
+  },
   "PORTAL_ACTIVATION": {
     "TITLE": "Patient portal access",
     "HELP": "If the activation SMS did not arrive, show the code and give it to the patient in person, or send the activation again.",

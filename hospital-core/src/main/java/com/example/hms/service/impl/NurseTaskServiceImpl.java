@@ -210,6 +210,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
 
+    /**
+     * QA D3901: the laboratory's confirmed group beside the typed one. Optional for the hand-built services of the
+     * unit tests (they get the declared group alone); in the application the bean always exists.
+     */
+    private com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBloodGroupStatus(com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus) {
+        this.bloodGroupStatus = bloodGroupStatus;
+    }
+
     /** CR-03: the documented paracetamol exposure at a dose; absent in unit tests built by hand. */
     private com.example.hms.service.emar.ParacetamolExposureCheck exposureCheck;
 
@@ -2263,6 +2274,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .mrn(patient.getMrnForHospital(hospitalId))
             // QA r70 D3220: the group where the nurse works, not only on the chart.
             .bloodType(patient.getBloodType())
+            // QA D3901: the laboratory's confirmed group of this hospital beside it.
+            .bloodGroup(bloodGroupStatus != null ? bloodGroupStatus.of(patient, hospitalId)
+                : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType()))
             .roomBed(a.getRoomBed())
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .admissionId(a.getId())

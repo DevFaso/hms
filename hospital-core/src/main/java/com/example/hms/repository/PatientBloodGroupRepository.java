@@ -32,6 +32,23 @@ public interface PatientBloodGroupRepository extends JpaRepository<PatientBloodG
     List<PatientBloodGroup> findByPatient_IdAndAntibodyScreenOrderByPerformedAtDesc(
         UUID patientId, com.example.hms.enums.AntibodyScreenResult antibodyScreen);
 
+    /**
+     * QA D3901: the current grouping at one hospital with its hospital loaded, for the patient record's « groupe
+     * confirmé » (the record is mapped outside the blood bank, where the lazy hospital may not be reachable).
+     */
+    @Query("SELECT g FROM PatientBloodGroup g JOIN FETCH g.hospital WHERE g.patient.id = :patientId "
+        + "AND g.hospital.id = :hospitalId AND g.superseded = false")
+    Optional<PatientBloodGroup> findCurrentWithHospital(@Param("patientId") UUID patientId,
+                                                        @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D3901: the patient's current grouping at every hospital, the newest first, for the patient's OWN record
+     * (patient portal), which belongs to no single hospital.
+     */
+    @Query("SELECT g FROM PatientBloodGroup g JOIN FETCH g.hospital WHERE g.patient.id = :patientId "
+        + "AND g.superseded = false ORDER BY g.performedAt DESC")
+    List<PatientBloodGroup> findCurrentAtEveryHospital(@Param("patientId") UUID patientId);
+
     @Query("SELECT g FROM PatientBloodGroup g WHERE g.hospital.id = :hospitalId AND g.superseded = false "
         + "ORDER BY g.performedAt DESC")
     List<PatientBloodGroup> findCurrentByHospital(@Param("hospitalId") UUID hospitalId);

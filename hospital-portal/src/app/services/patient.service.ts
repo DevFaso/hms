@@ -7,6 +7,7 @@ import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-que
 import { compactBody } from '../shared/identifier-body';
 import type { NationalUniqueIdChange } from '../patients/national-unique-id';
 import type { NotificationDeliveryStatus } from '../shared/delivery-warnings';
+import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-status';
 
 /** QA r70 D3206: a patient's pending portal activation code (server clock, no zone). */
 export interface PortalActivationCode {
@@ -80,7 +81,10 @@ export interface PatientResponse {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
+  /** The group typed on the chart: declared, never verified. Show it through `bloodGroup`. */
   bloodType?: string;
+  /** QA D3901: the declared group beside the laboratory's confirmed one (and the antibody flag on a chart read). */
+  bloodGroup?: BloodGroupStatus | null;
   allergies?: string;
   medicalHistorySummary?: string;
   preferredPharmacy?: string;

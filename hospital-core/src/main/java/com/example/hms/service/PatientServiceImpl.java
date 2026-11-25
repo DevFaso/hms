@@ -182,6 +182,17 @@ public class PatientServiceImpl implements PatientService {
         this.self = self;
     }
 
+    /**
+     * QA D3901: the chart read carries the allo-immunisation flag beside the confirmed group. Setter injection,
+     * optional for the hand-built test contexts (they keep what the mapper gave); in the application it exists.
+     */
+    private com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus;
+
+    @Autowired(required = false)
+    public void setBloodGroupStatus(com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus) {
+        this.bloodGroupStatus = bloodGroupStatus;
+    }
+
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String DEFAULT_UNKNOWN = "Unknown";
     private static final int DEFAULT_TIMELINE_LIMIT = 50;
@@ -343,7 +354,15 @@ public class PatientServiceImpl implements PatientService {
             }
         }
 
-        return buildPatientDto(patient, effectiveHospitalId);
+        PatientResponseDTO dto = buildPatientDto(patient, effectiveHospitalId);
+        if (dto != null && bloodGroupStatus != null
+                && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
+            // QA D3901: one chart is being read, so its safety facts are complete: the confirmed group and the
+            // allo-immunisation flag, which follows the patient from every hospital. Not for the front desk, whose
+            // answer has the group removed (RCPT-CLIN): a flag it never sees is not read, nor accounted, for it.
+            dto.setBloodGroup(bloodGroupStatus.withAntibodies(patient, effectiveHospitalId));
+        }
+        return dto;
     }
 
     @Override

@@ -22,11 +22,15 @@
           >
         }
         <!-- QA r70 D3220: the blood group on the summary and its print (the desk's copy has none). -->
-        @if (summary().patientBloodType) {
+        <!-- QA D3901: the laboratory's group; a typed one is labelled « non vérifié ». -->
+        @if (summary().patientBloodType || summary().patientBloodGroup?.confirmed) {
           <span data-testid="avs-blood-group"
             >{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}{{ 'COMMON.COLON' | translate }}
-            <strong>{{ summary().patientBloodType }}</strong></span
-          >
+            <app-blood-group-status
+              [status]="summary().patientBloodGroup"
+              [declared]="summary().patientBloodType"
+              [showAntibodies]="false"
+          /></span>
         }
       </p>
       <dl class="vss-identity-visit">

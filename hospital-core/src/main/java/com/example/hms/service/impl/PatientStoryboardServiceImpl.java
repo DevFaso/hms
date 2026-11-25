@@ -72,6 +72,17 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     /** QA r70 D3220: the latest recorded weight, for the patient-safety header. */
     private final com.example.hms.repository.PatientVitalSignRepository vitalSignRepository;
 
+    /**
+     * QA D3901: the safety strip shows the laboratory's confirmed group and the allo-immunisation flag. Setter
+     * injection, optional for the hand-built test contexts (they get the declared group alone).
+     */
+    private com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBloodGroupStatus(com.example.hms.service.transfusion.PatientBloodGroupStatusService bloodGroupStatus) {
+        this.bloodGroupStatus = bloodGroupStatus;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PatientStoryboardDTO getStoryboard(UUID patientId, UUID hospitalId) {
@@ -133,7 +144,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         boolean chronicProblem = problems.stream().anyMatch(ProblemSummaryDTO::isChronic);
 
         return PatientStoryboardDTO.builder()
-            .patient(buildHeader(patient, hospitalId))
+            .patient(buildHeader(patient, hospitalId, release))
             .allergies(allergies)
             // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
             .allergiesWithheld(!release && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
@@ -153,7 +164,15 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .build();
     }
 
-    private PatientHeaderDTO buildHeader(Patient patient, UUID hospitalId) {
+    private com.example.hms.payload.dto.BloodGroupStatusDTO bloodGroupOf(Patient patient, UUID hospitalId,
+                                                                        boolean release) {
+        if (bloodGroupStatus == null) {
+            return com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType());
+        }
+        return release ? bloodGroupStatus.of(patient, hospitalId) : bloodGroupStatus.withAntibodies(patient, hospitalId);
+    }
+
+    private PatientHeaderDTO buildHeader(Patient patient, UUID hospitalId, boolean release) {
         LocalDate dob = patient.getDateOfBirth();
         Integer age = dob != null ? Period.between(dob, LocalDate.now()).getYears() : null;
         String mrn = hospitalId != null ? patient.getMrnForHospital(hospitalId) : null;
@@ -176,6 +195,9 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .ageYears(age)
             .gender(patient.getGender())
             .bloodType(patient.getBloodType())
+            // QA D3901: a release copy carries this hospital's groups only; a chart read adds the antibody flag,
+            // which follows the patient from every hospital.
+            .bloodGroup(bloodGroupOf(patient, hospitalId, release))
             .latestWeightKg(weighing.map(com.example.hms.model.PatientVitalSign::getWeightKg).orElse(null))
             .latestWeightRecordedAt(weighing.map(com.example.hms.model.PatientVitalSign::getRecordedAt)
                 .orElse(null))

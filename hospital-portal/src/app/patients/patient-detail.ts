@@ -76,6 +76,7 @@ import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
 import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 import { PatientPortalActivationComponent } from './portal-activation/patient-portal-activation.component';
+import { BloodGroupStatusComponent } from '../shared/blood-group-status/blood-group-status.component';
 
 /** The chart-restriction reason box: the server names it `reason` in a 400. */
 const RESTRICTION_REASON_FIELD = 'restriction-reason';
@@ -104,6 +105,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    BloodGroupStatusComponent,
     PatientPortalActivationComponent,
     RuleStatusComponent,
     DateTimePipe,

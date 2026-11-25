@@ -148,7 +148,32 @@ public class PatientRecordPdfService {
         pages.field(t.get("pdf.record.field.dob"), join(" ", t.fmt(p.getDateOfBirth()),
             p.getAgeYears() != null ? t.get("pdf.record.field.ageYears", String.valueOf(p.getAgeYears())) : null));
         pages.field(t.get("pdf.record.field.sex"), label(t, p.getGender()));
-        pages.field(t.get("pdf.record.field.bloodType"), p.getBloodType());
+        writeBloodGroup(pages, p, t);
+    }
+
+    /**
+     * QA D3901: the printed group is the laboratory's confirmed one, with where and when; a typed group is printed
+     * as declared and not verified, and on its own line when it differs from the laboratory's.
+     */
+    private static void writeBloodGroup(Pages pages, PatientStoryboardDTO.PatientHeaderDTO p, PdfLabels t)
+            throws IOException {
+        com.example.hms.payload.dto.BloodGroupStatusDTO group = p.getBloodGroup() != null ? p.getBloodGroup()
+            : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(p.getBloodType());
+        String label = t.get("pdf.record.field.bloodType");
+        if (group.getConfirmed() != null) {
+            pages.field(label, t.get("pdf.record.field.bloodType.confirmed", group.getConfirmed(),
+                safe(group.getConfirmedHospitalName()), t.fmt(group.getConfirmedAt())));
+            if (group.isDiscrepancy()) {
+                pages.field(t.get("pdf.record.field.bloodTypeDeclared"),
+                    t.get("pdf.record.field.bloodType.differs", group.getDeclared()));
+            }
+        } else if (group.getDeclared() != null) {
+            pages.field(label, t.get("pdf.record.field.bloodType.declaredOnly", group.getDeclared()));
+        }
+        if (Boolean.TRUE.equals(group.getAlloImmunised())) {
+            pages.field(t.get("pdf.record.field.alloImmunisation"), group.getAntibodySpecificities() != null
+                ? group.getAntibodySpecificities() : t.get("pdf.record.field.alloImmunisation.unidentified"));
+        }
     }
 
     private static void writeAllergies(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,

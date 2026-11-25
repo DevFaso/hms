@@ -143,7 +143,13 @@ class PositiveAntibodyScreenGuardTest {
                 }
             }
         }
-        assertThat(callers).containsExactly("TransfusionServiceImpl.java");
+        // QA D3901 (r77): the patient record and the safety strip show the flag too, through one read-only call of
+        // the accounted status read, made inside the read-only transaction of the chart read that shows it.
+        assertThat(callers).containsExactlyInAnyOrder("TransfusionServiceImpl.java",
+            "PatientBloodGroupStatusService.java");
+        String record = code(MAIN.resolve("service/transfusion/PatientBloodGroupStatusService.java"));
+        assertThat(record).contains("screens.status(patient.getId(), hospitalId)")
+            .doesNotContainPattern("screens\\.(?!status\\()\\w+\\(");
     }
 
     /**
@@ -211,7 +217,10 @@ class PositiveAntibodyScreenGuardTest {
                 }
             }
         }
+        // QA D3901 (r77): and of the blood group status shown on the patient record and its safety strip, which
+        // carries the flag and the antibody only (no hospital's text), filled by the accounted status read above.
         assertThat(carriers).containsExactlyInAnyOrder("dto/transfusion/AntibodyStatusResponseDTO.java",
-            "dto/transfusion/PatientBloodGroupResponseDTO.java", "dto/transfusion/TransfusionRequestResponseDTO.java");
+            "dto/transfusion/PatientBloodGroupResponseDTO.java", "dto/transfusion/TransfusionRequestResponseDTO.java",
+            "dto/BloodGroupStatusDTO.java");
     }
 }

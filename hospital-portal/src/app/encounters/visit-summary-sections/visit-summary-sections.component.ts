@@ -1,3 +1,4 @@
+import { BloodGroupStatusComponent } from '../../shared/blood-group-status/blood-group-status.component';
 import { NoteAddendaComponent } from '../../shared/note-addenda/note-addenda.component';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -173,6 +174,7 @@ function escapeRegExp(value: string): string {
   selector: 'app-visit-summary-sections',
   standalone: true,
   imports: [
+    BloodGroupStatusComponent,
     NoteAddendaComponent,
     CommonModule,
     TranslateModule,
