@@ -15820,7 +15820,8 @@
     "PICK_HINT": "An exam of the hospital’s catalogue: it is priced from the price list.",
     "FREE_TEXT_HINT": "Pick the exam from the catalogue when it is there. Outside the catalogue, the line may be left for the cashier to price, and the exam may be hidden from family to be safe.",
     "EMPTY_HINT": "The hospital’s imaging catalogue is empty: type the exam as free text.",
-    "ORDER_LOAD_FAILED": "The catalogue could not be loaded: type the exam as free text."
+    "ORDER_LOAD_FAILED": "The catalogue could not be loaded: type the exam as free text.",
+    "READ_ONLY_FIELDS": "These fields are read-only with your current access to this catalogue."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Open the refill requests",

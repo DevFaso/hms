@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from './forms/form-control-style.directive';
 import {
   Component,
   ChangeDetectionStrategy,
@@ -29,7 +30,14 @@ interface VerificationStatus {
 @Component({
   selector: 'app-patient-recipient-verification',
   standalone: true,
-  imports: [FormsModule, TranslateModule, SubmitGuardDirective, DatePipe, ServerTimePipe],
+  imports: [
+    FormControlStyleDirective,
+    FormsModule,
+    TranslateModule,
+    SubmitGuardDirective,
+    DatePipe,
+    ServerTimePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (allowed()) {
@@ -87,6 +95,7 @@ interface VerificationStatus {
                     >{{ 'RECIPIENT_VERIFICATION.CODE' | translate }} *</label
                   >
                   <input
+                    appFormControl
                     [id]="'recipient-code-' + row.channel"
                     name="code"
                     [(ngModel)]="code"

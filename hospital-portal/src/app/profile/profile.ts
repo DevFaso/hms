@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { refusalReason } from '../shared/refusal-reason';
 import {
@@ -54,6 +55,7 @@ const PASSWORD_FIELD_IDS = ['pwdNew', 'pwdConfirm'];
   selector: 'app-profile',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     PhoneFieldDirective,
     SubmitGuardDirective,
     FocusOnRenderDirective,

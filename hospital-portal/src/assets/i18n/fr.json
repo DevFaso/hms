@@ -15820,7 +15820,8 @@
     "PICK_HINT": "Examen du catalogue de l'établissement : il est tarifé d'après la grille tarifaire.",
     "FREE_TEXT_HINT": "Choisissez l'examen dans le catalogue quand il y figure. Hors catalogue, la ligne peut rester à tarifer à la caisse, et l'examen peut être masqué aux proches par prudence.",
     "EMPTY_HINT": "Le catalogue d'imagerie de l'établissement est vide : saisissez l'examen en texte libre.",
-    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre."
+    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre.",
+    "READ_ONLY_FIELDS": "Ces champs sont en lecture seule avec votre accès actuel à ce catalogue."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Ouvrir les demandes de renouvellement",

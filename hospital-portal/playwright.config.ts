@@ -59,6 +59,7 @@ export default defineConfig({
       dependencies: ['setup'],
       testIgnore: [
         /form-display\.spec\.ts/,
+        /clinical-form-display\.spec\.ts/,
         /global-setup\.ts/,
         /auth\.spec\.ts/,
         /go-live-record-rights\.spec\.ts/,

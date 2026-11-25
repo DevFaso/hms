@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -47,6 +48,7 @@ function choiceOf(flag: boolean | null): PregnancyFlagChoice {
   selector: 'app-imaging-catalogue',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
@@ -95,11 +97,13 @@ function choiceOf(flag: boolean | null): PregnancyFlagChoice {
                   'IMAGING_CATALOGUE.BODY_REGION' | translate
                 }}</label>
                 <input
+                  appFormControl
                   type="text"
                   maxlength="150"
                   [id]="'cat-region-' + exam.id"
                   [attr.data-testid]="'catalogue-region-' + exam.code"
                   [disabled]="!exam.canEdit"
+                  [attr.aria-describedby]="!exam.canEdit ? 'catalogue-readonly-' + exam.id : null"
                   [ngModel]="draftOf(exam).bodyRegion"
                   (ngModelChange)="setRegion(exam, $event)"
                 />
@@ -109,9 +113,11 @@ function choiceOf(flag: boolean | null): PregnancyFlagChoice {
                   'IMAGING_CATALOGUE.FLAG' | translate
                 }}</label>
                 <select
+                  appFormControl
                   [id]="'cat-flag-' + exam.id"
                   [attr.data-testid]="'catalogue-flag-' + exam.code"
                   [disabled]="!exam.canEdit"
+                  [attr.aria-describedby]="!exam.canEdit ? 'catalogue-readonly-' + exam.id : null"
                   [ngModel]="draftOf(exam).flag"
                   (ngModelChange)="setFlag(exam, $event)"
                 >
@@ -137,6 +143,11 @@ function choiceOf(flag: boolean | null): PregnancyFlagChoice {
                   }}
                 }
               </p>
+              @if (!exam.canEdit) {
+                <p class="img-catalogue__status" [id]="'catalogue-readonly-' + exam.id">
+                  {{ 'IMAGING_CATALOGUE.READ_ONLY_FIELDS' | translate }}
+                </p>
+              }
               @if (exam.canEdit) {
                 <div class="img-catalogue__actions">
                   <button

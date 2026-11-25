@@ -174,6 +174,11 @@ jobs:
           PLAYWRIGHT_PREBUILT: "1"
         run: npm run e2e:form-display
 
+      - name: Production clinical form display
+        env:
+          PLAYWRIGHT_PREBUILT: "1"
+        run: npm run e2e:clinical-form-display
+
       # QA D2230 / D2231: every routed page and the main drawers measured at
       # 1366 / 1024 / 768 / 390 px; fails on sideways page scroll, clipped
       # controls and spilling text (hospital-portal/e2e/layout-overflow.spec.ts).
