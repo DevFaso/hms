@@ -214,7 +214,8 @@
               }
             }
             @if (lotIsSubstitute()) {
-              <small class="field-hint" role="alert" data-testid="lot-substitute">{{
+              {{ ' '
+              }}<small class="field-hint" role="alert" data-testid="lot-substitute">{{
                 'PHARMACY.LOT_SUBSTITUTE_HINT'
                   | translate
                     : {
@@ -225,7 +226,8 @@
             }
             @if (otherFormLots() > 0) {
               <!-- QA D1163: lots of another form than the order are not offered. -->
-              <small class="field-hint" data-testid="other-form-lots">{{
+              {{ ' '
+              }}<small class="field-hint" data-testid="other-form-lots">{{
                 'PHARMACY.LOTS_OTHER_FORM'
                   | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
               }}</small>

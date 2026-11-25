@@ -228,7 +228,19 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     @Test
     @DisplayName("in-house: sign → work queue → partial fill → completing (substituted) dispense → DISPENSED")
     void inHouseDispenseFlow() throws Exception {
+        // QA D3940: a substitution names the product dispensed, and only a substitute (the same active ingredient
+        // at the prescribed strength, here tablets for capsules) leaves as one. The order is written from the
+        // capsule item; this dispensary keeps no lots, so the product is the catalogue item the request names.
+        // Seeded first, so they are removed after the fills that reference them.
+        com.example.hms.model.medication.MedicationCatalogItem capsules =
+                seedProduct("Amoxicillin 500 mg capsule", "CAPSULE", "500");
+        com.example.hms.model.medication.MedicationCatalogItem tablets =
+                seedProduct("Amoxicillin 500 mg tablet", "TABLET", "500");
+        com.example.hms.model.medication.MedicationCatalogItem quarterStrength =
+                seedProduct("Amoxicillin 250 mg tablet", "TABLET", "250");
         UUID rxId = createAndSignPrescription();
+        transactionTemplate.executeWithoutResult(tx ->
+                prescriptionRepository.findById(rxId).orElseThrow().setMedicationCatalogItemId(capsules.getId()));
 
         mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
                 .andExpect(status().isOk())
@@ -241,11 +253,29 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                 .andExpect(status().isCreated());
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
 
+        // Another strength is refused, a substitution included: 6 tablets of 250 mg are not 6 of 500 mg.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 6, "out of the 500 mg",
+                                quarterStrength.getId())))
+                .andExpect(status().isBadRequest());
+        // A substitution that names no product is refused.
         mockMvc.perform(apiPost(DISPENSE)
                         .with(pharmacist(pharmacistA, hospitalA))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(dispenseBody(rxId, dispensaryA, pharmacistA, 6, "generic of the same strength")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isBadRequest());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 6, "capsules out of stock",
+                                tablets.getId())))
+                .andExpect(status().isCreated())
+                // The fill is named after what left the shelf.
+                .andExpect(jsonPath("$.data.medicationName").value("Amoxicillin 500 mg tablet"));
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.DISPENSED);
 
         assertThat(auditEventLogRepository.findAll())
@@ -765,7 +795,16 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
 
     private String dispenseBody(UUID rxId, Pharmacy pharmacy, User dispensedBy, int quantity,
                                 String substitutionReason) {
+        return dispenseBody(rxId, pharmacy, dispensedBy, quantity, substitutionReason, null);
+    }
+
+    /** QA D3940: a fill that names the catalogue item dispensed (a dispensary that keeps no lots). */
+    private String dispenseBody(UUID rxId, Pharmacy pharmacy, User dispensedBy, int quantity,
+                                String substitutionReason, UUID productId) {
         Map<String, Object> body = new HashMap<>();
+        if (productId != null) {
+            body.put("medicationCatalogItemId", productId);
+        }
         body.put("prescriptionId", rxId);
         body.put("patientId", patient.getId());
         body.put("pharmacyId", pharmacy.getId());
@@ -987,6 +1026,24 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                         .nameFr(name)
                         .genericName(name.toLowerCase(java.util.Locale.ROOT))
                         .controlled(controlled)
+                        .active(true)
+                        .hospital(hospitalA)
+                        .build());
+        cleanup.push(() -> catalogItemRepository.deleteById(item.getId()));
+        return item;
+    }
+
+    /** QA D3940: an amoxicillin product of this hospital's catalogue (ATC J01CA04) at a strength and form. */
+    private com.example.hms.model.medication.MedicationCatalogItem seedProduct(String name, String form,
+                                                                               String strength) {
+        com.example.hms.model.medication.MedicationCatalogItem item = catalogItemRepository.save(
+                com.example.hms.model.medication.MedicationCatalogItem.builder()
+                        .nameFr(name)
+                        .genericName("Amoxicillin")
+                        .atcCode("J01CA04")
+                        .form(form)
+                        .strength(strength)
+                        .strengthUnit("mg")
                         .active(true)
                         .hospital(hospitalA)
                         .build());
