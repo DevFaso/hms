@@ -1685,6 +1685,14 @@ public class LabResultServiceImpl implements LabResultService {
             throw new com.example.hms.exception.FieldBusinessException("criticalCommunicatedAt",
                 "lab.result.critical.communicatedAtFuture");
         }
+        // QA D3900: the call log records what the person told read back, and that is checked
+        // against the result exactly as the clinician's own read-back is (decimal comma or point,
+        // unit and comparator): "9,9" for a potassium of 2,1 is a transcription error caught here,
+        // not a record of one.
+        if (!CriticalValueNotificationService.readBackConfirmsResult(labResult, readBack)) {
+            throw new com.example.hms.exception.FieldBusinessException("criticalReadBack",
+                "lab.result.critical.readBackMismatch");
+        }
         labResult.setCriticalCommunicatedTo(to);
         labResult.setCriticalCommunicatedAt(at);
         labResult.setCriticalCommunicationReadBack(readBack);

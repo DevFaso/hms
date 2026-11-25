@@ -43,7 +43,7 @@ final class PanelReadBack {
         // trimmed): linear on any input (CodeQL java/polynomial-redos).
         Pattern.compile("[;\\n\\r|]|\\s(?:et|and|y)\\s|,(?=\\s*+\\p{L})");
     private static final Pattern MARKS = Pattern.compile("\\p{M}+");
-    private static final Pattern LABEL_SEPARATOR = Pattern.compile("^[\\s:=]+");
+    static final Pattern LABEL_SEPARATOR = Pattern.compile("^[\\s:=]+");
 
     private PanelReadBack() {
     }
@@ -122,7 +122,7 @@ final class PanelReadBack {
      * The length of {@code label} at the start of {@code segment}, accents and
      * case aside, when it ends there as a word (not "HB" in "HBA1c"); else 0.
      */
-    private static int prefixLength(String label, String segment) {
+    static int prefixLength(String label, String segment) {
         if (label == null || label.isBlank()) {
             return 0;
         }

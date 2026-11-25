@@ -87,6 +87,7 @@ class LabResultReleaseDocumentationTest {
         LabTestDefinition test = new LabTestDefinition();
         test.setId(UUID.randomUUID());
         test.setName("Kaliemie");
+        test.setTestCode("K");
         LabOrder order = new LabOrder();
         order.setId(UUID.randomUUID());
         order.setHospital(hospital);
@@ -205,5 +206,64 @@ class LabResultReleaseDocumentationTest {
         assertThat(result.getQcOverrideEventId()).isEqualTo(rejected.getId());
         assertThat(result.getQcOverrideByUserId()).isEqualTo(actorId);
         assertThat(result.getQcOverrideAt()).isNotNull();
+    }
+
+    /**
+     * QA D3900: potassium 2,1 was released with « Valeur relue » 9,9. The call log's read-back is
+     * compared with the result as the clinician's is; a mismatch is refused, named on its field,
+     * and nothing is released or stored.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"9,9", "9.9", "K 9,9", "6,9 g/L", "69", "abc", "Na 6,9"})
+    void aCallLogReadBackThatDiffersFromTheResultIsRefused_D3900(String readBack) {
+        gradedAs("CRITICAL");
+
+        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), false, false,
+            LabResultReleaseRequestDTO.builder()
+                .criticalCommunicatedTo("Dr Ouedraogo")
+                .criticalCommunicatedAt(LocalDateTime.now().minusMinutes(2))
+                .criticalReadBack(readBack)
+                .build(), Locale.ENGLISH))
+            .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("criticalReadBack");
+                assertThat(ex.getMessageKey()).isEqualTo("lab.result.critical.readBackMismatch");
+            });
+        assertThat(result.isReleased()).isFalse();
+        assertThat(result.getCriticalCommunicationReadBack()).isNull();
+        verify(labResultRepository, never()).save(any());
+    }
+
+    /** QA D3900: the value as people say and type it: comma or point, trailing zero, unit, the test's own name or code. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "6,9", "6.9", "6,90", "6,9 mmol/L", "6.9 MMOL/L", "K 6,9", "Kaliémie : 6,9 mmol/L", "K = 6.9"})
+    void aCallLogReadBackOfTheResultIsAccepted_D3900(String readBack) {
+        gradedAs("CRITICAL");
+
+        service.releaseLabResult(result.getId(), false, false, LabResultReleaseRequestDTO.builder()
+            .criticalCommunicatedTo("Dr Ouedraogo")
+            .criticalCommunicatedAt(LocalDateTime.now().minusMinutes(2))
+            .criticalReadBack(readBack)
+            .build(), Locale.ENGLISH);
+
+        assertThat(result.isReleased()).isTrue();
+        assertThat(result.getCriticalCommunicationReadBack()).isEqualTo(readBack);
+    }
+
+    @Test
+    void aTextResultsReadBackMustBeTheSameText_D3900() {
+        gradedAs("CRITICAL");
+        result.setResultValue("Positif");
+        result.setResultUnit(null);
+        LabResultReleaseRequestDTO.LabResultReleaseRequestDTOBuilder call = LabResultReleaseRequestDTO.builder()
+            .criticalCommunicatedTo("Dr Ouedraogo")
+            .criticalCommunicatedAt(LocalDateTime.now().minusMinutes(2));
+
+        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), false, false,
+            call.criticalReadBack("Négatif").build(), Locale.ENGLISH))
+            .isInstanceOf(FieldBusinessException.class);
+
+        service.releaseLabResult(result.getId(), false, false, call.criticalReadBack("positif").build(), Locale.ENGLISH);
+        assertThat(result.isReleased()).isTrue();
     }
 }
