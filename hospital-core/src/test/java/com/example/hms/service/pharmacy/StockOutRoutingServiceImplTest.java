@@ -374,6 +374,9 @@ class StockOutRoutingServiceImplTest {
         @DisplayName("the name match folds accents and case, as the DRUG check does")
         void accentedAndCasedNameStillMatches() {
             prescription.setMedicationName("AMOXICILLINE 500 mg gélule");
+            // Review of #1336: an order that states a strength matches a shelf item of that strength only.
+            amoxicilline.setStrength("500");
+            amoxicilline.setStrengthUnit("mg");
             when(inventoryItemRepository.findActiveWithCatalogItemByHospitalId(hospitalId))
                     .thenReturn(List.of(shelf));
             when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(

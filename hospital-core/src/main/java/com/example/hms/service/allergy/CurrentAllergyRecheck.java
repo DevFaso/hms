@@ -449,6 +449,28 @@ public class CurrentAllergyRecheck {
     }
 
     /**
+     * QA D3940 (r77): the stop the patient's CURRENT allergies put on a product dispensed in place of the ordered
+     * drug, read on that product alone (its name in the reader's language and its catalogue item), or empty. The
+     * re-check of the order ({@link #requirePrescriberReview}) reads the drug the prescriber chose; a substitute is
+     * another product and is read again. A penicillin-allergic patient was given amoxicillin as a « substitution »
+     * for ibuprofen because only the ordered drug was read.
+     */
+    public Optional<Stop> stopForProduct(Prescription rx, MedicationCatalogItem product) {
+        if (rx == null || product == null) {
+            return Optional.empty();
+        }
+        List<PatientAllergy> current = currentAllergies(rx);
+        if (current.isEmpty()) {
+            return Optional.empty();
+        }
+        String name = com.example.hms.utility.DrugDisplayNames.forReader(product);
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        return stop(rx.getId(), name, List.of(product), current);
+    }
+
+    /**
      * The re-check every gate calls before it writes (Policy 4): a drug the patient's current allergies
      * stop passes only under an authorized prescriber's CONTINUE review of this very conflict. It takes
      * no reason: nothing a nurse or a pharmacist writes releases the hold.

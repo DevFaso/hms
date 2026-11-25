@@ -440,6 +440,10 @@ final class ComputedKeys {
             "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
         site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|static final String PARTNER_DISPENSED_WITHDRAWN_KEY = KEY_PREFIX + \"PARTNER_DISPENSED_WITHDRAWN\"",
             "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
+        site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|static final String DISPENSED_SUBSTITUTED_KEY = KEY_PREFIX + \"DISPENSED_SUBSTITUTED\"",
+            "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
+        site(r, d, "com/example/hms/service/pharmacy/PrescriberPharmacyNotificationWriter.java|static final String PARTIALLY_FILLED_SUBSTITUTED_KEY = KEY_PREFIX + \"PARTIALLY_FILLED_SUBSTITUTED\"",
+            "PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.");
         r.put("com/example/hms/service/pro/ProScreeningEscalationService.java|text.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         r.put("com/example/hms/service/pro/ProScreeningEscalationService.java|text.key() #2",
@@ -592,7 +596,8 @@ final class ComputedKeys {
         r.put("PrescriberPharmacyNotificationWriter.java|prescription.pharmacy.event.", union(
             () -> prefixed("prescription.pharmacy.event.",
                 PrescriberPharmacyNotifier.NOTIFIED_EVENTS.stream().map(Enum::name).toList(), ""),
-            values("prescription.pharmacy.event.", List.of("PARTNER_TIMED_OUT", "PARTNER_DISPENSED_WITHDRAWN"))));
+            values("prescription.pharmacy.event.", List.of("PARTNER_TIMED_OUT", "PARTNER_DISPENSED_WITHDRAWN",
+                "DISPENSED_SUBSTITUTED", "PARTIALLY_FILLED_SUBSTITUTED"))));
 
         // ---- per role ----------------------------------------------------------------------
         r.put("EmailServiceImpl.java|email.role.label.", () -> prefixed("email.role.label.", bareRoleCodes(), ""));

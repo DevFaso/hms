@@ -224,6 +224,16 @@ export interface StockLotResponse {
    * when the server sends it; a lot of another form than the order is not offered.
    */
   unit?: string | null;
+  /**
+   * QA D3940: the lot's product (reader's language, with its strength), its
+   * strength and form, and how it relates to the order — filled by the
+   * dispensable-lots read only. A SUBSTITUTE leaves only as a recorded
+   * substitution; the server never lists another strength or molecule.
+   */
+  productName?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  productMatch?: 'PRESCRIBED' | 'EQUIVALENT' | 'SUBSTITUTE' | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -585,6 +595,11 @@ export interface WorkQueueReadyForCollection {
   preparedByName?: string;
   quantity?: number;
   unit?: string;
+  /** QA D3942: the product prepared, which a substitution makes another than the order's. */
+  medicationName?: string;
+  /** QA D3942: the prepared product replaces the prescribed one. */
+  substitution?: boolean;
+  substitutionReason?: string;
   /** When the one reminder SMS went out; absent before. */
   reminderSentAt?: string;
   /** Review of #1285: a controlled drug; set aside or lost on cancel, it needs a witness. */

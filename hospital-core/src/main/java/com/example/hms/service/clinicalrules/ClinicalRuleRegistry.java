@@ -155,7 +155,10 @@ public final class ClinicalRuleRegistry {
         // QA r70 scorecard C5, research report « Transfusion and critical result cover », section 2.
         rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
-            "service.lab.CriticalResultEscalationSettingsService"));
+            "service.lab.CriticalResultEscalationSettingsService"),
+        // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
+        rule(ClinicalRuleSetKey.DISPENSED_PRODUCT_SUBSTITUTION, "2026-11-25.1",
+            "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

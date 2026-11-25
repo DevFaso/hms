@@ -50,6 +50,14 @@ public class PrescriberPharmacyNotificationWriter {
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     private final NotificationService notificationService;
 
+    /** QA D3940: the fills of the order, to name a substituted product; absent in a pure-unit test. */
+    private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setDispenseRepository(com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository) {
+        this.dispenseRepository = dispenseRepository;
+    }
+
     /**
      * @return true when a notification was written, false when the
      *         prescription or its prescriber account could not be resolved
@@ -123,11 +131,34 @@ public class PrescriberPharmacyNotificationWriter {
             return NotificationText.of(key, medication);
         }
         Object patient = patientName(prescription.getPatient());
+        // QA D3940 (r77): a fill of another product names it. The notice said « Ibuprofène 400 mg a été entièrement
+        // délivré » when amoxicillin had been given in its place.
+        String substituted = substitutedProducts(prescription, event);
+        if (substituted != null) {
+            String substitutedKey = event == PrescriptionStatus.DISPENSED
+                    ? DISPENSED_SUBSTITUTED_KEY : PARTIALLY_FILLED_SUBSTITUTED_KEY;
+            return NotificationText.of(substitutedKey, medication, patient, substituted);
+        }
         Object third = switch (event) {
             case PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED -> partnerName(prescription);
             default -> "";
         };
         return NotificationText.of(key, medication, patient, third);
+    }
+
+    /** QA D3940: the fill notices of an order (partly) filled with a substitute, which name it. */
+    static final String DISPENSED_SUBSTITUTED_KEY = KEY_PREFIX + "DISPENSED_SUBSTITUTED";
+    static final String PARTIALLY_FILLED_SUBSTITUTED_KEY = KEY_PREFIX + "PARTIALLY_FILLED_SUBSTITUTED";
+
+    /** The substituted products of an in-house fill notice, joined, or null when none. */
+    private String substitutedProducts(Prescription prescription, PrescriptionStatus event) {
+        if (dispenseRepository == null
+                || (event != PrescriptionStatus.DISPENSED && event != PrescriptionStatus.PARTIALLY_FILLED)) {
+            return null;
+        }
+        java.util.List<String> names = dispenseRepository.findSubstitutedProductNames(prescription.getId()).stream()
+                .filter(n -> n != null && !n.isBlank()).map(String::trim).distinct().sorted().toList();
+        return names.isEmpty() ? null : String.join(", ", names);
     }
 
     /**
