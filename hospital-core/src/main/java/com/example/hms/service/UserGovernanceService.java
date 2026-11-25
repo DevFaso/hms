@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.superadmin.SuperAdminUserImportResultDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminUserResetResultDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminUserPasswordRotationDTO;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.ElapsedTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -350,7 +351,8 @@ public class UserGovernanceService {
         try {
             passwordResetService.requestReset(email, Locale.ENGLISH);
         } catch (RuntimeException ex) {
-            log.debug("[USER IMPORT] Failed to queue invitation for {}: {}", email, ex.getMessage());
+            log.debug("[USER IMPORT] Failed to queue invitation for {}: {}",
+                ActivationDeliveryTracker.maskEmail(email), ex.getMessage());
         }
     }
 

@@ -170,9 +170,9 @@ public class UserServiceImpl implements UserService {
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to send verification email to '{}': {}. "
+            log.warn("⚠️ Failed to send verification email to user {}: {}. "
                     + "Patient can request a new verification email later.",
-                    saved.getEmail(), e.getMessage());
+                    saved.getId(), e.getMessage());
         }
 
         User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())

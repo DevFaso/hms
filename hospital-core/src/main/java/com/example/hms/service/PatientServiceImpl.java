@@ -246,6 +246,7 @@ public class PatientServiceImpl implements PatientService {
     private final LabResultRepository labResultRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final AuditEventLogService auditEventLogService;
+    private final PatientDuplicateReview duplicateReview;
     /** E8 #49 — which hospitals this caller may read for this patient. */
     private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     /** E8 #51 — resolves a row's effective sensitive category before it travels. */
@@ -1051,6 +1052,7 @@ public class PatientServiceImpl implements PatientService {
         // typed fields thrown away: QA D725), is a 409. A second hospital links
         // the existing record through POST /registrations.
         accountLinkGuard.requireLinkable(user, null);
+        var duplicateDecision = duplicateReview.prepare(dto, hospitalId);
         Patient mapped = patientMapper.toPatient(dto, user);
         if (!writesClinicalFields()) {
             dropClinicalFields(mapped);
@@ -1063,6 +1065,7 @@ public class PatientServiceImpl implements PatientService {
         var identityChange = prepareNationalUniqueId(mapped, dto.getNationalUniqueId(),
             dto.isAllowNationalUniqueIdDuplicate(), dto.getNationalUniqueIdDuplicateReason());
         Patient patient = patientRepository.save(mapped);
+        duplicateReview.record(duplicateDecision, patient);
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
         // this exact number. Single-use server-side check — a forged/mismatched

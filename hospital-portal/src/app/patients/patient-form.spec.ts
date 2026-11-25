@@ -242,6 +242,26 @@ describe('PatientFormComponent', () => {
     });
   }
 
+  it('requires a keep-separate reason and sends it with the atomic registration', () => {
+    fillValidForm();
+    component.showDuplicateWarning = true;
+    component.proceedDespiteDuplicate();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(component.serverFieldErrors['duplicateReviewReason']).toBeTruthy();
+    component.duplicateReviewReason = '  cdx Documents et prénoms différents  ';
+    component.proceedDespiteDuplicate();
+    expect(userSpy.adminRegister.calls.mostRecent().args[0].patient?.duplicateReviewReason).toBe(
+      'cdx Documents et prénoms différents',
+    );
+    expect(component.showDuplicateWarning).toBeFalse();
+  });
+
+  it('a changed identity clears the previous keep-separate reason', () => {
+    component.duplicateReviewReason = 'cdx previous review';
+    component.onNameOrDobChange();
+    expect(component.duplicateReviewReason).toBe('');
+  });
+
   it('waits for the IU duplicate decision, then includes the approved identity value in registration', () => {
     fillValidForm();
     component.nationalUniqueIdChange = { nationalUniqueId: '000123456789' };

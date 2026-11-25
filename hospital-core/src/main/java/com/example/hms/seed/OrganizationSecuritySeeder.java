@@ -1,5 +1,6 @@
 package com.example.hms.seed;
 
+import com.example.hms.bootstrap.DeploymentProfiles;
 import com.example.hms.config.OrganizationSecurityConstants;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.enums.SecurityPolicyType;
@@ -34,7 +35,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Order(2) // Run after RoleSeeder
-@Profile({"local-h2", "local"})
+@Profile(DeploymentProfiles.SEEDING)
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OrganizationSecuritySeeder implements CommandLineRunner {
     private static final String DEFAULT_ORG_NAME = "DEFAULT_ORG";

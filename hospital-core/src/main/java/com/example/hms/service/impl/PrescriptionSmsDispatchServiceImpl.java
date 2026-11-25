@@ -31,6 +31,7 @@ import com.example.hms.service.SmsService;
 import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.service.pharmacy.PrescriptionQueueClaimService;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
+import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -228,7 +229,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         queueClaimService.releaseOnExit(rx, QueueClaimReleaseReason.DISPATCHED, decidedBy.getId(),
                 queueExitActor(auth));
         log.info("Dispatched prescription {} via SMS to pharmacy {} ({}); routing decision {}",
-                prescriptionId, pharmacy.getId(), phone, decision.getId());
+                prescriptionId, pharmacy.getId(), ActivationDeliveryTracker.maskPhone(phone), decision.getId());
 
         return PrescriptionSmsDispatchResponseDTO.builder()
                 .prescriptionId(rx.getId())

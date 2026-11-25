@@ -1227,6 +1227,24 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("C-P1: same family and DOB is offered even outside the general birth-date candidate page")
+        void sameFamilyAndBirthDateAreTargetedWithoutSilentMerge() {
+            Patient awa = registered("Awa", "Kaboré-Sawadogo", LocalDate.of(1991, 5, 3), "70000001", true);
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findActiveFamilyBornAtHospital(any(), eq(LocalDate.of(1991, 5, 3)), eq(hospitalId), any()))
+                    .thenReturn(List.of(awa));
+            for (String typed : new String[] {"Ibrahim Kabore Sawadogo", "Kabore-Sawadogo Ibrahim"}) {
+                assertThat(service.getDuplicateCandidates(typed, "1991-05-03", null, hospitalId))
+                    .singleElement().satisfies(candidate -> {
+                        assertThat(candidate.getPatientId()).isEqualTo(awa.getId());
+                        assertThat(candidate.getConfidenceScore()).isEqualTo(45);
+                    });
+            }
+            verify(patientRepo, never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D2520: a near spelling born a day off is offered; one born a week off, or with no date typed, is not")
         void aNearSpellingADayOffIsOffered_D2520() {
             Patient awa = registered("Awa", "TestDiallo", LocalDate.of(1991, 5, 3), "70000001", true);
