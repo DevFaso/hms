@@ -44,7 +44,7 @@
   },
   "ADT_INTAKE": {
     "TITLE": "Admissions automatiques depuis un autre logiciel",
-    "SUBTITLE": "Définissez les valeurs utilisées lorsqu’un autre logiciel transmet une admission ou une visite sans dossier de visite correspondant. La création nécessite l’activation de cet hôpital et celle du service d’admissions automatiques pour la plateforme.",
+    "SUBTITLE": "Définissez les valeurs utilisées quand un autre logiciel envoie une admission ou une visite sans dossier de visite correspondant. Activez la création automatique pour cet hôpital et pour la plateforme.",
     "LOADING": "Chargement des paramètres d’admission automatique…",
     "ERROR": "Impossible de charger les paramètres d’admission automatique.",
     "EMPTY": "Aucun hôpital n’a encore de paramètres d’admission automatique. Utilisez le formulaire ci-dessous pour en configurer un.",
@@ -71,7 +71,7 @@
       "ACUITY": "Niveau de gravité par défaut",
       "ENCOUNTER_TYPE": "Type de consultation par défaut",
       "CHIEF_COMPLAINT": "Motif principal par défaut",
-      "ENABLED": "Activer la création automatique pour cet hôpital",
+      "ENABLED": "Autoriser les admissions et visites automatiques pour cet hôpital",
       "ASSIGNMENT": "Affectation du médecin pour les visites automatiques",
       "ASSIGNMENT_NONE": "— Aucune : admissions uniquement —"
     },

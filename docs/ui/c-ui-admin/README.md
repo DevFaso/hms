@@ -1,7 +1,6 @@
 # C-UI: administration and integrations
 
-Display-only form work. The shared `appFormControl` directive adds the uniquely
-named `keneya-form-control` style to native controls. It has no value accessor,
+Display-only form work. The shared `appFormControl` attribute styles native controls directly, even if a view omits the optional directive import. The directive also adds the uniquely named `keneya-form-control` class. It has no value accessor,
 validator, event listener or API call. Form values, validation and event bindings are unchanged. The shell gains a
 presentation-only wrapLabel flag for the admissions navigation label. Native text/select/textarea binding,
 validation and disabled behavior are covered by tests.
@@ -44,3 +43,5 @@ control now has its own reasoned entry; copying one again fails the guard.
 This corrects the old collision rather than adding an exception for new code.
 
 Current review follow-up: the census checks the cited compiled component/global CSS selectors, not only reason text. Removing the order-set stylesheet fails the census. The ADT labels/help styles are carried over to form-group; reverting the stylesheet makes both-width browser checks fail (font weight 600 instead of 500). The mapping filter and DHIS label heights are measured too. Edit-state evidence: [390 px](automatic-admissions-edit-390.png), [1440 px](automatic-admissions-edit-1440.png). All 13 screenshots were refreshed from the passing production run. The two CI production suites reuse one build; the shared config still builds by default locally.
+
+The latest review correction compares complete parsed CSS selectors, including each member of a comma list; an unrelated ancestor prefix invalidates evidence. Template ownership follows actual Component metadata, external Sass compiles by filename, and only scoped exceptions need component CSS. Inline keys include the component class name. All 87 existing exceptions remain; five keys gained component identities. The screenshot guard checks the documented PNG set and every hash, including both edit states. ADT wording now describes automatic creation for both the hospital and platform, covering admissions and visits.

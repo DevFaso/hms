@@ -44,7 +44,7 @@
   },
   "ADT_INTAKE": {
     "TITLE": "Automatic admissions from another system",
-    "SUBTITLE": "Set the defaults used when another system sends an admission or visit with no matching visit record. Creation requires both this hospital and the platform automatic-admissions service to be enabled.",
+    "SUBTITLE": "Set the defaults used when another system sends an admission or visit with no matching visit record. Turn on automatic creation for this hospital and for the platform.",
     "LOADING": "Loading automatic-admission settings…",
     "ERROR": "Could not load automatic-admission settings.",
     "EMPTY": "No hospital has automatic-admission settings yet. Use the form below to configure one.",
@@ -71,7 +71,7 @@
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",
       "CHIEF_COMPLAINT": "Default chief complaint",
-      "ENABLED": "Create admissions automatically for this hospital",
+      "ENABLED": "Allow automatic admissions and visits for this hospital",
       "ASSIGNMENT": "Physician assignment for automatic visits",
       "ASSIGNMENT_NONE": "— None: admissions only —"
     },
