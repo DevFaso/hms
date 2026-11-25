@@ -640,4 +640,16 @@ class PasswordResetServiceImplTest {
         service.invalidateAllForUser(userId);
         verify(tokenRepository).deleteByUser_IdAndConsumedAtIsNull(userId);
     }
+
+    @Test
+    void theRawTokenIsLoggedOnADeveloperMachineOnly() {
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("local-h2", null)).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("", "local")).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("local-h2", " local ")).isTrue();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("", "dev")).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("local-h2", "dev")).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("test", null)).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken("", null)).isFalse();
+        assertThat(PasswordResetServiceImpl.shouldLogRawToken(null, null)).isFalse();
+    }
 }

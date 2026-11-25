@@ -234,7 +234,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.warn("🔑 Password reset email for user {} failed: {}", user.getId(), ex.getClass().getSimpleName());
         }
 
-        if (log.isDebugEnabled() && shouldLogRawToken()) {
+        if (log.isDebugEnabled() && shouldLogRawToken(
+                System.getProperty("spring.profiles.active", ""), System.getenv("SPRING_PROFILES_ACTIVE"))) {
             log.debug("🔑 [DEV ONLY] Raw password reset token for user {}: {}", user.getId(), rawToken);
             log.debug("🔗 [DEV ONLY] Reset link: {}", resetLink);
         }
@@ -402,10 +403,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
      * Developer machines only (local, local-h2). A shared dev environment ships its logs to the
      * same third-party stores as prod, so a reset token must not reach them there either.
      */
-    private boolean shouldLogRawToken() {
-        String profileProp = System.getProperty("spring.profiles.active", "");
-        String profileEnv = System.getenv("SPRING_PROFILES_ACTIVE");
-        String combined = profileProp + "," + (profileEnv != null ? profileEnv : "");
+    static boolean shouldLogRawToken(String profileProp, String profileEnv) {
+        String combined = (profileProp != null ? profileProp : "") + "," + (profileEnv != null ? profileEnv : "");
         String[] profiles = Arrays.stream(combined.split(","))
             .map(String::trim)
             .filter(profile -> !profile.isEmpty())
