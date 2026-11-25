@@ -66,10 +66,9 @@ public class UserRoleHospitalAssignmentController {
     String roleIdentifier = requestDTO.getRoleId() != null
         ? String.valueOf(requestDTO.getRoleId())
         : requestDTO.getRoleName();
-    String userIdentifier = requestDTO.getUserId() != null
-        ? String.valueOf(requestDTO.getUserId())
-        : requestDTO.getUserIdentifier();
-    log.info("🌐 Assigning role '{}' across multiple scopes for user '{}'", roleIdentifier, userIdentifier);
+    // The free-text identifier may be an e-mail address or a phone number: only the id is logged.
+    log.info("🌐 Assigning role '{}' across multiple scopes for user '{}'", roleIdentifier,
+        requestDTO.getUserId() != null ? requestDTO.getUserId() : "(by identifier)");
         return ResponseEntity.ok(assignmentService.assignRoleToMultipleScopes(requestDTO));
     }
 

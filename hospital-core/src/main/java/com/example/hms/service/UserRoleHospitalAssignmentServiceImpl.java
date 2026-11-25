@@ -516,7 +516,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
             recordAssignmentAudit(saved);
         }
-        log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getEmail());
+        log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getId());
         return toDtoWithLinks(saved);
     }
 
@@ -2235,7 +2235,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
             log.info("⚠️ Role '{}' already assigned to user '{}' for hospital '{}'.",
                 getRoleCode(role),
-                user.getEmail(),
+                user.getId(),
                 hospital != null ? hospital.getName() : GLOBAL_SCOPE);
             throw new ConflictException(
                 messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT, null,
@@ -2586,12 +2586,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 userRole.setRole(role);
                 userRoleRepository.save(userRole);
                 log.info("🔄 Synced legacy user_roles entry for user '{}' and role '{}'",
-                    user.getEmail(), getRoleCode(role));
+                    user.getId(), getRoleCode(role));
             }
         } catch (RuntimeException e) {
             // Best-effort: do not fail primary flow
             log.warn("⚠️ Legacy role sync failed for user '{}' and role '{}': {}",
-                user.getEmail(), getRoleCode(role), e.getMessage());
+                user.getId(), getRoleCode(role), e.getMessage());
         }
     }
 

@@ -123,7 +123,7 @@ SPLUNK_HEC_ENABLED=true \
 SPLUNK_HEC_ALLOW_INSECURE_URL=true \
 SPLUNK_HEC_URL=http://localhost:8088 \
 SPLUNK_HEC_TOKEN=any-token \
-./gradlew :hospital-core:bootRun
+./gradlew :hospital-core:bootRun --args='--spring.profiles.active=local-h2'
 ```
 
 ### Option 3 — Real HTTPS via a Caddy reverse proxy in front of the mock
@@ -139,7 +139,7 @@ docker run -d --network splunk-local --name splunk-tls -p 8443:443 \
 SPLUNK_HEC_ENABLED=true \
 SPLUNK_HEC_URL=https://splunk-local.localhost:8443 \
 SPLUNK_HEC_TOKEN=any-token \
-./gradlew :hospital-core:bootRun
+./gradlew :hospital-core:bootRun --args='--spring.profiles.active=local-h2'
 ```
 
 Caddy issues a self-signed cert under `*.localhost`; you may need to add it to your
