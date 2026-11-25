@@ -43,17 +43,17 @@
     }
   },
   "ADT_INTAKE": {
-    "TITLE": "Configuration ADT : médecin d'admission par défaut",
-    "SUBTITLE": "Valeurs par défaut par hôpital, utilisées lorsqu'un message ADT^A01/A04 arrive sans visite correspondante. La création automatique ne se déclenche que si la ligne est activée ET si l'indicateur global app.hl7.adt.visit-sync.auto-create.enabled est activé.",
-    "LOADING": "Chargement des configurations…",
-    "ERROR": "Impossible de charger les configurations.",
-    "EMPTY": "Aucune configuration pour l'instant. Utilisez le formulaire ci-dessous pour en créer une pour un hôpital.",
+    "TITLE": "Admissions automatiques depuis un autre logiciel",
+    "SUBTITLE": "Définissez les valeurs utilisées quand un autre logiciel envoie une admission ou une visite sans dossier de visite correspondant. Activez la création automatique pour cet hôpital et pour la plateforme.",
+    "LOADING": "Chargement des paramètres d’admission automatique…",
+    "ERROR": "Impossible de charger les paramètres d’admission automatique.",
+    "EMPTY": "Aucun hôpital n’a encore de paramètres d’admission automatique. Utilisez le formulaire ci-dessous pour en configurer un.",
     "SAVING": "Enregistrement…",
     "SAVE": "Enregistrer",
     "STATE_ENABLED": "Activée",
     "STATE_DISABLED": "Désactivée",
-    "FORM_CREATE_TITLE": "Créer ou mettre à jour une configuration",
-    "FORM_EDIT_TITLE": "Modifier la configuration",
+    "FORM_CREATE_TITLE": "Configurer un hôpital",
+    "FORM_EDIT_TITLE": "Modifier les paramètres d’admission automatique",
     "COL_HOSPITAL": "Hôpital",
     "COL_ADMISSION_TYPE": "Type d'admission",
     "COL_ACUITY": "Niveau de gravité",
@@ -65,17 +65,17 @@
       "PROVIDER_PLACEHOLDER": "— Sélectionner un médecin —",
       "DEPARTMENT": "Département (facultatif)",
       "DEPARTMENT_PLACEHOLDER": "— Sélectionner un département —",
-      "ASSIGNMENT_ID": "Identifiant d'affectation par défaut (requis pour A04)",
-      "ASSIGNMENT_HINT": "Nécessaire seulement si cet hôpital crée automatiquement les consultations ADT^A04 : l’affectation du médecin admettant, sous laquelle elles sont enregistrées.",
+      "ASSIGNMENT_ID": "Affectation du médecin pour les visites automatiques",
+      "ASSIGNMENT_HINT": "Pour créer une visite automatiquement, choisissez l’affectation du médecin admetteur. Sans affectation, seules les admissions automatiques sont disponibles.",
       "ADMISSION_TYPE": "Type d'admission par défaut",
       "ACUITY": "Niveau de gravité par défaut",
       "ENCOUNTER_TYPE": "Type de consultation par défaut",
       "CHIEF_COMPLAINT": "Motif principal par défaut",
-      "ENABLED": "Activer la création automatique pour cet hôpital",
-      "ASSIGNMENT": "Affectation par défaut (requise pour A04)",
-      "ASSIGNMENT_NONE": "— Aucune (A01 seulement) —"
+      "ENABLED": "Autoriser les admissions et visites automatiques pour cet hôpital",
+      "ASSIGNMENT": "Affectation du médecin pour les visites automatiques",
+      "ASSIGNMENT_NONE": "— Aucune : admissions uniquement —"
     },
-    "CONFIRM_DELETE": "Supprimer la configuration ADT pour {{hospital}} ?",
+    "CONFIRM_DELETE": "Supprimer les paramètres d’admission automatique pour {{hospital}} ?",
     "SELECTED_HOSPITAL": "Hôpital sélectionné :",
     "HOSPITAL_SEARCHING": "Recherche d'hôpitaux…",
     "HOSPITAL_NO_MATCH": "Aucun hôpital ne correspond à cette recherche.",
@@ -83,17 +83,19 @@
     "DEPARTMENT_NO_OPTIONS": "Aucun département dans cet hôpital.",
     "PLACEHOLDER": {
       "HOSPITAL_SEARCH": "Saisissez au moins 2 caractères du nom ou du code de l'hôpital…",
-      "CHIEF_COMPLAINT": "Laisser vide pour « Admission créée automatiquement depuis un message ADT »"
+      "CHIEF_COMPLAINT": "Laissez vide pour utiliser le motif automatique"
     },
     "VALIDATION": {
       "REQUIRED": "L'hôpital et le médecin admetteur sont obligatoires."
     },
     "TOAST": {
-      "SAVED": "Configuration enregistrée.",
-      "SAVE_FAILED": "Impossible d'enregistrer la configuration.",
-      "DELETED": "Configuration supprimée.",
-      "DELETE_FAILED": "Impossible de supprimer la configuration."
-    }
+      "SAVED": "Paramètres d’admission automatique enregistrés.",
+      "SAVE_FAILED": "Impossible d’enregistrer les paramètres d’admission automatique.",
+      "DELETED": "Paramètres d’admission automatique supprimés.",
+      "DELETE_FAILED": "Impossible de supprimer les paramètres d’admission automatique."
+    },
+    "HOSPITAL_LOCKED": "L’hôpital ne peut pas être changé pendant la modification. Annulez pour configurer un autre hôpital.",
+    "CHOOSE_HOSPITAL_FIRST": "Choisissez d’abord un hôpital pour accéder à ses médecins, départements et affectations."
   },
   "BEDS": {
     "DELETE_BED_CONFIRM": "Supprimer le lit {{name}} ?",
@@ -5374,7 +5376,7 @@
     "PROVIDER_STAFF": "Personnel",
     "PROVIDER_AUDIT": "Journal d'audit",
     "DHIS2": "Export DHIS2",
-    "ADT_INTAKE": "Admissions ADT automatiques",
+    "ADT_INTAKE": "Admissions automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",
@@ -5414,12 +5416,12 @@
     "SETTINGS_DESC": "Choisissez comment vous souhaitez être notifié pour chaque type d'événement.",
     "SETTINGS_TITLE": "Préférences de notification",
     "TITLE": "Notifications",
-    "TYPE_APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+    "TYPE_APPOINTMENT_REMINDER": "Rendez-vous et suivi (tous les messages)",
     "TYPE_BILLING": "Facturation",
     "TYPE_DISCHARGE_SUMMARY": "Résumé de sortie",
     "TYPE_GENERAL": "Général",
     "TYPE_LAB_RESULT": "Résultat de laboratoire",
-    "TYPE_MEDICATION_REFILL": "Renouvellement d'ordonnance",
+    "TYPE_MEDICATION_REFILL": "Pharmacie (tous les messages)",
     "TYPE_PROXY_ACCESS": "Accès délégué",
     "TYPE_SYSTEM": "Système",
     "UNREAD": "Non lu",
@@ -15134,7 +15136,7 @@
       "MAIL_SEND_FAILED": "Le serveur de messagerie n’a pas accepté l’e-mail",
       "SEND_FAILED": "Échec de l’envoi",
       "ATTEMPTS_EXHAUSTED": "Toutes les tentatives ont été utilisées",
-      "RECIPIENT_NOT_ALLOWED": "Numéro absent de la liste de test de cet environnement",
+      "RECIPIENT_NOT_ALLOWED": "Cette coordonnée ne figure pas dans la liste de test de cet environnement.",
       "OPTED_OUT": "Le patient a désactivé ce canal",
       "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
       "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
@@ -15824,7 +15826,8 @@
     "PICK_HINT": "Examen du catalogue de l'établissement : il est tarifé d'après la grille tarifaire.",
     "FREE_TEXT_HINT": "Choisissez l'examen dans le catalogue quand il y figure. Hors catalogue, la ligne peut rester à tarifer à la caisse, et l'examen peut être masqué aux proches par prudence.",
     "EMPTY_HINT": "Le catalogue d'imagerie de l'établissement est vide : saisissez l'examen en texte libre.",
-    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre."
+    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre.",
+    "READ_ONLY_FIELDS": "Ces champs sont en lecture seule avec votre accès actuel à ce catalogue."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Ouvrir les demandes de renouvellement",
@@ -16330,7 +16333,11 @@
     "CODE": "Code à six chiffres",
     "CONFIRM": "Confirmer le code",
     "ERROR": "Impossible de vérifier ces coordonnées. Réessayez.",
-    "CODE_REQUIRED": "Saisissez le code à six chiffres."
+    "CODE_REQUIRED": "Saisissez le code à six chiffres.",
+    "CONTACT": "Coordonnée : {{contact}}",
+    "CODE_SENT": "Un code a été envoyé à {{contact}}.",
+    "CODE_SENT_GENERIC": "Un code a été envoyé.",
+    "EXPIRES": "Valable jusqu’à {{time}}."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",

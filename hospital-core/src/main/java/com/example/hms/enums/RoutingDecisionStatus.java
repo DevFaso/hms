@@ -9,9 +9,7 @@ public enum RoutingDecisionStatus {
 
     /** QA D1090 class: the status as people read it, never the code, in a refusal. */
     public String localizedLabel() {
-        String label = com.example.hms.utility.MessageUtil.resolve((java.util.Locale) null,
-            "stock.routing.statusLabel." + name());
-        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+        return com.example.hms.utility.MessageUtil.resolveLabel(null, "stock.routing.statusLabel." + name(), name());
     }
 
     /** The label of {@code status}, or a dash for a decision that carries none. */

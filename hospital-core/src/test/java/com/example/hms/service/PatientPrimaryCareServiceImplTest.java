@@ -15,6 +15,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,8 +74,18 @@ class PatientPrimaryCareServiceImplTest {
     private PatientPrimaryCareResponseDTO responseDTO;
     private PatientPrimaryCareRequestDTO requestDTO;
 
+    private MessageSource previousTestMessageSource;
+    private org.springframework.context.i18n.LocaleContext previousTestLocale;
+
     @BeforeEach
     void setUp() {
+        previousTestMessageSource = (MessageSource) org.springframework.test.util.ReflectionTestUtils
+                .getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        previousTestLocale = org.springframework.context.i18n.LocaleContextHolder.getLocaleContext();
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.ENGLISH);
+        // These assertions inspect actual localized refusal text, including its id.
+        // Do not depend on a previous test leaving a static message source behind.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         assignmentId = UUID.randomUUID();
@@ -115,6 +126,12 @@ class PatientPrimaryCareServiceImplTest {
                 .assignmentId(assignmentId)
                 .startDate(LocalDate.now())
                 .build();
+    }
+
+    @AfterEach
+    void restoreMessageContext() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousTestMessageSource);
+        org.springframework.context.i18n.LocaleContextHolder.setLocaleContext(previousTestLocale);
     }
 
     // ─── assignPrimaryCare ───────────────────────────────────────

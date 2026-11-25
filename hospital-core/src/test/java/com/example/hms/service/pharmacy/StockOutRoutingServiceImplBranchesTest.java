@@ -344,12 +344,12 @@ class StockOutRoutingServiceImplBranchesTest {
         when(routingDecisionRepository.save(any())).thenReturn(decision);
         when(routingMapper.toResponseDTO(decision)).thenReturn(response);
         doThrow(new RuntimeException("down"))
-                .when(partnerChannel).notifyPatientAccepted(any(), any());
+                .when(partnerChannel).notifyPatientAccepted(any(), any(), any());
 
         RoutingDecisionResponseDTO result = service.partnerRespond(decisionId, true);
 
         assertThat(result.getStatus()).isEqualTo("ACCEPTED");
-        verify(partnerChannel).notifyPatientAccepted(any(), any());
+        verify(partnerChannel).notifyPatientAccepted(any(), any(), any());
     }
 
     @Test
@@ -371,12 +371,12 @@ class StockOutRoutingServiceImplBranchesTest {
         when(routingDecisionRepository.save(any())).thenReturn(decision);
         when(routingMapper.toResponseDTO(decision)).thenReturn(response);
         doThrow(new RuntimeException("down"))
-                .when(partnerChannel).notifyPatientDispensed(any(), any());
+                .when(partnerChannel).notifyPatientDispensed(any(), any(), any());
 
         service.confirmPartnerDispense(decisionId);
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
-        verify(partnerChannel).notifyPatientDispensed(any(), any());
+        verify(partnerChannel).notifyPatientDispensed(any(), any(), any());
     }
 
     @Test

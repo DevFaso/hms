@@ -29,7 +29,7 @@ class RecipientVerificationControllersTest {
         when(authUtils.resolveHospitalScope(auth, hospitalId, null, true)).thenReturn(hospitalId);
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(actor));
         when(registrations.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
-        var view = new PatientRecipientChallengeService.View(NotificationChannel.SMS, false, null);
+        var view = new PatientRecipientChallengeService.View(NotificationChannel.SMS, false, null, "•••• 42");
         when(service.getStatus(patientId)).thenReturn(List.of(view));
         assertThat(controller.status(patientId, hospitalId, auth)).containsExactly(view);
         controller.request(patientId, NotificationChannel.SMS, hospitalId, auth);
@@ -55,7 +55,7 @@ class RecipientVerificationControllersTest {
         var controller = new PatientSelfRecipientVerificationController(service, portal, authUtils);
         when(portal.resolvePatientId(auth)).thenReturn(patientId);
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(actor));
-        var view = new PatientRecipientChallengeService.View(NotificationChannel.EMAIL, true, null);
+        var view = new PatientRecipientChallengeService.View(NotificationChannel.EMAIL, true, null, "p•••@e•••.test");
         when(service.getStatus(patientId)).thenReturn(List.of(view));
         assertThat(controller.status(auth)).containsExactly(view);
         controller.request(NotificationChannel.EMAIL, auth);

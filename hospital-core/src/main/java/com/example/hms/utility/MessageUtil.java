@@ -18,17 +18,36 @@ public class MessageUtil {
         messageSource = ms;
     }
 
+    /** Optional display labels keep their established fallback without inspecting error prose. */
+    public static String resolveLabel(java.util.Locale locale, String key, String fallback) {
+        try {
+            String label = resolveOrNull(locale, key);
+            return label != null ? label : fallback;
+        } catch (RuntimeException unavailable) {
+            return fallback;
+        }
+    }
+
     public static String resolve(String key, Object... args) {
         return resolve(LocaleContextHolder.getLocale(), key, args);
     }
 
     /** {@link #resolve(String, Object...)} in an explicit locale (the request's when null). */
     public static String resolve(java.util.Locale locale, String key, Object... args) {
+        java.util.Locale requested = locale != null ? locale : LocaleContextHolder.getLocale();
         try {
-            return messageSource.getMessage(key, args, locale != null ? locale : LocaleContextHolder.getLocale());
+            return messageSource.getMessage(key, args, requested);
         } catch (RuntimeException e) {
-            // Graceful fallback
-            return "[Missing translation] " + key + (args.length > 0 ? " - " + args[0] : "");
+            // Callers also rethrow already rendered messages. Translating those twice
+            // would discard the actual refusal; this is the same distinction as resolveOrRaw.
+            if (key != null && !isMessageKey(key)) return key;
+            // A missing bundle must not expose an internal key or a possibly sensitive argument.
+            // This bootstrap fallback also works when the message source itself is unavailable.
+            return switch (requested.getLanguage()) {
+                case "en" -> "Message unavailable.";
+                case "es" -> "Mensaje no disponible.";
+                default -> "Message indisponible.";
+            };
         }
     }
 

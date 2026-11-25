@@ -69,7 +69,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
         }
 
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication."));
+                .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 

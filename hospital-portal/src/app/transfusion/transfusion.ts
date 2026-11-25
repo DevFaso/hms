@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import {
   Component,
   DestroyRef,
@@ -67,6 +68,7 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     FocusOnRenderDirective,
     ConfirmDialogComponent,
     ReasonDialogComponent,

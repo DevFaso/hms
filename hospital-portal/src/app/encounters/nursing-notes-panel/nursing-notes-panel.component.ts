@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import { NoteAddendaComponent } from '../../shared/note-addenda/note-addenda.component';
 import {
   ChangeDetectionStrategy,
@@ -41,6 +42,7 @@ export interface NursingNotePart {
   selector: 'app-nursing-notes-panel',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     NoteAddendaComponent,
     CommonModule,
     FormsModule,

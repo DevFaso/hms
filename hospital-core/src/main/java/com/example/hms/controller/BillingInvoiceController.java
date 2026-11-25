@@ -316,7 +316,7 @@ public class BillingInvoiceController {
             return ResponseEntity.ok(Map.of(STATUS, "SENT", "sentAt", java.time.OffsetDateTime.now()));
         } catch (org.springframework.mail.MailException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of(STATUS, "FAILED", "error", "Mail service unavailable"));
+                .body(Map.of(STATUS, "FAILED", "error", com.example.hms.utility.MessageUtil.resolve("response.mail.unavailable")));
         }
         // QA D755: a 404 (unknown or another hospital's invoice) or a refused
         // draft goes to the global handler; it was turned into a 500 here.

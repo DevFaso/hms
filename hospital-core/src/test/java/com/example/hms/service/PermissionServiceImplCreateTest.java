@@ -82,7 +82,10 @@ class PermissionServiceImplCreateTest {
 
         assertThatThrownBy(() -> service.createPermission(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already exists");
+            .satisfies(error -> {
+                assertThat(error).extracting("messageKey").isEqualTo("permission.name.taken");
+                assertThat(error).extracting("field").isEqualTo("name");
+            });
 
         verify(permissionRepository, never()).save(any(Permission.class));
     }

@@ -198,7 +198,7 @@ class Hl7InboundControllerTenancyTest {
 
         assertThatThrownBy(() -> controller.inbound(overWidth, labOrderId, assignmentId, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("Invalid MSH: MSH-10 exceeds 255 characters");
+            .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("hl7.field.tooLong"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()).containsExactly("MSH-10", 255); });
 
         verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
         verify(labResultService, never()).createIngestedLabResult(any(), any(), any());
@@ -211,7 +211,7 @@ class Hl7InboundControllerTenancyTest {
 
         assertThatThrownBy(() -> controller.inbound(overWidth, labOrderId, assignmentId, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("Invalid MSH: MSH-3 exceeds 180 characters")
+            .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("hl7.field.tooLong"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()).containsExactly("MSH-3", 180); })
             .message().doesNotContain("AAAA");
 
         verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
@@ -226,7 +226,7 @@ class Hl7InboundControllerTenancyTest {
 
         assertThatThrownBy(() -> controller.inbound(ORU, labOrderId, assignmentId, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("OBX-5 exceeds 2048 characters");
+            .satisfies(error -> { assertThat(error).extracting("messageKey").isEqualTo("hl7.field.tooLong"); assertThat(((com.example.hms.exception.BusinessException) error).getArgs()).containsExactly("OBX-5", 2048); });
 
         verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
         verify(labResultService, never()).createIngestedLabResult(any(), any(), any());

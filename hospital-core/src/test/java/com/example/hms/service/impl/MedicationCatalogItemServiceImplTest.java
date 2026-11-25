@@ -194,8 +194,8 @@ class MedicationCatalogItemServiceImplTest {
 
         assertThatThrownBy(() -> service.create(global))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                .hasMessageContaining("Only super-admins")
-                .hasMessageContaining("global");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.hospital.required"))
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.hospital.required"));
         verify(catalogRepository, never()).save(any());
     }
 
@@ -224,7 +224,7 @@ class MedicationCatalogItemServiceImplTest {
 
         assertThatThrownBy(() -> service.create(foreignReq))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                .hasMessageContaining("their own hospital");
+                .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("catalog.hospital.otherOwner"));
         verify(catalogRepository, never()).save(any());
     }
 

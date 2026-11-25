@@ -35,13 +35,14 @@ public class PatientRecipientChallengeService {
     private final PatientRecipientVerification verification;
     private final org.springframework.transaction.PlatformTransactionManager transactions;
 
-    public record View(NotificationChannel channel, boolean verified, LocalDateTime expiresAt) {}
+    public record View(NotificationChannel channel, boolean verified, LocalDateTime expiresAt, String maskedRecipient) {}
 
     @Transactional(readOnly = true)
     public List<View> getStatus(UUID patientId) {
         Patient patient = patients.findByIdUnscoped(patientId).orElseThrow(() -> missing(patientId));
         return List.of(NotificationChannel.SMS, NotificationChannel.EMAIL).stream().map(channel -> new View(channel,
-            verification.allows(patient, channel, recipient(patient, channel)), null)).toList();
+            verification.allows(patient, channel, recipient(patient, channel)), null,
+            PatientContactMask.of(recipient(patient, channel), channel))).toList();
     }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
@@ -58,7 +59,7 @@ public class PatientRecipientChallengeService {
             newTransaction().executeWithoutResult(status -> invalidate(patientId, channel, prepared.codeHash()));
             throw new BusinessException("recipientVerification.unavailable");
         }
-        return new View(channel, false, prepared.expiresAt());
+        return new View(channel, false, prepared.expiresAt(), PatientContactMask.of(prepared.recipient(), channel));
     }
 
     /** Commit the guess/resend budget before talking to either provider, without holding the reservation transaction open during delivery. */
@@ -129,7 +130,7 @@ public class PatientRecipientChallengeService {
             patient.setVerifiedSmsRecipient(patient.getPhoneNumberPrimary()); patient.setPhoneVerifiedAt(now);
         } else patient.setVerifiedEmailRecipient(patient.getEmail());
         patients.save(patient);
-        return new View(channel, true, null);
+        return new View(channel, true, null, PatientContactMask.of(recipient(patient, channel), channel));
     }
 
     private static String recipient(Patient patient, NotificationChannel channel) {

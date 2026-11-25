@@ -43,17 +43,17 @@
     }
   },
   "ADT_INTAKE": {
-    "TITLE": "ADT intake provider config",
-    "SUBTITLE": "Per-hospital defaults used when ADT^A01/A04 messages arrive without a matching in-app visit. Auto-create only fires when the row is enabled AND the cluster-wide app.hl7.adt.visit-sync.auto-create.enabled flag is on.",
-    "LOADING": "Loading intake configs…",
-    "ERROR": "Could not load intake configs.",
-    "EMPTY": "No intake configs yet. Use the form below to create one for a hospital.",
+    "TITLE": "Automatic admissions from another system",
+    "SUBTITLE": "Set the defaults used when another system sends an admission or visit with no matching visit record. Turn on automatic creation for this hospital and for the platform.",
+    "LOADING": "Loading automatic-admission settings…",
+    "ERROR": "Could not load automatic-admission settings.",
+    "EMPTY": "No hospital has automatic-admission settings yet. Use the form below to configure one.",
     "SAVING": "Saving…",
     "SAVE": "Save",
     "STATE_ENABLED": "Enabled",
     "STATE_DISABLED": "Disabled",
-    "FORM_CREATE_TITLE": "Create or upsert an intake config",
-    "FORM_EDIT_TITLE": "Edit intake config",
+    "FORM_CREATE_TITLE": "Configure a hospital",
+    "FORM_EDIT_TITLE": "Edit automatic-admission settings",
     "COL_HOSPITAL": "Hospital",
     "COL_ADMISSION_TYPE": "Admission type",
     "COL_ACUITY": "Acuity",
@@ -65,17 +65,17 @@
       "PROVIDER_PLACEHOLDER": "— Select a physician —",
       "DEPARTMENT": "Department (optional)",
       "DEPARTMENT_PLACEHOLDER": "— Select a department —",
-      "ASSIGNMENT_ID": "Default assignment id (required for A04)",
-      "ASSIGNMENT_HINT": "Needed only when this hospital creates ADT^A04 encounters automatically: the admitting physician's own assignment, under which the encounters are recorded.",
+      "ASSIGNMENT_ID": "Physician assignment for automatic visits",
+      "ASSIGNMENT_HINT": "For automatic visits, choose the admitting physician’s assignment. Without an assignment, only automatic admissions are available.",
       "ADMISSION_TYPE": "Default admission type",
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",
       "CHIEF_COMPLAINT": "Default chief complaint",
-      "ENABLED": "Enable auto-create for this hospital",
-      "ASSIGNMENT": "Default assignment (required for A04)",
-      "ASSIGNMENT_NONE": "— None (A01 only) —"
+      "ENABLED": "Allow automatic admissions and visits for this hospital",
+      "ASSIGNMENT": "Physician assignment for automatic visits",
+      "ASSIGNMENT_NONE": "— None: admissions only —"
     },
-    "CONFIRM_DELETE": "Delete ADT intake config for {{hospital}}?",
+    "CONFIRM_DELETE": "Delete automatic-admission settings for {{hospital}}?",
     "SELECTED_HOSPITAL": "Selected hospital:",
     "HOSPITAL_SEARCHING": "Searching hospitals…",
     "HOSPITAL_NO_MATCH": "No hospitals match this search.",
@@ -83,17 +83,19 @@
     "DEPARTMENT_NO_OPTIONS": "No departments at this hospital.",
     "PLACEHOLDER": {
       "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…",
-      "CHIEF_COMPLAINT": "Leave empty for \"Admitted automatically from an ADT message\""
+      "CHIEF_COMPLAINT": "Leave empty to use the automatic reason"
     },
     "VALIDATION": {
       "REQUIRED": "Hospital and admitting provider are required."
     },
     "TOAST": {
-      "SAVED": "Intake config saved.",
-      "SAVE_FAILED": "Could not save intake config.",
-      "DELETED": "Intake config deleted.",
-      "DELETE_FAILED": "Could not delete intake config."
-    }
+      "SAVED": "Automatic-admission settings saved.",
+      "SAVE_FAILED": "Could not save automatic-admission settings.",
+      "DELETED": "Automatic-admission settings deleted.",
+      "DELETE_FAILED": "Could not delete automatic-admission settings."
+    },
+    "HOSPITAL_LOCKED": "The hospital cannot change while editing. Cancel to configure another hospital.",
+    "CHOOSE_HOSPITAL_FIRST": "Choose a hospital first to access its physicians, departments and assignments."
   },
   "BEDS": {
     "DELETE_BED_CONFIRM": "Delete the bed {{name}}?",
@@ -5374,7 +5376,7 @@
     "PROVIDER_STAFF": "Staff",
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
-    "ADT_INTAKE": "ADT intake",
+    "ADT_INTAKE": "Automatic admissions",
     "UNSIGNED_NOTES": "Unsigned notes",
     "PRICE_LIST": "Price list",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
@@ -5414,12 +5416,12 @@
     "SETTINGS_DESC": "Choose how you want to be notified for each type of event.",
     "SETTINGS_TITLE": "Notification Preferences",
     "TITLE": "Notifications",
-    "TYPE_APPOINTMENT_REMINDER": "Appointment Reminder",
+    "TYPE_APPOINTMENT_REMINDER": "Appointments and follow-up (all messages)",
     "TYPE_BILLING": "Billing",
     "TYPE_DISCHARGE_SUMMARY": "Discharge Summary",
     "TYPE_GENERAL": "General",
     "TYPE_LAB_RESULT": "Lab Result",
-    "TYPE_MEDICATION_REFILL": "Medication Refill",
+    "TYPE_MEDICATION_REFILL": "Pharmacy (all messages)",
     "TYPE_PROXY_ACCESS": "Proxy Access",
     "TYPE_SYSTEM": "System",
     "UNREAD": "Unread",
@@ -15134,7 +15136,7 @@
       "MAIL_SEND_FAILED": "The mail server did not accept the email",
       "SEND_FAILED": "Send failed",
       "ATTEMPTS_EXHAUSTED": "Every attempt was used",
-      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "RECIPIENT_NOT_ALLOWED": "The contact is not on this environment's test list.",
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
@@ -15824,7 +15826,8 @@
     "PICK_HINT": "An exam of the hospital’s catalogue: it is priced from the price list.",
     "FREE_TEXT_HINT": "Pick the exam from the catalogue when it is there. Outside the catalogue, the line may be left for the cashier to price, and the exam may be hidden from family to be safe.",
     "EMPTY_HINT": "The hospital’s imaging catalogue is empty: type the exam as free text.",
-    "ORDER_LOAD_FAILED": "The catalogue could not be loaded: type the exam as free text."
+    "ORDER_LOAD_FAILED": "The catalogue could not be loaded: type the exam as free text.",
+    "READ_ONLY_FIELDS": "These fields are read-only with your current access to this catalogue."
   },
   "R70_PRIVACY": {
     "OPEN_REFILLS": "Open the refill requests",
@@ -16330,7 +16333,11 @@
     "CODE": "Six-digit code",
     "CONFIRM": "Confirm code",
     "ERROR": "Unable to verify this contact. Try again.",
-    "CODE_REQUIRED": "Enter the six-digit code."
+    "CODE_REQUIRED": "Enter the six-digit code.",
+    "CONTACT": "Contact: {{contact}}",
+    "CODE_SENT": "A code was sent to {{contact}}.",
+    "CODE_SENT_GENERIC": "A code was sent.",
+    "EXPIRES": "Valid until {{time}}."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Access or correct my record",

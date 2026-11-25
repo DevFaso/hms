@@ -18,7 +18,13 @@ test('own request reaches the hospital queue, needs a reason, then downloads the
             firstName: 'cdx',
             lastName: 'Patient',
             dateOfBirth: '1990-01-01',
-            hospitalRecords: [{ hospitalId: TEST_ID, hospitalName: 'cdx Hospital' }],
+            hospitalRecords: [
+              {
+                hospitalId: TEST_ID,
+                hospitalName:
+                  'cdx Centre hospitalier régional de Ouagadougou — consultation et suivi des dossiers',
+              },
+            ],
           },
           allergies: [],
           activeDiagnoses: [],
@@ -45,7 +51,8 @@ test('own request reaches the hospital queue, needs a reason, then downloads the
         patientName: 'cdx Patient',
         requesterType: 'PATIENT',
         requesterName: 'cdx Patient',
-        hospitalName: 'cdx Hospital',
+        hospitalName:
+          'cdx Centre hospitalier régional de Ouagadougou — consultation et suivi des dossiers',
         status: 'PENDING',
         requestedOn: '2026-11-23',
         dueOn: '2026-12-23',
@@ -64,7 +71,21 @@ test('own request reaches the hospital queue, needs a reason, then downloads the
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
-    await page.screenshot({ path: info.outputPath(`request-${width}.png`) });
+    const fits = await page
+      .getByTestId('record-rights')
+      .locator('input, select, textarea')
+      .evaluateAll((controls) =>
+        controls.every((el) => {
+          const box = el.getBoundingClientRect();
+          const form = el.closest('form')!.getBoundingClientRect();
+          return box.left >= form.left && box.right <= form.right;
+        }),
+      );
+    expect(fits).toBe(true);
+    const screenshot = info.outputPath(`request-${width}.png`);
+    await page.screenshot({ path: screenshot, fullPage: true });
+    if (width === 390 || width === 1440)
+      await info.attach(`record-request-${width}`, { path: screenshot, contentType: 'image/png' });
   }
   await signInAs(page, 'ROLE_DOCTOR', baseURL!);
   await page.route('**/api/roi-requests**', (route) => {
