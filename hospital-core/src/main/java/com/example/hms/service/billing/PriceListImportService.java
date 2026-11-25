@@ -200,6 +200,12 @@ public class PriceListImportService {
      */
     private void write(List<Planned> planned, PriceListService.Maintainer actor, String reason, UUID importId) {
         try {
+            // A row lock lasts until this import transaction ends. Re-querying it
+            // for every staged item triggers repeated Hibernate auto-flush checks
+            // over the growing persistence context and defeats the write batches.
+            if (planned.stream().anyMatch(row -> row.row().getOutcome() == PriceListImportRowOutcome.NEW_ITEM)) {
+                itemRepository.lockHospitalWhilePricing(actor.hospitalId());
+            }
             for (Planned row : planned) {
                 if (row.row().getOutcome() == PriceListImportRowOutcome.NEW_PRICE) {
                     priceList.closeForNewVersion(row.plan(), row.from());
@@ -209,7 +215,7 @@ public class PriceListImportService {
             int written = 0;
             for (Planned row : planned) {
                 switch (row.row().getOutcome()) {
-                    case NEW_ITEM -> priceList.stageItem(actor, row.newItem(), row.price(), row.from(), reason,
+                    case NEW_ITEM -> priceList.stageItemWithHospitalLockHeld(actor, row.newItem(), row.price(), row.from(), reason,
                         importId);
                     case NEW_PRICE -> priceList.stageVersion(row.item(), actor, row.plan(), row.price(), row.from(),
                         reason, importId);

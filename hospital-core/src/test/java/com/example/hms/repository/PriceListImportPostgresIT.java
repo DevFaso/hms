@@ -117,6 +117,7 @@ class PriceListImportPostgresIT {
     @Autowired private PriceListImportRepository imports;
     @Autowired private InvoiceItemRepository invoiceLines;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private HospitalRepository hospitals;
     @Autowired private PlatformTransactionManager transactions;
 
     private final LabTestDefinitionRepository labTests = mock(LabTestDefinitionRepository.class);
@@ -141,11 +142,7 @@ class PriceListImportPostgresIT {
         hospitalA = UUID.randomUUID();
         hospitalB = UUID.randomUUID();
         actor = UUID.randomUUID();
-        PriceListLinks links = new PriceListLinks(labTests, treatments);
-        service = new PriceListService(items, prices, links, invoiceLines, labTests, treatments,
-            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
-            CLOCK, "Africa/Ouagadougou");
-        importer = new PriceListImportService(service, items, prices, imports, links, labTests, audit, jdbc, "1s");
+        wireServices(items);
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(actor);
@@ -170,6 +167,81 @@ class PriceListImportPostgresIT {
             return StreamSupport.stream(ids.spliterator(), false).filter(codes::containsKey)
                 .map(id -> labTest(codes.get(id), hospitalA)).toList();
         });
+    }
+
+    private void wireServices(PriceListItemRepository itemRepository) {
+        PriceListLinks links = new PriceListLinks(labTests, treatments);
+        service = new PriceListService(itemRepository, prices, links, invoiceLines, labTests, treatments,
+            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
+            CLOCK, "Africa/Ouagadougou");
+        importer = new PriceListImportService(service, itemRepository, prices, imports, links, labTests, audit, jdbc, "1s");
+    }
+
+    @Test
+    @DisplayName("bulk new items acquire one real hospital share lock for the transaction")
+    void newItemsLockHospitalOncePerImport() {
+        PriceListItemRepository observed = org.mockito.Mockito.mock(PriceListItemRepository.class,
+            org.mockito.AdditionalAnswers.delegatesTo(items));
+        useRealHospital();
+        wireServices(observed);
+        assertThat(apply(sixtyNewItems(), "batch.csv").getNewItems()).isEqualTo(60);
+        verify(observed, times(1)).lockHospitalWhilePricing(hospitalA);
+        // Reusing the same service in another transaction must acquire the lock again.
+        apply(utf8(HEADER + "\nNEXT;Article suivant;OTHER_SERVICE;250;01/12/2026;;\n"), "next.csv");
+        verify(observed, times(2)).lockHospitalWhilePricing(hospitalA);
+        assertThat(itemCount(hospitalA)).isEqualTo(61);
+    }
+
+    private void useRealHospital() {
+        Hospital hospital = new Hospital();
+        hospital.setName("Synthetic batch-lock hospital");
+        hospital.setCode("BATCH-" + UUID.randomUUID());
+        hospitalA = inTx(() -> hospitals.saveAndFlush(hospital)).getId();
+        actAt(hospitalA);
+    }
+
+    private static byte[] sixtyNewItems() {
+        StringBuilder csv = new StringBuilder(HEADER).append('\n');
+        for (int i = 0; i < 60; i++) {
+            csv.append("ROW-").append(i).append(";Article;OTHER_SERVICE;100;01/12/2026;;\n");
+        }
+        return utf8(csv.toString());
+    }
+
+    @Test
+    @DisplayName("the import's hospital share lock survives every batch flush until commit")
+    void hospitalShareLockIsHeldUntilCommit() {
+        useRealHospital();
+        inTx(() -> {
+            assertThat(importer.importFile(sixtyNewItems(), "locked.csv", false, false).getNewItems()).isEqualTo(60);
+            assertThat(exclusiveHospitalLockOnAnotherConnection()).isFalse();
+            return null;
+        });
+        assertThat(exclusiveHospitalLockOnAnotherConnection()).isTrue();
+    }
+
+    private boolean exclusiveHospitalLockOnAnotherConnection() {
+        try (var connection = java.util.Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (var statement = connection.createStatement()) {
+                    statement.execute("SET LOCAL lock_timeout = '200ms'");
+                }
+                try (var statement = connection.prepareStatement("SELECT id FROM hospital.hospitals WHERE id = ? FOR UPDATE")) {
+                    statement.setObject(1, hospitalA);
+                    try (var result = statement.executeQuery()) {
+                        return result.next();
+                    }
+                }
+            } catch (java.sql.SQLException failure) {
+                if ("55P03".equals(failure.getSQLState())) return false;
+                throw failure;
+            } finally {
+                connection.rollback();
+            }
+        } catch (java.sql.SQLException failure) {
+            throw new IllegalStateException("Synthetic hospital lock check failed", failure);
+        }
     }
 
     private void actAt(UUID hospitalId) {
