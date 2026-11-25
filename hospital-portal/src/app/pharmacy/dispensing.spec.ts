@@ -1001,6 +1001,37 @@ describe('DispensingComponent', () => {
     expect(plain?.query(By.css('app-prescription-clarification'))).not.toBeNull();
   });
 
+  it('QA D3942: the queue and the hand-over card name the product prepared and the substitution', () => {
+    const substituted = {
+      ...preparedRow,
+      medicationName: 'P77 Ibuprofène 400 mg',
+      readyForCollection: {
+        ...preparedRow.readyForCollection,
+        medicationName: 'P77 Ibuprofène 200 mg',
+        substitution: true,
+        substitutionReason: 'Rupture du 400 mg',
+      },
+    };
+    showQueue([substituted]);
+    expect(byTestId('rx-ready-sub-rx-ready')).not.toBeNull();
+    expect(component.preparedProduct(substituted as any)).toBe('P77 Ibuprofène 200 mg');
+
+    component.openHandOver(substituted as any);
+    fixture.detectChanges();
+    expect(byTestId('ready-product')?.textContent).toContain('P77 Ibuprofène 200 mg');
+    expect(byTestId('ready-product')?.textContent).not.toContain('400 mg');
+    expect(byTestId('ready-substitution')?.textContent).toContain('Rupture du 400 mg');
+  });
+
+  it('QA D3942: a fill of the prescribed product carries no substitution mark', () => {
+    showQueue([preparedRow]);
+    expect(byTestId('rx-ready-sub-rx-ready')).toBeNull();
+    component.openHandOver(preparedRow as any);
+    fixture.detectChanges();
+    expect(byTestId('ready-product')?.textContent).toContain('Amoxicillin');
+    expect(byTestId('ready-substitution')).toBeNull();
+  });
+
   it('hands over with the optional wristband scan', () => {
     pharmacySvc.handOver.and.returnValue(
       of({ data: { id: 'd-ready', status: 'COMPLETED' } } as any),
@@ -2385,6 +2416,63 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       expect(sameDispenseUnit(undefined, 'flacon')).toBeTrue();
       expect(sameDispenseUnit('Comprimés', 'comprimé')).toBeTrue();
       expect(sameDispenseUnit('comprimé', 'flacon')).toBeFalse();
+    });
+
+    it('QA D3940: a substitute lot is never preselected, is labelled, and ticks the substitution', async () => {
+      await render();
+      pharmacySvc.listDispensableLots.and.returnValue(
+        of({
+          data: [
+            {
+              ...lot('tab', '2098-01-31', 100),
+              inventoryItemId: 'inv-2',
+              productName: 'Amoxicilline 500 mg comprimé',
+              strength: '500 mg',
+              productMatch: 'SUBSTITUTE',
+            },
+            {
+              ...lot('cap', '2099-06-30', 200),
+              productName: 'Amoxicilline 500 mg gélule',
+              strength: '500 mg',
+              productMatch: 'PRESCRIBED',
+            },
+          ],
+        }) as never,
+      );
+      pharmacySvc.claimQueueRow.and.returnValue(
+        of({ data: { ...myClaim, renewed: false } }) as never,
+      );
+      click('rx-dispense-rx-1');
+      fixture.detectChanges();
+
+      // The shorter-dated lot is the substitute: the prescribed product is preselected.
+      expect(component.form.stockLotId).toBe('cap');
+      expect(component.form.substitution).toBeFalsy();
+      const host = fixture.nativeElement as HTMLElement;
+      const options = Array.from(host.querySelectorAll<HTMLOptionElement>('#stockLot option'));
+      expect(options.map((o) => o.value)).toEqual(['', 'cap', 'tab']);
+      expect(options[1].textContent).toContain('Amoxicilline 500 mg gélule');
+      expect(host.querySelector('#stockLot optgroup option')?.textContent).toContain(
+        'Amoxicilline 500 mg comprimé',
+      );
+      expect(exists('lot-product')).toBeTrue();
+
+      component.form.stockLotId = 'tab';
+      component.onLotChange();
+      fixture.detectChanges();
+      expect(component.form.substitution).toBeTrue();
+      expect(exists('lot-substitute')).toBeTrue();
+      component.verifyAttested.set(true);
+      expect(component.dispenseBlockReason(false)).toContain('SUBMIT_GUARD.SUBSTITUTION_REASON');
+      component.form.substitutionReason = 'Gélules en rupture';
+      expect(component.dispenseBlockReason(false) ?? '').not.toContain(
+        'SUBMIT_GUARD.SUBSTITUTION_REASON',
+      );
+
+      // Back to the prescribed product: the box the lot ticked is unticked.
+      component.form.stockLotId = 'cap';
+      component.onLotChange();
+      expect(component.form.substitution).toBeFalse();
     });
 
     it('pre-selects the shortest-dated lot that covers the fill', async () => {

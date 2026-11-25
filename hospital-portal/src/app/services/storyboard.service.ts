@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { RestrictedRows } from './patient.service';
 import { backgroundRequestOptions } from './ws-transport';
+import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-status';
 
 /**
  * Wire shapes for {@code GET /api/patients/:patientId/storyboard}.
@@ -21,6 +22,8 @@ export interface StoryboardPatientHeader {
   ageYears?: number | null;
   gender?: string | null;
   bloodType?: string | null;
+  /** QA D3901: the declared group beside the laboratory's confirmed one, with the antibody flag. */
+  bloodGroup?: BloodGroupStatus | null;
   /** QA r70 D3220: the latest recorded weight (kg) and when it was taken. */
   latestWeightKg?: number | null;
   latestWeightRecordedAt?: string | null;

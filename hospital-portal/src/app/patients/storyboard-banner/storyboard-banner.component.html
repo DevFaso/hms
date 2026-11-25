@@ -15,6 +15,15 @@
         <span class="material-symbols-outlined" aria-hidden="true">error</span>
         {{ 'STORYBOARD.ERROR' | translate }}
       </p>
+    } @else if (state() === 'restricted') {
+      <p
+        class="storyboard__status storyboard__status--error"
+        data-testid="storyboard-restricted"
+        role="status"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        {{ 'STORYBOARD.RESTRICTED' | translate }}
+      </p>
     } @else if (state() === 'empty') {
       <p class="storyboard__status storyboard__status--empty" data-testid="storyboard-empty">
         <span class="material-symbols-outlined" aria-hidden="true">info</span>
@@ -32,13 +41,11 @@
         <span class="storyboard__blood-label">{{
           'PATIENT_SAFETY.BLOOD_GROUP' | translate
         }}</span>{{ 'COMMON.COLON' | translate }}
-        @if (s.patient?.bloodType) {
-          <strong class="storyboard__blood-value">{{ s.patient.bloodType }}</strong>
-        } @else {
-          <span class="storyboard__blood-missing">{{
-            'PATIENT_SAFETY.NOT_DOCUMENTED' | translate
-          }}</span>
-        }
+        <!-- QA D3901: the laboratory's group, a typed one « non vérifié », a disagreement, the antibody. -->
+        <app-blood-group-status
+          [status]="s.patient?.bloodGroup"
+          [declared]="s.patient?.bloodType"
+        />
       </p>
       <div class="storyboard__sections">
         <!-- Allergies -->

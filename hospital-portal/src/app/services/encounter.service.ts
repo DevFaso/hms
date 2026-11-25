@@ -9,6 +9,7 @@ import { Observable, defer, map } from 'rxjs';
 import { allRows, PageSlice } from '../shared/all-pages';
 import { WithheldResult, recordsWithheld } from './patient.service';
 import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
+import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-status';
 
 export type EncounterStatus =
   | 'SCHEDULED'
@@ -285,6 +286,8 @@ export interface AfterVisitSummary {
   patientMrn?: string | null;
   /** QA r70 D3220: the chart's blood group, on the summary and its print (removed for the desk). */
   patientBloodType?: string | null;
+  /** QA D3901: the declared group beside the laboratory's confirmed one (removed for the desk). */
+  patientBloodGroup?: BloodGroupStatus | null;
   /** A stay: its diagnoses read "at discharge"; an outpatient visit's do not. */
   inpatientStay?: boolean;
   /** Who signed the latest signed note, and when; absent while none is signed. */

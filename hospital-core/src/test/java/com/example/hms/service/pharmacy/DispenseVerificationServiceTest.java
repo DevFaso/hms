@@ -129,6 +129,9 @@ class DispenseVerificationServiceTest {
     void qaD1492AFreeTextCitedBrandIsDispensableFromALotOfItsGeneric() {
         StockLot paracetamol = lotOf(null, "Paracetamol", TODAY.plusMonths(6));
         MedicationCatalogItem item = paracetamol.getInventoryItem().getMedicationCatalogItem();
+        // Review of #1336: « Tylenol 500 mg » states a strength, which the item must state too.
+        item.setStrength("500");
+        item.setStrengthUnit("mg");
         prescription.setMedicationCode(null);
         prescription.setMedicationCatalogItemId(null);
 
@@ -312,6 +315,9 @@ class DispenseVerificationServiceTest {
         prescription.setMedicationCode(null);
         prescription.setMedicationName("Paracétamol 500 mg comprimé");
         StockLot lot = lotOf(null, "paracetamol", TODAY.plusMonths(3));
+        // Review of #1336: the order states 500 mg, so the item must state it too.
+        lot.getInventoryItem().getMedicationCatalogItem().setStrength("500");
+        lot.getInventoryItem().getMedicationCatalogItem().setStrengthUnit("mg");
 
         DispenseVerificationResult result = service.verify(prescription, lot, null, null);
 

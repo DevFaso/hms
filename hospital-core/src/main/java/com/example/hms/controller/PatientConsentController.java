@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.service.PatientConsentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,8 @@ import java.util.UUID;
 @RequestMapping("/patient-consents")
 @RequiredArgsConstructor
 @Tag(name = "Patient Consents", description = "Read-only listing of the record-sharing consents granted before E9 #65.")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "record-sharing consents: administrative")
 public class PatientConsentController {
 
     private final PatientConsentService patientConsentService;

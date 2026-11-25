@@ -14,10 +14,17 @@ public class ChartRestrictedException extends RuntimeException {
 
     public static final String CODE = "CHART_RESTRICTED";
 
+    /**
+     * QA D3864: the refusal is a bundle key, resolved in the caller's language
+     * by {@code GlobalExceptionHandler}. It names the way in (break-the-glass),
+     * never "reload": reloading cannot open a restricted chart.
+     */
+    public static final String MESSAGE_KEY = "chart.restricted.breakGlassRequired";
+
     private final transient UUID patientId;
 
     public ChartRestrictedException(UUID patientId) {
-        super("This chart is restricted: declare a break-the-glass session with a stated reason to open it.");
+        super(MESSAGE_KEY);
         this.patientId = patientId;
     }
 

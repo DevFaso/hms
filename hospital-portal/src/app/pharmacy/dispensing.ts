@@ -711,6 +711,26 @@ export class DispensingComponent implements OnInit, OnDestroy {
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
 
+  /**
+   * QA D3940: the lots of the prescribed product (or an equivalent). Only
+   * these are preselected, split across (FEFO) or offered first: a 250 mg lot
+   * was preselected for a 500 mg order.
+   */
+  readonly prescribedLots = computed(() =>
+    this.dispensableLots().filter((lot) => lot.productMatch !== 'SUBSTITUTE'),
+  );
+
+  /** QA D3940: lots of a substitute (same active ingredient and strength, another form). */
+  readonly substituteLots = computed(() =>
+    this.dispensableLots().filter((lot) => lot.productMatch === 'SUBSTITUTE'),
+  );
+
+  /** QA D3940: the chosen lot is a substitute: it leaves only as a recorded substitution. */
+  readonly lotIsSubstitute = computed(() => this.selectedLot()?.productMatch === 'SUBSTITUTE');
+
+  /** QA D3940: the substitution box was ticked by choosing a substitute lot (and is unticked with it). */
+  private substitutionFromLot = false;
+
   /** QA D1163: the unit the open order was written in ("flacon", "comprimé"). */
   readonly orderUnit = signal<string | null>(null);
 
@@ -728,7 +748,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * pre-selected when the lots arrive, unless the pharmacist already chose.
    */
   fefoLot(): StockLotResponse | undefined {
-    return fefoFirstLot(this.dispensableLots());
+    return fefoFirstLot(this.prescribedLots());
   }
 
   /**
@@ -746,7 +766,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     // order (the server's rule), so a first part would close it and refuse
     // the rest: such a fill is not split (the shortest lot, or a reason).
     if (!((this.selectedPrescription?.quantity ?? 0) > 0)) return [];
-    const parts = fefoAllocation(this.dispensableLots(), qty);
+    const parts = fefoAllocation(this.prescribedLots(), qty);
     return parts.length > 1 ? parts : [];
   }
 
@@ -834,6 +854,15 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.selectedLotId.set(this.form.stockLotId ?? '');
     // A new lot invalidates a scan taken against the previous one.
     this.form.productScanValue = '';
+    // QA D3940: a substitute lot is a substitution, with its reason; leaving it for the prescribed
+    // product unticks what choosing it ticked.
+    if (this.lotIsSubstitute()) {
+      this.form.substitution = true;
+      this.substitutionFromLot = true;
+    } else if (this.substitutionFromLot) {
+      this.form.substitution = false;
+      this.substitutionFromLot = false;
+    }
   }
 
   /** Open the printable label so the pharmacist has something to scan. */
@@ -985,6 +1014,29 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** QA D3942: the product a prepared fill holds (the fill's name), else the order's. */
+  preparedProduct(rx: WorkQueuePrescription): string {
+    return rx.readyForCollection?.medicationName || rx.medicationName || '';
+  }
+
+  /** QA D3942: the prepared fill is a recorded substitution for the order's product. */
+  isSubstitutedReady(rx: WorkQueuePrescription): boolean {
+    return !!rx.readyForCollection?.substitution;
+  }
+
+  /**
+   * QA D3942: the queue says what was prepared when it is not named as the order is (a
+   * substitution, or the catalogue product the order's free text was filled with).
+   */
+  preparedAsOther(rx: WorkQueuePrescription): boolean {
+    const ready = rx.readyForCollection;
+    if (!ready) return false;
+    return (
+      !!ready.substitution ||
+      (!!ready.medicationName && !!rx.medicationName && ready.medicationName !== rx.medicationName)
+    );
+  }
+
   /** QA D1001: what is still owed on the order; the prescribed amount only when the server sent none. */
   remainingQuantity(rx: WorkQueuePrescription): number {
     return rx.remainingQuantity ?? rx.quantity ?? 0;
@@ -1010,6 +1062,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
       !this.form.unit?.trim() && this.translate.instant('SUBMIT_GUARD.UNIT'),
       !this.verifyAttested() && this.translate.instant('SUBMIT_GUARD.ATTESTATION'),
       ready && this.fefoSplit().length > 1 && this.translate.instant('SUBMIT_GUARD.READY_SPLIT'),
+      // QA D3940: a substitution says why, and a substitute lot is one.
+      (this.form.substitution || this.lotIsSubstitute()) &&
+        !this.form.substitutionReason?.trim() &&
+        this.translate.instant('SUBMIT_GUARD.SUBSTITUTION_REASON'),
     ]);
   }
 

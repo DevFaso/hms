@@ -423,40 +423,157 @@ public class UserAccountAccess {
     }
 
     /**
-     * Review of #1246: whether the caller reaches this hospital through the
-     * organisation scope ALONE (not as a super-admin, not as its hospital or
-     * provider administrator). Such a caller names an existing account only
-     * among its organisation's staff: by identifier it would otherwise find
-     * any account of the platform, a patient's phone number included.
+     * QA D4020: which EXISTING accounts the caller may name as the holder of a
+     * new staff assignment, and whose name and contact a pending invitation
+     * may show it. Built once per decision from the caller's own active
+     * assignments, never from anything the request says (an absent or a
+     * different {@code X-Hospital-Id} neither widens nor narrows it).
+     *
+     * <ul>
+     *   <li>A super-admin: every account.</li>
+     *   <li>Anyone else: the hospitals where it registers staff (those it
+     *       administers, its organisation's, the provider facilities it
+     *       administers), and there an account that already holds a staff
+     *       (non-patient) assignment it accepted or that is live (a former
+     *       employee's included). A pending invitation counts only for a
+     *       person whose every row is in reach (one the caller registered). An
+     *       account known only to another hospital or organisation is not.</li>
+     *   <li>A hospital admin also names a patient of a hospital it
+     *       administers (a PATIENT row there): its own patient, whom it
+     *       already reads. Never another hospital's patient, and never
+     *       through an organisation or provider scope.</li>
+     * </ul>
      */
-    public boolean reachesOnlyThroughOrganisation(UUID hospitalId) {
+    public HolderReach holderReach() {
         Caller caller = caller();
-        if (caller.superAdmin() || hospitalId == null) {
-            return false;
+        if (caller.superAdmin()) {
+            return HolderReach.EVERYWHERE;
         }
-        return !administeredHospitals(caller).contains(hospitalId)
-            && !providerAdministeredHospitals(caller).contains(hospitalId)
-            && organisationHospitals(caller).contains(hospitalId);
+        Set<UUID> administered = administeredHospitals(caller);
+        Set<UUID> hospitals = new java.util.HashSet<>(administered);
+        hospitals.addAll(organisationHospitals(caller));
+        hospitals.addAll(providerAdministeredHospitals(caller));
+        return new HolderReach(false, hospitals, administered);
+    }
+
+    /** What {@link #holderReach} allows. */
+    public static final class HolderReach {
+
+        static final HolderReach EVERYWHERE = new HolderReach(true, Set.of(), Set.of());
+
+        private final boolean everywhere;
+        private final Set<UUID> hospitals;
+        /** The hospitals whose own patients the caller may name: those it administers as HOSPITAL_ADMIN. */
+        private final Set<UUID> patientHospitals;
+
+        HolderReach(boolean everywhere, Set<UUID> hospitals, Set<UUID> patientHospitals) {
+            this.everywhere = everywhere;
+            this.hospitals = Set.copyOf(hospitals);
+            this.patientHospitals = Set.copyOf(patientHospitals);
+        }
+
+        public boolean everywhere() {
+            return everywhere;
+        }
+
+        /** The hospitals where the caller registers staff (empty for the super-admin, who reaches everything). */
+        public Set<UUID> hospitals() {
+            return hospitals;
+        }
+
+        /** The hospitals whose own patients the caller may name ({@link #isOwnPatient}). */
+        public Set<UUID> patientHospitals() {
+            return patientHospitals;
+        }
+
+        /**
+         * May the caller name this existing account as the holder of a new
+         * staff assignment?
+         *
+         * @param holderRows every assignment the account holds, active or not
+         */
+        public boolean mayName(List<UserRoleHospitalAssignment> holderRows) {
+            if (everywhere) {
+                return true;
+            }
+            // A pending staff row counts only when every row of the holder is in
+            // reach (a person the caller registered): a pending invitation sent to
+            // someone of another hospital, accepted by nobody, establishes nothing.
+            boolean allInReach = !holderRows.isEmpty() && allInReach(holderRows);
+            return holderRows.stream()
+                    .anyMatch(row -> isStaffRowAt(row, hospitals) && (isAccepted(row) || allInReach))
+                || isOwnPatient(holderRows);
+        }
+
+        private boolean allInReach(List<UserRoleHospitalAssignment> rows) {
+            return rows.stream().allMatch(row -> {
+                UUID hospitalId = hospitalIdOf(row);
+                return hospitalId != null && hospitals.contains(hospitalId);
+            });
+        }
+
+        /** A row its holder accepted (its code confirmed), or one that is live. */
+        private static boolean isAccepted(UserRoleHospitalAssignment row) {
+            return row.getConfirmationVerifiedAt() != null || Boolean.TRUE.equals(row.getActive());
+        }
+
+        /**
+         * Is this account a patient of a hospital the caller administers (a
+         * PATIENT row there, active or not)? Never true for a super-admin's
+         * reach: the super-admin does not make a patient staff.
+         *
+         * @param holderRows every assignment the account holds, active or not
+         */
+        public boolean isOwnPatient(List<UserRoleHospitalAssignment> holderRows) {
+            return holderRows.stream().anyMatch(row -> {
+                UUID hospitalId = hospitalIdOf(row);
+                return hospitalId != null && patientHospitals.contains(hospitalId)
+                    && PATIENT.equals(roleCode(row.getRole()));
+            });
+        }
+
+        /**
+         * May the caller see who holds this row (name, e-mail) and send it an
+         * invitation again? A verified row, a patient row, or one whose holder
+         * the caller could name without it ({@link #mayName} over the holder's
+         * OTHER rows), or whose every row is in reach (a person the caller
+         * registered). A pending staff row given to someone known only to
+         * another hospital is not: its holder has not accepted anything.
+         *
+         * @param holderRows every assignment the row's holder holds, the row included
+         */
+        public boolean knowsHolderOf(UserRoleHospitalAssignment row, List<UserRoleHospitalAssignment> holderRows) {
+            if (everywhere || row == null || row.getConfirmationVerifiedAt() != null
+                    || PATIENT.equals(roleCode(row.getRole()))) {
+                return true;
+            }
+            List<UserRoleHospitalAssignment> others = holderRows.stream()
+                .filter(other -> other != row && (other.getId() == null || !other.getId().equals(row.getId())))
+                .toList();
+            return mayName(others) || allInReach(others);
+        }
     }
 
     /**
-     * Review of #1246 (rule 1a): whether this account is STAFF of the caller's
-     * own organisation: it holds a non-patient assignment, active or still
-     * waiting for its code, at a hospital of that organisation. The one test
-     * for "an existing account an organisation admin may name", whichever
-     * identifier found it (a username, an e-mail, a phone, a licence number):
-     * a patient's account, or another organisation's staff, is not.
+     * QA D4020: an account that is a patient and nothing else (a patient role
+     * or record, and no staff assignment anywhere). An {@code /assignments}
+     * write gives such an account a staff role only when the caller is the
+     * hospital admin of a hospital where it is a patient
+     * ({@link HolderReach#isOwnPatient}); never otherwise, whoever asks.
+     *
+     * @param holderRows every assignment the account holds, active or not
      */
-    public boolean isStaffOfCallersOrganisation(User account) {
-        if (account == null || account.getId() == null) {
+    public boolean isPatientOnly(User account, List<UserRoleHospitalAssignment> holderRows) {
+        if (account == null) {
             return false;
         }
-        Set<UUID> organisation = organisationHospitals(caller());
-        if (organisation.isEmpty()) {
+        boolean staffSomewhere = holderRows.stream()
+            .anyMatch(row -> !roleCode(row.getRole()).isEmpty() && !PATIENT.equals(roleCode(row.getRole())));
+        if (staffSomewhere) {
             return false;
         }
-        return assignmentRepository.findByUserId(account.getId()).stream()
-            .anyMatch(row -> isStaffRowAt(row, organisation));
+        return holdsAny(account, holderRows, Set.of(PATIENT))
+            || (account.getId() != null && patientRepository.existsByUserId(account.getId()));
     }
 
     private static boolean isStaffRowAt(UserRoleHospitalAssignment row, Set<UUID> hospitals) {

@@ -40,6 +40,8 @@ public class AfterVisitSummaryDTO {
      * Clinical: {@code ReceptionistResponseShaping} removes it for the desk.
      */
     private String patientBloodType;
+    /** QA D3901: the declared group beside the laboratory's confirmed one. */
+    private com.example.hms.payload.dto.BloodGroupStatusDTO patientBloodGroup;
 
     /** A stay (an admission behind the encounter): its diagnoses read "at discharge". */
     private boolean inpatientStay;

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.recordaccess.OptOutRequestDTO;
 import com.example.hms.payload.dto.recordaccess.RecordAccessDecisionDTO;
@@ -44,6 +45,8 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/patients/{patientId}")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "the access decision and the sharing opt-out: no chart content")
 public class RecordAccessController {
 
     static final String CLINICAL_ROLES = "hasAnyAuthority("

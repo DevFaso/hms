@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -33,6 +34,8 @@ import java.util.UUID;
 @RequestMapping("/patients/{patientId}/channel-preferences")
 @RequiredArgsConstructor
 @Tag(name = "Patient channel choices", description = "SMS and e-mail choices recorded at the desk")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "how the patient is contacted: administrative")
 public class PatientChannelPreferenceController {
 
     private static final String ROLES = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST')";

@@ -50,7 +50,9 @@ public enum ClinicalRuleSetKey {
     LEGACY_ULTRASOUND_REPORTS(ClinicalRuleArea.IMAGING),
     SAME_DAY_PRICE_CORRECTION(ClinicalRuleArea.BILLING),
     TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
-    CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB);
+    CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB),
+    /** QA D3940 (r77): the product dispensed is the prescribed one, or a substitute of the same ingredient and strength. */
+    DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING);
 
     private final ClinicalRuleArea area;
 

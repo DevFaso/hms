@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import java.util.Optional;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.RecallStatus;
@@ -63,6 +64,8 @@ public class PatientRecallController {
     @GetMapping
     @Operation(summary = "List recalls, soonest-due first",
         description = "Optionally filtered by status and patient.")
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "the desk phones the patient about a recall; its reason is masked")
     public ResponseEntity<List<RecallResponseDTO>> list(
             @RequestParam(required = false) RecallStatus status,
             @RequestParam(required = false) UUID patientId) {

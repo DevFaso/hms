@@ -19,6 +19,13 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EncounterNoteResponseDTO extends EncounterNoteBaseDTO {
     private UUID id;
+
+    /**
+     * QA D3863: whose chart the note is in. The restricted-chart masking
+     * attributes a record by its patientId; a note answered on its own
+     * (a co-signature) used to carry no patient at all.
+     */
+    private UUID patientId;
     private LocalDateTime updatedAt;
 
     /* QA D831: who wrote this entry. A stay holds one entry per progress note

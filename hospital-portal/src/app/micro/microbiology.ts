@@ -130,7 +130,10 @@ export class MicrobiologyComponent implements OnInit {
     return culture !== null && culture.status !== 'PRELIMINARY';
   });
 
-  /** Mirrors MicroCultureController.ENTRY_ROLES exactly. */
+  /**
+   * Mirrors MicroCultureController.ENTRY_ROLES exactly. QA D3902: the laboratory only; a doctor,
+   * nurse or midwife reads the report and never writes into it.
+   */
   canResult(): boolean {
     return this.roleContext.hasAnyActiveRole([
       'ROLE_LAB_SCIENTIST',
@@ -138,10 +141,16 @@ export class MicrobiologyComponent implements OnInit {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
     ]);
+  }
+
+  /**
+   * QA D3902: whether the selected report's edit controls are shown. A preliminary report is
+   * edited by whoever enters results; a final one is corrected only by those who may finalize
+   * (MicroCultureServiceImpl.CORRECTION_ROLES), and never by a clinician.
+   */
+  canEditSelected(): boolean {
+    return this.canResult() && (!this.selectedLocked() || this.canFinalize());
   }
 
   /** Mirrors MicroCultureController.FINALIZE_ROLES exactly. */

@@ -22,6 +22,7 @@ import { EnumLabelPipe } from '../pipes/enum-label.pipe';
 import { KeyLabelPipe } from '../pipes/key-label.pipe';
 import { ServerTimePipe } from '../pipes/server-time.pipe';
 import { serverDateOrInstant } from '../date-utils';
+import { BloodGroupStatusComponent } from '../blood-group-status/blood-group-status.component';
 
 type LoadState = 'loading' | 'ready' | 'error' | 'hidden';
 
@@ -44,7 +45,15 @@ const SEVERE: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE_THREATENIN
 @Component({
   selector: 'app-patient-safety-header',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, TranslateModule, EnumLabelPipe, KeyLabelPipe, ServerTimePipe],
+  imports: [
+    DatePipe,
+    DecimalPipe,
+    TranslateModule,
+    EnumLabelPipe,
+    KeyLabelPipe,
+    ServerTimePipe,
+    BloodGroupStatusComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-safety-header.component.html',
   styleUrl: './patient-safety-header.component.scss',

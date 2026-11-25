@@ -39,6 +39,20 @@ public class StockLotResponseDTO {
      * received before the migration — printing a label backfills it.
      */
     private String barcodeValue;
+
+    /*
+     * QA D3940 (r77): what the dispensing lot picker shows of each lot's product, filled by the dispensable-lots
+     * read only. The picker showed the lot number and the expiry, never the product or its strength, and
+     * preselected a 250 mg lot for a 500 mg order.
+     */
+    /** The lot's product in the reader's language, with its strength. */
+    private String productName;
+    /** The product's strength as written ("500 mg"), when the catalogue states one. */
+    private String strength;
+    /** The product's dosage form as the catalogue records it. */
+    private String form;
+    /** PRESCRIBED, EQUIVALENT or SUBSTITUTE ({@code DispensedProductMatch}); a substitute needs a recorded reason. */
+    private String productMatch;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

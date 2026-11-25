@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import com.example.hms.enums.AuditEventType;
@@ -1738,7 +1739,26 @@ class DispenseServiceImplTest {
         @Test
         @DisplayName("P-04: should emit DISPENSE_SUBSTITUTED audit event when substitution flag is true")
         void shouldEmitSubstitutedAuditOnSubstitution() {
+            // QA D3940: a substitution names its product (a lot of a substitute: same ingredient and strength).
+            MedicationCatalogItem prescribed = new MedicationCatalogItem();
+            prescribed.setId(UUID.randomUUID());
+            prescribed.setNameFr("Amoxicilline 500 mg gélule");
+            prescribed.setGenericName("Amoxicillin");
+            prescribed.setAtcCode("J01CA04");
+            prescribed.setForm("CAPSULE");
+            prescribed.setStrength("500");
+            prescribed.setStrengthUnit("mg");
+            prescription.setMedicationCatalogItemId(prescribed.getId());
+            prescription.setMedicationName("Amoxicilline 500 mg gélule");
+            doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
+            catalogItem.setNameFr("Amoxicilline 500 mg comprimé");
+            catalogItem.setAtcCode("J01CA04");
+            catalogItem.setForm("TABLET");
+            catalogItem.setStrength("500");
+            catalogItem.setStrengthUnit("mg");
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
             dto.setSubstitution(Boolean.TRUE);
             dto.setSubstitutionReason("Brand X out of stock; substituted with Brand Y");
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
@@ -3491,14 +3511,45 @@ class DispenseServiceImplTest {
             verify(stockLotRepository, never()).save(any());
         }
 
+        /** QA D3940: the order is written from its own catalogue item, the lot's item is {@code catalogItem}. */
+        private MedicationCatalogItem prescribe(String nameFr, String atc, String generic, String form,
+                                                String strength) {
+            MedicationCatalogItem prescribed = new MedicationCatalogItem();
+            prescribed.setId(UUID.randomUUID());
+            prescribed.setNameFr(nameFr);
+            prescribed.setGenericName(generic);
+            prescribed.setAtcCode(atc);
+            prescribed.setForm(form);
+            prescribed.setStrength(strength);
+            prescribed.setStrengthUnit("mg");
+            prescription.setMedicationCatalogItemId(prescribed.getId());
+            prescription.setMedicationName(nameFr);
+            doReturn(prescribed).when(dispenseVerificationService).prescribedItemOf(any());
+            return prescribed;
+        }
+
+        private void lotIs(String nameFr, String atc, String generic, String form, String strength) {
+            catalogItem.setNameFr(nameFr);
+            catalogItem.setGenericName(generic);
+            catalogItem.setAtcCode(atc);
+            catalogItem.setForm(form);
+            catalogItem.setStrength(strength);
+            catalogItem.setStrengthUnit("mg");
+        }
+
+        private void assertNothingMoved() {
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(50));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
         @Test
-        @DisplayName("a wrong-drug lot IS allowed as a recorded substitution")
+        @DisplayName("QA D3940: a substitute (same ingredient and strength, another form) IS allowed as a recorded substitution")
         void aRecordedSubstitutionCarriesTheDrugCheck() {
-            // Generic for brand, two 250s for a 500 — a real workflow the
-            // request already models. Reusing it beats inventing a second
-            // override that would need its own audit event.
-            catalogItem.setGenericName("Amoxicilline trihydrate");
-            catalogItem.setNameFr("Amoxicilline trihydrate");
+            // Capsules out of stock, tablets of the same molecule and strength:
+            // one unit is one prescribed unit, so the quantity is dose-equivalent.
+            prescribe("Amoxicilline 500 mg gélule", "J01CA04", "Amoxicillin", "CAPSULE", "500");
+            lotIs("Amoxicilline 500 mg comprimé", "J01CA04", "Amoxicillin", "TABLET", "500");
             DispenseRequestDTO dto = buildRequest();
             dto.setStockLotId(stockLotId);
             dto.setSubstitution(true);
@@ -3514,6 +3565,122 @@ class DispenseServiceImplTest {
             assertThat(entity.getVerificationOverrides()).contains("DRUG");
             assertThat(entity.getVerificationOverrideReason()).isEqualTo("Prescribed brand out of stock");
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(40));
+            // The fill is named after what left the shelf, not what the client sent.
+            assertThat(dto.getMedicationName()).isEqualTo("Amoxicilline 500 mg comprimé");
+        }
+
+        @Test
+        @DisplayName("QA D3940: a substitute without the flag is refused")
+        void aSubstituteWithoutTheFlagIsRefused() {
+            prescribe("Amoxicilline 500 mg gélule", "J01CA04", "Amoxicillin", "CAPSULE", "500");
+            lotIs("Amoxicilline 500 mg comprimé", "J01CA04", "Amoxicillin", "TABLET", "500");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("substitution");
+            assertNothingMoved();
+        }
+
+        @Test
+        @DisplayName("QA D3940 (a): a 250 mg lot for a free-text 500 mg order is refused, no product id sent")
+        void anotherStrengthForAFreeTextOrderIsRefused() {
+            prescription.setMedicationName("Amoxicilline 500 mg");
+            lotIs("P77 Amoxicilline 250 mg", "J01CA04", "Amoxicilline", "CAPSULE", "250");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationName("Amoxicilline 500 mg");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("250 mg")
+                    .hasMessageContaining("another strength");
+            assertNothingMoved();
+        }
+
+        @Test
+        @DisplayName("QA D3940: another strength is refused even as a recorded substitution (dose-equivalence is D3952)")
+        void anotherStrengthIsRefusedAsASubstitution() {
+            prescribe("P77 Ibuprofène 400 mg", "M01AE01", "Ibuprofen", "TABLET", "400");
+            lotIs("P77 Ibuprofène 200 mg", "M01AE01", "Ibuprofen", "TABLET", "200");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Rupture du 400 mg");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("another strength");
+            assertNothingMoved();
+        }
+
+        @Test
+        @DisplayName("QA D3940 (b): a « substitution » by another molecule is refused")
+        void anotherMoleculeIsRefusedAsASubstitution() {
+            prescribe("P77 Ibuprofène 400 mg", "M01AE01", "Ibuprofen", "TABLET", "400");
+            lotIs("P77 Diclofénac 50 mg", "M01AB05", "Diclofenac", "TABLET", "50");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Rupture");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .matches(e -> "pharmacy.dispense.substitutionOtherDrug"
+                            .equals(((BusinessException) e).getMessageKey()));
+            assertNothingMoved();
+        }
+
+        @Test
+        @DisplayName("QA D3940 (b): a substitute the patient's current allergies stop is refused")
+        void aSubstituteTheAllergiesStopIsRefused() {
+            prescribe("Amoxicilline 500 mg gélule", "J01CA04", "Amoxicillin", "CAPSULE", "500");
+            lotIs("Amoxicilline 500 mg comprimé", "J01CA04", "Amoxicillin", "TABLET", "500");
+            com.example.hms.service.allergy.CurrentAllergyRecheck recheck =
+                    mock(com.example.hms.service.allergy.CurrentAllergyRecheck.class);
+            service.setAllergyRecheck(recheck);
+            com.example.hms.model.PatientAllergy penicillin = new com.example.hms.model.PatientAllergy();
+            penicillin.setId(UUID.randomUUID());
+            penicillin.setAllergenDisplay("Pénicilline");
+            when(recheck.stopForProduct(any(), any())).thenReturn(Optional.of(
+                    new com.example.hms.service.allergy.CurrentAllergyRecheck.Stop(null, penicillin, "documented", "t")));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Rupture");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasMessageContaining("Pénicilline")
+                    .hasMessageContaining("500 mg");
+            assertNothingMoved();
+        }
+
+        @Test
+        @DisplayName("QA D3940: a substitution names the product dispensed (a lot, or the item when stock is not in lots)")
+        void aSubstitutionWithNoProductIsRefused() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Rupture");
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .matches(e -> "pharmacy.dispense.substitutionNeedsProduct"
+                            .equals(((BusinessException) e).getMessageKey()));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
         @Test
@@ -3691,6 +3858,8 @@ class DispenseServiceImplTest {
             MedicationCatalogItem drug = new MedicationCatalogItem();
             drug.setId(UUID.randomUUID());
             drug.setGenericName(genericName);
+            // Review of #1336: the orders here state 500 mg, which an item of unknown strength does not meet.
+            drug.setNameFr(genericName + " 500 mg");
             InventoryItem item = InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(drug)
                     .quantityOnHand(BigDecimal.valueOf(100)).build();
             item.setId(UUID.randomUUID());
@@ -3740,6 +3909,32 @@ class DispenseServiceImplTest {
             assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
                     .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
                     .containsExactly("PCM-1");
+        }
+
+        @Test
+        @DisplayName("QA D3940: another strength is never listed; a substitute comes after the prescribed product, labelled")
+        void theLotsSayTheirProductAndASubstituteComesLast() {
+            prescription.setMedicationName("Amoxicilline 500 mg");
+            StockLot fiveHundred = lot("Amoxicilline", "AMX-500", BigDecimal.valueOf(40));
+            fiveHundred.getInventoryItem().getMedicationCatalogItem().setNameFr("Amoxicilline 500 mg");
+            fiveHundred.setExpiryDate(java.time.LocalDate.now().plusYears(2));
+            StockLot twoFifty = lot("Amoxicilline", "AMX-250", BigDecimal.valueOf(69));
+            twoFifty.getInventoryItem().getMedicationCatalogItem().setNameFr("P77 Amoxicilline 250 mg");
+            twoFifty.setExpiryDate(java.time.LocalDate.now().plusMonths(3));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(twoFifty, fiveHundred)));
+
+            List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> lots =
+                    service.listDispensableLots(prescriptionId, pharmacyId);
+            // The shorter-dated 250 mg lot was preselected for the 500 mg order: it is not offered at all.
+            assertThat(lots).extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
+                    .containsExactly("AMX-500");
+            assertThat(lots.get(0).getProductName()).isEqualTo("Amoxicilline 500 mg");
+            assertThat(lots.get(0).getStrength()).isEqualTo("500 mg");
+            assertThat(lots.get(0).getProductMatch()).isEqualTo("PRESCRIBED");
         }
 
         @Test

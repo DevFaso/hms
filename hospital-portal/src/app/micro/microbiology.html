@@ -183,7 +183,11 @@
             {{ ' '
             }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
-              {{ culture.correctedAt | serverTime | date: 'short' }} —
+              {{ culture.correctedAt | serverTime | date: 'short' }}
+              @if (culture.correctedByName) {
+                ({{ culture.correctedByName }})
+              }
+              —
               {{ 'COMMON.REASON_VALUE' | translate: { reason: culture.correctionReason } }}
             </span>
           </div>
@@ -224,7 +228,13 @@
           </p>
         }
 
-        @if (canResult() && selectedLocked()) {
+        @if (canResult() && !canFinalize() && selectedLocked()) {
+          <!-- QA D3902: a final report is corrected by the laboratory's validating tier only. -->
+          <p class="correction-lab-only" data-testid="correction-lab-only">
+            {{ 'MICRO.CORRECTION_LAB_ONLY' | translate }}
+          </p>
+        }
+        @if (canEditSelected() && selectedLocked()) {
           <div class="form-field correction-field">
             <!-- QA D1305: shown only on a locked report, where it is required. -->
             <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }} *</label>
@@ -241,7 +251,7 @@
           </div>
         }
 
-        @if (canResult()) {
+        @if (canEditSelected()) {
           <div class="edit-grid">
             <div class="form-field">
               <label for="edit-growth">{{ 'MICRO.FIELD_GROWTH' | translate }}</label>
@@ -295,7 +305,7 @@
 
         <div class="isolates-header">
           <h3>{{ 'MICRO.ISOLATES' | translate }} ({{ culture.isolates.length }})</h3>
-          @if (canResult()) {
+          @if (canEditSelected()) {
             <button
               type="button"
               class="btn-secondary"
@@ -320,7 +330,7 @@
               @if (isolate.growthQuantity) {
                 <span class="quantity">{{ isolate.growthQuantity }}</span>
               }
-              @if (canResult()) {
+              @if (canEditSelected()) {
                 <span class="isolate-actions">
                   <button
                     type="button"
@@ -352,7 +362,7 @@
                       <th>{{ 'MICRO.COL_METHOD' | translate }}</th>
                       <th>{{ 'MICRO.COL_MIC' | translate }}</th>
                       <th>{{ 'MICRO.COL_INTERPRETATION' | translate }}</th>
-                      @if (canResult()) {
+                      @if (canEditSelected()) {
                         <th></th>
                       }
                     </tr>
@@ -373,7 +383,7 @@
                             {{ interpLabel(susc.interpretation) }}
                           </span>
                         </td>
-                        @if (canResult()) {
+                        @if (canEditSelected()) {
                           <td class="row-actions">
                             <button
                               type="button"

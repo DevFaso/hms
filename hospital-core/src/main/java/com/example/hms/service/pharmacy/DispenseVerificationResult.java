@@ -25,13 +25,22 @@ public final class DispenseVerificationResult {
 
     private final Map<DispenseCheck, Boolean> outcomes;
     private final Map<DispenseCheck, String> failureReasons;
+    /** QA D3940: how the lot's product relates to the prescribed one; null when no lot's product was compared. */
+    private final DispensedProductMatch productMatch;
 
     private DispenseVerificationResult(
         Map<DispenseCheck, Boolean> outcomes,
-        Map<DispenseCheck, String> failureReasons
+        Map<DispenseCheck, String> failureReasons,
+        DispensedProductMatch productMatch
     ) {
         this.outcomes = outcomes;
         this.failureReasons = failureReasons;
+        this.productMatch = productMatch;
+    }
+
+    /** QA D3940: the lot's product against the order's, or null when none was compared (no lot, a failed scan). */
+    public DispensedProductMatch productMatch() {
+        return productMatch;
     }
 
     public static Builder builder() {
@@ -75,6 +84,12 @@ public final class DispenseVerificationResult {
     public static final class Builder {
         private final Map<DispenseCheck, Boolean> outcomes = new EnumMap<>(DispenseCheck.class);
         private final Map<DispenseCheck, String> failureReasons = new EnumMap<>(DispenseCheck.class);
+        private DispensedProductMatch productMatch;
+
+        public Builder productMatch(DispensedProductMatch match) {
+            this.productMatch = match;
+            return this;
+        }
 
         public Builder pass(DispenseCheck check) {
             outcomes.put(check, Boolean.TRUE);
@@ -103,7 +118,8 @@ public final class DispenseVerificationResult {
         public DispenseVerificationResult build() {
             return new DispenseVerificationResult(
                 Map.copyOf(outcomes),
-                Map.copyOf(failureReasons)
+                Map.copyOf(failureReasons),
+                productMatch
             );
         }
     }

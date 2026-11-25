@@ -4034,6 +4034,12 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V368 (QA D3863): a partial index over the restricted charts, read by the central gate. -->
+    <changeSet id="V368-restricted-chart-lookup-index" author="hms-team" runOnChange="false">
+        <sqlFile path="V368__restricted_chart_lookup_index.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V391-patient-recipient-verification" author="codex" runOnChange="false">
         <sqlFile path="V391__patient_recipient_verification.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>

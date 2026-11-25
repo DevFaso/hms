@@ -15,6 +15,15 @@
         <span class="material-symbols-outlined" aria-hidden="true">error</span>
         {{ 'CHART_REVIEW.ERROR' | translate }}
       </p>
+    } @else if (state() === 'restricted') {
+      <p
+        class="chart-review__status chart-review__status--error"
+        data-testid="chart-review-restricted"
+        role="status"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        {{ 'STORYBOARD.RESTRICTED' | translate }}
+      </p>
     } @else if (state() === 'empty') {
       <p class="chart-review__status chart-review__status--empty" data-testid="chart-review-empty">
         <span class="material-symbols-outlined" aria-hidden="true">inbox</span>

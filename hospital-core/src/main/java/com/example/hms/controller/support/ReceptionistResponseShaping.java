@@ -66,7 +66,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
      */
     public static final Map<Class<?>, Set<String>> REMOVED = Map.ofEntries(
         Map.entry(PatientHospitalRegistrationResponseDTO.class, Set.of("readyForDischargeNote")),
-        Map.entry(PatientResponseDTO.class, Set.of("bloodType", "allergies", "chronicConditions", "flags", "risks",
+        Map.entry(PatientResponseDTO.class, Set.of("bloodType", "bloodGroup", "allergies", "chronicConditions", "flags", "risks",
             "medicalHistorySummary", "careTeamNotes", "hr", "bp", "spo2", "lastVitals", "chartRestrictionReason")),
         Map.entry(EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
             "dischargeDiagnoses", "extraFields", "note", "noteEntries", "notePendingSignature")),
@@ -78,7 +78,9 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
             "noteAddenda",
             "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory",
             // QA r70 D3220: the blood group printed on the summary.
-            "patientBloodType")),
+            "patientBloodType",
+            // QA D3901: the declared and confirmed group and the antibody flag beside it.
+            "patientBloodGroup")),
         Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
         Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
         Map.entry(IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason")),
@@ -156,6 +158,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
 
     private static void shapePatient(PatientResponseDTO patient) {
         patient.setBloodType(null);
+        patient.setBloodGroup(null);
         patient.setAllergies(null);
         patient.setChronicConditions(List.of());
         patient.setFlags(List.of());
@@ -202,6 +205,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         summary.setFamilyHistory(null);
         summary.setSocialHistory(null);
         summary.setPatientBloodType(null);
+        summary.setPatientBloodGroup(null);
     }
 
     private static void shapeBoard(BedBoardDTO board) {

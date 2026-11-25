@@ -20,6 +20,8 @@ public class NurseWorkboardPatientDTO {
     private String mrn;
     /** QA r70 D3220: the blood group recorded on the chart (A+ … O-); null when none is. */
     private String bloodType;
+    /** QA D3901: the declared group beside the laboratory's confirmed one. */
+    private com.example.hms.payload.dto.BloodGroupStatusDTO bloodGroup;
     private String roomBed;
 
     /** AcuityLevel enum name (e.g. "LEVEL_3_MAJOR"). */

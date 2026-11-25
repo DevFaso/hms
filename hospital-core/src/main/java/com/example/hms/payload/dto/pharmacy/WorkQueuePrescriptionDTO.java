@@ -178,6 +178,11 @@ public class WorkQueuePrescriptionDTO implements com.example.hms.payload.dto.pre
         private String preparedByName;
         private BigDecimal quantity;
         private String unit;
+        /** QA D3942: the product prepared (the fill's name), which a substitution makes another than the order's. */
+        private String medicationName;
+        /** QA D3942: the prepared product replaces the prescribed one. */
+        private boolean substitution;
+        private String substitutionReason;
         /** When the one reminder SMS was sent; null before. */
         private LocalDateTime reminderSentAt;
         /** Review of #1285: a controlled drug; cancelling it into quarantine or as a loss needs a witness. */

@@ -1,3 +1,5 @@
+import { shownBloodGroup } from '../shared/blood-group-status/blood-group-status';
+import { BloodGroupStatusComponent } from '../shared/blood-group-status/blood-group-status.component';
 import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
 import { exactIdentifierFirst, patientMatchesTerm } from '../shared/person-search';
 import {
@@ -37,6 +39,7 @@ type SortDir = 'asc' | 'desc';
   selector: 'app-patient-list',
   standalone: true,
   imports: [
+    BloodGroupStatusComponent,
     DashPipe,
     PersonNamePipe,
     CommonModule,
@@ -330,7 +333,10 @@ export class PatientListComponent implements OnInit, OnDestroy {
     if (this.statusFilter === 'active') result = result.filter((p) => p.active);
     if (this.statusFilter === 'inactive') result = result.filter((p) => !p.active);
     if (this.bloodTypeFilter) {
-      result = result.filter((p) => p.bloodType === this.bloodTypeFilter);
+      // QA D3901: the group shown, the laboratory's when there is one, not the typed one behind it.
+      result = result.filter(
+        (p) => shownBloodGroup(p.bloodGroup, p.bloodType) === this.bloodTypeFilter,
+      );
     }
     if (this.hospitalFilter) {
       result = result.filter((p) => p.hospitalId === this.hospitalFilter);

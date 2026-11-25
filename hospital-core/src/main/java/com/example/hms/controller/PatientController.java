@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.identifiersearch.PatientLookupRequestDTO;
 import com.example.hms.payload.dto.identifiersearch.PatientSearchRequestDTO;
 import com.example.hms.payload.dto.identifiersearch.RegistrationMatchRequestDTO;
@@ -288,6 +289,8 @@ public class PatientController {
             schema = @Schema(implementation = MessageResponse.class)))
     @GetMapping("/{id}")
     @PreAuthorize(PATIENT_READ_ROLES)
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "the patient page header: the identity stays, the clinical fields are masked and the tabs refuse")
     public ResponseEntity<PatientResponseDTO> getPatientById(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -575,6 +578,8 @@ public class PatientController {
     )
     @GetMapping("/{id}/address-history")
     @PreAuthorize(PATIENT_READ_ROLES)
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "identity: where the patient has lived")
     public ResponseEntity<java.util.List<com.example.hms.payload.dto.PatientAddressHistoryDTO>> getAddressHistory(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,

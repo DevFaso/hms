@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.payload.dto.roi.RoiRequestCreateDTO;
 import com.example.hms.payload.dto.roi.RoiRequestResponseDTO;
 import com.example.hms.service.roi.RoiRequestService;
@@ -38,6 +39,8 @@ import java.util.UUID;
 @Tag(name = "Release of Information",
     description = "Formal requests for a copy of the record, and their outcomes.")
 @SecurityRequirement(name = "bearerAuth")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "release-of-information requests: a formal, audited release process")
 public class PatientRoiController {
 
     private final RoiRequestService roiService;

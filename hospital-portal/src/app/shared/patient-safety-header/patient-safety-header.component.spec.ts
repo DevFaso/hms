@@ -51,10 +51,37 @@ describe('PatientSafetyHeaderComponent', () => {
   it('shows the blood group, labelled, with the weight and the allergies', () => {
     storyboard.getStoryboard.and.returnValue(of(summary()));
     const el = show('p-1');
-    expect(text(el, 'patient-safety-blood-group')).toBe('O+');
+    // QA D3901: a group only typed on the chart is shown as declared, never as the laboratory's.
+    expect(text(el, 'blood-group-declared')).toBe('O+');
+    expect(text(el, 'patient-safety-blood-group')).toContain('BLOOD_GROUP.DECLARED_UNVERIFIED');
+    expect(el.querySelector('[data-testid="blood-group-confirmed"]')).toBeNull();
     expect(el.textContent).toContain('PATIENT_SAFETY.BLOOD_GROUP');
     expect(text(el, 'patient-safety-weight')).toContain('PATIENT_SAFETY.WEIGHT_KG');
     expect(text(el, 'patient-safety-allergies')).toContain('Pénicilline');
+  });
+
+  it('QA D3901: shows the laboratory group, the typed one that differs, and the antibody alert', () => {
+    storyboard.getStoryboard.and.returnValue(
+      of(
+        summary({
+          bloodType: 'A+',
+          bloodGroup: {
+            declared: 'A+',
+            confirmed: 'B+',
+            confirmedAt: '2026-11-25T09:30:00',
+            confirmedHospitalName: 'Centre Médical Test',
+            discrepancy: true,
+            alloImmunised: true,
+            antibodySpecificities: 'anti-E',
+          },
+        }),
+      ),
+    );
+    const el = show('p-1');
+    expect(text(el, 'blood-group-confirmed')).toBe('B+');
+    expect(el.querySelector('[data-testid="blood-group-declared"]')).toBeNull();
+    expect(text(el, 'blood-group-discrepancy')).toContain('BLOOD_GROUP.DIFFERS_FROM_DECLARED');
+    expect(text(el, 'blood-group-antibody')).toContain('BLOOD_GROUP.ALLO_IMMUNISED');
   });
 
   it('says when no blood group is recorded, never leaves the slot empty', () => {

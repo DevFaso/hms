@@ -322,6 +322,30 @@ describe('ImagingComponent — r53 imaging', () => {
       );
     });
 
+    it('QA D3903: a duplicate the server refused without a reason is shown with the reasons', () => {
+      setUp(['ROLE_DOCTOR']);
+      // The preview found nothing (an order placed since); the server finds it and asks for a reason.
+      imaging.checkDuplicates.and.returnValues(of([]), of([MATCH]));
+      imaging.createOrder.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: {
+            message: 'Choisissez pourquoi…',
+            fieldErrors: { duplicateOverrideReason: 'Choisissez pourquoi…' },
+          },
+        })),
+      );
+      fillNewOrder();
+      component.submitForm();
+      fixture.detectChanges();
+
+      expect(imaging.createOrder).toHaveBeenCalledTimes(1);
+      expect(imaging.checkDuplicates).toHaveBeenCalledTimes(2);
+      expect(component.duplicateMatches()).toEqual([MATCH]);
+      expect(component.showModal()).toBeTrue();
+      expect(q('[data-testid="imaging-duplicate-warning"]')).not.toBeNull();
+    });
+
     it('an edit is not previewed', () => {
       setUp(['ROLE_DOCTOR']);
       imaging.updateOrder.and.returnValue(of(order()));

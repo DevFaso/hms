@@ -14,10 +14,15 @@ import java.util.Set;
  * lesser act, was already narrow. The gates disagreed with each other and with
  * microbiology.
  *
- * <p>The rule now is the one microbiology settled on: <b>entry is broad,
- * release belongs to the laboratory.</b> With one addition that microbiology
- * does not need — entry by a nurse is scoped to the tests a nurse actually
- * performs, which is what {@code LabTestDefinition.pointOfCare} records.
+ * <p>The rule now is: <b>entry is broad, release belongs to the laboratory.</b>
+ * With one addition — entry by a nurse is scoped to the tests a nurse actually
+ * performs, which is what {@code LabTestDefinition.pointOfCare} records — and a
+ * released result is never edited in place ({@code requireNotReleased}): its
+ * correction is a new row the laboratory releases.
+ *
+ * <p>QA D3902: microbiology no longer shares the broad entry. A culture is never
+ * a bedside test, so its entry is the laboratory's alone, and a final report is
+ * corrected only by the validating tier ({@code LabResultEntryEndpointsGuardTest}).
  */
 public final class LabResultAuthority {
 

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
@@ -94,6 +95,8 @@ public class PatientHospitalRegistrationController {
     @ApiResponse(responseCode = "200", description = "List of patient-hospital registrations",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientHospitalRegistrationResponseDTO.class)))
+    @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
+        reason = "registration at the desk: identity and dates")
     public ResponseEntity<List<PatientHospitalRegistrationResponseDTO>> getRegistrations(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID hospitalId,

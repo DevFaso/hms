@@ -196,18 +196,28 @@
         </div>
         @if (writesClinicalFields()) {
           <div class="field-group">
-            <label for="demoBloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
+            <!-- QA D3901: the typed group stays editable, as DECLARED; it never replaces the laboratory's. -->
+            <label for="demoBloodType">{{ 'BLOOD_GROUP.DECLARED_FIELD' | translate }}</label>
             <select
               id="demoBloodType"
               name="bloodType"
               class="form-control"
               [(ngModel)]="form.bloodType"
+              aria-describedby="demoBloodType-hint"
             >
               <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
               @for (b of bloodTypes; track b) {
                 <option [value]="b">{{ b }}</option>
               }
             </select>
+            <small class="field-hint" id="demoBloodType-hint"
+              >{{ 'BLOOD_GROUP.DECLARED_FIELD_HINT' | translate }}
+              @if (patient.bloodGroup?.confirmed; as confirmed) {
+                <strong data-testid="demo-blood-group-confirmed">{{
+                  'BLOOD_GROUP.CONFIRMED_ON_RECORD' | translate: { group: confirmed }
+                }}</strong>
+              }
+            </small>
           </div>
           <!-- QA r70 D3223: the personal history the Synthèse reads; it had no entry anywhere. -->
           <div class="field-group field-group-wide">

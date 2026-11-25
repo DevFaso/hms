@@ -1,5 +1,8 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
+
 import com.example.hms.enums.DispenseCheck;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -49,12 +52,23 @@ import java.util.UUID;
  * right patient was confirmed".
  */
 @Service
+@ProvisionalRule(ClinicalRuleSetKey.DISPENSED_PRODUCT_SUBSTITUTION)
 public class DispenseVerificationService {
 
     private final Clock clock;
 
+    /** QA D3940: the order's own catalogue item, to compare products; absent in a pure-unit test. */
+    private final com.example.hms.repository.MedicationCatalogItemRepository catalogue;
+
     public DispenseVerificationService(Clock clock) {
+        this(clock, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DispenseVerificationService(Clock clock,
+                                       com.example.hms.repository.MedicationCatalogItemRepository catalogue) {
         this.clock = clock;
+        this.catalogue = catalogue;
     }
 
     /**
@@ -145,10 +159,10 @@ public class DispenseVerificationService {
     }
 
     /**
-     * Right drug: the lot's catalogue item must be the prescribed
-     * medication. Matches on code first (formulary or RxNorm), falling back
-     * to the name — the same precedence the bedside check uses, because the
-     * prescription carries free text and a code, not a catalogue FK.
+     * Right drug: the lot's catalogue item must be the prescribed product
+     * ({@link #classify}, QA D3940): the molecule AND the strength, not the
+     * molecule alone. The match is kept on the result, so the caller lets a
+     * recorded substitution carry only a real substitute through.
      */
     private void verifyDrug(Prescription rx, StockLot lot, DispenseVerificationResult.Builder b) {
         if (lot == null || rx == null) {
@@ -162,12 +176,33 @@ public class DispenseVerificationService {
             b.fail(DispenseCheck.DRUG, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotNoMedication"));
             return;
         }
-        if (matchesPrescribedDrug(rx, item)) {
+        DispensedProductMatch match = classify(rx, item);
+        b.productMatch(match);
+        if (match.isPrescribedProduct()) {
             b.pass(DispenseCheck.DRUG);
         } else {
-            b.fail(DispenseCheck.DRUG,
-                com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wrongDrug", describe(item), describePrescribed(rx)));
+            b.fail(DispenseCheck.DRUG, refusalOf(match, rx, item));
         }
+    }
+
+    /**
+     * QA D3940: why a product that is not the prescribed one is refused, in the
+     * reader's language, naming both products with their strength.
+     */
+    public String refusalOf(DispensedProductMatch match, Prescription rx, MedicationCatalogItem item) {
+        String product = describeProduct(item);
+        String prescribed = describePrescribed(rx);
+        if (match == DispensedProductMatch.SUBSTITUTE) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.substituteNeedsRecord", product,
+                prescribed);
+        }
+        if (match == DispensedProductMatch.OTHER_STRENGTH && ProductStrength.labelOf(item).isPresent()) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.otherStrength", product, prescribed);
+        }
+        if (match == DispensedProductMatch.OTHER_STRENGTH) {
+            return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.strengthUnknown", product, prescribed);
+        }
+        return com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wrongDrug", product, prescribed);
     }
 
     /** Fit to give: the lot must not have passed its expiry date. */
@@ -194,54 +229,161 @@ public class DispenseVerificationService {
     // ── Matching ────────────────────────────────────────────────────────
 
     /**
-     * True when the catalogue item is the drug the prescription names. Code
-     * beats name: the code is the identifier, the name is how somebody typed
-     * it. Both the formulary code and the RxNorm code are accepted, since a
-     * prescription written through the catalogue carries one and a
-     * prescription imported over HL7 may carry the other.
+     * True when the catalogue item is the product the prescription names: the
+     * prescribed item or an {@link DispensedProductMatch#EQUIVALENT} of it
+     * ({@link #classify}). The lot picker, the stock-out routing and the
+     * dispense DRUG check read this one rule.
      */
     public boolean matchesPrescribedDrug(Prescription rx, MedicationCatalogItem item) {
+        return classify(rx, item).isPrescribedProduct();
+    }
+
+    /** {@link #classify(Prescription, MedicationCatalogItem, MedicationCatalogItem)} with the order's own item. */
+    public DispensedProductMatch classify(Prescription rx, MedicationCatalogItem item) {
+        return classify(rx, prescribedItemOf(rx), item);
+    }
+
+    /**
+     * The catalogue item the order was written from, or null (none, or not resolvable here). Read at the order's
+     * own hospital, where the prescribing side resolved it ({@code applyCatalogPick}).
+     */
+    public MedicationCatalogItem prescribedItemOf(Prescription rx) {
+        if (rx == null || rx.getMedicationCatalogItemId() == null || catalogue == null
+                || rx.getHospital() == null || rx.getHospital().getId() == null) {
+            return null;
+        }
+        return catalogue.findByIdAndHospital_Id(rx.getMedicationCatalogItemId(), rx.getHospital().getId())
+            .orElse(null);
+    }
+
+    /**
+     * QA D3940 (r77): how a catalogue item relates to the product the order
+     * prescribes ({@link DispensedProductMatch} states the rule). A 250 mg
+     * amoxicillin lot was dispensed for a 500 mg order: the check compared the
+     * molecule (code, then name) and never the strength.
+     *
+     * <ul>
+     *   <li>An order written from a catalogue item is compared product to
+     *       product: the same item; else the same active ingredient (ATC code
+     *       when both items carry one, else the generic name read as its
+     *       ingredients), then the strength, then the form.</li>
+     *   <li>An order with no item (free text, an external code) names a
+     *       molecule by its code or its text (QA D138, D899, D1492), at the
+     *       strength its text states; a text that states none compares the
+     *       molecule alone, as before.</li>
+     * </ul>
+     *
+     * @param prescribed the order's own item ({@link #prescribedItemOf}), or null
+     */
+    public static DispensedProductMatch classify(Prescription rx, MedicationCatalogItem prescribed,
+                                                 MedicationCatalogItem item) {
+        if (item == null) {
+            return DispensedProductMatch.OTHER_DRUG;
+        }
+        if (rx == null) {
+            return DispensedProductMatch.PRESCRIBED;
+        }
         // QA D899: the catalog item the order was written from (V221) is the
         // drug, whatever its code or name. A UI-created item has no code, so
         // without this the match fell to the typed name alone.
         String prescribedCode = normalize(rx.getMedicationCode());
         boolean linked = rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId());
+        boolean codeNamesItem = !prescribedCode.isEmpty() && prescribedCode.equals(normalize(item.getCode()));
         // QA D1223 (round 24): the link (or the formulary code the link wrote)
         // says "this item", but the name written on the order names another
         // drug - an order saved with a mismatched catalogue id. The lot is not
         // the drug the order reads as: the DRUG check fails rather than letting
         // one input hide the other. The prescription is refused at creation,
         // edit and signature since round 24; this closes an older row.
-        if ((linked || (!prescribedCode.isEmpty() && prescribedCode.equals(normalize(item.getCode()))))
-                && OrderedDrugIdentity.contradicts(rx.getMedicationName(), item)) {
-            return false;
+        if ((linked || codeNamesItem) && OrderedDrugIdentity.contradicts(rx.getMedicationName(), item)) {
+            return DispensedProductMatch.OTHER_DRUG;
         }
         if (linked) {
-            return true;
+            return DispensedProductMatch.PRESCRIBED;
         }
+        if (prescribed != null && !OrderedDrugIdentity.contradicts(rx.getMedicationName(), prescribed)) {
+            return compareProducts(prescribed, item);
+        }
+        return compareWithOrderText(rx, prescribedCode, codeNamesItem, item);
+    }
+
+    /** An order written from {@code prescribed}: the other item is compared product to product. */
+    private static DispensedProductMatch compareProducts(MedicationCatalogItem prescribed, MedicationCatalogItem item) {
+        if (prescribed.getId() != null && prescribed.getId().equals(item.getId())) {
+            return DispensedProductMatch.PRESCRIBED;
+        }
+        if (!sameActiveIngredient(prescribed, item)) {
+            return DispensedProductMatch.OTHER_DRUG;
+        }
+        if (ProductStrength.compare(prescribed, item) != ProductStrength.Relation.SAME) {
+            // A strength nobody recorded cannot be shown to be the same dose.
+            return DispensedProductMatch.OTHER_STRENGTH;
+        }
+        return sameForm(prescribed, item) ? DispensedProductMatch.EQUIVALENT : DispensedProductMatch.SUBSTITUTE;
+    }
+
+    /** An order with no catalogue item: the molecule its code or text names, at the strength its text states. */
+    private static DispensedProductMatch compareWithOrderText(Prescription rx, String prescribedCode,
+                                                              boolean codeNamesItem, MedicationCatalogItem item) {
+        if (codeNamesItem) {
+            // The formulary code is the item's own: the order names this very product.
+            return DispensedProductMatch.PRESCRIBED;
+        }
+        boolean molecule;
         if (!prescribedCode.isEmpty()) {
-            return prescribedCode.equals(normalize(item.getCode()))
-                || prescribedCode.equals(normalize(item.getRxnormCode()))
+            molecule = prescribedCode.equals(normalize(item.getRxnormCode()))
                 || prescribedCode.equals(normalize(item.getAtcCode()));
+        } else {
+            String prescribedName = normalize(rx.getMedicationName());
+            if (prescribedName.isEmpty()) {
+                // Nothing to compare against. Refusing here would block every
+                // legacy prescription that predates coded ordering, so this is
+                // deliberately permissive.
+                return DispensedProductMatch.PRESCRIBED;
+            }
+            // QA D138: a free-text order names the drug the way people write it,
+            // "Paracétamol 500 mg comprimé", while the catalogue says
+            // "paracetamol". QA D1492: a cited brand is read as its generic, by
+            // the map the limits and allergy checks use.
+            molecule = namesCatalogItem(prescribedName, item)
+                || OrderedDrugIdentity.citedBrandIsThisDrug(prescribedName, item);
         }
-        String prescribedName = normalize(rx.getMedicationName());
-        if (prescribedName.isEmpty()) {
-            // Nothing to compare against. Refusing here would block every
-            // legacy prescription that predates coded ordering, so this is
-            // deliberately permissive — and the DRUG check is recorded as
-            // unevaluated rather than passed, which is the honest answer.
-            return true;
+        if (!molecule) {
+            return DispensedProductMatch.OTHER_DRUG;
         }
-        // QA D138: a free-text order names the drug the way people write it,
-        // "Paracétamol 500 mg comprimé", while the catalogue says
-        // "paracetamol". Compare without accents, and accept the catalogue
-        // name when it is the whole first part of the prescribed text,
-        // ending on a word boundary ("paracetamol 500 mg" matches, a longer
-        // word that merely starts with the name does not).
-        // QA D1492: one reading of a drug. The limits and allergy checks read a cited brand as its generic,
-        // so the pharmacy does too, by the same map. A brand with no mapping stays refused.
-        return namesCatalogItem(prescribedName, item)
-            || OrderedDrugIdentity.citedBrandIsThisDrug(prescribedName, item);
+        // QA D3940: "Amoxicilline 500 mg" is not filled from a 250 mg lot. Review of #1336: an order that states
+        // a strength is filled only at that strength; a lot whose strength cannot be read (nobody recorded it, a
+        // combination not fully written) is not shown to be it. Only an order that states none compares the
+        // molecule alone, as before.
+        // A strength stated but not understood (« 500 mg/400 UI ») is never read as none: it is refused.
+        String text = ProductStrength.statesStrength(rx.getMedicationName())
+            ? rx.getMedicationName() : rx.getMedicationDisplayName();
+        if (!ProductStrength.statesStrength(text)) {
+            return DispensedProductMatch.PRESCRIBED;
+        }
+        return ProductStrength.compare(text, item) == ProductStrength.Relation.SAME
+            ? DispensedProductMatch.PRESCRIBED : DispensedProductMatch.OTHER_STRENGTH;
+    }
+
+    /**
+     * The same active ingredient(s): the ATC code when both items carry one (it
+     * names the substance, and a combination has its own), else the generic
+     * names read as their ingredients in any spelling.
+     */
+    static boolean sameActiveIngredient(MedicationCatalogItem a, MedicationCatalogItem b) {
+        String atcA = normalize(a.getAtcCode());
+        String atcB = normalize(b.getAtcCode());
+        if (!atcA.isEmpty() && !atcB.isEmpty()) {
+            return atcA.equals(atcB);
+        }
+        java.util.Set<String> ingredientsA = OrderedDrugIdentity.ingredientsOf(a.getGenericName());
+        return !ingredientsA.isEmpty() && ingredientsA.equals(OrderedDrugIdentity.ingredientsOf(b.getGenericName()));
+    }
+
+    /** The same dosage form, both stated. */
+    private static boolean sameForm(MedicationCatalogItem a, MedicationCatalogItem b) {
+        String formA = fold(normalize(a.getForm()));
+        return !formA.isEmpty() && formA.equals(fold(normalize(b.getForm())));
     }
 
     /**
@@ -303,8 +445,31 @@ public class DispenseVerificationService {
         return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.unnamedProduct") : name;
     }
 
+    /**
+     * QA D3940: a catalogue product as a reader tells it from another strength,
+     * "Amoxicilline 250 mg": its name in the reader's language ({@link #describe})
+     * with its strength when the name does not already say it.
+     */
+    public static String describeProduct(MedicationCatalogItem item) {
+        return withStrength(describe(item), item);
+    }
+
+    /** {@code name} followed by the item's strength, unless the name already states a strength. */
+    public static String withStrength(String name, MedicationCatalogItem item) {
+        return withStrength(name, item, com.example.hms.utility.DisplayNumbers.requestLocale());
+    }
+
+    /** {@link #withStrength(String, MedicationCatalogItem)} with the strength written for a reader of {@code locale}. */
+    public static String withStrength(String name, MedicationCatalogItem item, Locale locale) {
+        java.util.Optional<String> strength = ProductStrength.labelOf(item, locale);
+        if (name == null || strength.isEmpty() || ProductStrength.readsAStrength(name)) {
+            return name;
+        }
+        return name + " " + strength.get();
+    }
+
     /** Human-readable name of what was prescribed, for the refusal message (the reader's words when none). */
-    private String describePrescribed(Prescription rx) {
+    public static String describePrescribed(Prescription rx) {
         String name = firstNonBlank(
             rx.getMedicationDisplayName(), rx.getMedicationName(), rx.getMedicationCode());
         return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.prescribedMedication") : name;

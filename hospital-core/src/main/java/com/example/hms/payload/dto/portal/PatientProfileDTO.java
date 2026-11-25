@@ -53,6 +53,8 @@ public class PatientProfileDTO {
 
     // Medical basics (read-only for patient)
     private String bloodType;
+    /** QA D3901: the declared group beside the laboratory's confirmed one. */
+    private com.example.hms.payload.dto.BloodGroupStatusDTO bloodGroup;
     private String allergies;
     private String chronicConditions;
     private String preferredPharmacy;

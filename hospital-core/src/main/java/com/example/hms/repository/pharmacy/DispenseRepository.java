@@ -194,6 +194,18 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<Object[]> sumQuantityCommittedByPrescriptionIds(
             @Param("prescriptionIds") Collection<UUID> prescriptionIds);
 
+    /**
+     * QA D3941: {@link #sumQuantityDispensedForPrescription} for a whole ward's
+     * MAR in one query, as {@code [prescriptionId, dispensed]} rows; a
+     * prescription with no fill has no row. What the MAR row says was supplied.
+     */
+    @Query("SELECT d.prescription.id, COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
+         + "WHERE d.prescription.id IN :prescriptionIds AND d.status NOT IN :excludedStatuses "
+         + "GROUP BY d.prescription.id")
+    List<Object[]> sumQuantityDispensedByPrescriptionIds(
+            @Param("prescriptionIds") Collection<UUID> prescriptionIds,
+            @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 
     /** True when the prescription has an open preparation (status PENDING). */
@@ -201,6 +213,16 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     /** The open preparation of one prescription, if any (at most one: V178). */
     Optional<Dispense> findFirstByPrescription_IdAndStatus(UUID prescriptionId, DispenseStatus status);
+
+    /**
+     * QA D3940: the products an order's handed-over fills substituted for the prescribed one (the fill's name is
+     * the product dispensed), for the prescriber's notice. Open preparations and cancelled fills are not counted.
+     */
+    @Query("SELECT DISTINCT d.medicationName FROM Dispense d WHERE d.prescription.id = :prescriptionId "
+         + "AND d.substitution = true "
+         + "AND d.status <> com.example.hms.enums.DispenseStatus.CANCELLED "
+         + "AND d.status <> com.example.hms.enums.DispenseStatus.PENDING")
+    List<String> findSubstitutedProductNames(@Param("prescriptionId") UUID prescriptionId);
 
     /** The open preparations of a page of prescriptions, one query. */
     List<Dispense> findByPrescription_IdInAndStatus(Collection<UUID> prescriptionIds, DispenseStatus status);

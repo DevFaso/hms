@@ -50,6 +50,7 @@ class SignedNoteAddendaGuardTest {
     /** File → why it reads a note entity and shows none of its text to a reader. */
     private static final Map<String, String> NOT_A_READER = Map.ofEntries(
         Map.entry("SmartPhraseController.java", "documentation only: phrases are typed into the note form"),
+        Map.entry("RestrictedChartGate.java", "QA D3863: reads only whose chart a nursing note is in, never its text"),
         Map.entry("SmartPhraseService.java", "documentation only: expands phrases, reads no note"),
         Map.entry("CheckOutMapper.java",
             "copies the signed note's plan and instructions into the stored discharge summary at checkout; "

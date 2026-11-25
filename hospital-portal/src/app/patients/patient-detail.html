@@ -66,13 +66,14 @@
               {{ p.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
-          @if (p.bloodType) {
+          @if (p.bloodType || p.bloodGroup?.confirmed || p.bloodGroup?.alloImmunised) {
             <!-- QA r70 D3222: the group is named, not only a drop icon. -->
+            <!-- QA D3901: the laboratory's group, a typed one « non vérifié », a disagreement, the antibody. -->
             <span class="meta-tag" data-testid="header-blood-type"
               ><span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>
               {{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}{{ 'COMMON.COLON' | translate }}
-              <strong>{{ p.bloodType }}</strong></span
-            >
+              <app-blood-group-status [status]="p.bloodGroup" [declared]="p.bloodType"
+            /></span>
           }
           {{ ' ' }}
           @if (p.deceased && p.deathDisputed) {
@@ -423,9 +424,9 @@
               <div class="info-rows clinical-summary">
                 <div class="info-row">
                   <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span>
-                  <span class="value">{{
-                    p.bloodType || ('PATIENTS.NOT_DOCUMENTED' | translate)
-                  }}</span>
+                  <span class="value" data-testid="essentials-blood-group"
+                    ><app-blood-group-status [status]="p.bloodGroup" [declared]="p.bloodType"
+                  /></span>
                 </div>
                 <div class="info-row">
                   <span class="label">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</span>
@@ -666,8 +667,9 @@
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span><span
                   class="value"
-                  >{{ p.bloodType | dash }}</span
-                >
+                  data-testid="details-blood-group"
+                  ><app-blood-group-status [status]="p.bloodGroup" [declared]="p.bloodType"
+                /></span>
               </div>
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span><span

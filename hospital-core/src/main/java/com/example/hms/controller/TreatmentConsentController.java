@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.TreatmentConsentSource;
 import com.example.hms.payload.dto.TreatmentConsentRequestDTO;
@@ -39,6 +40,8 @@ import java.util.UUID;
 @RequestMapping("/patients/{patientId}/treatment-consents")
 @RequiredArgsConstructor
 @Tag(name = "Treatment Consent", description = "Consent-to-treat records (revoke, never delete)")
+@RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
+    reason = "treatment consents the desk records: administrative")
 public class TreatmentConsentController {
 
     private static final String ROLES =
