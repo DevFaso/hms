@@ -19,6 +19,12 @@ public class JwtResponse {
     private long issuedAt;
     private long accessTokenExpiresAt;
     private long refreshTokenExpiresAt;
+    /**
+     * When the session ends (epoch ms): no refresh after it, the user signs in
+     * again. A fixed time after sign-in (app.auth.session-max-lifetime, or the
+     * patient one for a patient-only session). Null on answers that open no session.
+     */
+    private Long sessionEndsAt;
 
     private UUID id;
     private String username;

@@ -285,6 +285,23 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.REFRESH_REFUSED_CUTOFF',
     re: /^Refresh refused — issued before the sign-in cutoff$/,
   },
+  // Sessions end a fixed time after sign-in; a reused refresh token ends the session.
+  {
+    key: 'AUDIT.DESC.REFRESH_REFUSED_LIFETIME',
+    re: /^Refresh refused — the session reached its maximum lifetime$/,
+  },
+  {
+    key: 'AUDIT.DESC.REFRESH_REFUSED_REUSED',
+    re: /^Refresh refused — a used refresh token was presented again \(jti=[^)]*\); its session was ended$/,
+  },
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED_REFRESH_REUSE',
+    re: /^Session revoked on refresh token reuse \(sid=[^)]*\)$/,
+  },
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED_SECOND_FACTOR',
+    re: /^Session revoked on second-factor lapse \(sid=[^)]*\)$/,
+  },
   {
     key: 'AUDIT.DESC.PASSWORD_REUSE_REJECTED',
     re: /^Password change rejected — matches a recent password$/,

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AuthControllerPropertiesRefreshCutoffTest {
 
     private static AuthControllerProperties with(String cutoff) {
-        return new AuthControllerProperties("https://localhost", List.of(), false, "", cutoff);
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", cutoff, "", "");
     }
 
     @Test
@@ -34,6 +34,47 @@ class AuthControllerPropertiesRefreshCutoffTest {
         assertThat(props.refreshIssuedBeforeCutoff(Date.from(cutoff))).isFalse();
         assertThat(props.refreshIssuedBeforeCutoff(Date.from(cutoff.plusSeconds(60)))).isFalse();
         assertThat(props.refreshIssuedBeforeCutoff(null)).isFalse();
+    }
+
+    private static AuthControllerProperties lifetime(String value) {
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", "", value, "");
+    }
+
+    @Test
+    @DisplayName("app.auth.session-max-lifetime: 12 h when unset, the configured duration otherwise")
+    void sessionLifetime() {
+        assertThat(lifetime("").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
+        assertThat(lifetime(null).sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
+        assertThat(lifetime(" PT8H ").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(8));
+    }
+
+    private static AuthControllerProperties patientLifetime(String value) {
+        return new AuthControllerProperties("https://localhost", List.of(), false, "", "", "", value);
+    }
+
+    @Test
+    @DisplayName("app.auth.patient-session-max-lifetime: 30 days when unset, the configured duration otherwise")
+    void patientSessionLifetime() {
+        assertThat(patientLifetime("").sessionLifetime().patientMaxLifetime()).isEqualTo(java.time.Duration.ofDays(30));
+        assertThat(patientLifetime("P14D").sessionLifetime().patientMaxLifetime()).isEqualTo(java.time.Duration.ofDays(14));
+        assertThat(patientLifetime("P14D").sessionLifetime().maxLifetime()).isEqualTo(java.time.Duration.ofHours(12));
+        for (String bad : List.of("30d", "P0D", "-P1D")) {
+            assertThatThrownBy(() -> patientLifetime(bad))
+                .as(bad)
+                .isInstanceOf(BeanInitializationException.class)
+                .hasMessageContaining("app.auth.patient-session-max-lifetime");
+        }
+    }
+
+    @Test
+    @DisplayName("a session lifetime that does not parse, or is not positive, stops the start-up")
+    void aBadSessionLifetimeStopsTheStartUp() {
+        for (String bad : List.of("12h", "PT0S", "-PT1H")) {
+            assertThatThrownBy(() -> lifetime(bad))
+                .as(bad)
+                .isInstanceOf(BeanInitializationException.class)
+                .hasMessageContaining("app.auth.session-max-lifetime");
+        }
     }
 
     @Test

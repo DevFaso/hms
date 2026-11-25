@@ -27,9 +27,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       its code) and the MFA step ({@code MfaController}). A new sign-in path
  *       must be added here on purpose, after applying the same MFA challenge;
  *       and</li>
- *   <li>stamped with a session id (the three-argument overloads), so logout
- *       can revoke the whole family. The one- and two-argument overloads mint
- *       a token no logout can reach beyond its own jti.</li>
+ *   <li>stamped with a session id (the three-argument overloads, or the
+ *       refresh's four-argument one that also carries the session's sign-in
+ *       time), so logout can revoke the whole family. The one- and
+ *       two-argument overloads mint a token no logout can reach beyond its
+ *       own jti.</li>
  * </ul>
  */
 @DisplayName("Sessions are minted only by the reviewed sign-in paths, always with a session id")
@@ -48,7 +50,7 @@ class SessionTokenMintingGuardTest {
             int line = (int) source.substring(0, m.start()).chars().filter(c -> c == '\n').count() + 1;
             if (!SIGN_IN_PATHS.contains(file)) {
                 out.add(file + ":" + line + " mints a session outside the reviewed sign-in paths");
-            } else if (args != 3) {
+            } else if (args < 3) {
                 out.add(file + ":" + line + " mints a token without a session id");
             }
         }
@@ -86,6 +88,8 @@ class SessionTokenMintingGuardTest {
         assertThat(offenders("controller/AuthController.java", old)).hasSize(2);
         String fixed = "class A { void x() { String t = jwtTokenProvider.generateAccessToken(d, f(a, b), sid); } }";
         assertThat(offenders("controller/AuthController.java", fixed)).isEmpty();
+        String continued = "class A { void x() { String r = jwtTokenProvider.generateRefreshToken(d, f, sid, live); } }";
+        assertThat(offenders("controller/AuthController.java", continued)).isEmpty();
         assertThat(offenders("service/impl/NewLoginServiceImpl.java", fixed)).hasSize(1);
     }
 

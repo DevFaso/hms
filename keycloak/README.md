@@ -186,7 +186,8 @@ flow, plus
 - the existing conditional OTP (for anyone who has configured OTP), now
   skipped for `ROLE_PROVIDER_ADMIN`, so a provider admin is asked once;
 - Authenticator References on the password form (`pwd`) and both OTP forms
-  (`otp`), with a max age of 172800 s (= `ssoSessionMaxLifespan`), which the
+  (`otp`), with a max age of 172800 s (longer than `ssoSessionMaxLifespan`,
+  43200 s, so it never lapses within a session), which the
   `amr` mapper on `hms-profile` turns into the token's `amr` claim.
 
 The backend's provider MFA gate reads `otp` in `amr` for **every** provider

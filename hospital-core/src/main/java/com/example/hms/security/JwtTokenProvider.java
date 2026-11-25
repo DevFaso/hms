@@ -78,8 +78,9 @@ public class JwtTokenProvider {
 
     /**
      * How long a verified TOTP code counts for a legacy session (AC-13): 48 h,
-     * the realm's SSO max lifespan and its Authenticator Reference max age, so
-     * both auth paths re-challenge on the same clock.
+     * the realm's Authenticator Reference max age, so both auth paths
+     * re-challenge on the same clock. A session itself ends sooner
+     * ({@link SessionLifetime}; the realm's SSO max lifespan).
      */
     @Value("${app.mfa.second-factor-max-age-seconds:172800}")
     private long secondFactorMaxAgeSeconds = 172_800L;
@@ -94,6 +95,14 @@ public class JwtTokenProvider {
      * ({@link TokenBlacklistService#revokeSession}), not only the tokens it is shown.
      */
     public static final String SESSION_ID_CLAIM = "sid";
+
+    /**
+     * When the session a refresh token belongs to was signed in to (OIDC
+     * {@code auth_time}, epoch seconds). Set at sign-in and carried unchanged by
+     * every rotation, so {@link SessionLifetime} can end the session a fixed
+     * time after it, however often it is refreshed.
+     */
+    public static final String SIGNED_IN_AT_CLAIM = "auth_time";
 
     private final HospitalUserDetailsService userDetailsService;
     private final TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor;
@@ -370,14 +379,39 @@ public class JwtTokenProvider {
         return generateRefreshToken(descriptor, secondFactorAt, null);
     }
 
-    /** {@link #generateRefreshToken(TokenUserDescriptor, Instant)} for the sign-in session {@code sessionId}. */
+    /**
+     * {@link #generateRefreshToken(TokenUserDescriptor, Instant)} for the sign-in
+     * session {@code sessionId}, which this sign-in opens now: the token's
+     * {@link #SIGNED_IN_AT_CLAIM} is its issue time. Only a sign-in calls this;
+     * a refresh continues the session with
+     * {@link #generateRefreshToken(TokenUserDescriptor, Instant, String, SessionLifetime.Live)}
+     * (guarded by SessionLifetimeGuardTest).
+     */
     public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId) {
+        return mintRefreshToken(descriptor, secondFactorAt, sessionId, null);
+    }
+
+    /**
+     * The refresh token that continues a session {@link SessionLifetime#live}
+     * found within its lifetime: it carries the session's original sign-in
+     * time on, so the session still ends a fixed time after its sign-in.
+     */
+    public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId,
+                                       SessionLifetime.Live session) {
+        Objects.requireNonNull(session, "a continued session must pass the lifetime check");
+        return mintRefreshToken(descriptor, secondFactorAt, sessionId, session.signedInAt());
+    }
+
+    /** {@code signedInAt} {@code null}: the session opens now. */
+    private String mintRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId,
+                                    Instant signedInAt) {
         Objects.requireNonNull(descriptor, "descriptor is required");
 
         List<String> roles = descriptorRoles(descriptor);
 
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
+        long signedInAtSeconds = signedInAt != null ? signedInAt.getEpochSecond() : now.getTime() / 1000;
 
         return Jwts.builder()
             .claim(TokenUse.CLAIM, TokenUse.REFRESH)
@@ -386,6 +420,7 @@ public class JwtTokenProvider {
             .claim(ROLES_CLAIM, roles)
             .claims(secondFactorClaims(secondFactorAt))
             .claims(sessionClaim(sessionId))
+            .claim(SIGNED_IN_AT_CLAIM, signedInAtSeconds)
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -856,6 +891,53 @@ public class JwtTokenProvider {
         try {
             Object sid = jwtParser().parseSignedClaims(token).getPayload().get(SESSION_ID_CLAIM);
             return sid instanceof String value && StringUtils.hasText(value) ? value : null;
+        } catch (RuntimeException unparsable) {
+            return null;
+        }
+    }
+
+    /**
+     * The session a refresh token continues, as {@link SessionLifetime#live}
+     * judges it: its sign-in time, its own issue time and the role set it
+     * carries, read from a token whose signature and expiry are verified here.
+     * Empty for anything that is not a refresh token this issuer minted. The
+     * only way to build a {@link SessionLifetime.Presented}, so no caller can
+     * hand the lifetime check a time of its own.
+     */
+    public Optional<SessionLifetime.Presented> presentedSession(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return Optional.empty();
+        }
+        try {
+            Claims claims = jwtParser().parseSignedClaims(refreshToken).getPayload();
+            if (!(TokenUse.isMarkedRefresh(claims) || TokenUse.isLegacyRefreshShape(claims))
+                    || claims.getIssuedAt() == null) {
+                return Optional.empty();
+            }
+            Instant signedInAt = claims.get(SIGNED_IN_AT_CLAIM) instanceof Number seconds
+                ? Instant.ofEpochSecond(seconds.longValue()) : null;
+            List<String> roles = claims.get(ROLES_CLAIM) instanceof Collection<?> carried
+                ? carried.stream().filter(Objects::nonNull).map(String::valueOf).toList()
+                : List.of();
+            return Optional.of(new SessionLifetime.Presented(signedInAt, claims.getIssuedAt().toInstant(), roles));
+        } catch (JwtException | IllegalArgumentException unusable) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * When the session a token belongs to was signed in to
+     * ({@link #SIGNED_IN_AT_CLAIM}), or {@code null} for a token minted before
+     * the claim existed, or one that does not parse. {@link SessionLifetime}
+     * then counts from the token's own issue time.
+     */
+    public Instant signedInAt(String token) {
+        if (!StringUtils.hasText(token)) {
+            return null;
+        }
+        try {
+            Object at = jwtParser().parseSignedClaims(token).getPayload().get(SIGNED_IN_AT_CLAIM);
+            return at instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
         } catch (RuntimeException unparsable) {
             return null;
         }

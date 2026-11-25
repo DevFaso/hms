@@ -19,6 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { safeReturnUrl } from '../auth/return-url';
+import { SESSION_LIFETIME_REASON } from '../auth/session-lifetime';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
@@ -149,9 +150,14 @@ export class Login implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     if (!this.isBrowser) return;
+    const reason = this.route.snapshot.queryParamMap.get('reason');
     // D2001: the lock screen signed the user out on the account lockout.
-    if (this.route.snapshot.queryParamMap.get('reason') === 'locked') {
+    if (reason === 'locked') {
       this.error = this.translate.instant('LOGIN.LOCKED_FROM_LOCK_SCREEN');
+    }
+    // The session ended a fixed time after its sign-in: say so, not "error".
+    if (reason === SESSION_LIFETIME_REASON) {
+      this.error = this.translate.instant('LOGIN.SESSION_LIFETIME_REACHED');
     }
     this.checkBootstrapStatus();
   }
