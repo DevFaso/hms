@@ -8,7 +8,6 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
@@ -25,7 +24,6 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
@@ -180,7 +178,7 @@ public class JwtTokenProvider {
 
     private void initHmac() {
         String value = Objects.requireNonNull(jwtSecret, "app.jwt.secret is required");
-        byte[] keyBytes = decodeSecretValue(value);
+        byte[] keyBytes = JwtSecretBytes.decode(value);
 
         if (keyBytes.length < 32) { // 256 bits
             throw new IllegalStateException(
@@ -248,34 +246,6 @@ public class JwtTokenProvider {
             }
             throw e;
         }
-    }
-
-    private static byte[] decodeSecretValue(String value) {
-        if (value.startsWith("base64:")) {
-            return Decoders.BASE64.decode(value.substring("base64:".length()));
-        } else if (value.startsWith("hex:")) {
-            return hexStringToBytes(value.substring("hex:".length()));
-        } else {
-            return value.getBytes(StandardCharsets.UTF_8);
-        }
-    }
-
-    private static byte[] hexStringToBytes(String hex) {
-        String s = hex.trim();
-        if ((s.length() & 1) != 0) {
-            throw new IllegalArgumentException("Hex-encoded secret must have even length");
-        }
-        int len = s.length() / 2;
-        byte[] out = new byte[len];
-        for (int i = 0; i < len; i++) {
-            int hi = Character.digit(s.charAt(i * 2), 16);
-            int lo = Character.digit(s.charAt(i * 2 + 1), 16);
-            if (hi < 0 || lo < 0) {
-                throw new IllegalArgumentException("Invalid hex character in secret");
-            }
-            out[i] = (byte) ((hi << 4) + lo);
-        }
-        return out;
     }
 
     public String generateAccessToken(TokenUserDescriptor descriptor) {

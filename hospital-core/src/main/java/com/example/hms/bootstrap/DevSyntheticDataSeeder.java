@@ -57,6 +57,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.permission.PermissionCatalog;
+import com.example.hms.utility.ActivationDeliveryTracker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -92,7 +93,7 @@ import java.util.function.Function;
 import java.util.OptionalInt;
 
 @Component
-@Profile({"local", "local-h2"})
+@Profile(DeploymentProfiles.SEEDING)
 @ConditionalOnProperty(value = "app.seed.synthetic.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
@@ -304,7 +305,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         try {
             return Optional.of(Integer.parseInt(numericPart));
         } catch (NumberFormatException ex) {
-            log.debug("Ignoring non-numeric phone number: {}", phoneNumber);
+            log.debug("Ignoring non-numeric phone number: {}", ActivationDeliveryTracker.maskPhone(phoneNumber));
             return Optional.empty();
         }
     }
@@ -403,7 +404,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .build();
 
         patientConsentRepository.save(consent);
-        log.info("Seeded patient consent for {} from {} to {}", email, fromHospital.getCode(), toHospital.getCode());
+        log.info("Seeded patient consent for {} from {} to {}",
+            ActivationDeliveryTracker.maskEmail(email), fromHospital.getCode(), toHospital.getCode());
     }
 
     private Hospital findAlternateHospital(Hospital fromHospital) {

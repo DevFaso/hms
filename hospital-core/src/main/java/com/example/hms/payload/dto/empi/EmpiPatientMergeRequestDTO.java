@@ -16,6 +16,7 @@ public class EmpiPatientMergeRequestDTO {
     @NotNull(message = "{empiMerge.secondaryPatientId.required}")
     private UUID secondaryPatientId;
 
+    @jakarta.validation.constraints.NotBlank(message = "{patient.duplicateReview.mergeReasonRequired}")
     @Size(max = 2000)
     private String notes;
 }

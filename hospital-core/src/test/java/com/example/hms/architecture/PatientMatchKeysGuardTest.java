@@ -32,6 +32,18 @@ class PatientMatchKeysGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
+    @Test
+    void registrationMatchingRetainsTheIndependentScopedFamilyAndBirthCandidateBlock() throws Exception {
+        String source = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/ReceptionServiceImpl.java")));
+        assertThat(source).contains("PatientMatchKeys.familyNameKeys(name)",
+            "findActiveFamilyBornAtHospital(familyKeys, bornOn, hospitalId,",
+            "PatientRepository.FAMILY_DOB_CAP", "PatientMatchKeys.sharedFamilyName(name, p.getLastName())");
+        Method query = java.util.Arrays.stream(PatientRepository.class.getDeclaredMethods())
+            .filter(method -> method.getName().equals("findActiveFamilyBornAtHospital")).findFirst().orElseThrow();
+        assertThat(query.getAnnotation(Query.class).value()).contains("hospitalId", "dateOfBirth", "lastName", "active");
+    }
+
     /** Callers allowed to look a number up exactly as stored, and why. */
     private static final Map<String, String> EXACT_PHONE_CALLERS = Map.of(
         "service/PatientServiceImpl.java",

@@ -35,6 +35,10 @@ export interface AuditDescriptionPattern {
 
 export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
+    key: 'AUDIT.DESC.DUPLICATE_KEPT_SEPARATE',
+    re: /^Possible duplicate kept as a separate patient$/,
+  },
+  {
     key: 'AUDIT.DESC.NATIONAL_IU_ACTION',
     re: /^Patient identity: (.+)$/,
     params: ['operation'],

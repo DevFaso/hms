@@ -94,7 +94,9 @@ dependencies {
 
     // Database
     runtimeOnly 'org.postgresql:postgresql'
-    runtimeOnly 'com.h2database:h2'
+    // H2 serves the test profile and the developer-only local-h2 profile, never a deployed one:
+    // on bootRun's and the tests' classpath, absent from the bootJar the image runs.
+    testAndDevelopmentOnly 'com.h2database:h2'
 
     // Annotation processor
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'

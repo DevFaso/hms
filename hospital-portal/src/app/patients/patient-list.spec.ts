@@ -16,6 +16,7 @@ describe('PatientListComponent directory', () => {
   let toast: jasmine.SpyObj<ToastService>;
   let permission: jasmine.Spy;
   let superAdmin: ReturnType<typeof signal<boolean>>;
+  let iuAllowed: ReturnType<typeof signal<boolean>>;
   const row = (overrides: Partial<PatientResponse> = {}): PatientResponse => ({
     id: 'cdx-1',
     firstName: 'Cdx',
@@ -25,7 +26,8 @@ describe('PatientListComponent directory', () => {
     ...overrides,
   });
   beforeEach(() => {
-    patients = jasmine.createSpyObj('PatientService', ['list']);
+    patients = jasmine.createSpyObj('PatientService', ['list', 'searchNationalUniqueId']);
+    patients.searchNationalUniqueId.and.returnValue(of([]));
     patients.list.and.returnValue(
       of([
         row(),
@@ -51,6 +53,7 @@ describe('PatientListComponent directory', () => {
     toast = jasmine.createSpyObj('ToastService', ['error']);
     permission = jasmine.createSpy('hasPermission').and.returnValue(true);
     superAdmin = signal(true);
+    iuAllowed = signal(true);
     TestBed.configureTestingModule({
       imports: [PatientListComponent, TranslateModule.forRoot()],
       providers: [
@@ -61,13 +64,62 @@ describe('PatientListComponent directory', () => {
         {
           provide: RoleContextService,
           // hasAnyActiveRole: the RCPT-CLIN front-desk check (blood type column and filter).
-          useValue: { isSuperAdmin: superAdmin, hasAnyActiveRole: () => false },
+          useValue: {
+            isSuperAdmin: superAdmin,
+            hasAnyActiveRole: () => false,
+            hasAnyActiveRoleExactly: () => iuAllowed(),
+          },
         },
         { provide: ToastService, useValue: toast },
       ],
     });
   });
   const make = () => TestBed.createComponent(PatientListComponent);
+
+  it('D2521 finds a listed patient by the exact IU endpoint without losing leading zeros', fakeAsync(() => {
+    patients.searchNationalUniqueId.and.returnValue(of([row({ id: 'cdx-2' })]));
+    const fixture = make();
+    fixture.detectChanges();
+    fixture.componentInstance.onSearchChange('0012 3456 7890');
+    tick(300);
+    expect(patients.searchNationalUniqueId).toHaveBeenCalledOnceWith('001234567890');
+    expect(fixture.componentInstance.filtered().map((patient) => patient.id)).toEqual(['cdx-2']);
+    expect(fixture.componentInstance.patients().length).toBe(2);
+    fixture.destroy();
+  }));
+
+  it('ignores an old IU response immediately when the typed term changes, before debounce', fakeAsync(() => {
+    const delayed = new Subject<PatientResponse[]>();
+    patients.searchNationalUniqueId.and.returnValue(delayed);
+    const fixture = make();
+    fixture.detectChanges();
+    fixture.componentInstance.onSearchChange('001234567890');
+    tick(300);
+    fixture.componentInstance.onSearchChange('Second');
+    delayed.next([row()]);
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    tick(300);
+    expect(fixture.componentInstance.filtered().map((patient) => patient.id)).toEqual(['cdx-2']);
+    fixture.destroy();
+  }));
+
+  it('never calls the protected IU endpoint for a disallowed role, and ignores a response after permission loss', fakeAsync(() => {
+    const delayed = new Subject<PatientResponse[]>();
+    patients.searchNationalUniqueId.and.returnValue(delayed);
+    const fixture = make();
+    fixture.detectChanges();
+    iuAllowed.set(false);
+    fixture.componentInstance.onSearchChange('001234567890');
+    tick(300);
+    expect(patients.searchNationalUniqueId).not.toHaveBeenCalled();
+    iuAllowed.set(true);
+    fixture.componentInstance.onSearchChange('001234567890');
+    tick(300);
+    iuAllowed.set(false);
+    delayed.next([row()]);
+    expect(fixture.componentInstance.filtered()).toEqual([]);
+    fixture.destroy();
+  }));
 
   it('renders four registration metrics, grouped contacts and the existing chart destination', () => {
     const fixture = make();

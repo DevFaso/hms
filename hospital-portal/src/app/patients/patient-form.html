@@ -572,6 +572,25 @@
         }
       </tbody>
     </table>
+    <div class="form-group">
+      <label for="duplicate-review-reason">{{ 'PATIENTS.DUPLICATE_REASON' | translate }} *</label>
+      <textarea
+        id="duplicate-review-reason"
+        name="duplicateReviewReason"
+        [(ngModel)]="duplicateReviewReason"
+        required
+        maxlength="2000"
+        aria-describedby="duplicate-review-help duplicate-review-error"
+        [attr.aria-invalid]="serverFieldErrors['duplicateReviewReason'] ? 'true' : null"
+        (ngModelChange)="serverFieldErrors['duplicateReviewReason'] = ''"
+      ></textarea>
+      <p id="duplicate-review-help" class="field-hint">
+        {{ 'PATIENTS.DUPLICATE_REASON_HELP' | translate }}
+      </p>
+      <p id="duplicate-review-error" class="error" role="alert">
+        {{ serverFieldErrors['duplicateReviewReason'] }}
+      </p>
+    </div>
     <div class="dup-modal-footer">
       <button type="button" class="btn-secondary" (click)="showDuplicateWarning = false">
         {{ 'PATIENTS.GO_BACK_REVIEW' | translate }}

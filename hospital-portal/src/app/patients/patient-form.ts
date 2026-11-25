@@ -151,6 +151,7 @@ export class PatientFormComponent implements OnInit {
   // ── MVP 11: Duplicate warning ───────────────────────────────────────────
   duplicateCandidates: DuplicateCandidate[] = [];
   showDuplicateWarning = false;
+  duplicateReviewReason = '';
   private lastDuplicateCheck = '';
   private duplicateCheckSubject = new Subject<{ name: string; dob: string; phone: string }>();
 
@@ -349,6 +350,7 @@ export class PatientFormComponent implements OnInit {
 
   /** Called when first name, last name, date of birth, or primary phone changes. */
   onNameOrDobChange(): void {
+    this.duplicateReviewReason = '';
     const name = `${this.form.firstName} ${this.form.lastName}`.trim();
     const dob = this.form.dateOfBirth ?? '';
     const phone = this.effectivePhone;
@@ -506,6 +508,13 @@ export class PatientFormComponent implements OnInit {
 
   /** Dismiss the duplicate warning and allow submission to continue. */
   proceedDespiteDuplicate(): void {
+    if (!this.duplicateReviewReason.trim()) {
+      this.serverFieldErrors['duplicateReviewReason'] = this.translate.instant(
+        'PATIENTS.DUPLICATE_REASON_REQUIRED',
+      );
+      focusFirstInvalid(this.host.nativeElement, ['duplicate-review-reason']);
+      return;
+    }
     this.showDuplicateWarning = false;
     this.submitRegistration();
   }
@@ -626,6 +635,7 @@ export class PatientFormComponent implements OnInit {
     let deliveryReport: NotificationDeliveryStatus[] = [];
     const patient: PatientCreateRequest = {
       ...this.form,
+      duplicateReviewReason: this.duplicateReviewReason.trim() || undefined,
       ...this.nationalUniqueIdChange,
       phoneNumberPrimary: this.effectivePhone,
       email,
@@ -675,6 +685,7 @@ export class PatientFormComponent implements OnInit {
           // QA D1037 / D984: the refused field is named, in the toast and
           // under the field; the generic "invalid parameters" said neither.
           this.serverFieldErrors = fieldErrorsOf(err);
+          if (this.serverFieldErrors['duplicateReviewReason']) this.showDuplicateWarning = true;
           this.toast.error(
             labelledRefusalReason(err, this.translate, PATIENT_FORM_FIELD_LABELS) ??
               this.translate.instant('PATIENTS.REGISTER_FAILED'),
@@ -737,6 +748,7 @@ export const PATIENT_FORM_REQUIRED = [
 
 /** QA D1072: a form field's element id, where it differs from the field name. */
 export const PATIENT_FORM_FIELD_IDS: Readonly<Record<string, string>> = {
+  duplicateReviewReason: 'duplicate-review-reason',
   phoneNumberPrimary: 'phonePrimary',
   dateOfBirth: 'dob',
   hospitalId: 'hospital',
@@ -744,6 +756,7 @@ export const PATIENT_FORM_FIELD_IDS: Readonly<Record<string, string>> = {
 
 /** QA D1037: the form's fields, as the server names them, to their label keys. */
 export const PATIENT_FORM_FIELD_LABELS: Readonly<Record<string, string>> = {
+  duplicateReviewReason: 'PATIENTS.DUPLICATE_REASON',
   firstName: 'PATIENTS.FIRST_NAME',
   lastName: 'PATIENTS.LAST_NAME',
   email: 'PATIENTS.EMAIL',
