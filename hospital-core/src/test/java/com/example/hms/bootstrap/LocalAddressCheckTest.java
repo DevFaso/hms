@@ -1,6 +1,7 @@
 package com.example.hms.bootstrap;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -56,6 +57,22 @@ class LocalAddressCheckTest {
     @DisplayName("null counts as local")
     @NullSource
     void nullIsLocal(String host) {
+        assertThat(LocalAddressCheck.isLocal(host)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a very long host is judged without overflowing the stack")
+    void aVeryLongHostDoesNotOverflow() {
+        assertThat(LocalAddressCheck.isLocal("1.".repeat(200_000) + "1")).as("numeric labels").isTrue();
+        assertThat(LocalAddressCheck.isLocal("1:".repeat(200_000) + "1")).as("hex groups").isTrue();
+        assertThat(LocalAddressCheck.isLocal("::" + "a:".repeat(200_000) + "1")).as("compressed hex groups").isTrue();
+        assertThat(LocalAddressCheck.isLocal("a.".repeat(200_000) + "example")).as("a long name").isFalse();
+    }
+
+    @ParameterizedTest(name = "[{index}] ''{0}'' is local")
+    @DisplayName("a host that is only a dot is local: it cannot name the shared service")
+    @ValueSource(strings = {".", " . "})
+    void onlyADot(String host) {
         assertThat(LocalAddressCheck.isLocal(host)).isTrue();
     }
 }

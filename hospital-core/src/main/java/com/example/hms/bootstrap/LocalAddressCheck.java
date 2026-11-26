@@ -29,10 +29,14 @@ import java.util.regex.Pattern;
  */
 final class LocalAddressCheck {
 
-    /** Every label numeric (decimal, octal or hex): the host is meant as an IPv4 literal. */
-    private static final Pattern NUMERIC_IPV4 = Pattern.compile("^(0x[0-9a-f]*|[0-9]+)(\\.(0x[0-9a-f]*|[0-9]+))*$");
-    /** Zero or more colon-separated hex groups of one to four digits. */
-    private static final Pattern HEX_GROUPS = Pattern.compile("^([0-9a-f]{1,4}(:[0-9a-f]{1,4})*)?$");
+    /*
+     * Each pattern below matches ONE label or group: the host is split first. A repeated group in
+     * a java.util.regex pattern recurses once per repetition, so a long host could overflow the stack.
+     */
+    /** One numeric IPv4 label: decimal, octal or hex. */
+    private static final Pattern NUMERIC_LABEL = Pattern.compile("0x[0-9a-f]*|[0-9]+");
+    /** One IPv6 group: one to four hex digits. */
+    private static final Pattern HEX_GROUP = Pattern.compile("[0-9a-f]{1,4}");
     private static final Pattern DECIMAL_OCTET = Pattern.compile("^[0-9]{1,3}$");
     /** What the parsers return for a literal that does not parse. */
     private static final byte[] INVALID = new byte[0];
@@ -60,7 +64,10 @@ final class LocalAddressCheck {
             return isLocalAddress(parseIpv6(host));
         }
         String name = host.endsWith(".") ? host.substring(0, host.length() - 1) : host;
-        if (NUMERIC_IPV4.matcher(name).matches()) {
+        if (name.isEmpty()) {
+            return true;
+        }
+        if (allMatch(name.split("\\.", -1), NUMERIC_LABEL)) {
             // Fail closed on the ambiguous forms: local if either reading that parses is local,
             // or if neither parses.
             byte[] decimal = parseIpv4(name, false);
@@ -92,6 +99,15 @@ final class LocalAddressCheck {
             return isLocalAddress(new byte[] {bytes[12], bytes[13], bytes[14], bytes[15]});
         }
         return false;
+    }
+
+    private static boolean allMatch(String[] parts, Pattern pattern) {
+        for (String part : parts) {
+            if (!pattern.matcher(part).matches()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean firstBytesZero(byte[] bytes, int count) {
@@ -166,7 +182,7 @@ final class LocalAddressCheck {
             return INVALID;
         }
         for (String half : halves) {
-            if (!HEX_GROUPS.matcher(half).matches()) {
+            if (!half.isEmpty() && !allMatch(half.split(":", -1), HEX_GROUP)) {
                 return INVALID;
             }
         }
@@ -190,7 +206,7 @@ final class LocalAddressCheck {
         return bytes;
     }
 
-    /** Colon-separated hex groups, already checked against {@link #HEX_GROUPS}. */
+    /** Colon-separated hex groups, each already checked against {@link #HEX_GROUP}. */
     private static int[] groups(String text) {
         if (text.isEmpty()) {
             return new int[0];
