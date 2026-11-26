@@ -172,6 +172,52 @@ class MicroCultureOutcomePostgresIT {
         assertThat(service.createCulture(hospital, null, request).getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
     }
 
+    /** Move an open order after another transaction has already loaded it. */
+    private void replaceOrderDefinitionInIndependentTransaction() {
+        var independent = new TransactionTemplate(transactionManager);
+        independent.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        independent.executeWithoutResult(status -> {
+            UUID definition = UUID.randomUUID();
+            entityManager.createNativeQuery("""
+                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, culture, approval_status, created_at, updated_at)
+                VALUES (:id, :code, 'Creatinine', true, false, 'ACTIVE', now(), now())
+                """).setParameter("id", definition).setParameter("code", "CREAT-" + definition).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET lab_test_definition_id = :definition WHERE id = :id")
+                .setParameter("definition", definition).setParameter("id", order).executeUpdate();
+        });
+    }
+
+    @Test
+    void creationChecksTheDefinitionCommittedBeforeTheOrderLock() {
+        var request = com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build();
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var stale = entityManager.find(com.example.hms.model.LabOrder.class, order);
+            assertThat(stale.getLabTestDefinition().isCulture()).isTrue();
+            replaceOrderDefinitionInIndependentTransaction();
+            service.createCulture(hospital, null, request);
+        })).hasFieldOrPropertyWithValue("messageKey", "micro.culture.cultureOrderRequired");
+    }
+
+    @Test
+    void finalizationDoesNotCompleteAnOrderWhoseCommittedDefinitionChanged() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var stale = entityManager.find(com.example.hms.model.LabOrder.class, order);
+            assertThat(stale.getLabTestDefinition().isCulture()).isTrue();
+            replaceOrderDefinitionInIndependentTransaction();
+            assertThat(service.finalizeCulture(culture, hospital, null).getStatus()).isEqualTo(MicroCultureStatus.FINAL);
+        });
+        String persisted = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(persisted).isEqualTo("RECEIVED");
+    }
+
     @Test
     void onlyCultureOrdersCountPendingCultureReportsAsOutstandingWork() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->

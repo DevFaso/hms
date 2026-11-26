@@ -81,6 +81,7 @@ class MicroCultureServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
 
+    @Mock private jakarta.persistence.EntityManager entityManager;
     private MicroCultureServiceImpl service;
 
     private UUID hospitalId;
@@ -111,7 +112,7 @@ class MicroCultureServiceImplTest {
             cultureRepository, isolateRepository, susceptibilityRepository, correctionRepository,
             labOrderRepository, labResultRepository, specimenRepository, patientChartAccess,
             staffRepository, userRepository, notificationService,
-            TestMessageSources.bundles(), java.time.Clock.systemDefaultZone());
+            TestMessageSources.bundles(), java.time.Clock.systemDefaultZone(), entityManager);
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -211,10 +212,10 @@ class MicroCultureServiceImplTest {
         service.createCulture(hospitalId, null, MicroCultureRequestDTO.builder().labOrderId(orderId).build());
         var sequence = org.mockito.Mockito.inOrder(labOrderRepository, cultureRepository);
         sequence.verify(labOrderRepository).findById(orderId);
-        sequence.verify(labOrderRepository).findWithLockById(orderId);
-        sequence.verify(labOrderRepository).findStatusById(orderId);
+        sequence.verify(labOrderRepository).findWithLockByIdAndHospitalId(orderId, hospitalId);
+        sequence.verify(labOrderRepository).findStatusByIdAndHospitalId(orderId, hospitalId);
         sequence.verify(cultureRepository).save(any(MicroCultureResult.class));
-        sequence.verify(labOrderRepository).updateStatusFrom(orderId, LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
+        sequence.verify(labOrderRepository).updateStatusFromInHospital(orderId, hospitalId, LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
     }
 
     @Test

@@ -98,6 +98,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     private final NotificationService notificationService;
     private final MessageSource messageSource;
     private final Clock clock;
+    private final jakarta.persistence.EntityManager entityManager;
 
     /** D3905: every final/corrected culture write also closes its finished worklist item. */
     private MicroCultureResult saveCulture(MicroCultureResult culture, UUID hospitalId) {
@@ -116,6 +117,8 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         }
         LabOrder lockedOrder = labOrderRepository.findWithLockByIdAndHospitalId(orderId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("microculture.culture.notFound", saved.getId()));
+        // The order may already be managed from before the lock; reload its committed definition.
+        entityManager.refresh(lockedOrder);
         // Legacy reports may predate the culture flag. They can be corrected, but must never close a non-culture order.
         if (lockedOrder.getLabTestDefinition() == null || !lockedOrder.getLabTestDefinition().isCulture()
             || !com.example.hms.service.lab.LabDefinitionEligibility.canResultOrderedVersion(lockedOrder.getLabTestDefinition())) {
@@ -149,9 +152,11 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             throw new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId());
         }
         // Creation and finalization serialize on the same order. Read its committed state, not the pre-lock snapshot.
-        labOrderRepository.findWithLockById(order.getId())
+        order = labOrderRepository.findWithLockByIdAndHospitalId(order.getId(), hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId()));
-        LabOrderStatus committed = labOrderRepository.findStatusById(order.getId());
+        // A lock does not refresh a previously managed entity.
+        entityManager.refresh(order);
+        LabOrderStatus committed = labOrderRepository.findStatusByIdAndHospitalId(order.getId(), hospitalId);
         if (committed == LabOrderStatus.CANCELLED) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.orderCancelled");
         }
@@ -200,7 +205,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         MicroCultureResult saved = saveCulture(culture, hospitalId);
         LabOrderStatus target = com.example.hms.service.lab.LabOrderLifecycle.statusAfterNewResult(committed);
         if (target != null) {
-            labOrderRepository.updateStatusFrom(order.getId(), committed, target);
+            labOrderRepository.updateStatusFromInHospital(order.getId(), hospitalId, committed, target);
         }
         return toDto(saved);
     }
