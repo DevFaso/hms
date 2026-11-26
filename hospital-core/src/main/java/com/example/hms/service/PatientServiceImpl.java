@@ -306,9 +306,7 @@ public class PatientServiceImpl implements PatientService {
             ? patientRepository.findByHospitalId(hospitalId)
             : patientRepository.findAll();
 
-        return patients.stream()
-            .map(patient -> buildPatientDto(patient, hospitalId))
-            .toList();
+        return buildPatientDtos(patients, hospitalId);
     }
 
     @Override
@@ -913,9 +911,7 @@ public class PatientServiceImpl implements PatientService {
                 .limit((long) size - found.size())
                 .forEach(found::add);
         }
-        return found.stream()
-            .map(patient -> buildPatientDto(patient, hospitalId))
-            .toList();
+        return buildPatientDtos(found, hospitalId);
     }
 
     /** QA D2521: the patients whose IU is {@code term}, first, within the search's hospital and status filters. */
@@ -973,16 +969,15 @@ public class PatientServiceImpl implements PatientService {
     @Transactional(readOnly = true)
     public List<PatientResponseDTO> getPatientsByHospital(UUID hospitalId, Locale locale) {
         List<Patient> patients = patientRepository.findByHospitalId(hospitalId);
-        return patients.stream()
-            .map(patient -> buildPatientDto(patient, hospitalId))
-            .toList();
+        return buildPatientDtos(patients, hospitalId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientResponseDTO> getPatientPageByHospital(UUID hospitalId, Boolean activeOnly, Pageable pageable) {
         Page<Patient> patientPage = patientRepository.findPageByHospitalIdAndActive(hospitalId, activeOnly, pageable);
-        return patientPage.map(patient -> buildPatientDto(patient, hospitalId));
+        List<PatientResponseDTO> mapped = buildPatientDtos(patientPage.getContent(), hospitalId);
+        return new org.springframework.data.domain.PageImpl<>(mapped, patientPage.getPageable(), patientPage.getTotalElements());
     }
 
     /**
@@ -1228,15 +1223,15 @@ public class PatientServiceImpl implements PatientService {
         // (requireActiveHospitalId throws) for a caller with no hospital at all.
         UUID scopeHospitalId = hospitalId != null ? hospitalId : roleValidator.requireActiveHospitalId();
         if (scopeHospitalId == null) {
-            return results.stream().map(p -> buildPatientDto(p, null)).toList();
+            return buildPatientDtos(results, null);
         }
-        return results.stream()
+        List<Patient> scopedResults = results.stream()
             .filter(p -> registrationRepository.existsByPatientIdAndHospitalId(p.getId(), scopeHospitalId))
             // QA D903: map at the hospital the filter used, so the MRN is THIS hospital's (the
             // mapper falls back to any hospital's MRN when given no scope) and the D504
             // sharing opt-out is applied — never the unscoped view of a scoped read.
-            .map(p -> buildPatientDto(p, scopeHospitalId))
             .toList();
+        return buildPatientDtos(scopedResults, scopeHospitalId);
     }
 
     @Override
@@ -3516,8 +3511,19 @@ public class PatientServiceImpl implements PatientService {
         return dto;
     }
 
+    private List<PatientResponseDTO> buildPatientDtos(List<Patient> patients, UUID hospitalId) {
+        List<PatientResponseDTO> mapped = patientMapper.toPatientDTOs(patients, hospitalId);
+        for (int index = 0; index < patients.size(); index++) {
+            shapePatientDto(patients.get(index), hospitalId, mapped.get(index));
+        }
+        return mapped;
+    }
+
     private PatientResponseDTO buildPatientDto(Patient patient, UUID hospitalId) {
-        PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
+        return shapePatientDto(patient, hospitalId, patientMapper.toPatientDTO(patient, hospitalId));
+    }
+
+    private PatientResponseDTO shapePatientDto(Patient patient, UUID hospitalId, PatientResponseDTO dto) {
         if (patient == null || dto == null || patient.getId() == null) {
             return dto;
         }

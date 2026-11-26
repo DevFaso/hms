@@ -55,11 +55,44 @@ class PatientConsentServiceImplTest {
     }
 
     private void stubMappers(Patient patient) {
-        when(patientMapper.toPatientDTO(eq(patient), any(UUID.class), eq(true), eq(true)))
-            .thenReturn(new PatientResponseDTO());
+        when(patientMapper.toPatientDTOs(eq(List.of(patient)), any(UUID.class)))
+            .thenReturn(List.of(new PatientResponseDTO()));
         when(hospitalMapper.toHospitalDTO(any(Hospital.class))).thenReturn(HospitalResponseDTO.builder().build());
         when(consentMapper.toDto(any(PatientConsent.class), any(), any(), any()))
             .thenReturn(PatientConsentResponseDTO.builder().build());
+    }
+
+    @Test
+    void mixedHospitalPagesBatchEachHospitalAndKeepTheOriginalPageOrder() {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        PatientConsent first = consentFor(patient);
+        PatientConsent otherHospital = consentFor(patient);
+        PatientConsent last = consentFor(patient);
+        last.setFromHospital(first.getFromHospital());
+        Pageable pageable = PageRequest.of(2, 3);
+        when(consentRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(first, otherHospital, last), pageable, 9));
+        PatientResponseDTO own = PatientResponseDTO.builder().id(patient.getId()).mrn("A-ONLY").build();
+        PatientResponseDTO elsewhere = PatientResponseDTO.builder().id(patient.getId()).mrn("B-ONLY").build();
+        when(patientMapper.toPatientDTOs(List.of(patient, patient), first.getFromHospital().getId()))
+            .thenReturn(List.of(own, own));
+        when(patientMapper.toPatientDTOs(List.of(patient), otherHospital.getFromHospital().getId()))
+            .thenReturn(List.of(elsewhere));
+        when(hospitalMapper.toHospitalDTO(any(Hospital.class))).thenReturn(HospitalResponseDTO.builder().build());
+        when(consentMapper.toDto(any(PatientConsent.class), any(), any(), any())).thenAnswer(call ->
+            PatientConsentResponseDTO.builder().id(((PatientConsent) call.getArgument(0)).getId())
+                .patient(call.getArgument(1)).build());
+
+        Page<PatientConsentResponseDTO> result = service.getAllConsents(pageable);
+
+        assertThat(result.getContent()).extracting(PatientConsentResponseDTO::getId)
+            .containsExactly(first.getId(), otherHospital.getId(), last.getId());
+        assertThat(result.getContent()).extracting(row -> row.getPatient().getMrn())
+            .containsExactly("A-ONLY", "B-ONLY", "A-ONLY");
+        assertThat(result.getNumber()).isEqualTo(2);
+        assertThat(result.getTotalElements()).isEqualTo(9);
+        org.mockito.Mockito.verify(patientMapper, org.mockito.Mockito.times(2)).toPatientDTOs(any(), any());
+        org.mockito.Mockito.verifyNoMoreInteractions(patientMapper);
     }
 
     @Test
