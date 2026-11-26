@@ -1,0 +1,80 @@
+# Super-admin UI review — 26 November 2026
+
+## Initial landing-page findings
+
+Read-only inspection of the dev site as super administrator. These are UI observations, not evidence of backend authorization or a complete functional audit.
+
+1. Many all-hospital modules replace the worklist with a hospital directory and an « Ouvrir le module » action. Examples include maternity, registrations, patient tracking, mortality, laboratory validation and operations, reports, notifications and several administration pages. Consider authorized cross-hospital worklists with hospital identification and context-specific row actions. Bed management already presents cross-hospital totals and rows.
+2. Stock routing asks the user to select a hospital without a visible selector in the page. Clinical rules and validation similarly asks for an establishment without a visible selector. Verify the complete selection flow and provide an obvious way forward.
+3. Pharmacy inventory defaults to one pharmacy; its search and count are limited to the current page. Goods receipt presents recent lots. Consider a cross-hospital inventory overview and searchable, paginated delivery history.
+4. Staff cards show role, department, email and status but do not visibly identify the hospital; department cards have a similar issue in the all-hospital context.
+5. The laboratory quality dashboard displays a 0% validation success rate when there are zero validation studies. Display no data rather than a calculated rate with no denominator.
+6. Long sidebar labels are truncated, including « Signatures numériq… » and « Communication du … ». Platform administration exposes technical terms such as JWT, min-iat, DLQ and replay without a plain-language explanation.
+7. Some fictional pharmacy items described as powder sachets or tablets appeared with « gélule » as the stock unit. Verify catalogue and packaging data before treating this as a confirmed defect.
+
+The first pass covered landing pages and selected desktop layouts. It did not establish the behavior of every detail view, dialog, mobile layout, or language.
+
+## Detail-view follow-up
+
+Read-only desktop inspection, French interface, using fictional records. No form was submitted. This follow-up is a sample, not a complete audit of all sidebar modules.
+
+- **Imaging request drawer:** the underlying all-hospital list identifies the hospital, but the opened request drawer does not visibly identify it alongside the patient, study and prescriber. Include the establishment in the drawer so context remains clear when the list is obscured.
+- **Imaging results:** all three visible fictional rows displayed « — » in the report-number column. Determine whether identifiers are missing from the data or the UI; show a meaningful identifier or explain why none exists. The French date filters showed the browser-format placeholder `mm/dd/yyyy` in this session; check localization across supported browsers.
+- **Pharmacy inventory → Conditionnement:** the radio choice describing conversion ends in an ellipsis ("stock, lots, seuil et quantité à commander multipliés par ...") even on the wide desktop viewport. Wrap the complete consequence so it can be read before a stock conversion. Controls also use inconsistent native-looking button styles in the inventory table.
+- **Pharmacy inventory and dispensing:** the fictional "poudre sachet" item appeared in stock and recent dispensing as gélules. The packaging form also prefilled « gélule » while displaying « comprimé » as the delivery-unit placeholder. Check source data and packaging mapping before deciding whether this is a UI defect; do not infer the correct conversion from the name alone.
+- **Patient record:** the clinical-summary area becomes unusually tall when the active-visit card has more fields than its adjacent cards, leaving large blank space beneath the other cards. Consider a layout that preserves scanability without equal-height empty areas. The emergency-access warning asks for a hospital but the visible record header does not provide a selector; verify the intended route to choose one.
+- **Appointments:** the list filter says « Terminée » while the same completed appointment is labelled « Terminé » in the list and detail view. Make status wording consistent. The detail view otherwise shows the hospital, practitioner, patient and timing.
+- **Maternity:** opening a hospital from the super-admin directory reaches a substantive module with separate clinical tabs. In the labour tab, the exact-identifier checkbox label wraps awkwardly despite ample page width. This inspection did not open a patient labour record.
+- **Bed management:** opening « Voir les lits » expands a hospital-labelled unit list with row actions; this is a useful example of preserving hospital context in a cross-hospital workflow.
+- **Laboratory test configuration:** opened the edit-definition dialog. Additional fields extend below the initial visible portion and require scrolling inside the dialog; check the footer and focus behavior at smaller viewports. No change was saved.
+
+### Coverage remaining
+
+Detail views and create/edit dialogs for the remaining modules, more patient-record tabs and subflows, pagination and filters beyond sampled controls, mobile/tablet layouts, keyboard behavior, and English translations remain to be inspected. No conclusion is made about their quality or correctness.
+
+## Additional detail pass
+
+- **Billing → invoice detail:** in the line-item table, unit price and line total run together in the right-hand drawer at desktop width (e.g. adjacent amounts appear without sufficient separation). Allocate adequate column spacing or use a responsive stacked presentation so values can be distinguished.
+- **Billing → new invoice:** the French form shows dates in the browser's US month/day/year format in this session. The patient identifier option wraps abruptly and the amount explanation occupies a narrow column. Verify localization and improve the form's layout.
+- **Scheduling → add shift and bulk scheduling:** dates and times appeared as US-format dates and AM/PM in the French interface. The end-time label and its next-day hint wrap and make the three controls misaligned. Test browser locale behavior and give the labels adequate room.
+- **Goods receipt → receive stock:** opened the inline receipt form; the date field also showed a US-format placeholder in this French session. Quantity is requested without an explicit unit next to the field before an item is selected; check that the selected-item state makes the unit unambiguous before receipt.
+- **Stock adjustment:** opened the new-transaction form without submitting. Additional fields may depend on the selected type and were not verified.
+- **Hospitals and roles:** opened the new-hospital and new-role forms without submitting. These do not constitute a review of their saved records or permission behavior.
+- **Access interruption:** while navigating to users, the dev session returned to the login screen. The laboratory validation queue, hospital directory and role directory were observed loading before the redirect; their final states were not established. The remaining authenticated views still require review after sign-in.
+
+## Further hospital-specific and scrolled inspection
+
+After access was restored, the following observations were made on the French desktop UI in the fictional test hospital. No forms were submitted.
+
+1. **Mortality → record details:** select the hospital, scroll to the register and open a record with the eye action. The detail renders as an unstructured block below the table, with labels and values joined together (for example « LieuDans l’établissement », « CirconstanceNaturelle » and « Certifié parTest… »). Use a clearly separated labelled layout and readable spacing. The provisional perinatal definitions remain displayed; this review did not assess their clinical correctness.
+2. **Record communication → register a request:** the « Dossier complet » checkbox is visually separated from its label, appearing near the horizontal centre of the form while the label sits on the left below it. Place the checkbox next to its label and verify its accessible association. The date input shows a US-format placeholder in this browser session.
+3. **Laboratory personnel:** the long licence values are clipped by the fixed actions column, and the table has a horizontal scrollbar despite substantial unused space on the desktop. Preserve access to the complete licence and action controls, including while editing a row.
+4. **Patient record → Parcours & rendez-vous → Consultations:** the lower « Notes de soins infirmiers » section reported « Les notes de soins n'ont pas pu être chargées » for one fictional record. The visible error did not offer an inline retry. This is an observed load failure, not proof of its cause or persistence; reproduce and provide a clear retry where appropriate.
+5. **User management → edit a patient account:** the form shows staff-oriented hospital, job-title and employment-type fields and explanatory text about a staff member, although the selected account is a patient. Clarify which fields apply to patient accounts and avoid presenting irrelevant controls.
+6. **Reception → Liste d'attente:** the status filters are stacked vertically against the left edge while the add button sits far to the right, leaving a large empty strip. Group the filters and action into a responsive toolbar. The waiting-list form also uses US-format date placeholders in this French browser session.
+
+Coverage expanded to the hospital-specific validation queue, lab instrument and inventory create forms, lab staff inline editor, lab operations dashboard, registrations list, reception patient preview and several tabs, mortality detail, on-call create form and patient-tracking board. Empty lab instrument/inventory data prevented inspecting existing item details. Validation, edits, destructive actions and form submissions were not executed. Other modules and deeper flows remain uninspected; this is not a complete platform audit.
+
+## Additional scrolled forms
+
+- **Drug interactions → edit:** the French list displayed a French recommendation, while the edit form for the same example displayed the recommendation and description in English. The lower form was inspected by scrolling. Verify the intended translation/editing model and identify the language of each editable field so a French-speaking operator understands what is being changed.
+- **Department cards and edit:** different hospitals have departments with identical visible names; the card does not identify the hospital, although the edit form does. Display the establishment on the card so staff can distinguish entries without opening each one. The lower multilingual-name and status fields were reached by scrolling.
+- **Pharmacy registry:** the edit form identifies the associated hospital, but its card does not visibly name it. Display it in the card alongside the pharmacy type and status.
+- **Automatic admissions:** scrolled through defaults, the enable checkbox and save controls. It supplies explanatory text for disabled doctor and department selection; no settings were changed.
+- **Integration message journal:** no message matched the visible filters, so message details and retry flows could not be inspected in this session.
+
+
+## Follow-up: panels and API / webhooks
+
+- **Patient panels:** the all-hospital screen is a hospital directory, not a combined assignment worklist. In one fictional hospital the assignment form explained that a new responsible person replaces the previous assignment and retains history. Its date control displayed the browser US month/day/year format in the French session. The form was not submitted.
+- **API and webhooks:** the all-hospital screen is a directory of hospitals, not a combined list of API keys or endpoints. In one fictional hospital both lists were empty. The key and endpoint creation dialogs were inspected without submission; the key expiry date displayed month/day/year in the French session. No credentials or endpoints were created. Existing-key and existing-endpoint details could not be inspected because the lists were empty.
+
+- **Governance console:** in the French user-governance password-rotation table, a one-day password age is rendered as `1 jours`; the singular should be used. The security-policy list displays several default policy names and descriptions in English despite the French interface. Verify which strings are seeded data and which are translatable UI before changing them. No security settings were edited.
+- **Governance references:** in the French reference/rules tab, template titles and descriptions are French but individual rule names remain English (for example, role segregation and device patch compliance). Inspect the source of those labels before translating. A fictional user credential detail showed clear empty MFA and recovery states. No policy, reference or account change was submitted.
+- **Organization and hospital detail:** followed a fictional organization to a linked hospital. The organization detail lists its hospitals and the hospital detail provides an onboarding checklist with direct links and a readiness message. No lifecycle action was taken; this is a read-only inspection and does not establish the correctness of the checklist calculations.
+- **Scheduled reports:** the all-hospital view is a hospital directory. In a fictional hospital, inspected an existing report history and the new-report form without running, stopping, or creating a report. The history displays a raw period value `202610`; verify its underlying format and present a localized readable period if supported.
+- **Laboratory instrument outbox:** in the super-admin unscoped view, the list showed 27 pending and zero failed and warned that outbound transport is disabled. Opening a message failed with an English error saying hospital context was required; no visible hospital context or per-row hospital was shown in that view. Verify the list/detail tenant scoping and expose an appropriate hospital context without broadening access. Transport was not enabled and no retry was attempted.
+- **Disease surveillance:** the all-hospital screen clearly says it displays counts rather than patient records, and previous-month navigation changed the selected period. The month is displayed as an ISO token (`2026-10`) rather than a localized month name. Both periods sampled were empty, so chart and populated-row details remain uninspected.
+- **Inbox:** the super-admin inbox showed an explicit empty state and type filters with zero counts. There were no messages available, so message details, actions and pagination could not be inspected.
+- **Digital signatures:** an empty super-admin list says a report can be checked by reference, but no lookup is offered to that role; source confirms the lookup is intentionally restricted to clinicians. Draft PR #1365 makes the empty-state guidance conditional without changing access. No signatures were created or changed.
+- **Patient notifications:** in a fictional hospital, the default failed filter explained that other statuses were hidden; switching to all revealed a paginated list. At a wide desktop viewport the content stays narrow, and the channel column wraps E-mail across lines despite ample surrounding space. No message was retried or sent. The all-hospital screen remains a directory.
