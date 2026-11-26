@@ -382,6 +382,11 @@ public enum AuditEventType {
     CLINICAL_RULE_SIGNED_OFF,
     /** V356: a rule set's sign-off revoked at a hospital; it reads « provisoire » again (ids, key and version only). */
     CLINICAL_RULE_SIGNOFF_REVOKED,
+    /**
+     * V382: audit rows past the retention period removed by {@code support.purge_expired_audit_rows}, the only
+     * delete the audit tables accept. Written by the database function itself (counts and cutoff only).
+     */
+    AUDIT_RETENTION_PURGED,
 
     OTHER
 }

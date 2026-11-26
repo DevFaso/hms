@@ -84,7 +84,7 @@ class AuditEventHospitalIdBackfillMigrationIT {
             run(stmt, V229);
             assertThat(hospitalIdOfRowTargeting(stmt, INVOICE)).as("V229 writes no hospital_id").isNull();
 
-            run(stmt, V235);
+            runV235(stmt);
 
             assertThat(hospitalIdOfRowTargeting(stmt, INVOICE)).isEqualTo(HOSPITAL);
         }
@@ -96,7 +96,7 @@ class AuditEventHospitalIdBackfillMigrationIT {
             plantRecall(stmt);
             plantAuditRow(stmt, "NULL", "SYSTEM", "PROGRAM_DEFAULTER_TRACED", "PatientRecall", RECALL, "NULL");
 
-            run(stmt, V235);
+            runV235(stmt);
 
             assertThat(hospitalIdOfRowTargeting(stmt, RECALL)).isEqualTo(HOSPITAL);
         }
@@ -123,8 +123,8 @@ class AuditEventHospitalIdBackfillMigrationIT {
             String attributed = plantAuditRow(stmt, "NULL", "Migration V229", "INVOICE_UPDATED", "BillingInvoice",
                 INVOICE, "'" + OTHER_HOSPITAL + "'");
 
-            run(stmt, V235);
-            run(stmt, V235);
+            runV235(stmt);
+            runV235(stmt);
 
             assertThat(hospitalIdOf(stmt, otherJob)).isNull();
             assertThat(hospitalIdOf(stmt, human)).isNull();
@@ -182,6 +182,19 @@ class AuditEventHospitalIdBackfillMigrationIT {
                 + "WHERE id = '" + auditId + "'")) {
             assertThat(rs.next()).isTrue();
             return rs.getString(1);
+        }
+    }
+
+    /**
+     * V235 ran before V382 made the audit table append-only, so it is replayed the way it ran: with the
+     * append-only trigger switched off around it (test-only; no migration does this).
+     */
+    private static void runV235(Statement stmt) throws Exception {
+        stmt.execute("ALTER TABLE support.audit_event_logs DISABLE TRIGGER trg_audit_append_only");
+        try {
+            run(stmt, V235);
+        } finally {
+            stmt.execute("ALTER TABLE support.audit_event_logs ENABLE TRIGGER trg_audit_append_only");
         }
     }
 
