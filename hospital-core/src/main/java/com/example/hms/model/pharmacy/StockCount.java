@@ -28,6 +28,11 @@ public class StockCount extends BaseEntity {
     private UUID clientRequestId;
     @Column(name = "book_quantity", nullable = false, precision = 12, scale = 2)
     private BigDecimal bookQuantity;
+    /** Null on historical observations: they must be recounted before an adjustment. */
+    @Column(name = "book_item_revision")
+    private Long itemRevision;
+    @Column(name = "book_lot_revision")
+    private Long lotRevision;
     @Column(name = "counted_quantity", nullable = false, precision = 12, scale = 2)
     private BigDecimal countedQuantity;
     @Column(nullable = false, precision = 12, scale = 2)

@@ -38,7 +38,7 @@ public class PharmacyConsumptionService {
     public PharmacyConsumptionDTO report(UUID pharmacyId, LocalDate from, LocalDate to) {
         UUID hospitalId = access.readerHospital();
         pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound"));
+            .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacyId));
         LocalDate last = to == null ? LocalDate.now(clock) : to;
         LocalDate first = from == null ? last.minusDays(29) : from;
         long days = ChronoUnit.DAYS.between(first, last);
@@ -56,15 +56,15 @@ public class PharmacyConsumptionService {
         Set<UUID> medicationIds = rows.stream().map(row -> (UUID) row[1]).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         Map<UUID, MedicationCatalogItem> names = catalogue.findAllById(medicationIds).stream()
             .collect(Collectors.toMap(MedicationCatalogItem::getId, Function.identity()));
-        List<PharmacyConsumptionDTO.Line> lines = rows.stream()
+        List<PharmacyConsumptionDTO.StockConsumptionLine> lines = rows.stream()
             .filter(row -> decimal(row[3]).signum() != 0 || decimal(row[4]).signum() != 0)
             .map(row -> {
                 String unit = (String) row[2];
                 boolean comparable = unit != null && !unit.isBlank();
-                return new PharmacyConsumptionDTO.Line((UUID) row[0], DrugDisplayNames.forReader(names.get((UUID) row[1])), unit,
+                return new PharmacyConsumptionDTO.StockConsumptionLine((UUID) row[0], DrugDisplayNames.forReader(names.get((UUID) row[1])), unit,
                     comparable ? decimal(row[3]) : null, comparable ? decimal(row[4]) : null, comparable, ((Number) row[5]).longValue());
             })
-            .sorted(Comparator.comparing(PharmacyConsumptionDTO.Line::medicationName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+            .sorted(Comparator.comparing(PharmacyConsumptionDTO.StockConsumptionLine::medicationName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
             .toList();
         return new PharmacyConsumptionDTO(first, last, lines);
     }

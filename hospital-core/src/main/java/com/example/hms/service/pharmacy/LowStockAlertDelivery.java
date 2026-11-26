@@ -9,6 +9,9 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Locale;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
+import com.example.hms.service.i18n.NotificationLocalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,9 +26,11 @@ public class LowStockAlertDelivery {
     private final NotificationService notifications;
     private final JdbcTemplate jdbc;
     private final Clock clock;
+    private final InventoryItemRepository items;
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public int deliver(InventoryItem item, Object[] arguments) {
+    public int deliver(UUID itemId, Locale locale) {
+        InventoryItem item = itemId == null ? null : items.findForAlertDelivery(itemId).orElse(null);
         if (item == null || !item.isActive() || item.getPharmacy() == null || !item.getPharmacy().isActive()
                 || item.getPharmacy().getHospital() == null || !item.getPharmacy().getHospital().isActive()
                 || item.getQuantityOnHand() == null || item.getReorderThreshold() == null
@@ -33,6 +38,12 @@ public class LowStockAlertDelivery {
             return 0;
         }
         UUID hospitalId = item.getPharmacy().getHospital().getId();
+        String drug = item.getMedicationCatalogItem() == null ? null
+            : com.example.hms.utility.DrugDisplayNames.forReader(item.getMedicationCatalogItem(),
+                locale == null ? Locale.ENGLISH : locale);
+        Object[] arguments = {drug == null ? NotificationLocalizer.key("inventory.lowStock.unknown") : drug,
+            item.getPharmacy().getName() == null ? NotificationLocalizer.key("inventory.lowStock.unknown") : item.getPharmacy().getName(),
+            item.getQuantityOnHand(), item.getReorderThreshold()};
         var recipients = new LinkedHashMap<UUID, User>();
         assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES).stream()
             .filter(user -> user.getId() != null && user.getUsername() != null && !user.getUsername().isBlank())

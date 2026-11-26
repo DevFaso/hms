@@ -24,6 +24,7 @@ public class StockLotMapper {
             .expiryDate(entity.getExpiryDate())
             .initialQuantity(entity.getInitialQuantity())
             .remainingQuantity(entity.getRemainingQuantity())
+            .stockRevision(entity.getStockRevision())
             .supplier(entity.getSupplier())
             .unitCost(entity.getUnitCost())
             .receivedDate(entity.getReceivedDate())

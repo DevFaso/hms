@@ -31,20 +31,24 @@ class LowStockAlertDeliveryTest {
     @Mock private JdbcTemplate jdbc;
     private LowStockAlertDelivery service;
     private InventoryItem item;
+    @Mock private com.example.hms.repository.pharmacy.InventoryItemRepository items;
     private User recipient;
     private static final LocalDate DAY = LocalDate.of(2026, 11, 26);
 
     @BeforeEach
     void setUp() {
         service = new LowStockAlertDelivery(assignments, notifications, jdbc,
-            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), items);
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
-        Pharmacy pharmacy = Pharmacy.builder().hospital(hospital).active(true).build();
+        Pharmacy pharmacy = Pharmacy.builder().hospital(hospital).name("Synthetic store").active(true).build();
         pharmacy.setId(UUID.randomUUID());
         item = InventoryItem.builder().pharmacy(pharmacy).active(true)
             .quantityOnHand(BigDecimal.ONE).reorderThreshold(BigDecimal.TEN).build();
+        item.setMedicationCatalogItem(com.example.hms.model.medication.MedicationCatalogItem.builder()
+            .nameFr("Synthetic medicine").genericName("Synthetic medicine").build());
         item.setId(UUID.randomUUID());
+        when(items.findForAlertDelivery(item.getId())).thenReturn(java.util.Optional.of(item));
         recipient = new User();
         recipient.setId(UUID.randomUUID());
         recipient.setUsername("synthetic-pharmacist");
@@ -55,10 +59,11 @@ class LowStockAlertDeliveryTest {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(item.getPharmacy().getHospital().getId(),
             LowStockAlertDelivery.RECIPIENT_ROLES)).thenReturn(List.of(recipient, recipient));
         when(jdbc.update(anyString(), eq(item.getId()), eq(recipient.getId()), eq(DAY))).thenReturn(1);
-        Object[] arguments = {"Synthetic medicine", "Synthetic store", 1, 10};
-        assertThat(service.deliver(item, arguments)).isEqualTo(1);
-        verify(notifications).createNotification("inventory.lowStock.notification", arguments,
-            recipient.getUsername(), "REORDER_ALERT", item.getId());
+        assertThat(service.deliver(item.getId(), java.util.Locale.ENGLISH)).isEqualTo(1);
+        var arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(notifications).createNotification(eq("inventory.lowStock.notification"), arguments.capture(),
+            eq(recipient.getUsername()), eq("REORDER_ALERT"), eq(item.getId()));
+        assertThat(arguments.getValue()).containsExactly("Synthetic medicine", "Synthetic store", BigDecimal.ONE, BigDecimal.TEN);
         verifyNoMoreInteractions(notifications);
     }
 
@@ -66,7 +71,7 @@ class LowStockAlertDeliveryTest {
     void anExistingDailyClaimDoesNotSendAgain() {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(recipient));
         when(jdbc.update(anyString(), any(UUID.class), any(UUID.class), any(LocalDate.class))).thenReturn(0);
-        assertThat(service.deliver(item, new Object[0])).isZero();
+        assertThat(service.deliver(item.getId(), java.util.Locale.ENGLISH)).isZero();
         verifyNoInteractions(notifications);
     }
 
@@ -76,16 +81,32 @@ class LowStockAlertDeliveryTest {
         when(jdbc.update(anyString(), any(UUID.class), any(UUID.class), any(LocalDate.class))).thenReturn(1);
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic storage failure"));
-        assertThatThrownBy(() -> service.deliver(item, new Object[0])).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.deliver(item.getId(), java.util.Locale.ENGLISH)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void recoveredOrInactiveStockNeverRaisesAnAlert() {
         item.setQuantityOnHand(new BigDecimal("11"));
-        assertThat(service.deliver(item, new Object[0])).isZero();
+        assertThat(service.deliver(item.getId(), java.util.Locale.ENGLISH)).isZero();
         item.setQuantityOnHand(BigDecimal.ONE);
         item.getPharmacy().setActive(false);
-        assertThat(service.deliver(item, new Object[0])).isZero();
+        assertThat(service.deliver(item.getId(), java.util.Locale.ENGLISH)).isZero();
         verifyNoInteractions(assignments, jdbc, notifications);
     }
+    @Test
+    void deliveryUsesTheReloadedHospitalCatalogAndQuantitiesInsteadOfTheSweepSnapshot() {
+        InventoryItem fresh = InventoryItem.builder().pharmacy(item.getPharmacy()).active(true)
+            .medicationCatalogItem(item.getMedicationCatalogItem()).quantityOnHand(new BigDecimal("3"))
+            .reorderThreshold(new BigDecimal("12")).build();
+        fresh.setId(item.getId());
+        when(items.findForAlertDelivery(item.getId())).thenReturn(java.util.Optional.of(fresh));
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(recipient));
+        when(jdbc.update(anyString(), any(UUID.class), any(UUID.class), any(LocalDate.class))).thenReturn(1);
+        assertThat(service.deliver(item.getId(), java.util.Locale.ENGLISH)).isEqualTo(1);
+        var arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(notifications).createNotification(eq("inventory.lowStock.notification"), arguments.capture(),
+            eq(recipient.getUsername()), eq("REORDER_ALERT"), eq(item.getId()));
+        assertThat(arguments.getValue()).containsExactly("Synthetic medicine", "Synthetic store", new BigDecimal("3"), new BigDecimal("12"));
+    }
+
 }

@@ -102,6 +102,8 @@ class InventoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(stockLotRepository.sumRemainingForItem(any(UUID.class)))
+            .thenAnswer(call -> inventoryItem.getQuantityOnHand());
         org.mockito.Mockito.lenient().when(clock.instant()).thenAnswer(i -> java.time.Instant.now());
         org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         hospital = new Hospital();
@@ -703,6 +705,20 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        void anExternalReceiptCannotStrandExistingLotlessStock() {
+            StockLotRequestDTO dto = buildLotRequest();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            inventoryItem.setQuantityOnHand(new BigDecimal("20"));
+            when(stockLotRepository.sumRemainingForItem(inventoryItemId)).thenReturn(BigDecimal.ZERO);
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                .extracting("field", "messageKey").containsExactly("stockLotId", "pharmacy.inventory.lot.balanceUnreconciled");
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("D3946: an external receipt of an existing lot is refused without adding stock")
         void sameLotTwiceIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();
@@ -1224,7 +1240,7 @@ class InventoryServiceImplTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             service.triggerReorderAlerts();
 
-            verify(lowStockAlertDelivery).deliver(eq(inventoryItem), any());
+            verify(lowStockAlertDelivery).deliver(eq(inventoryItem.getId()), any());
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
 

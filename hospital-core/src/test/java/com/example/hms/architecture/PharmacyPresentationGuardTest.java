@@ -12,13 +12,13 @@ class PharmacyPresentationGuardTest {
         Path services = Path.of("src/main/java/com/example/hms/service");
         String delivery = Files.readString(services.resolve("pharmacy/LowStockAlertDelivery.java"));
         assertThat(delivery).contains("Propagation.REQUIRES_NEW", "findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES)",
-            "ON CONFLICT DO NOTHING", "if (claimed == 1)");
+            "ON CONFLICT DO NOTHING", "if (claimed == 1)", "items.findForAlertDelivery(itemId)");
         assertThat(delivery.indexOf("INSERT INTO clinical.low_stock_alert_receipts"))
             .isLessThan(delivery.indexOf("notifications.createNotification("));
         assertThat(Files.readString(services.resolve("pharmacy/InventoryServiceImpl.java")))
-            .contains("lowStockAlertDelivery.deliver(item, alertArgs)");
+            .contains("lowStockAlertDelivery.deliver(item.getId(), locale)");
         String scheduler = Files.readString(services.resolve("pharmacy/LowStockAlertScheduler.java"));
-        assertThat(scheduler).contains("@SchedulerLock(", "delivery.deliver(item, arguments)");
+        assertThat(scheduler).contains("@SchedulerLock(", "delivery.deliver(itemId, Locale.FRENCH)", "findLowStockIdsAcrossActiveFacilities()");
         try (var paths = Files.walk(services)) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(path));
@@ -42,6 +42,7 @@ class PharmacyPresentationGuardTest {
         assertThat(receipt.indexOf("pharmacy.inventory.lot.duplicate"))
             .isGreaterThanOrEqualTo(0).isLessThan(receipt.indexOf("stockLotMapper.toEntity("));
         assertThat(receipt).doesNotContain("stockLotRepository.addReceipt(");
+        assertThat(receipt).contains("StockLotBalance.requireReconciled(item, stockLotRepository.sumRemainingForItem(item.getId()))");
         String repository = Files.readString(root.resolve("repository/pharmacy/StockLotRepository.java"));
         assertThat(repository).contains("UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string)))");
         try (var paths = Files.walk(root)) {
@@ -77,8 +78,8 @@ class PharmacyPresentationGuardTest {
                 if (!source.contains("implements PharmacySaleService")) continue;
                 writers++;
                 assertThat(source).as(path.toString()).contains(
-                    "dto.getReferenceNumber() == null || dto.getReferenceNumber().isBlank()",
-                    "FieldBusinessException(\"referenceNumber\", \"pharmacy.payment.mobileMoneyReferenceRequired\")");
+                    ".require(!mobileMoney || org.springframework.util.StringUtils.hasText(dto.getReferenceNumber())",
+                    "\"referenceNumber\", \"pharmacy.payment.mobileMoneyReferenceRequired\"");
                 assertThat(source.indexOf("pharmacy.payment.mobileMoneyReferenceRequired"))
                     .isLessThan(source.indexOf("saleRepository.save("));
             }
@@ -92,4 +93,26 @@ class PharmacyPresentationGuardTest {
             assertThat(messages.getProperty("pharmacy.inventory.price.whole")).isNotBlank();
         }
     }
+    @Test
+    void allCountSnapshotsUseDatabaseMaintainedRevisionsAcrossEveryStockWriter() throws Exception {
+        Path root = Path.of("src/main");
+        String migration = Files.readString(root.resolve("resources/db/migration/V399__stock_count_revisions.sql"));
+        for (String table : new String[]{"inventory_items", "stock_lots"}) {
+            assertThat(migration).contains("ALTER TABLE clinical." + table + " ADD COLUMN IF NOT EXISTS stock_revision",
+                "BEFORE UPDATE ON clinical." + table);
+        }
+        assertThat(migration).contains("NEW.stock_revision := OLD.stock_revision + 1", "IS DISTINCT FROM ROW",
+            "NEW.quantity_on_hand", "NEW.unit", "NEW.remaining_quantity", "book_item_revision", "book_lot_revision");
+        for (String entity : new String[]{"InventoryItem", "StockLot"}) {
+            assertThat(Files.readString(root.resolve("java/com/example/hms/model/pharmacy/" + entity + ".java")))
+                .contains("org.hibernate.generator.EventType.INSERT", "org.hibernate.generator.EventType.UPDATE", "insertable = false, updatable = false", "Long stockRevision");
+        }
+        String service = Files.readString(root.resolve("java/com/example/hms/service/pharmacy/StockCountService.java"));
+        assertThat(service).contains("sameRevision(item, lot, request.expectedItemRevision(), request.expectedLotRevision())",
+            "sameRevision(item, lot, count.getItemRevision(), count.getLotRevision())",
+            "book_item_revision, book_lot_revision", "lockStock(item, lot)");
+        assertThat(Files.readString(root.resolve("resources/db/migration/changelog.xml")))
+            .contains("V399__stock_count_revisions.sql");
+    }
+
 }

@@ -10,6 +10,9 @@ public record StockCountRequestDTO(
     @NotNull(message = "{stockCount.requestRequired}") UUID clientRequestId,
     @NotNull(message = "{stockCount.startRequired}") BigDecimal expectedBookQuantity,
     @Size(max = 60) String expectedUnit,
+    @NotNull(message = "{stockCount.startRequired}")
+    @Min(value = 0, message = "{stockCount.startRequired}") Long expectedItemRevision,
+    @Min(value = 0, message = "{stockCount.startRequired}") Long expectedLotRevision,
     @NotNull(message = "{stockCount.quantityRequired}")
     @DecimalMin(value = "0", message = "{stockCount.quantityNonNegative}")
     @Digits(integer = 10, fraction = 2, message = "{stockCount.quantityPrecision}") BigDecimal countedQuantity,

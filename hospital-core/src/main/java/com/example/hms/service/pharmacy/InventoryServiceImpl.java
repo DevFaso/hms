@@ -520,6 +520,9 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
+        // Validate stock and pack metadata from the locked row, including legacy items not yet tracked by lot.
+        inventoryItemRepository.lockById(item.getId());
+        refreshIfManaged(item);
         receiveInUnits(item, dto);
 
         validateReceiptQuantitiesAndDates(dto);
@@ -533,7 +536,7 @@ public class InventoryServiceImpl implements InventoryService {
             throw new com.example.hms.exception.FieldBusinessException("unitCost", "stockTransaction.unitCost.min");
         }
         // D3946: serialise validation with goods-in for this item; a concurrent receipt sees the committed batch.
-        inventoryItemRepository.lockById(item.getId());
+        StockLotBalance.requireReconciled(item, stockLotRepository.sumRemainingForItem(item.getId()));
         if (dto.getLotNumber() != null) {
             dto.setLotNumber(dto.getLotNumber().trim());
         }
@@ -686,22 +689,16 @@ public class InventoryServiceImpl implements InventoryService {
         // (QA D894): it is written in English, the shape the portal's
         // pattern reads, whatever the caller's language.
         Locale locale = LocaleContextHolder.getLocale();
-        String unknown = messageSource.getMessage("inventory.lowStock.unknown", null, locale);
         String unknownForAudit = messageSource.getMessage("inventory.lowStock.unknown", null, Locale.ENGLISH);
         for (InventoryItem item : lowStock) {
             boolean hasMedication = item.getMedicationCatalogItem() != null;
             boolean hasPharmacy = item.getPharmacy() != null;
             String onHand = String.valueOf(item.getQuantityOnHand());
             String threshold = String.valueOf(item.getReorderThreshold());
-            // QA D1235 class: the alert reader sees the drug in their own language.
-            String drugName = hasMedication
-                ? com.example.hms.utility.DrugDisplayNames.forReader(item.getMedicationCatalogItem(), locale) : null;
-            Object[] alertArgs = {drugName != null ? drugName : unknown,
-                hasPharmacy ? item.getPharmacy().getName() : unknown, onHand, threshold};
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
 
-            pushReorderAlert(item, alertArgs);
+            pushReorderAlert(item, locale);
 
             logAudit(AuditEventType.STOCK_REORDER_ALERT,
                 messageSource.getMessage("inventory.lowStock.notification", auditArgs, Locale.ENGLISH),
@@ -712,9 +709,9 @@ public class InventoryServiceImpl implements InventoryService {
     // ── Private helpers ──────────────────────────────────────────────────
 
     /** One item's failed delivery must not stop the remaining items. */
-    private void pushReorderAlert(InventoryItem item, Object[] alertArgs) {
+    private void pushReorderAlert(InventoryItem item, Locale locale) {
         try {
-            lowStockAlertDelivery.deliver(item, alertArgs);
+            lowStockAlertDelivery.deliver(item.getId(), locale);
         } catch (Exception e) {
             log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
         }

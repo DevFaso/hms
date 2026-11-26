@@ -152,6 +152,7 @@ export interface InventoryItemRequest {
 }
 
 export interface InventoryItemResponse {
+  stockRevision?: number;
   id: string;
   pharmacyId: string;
   medicationCatalogItemId: string;
@@ -202,6 +203,7 @@ export interface StockLotRequest {
 }
 
 export interface StockLotResponse {
+  stockRevision?: number;
   id: string;
   inventoryItemId: string;
   lotNumber: string;

@@ -59,7 +59,8 @@ public class StockCountService {
         StockLot lot = ownedLot(request.stockLotId(), item);
         lockStock(item, lot);
         BigDecimal book = lot == null ? item.getQuantityOnHand() : lot.getRemainingQuantity();
-        if (book.compareTo(request.expectedBookQuantity()) != 0 || !Objects.equals(item.getUnit(), request.expectedUnit())) {
+        if (!sameRevision(item, lot, request.expectedItemRevision(), request.expectedLotRevision())
+                || book.compareTo(request.expectedBookQuantity()) != 0 || !Objects.equals(item.getUnit(), request.expectedUnit())) {
             throw new BusinessException("stockCount.changedSinceCount");
         }
         requireCountedUnits(item, request.countedQuantity());
@@ -69,14 +70,14 @@ public class StockCountService {
             INSERT INTO clinical.pharmacy_stock_counts
                 (id, hospital_id, inventory_item_id, stock_lot_id, client_request_id, book_quantity,
                  counted_quantity, variance, unit, reason, medication_name_fr, medication_name_en, lot_number,
-                 recorded_by_user_id, recorded_by_name, recorded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 recorded_by_user_id, recorded_by_name, recorded_at, book_item_revision, book_lot_revision)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (hospital_id, client_request_id) DO NOTHING
             """, UUID.randomUUID(), hospitalId, item.getId(), lot == null ? null : lot.getId(), request.clientRequestId(),
             book, request.countedQuantity(), request.countedQuantity().subtract(book), item.getUnit(), request.reason().trim(),
             DrugDisplayNames.forReader(item.getMedicationCatalogItem(), Locale.FRENCH),
             DrugDisplayNames.forReader(item.getMedicationCatalogItem(), Locale.ENGLISH), lot == null ? null : lot.getLotNumber(),
-            actor.getId(), actorName(actor), LocalDateTime.now(clock));
+            actor.getId(), actorName(actor), LocalDateTime.now(clock), item.getStockRevision(), lot == null ? null : lot.getStockRevision());
         StockCount saved = counts.findByHospitalIdAndClientRequestId(hospitalId, request.clientRequestId()).orElseThrow();
         return sameRequest(saved, request);
     }
@@ -93,7 +94,8 @@ public class StockCountService {
         StockLot lot = ownedLot(count.getStockLot() == null ? null : count.getStockLot().getId(), item);
         lockStock(item, lot);
         BigDecimal current = lot == null ? item.getQuantityOnHand() : lot.getRemainingQuantity();
-        if (current.compareTo(count.getBookQuantity()) != 0 || !Objects.equals(item.getUnit(), count.getUnit())) {
+        if (!sameRevision(item, lot, count.getItemRevision(), count.getLotRevision())
+                || current.compareTo(count.getBookQuantity()) != 0 || !Objects.equals(item.getUnit(), count.getUnit())) {
             throw new BusinessException("stockCount.changedSinceCount");
         }
         User actor = actor();
@@ -177,10 +179,19 @@ public class StockCountService {
     }
 
     private static void validate(StockCountRequestDTO request) {
-        if (request.inventoryItemId() == null) throw new FieldBusinessException("inventoryItemId", "stockTransaction.inventoryItemId.required");
-        if (request.clientRequestId() == null) throw new FieldBusinessException("clientRequestId", "stockCount.requestRequired");
-        if (request.expectedBookQuantity() == null) throw new FieldBusinessException("inventoryItemId", "stockCount.startRequired");
-        if (request.countedQuantity() == null) throw new FieldBusinessException("countedQuantity", "stockCount.quantityRequired");
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.inventoryItemId(), "inventoryItemId", "stockTransaction.inventoryItemId.required")
+            .requireValue(request.clientRequestId(), "clientRequestId", "stockCount.requestRequired")
+            .requireValue(request.expectedBookQuantity(), "expectedBookQuantity", "stockCount.startRequired")
+            .requireValue(request.expectedItemRevision(), "expectedItemRevision", "stockCount.startRequired")
+            .requireValue(request.countedQuantity(), "countedQuantity", "stockCount.quantityRequired")
+            .requireValue(request.reason(), "reason", "stockCount.reasonRequired")
+            .orThrow();
+        if (request.expectedItemRevision() == null || request.expectedItemRevision() < 0
+                || (request.stockLotId() != null && request.expectedLotRevision() == null)
+                || (request.expectedLotRevision() != null && request.expectedLotRevision() < 0)) {
+            throw new FieldBusinessException("inventoryItemId", "stockCount.startRequired");
+        }
         if (request.countedQuantity().signum() < 0) throw new FieldBusinessException("countedQuantity", "stockCount.quantityNonNegative");
         if (request.countedQuantity().scale() > 2 || request.countedQuantity().precision() - request.countedQuantity().scale() > 10)
             throw new FieldBusinessException("countedQuantity", "stockCount.quantityPrecision");
@@ -202,10 +213,17 @@ public class StockCountService {
         UUID lotId = count.getStockLot() == null ? null : count.getStockLot().getId();
         if (!count.getInventoryItem().getId().equals(request.inventoryItemId()) || !Objects.equals(lotId, request.stockLotId())
                 || count.getBookQuantity().compareTo(request.expectedBookQuantity()) != 0 || !Objects.equals(count.getUnit(), request.expectedUnit())
+                || !Objects.equals(count.getItemRevision(), request.expectedItemRevision())
+                || !Objects.equals(count.getLotRevision(), request.expectedLotRevision())
                 || count.getCountedQuantity().compareTo(request.countedQuantity()) != 0 || !count.getReason().equals(request.reason().trim())) {
             throw new BusinessException("stockCount.requestReused");
         }
         return response(count);
+    }
+
+    private static boolean sameRevision(InventoryItem item, StockLot lot, Long itemRevision, Long lotRevision) {
+        return itemRevision != null && Objects.equals(item.getStockRevision(), itemRevision)
+            && (lot == null ? lotRevision == null : lotRevision != null && Objects.equals(lot.getStockRevision(), lotRevision));
     }
 
     private static StockCountResponseDTO response(StockCount count) {
@@ -218,6 +236,6 @@ public class StockCountService {
     }
 
     private static ResourceNotFoundException notFound(UUID id) {
-        return new ResourceNotFoundException("stockCount.notFound", id);
+        return new ResourceNotFoundException("stockCount.notFound");
     }
 }

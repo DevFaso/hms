@@ -53,7 +53,7 @@ class StockCountServiceTest {
         item.setId(UUID.randomUUID());
         actor = new User(); actor.setId(UUID.randomUUID()); actor.setFirstName("Synthetic"); actor.setLastName("Counter");
         count = StockCount.builder().hospital(hospital).inventoryItem(item).clientRequestId(UUID.randomUUID())
-            .bookQuantity(new BigDecimal("20")).countedQuantity(new BigDecimal("18")).variance(new BigDecimal("-2"))
+            .itemRevision(0L).bookQuantity(new BigDecimal("20")).countedQuantity(new BigDecimal("18")).variance(new BigDecimal("-2"))
             .unit("tablet").reason("Synthetic physical count").recordedBy(actor).recordedByName("Synthetic Counter")
             .recordedAt(LocalDateTime.of(2026, 11, 26, 8, 0)).build();
         count.setId(UUID.randomUUID());
@@ -64,7 +64,7 @@ class StockCountServiceTest {
     }
 
     private StockCountRequestDTO request() {
-        return new StockCountRequestDTO(item.getId(), null, count.getClientRequestId(), new BigDecimal("20"), "tablet", new BigDecimal("18"), count.getReason());
+        return new StockCountRequestDTO(item.getId(), null, count.getClientRequestId(), new BigDecimal("20"), "tablet", 0L, null, new BigDecimal("18"), count.getReason());
     }
 
     private void stock() {
@@ -79,11 +79,11 @@ class StockCountServiceTest {
         when(counts.findByHospitalIdAndClientRequestId(hospital.getId(), count.getClientRequestId()))
             .thenReturn(Optional.empty(), Optional.of(count));
         var saved = service.record(request());
-        assertThat(saved.bookQuantity()).isEqualByComparingTo("20");
-        assertThat(saved.countedQuantity()).isEqualByComparingTo("18");
-        assertThat(saved.variance()).isEqualByComparingTo("-2");
-        assertThat(saved.recordedByName()).isEqualTo("Synthetic Counter");
-        assertThat(saved.appliedAt()).isNull();
+        assertThat(saved.getBookQuantity()).isEqualByComparingTo("20");
+        assertThat(saved.getCountedQuantity()).isEqualByComparingTo("18");
+        assertThat(saved.getVariance()).isEqualByComparingTo("-2");
+        assertThat(saved.getRecordedByName()).isEqualTo("Synthetic Counter");
+        assertThat(saved.getAppliedAt()).isNull();
         assertThat(item.getQuantityOnHand()).isEqualByComparingTo("20");
         verify(jdbc).update(contains("INSERT INTO clinical.pharmacy_stock_counts"), any(Object[].class));
         verifyNoInteractions(movements);
@@ -92,8 +92,8 @@ class StockCountServiceTest {
     @Test
     void aRecordRetryReturnsTheSameObservationAndCannotChangeItsQuantity() {
         when(counts.findByHospitalIdAndClientRequestId(hospital.getId(), count.getClientRequestId())).thenReturn(Optional.of(count));
-        assertThat(service.record(request()).id()).isEqualTo(count.getId());
-        var changed = new StockCountRequestDTO(item.getId(), null, count.getClientRequestId(), new BigDecimal("20"), "tablet", BigDecimal.TEN, count.getReason());
+        assertThat(service.record(request()).getId()).isEqualTo(count.getId());
+        var changed = new StockCountRequestDTO(item.getId(), null, count.getClientRequestId(), new BigDecimal("20"), "tablet", 0L, null, BigDecimal.TEN, count.getReason());
         assertThatThrownBy(() -> service.record(changed)).isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "stockCount.requestReused");
         verifyNoInteractions(items, jdbc, movements);
@@ -126,8 +126,8 @@ class StockCountServiceTest {
         UUID witness = UUID.randomUUID();
         when(movements.recordTransaction(any())).thenReturn(StockTransactionResponseDTO.builder().id(movementId).build());
         var confirmation = new StockCountConfirmationDTO(true, witness);
-        assertThat(service.confirm(count.getId(), confirmation).adjustmentId()).isEqualTo(movementId);
-        assertThat(service.confirm(count.getId(), confirmation).adjustmentId()).isEqualTo(movementId);
+        assertThat(service.confirm(count.getId(), confirmation).getAdjustmentId()).isEqualTo(movementId);
+        assertThat(service.confirm(count.getId(), confirmation).getAdjustmentId()).isEqualTo(movementId);
         var movement = ArgumentCaptor.forClass(StockTransactionRequestDTO.class);
         verify(movements, times(1)).recordTransaction(movement.capture());
         assertThat(movement.getValue().getQuantity()).isEqualByComparingTo("-2");
@@ -150,6 +150,18 @@ class StockCountServiceTest {
         assertThat(count.getAppliedAt()).isNull();
         verifyNoInteractions(movements);
         verify(counts, never()).save(any());
+    }
+
+    @Test
+    void equalQuantityAndUnitAfterAnInterveningMovementStillRequireARecountAtBothSteps() {
+        stock();
+        item.setStockRevision(2L);
+        assertThatThrownBy(() -> service.record(request()))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.changedSinceCount");
+        when(counts.findLocked(count.getId(), hospital.getId())).thenReturn(Optional.of(count));
+        assertThatThrownBy(() -> service.confirm(count.getId(), new StockCountConfirmationDTO(true, null)))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.changedSinceCount");
+        verifyNoInteractions(movements, jdbc, users);
     }
 
     @Test

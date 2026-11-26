@@ -46,6 +46,7 @@ class LowStockAlertClaimPostgresIT {
     private NotificationService notifications;
     private LowStockAlertDelivery delivery;
     private InventoryItem item;
+    private com.example.hms.repository.pharmacy.InventoryItemRepository items;
 
     @BeforeAll
     static void schema() throws Exception {
@@ -61,13 +62,15 @@ class LowStockAlertClaimPostgresIT {
 
     @BeforeEach
     void fixture() {
+        items = mock(com.example.hms.repository.pharmacy.InventoryItemRepository.class);
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
-        Pharmacy pharmacy = Pharmacy.builder().hospital(hospital).active(true).build();
+        Pharmacy pharmacy = Pharmacy.builder().hospital(hospital).name("Synthetic store").active(true).build();
         pharmacy.setId(UUID.randomUUID());
         item = InventoryItem.builder().pharmacy(pharmacy).quantityOnHand(BigDecimal.ONE)
             .reorderThreshold(BigDecimal.TEN).active(true).build();
         item.setId(UUID.randomUUID());
+        when(items.findForAlertDelivery(item.getId())).thenReturn(java.util.Optional.of(item));
         User pharmacist = new User();
         pharmacist.setId(UUID.randomUUID());
         pharmacist.setUsername("synthetic-pharmacist");
@@ -78,7 +81,7 @@ class LowStockAlertClaimPostgresIT {
             .thenReturn(List.of(pharmacist));
         notifications = mock(NotificationService.class);
         var target = new LowStockAlertDelivery(assignments, notifications, jdbc,
-            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), items);
         var proxy = new org.springframework.aop.framework.ProxyFactory(target);
         proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
             (org.springframework.transaction.TransactionManager) transactionManager,
@@ -92,11 +95,11 @@ class LowStockAlertClaimPostgresIT {
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return transaction.execute(status -> delivery.deliver(item, new Object[0]));
+                return transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
             });
             var second = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return transaction.execute(status -> delivery.deliver(item, new Object[0]));
+                return transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
             });
             start.countDown();
             assertThat(first.get(20, TimeUnit.SECONDS) + second.get(20, TimeUnit.SECONDS)).isEqualTo(1);
@@ -110,8 +113,8 @@ class LowStockAlertClaimPostgresIT {
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
         transaction.executeWithoutResult(status -> {
-            assertThatThrownBy(() -> delivery.deliver(item, new Object[0])).isInstanceOf(IllegalStateException.class);
-            assertThat(delivery.deliver(item, new Object[0])).isEqualTo(1);
+            assertThatThrownBy(() -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH)).isInstanceOf(IllegalStateException.class);
+            assertThat(delivery.deliver(item.getId(), java.util.Locale.ENGLISH)).isEqualTo(1);
         });
         assertThat(claimCount()).isEqualTo(1);
         verify(notifications, times(2)).createNotification(anyString(), any(), anyString(), anyString(), eq(item.getId()));
@@ -121,11 +124,11 @@ class LowStockAlertClaimPostgresIT {
     void aFailedNotificationRollsBackTheClaimAndASuccessfulRetryCannotSendTwice() {
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
-        assertThatThrownBy(() -> transaction.execute(status -> delivery.deliver(item, new Object[0])))
+        assertThatThrownBy(() -> transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH)))
             .isInstanceOf(IllegalStateException.class);
         assertThat(claimCount()).isZero();
-        Integer delivered = transaction.execute(status -> delivery.deliver(item, new Object[0]));
-        Integer repeated = transaction.execute(status -> delivery.deliver(item, new Object[0]));
+        Integer delivered = transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
+        Integer repeated = transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
         assertThat(delivered).isEqualTo(1);
         assertThat(repeated).isZero();
         assertThat(claimCount()).isEqualTo(1);
