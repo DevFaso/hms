@@ -60,7 +60,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
     PatientBloodGroupStatusService.class, PatientMapper.class,
     com.example.hms.security.EncryptionKeyHolder.class, PatientBloodGroupOnRecordPostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)

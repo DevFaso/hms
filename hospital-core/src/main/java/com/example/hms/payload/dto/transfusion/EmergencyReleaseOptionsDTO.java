@@ -42,6 +42,30 @@ public class EmergencyReleaseOptionsDTO {
     /** Who can authorise a serologically incompatible release: never the caller. */
     private List<StockWitnessCandidateDTO> authorisers;
 
+    /** What the O positive authority rule says for this patient (V380). */
+    private OPositiveRule positiveRule;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OPositiveRule {
+        private com.example.hms.enums.OPositiveRiskTier riskTier;
+        private com.example.hms.enums.OPositiveTierReason tierReason;
+        private boolean protocolActive;
+        private int femaleAgeCutoff;
+        private boolean boysLowRisk;
+        private int reviewDeadlineHours;
+        /** The low-risk tier: the issuer may be named as deciding, from {@link EmergencyReleaseOptionsDTO#deciders}. */
+        private boolean issuerMayDecide;
+        /** O positive leaves by the plain issue, with nothing asked. */
+        private boolean plainIssueAllowed;
+        /** Who can be named as the physician ordering it: never the caller. Empty in the low-risk tier. */
+        private List<StockWitnessCandidateDTO> physicians;
+        /** Who can be named as the biologist, for a patient with a known antibody. */
+        private List<StockWitnessCandidateDTO> biologists;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

@@ -70,6 +70,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
         // QA D3351: the biologist's tasks of the positive antibody screen rule; the reader's copy is keyed.
         Map.entry("service/transfusion/PositiveAntibodyScreenService.java", NOTICE),
+        // V380: the review, countersignature and follow-up tasks of an O positive release; the reader's copy is keyed.
+        Map.entry("service/transfusion/OPositiveReleaseNotices.java", NOTICE),
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
         // QA D1802: the reconciliation task of a contradicted stillbirth certificate; the reader's copy is keyed.
         Map.entry("service/maternity/StillbirthCertificateConflicts.java", NOTICE),

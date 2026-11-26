@@ -71,7 +71,10 @@ public class EmergencyBloodRelease extends BaseEntity {
     @Column(name = "reason", columnDefinition = "TEXT")
     private String reason;
 
-    /** Who decided or authorised. Null when the release needed no decision. */
+    /**
+     * Who decided or authorised. Null when the release needed no decision, and for an O positive decision whose
+     * authority is still owed (V380: no physician reachable): the issuer is never recorded as its authoriser.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "authoriser_user_id",
         foreignKey = @ForeignKey(name = "fk_emergency_release_authoriser"))

@@ -4061,4 +4061,11 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V380 (owner decision 2026-11-25): the emergency O positive protocol of a hospital, and the decision,
+         countersignature, review and follow-up kept for every O positive red-cell release. -->
+    <changeSet id="V380-emergency-o-positive-release-authority" author="hms-team" runOnChange="false">
+        <sqlFile path="V380__emergency_o_positive_release_authority.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
