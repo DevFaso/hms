@@ -11,7 +11,9 @@
   </div>
 
   @if (isSuperAdmin()) {
-    @if (!showPartnerForm() && !showBackOrderForm() && !saving() && !allergyHold()) {
+    @if (
+      !showPartnerForm() && !showBackOrderForm() && !saving() && !printingCopy() && !allergyHold()
+    ) {
       <app-hospital-scope-chip
         [preserveScope]="true"
         [disableUrlSync]="true"
@@ -229,7 +231,12 @@
       @if (canAct && isPrinted()) {
         <div class="routing-options" data-testid="printed-copy-panel">
           <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
-          <button class="btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
+          <button
+            class="btn-secondary"
+            (click)="reprintCopy()"
+            [disabled]="printingCopy()"
+            data-testid="reprint-copy"
+          >
             {{ 'PHARMACY.REPRINT_COPY' | translate }}
           </button>
         </div>

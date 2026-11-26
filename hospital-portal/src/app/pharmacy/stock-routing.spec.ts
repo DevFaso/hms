@@ -165,6 +165,18 @@ describe('StockRoutingComponent', () => {
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledTimes(2);
   });
 
+  it('does not open a previous hospital copy after a scope change', () => {
+    const copy = new Subject<Blob>();
+    pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(copy);
+    component.prescriptionId = 'rx-1';
+    component.reprintCopy();
+    expect(component.printingCopy()).toBeTrue();
+    component.onScopeChange();
+    copy.next(new Blob(['pdf']));
+    copy.complete();
+    expect(printSvc.openForPrint).not.toHaveBeenCalled();
+  });
+
   it('offers hospital switching only after an in-flight action finishes', () => {
     isSuperAdmin.set(true);
     fixture.detectChanges();

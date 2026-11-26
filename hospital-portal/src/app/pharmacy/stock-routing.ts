@@ -99,6 +99,8 @@ export class StockRoutingComponent implements OnInit {
   /** A hospital switch invalidates order-specific reads and reloads the queue. */
   onScopeChange(): void {
     this.checkSeq++;
+    this.scopeSeq++;
+    this.printingCopy.set(false);
     this.checking.set(false);
     this.prescriptionId = '';
     this.selected.set(null);
@@ -167,6 +169,7 @@ export class StockRoutingComponent implements OnInit {
   readonly queueAtLimit = signal(false);
   private queueSeq = 0;
   private checkSeq = 0;
+  private scopeSeq = 0;
   readonly rxSearch = signal('');
   readonly selected = signal<WorkQueuePrescription | null>(null);
   /** At most this many matches are listed; typing more narrows them. */
@@ -414,6 +417,7 @@ export class StockRoutingComponent implements OnInit {
 
   // Action state
   saving = signal(false);
+  printingCopy = signal(false);
 
   checkStock(): void {
     if (!this.prescriptionId.trim()) return;
@@ -545,12 +549,21 @@ export class StockRoutingComponent implements OnInit {
   }
 
   private openPrintedCopy(prescriptionId: string): void {
+    const scope = this.scopeSeq;
+    this.printingCopy.set(true);
     this.svc.getPrintedPrescriptionCopy(prescriptionId).subscribe({
-      next: (blob) => this.printService.openForPrint(blob),
-      error: (err: unknown) =>
+      next: (blob) => {
+        if (scope !== this.scopeSeq) return;
+        this.printingCopy.set(false);
+        this.printService.openForPrint(blob);
+      },
+      error: (err: unknown) => {
+        if (scope !== this.scopeSeq) return;
+        this.printingCopy.set(false);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_COPY_FAILED'),
-        ),
+        );
+      },
     });
   }
 
