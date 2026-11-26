@@ -124,16 +124,21 @@ export class ClinicalRulesComponent {
   protected load(hospitalId: string | null): void {
     this.overview.set(null);
     this.failed.set(false);
-    if (!hospitalId) return;
+    if (!hospitalId) {
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.rulesService.overview(hospitalId).subscribe({
       next: (overview) => {
-        if (this.hospitalId() === hospitalId) this.overview.set(overview);
+        if (this.hospitalId() !== hospitalId) return;
+        this.overview.set(overview);
         this.loading.set(false);
       },
       error: () => {
+        if (this.hospitalId() !== hospitalId) return;
         this.loading.set(false);
-        if (this.hospitalId() === hospitalId) this.failed.set(true);
+        this.failed.set(true);
       },
     });
   }
