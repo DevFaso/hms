@@ -143,6 +143,13 @@ export const INVOICE_ITEM_CATEGORIES: InvoiceItemCategory[] = [
   'GENERAL',
 ];
 
+/** Review of #1338: a price-list item's grid price on a draft invoice's service date. */
+export interface InvoiceLineGridPrice {
+  priceListItemId: string;
+  serviceDate: string;
+  unitPrice?: number | null;
+}
+
 export interface InvoiceItemRequest {
   billingInvoiceId: string;
   itemDescription: string;
@@ -457,6 +464,17 @@ export class BillingService {
 
   createInvoiceItem(req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
     return this.http.post<InvoiceItemResponse>('/invoice-items', req);
+  }
+
+  /**
+   * Review of #1338 (QA D3980): the grid price a line typed on this draft would take for a price-list item, on the
+   * invoice's own service date (the price the server checks the line against). Null when none is in force then.
+   */
+  getGridPrice(invoiceId: string, priceListItemId: string): Observable<InvoiceLineGridPrice> {
+    const params = new HttpParams()
+      .set('billingInvoiceId', invoiceId)
+      .set('priceListItemId', priceListItemId);
+    return this.http.get<InvoiceLineGridPrice>('/invoice-items/grid-price', { params });
   }
 
   /** The backend answers text/plain, so parse as text. */

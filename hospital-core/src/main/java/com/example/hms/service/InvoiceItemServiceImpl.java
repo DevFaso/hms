@@ -152,8 +152,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         }
         item.setItemCategory(picked.getCategory() == com.example.hms.enums.PriceListCategory.LAB_TEST
             ? com.example.hms.enums.ItemCategory.LAB_TEST : com.example.hms.enums.ItemCategory.SERVICE);
-        java.time.LocalDate day = invoice.getInvoiceDate() != null ? invoice.getInvoiceDate()
-            : tariffResolver != null ? tariffResolver.today() : null;
+        java.time.LocalDate day = serviceDayOf(invoice);
         java.util.Optional<com.example.hms.service.billing.TariffResolver.Tariff> tariff = tariffResolver == null
             ? java.util.Optional.empty() : tariffResolver.resolveItem(hospitalId, picked.getId(), day);
         if (tariff.isEmpty()) {
@@ -178,6 +177,40 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     }
 
     private static final String FIELD_PRICE_LIST_ITEM = "priceListItemId";
+
+    /**
+     * The day a typed line is priced on: the invoice's date (its service date, as the checkout and the coverage read
+     * it), else today in the hospital's business zone. One rule for the picker's price and the create's check.
+     */
+    private java.time.LocalDate serviceDayOf(BillingInvoice invoice) {
+        if (invoice.getInvoiceDate() != null) {
+            return invoice.getInvoiceDate();
+        }
+        return tariffResolver != null ? tariffResolver.today() : java.time.LocalDate.now();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.billing.InvoiceLineGridPriceDTO gridPrice(UUID invoiceId,
+                                                                               UUID priceListItemId) {
+        if (priceListItemId == null) {
+            throw new FieldBusinessException(FIELD_PRICE_LIST_ITEM, "billing.item.priceListItemUnknown");
+        }
+        BillingInvoice invoice = writableInvoice(invoiceId);
+        UUID hospitalId = invoice.getHospital().getId();
+        boolean offered = priceListItemRepository != null && priceListItemRepository
+            .findByIdAndHospitalId(priceListItemId, hospitalId)
+            .filter(found -> found.isActive() && hospitalId.equals(found.getHospitalId()))
+            .isPresent();
+        if (!offered) {
+            throw new FieldBusinessException(FIELD_PRICE_LIST_ITEM, "billing.item.priceListItemUnknown");
+        }
+        java.time.LocalDate day = serviceDayOf(invoice);
+        java.math.BigDecimal price = tariffResolver == null ? null
+            : tariffResolver.peekItem(hospitalId, priceListItemId, day)
+                .map(com.example.hms.service.billing.TariffResolver.Tariff::unitPrice).orElse(null);
+        return new com.example.hms.payload.dto.billing.InvoiceLineGridPriceDTO(priceListItemId, day, price);
+    }
 
     /**
      * PR 10 review (QA D2703): the checkout prices a visit's charges; a line typed beside them on the visit's

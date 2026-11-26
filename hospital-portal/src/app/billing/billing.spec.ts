@@ -68,6 +68,7 @@ describe('BillingComponent', () => {
       'getInvoice',
       'getInvoiceItems',
       'createInvoiceItem',
+      'getGridPrice',
       'updateInvoiceItem',
       'deleteInvoiceItem',
       'listPayments',
@@ -135,6 +136,10 @@ describe('BillingComponent', () => {
 
     beforeEach(() => {
       spyOn(TestBed.inject(PriceListService), 'list').and.returnValue(of([widal as any]));
+      // The grid price of the invoice's own date (3 500 here; today's is in currentPrice).
+      billingSpy.getGridPrice.and.returnValue(
+        of({ priceListItemId: 'act-widal', serviceDate: '2026-08-01', unitPrice: 3500 }),
+      );
       billingSpy.createInvoiceItem.and.returnValue(of({} as any));
       billingSpy.getInvoice.and.returnValue(of(mockInvoice({ status: 'DRAFT' })));
     });
@@ -169,6 +174,36 @@ describe('BillingComponent', () => {
       component.addItem();
       const sent = billingSpy.createInvoiceItem.calls.mostRecent().args[0];
       expect(sent.priceListItemId).toBeUndefined();
+    });
+
+    it('review of #1338: a backdated draft takes the grid price of its own date, not the current one', () => {
+      // Today the act costs 3 500; on the invoice's date (1 August) it cost 3 000.
+      billingSpy.getGridPrice.and.returnValue(
+        of({ priceListItemId: 'act-widal', serviceDate: '2026-08-01', unitPrice: 3000 }),
+      );
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', invoiceDate: '2026-08-01' }));
+      fixture.detectChanges();
+
+      component.pickPriceListItem('act-widal');
+      expect(billingSpy.getGridPrice).toHaveBeenCalledWith('inv-1', 'act-widal');
+      expect(component.newItemUnitPrice()).toBe(3000);
+      expect(component.newItemOverridesGrid()).toBeFalse();
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).toHaveBeenCalledWith(
+        jasmine.objectContaining({ priceListItemId: 'act-widal', unitPrice: 3000 }),
+      );
+
+      // Typing today's 3 500 on that draft is an override: the reason field shows and is asked for.
+      billingSpy.createInvoiceItem.calls.reset();
+      component.pickPriceListItem('act-widal');
+      component.newItemUnitPrice.set(3500);
+      expect(component.newItemOverridesGrid()).toBeTrue();
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="line-add-reason"]'),
+      ).not.toBeNull();
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
     });
 
     it('a picked act at another price asks why before sending', () => {

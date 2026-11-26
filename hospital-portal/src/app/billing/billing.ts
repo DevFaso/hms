@@ -338,15 +338,36 @@ export class BillingComponent implements OnInit {
     });
   }
 
-  /** Picking an act fills the line from the grid: its label, a lab test or a service, its price in force. */
+  /**
+   * Review of #1338: the picked act's grid price on the invoice's own date (undefined while it is read, null when
+   * none is in force that day). A backdated draft takes the price of its date, never today's.
+   */
+  pickedGridPrice = signal<number | null | undefined>(undefined);
+
+  /** Picking an act fills the line from the grid: its label, a lab test or a service, its price on the invoice's date. */
   pickPriceListItem(id: string): void {
     this.newItemPriceListItemId.set(id ?? '');
+    this.pickedGridPrice.set(undefined);
     const item = this.pickedPriceListItem();
-    if (!item) return;
+    const inv = this.selectedInvoice();
+    if (!item || !inv) return;
     this.newItemDescription.set(item.label);
     this.newItemCategory.set(item.category === 'LAB_TEST' ? 'LAB_TEST' : 'SERVICE');
-    const price = item.currentPrice?.unitPrice;
-    this.newItemUnitPrice.set(price !== null && price !== undefined ? Number(price) : null);
+    this.newItemUnitPrice.set(null);
+    this.billingService.getGridPrice(inv.id, item.id).subscribe({
+      next: (grid) => {
+        // A later pick wins: an earlier answer arriving late changes nothing.
+        if (this.newItemPriceListItemId() !== item.id) return;
+        const price = grid?.unitPrice;
+        const known = price !== null && price !== undefined ? Number(price) : null;
+        this.pickedGridPrice.set(known);
+        this.newItemUnitPrice.set(known);
+      },
+      error: () => {
+        if (this.newItemPriceListItemId() !== item.id) return;
+        this.pickedGridPrice.set(null);
+      },
+    });
   }
 
   /**
@@ -359,13 +380,12 @@ export class BillingComponent implements OnInit {
       : 'BILLING.OVERRIDE_REASON_REQUIRED';
   }
 
-  /** Whether the price typed differs from the picked act's grid price (an override: a reason is asked). */
+  /** Whether the price typed differs from the act's grid price on the invoice's date (an override: a reason is asked). */
   newItemOverridesGrid(): boolean {
-    const item = this.pickedPriceListItem();
-    const grid = item?.currentPrice?.unitPrice;
+    const grid = this.pickedGridPrice();
     const price = this.newItemUnitPrice();
     return (
-      !!item &&
+      !!this.pickedPriceListItem() &&
       grid !== null &&
       grid !== undefined &&
       price !== null &&
@@ -1045,6 +1065,7 @@ export class BillingComponent implements OnInit {
 
   private resetNewItem(): void {
     this.newItemPriceListItemId.set('');
+    this.pickedGridPrice.set(undefined);
     this.newItemReason.set('');
     this.newItemDescription.set('');
     this.newItemCategory.set('SERVICE');

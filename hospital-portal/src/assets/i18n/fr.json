@@ -3066,7 +3066,9 @@
     "LINE_PRICE_LIST_ITEM": "Acte de la grille",
     "LINE_PRICE_LIST_ITEM_NONE": "Aucun acte (ligne non prise en charge)",
     "LINE_PRICE_LIST_ITEM_HINT": "La ligne prend le libellé et le prix de la grille, et l’assurance du patient applique ses règles à cet acte (exclusions, plafonds).",
-    "LINE_NOT_COVERED_HINT": "Sans acte de la grille, cette ligne n’est pas prise en charge par l’assurance : le patient la paie en entier."
+    "LINE_NOT_COVERED_HINT": "Sans acte de la grille, cette ligne n’est pas prise en charge par l’assurance : le patient la paie en entier.",
+    "LINE_GRID_PRICE": "Prix de la grille à la date de la facture : {{price}}",
+    "LINE_GRID_PRICE_NONE": "Aucun prix de la grille à la date de la facture : saisissez le prix."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",

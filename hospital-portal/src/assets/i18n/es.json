@@ -3066,7 +3066,9 @@
     "LINE_PRICE_LIST_ITEM": "Price-list item (act)",
     "LINE_PRICE_LIST_ITEM_NONE": "No item (line not covered)",
     "LINE_PRICE_LIST_ITEM_HINT": "The line takes the price list's label and price, and the patient's insurance applies its rules to this act (exclusions, ceilings).",
-    "LINE_NOT_COVERED_HINT": "Without a price-list item, this line is not covered by insurance: the patient pays all of it."
+    "LINE_NOT_COVERED_HINT": "Without a price-list item, this line is not covered by insurance: the patient pays all of it.",
+    "LINE_GRID_PRICE": "Price-list price on the invoice date: {{price}}",
+    "LINE_GRID_PRICE_NONE": "No price-list price on the invoice date: type the price."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",

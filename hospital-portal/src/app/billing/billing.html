@@ -835,14 +835,20 @@
                         {{ 'BILLING.LINE_PRICE_LIST_ITEM_NONE' | translate }}
                       </option>
                       @for (act of priceListItems(); track act.id) {
-                        <option [value]="act.id">
-                          {{ act.code }} — {{ act.label }}
-                          @if (act.currentPrice) {
-                            ({{ formatCurrency(act.currentPrice.unitPrice) }})
-                          }
-                        </option>
+                        <option [value]="act.id">{{ act.code }} — {{ act.label }}</option>
                       }
                     </select>
+                    <!-- Review of #1338: the grid price of the invoice's own date (a backdated draft is not priced today). -->
+                    @if (pickedPriceListItem() && pickedGridPrice() !== undefined) {
+                      <p class="field-hint" data-testid="line-add-grid-price">
+                        {{
+                          pickedGridPrice() === null
+                            ? ('BILLING.LINE_GRID_PRICE_NONE' | translate)
+                            : ('BILLING.LINE_GRID_PRICE'
+                              | translate: { price: formatCurrency(pickedGridPrice() ?? 0) })
+                        }}
+                      </p>
+                    }
                     <p class="field-hint" id="line-act-hint" data-testid="line-add-act-hint">
                       {{
                         (pickedPriceListItem()

@@ -398,4 +398,57 @@ class InvoiceItemServiceImplTest {
         assertThat(saved.getValue().getCoverageCategory()).as("never claimed from the insurer").isNull();
         assertThat(saved.getValue().getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.MANUAL);
     }
+
+    /**
+     * Review of #1338: on a draft dated before a tariff change, the grid price is the one in force on the invoice's
+     * date (3 000 until 19/11, 3 500 from 20/11): the picker reads it, and the create checks against it.
+     */
+    @Test
+    void aBackdatedDraftTakesTheGridPriceOfItsOwnDate_D3980() {
+        var widal = widal();
+        java.time.LocalDate invoiceDay = java.time.LocalDate.of(2026, 11, 10);
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 11, 25);
+        UUID oldVersion = UUID.randomUUID();
+        var before = new com.example.hms.service.billing.TariffResolver.Tariff(widal.getId(), oldVersion,
+            widal.getLabel(), new BigDecimal("3000"));
+        var after = new com.example.hms.service.billing.TariffResolver.Tariff(widal.getId(), UUID.randomUUID(),
+            widal.getLabel(), new BigDecimal("3500"));
+        when(priceItems.findActiveByIdForCharge(widal.getId(), HOSPITAL_ID)).thenReturn(Optional.of(widal));
+        when(priceItems.findByIdAndHospitalId(widal.getId(), HOSPITAL_ID)).thenReturn(Optional.of(widal));
+        when(tariffs.resolveItem(HOSPITAL_ID, widal.getId(), invoiceDay)).thenReturn(Optional.of(before));
+        when(tariffs.resolveItem(HOSPITAL_ID, widal.getId(), today)).thenReturn(Optional.of(after));
+        when(tariffs.peekItem(HOSPITAL_ID, widal.getId(), invoiceDay)).thenReturn(Optional.of(before));
+        when(tariffs.peekItem(HOSPITAL_ID, widal.getId(), today)).thenReturn(Optional.of(after));
+        when(tariffs.today()).thenReturn(today);
+
+        InvoiceItemRequestDTO atTodaysPrice = typed(widal.getId(), "3500");
+        invoice.setInvoiceDate(invoiceDay);
+        // The picker reads the price of the invoice's own date, not today's.
+        var grid = service.gridPrice(invoice.getId(), widal.getId());
+        assertThat(grid.serviceDate()).isEqualTo(invoiceDay);
+        assertThat(grid.unitPrice()).isEqualByComparingTo("3000");
+
+        // Today's price on that draft is an override (a reason is asked); the date's price is the grid's.
+        assertThatThrownBy(() -> service.createInvoiceItem(atTodaysPrice, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.overrideReasonRequired");
+        InvoiceItemRequestDTO atItsDatesPrice = typed(widal.getId(), "3000");
+        invoice.setInvoiceDate(invoiceDay);
+        org.mockito.ArgumentCaptor<InvoiceItem> saved = org.mockito.ArgumentCaptor.forClass(InvoiceItem.class);
+        service.createInvoiceItem(atItsDatesPrice, Locale.FRENCH);
+        verify(itemRepository).save(saved.capture());
+        assertThat(saved.getValue().getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.TARIFF);
+        assertThat(saved.getValue().getPriceListPriceId()).isEqualTo(oldVersion);
+    }
+
+    @Test
+    void theGridPriceOfAnotherHospitalsActIsRefused_D3980() {
+        UUID elsewhere = UUID.randomUUID();
+        service.setPriceList(priceItems, tariffs);
+        when(priceItems.findByIdAndHospitalId(elsewhere, HOSPITAL_ID)).thenReturn(Optional.empty());
+        UUID invoiceId = invoice.getId();
+        assertThatThrownBy(() -> service.gridPrice(invoiceId, elsewhere))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.priceListItemUnknown");
+    }
 }
