@@ -11355,8 +11355,6 @@
     "WITNESS_CONFIRM_SUBMIT": "Confirm the witness",
     "WITNESS_CONFIRM_CONFIRMING": "Confirming…",
     "WITNESS_CONFIRM_CONFIRMED": "Witness confirmed: {{name}} (good until {{time}})",
-    "WITNESS_CONFIRM_PASSWORD_REQUIRED": "The witness enters their own password.",
-    "WITNESS_CONFIRM_CODE_REQUIRED": "The witness enters the code from their authenticator app.",
     "WITNESS_CONFIRM_FAILED": "The witness’s confirmation could not be checked. Try again.",
     "WITNESS_CONFIRM_UNAVAILABLE": "This witness cannot confirm here: their account has neither a local password nor an authenticator app. Choose another witness.",
     "WITNESS_CONFIRM_FALLBACK_HINT": "The hospital administrator is offered because no other pharmacist, pharmacy verifier or store manager can witness.",

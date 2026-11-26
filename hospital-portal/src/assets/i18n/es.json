@@ -11355,8 +11355,6 @@
     "WITNESS_CONFIRM_SUBMIT": "Confirmar al testigo",
     "WITNESS_CONFIRM_CONFIRMING": "Confirmando…",
     "WITNESS_CONFIRM_CONFIRMED": "Testigo confirmado: {{name}} (válido hasta las {{time}})",
-    "WITNESS_CONFIRM_PASSWORD_REQUIRED": "El testigo introduce su propia contraseña.",
-    "WITNESS_CONFIRM_CODE_REQUIRED": "El testigo introduce el código de su aplicación de autenticación.",
     "WITNESS_CONFIRM_FAILED": "No se pudo verificar la confirmación del testigo. Inténtelo de nuevo.",
     "WITNESS_CONFIRM_UNAVAILABLE": "Este testigo no puede confirmar aquí: su cuenta no tiene contraseña local ni aplicación de autenticación. Elija otro testigo.",
     "WITNESS_CONFIRM_FALLBACK_HINT": "Se propone al administrador del hospital porque ningún otro farmacéutico, verificador o jefe de almacén puede ser testigo.",

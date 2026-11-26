@@ -31,8 +31,8 @@ describe('TransfusionComponent: a request handed over from a clinical card (QA D
       'getCurrentBloodGroup',
     ]);
     txSpy.listRequests.and.returnValue(of([]));
-    txSpy.getAntibodyStatus.and.returnValue(of(null as never));
-    txSpy.getCurrentBloodGroup.and.returnValue(of(null as never));
+    txSpy.getAntibodyStatus.and.returnValue(of(null) as never);
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null) as never);
     patients = jasmine.createSpyObj<PatientService>('PatientService', ['getById']);
     patients.getById.and.returnValue(of(mother));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);

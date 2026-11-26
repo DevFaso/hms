@@ -17,6 +17,8 @@ import {
   WitnessConfirmation,
 } from '../../services/pharmacy.service';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../../shared/date-utils';
 
@@ -32,7 +34,7 @@ import { serverDateOrInstant } from '../../shared/date-utils';
 @Component({
   selector: 'app-witness-confirm',
   standalone: true,
-  imports: [TranslateModule, DatePipe, ServerTimePipe],
+  imports: [TranslateModule, DatePipe, ServerTimePipe, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './witness-confirm.component.html',
   styles: `
@@ -100,19 +102,8 @@ export class WitnessConfirmComponent {
     const witnessId = this.witnessId();
     if (!witnessId || this.confirming()) return;
     const ids = [this.fieldId()];
-    if (!this.secret().trim()) {
-      refuseFields(
-        this.host.nativeElement,
-        ids,
-        ids,
-        this.translate.instant(
-          this.usesCode()
-            ? 'PHARMACY.WITNESS_CONFIRM_CODE_REQUIRED'
-            : 'PHARMACY.WITNESS_CONFIRM_PASSWORD_REQUIRED',
-        ),
-      );
-      return;
-    }
+    // A blank field is refused by the button's submit guard, which names it; nothing is sent.
+    if (!this.secret().trim()) return;
     refuseFields(this.host.nativeElement, [], ids, '');
     this.confirming.set(true);
     this.svc.confirmWitness(witnessId, this.secret()).subscribe({
@@ -123,15 +114,23 @@ export class WitnessConfirmComponent {
         this.lastConfirmation.set(confirmation);
         if (confirmation) this.confirmed.emit(confirmation);
       },
-      error: (err: { error?: { message?: string } }) => {
+      error: (err: unknown) => {
         this.confirming.set(false);
         // A refused secret is never kept on screen; the reason is said under the field.
         this.secret.set('');
+        // The server names what it refused (the secret, or the choice of witness): both are said here,
+        // where the witness is looking.
+        const fieldId = this.fieldId();
+        const named = refusedFieldReasons(err, { secret: fieldId, witnessedBy: fieldId });
+        if (named.length > 0) {
+          refuseFields(this.host.nativeElement, [{ id: fieldId, message: named[0][1] }], ids);
+          return;
+        }
         refuseFields(
           this.host.nativeElement,
           ids,
           ids,
-          err?.error?.message ?? this.translate.instant('PHARMACY.WITNESS_CONFIRM_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.WITNESS_CONFIRM_FAILED'),
         );
       },
     });

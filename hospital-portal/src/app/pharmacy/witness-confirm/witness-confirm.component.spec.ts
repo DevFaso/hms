@@ -4,6 +4,11 @@ import { of, throwError } from 'rxjs';
 
 import { WitnessConfirmComponent } from './witness-confirm.component';
 import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
+import {
   PharmacyService,
   StockWitnessCandidate,
   WitnessConfirmation,
@@ -121,11 +126,30 @@ describe('WitnessConfirmComponent (QA D2679)', () => {
 
   it('refuses an empty field without calling the server', () => {
     pick('w-pass');
-    el('witness-confirm-submit')!.click();
-    fixture.detectChanges();
+    document.body.appendChild(host());
 
-    expect(svc.confirmWitness).not.toHaveBeenCalled();
-    expect(field().getAttribute('aria-invalid')).toBe('true');
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="witness-confirm-submit"]',
+      sent: svc.confirmWitness,
+    });
+
+    expect(marked).toEqual(['dispWitnessSecret']);
+    host().remove();
+  });
+
+  it('marks the field with the reason the server names for the secret or for the choice of witness', () => {
+    pick('w-pass');
+    for (const refused of ['secret', 'witnessedBy']) {
+      svc.confirmWitness.and.returnValue(
+        throwError(() => fieldErrorsResponse({ [refused]: `Refusé : ${refused}` })),
+      );
+      type('guess');
+      el('witness-confirm-submit')!.click();
+      fixture.detectChanges();
+
+      expectFieldsMarked(fixture, { dispWitnessSecret: `Refusé : ${refused}` });
+      expect(fixture.componentInstance.isConfirmed()).toBeFalse();
+    }
   });
 
   it('a confirmation is one witness’s: picking another colleague asks again', () => {

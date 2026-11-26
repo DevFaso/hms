@@ -395,8 +395,10 @@ export class TransfusionComponent implements OnInit {
         next: (patient) => {
           if (this.showRequestModal() && !this.requestForm.patientId) this.onPatientPicked(patient);
         },
-        error: () =>
-          this.toast.error(this.translate.instant('TRANSFUSION.HANDOVER_PATIENT_FAILED')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.HANDOVER_PATIENT_FAILED'),
+          ),
       });
   }
 

@@ -11355,8 +11355,6 @@
     "WITNESS_CONFIRM_SUBMIT": "Confirmer le témoin",
     "WITNESS_CONFIRM_CONFIRMING": "Confirmation…",
     "WITNESS_CONFIRM_CONFIRMED": "Témoin confirmé : {{name}} (valable jusqu’à {{time}})",
-    "WITNESS_CONFIRM_PASSWORD_REQUIRED": "Le témoin saisit son propre mot de passe.",
-    "WITNESS_CONFIRM_CODE_REQUIRED": "Le témoin saisit le code de son application d’authentification.",
     "WITNESS_CONFIRM_FAILED": "La confirmation du témoin n’a pas pu être vérifiée. Réessayez.",
     "WITNESS_CONFIRM_UNAVAILABLE": "Ce témoin ne peut pas confirmer ici : son compte n’a ni mot de passe local ni application d’authentification. Choisissez un autre témoin.",
     "WITNESS_CONFIRM_FALLBACK_HINT": "L’administrateur de l’hôpital est proposé parce qu’aucun autre pharmacien, vérificateur ou gestionnaire de magasin ne peut être témoin.",

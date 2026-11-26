@@ -1,5 +1,5 @@
 @if (witnessId()) {
-  <div class="field witness-confirm" data-testid="witness-confirm">
+  <div class="field witness-confirm" data-testid="witness-confirm" data-submit-scope>
     @if (candidate()?.fallback) {
       <small class="field-hint" data-testid="witness-fallback-hint">{{
         'PHARMACY.WITNESS_CONFIRM_FALLBACK_HINT' | translate
@@ -37,6 +37,7 @@
           [type]="usesCode() ? 'text' : 'password'"
           [attr.inputmode]="usesCode() ? 'numeric' : null"
           autocomplete="off"
+          required
           maxlength="256"
           [value]="secret()"
           (input)="secret.set($any($event.target).value)"
@@ -47,6 +48,8 @@
           class="btn-secondary"
           data-testid="witness-confirm-submit"
           [disabled]="confirming()"
+          appSubmitGuard
+          submitGuardRequired
           (click)="confirm()"
         >
           {{

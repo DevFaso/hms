@@ -89,7 +89,7 @@ public class StockTransactionController {
      * destruction, an adjustment); the witness's eligibility and factor are the service's checks.
      */
     @PostMapping("/witness-confirmations")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Confirm the witness of a controlled-drug movement",
             description = "The witness's own password, or the code of their authenticator when they have one. "
                     + "The confirmation stands for the caller's controlled movements at the active hospital for "
