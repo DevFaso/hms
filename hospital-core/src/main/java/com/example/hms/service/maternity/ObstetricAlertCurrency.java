@@ -93,13 +93,15 @@ public class ObstetricAlertCurrency {
     /**
      * QA D3862: a HIGH NEWS2 no longer stands once a later vital set of the patient at the same hospital measured
      * every NEWS2 parameter (a complete score: D658, a set that left one out says nothing) and scored below HIGH,
-     * and no reading since then scored HIGH.
+     * and no reading at or after that one scored HIGH.
      *
-     * <p>Review of #1339 (Rex P1): HIGH, then a complete LOW, then an incomplete HIGH (its repeat alert held back by
-     * the open one) closed the alert on the LOW and deleted its tasks although the newest reading was HIGH. Walking
-     * from the newest reading back: any HIGH, complete or not (a partial total already at 7 is HIGH whatever the
-     * missing values), keeps the alert standing; the first complete reading below HIGH closes it; a partial reading
-     * below HIGH says nothing and is passed over.
+     * <p>Review of #1339 (Rex P1, twice): HIGH, then a complete LOW, then an incomplete HIGH (its repeat alert held
+     * back by the open one) closed the alert on the LOW; and a complete LOW with the SAME recorded time as a HIGH
+     * (the vitals API keeps the time it is given, so duplicates and back-dated sets exist) could win the tie. The rule
+     * reads recorded times only, never the order rows arrived in, and fails safe: a complete reading below HIGH closes
+     * the alert only when it is strictly later than every HIGH reading since the alert, complete or not (a partial
+     * total already at 7 is HIGH whatever the missing values). A tie goes to HIGH. A partial reading below HIGH says
+     * nothing.
      */
     private boolean news2Resolved(ObstetricAlertEscalation row) {
         if (vitalSignRepository == null) {
@@ -110,29 +112,33 @@ public class ObstetricAlertCurrency {
             return false;
         }
         com.example.hms.model.PatientVitalSign source = found.get();
-        List<com.example.hms.model.PatientVitalSign> newestFirst = vitalSignRepository.findWithinRange(row.getPatientId(),
-                row.getHospitalId(), source.getRecordedAt(), null, org.springframework.data.domain.PageRequest.of(0, 50))
+        List<com.example.hms.model.PatientVitalSign> since = vitalSignRepository.findWithinRange(row.getPatientId(),
+                row.getHospitalId(), source.getRecordedAt(), null, org.springframework.data.domain.PageRequest.of(0, 200))
             .stream()
             .filter(later -> !Objects.equals(later.getId(), source.getId()))
-            .filter(later -> later.getRecordedAt() != null && later.getRecordedAt().isAfter(source.getRecordedAt()))
-            .sorted(java.util.Comparator.comparing(com.example.hms.model.PatientVitalSign::getRecordedAt).reversed())
+            .filter(later -> later.getRecordedAt() != null && !later.getRecordedAt().isBefore(source.getRecordedAt()))
             .toList();
-        return newerThanEveryHighReading(newestFirst);
+        return closedBy(source.getRecordedAt(), since);
     }
 
-    /** The newest readings first: a HIGH (complete or not) before any complete reading below HIGH keeps it standing. */
-    static boolean newerThanEveryHighReading(List<com.example.hms.model.PatientVitalSign> newestFirst) {
-        for (com.example.hms.model.PatientVitalSign reading : newestFirst) {
+    /**
+     * Whether a complete reading below HIGH is strictly later than the alert and than every HIGH reading in
+     * {@code since} (complete or not). Order-free: only recorded times are compared, and a tie goes to HIGH.
+     */
+    static boolean closedBy(java.time.LocalDateTime alertAt, List<com.example.hms.model.PatientVitalSign> since) {
+        java.time.LocalDateTime latestHigh = alertAt;
+        java.time.LocalDateTime latestCompleteLow = null;
+        for (com.example.hms.model.PatientVitalSign reading : since) {
             com.example.hms.utility.NewsScoreCalculator.NewsScoreResult score =
                 com.example.hms.utility.NewsScoreCalculator.score(reading);
+            java.time.LocalDateTime at = reading.getRecordedAt();
             if (score.riskBand() == com.example.hms.utility.NewsScoreCalculator.RiskBand.HIGH) {
-                return false;
-            }
-            if (score.complete()) {
-                return true;
+                latestHigh = at.isAfter(latestHigh) ? at : latestHigh;
+            } else if (score.complete() && (latestCompleteLow == null || at.isAfter(latestCompleteLow))) {
+                latestCompleteLow = at;
             }
         }
-        return false;
+        return latestCompleteLow != null && latestCompleteLow.isAfter(latestHigh);
     }
 
     private boolean partographResolved(ObstetricAlertEscalation row) {

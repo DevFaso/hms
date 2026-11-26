@@ -123,6 +123,34 @@ class News2AlertCurrencyTest {
     }
 
     @Test
+    void aCompleteLowAndAHighWithTheSameRecordedTimeKeepItStanding() {
+        // Rex on #1339 (P1): the vitals API keeps the time it is given; a tie goes to HIGH, whatever the row order.
+        LocalDateTime same = T0.plusMinutes(20);
+        later.add(completeLow(same));
+        later.add(incompleteHigh(same));
+        assertThat(currency.noLongerUrgent(row)).isFalse();
+
+        later.clear();
+        later.add(incompleteHigh(same));
+        later.add(completeLow(same));
+        assertThat(currency.noLongerUrgent(row)).isFalse();
+    }
+
+    @Test
+    void aLowEnteredLaterButRecordedBeforeAHighKeepsItStanding() {
+        // The HIGH was entered first; a back-dated complete LOW entered after it is still older than the HIGH.
+        later.add(completeHigh(T0.plusMinutes(30)));
+        later.add(completeLow(T0.plusMinutes(20)));
+        assertThat(currency.noLongerUrgent(row)).isFalse();
+    }
+
+    @Test
+    void aCompleteLowAtTheAlertsOwnTimeNeverClosesIt() {
+        later.add(completeLow(T0));
+        assertThat(currency.noLongerUrgent(row)).isFalse();
+    }
+
+    @Test
     void theVitalSetSourcesOfTheOtherScoresNeverCloseOnTheirOwn() {
         // The maternal and newborn vital-set alerts stand until acknowledged or the cap: no reading closes them.
         later.add(completeLow(T0.plusMinutes(15)));
