@@ -75,7 +75,9 @@
           <tr>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_PATIENT' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_EVENT' | translate }}</th>
-            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_CHANNEL' | translate }}</th>
+            <th scope="col" class="channel-cell">
+              {{ 'PATIENT_NOTIFICATIONS.COL_CHANNEL' | translate }}
+            </th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_STATUS' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_ATTEMPTS' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_NEXT_ATTEMPT' | translate }}</th>
@@ -96,7 +98,7 @@
                   </div>
                 }
               </td>
-              <td>{{ channelKey(row.channel) | translate }}</td>
+              <td class="channel-cell">{{ channelKey(row.channel) | translate }}</td>
               <td>
                 <span class="status-badge" [attr.data-status]="row.status">
                   {{ statusKey(row.status) | translate }}
