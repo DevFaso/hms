@@ -349,6 +349,16 @@ export class BillingComponent implements OnInit {
     this.newItemUnitPrice.set(price !== null && price !== undefined ? Number(price) : null);
   }
 
+  /**
+   * The one reason field of a new line says why it is asked: a line added to a visit's invoice, or (QA D3980) a
+   * picked act priced away from the grid.
+   */
+  newItemReasonRequiredKey(inv: BillingInvoiceResponse): string {
+    return this.addedLineNeedsReason(inv)
+      ? 'BILLING.ADDED_LINE_REASON_REQUIRED'
+      : 'BILLING.OVERRIDE_REASON_REQUIRED';
+  }
+
   /** Whether the price typed differs from the picked act's grid price (an override: a reason is asked). */
   newItemOverridesGrid(): boolean {
     const item = this.pickedPriceListItem();
@@ -1074,11 +1084,7 @@ export class BillingComponent implements OnInit {
     if ((this.addedLineNeedsReason(inv) || this.newItemOverridesGrid()) && !reason) {
       refusals.push({
         id: 'line-reason',
-        message: this.translate.instant(
-          this.addedLineNeedsReason(inv)
-            ? 'BILLING.ADDED_LINE_REASON_REQUIRED'
-            : 'BILLING.OVERRIDE_REASON_REQUIRED',
-        ),
+        message: this.translate.instant(this.newItemReasonRequiredKey(inv)),
       });
     }
     if (refusals.length > 0) {

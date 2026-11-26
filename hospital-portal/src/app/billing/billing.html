@@ -113,7 +113,8 @@
         }}</span><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
         <!-- QA D3981 (r77): the net revenue says what it nets, as the till's day report does. -->
         @if (!statsUnknown() && (stats().refunded ?? 0) > 0) {
-          <span class="card-hint" data-testid="billing-revenue-breakdown">{{
+          {{ ' '
+          }}<span class="card-hint" data-testid="billing-revenue-breakdown">{{
             'BILLING.REVENUE_BREAKDOWN'
               | translate
                 : {

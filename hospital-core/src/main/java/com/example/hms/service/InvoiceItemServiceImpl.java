@@ -111,7 +111,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         InvoiceItem saved = invoiceItemRepository.save(item);
         if (linked == PriceChange.OVERRIDDEN) {
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, "Tariff price version "
-                + saved.getPriceListPriceId() + " overridden on added line " + saved.getId() + " of invoice "
+                + saved.getPriceListPriceId() + " overridden on draft line " + saved.getId() + " of invoice "
                 + invoice.getId(), saved.getId(), invoice, saved.getOverrideReason());
         } else if (reason != null) {
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
