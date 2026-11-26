@@ -115,7 +115,11 @@ class PartialUniqueReleaseFlushGuardTest {
         // V364 (QA r70, C5): one OPEN incident per critical result; closing it (a read-back, an amendment, a
         // result no longer critical) releases the slot with saveAndFlush, and the next incident is opened by a
         // later sweep, never in the closing method.
-        Map.entry("critical_result_incidents", "CriticalResultIncident"));
+        Map.entry("critical_result_incidents", "CriticalResultIncident"),
+        // V385 (go-live D2): one version awaiting approval and one in force per catalogue entry and kind. An
+        // approval supersedes the version in force with saveAndFlush, in its own method, before the new one is
+        // marked approved; a version is never built in a method that releases one.
+        Map.entry("medication_catalog_versions", "MedicationCatalogVersion"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

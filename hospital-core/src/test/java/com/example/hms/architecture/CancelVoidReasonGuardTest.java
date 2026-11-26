@@ -477,6 +477,13 @@ class CancelVoidReasonGuardTest {
         CLINICAL_HANDLERS.put("POST /billing/price-list/{id}/deactivate",
             "PriceListDeactivateRequestDTO.reason -> service/billing/PriceListServiceTest#deactivatingNeedsAReason");
         // Billing-money plan PR 6: retiring a payer keeps who, when and why (ending a rule too: PayerCatalogueServiceTest).
+        // Go-live D2 (V385): refusing a version of the medication catalogue states why; the author taking back
+        // their own waiting proposal ends nothing that was ever in force.
+        CLINICAL_HANDLERS.put("POST /medication-catalog/versions/{versionId}/reject",
+            "MedicationCatalogVersionDecisionDTO.reason -> service/formulary/MedicationCatalogVersionServiceTest#aRefusalNeedsItsReason_andChangesNothing");
+        CLINICAL_HANDLERS.put("POST /medication-catalog/versions/{versionId}/withdraw",
+            "NOT A CLINICAL RECORD: the author takes back their own proposal before any decision; it never took "
+                + "effect, and the catalogue is unchanged (MedicationCatalogVersionServiceTest#onlyTheAuthorWithdrawsAWaitingVersion)");
         CLINICAL_HANDLERS.put("POST /billing/payers/{payerId}/deactivate",
             "PayerReasonRequestDTO.reason -> service/billing/PayerCatalogueServiceTest#deactivatingAPayerNeedsAReason");
         CLINICAL_HANDLERS.put("POST /admissions/order-sets/{orderSetId}/deactivate",

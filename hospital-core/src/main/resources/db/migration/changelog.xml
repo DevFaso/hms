@@ -4090,6 +4090,13 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V385 (go-live D2): versions of the medication catalogue (formulary entries and dose limits), each
+         approved per hospital by a second person; the catalogue row records the approved version in force. -->
+    <changeSet id="V385-medication-catalog-versions" author="hms-team" runOnChange="false">
+        <sqlFile path="V385__medication_catalog_versions.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
         <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="false"/>

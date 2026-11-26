@@ -1,0 +1,234 @@
+<section class="approvals" data-test="catalog-approvals">
+  @if (!forOneEntry()) {
+    <p class="approvals-intro">{{ 'PHARMACY.CATALOG_APPROVAL.INTRO' | translate }}</p>
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab"
+        [class.active]="view() === 'PENDING'"
+        [attr.aria-pressed]="view() === 'PENDING'"
+        data-test="approvals-view-pending"
+        (click)="show('PENDING')"
+      >
+        {{ 'PHARMACY.CATALOG_APPROVAL.VIEW_PENDING' | translate }}
+      </button>
+      <button
+        type="button"
+        class="tab"
+        [class.active]="view() === 'HISTORY'"
+        [attr.aria-pressed]="view() === 'HISTORY'"
+        data-test="approvals-view-history"
+        (click)="show('HISTORY')"
+      >
+        {{ 'PHARMACY.CATALOG_APPROVAL.VIEW_HISTORY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (loading()) {
+    <output class="loading-state">
+      <span class="spinner"></span>
+      <span>{{ 'COMMON.LOADING' | translate }}</span>
+    </output>
+  } @else if (loadFailed()) {
+    <div class="empty-state" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <p>{{ 'PHARMACY.CATALOG_APPROVAL.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (versions().length === 0) {
+    <div class="empty-state" data-test="approvals-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+      <p>{{ emptyKey() | translate }}</p>
+    </div>
+  } @else {
+    <ul class="version-list">
+      @for (version of versions(); track version.id) {
+        <li class="version-card" [attr.data-status]="version.status" data-test="approval-version">
+          <header class="version-head">
+            <div>
+              <h3 class="version-title">{{ version.itemLabel }}</h3>
+              <p class="version-meta">
+                <span class="chip">{{
+                  version.kind | keyLabel: 'PHARMACY.CATALOG_APPROVAL.KIND.'
+                }}</span>
+                {{ ' ' }}
+                <span class="chip">{{
+                  version.changeType | keyLabel: 'PHARMACY.CATALOG_APPROVAL.CHANGE.'
+                }}</span>
+                {{ ' ' }}
+                <span class="chip">{{
+                  'PHARMACY.CATALOG_APPROVAL.VERSION' | translate: { n: version.versionNumber }
+                }}</span>
+              </p>
+            </div>
+            <span
+              class="version-status"
+              [attr.data-status]="version.status"
+              data-test="approval-status"
+              >{{ version.status | keyLabel: 'PHARMACY.CATALOG_APPROVAL.STATUS.' }}</span
+            >
+          </header>
+
+          <dl class="version-who">
+            <div>
+              <dt>{{ 'PHARMACY.CATALOG_APPROVAL.PROPOSED_BY' | translate }}</dt>
+              <dd>
+                {{ version.proposedByName || '—' }},
+                {{ version.proposedAt | serverTime | dateTime }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'PHARMACY.CATALOG_APPROVAL.REASON' | translate }}</dt>
+              <dd class="version-reason">{{ version.changeReason }}</dd>
+            </div>
+            @if (version.decidedAt) {
+              <div>
+                <dt>{{ version.status | keyLabel: 'PHARMACY.CATALOG_APPROVAL.DECIDED_BY.' }}</dt>
+                <dd>
+                  {{ version.decidedByName || '—' }},
+                  {{ version.decidedAt | serverTime | dateTime }}
+                </dd>
+              </div>
+            }
+            @if (version.decisionReason) {
+              <div>
+                <dt>{{ 'PHARMACY.CATALOG_APPROVAL.DECISION_REASON' | translate }}</dt>
+                <dd class="version-reason" data-test="approval-decision-reason">
+                  {{ version.decisionReason }}
+                </dd>
+              </div>
+            }
+          </dl>
+
+          @if (version.changeType === 'RATIFY') {
+            <p class="version-note">{{ 'PHARMACY.CATALOG_APPROVAL.RATIFY_NOTE' | translate }}</p>
+          }
+
+          <div class="version-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_FIELD' | translate }}</th>
+                  @if (version.changeType !== 'CREATE') {
+                    <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_BEFORE' | translate }}</th>
+                  }
+                  <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_PROPOSED' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (line of lines(version); track line.field) {
+                  <tr [class.changed]="line.changed" data-test="approval-line">
+                    <th scope="row">
+                      {{ line.field | keyLabel: 'PHARMACY.CATALOG_APPROVAL.FIELD.' }}
+                    </th>
+                    @if (version.changeType !== 'CREATE') {
+                      <td>{{ line.before }}</td>
+                    }
+                    <td>
+                      {{ line.after }}
+                      @if (line.changed) {
+                        <span class="changed-mark">{{
+                          'PHARMACY.CATALOG_APPROVAL.CHANGED' | translate
+                        }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (version.status === 'PENDING_APPROVAL') {
+            @if (version.ownProposal && !version.callerMayApprove) {
+              <p class="version-note" data-test="approval-own-note">
+                {{ 'PHARMACY.CATALOG_APPROVAL.OWN_PROPOSAL_NOTE' | translate }}
+              </p>
+            } @else if (!version.callerMayApprove) {
+              <p class="version-note" data-test="approval-role-note">
+                {{ version.kind | keyLabel: 'PHARMACY.CATALOG_APPROVAL.ROLE_NOTE.' }}
+              </p>
+            }
+
+            @if (refusing() === version.id) {
+              <form class="refusal" (ngSubmit)="confirmRefusal(version)">
+                <label for="catalogRefusalReason"
+                  >{{ 'PHARMACY.CATALOG_APPROVAL.REFUSE_REASON' | translate }} *</label
+                >
+                <textarea
+                  id="catalogRefusalReason"
+                  name="catalogRefusalReason"
+                  rows="2"
+                  maxlength="1000"
+                  required
+                  [(ngModel)]="refusalText"
+                  [attr.aria-invalid]="refusalMissing() ? 'true' : null"
+                  [attr.aria-describedby]="refusalMissing() ? 'catalogRefusalReason-error' : null"
+                  data-test="approval-refusal-reason"
+                ></textarea>
+                @if (refusalMissing()) {
+                  <small class="field-error" id="catalogRefusalReason-error" role="alert">{{
+                    'PHARMACY.CATALOG_APPROVAL.REFUSE_REASON_REQUIRED' | translate
+                  }}</small>
+                }
+                <div class="version-actions">
+                  <button type="button" class="btn-secondary" (click)="cancelRefusal()">
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                  <button
+                    appSubmitGuard
+                    submitGuardRequired
+                    type="submit"
+                    class="btn-danger"
+                    [disabled]="!!acting()"
+                    data-test="approval-refuse-confirm"
+                  >
+                    {{ 'PHARMACY.CATALOG_APPROVAL.REFUSE_CONFIRM' | translate }}
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <div class="version-actions">
+                @if (version.ownProposal) {
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    [disabled]="!!acting()"
+                    data-test="approval-withdraw"
+                    (click)="withdraw(version)"
+                  >
+                    {{ 'PHARMACY.CATALOG_APPROVAL.WITHDRAW' | translate }}
+                  </button>
+                }
+                @if (version.callerMayReject) {
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    [disabled]="!!acting()"
+                    data-test="approval-refuse"
+                    (click)="startRefusal(version)"
+                  >
+                    {{ 'PHARMACY.CATALOG_APPROVAL.REFUSE' | translate }}
+                  </button>
+                }
+                @if (version.callerMayApprove) {
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    [disabled]="!!acting()"
+                    data-test="approval-approve"
+                    (click)="approve(version)"
+                  >
+                    {{ 'PHARMACY.CATALOG_APPROVAL.APPROVE' | translate }}
+                  </button>
+                }
+              </div>
+            }
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

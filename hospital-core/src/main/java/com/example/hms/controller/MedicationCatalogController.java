@@ -4,7 +4,12 @@ import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO;
+import com.example.hms.enums.MedicationCatalogVersionKind;
+import com.example.hms.enums.MedicationCatalogVersionStatus;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemResponseDTO;
+import com.example.hms.payload.dto.medication.MedicationCatalogVersionDecisionDTO;
+import com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO;
+import com.example.hms.service.formulary.MedicationCatalogVersionService;
 import com.example.hms.service.MedicationCatalogItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -27,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,13 +44,87 @@ public class MedicationCatalogController {
 
     private final MedicationCatalogItemService catalogService;
     private final ControllerAuthUtils authUtils;
+    /** Go-live D2 (V385): the approval circuit of the catalogue (queue, history, decisions). */
+    private final MedicationCatalogVersionService versionService;
 
+    /** Who reads the approval queue and an entry's history: those who propose and those who decide. */
+    private static final String VERSION_READERS = "hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN',"
+        + "'ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_SUPER_ADMIN')";
+    /**
+     * Who may reach a decision at all. Which of them decides WHICH version, at which hospital, and never their own,
+     * is {@code MedicationCatalogApprovalPolicy}'s: a pharmacist of the hospital; for dose limits the médecin-chef
+     * too; a platform administrator for a platform entry only.
+     */
+    private static final String VERSION_DECIDERS = "hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR',"
+        + "'ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_SUPER_ADMIN')";
+    private static final String VERSION_AUDITED = "service audits each step of the approval circuit";
+
+    /**
+     * Go-live D2 (V385): a new entry is proposed, not created: 202 with the version awaiting approval. It is in
+     * the catalogue, and can be prescribed and dispensed, once a pharmacist other than its author approved it.
+     */
     @PostMapping
     // P-02: formulary additions are governance acts — restrict to admin roles only.
+    @WriteAudited(skip = true, reason = VERSION_AUDITED)
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Add a medication to the catalog")
-    public ResponseEntity<MedicationCatalogItemResponseDTO> create(@Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.create(dto));
+    @Operation(summary = "Propose a new medication for the catalog (awaits approval)")
+    public ResponseEntity<MedicationCatalogVersionResponseDTO> create(@Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(catalogService.create(dto));
+    }
+
+    @PostMapping("/{id}/approval-request")
+    @WriteAudited(skip = true, reason = VERSION_AUDITED)
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Submit an entry nobody approved yet, as it stands, for approval")
+    public ResponseEntity<MedicationCatalogItemResponseDTO> requestApproval(
+            @PathVariable UUID id,
+            @Valid @RequestBody MedicationCatalogVersionDecisionDTO dto) {
+        return ResponseEntity.ok(catalogService.requestFormularyApproval(id, dto.getReason()));
+    }
+
+    @GetMapping("/versions")
+    @PreAuthorize(VERSION_READERS)
+    @Operation(summary = "The approval queue, or the decided versions, of the acting hospital")
+    public ResponseEntity<Page<MedicationCatalogVersionResponseDTO>> listVersions(
+            @RequestParam(required = false) MedicationCatalogVersionStatus status,
+            @RequestParam(required = false) MedicationCatalogVersionKind kind,
+            Pageable pageable) {
+        return ResponseEntity.ok(versionService.list(status, kind, pageable));
+    }
+
+    @GetMapping("/{id}/versions")
+    @PreAuthorize(VERSION_READERS)
+    @Operation(summary = "The version history of one catalog entry: who, when, why")
+    public ResponseEntity<List<MedicationCatalogVersionResponseDTO>> history(@PathVariable UUID id) {
+        return ResponseEntity.ok(versionService.history(id));
+    }
+
+    @PostMapping("/versions/{versionId}/approve")
+    @WriteAudited(skip = true, reason = VERSION_AUDITED)
+    @PreAuthorize(VERSION_DECIDERS)
+    @Operation(summary = "Approve a version: it takes effect now")
+    public ResponseEntity<MedicationCatalogVersionResponseDTO> approve(
+            @PathVariable UUID versionId,
+            @Valid @RequestBody(required = false) MedicationCatalogVersionDecisionDTO dto) {
+        return ResponseEntity.ok(versionService.approve(versionId, dto == null ? null : dto.getReason()));
+    }
+
+    @PostMapping("/versions/{versionId}/reject")
+    @WriteAudited(skip = true, reason = VERSION_AUDITED)
+    @PreAuthorize(VERSION_DECIDERS)
+    @Operation(summary = "Refuse a version, with the reason")
+    public ResponseEntity<MedicationCatalogVersionResponseDTO> reject(
+            @PathVariable UUID versionId,
+            @Valid @RequestBody MedicationCatalogVersionDecisionDTO dto) {
+        return ResponseEntity.ok(versionService.reject(versionId, dto.getReason()));
+    }
+
+    @PostMapping("/versions/{versionId}/withdraw")
+    @WriteAudited(skip = true, reason = VERSION_AUDITED)
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Take back one's own version while it awaits a decision")
+    public ResponseEntity<MedicationCatalogVersionResponseDTO> withdraw(@PathVariable UUID versionId) {
+        return ResponseEntity.ok(versionService.withdraw(versionId));
     }
 
     @GetMapping("/{id}")
@@ -137,11 +217,14 @@ public class MedicationCatalogController {
      * and approve, as a real formulary is (the round-17 QA found the
      * pharmacist could not edit them at all). Scoped to the caller's acting
      * hospital; the service audits MEDICATION_DOSE_LIMITS_UPDATED.
+     *
+     * <p>Go-live D2 (V385): the limits sent are PROPOSED. They are in force once a different pharmacist, or the
+     * médecin-chef, approved the version; until then the dose check keeps reading the limits in force.
      */
     @PutMapping("/{id}/pediatric-dosing")
     @WriteAudited(skip = true, reason = "service emits MEDICATION_DOSE_LIMITS_UPDATED")
     @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Set or approve a medication's paediatric dose limits")
+    @Operation(summary = "Propose a medication's paediatric dose limits (awaits approval)")
     public ResponseEntity<MedicationCatalogItemResponseDTO> updatePediatricDosing(
             @PathVariable UUID id,
             @Valid @RequestBody com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {

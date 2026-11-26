@@ -172,7 +172,10 @@ public final class ClinicalRuleRegistry {
             "service.transfusion.IncompatibleReleaseNotices"),
         // QA D3862 (r77): a HIGH NEWS2 is an urgent alert to acknowledge (the D3304 path), not a bell alone.
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-25.1",
-            "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"));
+            "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"),
+        // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
+        rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
+            "service.formulary.MedicationCatalogApprovalPolicy"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

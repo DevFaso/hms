@@ -4,7 +4,12 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MedicationCatalogItemMapper;
 import com.example.hms.model.Hospital;
+import com.example.hms.enums.MedicationCatalogVersionStatus;
+import com.example.hms.model.medication.FormularySnapshot;
 import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.medication.MedicationCatalogVersion;
+import com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO;
+import com.example.hms.service.formulary.MedicationCatalogVersionService;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemResponseDTO;
@@ -32,6 +37,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +50,8 @@ class MedicationCatalogItemServiceImplTest {
     @Mock private MedicationCatalogItemMapper mapper;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private RoleValidator roleValidator;
+    /** Go-live D2 (V385): the approval circuit; what it does with a proposal is MedicationCatalogVersionServiceTest's. */
+    @Mock private MedicationCatalogVersionService versionService;
 
     @InjectMocks private MedicationCatalogItemServiceImpl service;
 
@@ -92,22 +102,41 @@ class MedicationCatalogItemServiceImplTest {
 
     // ── create ──
 
+    /** Go-live D2 (V385): what a create proposes, as the version service receives it. */
+    private FormularySnapshot proposedFor(Hospital expectedHospital) {
+        ArgumentCaptor<FormularySnapshot> proposed = ArgumentCaptor.forClass(FormularySnapshot.class);
+        if (expectedHospital == null) {
+            verify(versionService).proposeNewEntry(isNull(), proposed.capture(), any());
+        } else {
+            verify(versionService).proposeNewEntry(same(expectedHospital), proposed.capture(), any());
+        }
+        return proposed.getValue();
+    }
+
+    private void theVersionServiceAcceptsTheProposal() {
+        MedicationCatalogVersion version = new MedicationCatalogVersion();
+        when(versionService.proposeNewEntry(any(), any(), any())).thenReturn(version);
+        when(versionService.toDto(version)).thenReturn(MedicationCatalogVersionResponseDTO.builder()
+            .status(MedicationCatalogVersionStatus.PENDING_APPROVAL).build());
+    }
+
     @Test
-    void create_success() {
-        // Default-case create: a hospital admin adds Paracétamol to their own
-        // hospital's catalog. The V95 platform-scope refactor adds a scope
-        // check — JWT must report this hospital as the active scope.
+    void create_proposesAVersion_andWritesNothingToTheCatalogue() {
+        // Go-live D2 (V385): a hospital admin's new entry is a proposal; the catalogue row is the approval's.
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mapper.toEntity(requestDTO)).thenReturn(item);
-        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
-        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        theVersionServiceAcceptsTheProposal();
+        requestDTO.setChangeReason("Ajout au formulaire");
 
-        MedicationCatalogItemResponseDTO result = service.create(requestDTO);
+        MedicationCatalogVersionResponseDTO result = service.create(requestDTO);
 
-        assertThat(result.getNameFr()).isEqualTo("Paracétamol");
-        verify(catalogRepository).save(any(MedicationCatalogItem.class));
+        assertThat(result.getStatus()).isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
+        FormularySnapshot proposed = proposedFor(hospital);
+        assertThat(proposed.nameFr()).isEqualTo("Paracétamol");
+        assertThat(proposed.strength()).isEqualTo("500");
+        verify(versionService).proposeNewEntry(any(), any(), eq("Ajout au formulaire"));
+        verify(catalogRepository, never()).save(any());
     }
 
     @Test
@@ -123,14 +152,11 @@ class MedicationCatalogItemServiceImplTest {
 
     /**
      * Regression for the dev 400 reported on 2026-05-10: super-admin posted
-     * a medication payload without {@code hospitalId} (the frontend doesn't
-     * carry the field) and was rejected by the old DTO-level {@code @NotNull}.
-     * After V95, super-admin omitting hospitalId means "create a global /
-     * platform / LNME entry" — the service must save the entity with a
-     * {@code null} Hospital association.
+     * a medication payload without {@code hospitalId}. After V95 that is a
+     * global / platform / LNME entry: the proposal names no hospital.
      */
     @Test
-    void create_asSuperAdmin_withoutHospitalId_savesAsGlobal() {
+    void create_asSuperAdmin_withoutHospitalId_proposesAPlatformEntry() {
         MedicationCatalogItemRequestDTO global = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Amoxicilline")
                 .genericName("Amoxicillin")
@@ -140,20 +166,14 @@ class MedicationCatalogItemServiceImplTest {
                 .build(); // no hospitalId
 
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        when(mapper.toEntity(global)).thenReturn(item);
-        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
-        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        theVersionServiceAcceptsTheProposal();
 
         service.create(global);
 
-        // The saved entity must carry a null Hospital — that's what marks
-        // it as a platform-wide LNME row.
-        ArgumentCaptor<MedicationCatalogItem> captor =
-                ArgumentCaptor.forClass(MedicationCatalogItem.class);
-        verify(catalogRepository).save(captor.capture());
-        assertThat(captor.getValue().getHospital()).isNull();
+        assertThat(proposedFor(null).atcCode()).isEqualTo("J01CA04");
         // And we must NOT have looked up a hospital — there's no UUID to look up.
         verify(hospitalRepository, never()).findById(any());
+        verify(catalogRepository, never()).save(any());
     }
 
     /**
@@ -171,16 +191,11 @@ class MedicationCatalogItemServiceImplTest {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mapper.toEntity(noHospital)).thenReturn(item);
-        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
-        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        theVersionServiceAcceptsTheProposal();
 
         service.create(noHospital);
 
-        ArgumentCaptor<MedicationCatalogItem> captor =
-                ArgumentCaptor.forClass(MedicationCatalogItem.class);
-        verify(catalogRepository).save(captor.capture());
-        assertThat(captor.getValue().getHospital()).isSameAs(hospital);
+        assertThat(proposedFor(hospital).nameFr()).isEqualTo("Amoxicilline");
     }
 
     @Test
@@ -234,19 +249,14 @@ class MedicationCatalogItemServiceImplTest {
      * that only one site stocks.
      */
     @Test
-    void create_asSuperAdmin_withExplicitHospitalId_savesAsTenantScoped() {
+    void create_asSuperAdmin_withExplicitHospitalId_proposesItForThatHospital() {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mapper.toEntity(requestDTO)).thenReturn(item);
-        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
-        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        theVersionServiceAcceptsTheProposal();
 
         service.create(requestDTO);
 
-        ArgumentCaptor<MedicationCatalogItem> captor =
-                ArgumentCaptor.forClass(MedicationCatalogItem.class);
-        verify(catalogRepository).save(captor.capture());
-        assertThat(captor.getValue().getHospital()).isEqualTo(hospital);
+        assertThat(proposedFor(hospital).genericName()).isEqualTo("Paracetamol");
     }
 
     // ── getById ──
@@ -337,6 +347,103 @@ class MedicationCatalogItemServiceImplTest {
 
         assertThat(result.getNameFr()).isEqualTo("Paracétamol");
         verify(catalogRepository).save(item);
+    }
+
+    // ── Go-live D2 (V385): what prescribing and dispensing read is never edited in place ──
+
+    @Test
+    void update_aChangeOfStrength_isProposed_andTheRowKeepsTheStrengthInForce() {
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        requestDTO.setStrength("1000");
+        requestDTO.setControlled(true);
+        requestDTO.setChangeReason("Nouveau dosage référencé");
+
+        service.update(itemId, requestDTO);
+
+        ArgumentCaptor<FormularySnapshot> proposed = ArgumentCaptor.forClass(FormularySnapshot.class);
+        verify(versionService).proposeFormulary(same(item), proposed.capture(), eq("Nouveau dosage référencé"));
+        assertThat(proposed.getValue().strength()).isEqualTo("1000");
+        assertThat(proposed.getValue().controlled()).isTrue();
+        // The row prescribing and dispensing read is untouched until the approval.
+        assertThat(item.getStrength()).isEqualTo("500");
+        assertThat(item.isControlled()).isFalse();
+    }
+
+    @Test
+    void update_ofTheDescriptionAndCategoryOnly_isSavedAtOnce_withNoVersion() {
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        requestDTO.setDescription("Antalgique de palier 1");
+        requestDTO.setCategory("Antalgique");
+        requestDTO.setEssentialList(true);
+
+        service.update(itemId, requestDTO);
+
+        verify(versionService, never()).proposeFormulary(any(), any(), any());
+        assertThat(item.getDescription()).isEqualTo("Antalgique de palier 1");
+        assertThat(item.getCategory()).isEqualTo("Antalgique");
+        assertThat(item.isEssentialList()).isTrue();
+    }
+
+    @Test
+    void update_thatWithdrawsTheEntry_takesEffectAtOnce_andIsAudited() {
+        // A recalled medicine does not wait for a second person; putting it back does.
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        requestDTO.setActive(false);
+
+        service.update(itemId, requestDTO);
+
+        assertThat(item.isActive()).isFalse();
+        verify(versionService, never()).proposeFormulary(any(), any(), any());
+        ArgumentCaptor<AuditEventRequestDTO> row = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(row.capture());
+        assertThat(row.getValue().getEventType()).isEqualTo(AuditEventType.MEDICATION_DEACTIVATED);
+    }
+
+    @Test
+    void update_thatPutsAWithdrawnEntryBack_isProposed_andTheEntryStaysWithdrawn() {
+        item.deactivate();
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+        requestDTO.setChangeReason("Rappel de lot levé");
+
+        service.update(itemId, requestDTO);
+
+        ArgumentCaptor<FormularySnapshot> proposed = ArgumentCaptor.forClass(FormularySnapshot.class);
+        verify(versionService).proposeFormulary(same(item), proposed.capture(), eq("Rappel de lot levé"));
+        assertThat(proposed.getValue().active()).isTrue();
+        assertThat(item.isActive()).isFalse();
+    }
+
+    @Test
+    void requestFormularyApproval_submitsTheEntryAsItStands() {
+        actingAtTheItemsHospital();
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+
+        service.requestFormularyApproval(itemId, "Revue du formulaire à la mise en service");
+
+        ArgumentCaptor<FormularySnapshot> proposed = ArgumentCaptor.forClass(FormularySnapshot.class);
+        verify(versionService).proposeFormulary(same(item), proposed.capture(),
+            eq("Revue du formulaire à la mise en service"));
+        assertThat(proposed.getValue().clinicalDifferences(FormularySnapshot.of(item))).isEmpty();
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void requestFormularyApproval_ofAnotherHospitalsEntry_isNotFound() {
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.requestFormularyApproval(itemId, "x"))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(versionService, never()).proposeFormulary(any(), any(), any());
     }
 
     // Policy 2026-11-20 (provisional): a medicine's sensitive category.

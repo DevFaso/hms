@@ -25,7 +25,11 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'listMedications',
       'searchMedications',
+      'listCatalogVersions',
     ]);
+    svc.listCatalogVersions.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+    );
     svc.listMedications.and.returnValue(
       of({ content: [item], totalElements: 1, totalPages: 1, size: 20, number: 0 }),
     );
@@ -83,7 +87,9 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     } as never);
     expect(component.dosingForm.pediatricMaxDoseMgPerKg).toBe(15);
     expect(component.dosingForm.pediatricMaxDailyMg).toBe(4000);
-    expect(component.dosingForm.pediatricDoseStatus).toBe('DEFAULT_PENDING_APPROVAL');
+    // Go-live D2 (V385): the caller no longer declares the limits approved; they state why.
+    expect('pediatricDoseStatus' in component.dosingForm).toBeFalse();
+    expect(component.dosingForm.changeReason).toBe('');
     component.addBand();
     expect(component.dosingForm.pediatricWeightBands.length).toBe(1);
     component.removeBand(0);
@@ -167,8 +173,18 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     fixture = TestBed.createComponent(MedicationCatalogComponent);
     fixture.detectChanges();
     http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page(rows));
+    flushPendingCount(0);
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
+  }
+
+  /** Go-live D2 (V385): the page reads how many versions await approval (one row, for the total). */
+  function flushPendingCount(waiting: number): void {
+    const count = http.expectOne(
+      (r) => r.method === 'GET' && r.url === '/medication-catalog/versions',
+    );
+    expect(count.request.params.get('status')).toBe('PENDING_APPROVAL');
+    count.flush({ content: [], totalElements: waiting, totalPages: 1, size: 1, number: 0 });
   }
 
   afterEach(() => http.verify());
@@ -195,6 +211,7 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     http
       .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog')
       .flush(page([{ ...zidovudine, sensitivityCategory: 'HIV' }]));
+    flushPendingCount(0);
     fixture.detectChanges();
     expect(component.filtered()[0].sensitivityCategory).toBe('HIV');
     el.querySelector<HTMLButtonElement>('[data-test="catalog-edit"]')!.click();
@@ -208,6 +225,177 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     expect('clearSensitivityCategory' in again.request.body).toBeFalse();
     again.flush({ ...zidovudine, sensitivityCategory: 'HIV' });
     http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page([]));
+    flushPendingCount(0);
+  });
+
+  // ── Go-live D2 (V385): what is prescribed and dispensed changes through an approval ──
+
+  it('sends a change of strength for approval with its reason, and says the entry keeps its values', () => {
+    render(['ROLE_HOSPITAL_ADMIN'], [zidovudine]);
+    const component = fixture.componentInstance;
+    el.querySelector<HTMLButtonElement>('[data-test="catalog-edit"]')!.click();
+    fixture.detectChanges();
+    expect(component.needsApproval()).toBeFalse();
+    expect(el.querySelector('[data-test="catalog-approval-hint"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.EDIT_HINT_DIRECT',
+    );
+
+    component.form.strength = '300';
+    fixture.detectChanges();
+    expect(component.needsApproval()).toBeTrue();
+    expect(el.querySelector('[data-test="catalog-approval-hint"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.EDIT_HINT_PROPOSES',
+    );
+
+    // No reason: nothing is sent.
+    component.submitForm();
+    http.expectNone((r) => r.method === 'PUT');
+    expect(toast.error).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED',
+    );
+
+    component.form.changeReason = 'Nouveau dosage référencé';
+    component.submitForm();
+    const put = http.expectOne((r) => r.method === 'PUT');
+    expect(put.request.body.strength).toBe('300');
+    expect(put.request.body.changeReason).toBe('Nouveau dosage référencé');
+    put.flush({ ...zidovudine, pendingFormularyVersionId: 'v-1' });
+    expect(toast.success).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_UPDATE',
+    );
+
+    // The row still shows the entry in force, marked provisional with a version pending.
+    http
+      .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog')
+      .flush(page([{ ...zidovudine, pendingFormularyVersionId: 'v-1' }]));
+    flushPendingCount(1);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-test="catalog-formulary-status"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.BADGE_PROVISIONAL',
+    );
+    expect(el.querySelector('[data-test="catalog-pending-version"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="catalog-approvals-count"]')).not.toBeNull();
+  });
+
+  it('proposes a new medicine with its reason: 202, a version awaiting approval, never "created"', () => {
+    render(['ROLE_HOSPITAL_ADMIN'], []);
+    const component = fixture.componentInstance;
+    component.openCreate();
+    component.form.nameFr = 'Amoxicilline 500 mg';
+    component.form.genericName = 'amoxicilline';
+
+    component.submitForm();
+    http.expectNone((r) => r.method === 'POST');
+    expect(toast.error).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED',
+    );
+
+    component.form.changeReason = 'Ajout au formulaire';
+    component.submitForm();
+    const post = http.expectOne((r) => r.method === 'POST');
+    expect(post.request.url).toBe('/medication-catalog');
+    expect(post.request.body.changeReason).toBe('Ajout au formulaire');
+    post.flush({ id: 'v-9', status: 'PENDING_APPROVAL' }, { status: 202, statusText: 'Accepted' });
+    expect(toast.success).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_CREATE',
+    );
+    http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page([]));
+    flushPendingCount(1);
+  });
+
+  it('proposes paediatric limits with a reason, and refuses a second proposal while one waits', () => {
+    render(['ROLE_PHARMACIST'], [zidovudine]);
+    const component = fixture.componentInstance;
+    component.openDosing(zidovudine);
+    component.dosingForm.pediatricMaxDoseMgPerKg = 8;
+
+    component.saveDosing();
+    http.expectNone((r) => r.method === 'PUT');
+    expect(toast.error).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED',
+    );
+
+    component.dosingForm.changeReason = 'Limites du protocole national';
+    component.saveDosing();
+    const put = http.expectOne((r) => r.method === 'PUT');
+    expect(put.request.url).toBe('/medication-catalog/m-azt/pediatric-dosing');
+    expect(put.request.body.changeReason).toBe('Limites du protocole national');
+    expect('pediatricDoseStatus' in put.request.body).toBeFalse();
+    put.flush({ ...zidovudine, pendingDoseLimitVersionId: 'v-2' });
+    expect(toast.success).toHaveBeenCalledOnceWith(
+      'PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_DOSING',
+    );
+    const waiting = { ...zidovudine, pendingDoseLimitVersionId: 'v-2' };
+    http
+      .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog')
+      .flush(page([waiting]));
+    flushPendingCount(1);
+
+    component.openDosing(waiting);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-test="dosing-pending-note"]')).not.toBeNull();
+    // The button stays usable and says why nothing is sent (never a silent disabled control).
+    component.dosingForm.changeReason = 'Autres limites';
+    component.saveDosing();
+    http.expectNone((r) => r.method === 'PUT');
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.CATALOG_APPROVAL.DOSING_PENDING_NOTE');
+  });
+
+  it('shows an approved entry its version, and limits one person set as provisional', () => {
+    render(
+      ['ROLE_PHARMACIST'],
+      [
+        {
+          ...zidovudine,
+          formularyApprovedVersion: 3,
+          pediatricMaxDoseMgPerKg: 8,
+          pediatricDoseStatus: 'APPROVED',
+        },
+      ],
+    );
+    expect(el.querySelector('[data-test="catalog-formulary-status"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.BADGE_APPROVED',
+    );
+    expect(el.querySelector('[data-test="catalog-dosing-status"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.DOSE_BADGE_PROVISIONAL',
+    );
+    expect(el.querySelector('[data-test="catalog-pending-version"]')).toBeNull();
+  });
+
+  it('submits an entry nobody approved yet as it stands, from its history, with a reason', () => {
+    render(['ROLE_HOSPITAL_ADMIN'], [zidovudine]);
+    const component = fixture.componentInstance;
+    el.querySelector<HTMLButtonElement>('[data-test="catalog-history"]')!.click();
+    fixture.detectChanges();
+    http
+      .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog/m-azt/versions')
+      .flush([]);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-test="history-provisional-note"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="approvals-empty"]')).not.toBeNull();
+
+    component.submitAsIs();
+    http.expectNone((r) => r.method === 'POST');
+
+    component.asIsReason = 'Revue du formulaire à la mise en service';
+    component.submitAsIs();
+    const post = http.expectOne((r) => r.method === 'POST');
+    expect(post.request.url).toBe('/medication-catalog/m-azt/approval-request');
+    expect(post.request.body).toEqual({ reason: 'Revue du formulaire à la mise en service' });
+    post.flush({ ...zidovudine, pendingFormularyVersionId: 'v-3' });
+    expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.CATALOG_APPROVAL.SUBMITTED_TOAST');
+
+    http
+      .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog')
+      .flush(page([{ ...zidovudine, pendingFormularyVersionId: 'v-3' }]));
+    flushPendingCount(1);
+    fixture.detectChanges();
+    // The history is read again, and the entry is no longer offered for submission.
+    http
+      .expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog/m-azt/versions')
+      .flush([]);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-test="history-submit-as-is"]')).toBeNull();
   });
 
   it('deactivates an entry with no hospital in the request', () => {
@@ -261,7 +449,11 @@ describe('MedicationCatalogComponent — the category column is labelled (QA D52
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'listMedications',
       'searchMedications',
+      'listCatalogVersions',
     ]);
+    svc.listCatalogVersions.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+    );
     svc.listMedications.and.returnValue(
       of({
         content: [{ ...item, category: 'ANALGESIC' } as MedicationCatalogItemResponse],
@@ -335,7 +527,13 @@ describe('Medication catalogue search ordering', () => {
   it('keeps the latest search when the earlier request finishes last', () => {
     const old = new Subject<any>();
     const latest = new Subject<any>();
-    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', ['searchMedications']);
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'searchMedications',
+      'listCatalogVersions',
+    ]);
+    svc.listCatalogVersions.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+    );
     svc.searchMedications.and.returnValues(old, latest);
     TestBed.configureTestingModule({
       imports: [MedicationCatalogComponent, TranslateModule.forRoot()],

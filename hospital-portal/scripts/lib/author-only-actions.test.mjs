@@ -32,6 +32,8 @@ const ENDING_CLICK =
 
 /** Sites whose decision is not the author's, and why (file :: handler). */
 const NOT_AUTHOR_OWNED = {
+  'pharmacy/medication-catalog-approvals.html :: withdraw(version)':
+    'already per row on the author: offered only where the server answers ownProposal (go-live D2, MedicationCatalogVersionService.withdraw refuses anyone else)',
   'lab/lab.html :: openVoid(order)':
     'supervisor path: entered-in-error is a lab manager’s or director’s decision (ClinicalDocumentAuthorGuardTest TEAM_OWNED LabOrderServiceImpl.voidLabOrder)',
   'referrals/referrals.html :: confirmCancel(r)':
@@ -165,6 +167,8 @@ test('QA D1081: an action that ends a clinical record is offered per row on the 
  * are not orders are listed with their reason.
  */
 const NOT_AN_ORDER = {
+  'pharmacy/medication-catalog-approvals.html :: withdraw(version)':
+    'a proposed version of the medication catalogue awaiting approval, not an order (offered only while PENDING_APPROVAL)',
   'appointments/appointment-detail.html :: openCancelConfirm':
     'an appointment, not an order (appointment policy)',
   'patient-portal/my-appointments/my-appointments.component.html :: openCancel':

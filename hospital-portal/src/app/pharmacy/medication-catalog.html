@@ -13,6 +13,41 @@
     }
   </div>
 
+  <!-- Go-live D2 (V385): the approval circuit of the catalogue: queue and history. -->
+  @if (canSeeApprovals()) {
+    <section class="approvals-panel" [class.open]="approvalsOpen()">
+      <button
+        type="button"
+        class="approvals-toggle"
+        [attr.aria-expanded]="approvalsOpen()"
+        aria-controls="catalog-approvals-panel"
+        data-test="catalog-approvals-toggle"
+        (click)="toggleApprovals()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+        <span class="approvals-toggle-label">{{
+          'PHARMACY.CATALOG_APPROVAL.PANEL_TITLE' | translate
+        }}</span>
+        @if (pendingApprovals(); as waiting) {
+          <span class="approvals-count" data-test="catalog-approvals-count">{{
+            'PHARMACY.CATALOG_APPROVAL.PENDING_COUNT' | translate: { count: waiting }
+          }}</span>
+        }
+        <span class="material-symbols-outlined" aria-hidden="true">{{
+          approvalsOpen() ? 'expand_less' : 'expand_more'
+        }}</span>
+      </button>
+      @if (approvalsOpen()) {
+        <div id="catalog-approvals-panel" class="approvals-body">
+          <app-medication-catalog-approvals
+            (decided)="onVersionDecided()"
+            (pendingCount)="pendingApprovals.set($event)"
+          />
+        </div>
+      }
+    </section>
+  }
+
   @if (!loading() && !loadFailed()) {
     <section class="workspace-stats" [attr.aria-label]="'PHARMACY_DASH.SUMMARY' | translate">
       <div class="workspace-stat stat-lead">
@@ -118,19 +153,41 @@
                       | translate: { category: sensitivityLabelKey(sensitive) | translate }
                   }}</span>
                 }
+                <!-- Go-live D2 (V385): whether a second person approved the entry, and which version. -->
+                {{ ' ' }}
+                @if (item.formularyApprovedVersion; as approvedVersion) {
+                  <span class="badge badge-essential" data-test="catalog-formulary-status">{{
+                    'PHARMACY.CATALOG_APPROVAL.BADGE_APPROVED' | translate: { n: approvedVersion }
+                  }}</span>
+                } @else {
+                  <span
+                    class="badge badge-provisional"
+                    data-test="catalog-formulary-status"
+                    [title]="'PHARMACY.CATALOG_APPROVAL.BADGE_PROVISIONAL_HINT' | translate"
+                    >{{ 'PHARMACY.CATALOG_APPROVAL.BADGE_PROVISIONAL' | translate }}</span
+                  >
+                }
+                @if (item.pendingFormularyVersionId || item.pendingDoseLimitVersionId) {
+                  {{ ' '
+                  }}<span class="badge badge-controlled" data-test="catalog-pending-version">{{
+                    'PHARMACY.CATALOG_APPROVAL.BADGE_PENDING' | translate
+                  }}</span>
+                }
                 @if (hasPediatricLimits(item)) {
                   <!-- Round 18 (QA D935): who may rely on the limits, at a glance. -->
                   {{ ' '
                   }}<span
                     class="badge"
                     [class.badge-pending]="item.pediatricDoseStatus !== 'APPROVED'"
-                    [class.badge-essential]="item.pediatricDoseStatus === 'APPROVED'"
+                    [class.badge-provisional]="
+                      item.pediatricDoseStatus === 'APPROVED' && !item.doseLimitApprovedVersion
+                    "
+                    [class.badge-essential]="
+                      item.pediatricDoseStatus === 'APPROVED' && !!item.doseLimitApprovedVersion
+                    "
                     data-test="catalog-dosing-status"
                     >{{
-                      (item.pediatricDoseStatus === 'APPROVED'
-                        ? 'PHARMACY.DOSING.BADGE_APPROVED'
-                        : 'PHARMACY.DOSING.BADGE_PENDING'
-                      ) | translate
+                      doseBadgeKey(item) | translate: { n: item.doseLimitApprovedVersion }
                     }}</span
                   >
                 }
@@ -151,6 +208,17 @@
               </td>
               <td>
                 <div class="action-group">
+                  @if (canSeeApprovals()) {
+                    <button
+                      class="action-link"
+                      [title]="'PHARMACY.CATALOG_APPROVAL.HISTORY_ACTION' | translate"
+                      [attr.aria-label]="'PHARMACY.CATALOG_APPROVAL.HISTORY_ACTION' | translate"
+                      data-test="catalog-history"
+                      (click)="openHistory(item)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">history</span>
+                    </button>
+                  }
                   @if (canEditDosing()) {
                     <button
                       class="action-link"
@@ -458,6 +526,33 @@
                 rows="3"
               ></textarea>
             </div>
+
+            <!-- Go-live D2 (V385): what is prescribed and dispensed changes through an approval. -->
+            <div class="field">
+              <label for="changeReason"
+                >{{ 'PHARMACY.CATALOG_APPROVAL.CHANGE_REASON' | translate }}
+                @if (needsApproval()) {
+                  *
+                }
+              </label>
+              <textarea
+                id="changeReason"
+                name="changeReason"
+                rows="2"
+                maxlength="1000"
+                [(ngModel)]="form.changeReason"
+                [required]="needsApproval()"
+                aria-describedby="changeReason-hint"
+              ></textarea>
+              <small class="field-hint" id="changeReason-hint" data-test="catalog-approval-hint">{{
+                (editing()
+                  ? needsApproval()
+                    ? 'PHARMACY.CATALOG_APPROVAL.EDIT_HINT_PROPOSES'
+                    : 'PHARMACY.CATALOG_APPROVAL.EDIT_HINT_DIRECT'
+                  : 'PHARMACY.CATALOG_APPROVAL.CREATE_HINT'
+                ) | translate
+              }}</small>
+            </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeModal()">
@@ -690,33 +785,129 @@
                 [(ngModel)]="dosingForm.pediatricDoseSource"
               />
             </div>
+            <!-- Go-live D2 (V385): the limits are proposed; another person approves them. -->
             <div class="field">
-              <label for="dose-status">{{ 'PHARMACY.DOSING.STATUS' | translate }}</label>
-              <select
-                id="dose-status"
-                name="pediatricDoseStatus"
-                [(ngModel)]="dosingForm.pediatricDoseStatus"
+              <label for="dose-reason"
+                >{{ 'PHARMACY.CATALOG_APPROVAL.CHANGE_REASON' | translate }} *</label
               >
-                <option value="DEFAULT_PENDING_APPROVAL">
-                  {{ 'PHARMACY.DOSING.STATUS_PENDING' | translate }}
-                </option>
-                <option value="APPROVED">
-                  {{ 'PHARMACY.DOSING.STATUS_APPROVED' | translate }}
-                </option>
-              </select>
+              <textarea
+                id="dose-reason"
+                name="changeReason"
+                rows="2"
+                maxlength="1000"
+                required
+                [(ngModel)]="dosingForm.changeReason"
+                aria-describedby="dose-reason-hint"
+              ></textarea>
+              <small class="field-hint" id="dose-reason-hint">{{
+                'PHARMACY.CATALOG_APPROVAL.DOSING_HINT' | translate
+              }}</small>
             </div>
+            @if (dItem.pendingDoseLimitVersionId) {
+              <p class="approval-note" data-test="dosing-pending-note">
+                {{ 'PHARMACY.CATALOG_APPROVAL.DOSING_PENDING_NOTE' | translate }}
+              </p>
+            }
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeDosing()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="dosingSaving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="dosingSaving()"
+              data-test="dosing-submit"
+            >
               {{
-                dosingSaving() ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE_CHANGES' | translate)
+                dosingSaving()
+                  ? ('COMMON.SAVING' | translate)
+                  : ('PHARMACY.CATALOG_APPROVAL.SUBMIT_FOR_APPROVAL' | translate)
               }}
             </button>
           </div>
         </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Go-live D2 (V385): the versions of one entry: who, when, why. -->
+  @if (historyItem(); as hItem) {
+    <div
+      class="modal-backdrop"
+      (click)="closeHistory()"
+      (keydown.escape)="closeHistory()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="!!historyItem()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+        appModalDialog
+        aria-labelledby="medication-catalog-dialog-title-4"
+        (escaped)="closeHistory()"
+      >
+        <div class="modal-header">
+          <h2 id="medication-catalog-dialog-title-4">
+            {{ 'PHARMACY.CATALOG_APPROVAL.HISTORY_TITLE' | translate }} — {{ hItem.nameFr }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeHistory()"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          @if (!hItem.formularyApprovedVersion) {
+            <p class="approval-note" data-test="history-provisional-note">
+              {{ 'PHARMACY.CATALOG_APPROVAL.BADGE_PROVISIONAL_HINT' | translate }}
+            </p>
+          }
+          @if (canSubmitAsIs(hItem)) {
+            <form class="as-is" (ngSubmit)="submitAsIs()">
+              <div class="field">
+                <label for="asIsReason"
+                  >{{ 'PHARMACY.CATALOG_APPROVAL.SUBMIT_AS_IS_REASON' | translate }} *</label
+                >
+                <textarea
+                  id="asIsReason"
+                  name="asIsReason"
+                  rows="2"
+                  maxlength="1000"
+                  required
+                  [(ngModel)]="asIsReason"
+                ></textarea>
+              </div>
+              <button
+                appSubmitGuard
+                submitGuardRequired
+                type="submit"
+                class="btn-primary"
+                [disabled]="submittingAsIs()"
+                data-test="history-submit-as-is"
+              >
+                {{ 'PHARMACY.CATALOG_APPROVAL.SUBMIT_AS_IS' | translate }}
+              </button>
+            </form>
+          }
+          <app-medication-catalog-approvals
+            [entry]="hItem"
+            [reloadKey]="historyRead()"
+            (decided)="onVersionDecided()"
+          />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeHistory()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+        </div>
       </dialog>
     </div>
   }

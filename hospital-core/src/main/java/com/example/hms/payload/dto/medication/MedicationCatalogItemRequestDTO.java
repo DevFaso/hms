@@ -82,6 +82,14 @@ public class MedicationCatalogItemRequestDTO {
     private String description;
 
     /**
+     * Go-live D2 (V385): why the entry is created, or why what prescribing and dispensing read is changed.
+     * Required whenever the request proposes a version (a new entry; a change of name, ATC, form, strength,
+     * route, RxNorm or controlled flag); the approver reads it and the history keeps it.
+     */
+    @Size(max = 1000)
+    private String changeReason;
+
+    /**
      * Owning hospital. Optional from V95 onwards: super-admins may omit
      * this field to create a <strong>global / platform catalog entry</strong>
      * (visible to every tenant) representing an item on Burkina Faso's

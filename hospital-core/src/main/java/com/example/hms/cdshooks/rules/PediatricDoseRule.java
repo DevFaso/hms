@@ -585,9 +585,23 @@ public class PediatricDoseRule implements CdsRule {
                 ? text.get("cds.pediatric.limit.sourceUnknown", "source not stated")
                 : item.getPediatricDoseSource().trim();
             String status = item.getPediatricDoseStatus() == PediatricDoseLimitStatus.APPROVED
-                ? text.get("cds.pediatric.limit.approved", "approved locally")
+                ? approvedBasis()
                 : text.get("cds.pediatric.limit.pending", "default, pending local approval");
             return source + " (" + status + ")";
+        }
+
+        /**
+         * Go-live D2 (V385): the card says whether a second person approved the limit it rests on, and which
+         * version. A limit set before the approval circuit, by one person, judges the dose exactly as before and
+         * is named provisional until its version is approved.
+         */
+        private String approvedBasis() {
+            Integer version = item.getDoseLimitApprovedVersion();
+            return version == null
+                ? text.get("cds.pediatric.limit.approvedUnratified",
+                    "approved locally; provisional, second-person approval pending")
+                : text.get("cds.pediatric.limit.approvedVersion", "approved locally, version {0}",
+                    String.valueOf(version));
         }
 
         private CdsCard warning(String summary, String limitBasis) {
