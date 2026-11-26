@@ -215,6 +215,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 /** QA D1424: the unit is chosen every time; 5.6 means nothing without it. */
 export const GLUCOSE_UNITS: readonly GlucoseUnit[] = ['MG_DL', 'MMOL_L'];
 
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 @Component({
   selector: 'app-postpartum-tab',
   standalone: true,
@@ -228,6 +229,7 @@ export const GLUCOSE_UNITS: readonly GlucoseUnit[] = ['MG_DL', 'MMOL_L'];
     PatientPickerComponent,
     ProInstrumentFormComponent,
     EnumLabelPipe,
+    PatientSafetyHeaderComponent,
   ],
   templateUrl: './postpartum-tab.html',
   styleUrl: './maternity.scss',

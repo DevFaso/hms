@@ -362,6 +362,9 @@
 // ── Secondary Filters ──
 .wl-filters {
   display: flex;
+  // QA D2262: at 390 px the date and the two selects (476 px on one line) wrap instead of overflowing.
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
@@ -370,6 +373,8 @@
 }
 
 .wl-filter-select {
+  min-width: 0;
+  max-width: 100%;
   font-size: 12px;
   padding: 4px 8px;
   border: 1px solid #e2e8f0;
@@ -386,6 +391,8 @@
 }
 
 .wl-filter-date {
+  min-width: 0;
+  max-width: 100%;
   font-size: 12px;
   padding: 4px 8px;
   border: 1px solid #e2e8f0;

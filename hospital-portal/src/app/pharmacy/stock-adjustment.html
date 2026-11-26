@@ -150,6 +150,12 @@
                   <option [ngValue]="w.userId">{{ w.displayName }}</option>
                 }
               </select>
+              <!-- QA D2679: named is not witnessed; the witness confirms with their own password or code. -->
+              <app-witness-confirm
+                fieldId="txWitnessSecret"
+                [witnessId]="form.witnessedBy"
+                [candidates]="witnessCandidates()"
+              />
               @if (witnessCandidates().length === 0) {
                 <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
               }
@@ -627,6 +633,12 @@
                   <option [ngValue]="w.userId">{{ w.displayName }}</option>
                 }
               </select>
+              <!-- QA D2679: named is not witnessed; the witness confirms with their own password or code. -->
+              <app-witness-confirm
+                fieldId="destroyWitnessSecret"
+                [witnessId]="destroyWitness"
+                [candidates]="witnessCandidates()"
+              />
             </div>
           }
         </div>

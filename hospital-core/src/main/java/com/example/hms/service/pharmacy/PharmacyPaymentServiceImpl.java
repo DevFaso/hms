@@ -162,11 +162,11 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         // Billing plan PR 11 (QA D2430): the same checkout sent again after its answer was lost.
         PharmacyPayment keyed = findKeyedPayment(hospitalId, dispense, dto);
         if (keyed != null) {
-            return toResponse(keyed);
+            return toReceiptResponse(keyed, true);
         }
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
-            return toResponse(replay.get());
+            return toReceiptResponse(replay.get(), true);
         }
         requireAmountIsPatientShare(dispense, dto.getAmount(), hospitalId);
 
@@ -220,7 +220,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 saved.getId().toString(),
                 AUDIT_ENTITY);
 
-        return toResponse(saved);
+        return toReceiptResponse(saved, true);
     }
 
     /**
@@ -281,6 +281,19 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     }
 
     /**
+     * QA D2310: one payment read for its receipt (the answer to the checkout, a single payment read) also
+     * carries the receipt's lines: quantity, record number, cashier, pharmacy and, while the price read is the
+     * price charged, the unit price. Lists stay plain: a price lookup per row is not a list's job.
+     */
+    private PharmacyPaymentResponseDTO toReceiptResponse(PharmacyPayment payment, boolean withPrices) {
+        PharmacyPaymentResponseDTO dto = toResponse(payment);
+        if (dto != null) {
+            dto.setReceipt(PharmacyReceiptDetails.of(payment, inventoryItemRepository, withPrices));
+        }
+        return dto;
+    }
+
+    /**
      * QA D1032: the payment's readable receipt number, allocated once; the
      * first allocation of a year can lose the counter-row insert race, and is
      * retried once (the invoice number's rule).
@@ -308,7 +321,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
-        return toResponse(entity);
+        return toReceiptResponse(entity, false);
     }
 
     @Override

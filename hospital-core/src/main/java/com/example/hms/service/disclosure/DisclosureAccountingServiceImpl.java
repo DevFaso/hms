@@ -37,6 +37,14 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         this.familyReleaseDisclosure = familyReleaseDisclosure;
     }
 
+    /** QA D3451 (proxy-read part): what a read through family access adds to its row; null in a hand-built test. */
+    private FamilyAccessDisclosure familyAccessDisclosure;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setFamilyAccessDisclosure(FamilyAccessDisclosure familyAccessDisclosure) {
+        this.familyAccessDisclosure = familyAccessDisclosure;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from,
@@ -224,7 +232,9 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
 
     /** QA D979: the categories a repeat of folds into one line; every emergency, copy or insurer row stays. */
     private static final Set<DisclosureCategory> FOLDABLE =
-        java.util.EnumSet.of(DisclosureCategory.TREATMENT_ACCESS, DisclosureCategory.SHARED_WITH_PROVIDER);
+        java.util.EnumSet.of(DisclosureCategory.TREATMENT_ACCESS, DisclosureCategory.SHARED_WITH_PROVIDER,
+            // QA D3451: one opening of the family tab is several reads of the same part of the record.
+            DisclosureCategory.FAMILY_ACCESS);
 
     /**
      * QA D979: Joséphine Hien appeared five times in 40 seconds as "shared
@@ -277,7 +287,9 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         // repeat. The patient's list does not show it, and two reads of the
         // chart by the same person (one described "chart", one "timeline")
         // were two identical-looking lines: Joséphine Hien, twice.
-        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName();
+        // QA D3451: a relative reading another PART of the record is not a repeat: each part shows once.
+        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName()
+            + (entry.getAccessedSection() == null ? "" : "|" + entry.getAccessedSection());
     }
 
     /** Audit timestamps are UTC wall-clock values; compared as such. */
@@ -332,6 +344,10 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         // QA D3451: a release to the family says to whom, and which category of result.
         if (entry.getCategory() == DisclosureCategory.RELEASED_TO_FAMILY && familyReleaseDisclosure != null) {
             familyReleaseDisclosure.describe(event, entry);
+        }
+        // QA D3451 (proxy-read part): a read through family access says how the reader is related and which part.
+        if (entry.getCategory() == DisclosureCategory.FAMILY_ACCESS && familyAccessDisclosure != null) {
+            familyAccessDisclosure.describe(event, entry);
         }
         return entry;
     }

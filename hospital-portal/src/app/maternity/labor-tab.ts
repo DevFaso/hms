@@ -51,6 +51,8 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { MaternityStayComponent } from './maternity-stay.component';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
+import { BloodRequestLinkComponent } from '../shared/blood-request-link/blood-request-link.component';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 /**
@@ -211,6 +213,8 @@ const DELIVERY_IDS = [
     PartographChartComponent,
     RouterLink,
     MaternityStayComponent,
+    PatientSafetyHeaderComponent,
+    BloodRequestLinkComponent,
   ],
   templateUrl: './labor-tab.html',
   styleUrl: './maternity.scss',

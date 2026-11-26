@@ -112,6 +112,8 @@ class ReadOnlyPostGuardTest {
         "AuditEventLogController#termSearchAuditLogs",
         "ChatController#searchChatHistory",
         "DepartmentController#searchDepartments",
+        // QA D2319: the dispensing queue's search box (a patient's name or record number).
+        "DispenseController#searchWorkQueue",
         "NotificationController#termSearchNotifications",
         "PatientController#termSearchPatients",
         "PatientPortalController#termSearchMyNotifications",

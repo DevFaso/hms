@@ -179,6 +179,62 @@ class PatientPortalServiceImplProxyTest {
         }
 
         @Test
+        @DisplayName("QA D3451: a read the grant allows is recorded for the patient's access list, with its part")
+        void allowedReadIsRecorded() {
+            com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit =
+                org.mockito.Mockito.mock(com.example.hms.service.recordaccess.ProxyReadAudit.class);
+            service.setProxyReadAudit(proxyReadAudit);
+            PatientProxy grant = buildGrant("VIEW_APPOINTMENTS", null);
+            stubActiveGrant(grant);
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
+
+            service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH);
+
+            verify(proxyReadAudit).record(grant.getId(), ProxyRelationship.CAREGIVER, grantorPatientId, proxyUserId,
+                "VIEW_APPOINTMENTS");
+        }
+
+        @Test
+        @DisplayName("QA D3451: a refused read is not recorded as a read")
+        void refusedReadIsNotRecorded() {
+            com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit =
+                org.mockito.Mockito.mock(com.example.hms.service.recordaccess.ProxyReadAudit.class);
+            service.setProxyReadAudit(proxyReadAudit);
+            stubActiveGrant(buildGrant("VIEW_BILLING", null));
+
+            assertThatThrownBy(() -> service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            org.mockito.Mockito.verifyNoInteractions(proxyReadAudit);
+        }
+
+        /**
+         * QA D3451 (class): every read a proxy makes goes through the one grant check, and that check records
+         * it. A new proxy read that skips the check would be both unauthorised and invisible to the patient.
+         */
+        @Test
+        @DisplayName("QA D3451 guard: every proxy read passes the one grant check, which records the read")
+        void everyProxyReadPassesTheRecordingCheck() throws java.io.IOException {
+            String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/example/hms/service/impl/PatientPortalServiceImpl.java"));
+            java.util.regex.Matcher method = java.util.regex.Pattern.compile(
+                "public [\\w<>\\[\\], .]+ ((?:get|count)Proxy\\w+|resolveProxyRecordsPatientId)"
+                    + "\\(Authentication auth, UUID patientId[^)]*\\) \\{")
+                .matcher(source);
+            String methodEnd = source.contains("\r\n") ? "\r\n    }" : "\n    }";
+            int reads = 0;
+            while (method.find()) {
+                reads++;
+                String body = source.substring(method.end(), source.indexOf(methodEnd, method.end()));
+                assertThat(body).as("%s reads a grantor's data", method.group(1)).contains("verifyProxyAccess(auth, patientId,");
+            }
+            assertThat(reads).as("proxy reads found").isGreaterThanOrEqualTo(8);
+            String check = source.substring(source.indexOf("private Patient verifyProxyAccess("));
+            check = check.substring(0, check.indexOf(methodEnd));
+            assertThat(check).contains("proxyReadAudit.record(proxy.getId(), proxy.getRelationship(), patientId, userId, requiredPermission)");
+        }
+
+        @Test
         @DisplayName("scope for a different domain is denied")
         void wrongScope_denied() {
             stubActiveGrant(buildGrant("VIEW_BILLING", null));

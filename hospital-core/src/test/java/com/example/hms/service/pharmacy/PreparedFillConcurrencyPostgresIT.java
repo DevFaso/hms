@@ -154,6 +154,8 @@ class PreparedFillConcurrencyPostgresIT {
     }
 
     @MockitoBean private RoleValidator roleValidator;
+    /** QA D2679: the witness rule asks for the witness's own confirmation; no controlled drug moves here. */
+    @MockitoBean private ControlledWitnessConfirmation witnessConfirmation;
     /** QA D1555: the allergy gate itself is tested in the unit tests; none of these patients has an allergy. */
     @MockitoBean private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
     /** Policy rule 6 (V345): the deferral gate, mocked: these tests are about locks, not money. */

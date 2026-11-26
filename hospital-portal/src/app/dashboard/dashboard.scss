@@ -746,6 +746,10 @@ $shadow-md:
 
 .card-head {
   display: flex;
+  // QA D2262: on a phone the title group and the date / « Voir tout » group (360 px together) take two
+  // lines instead of pushing the link off the card.
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
@@ -754,6 +758,7 @@ $shadow-md:
 
 .card-title-group {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }
@@ -810,6 +815,8 @@ $shadow-md:
 // ── CARD HEAD RIGHT GROUP ─────────────────────────────────────────────────────
 .card-head-right {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }

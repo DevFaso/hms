@@ -115,6 +115,12 @@
         margin-top: 0.5rem;
         font-size: 0.85rem;
       }
+
+      // QA D2310: the pharmacy's name, address and phone above the title.
+      .receipt-pharmacy {
+        margin: 0 0 0.5rem;
+        font-size: 0.85rem;
+      }
     }
 
     .total-row {

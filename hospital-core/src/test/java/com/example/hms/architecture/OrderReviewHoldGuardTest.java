@@ -75,6 +75,7 @@ class OrderReviewHoldGuardTest {
         Prescription#search | a read over POST (the list's search box, QA D3750): nothing leaves
         Prescription#update,delete | an edit holds the order again (reviewAgainAfterChange, pinned below); a withdrawal stops the order
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
+        Dispense#searchWorkQueue | a read over POST: the queue's typed search term travels in the body (QA D2319)
         Dispense#cancelReady,cancelDispense | hands stock back
         NurseTask#createHandoff,completeHandoff,captureVitals,createNursingTask,completeNursingTask,markInboxRead,createCareNote | no order
         Transfusion#createRequest | a new order written after the dispute follows the normal workflow

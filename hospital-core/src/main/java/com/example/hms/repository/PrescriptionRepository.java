@@ -376,6 +376,62 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
                                               Pageable pageable);
 
     /**
+     * QA D2319: the work queue narrowed by its search box. The rows are the queue's own (same hospital, same
+     * statuses, same ended-stay rule as {@link #findWorkQueue}); the term matches the patient's name (either
+     * order, accents ignored), the patient's record number AT THIS HOSPITAL (never another hospital's), or the
+     * medication.
+     */
+    String WORK_QUEUE_SEARCH_FROM = " from Prescription p left join p.patient pt "
+            + "where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
+            + "and (" + PatientRepository.FOLD_OPEN + "p.medicationName" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+            + " or " + PatientRepository.FOLD_OPEN + "CONCAT(pt.firstName, ' ', COALESCE(CONCAT(pt.middleName, ' '), ''), pt.lastName)"
+            + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+            + " or " + PatientRepository.FOLD_OPEN + "CONCAT(pt.firstName, ' ', pt.lastName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+            + " or " + PatientRepository.FOLD_OPEN + "CONCAT(pt.lastName, ' ', pt.firstName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+            + " or exists (select r.id from PatientHospitalRegistration r where r.patient = pt "
+            + "and r.hospital.id = :hospitalId and LOWER(r.mrn)" + SEARCH_LIKE + ")) ";
+    /** The MINE filter of {@link #findWorkQueueClaimedBy}, on the search. */
+    String WORK_QUEUE_SEARCH_MINE = "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)";
+    /** The UNCLAIMED filter of {@link #findWorkQueueUnclaimed}, on the search. */
+    String WORK_QUEUE_SEARCH_UNCLAIMED = "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedAt > :activeAfter) "
+            + "and not exists (select d.id from Dispense d where d.prescription = p "
+            + "and d.status = com.example.hms.enums.DispenseStatus.PENDING)";
+
+    /** QA D2319: the queue's search box, filter ALL. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "select p" + WORK_QUEUE_SEARCH_FROM,
+        countQuery = "select count(p)" + WORK_QUEUE_SEARCH_FROM)
+    Page<Prescription> searchWorkQueue(@Param("hospitalId") UUID hospitalId,
+                                       @Param("statuses") List<PrescriptionStatus> statuses,
+                                       @Param("namePattern") String namePattern,
+                                       Pageable pageable);
+
+    /** QA D2319: the queue's search box, filter MINE. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "select p" + WORK_QUEUE_SEARCH_FROM + WORK_QUEUE_SEARCH_MINE,
+        countQuery = "select count(p)" + WORK_QUEUE_SEARCH_FROM + WORK_QUEUE_SEARCH_MINE)
+    Page<Prescription> searchWorkQueueClaimedBy(@Param("hospitalId") UUID hospitalId,
+                                                @Param("statuses") List<PrescriptionStatus> statuses,
+                                                @Param("namePattern") String namePattern,
+                                                @Param("userId") UUID userId,
+                                                @Param("activeAfter") LocalDateTime activeAfter,
+                                                Pageable pageable);
+
+    /** QA D2319: the queue's search box, filter UNCLAIMED. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "select p" + WORK_QUEUE_SEARCH_FROM + WORK_QUEUE_SEARCH_UNCLAIMED,
+        countQuery = "select count(p)" + WORK_QUEUE_SEARCH_FROM + WORK_QUEUE_SEARCH_UNCLAIMED)
+    Page<Prescription> searchWorkQueueUnclaimed(@Param("hospitalId") UUID hospitalId,
+                                                @Param("statuses") List<PrescriptionStatus> statuses,
+                                                @Param("namePattern") String namePattern,
+                                                @Param("activeAfter") LocalDateTime activeAfter,
+                                                Pageable pageable);
+
+    /**
      * The prescription with its row locked, for a caller about to make an
      * exclusive decision about it — SMS dispatch, which may hold at most one
      * open offer at a time. Two concurrent dispatches would otherwise both read

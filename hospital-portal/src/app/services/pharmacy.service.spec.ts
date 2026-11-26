@@ -54,4 +54,30 @@ describe('PharmacyService', () => {
     expect(bare.request.params.get('claim')).toBe('MINE');
     bare.flush({ success: true, data: null });
   });
+
+  it('QA D2319: a typed term searches the queue by POST, the term in the body and never in the URL', () => {
+    service.getDispenseWorkQueue(0, 20, 'MINE', undefined, '  Kaboré ').subscribe();
+    const search = http.expectOne((r) => r.url === '/pharmacy/dispense/work-queue/term-search');
+    expect(search.request.method).toBe('POST');
+    expect(search.request.body).toEqual({ search: 'Kaboré' });
+    expect(search.request.params.get('claim')).toBe('MINE');
+    expect(search.request.params.get('page')).toBe('0');
+    expect(search.request.urlWithParams).not.toContain('Kabor');
+    search.flush({ success: true, data: { content: [], totalElements: 0, totalPages: 0 } });
+
+    // A blank term is the queue itself: the plain GET.
+    service.getDispenseWorkQueue(0, 20, 'ALL', undefined, '   ').subscribe();
+    const list = http.expectOne((r) => r.url === '/pharmacy/dispense/work-queue');
+    expect(list.request.method).toBe('GET');
+    list.flush({ success: true, data: null });
+  });
+
+  it('QA D2679: the witness’s secret is posted in the body of the confirmation call', () => {
+    service.confirmWitness('w-1', 's3cret').subscribe();
+    const call = http.expectOne('/pharmacy/stock-transactions/witness-confirmations');
+    expect(call.request.method).toBe('POST');
+    expect(call.request.body).toEqual({ witnessedBy: 'w-1', secret: 's3cret' });
+    expect(call.request.urlWithParams).not.toContain('s3cret');
+    call.flush({ success: true, data: null });
+  });
 });

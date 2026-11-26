@@ -54,6 +54,29 @@ public class DispenseController {
         return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getWorkQueue(pageable, claim)));
     }
 
+    /**
+     * QA D2319: the queue's search box. The typed term is a patient's name or record number, so it travels in
+     * the body, never in the URL (proxy and access logs, browser history, front-end tracing); the claim filter
+     * and the paging stay in the query. The rows are those of the caller's active hospital only.
+     */
+    @com.example.hms.security.ReadsOnly("the dispensing queue's search box, under POST so the typed term stays"
+        + " out of the URL")
+    @PostMapping("/work-queue/term-search")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Search the pharmacist work queue",
+            description = "One page of the work queue narrowed to a patient's name, their record number at the "
+                    + "current hospital, or a medication, accents ignored; the term is in the body. claim as on "
+                    + "the queue.")
+    @ApiResponse(responseCode = "200", description = "Matching work-queue rows")
+    @ApiResponse(responseCode = "400", description = "Blank term or unknown claim filter")
+    public ResponseEntity<ApiResponseWrapper<Page<WorkQueuePrescriptionDTO>>> searchWorkQueue(
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable,
+            @RequestParam(name = "claim", defaultValue = "ALL") QueueClaimFilter claim) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                dispenseService.searchWorkQueue(body.term(), pageable, claim)));
+    }
+
     @PostMapping("/work-queue/{prescriptionId}/claim")
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Claim a work-queue prescription",

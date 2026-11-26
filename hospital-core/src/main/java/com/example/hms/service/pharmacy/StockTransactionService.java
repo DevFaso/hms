@@ -39,4 +39,11 @@ public interface StockTransactionService {
 
     Page<StockTransactionResponseDTO> listByPharmacyAndType(
             UUID pharmacyId, StockTransactionType type, Pageable pageable);
+
+    /**
+     * QA D2679: the witness of the caller's next controlled-drug movements at the active hospital confirms with
+     * their own password or authenticator code. Until they have, a movement naming them is refused.
+     */
+    com.example.hms.payload.dto.pharmacy.WitnessConfirmationResponseDTO confirmWitness(
+            com.example.hms.payload.dto.pharmacy.WitnessConfirmationRequestDTO dto);
 }

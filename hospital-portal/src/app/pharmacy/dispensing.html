@@ -299,6 +299,12 @@
                   <option [ngValue]="w.userId">{{ w.displayName }}</option>
                 }
               </select>
+              <!-- QA D2679: named is not witnessed; the witness confirms with their own password or code. -->
+              <app-witness-confirm
+                fieldId="dispWitnessSecret"
+                [witnessId]="form.witnessedBy"
+                [candidates]="witnessCandidates()"
+              />
               @if (witnessCandidates().length === 0) {
                 <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
               }
@@ -743,6 +749,12 @@
                   <option [ngValue]="w.userId">{{ w.displayName }}</option>
                 }
               </select>
+              <!-- QA D2679: named is not witnessed; the witness confirms with their own password or code. -->
+              <app-witness-confirm
+                fieldId="cancelReadyWitnessSecret"
+                [witnessId]="cancelReadyWitness"
+                [candidates]="witnessCandidates()"
+              />
             </div>
           }
         </div>
@@ -852,12 +864,46 @@
       </fieldset>
     }
 
+    <!-- QA D2319: find a patient's prescriptions in the whole queue, not only on the page shown. -->
+    <div class="search-box queue-search" data-testid="queue-search">
+      <span class="material-symbols-outlined" aria-hidden="true">search</span>
+      <input
+        id="queueSearch"
+        name="queueSearch"
+        type="search"
+        maxlength="200"
+        autocomplete="off"
+        [attr.aria-label]="'PHARMACY.QUEUE_SEARCH' | translate"
+        [placeholder]="'PHARMACY.QUEUE_SEARCH' | translate"
+        [(ngModel)]="queueSearch"
+        (input)="onQueueSearchInput()"
+        (keydown.enter)="runQueueSearch()"
+      />
+      @if (queueSearch) {
+        <button
+          type="button"
+          class="btn-link"
+          data-testid="queue-search-clear"
+          (click)="clearQueueSearch()"
+        >
+          {{ 'PHARMACY.QUEUE_SEARCH_CLEAR' | translate }}
+        </button>
+      }
+    </div>
+
     @if (queueLoading()) {
       <div class="loading-bar"></div>
     } @else if (workQueue().length === 0) {
       <div class="empty-state">
-        <span class="material-symbols-outlined">check_circle</span>
-        <p>{{ 'PHARMACY.NO_PENDING_RX' | translate }}</p>
+        @if (queueSearchApplied()) {
+          <span class="material-symbols-outlined" aria-hidden="true">search_off</span>
+          <p data-testid="queue-search-empty">
+            {{ 'PHARMACY.QUEUE_SEARCH_EMPTY' | translate: { term: queueSearchApplied() } }}
+          </p>
+        } @else {
+          <span class="material-symbols-outlined">check_circle</span>
+          <p>{{ 'PHARMACY.NO_PENDING_RX' | translate }}</p>
+        }
       </div>
     } @else {
       <div
@@ -1209,6 +1255,12 @@
                 <option [ngValue]="w.userId">{{ w.displayName }}</option>
               }
             </select>
+            <!-- QA D2679: named is not witnessed; the witness confirms with their own password or code. -->
+            <app-witness-confirm
+              fieldId="cancelWitnessSecret"
+              [witnessId]="cancelWitnessId"
+              [candidates]="witnessCandidates()"
+            />
           </div>
         }
         <div class="field">

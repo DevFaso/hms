@@ -4090,6 +4090,13 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V388 (QA D2679): the witness of a controlled-drug movement confirms with their own password or
+         authenticator code; one row per confirmation (ids, method, times), read by the witness rule. -->
+    <changeSet id="V388-stock-witness-confirmations" author="hms-team" runOnChange="false">
+        <sqlFile path="V388__stock_witness_confirmations.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
         <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="false"/>

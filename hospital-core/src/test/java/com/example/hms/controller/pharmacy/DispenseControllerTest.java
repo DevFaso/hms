@@ -122,6 +122,40 @@ class DispenseControllerTest {
     }
 
     @Test
+    @DisplayName("QA D2319: the queue's search takes its term in the body, keeps the claim filter and has the queue's gate")
+    void queueSearchPostsItsTerm() throws Exception {
+        DispenseService service = mock(DispenseService.class);
+        PrescriptionQueueClaimService claims = mock(PrescriptionQueueClaimService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new DispenseController(service, claims))
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/pharmacy/dispense/work-queue/term-search").param("claim", "UNCLAIMED")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"search\":\" Kaboré \"}"))
+                .andExpect(status().isOk());
+        verify(service).searchWorkQueue(eq("Kaboré"), any(Pageable.class), eq(QueueClaimFilter.UNCLAIMED));
+
+        // A blank term is refused: the list itself is the plain GET, never an unfiltered answer to a search.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/pharmacy/dispense/work-queue/term-search")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"search\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(gateOf("searchWorkQueue", com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO.class,
+                Pageable.class, QueueClaimFilter.class))
+                .isEqualTo(gateOf("getWorkQueue", Pageable.class, QueueClaimFilter.class));
+        Method search = DispenseController.class.getDeclaredMethod("searchWorkQueue",
+                com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO.class, Pageable.class,
+                QueueClaimFilter.class);
+        assertThat(search.isAnnotationPresent(com.example.hms.security.ReadsOnly.class))
+                .as("a search under POST is declared a read").isTrue();
+    }
+
+    @Test
     @DisplayName("GET /settings reports the ready-for-collection flag")
     void settingsReportTheFlag() {
         DispenseService service = mock(DispenseService.class);

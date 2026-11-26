@@ -24,7 +24,17 @@ const CLINICAL_SCREENS = {
   'nurse station (vitals, care note)': '../src/app/nurse-station/nurse-station.html',
   // QA D3867: the prescription dialog shows the allergies and the dated weight before the order is created.
   'new prescription dialog': '../src/app/prescriptions/prescriptions.html',
+  // QA D3220 (remainder, r77): the labour and delivery card and the post-partum watch, where a haemorrhage is seen.
+  'labour and delivery card': '../src/app/maternity/labor-tab.html',
+  'post-partum watch': '../src/app/maternity/postpartum-tab.html',
 };
+
+/** QA D3220: the screens whose header also offers the request for blood, beside the group. */
+const BLOOD_REQUEST_SCREENS = [
+  'labour and delivery card',
+  'post-partum watch',
+  'new prescription dialog',
+];
 
 const HEADER_TEMPLATE =
   '../src/app/shared/patient-safety-header/patient-safety-header.component.html';
@@ -39,6 +49,38 @@ for (const [name, path] of Object.entries(CLINICAL_SCREENS)) {
     );
   });
 }
+
+for (const name of BLOOD_REQUEST_SCREENS) {
+  test(`${name}: the header offers the request for blood`, () => {
+    const html = read(CLINICAL_SCREENS[name]);
+    assert.match(
+      html,
+      /<app-patient-safety-header\b[^>]*\[bloodRequest\]="true"/,
+      `${CLINICAL_SCREENS[name]} shows the blood group with no way to ask for blood`,
+    );
+  });
+}
+
+test('the request for blood opens the blood bank with the patient in the navigation state, not the URL', () => {
+  const header = read(HEADER_TEMPLATE);
+  assert.match(
+    header,
+    /@if \(bloodRequest\(\)\) \{\s*<app-blood-request-link \[patientId\]="patientId\(\)"/,
+  );
+  const link = read('../src/app/shared/blood-request-link/blood-request-link.component.ts');
+  assert.match(link, /routerLink="\/transfusions"/);
+  assert.match(link, /\[state\]="state\(\)"/);
+  assert.doesNotMatch(link, /queryParams/);
+  // Offered to the roles the endpoint admits, from the one map the backend mirrors.
+  assert.match(link, /actionRoles\('transfusionRequestCreate'\)/);
+  // The delivery's alerts (the haemorrhage one) carry the action too.
+  assert.match(
+    read(CLINICAL_SCREENS['labour and delivery card']),
+    /record\.alerts\?\.length[\s\S]{0,200}<app-blood-request-link \[patientId\]="p\.id"/,
+  );
+  // And the blood bank opens its own request form for that patient.
+  assert.match(read('../src/app/transfusion/transfusion.ts'), /takeBloodRequestPatient\(\)/);
+});
 
 test('the discharge summary shows the header where it is written and where it is read', () => {
   const html = read(CLINICAL_SCREENS['discharge summary (write and read)']);

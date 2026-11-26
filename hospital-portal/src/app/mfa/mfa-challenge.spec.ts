@@ -118,6 +118,29 @@ describe('MfaChallengeComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
+  it('keeps a wrong code on the challenge: the reason, an empty field, the focus on it (QA D2401)', async () => {
+    mfa.verifyLogin.and.returnValue(
+      throwError(() => ({ status: 401, error: { message: 'Ce code n’a pas été accepté.' } })),
+    );
+    create({ mfaToken: 'mfa-1', mfaEnrolled: true });
+    document.body.appendChild(host());
+    submit('654321');
+    await fixture.whenStable();
+
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(auth.setToken).not.toHaveBeenCalled();
+    expect(text('.error-banner')).toBe('Ce code n’a pas été accepté.');
+    const field = host().querySelector<HTMLInputElement>('#mfa-challenge-code')!;
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(fixture.componentInstance.code).toBe('');
+    expect(document.activeElement).toBe(field);
+    // The same challenge takes the next code: nothing was signed out.
+    mfa.verifyLogin.calls.reset();
+    submit('123456');
+    expect(mfa.verifyLogin).toHaveBeenCalledWith('mfa-1', '123456');
+    host().remove();
+  });
+
   it('completes the sign-in on a good code and lands on the role home', () => {
     const res: MfaVerifyLoginResponse = { accessToken: 'jwt', refreshToken: 'r' };
     mfa.verifyLogin.and.returnValue(of(res));

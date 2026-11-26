@@ -192,7 +192,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             return List.of();
         }
         UUID self = roleValidator.getCurrentUserId();
-        Map<UUID, StockWitnessCandidateDTO> byUser = new LinkedHashMap<>();
+        // QA D2679: pharmacy staff first. The administrator is listed only when none of them can witness.
+        Map<UUID, User> pharmacyStaff = new LinkedHashMap<>();
+        Map<UUID, User> administrators = new LinkedHashMap<>();
         for (UserRoleHospitalAssignment a : assignmentRepository.findStaffRowsByHospitalId(hospitalId)) {
             User user = a.getUser();
             if (!Boolean.TRUE.equals(a.getActive()) || user == null || !user.isActive() || user.isDeleted()
@@ -201,12 +203,45 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                     || !WITNESS_ROLE_CODES.contains(upper(a.getRole().getCode()))) {
                 continue;
             }
-            byUser.putIfAbsent(user.getId(), new StockWitnessCandidateDTO(user.getId(), displayName(user)));
+            boolean pharmacyRole = ControlledStockWitness.PHARMACY_WITNESS_ROLE_CODES.contains(upper(a.getRole().getCode()));
+            (pharmacyRole ? pharmacyStaff : administrators).putIfAbsent(user.getId(), user);
+        }
+        Map<UUID, StockWitnessCandidateDTO> byUser = new LinkedHashMap<>();
+        pharmacyStaff.forEach((id, user) -> byUser.put(id, new StockWitnessCandidateDTO(id, displayName(user),
+                controlledStockWitness.confirmationMethodOf(user), false)));
+        if (pharmacyStaff.isEmpty()) {
+            administrators.forEach((id, user) -> byUser.put(id, new StockWitnessCandidateDTO(id, displayName(user),
+                    controlledStockWitness.confirmationMethodOf(user), true)));
         }
         return byUser.values().stream()
                 .sorted(Comparator.comparing(StockWitnessCandidateDTO::displayName,
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
+    }
+
+    /**
+     * QA D2679: no {@code @Transactional} here on purpose. A refused confirmation throws, and the witness's
+     * failed attempt (the sign-in bucket, the audit row) must stay counted: each of those writes commits in its
+     * own transaction, and the confirmation row is one repository save.
+     */
+    @Override
+    public com.example.hms.payload.dto.pharmacy.WitnessConfirmationResponseDTO confirmWitness(
+            com.example.hms.payload.dto.pharmacy.WitnessConfirmationRequestDTO dto) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException("witnessConfirmation.hospitalRequired");
+        }
+        UUID self = roleValidator.getCurrentUserId();
+        User performer = self == null ? null : userRepository.findById(self).orElse(null);
+        if (performer == null) {
+            throw new BusinessException("pharmacy.currentUserUnknown");
+        }
+        com.example.hms.model.pharmacy.StockWitnessConfirmation confirmed =
+                controlledStockWitness.confirmWitness(dto.getWitnessedBy(), dto.getSecret(), performer, hospitalId);
+        User witness = userRepository.findById(confirmed.getWitnessUserId()).orElse(null);
+        return new com.example.hms.payload.dto.pharmacy.WitnessConfirmationResponseDTO(confirmed.getWitnessUserId(),
+                witness == null ? null : displayName(witness), confirmed.getMethod(), confirmed.getConfirmedAt(),
+                confirmed.getExpiresAt());
     }
 
     @Override
