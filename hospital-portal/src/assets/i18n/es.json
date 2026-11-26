@@ -13530,6 +13530,7 @@
     "NONE_YET": "Aún no hay informes programados",
     "NONE_YET_HINT": "Cree uno para recibir un CSV agregado cada día, semana o mes.",
     "NO_RUNS": "Sin ejecuciones para este informe",
+    "WEEK_LABEL": "Semana {{week}}, {{year}}",
     "PERIOD_TOKEN": "Período",
     "ROWS": "Filas",
     "GENERATED_AT": "Generado",

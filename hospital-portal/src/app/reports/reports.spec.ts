@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
 import { of, Subject, throwError } from 'rxjs';
 
 import { ReportsComponent } from './reports';
@@ -75,6 +76,23 @@ describe('ReportsComponent', () => {
     fixture = TestBed.createComponent(ReportsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('renders report history periods in the current language and keeps the original token', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    expect(component.periodLabel('202610', 'MONTHLY')).toBe('octobre 2026');
+    expect(component.periodLabel('2026-W01', 'WEEKLY')).toBe('Semaine 1, 2026');
+    expect(component.periodLabel('2026-10-08', 'DAILY')).toBe('8 oct. 2026');
+    expect(component.periodLabel('202613', 'MONTHLY')).toBe('202613');
+    expect(component.periodLabel('2026-02-30', 'DAILY')).toBe('2026-02-30');
+    expect(component.periodLabel('2026-W00', 'WEEKLY')).toBe('2026-W00');
+    component.toggleRuns(definition());
+    fixture.detectChanges();
+    const cell = fixture.nativeElement.querySelector('.runs-table tbody tr td') as HTMLElement;
+    expect(cell.textContent?.trim()).toBe('juillet 2026');
+    expect(cell.title).toBe('202607');
   });
 
   it('should create and load definitions on init', () => {

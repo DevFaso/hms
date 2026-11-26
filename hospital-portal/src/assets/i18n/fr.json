@@ -13530,6 +13530,7 @@
     "NONE_YET": "Aucun rapport planifié",
     "NONE_YET_HINT": "Créez-en un pour recevoir un CSV agrégé chaque jour, semaine ou mois.",
     "NO_RUNS": "Aucune exécution pour ce rapport",
+    "WEEK_LABEL": "Semaine {{week}}, {{year}}",
     "PERIOD_TOKEN": "Période",
     "ROWS": "Lignes",
     "GENERATED_AT": "Généré le",
