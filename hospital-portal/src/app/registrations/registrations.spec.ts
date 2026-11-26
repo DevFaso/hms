@@ -440,6 +440,17 @@ describe('RegistrationsComponent global super-admin view', () => {
     expect(post.request.body.patientId).toBe('p1');
     post.flush({ id: 'new', hospitalId: 'h2', active: true });
     expect(fixture.componentInstance.registrations().map((row) => row.id)).toEqual(['new']);
+
+    fixture.componentInstance.registrations.set([]);
+    fixture.componentInstance.activeFilter.set('inactive');
+    fixture.componentInstance.openCreate();
+    fixture.componentInstance.form.hospitalId = 'h2';
+    fixture.componentInstance.form.patientId = 'p2';
+    fixture.componentInstance.submitForm();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url === '/registrations')
+      .flush({ id: 'active-new', hospitalId: 'h2', active: true });
+    expect(fixture.componentInstance.registrations()).toEqual([]);
   });
 
   it('reports a failed hospital instead of displaying incomplete network totals', () => {
