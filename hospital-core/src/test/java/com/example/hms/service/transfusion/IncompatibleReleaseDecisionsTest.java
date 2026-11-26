@@ -684,6 +684,49 @@ class IncompatibleReleaseDecisionsTest {
     }
 
     @Test
+    @DisplayName("review of #1347: a note alone is accepted while the monitoring is open, appended to those kept, audited, "
+        + "and closes nothing")
+    void aNoteAloneIsKept() {
+        typed(AboGroup.A, RhFactor.POSITIVE);
+        TransfusionRequest request = request();
+        BloodUnit unit = incompatibleBag(request, "A-1", AboGroup.A, RhFactor.POSITIVE, null, null);
+        IncompatibleReleaseDecision decision = release(request, unit, naming(doctor));
+        UUID id = decision.getId();
+        when(roleValidator.getCurrentUserId()).thenReturn(midwife);
+        service.recordIncompatibleMonitoring(id, hospitalId, IncompatibleMonitoringRequestDTO.builder()
+            .checksDone(List.of(IncompatibleMonitoringCheck.BEDSIDE_ABO_CHECK)).build());
+        org.mockito.Mockito.clearInvocations(fixture.audit, fixture.inBasket);
+
+        // After the checks, with no new check and no outcome: the observation alone.
+        IncompatibleReleaseDecisionDTO first = service.recordIncompatibleMonitoring(id, hospitalId,
+            IncompatibleMonitoringRequestDTO.builder().note("  Clear urine at H+2  ").build());
+        assertThat(first.getMonitoringNote()).isEqualTo("Clear urine at H+2");
+        IncompatibleReleaseDecisionDTO second = service.recordIncompatibleMonitoring(id, hospitalId,
+            IncompatibleMonitoringRequestDTO.builder().note("Afebrile at H+4").build());
+        assertThat(second.getMonitoringNote()).as("appended, never replaced").isEqualTo("Clear urine at H+2\nAfebrile at H+4");
+
+        assertThat(decision.monitoringOwed()).as("a note closes nothing").isTrue();
+        assertThat(decision.getMonitoringOutcome()).isNull();
+        assertThat(second.getMonitoringChecksDone()).containsExactly(IncompatibleMonitoringCheck.BEDSIDE_ABO_CHECK);
+        verify(fixture.inBasket, never()).removeOpenItemsForReference(any(), any());
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(fixture.audit, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).allSatisfy(event -> {
+            assertThat(event.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.INCOMPATIBLE_RELEASE_MONITORING_RECORDED);
+            assertThat(event.getUserId()).isEqualTo(midwife);
+            assertThat(String.valueOf(event.getDetails()) + event.getEventDescription()).as("codes only, never the narrative")
+                .doesNotContain("urine").doesNotContain("Afebrile");
+        });
+        // An empty note is still nothing, and the laboratory issuer still cannot write it.
+        assertThatThrownBy(() -> service.recordIncompatibleMonitoring(id, hospitalId,
+            IncompatibleMonitoringRequestDTO.builder().note("   ").build())).isInstanceOf(FieldBusinessException.class);
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        assertThatThrownBy(() -> service.recordIncompatibleMonitoring(id, hospitalId,
+            IncompatibleMonitoringRequestDTO.builder().note("x").build())).isInstanceOf(ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("a bag that comes back unused closes its monitoring by itself; the countersignature of a fallback stays owed")
     void theBagCameBack() {
         fixture.incompatibleFallback(true);

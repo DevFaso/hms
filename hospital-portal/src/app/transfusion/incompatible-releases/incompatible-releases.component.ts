@@ -225,10 +225,18 @@ export class IncompatibleReleasesComponent implements OnInit {
     if (checksDone.length === 0) return;
     this.act(
       row,
-      this.transfusion.recordIncompatibleMonitoring(row.id, { checksDone, ...this.noteOf(row) }),
+      this.transfusion.recordIncompatibleMonitoring(row.id, { checksDone }),
       'CHECKS_SAVED',
-      { note: 'incompat-note-' + row.id },
     );
+  }
+
+  /** An observation on its own while the monitoring is open: the server adds it to those already kept. */
+  saveNote(row: IncompatibleReleaseDecision): void {
+    const note = this.noteOf(row);
+    if (!note.note) return;
+    this.act(row, this.transfusion.recordIncompatibleMonitoring(row.id, note), 'NOTE_SAVED', {
+      note: 'incompat-note-' + row.id,
+    });
   }
 
   /** The haemovigilance prompt: whether a reaction was seen. It closes the monitoring. */
@@ -270,8 +278,11 @@ export class IncompatibleReleasesComponent implements OnInit {
         this.busyId.set(null);
         this.releases.update((rows) => rows.map((r) => (r.id === updated.id ? updated : r)));
         delete this.checks[row.id];
-        delete this.outcome[row.id];
-        delete this.notes[row.id];
+        if (doneKey !== 'CHECKS_SAVED') {
+          // Saving the checks sends no note: one being typed stays.
+          delete this.outcome[row.id];
+          delete this.notes[row.id];
+        }
         this.toast.success(this.translate.instant('TRANSFUSION.INCOMPAT.' + doneKey));
       },
       error: (err: unknown) => {

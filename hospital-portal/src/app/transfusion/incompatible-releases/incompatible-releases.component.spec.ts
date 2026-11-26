@@ -277,6 +277,50 @@ describe('IncompatibleReleasesComponent (V381)', () => {
     expect(el('incompat-record-outcome')).toBeNull();
   });
 
+  it('a note alone is saved while the monitoring is open, after checks too, and a note being typed survives saving checks', async () => {
+    const checked = decision({ monitoringChecksDone: ['BEDSIDE_ABO_CHECK'] });
+    await start(['ROLE_NURSE'], [checked]);
+    expect(el('incompat-save-note')).not.toBeNull();
+
+    // Ticking another check and saving it does not send, nor lose, the note being typed.
+    component.notes['d1'] = '  Urines claires à H+2  ';
+    component.setChecked(checked, 'SLOW_START', true);
+    const both = decision({ monitoringChecksDone: ['BEDSIDE_ABO_CHECK', 'SLOW_START'] });
+    tx.recordIncompatibleMonitoring.and.returnValue(of(both));
+    component.saveChecks(checked);
+    expect(tx.recordIncompatibleMonitoring).toHaveBeenCalledWith('d1', {
+      checksDone: ['SLOW_START'],
+    });
+    expect(component.notes['d1']).toBe('  Urines claires à H+2  ');
+
+    // No new check, no outcome: the note goes on its own.
+    tx.recordIncompatibleMonitoring.and.returnValue(
+      of({ ...both, monitoringNote: 'Urines claires à H+2' }),
+    );
+    fixture.detectChanges();
+    component.saveNote(both);
+    expect(tx.recordIncompatibleMonitoring).toHaveBeenCalledWith('d1', {
+      note: 'Urines claires à H+2',
+    });
+    fixture.detectChanges();
+    expect(el('incompat-note-kept')!.textContent).toContain('Urines claires à H+2');
+    expect(component.notes['d1']).toBeUndefined();
+    expect(toast.success).toHaveBeenCalledWith('TRANSFUSION.INCOMPAT.NOTE_SAVED');
+    // Still open: another note can follow.
+    expect(el('incompat-save-note')).not.toBeNull();
+
+    // A blank note sends nothing.
+    component.notes['d1'] = '   ';
+    component.saveNote(both);
+    expect(tx.recordIncompatibleMonitoring).toHaveBeenCalledTimes(2);
+  });
+
+  it('once the outcome is recorded the note form goes with the rest', async () => {
+    await start(['ROLE_NURSE'], [decision({ monitoringOutcome: 'NO_REACTION' })]);
+    expect(el('incompat-save-note')).toBeNull();
+    expect(el('incompat-record-outcome')).toBeNull();
+  });
+
   it('each action is refused empty on its field, never by a silently disabled button (QA D1124)', async () => {
     await start(['ROLE_NURSE']);
     document.body.appendChild(fixture.nativeElement);
@@ -287,6 +331,12 @@ describe('IncompatibleReleasesComponent (V381)', () => {
           sent: tx.recordIncompatibleMonitoring,
         }),
       ).toEqual(['incompat-outcome-d1']);
+      expect(
+        expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="incompat-save-note"]',
+          sent: tx.recordIncompatibleMonitoring,
+        }),
+      ).toEqual(['incompat-note-d1']);
       expect(
         expectEmptySubmitRefusal(fixture, {
           button: '[data-testid="incompat-save-checks"]',

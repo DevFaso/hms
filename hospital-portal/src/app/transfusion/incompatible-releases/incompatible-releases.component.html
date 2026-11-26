@@ -361,15 +361,6 @@
           }
           @if (monitoringOwed(r) && canMonitor) {
             <div class="opos-inline-form">
-              <textarea
-                appFormControl
-                rows="2"
-                maxlength="2000"
-                [id]="'incompat-note-' + r.id"
-                [attr.aria-label]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
-                [placeholder]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
-                [(ngModel)]="notes[r.id]"
-              ></textarea>
               <button
                 type="button"
                 class="btn-secondary btn-sm"
@@ -385,6 +376,34 @@
           }
         </div>
         @if (monitoringOwed(r) && canMonitor) {
+          <!-- An observation on its own, while the monitoring is open: added to those already kept. -->
+          <div class="opos-inline-form" data-submit-scope>
+            <div class="field">
+              <label [for]="'incompat-note-' + r.id"
+                >{{ 'TRANSFUSION.INCOMPAT.NOTE' | translate }} *</label
+              >
+              <textarea
+                required
+                appFormControl
+                rows="2"
+                maxlength="2000"
+                [id]="'incompat-note-' + r.id"
+                data-testid="incompat-note"
+                [(ngModel)]="notes[r.id]"
+              ></textarea>
+            </div>
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              data-testid="incompat-save-note"
+              [disabled]="busyId() === r.id"
+              [appSubmitGuard]="!(notes[r.id] || '').trim()"
+              [submitGuardFields]="['incompat-note-' + r.id]"
+              (click)="saveNote(r)"
+            >
+              {{ 'TRANSFUSION.INCOMPAT.SAVE_NOTE' | translate }}
+            </button>
+          </div>
           <div class="opos-inline-form" data-submit-scope>
             <div class="field">
               <label [for]="'incompat-outcome-' + r.id"

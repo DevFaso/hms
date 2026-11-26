@@ -13823,6 +13823,8 @@
       "OUTCOME_ACTION": "Enregistrer le résultat",
       "OUTCOME_SAVED": "Surveillance enregistrée",
       "NOTE": "Commentaire",
+      "SAVE_NOTE": "Ajouter ce commentaire",
+      "NOTE_SAVED": "Commentaire ajouté",
       "INFORMED_LATER_ACTION": "Le patient a maintenant été informé",
       "INFORMED_LATER": "informé après coup par {{name}}, {{at}}",
       "INFORMED_SAVED": "Enregistré : le patient a été informé",

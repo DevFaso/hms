@@ -13823,6 +13823,8 @@
       "OUTCOME_ACTION": "Registrar el resultado",
       "OUTCOME_SAVED": "Vigilancia registrada",
       "NOTE": "Nota",
+      "SAVE_NOTE": "Añadir esta nota",
+      "NOTE_SAVED": "Nota añadida",
       "INFORMED_LATER_ACTION": "El paciente ya ha sido informado",
       "INFORMED_LATER": "informado después por {{name}}, {{at}}",
       "INFORMED_SAVED": "Registrado: el paciente fue informado",

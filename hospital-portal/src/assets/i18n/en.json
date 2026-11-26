@@ -13823,6 +13823,8 @@
       "OUTCOME_ACTION": "Record the outcome",
       "OUTCOME_SAVED": "Monitoring recorded",
       "NOTE": "Note",
+      "SAVE_NOTE": "Add this note",
+      "NOTE_SAVED": "Note added",
       "INFORMED_LATER_ACTION": "The patient has now been informed",
       "INFORMED_LATER": "informed afterwards by {{name}}, {{at}}",
       "INFORMED_SAVED": "Recorded: the patient was informed",
