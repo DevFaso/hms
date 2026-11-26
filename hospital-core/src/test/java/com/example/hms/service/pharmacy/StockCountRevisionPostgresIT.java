@@ -269,6 +269,39 @@ class StockCountRevisionPostgresIT {
     }
 
     @Test
+    void reconciliationRefusesALotBeingChangedAndLeavesNoAdjustment() throws Exception {
+        UUID lotId = transaction.execute(status -> {
+            var lot = StockLot.builder().inventoryItem(items.findById(itemId).orElseThrow()).lotNumber("COUNT-REPAIR-BUSY")
+                .expiryDate(LocalDate.now().plusYears(1)).initialQuantity(new BigDecimal("15"))
+                .remainingQuantity(new BigDecimal("15")).receivedDate(LocalDate.now())
+                .receivedByUser(entityManager.find(User.class, actorId)).unitCost(BigDecimal.ONE).build();
+            return lots.saveAndFlush(lot).getId();
+        });
+        var request = new StockBalanceReconciliationRequest(new BigDecimal("20"), new BigDecimal("15"),
+            items.findById(itemId).orElseThrow().getStockRevision(), true, "Physical count verified", null,
+            List.of(new StockBalanceReconciliationRequest.LotCount(lotId, new BigDecimal("15"))));
+        var held = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var holder = pool.submit(() -> transaction.executeWithoutResult(status -> {
+                jdbc.queryForObject("SELECT id FROM clinical.stock_lots WHERE id = ? FOR UPDATE", UUID.class, lotId);
+                held.countDown();
+                try { if (!release.await(20, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Lock test timed out"); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+            }));
+            try {
+                assertThat(held.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> reconciliation.reconcile(itemId, request))
+                    .hasFieldOrPropertyWithValue("messageKey", "stockCount.stockBusy");
+            } finally { release.countDown(); }
+            holder.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        assertThat(items.findById(itemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
+        assertThat(lots.findById(lotId).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("15");
+        assertThat(ledger.findByInventoryItemId(itemId, org.springframework.data.domain.Pageable.unpaged()).getTotalElements()).isZero();
+    }
+
+    @Test
     void consumptionQueryExcludesTransferReturnsFromQuantitiesAndSourceMovementCount() {
         UUID origin = UUID.randomUUID();
         transaction.executeWithoutResult(status -> {
