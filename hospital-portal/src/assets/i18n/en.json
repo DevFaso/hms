@@ -13427,6 +13427,7 @@
     "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "These fields contain the saved text, which may be in a different language from the text shown in the list. Changes replace this text for all hospitals.",
     "ACTIONS": "Actions",
     "ACTIVE": "Active",
     "ADD": "Add interaction",

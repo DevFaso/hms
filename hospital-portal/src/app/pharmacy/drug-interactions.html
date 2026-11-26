@@ -284,6 +284,11 @@
             {{ ' '
             }}<span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
           </p>
+          @if (editingId()) {
+            <p class="derived-flags" data-testid="ddi-edit-language-note">
+              {{ 'DRUG_INTERACTIONS.EDIT_LANGUAGE_NOTE' | translate }}
+            </p>
+          }
           <label for="ddi-recommendation"
             >{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }} *
             <textarea

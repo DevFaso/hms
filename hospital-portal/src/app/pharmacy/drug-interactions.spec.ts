@@ -93,6 +93,20 @@ describe('DrugInteractionsComponent', () => {
     expect(cell('i-2')).toBe('Texte saisi par la pharmacie.');
   });
 
+  it('explains that editing replaces saved text, not the translated list display', () => {
+    const row = entry({ recommendation: 'Avoid.', displayRecommendation: '? ?viter.' });
+    setup(['ROLE_PHARMACIST'], [row]);
+    component.openEdit(row);
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="ddi-edit-language-note"]'),
+    ).not.toBeNull();
+    expect(
+      (fixture.nativeElement.querySelector('#ddi-recommendation') as HTMLTextAreaElement).value,
+    ).toBe('Avoid.');
+  });
+
   it('hides write controls from read-only roles the backend would refuse', () => {
     // READ spans PHARMACIST/DOCTOR/NURSE/MIDWIFE/admins; WRITE is
     // PHARMACIST/HOSPITAL_ADMIN/SUPER_ADMIN only.

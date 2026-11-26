@@ -13427,6 +13427,7 @@
     "BANNER_DEFAULT": "Le système est en maintenance. La consultation fonctionne ; les modifications sont temporairement désactivées."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "Ces champs contiennent le texte enregistr?, qui peut ?tre dans une autre langue que celle affich?e dans la liste. Les modifications remplacent ce texte pour tous les h?pitaux.",
     "ACTIONS": "Actions",
     "ACTIVE": "En vigueur",
     "ADD": "Ajouter une interaction",
