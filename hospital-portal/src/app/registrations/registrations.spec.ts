@@ -377,6 +377,8 @@ describe('RegistrationsComponent global super-admin view', () => {
       fixture.nativeElement.querySelectorAll('[data-testid="registration-hospital"]'),
     ).map((cell: any) => cell.textContent.trim());
     expect(hospitals).toEqual(['First', 'Second']);
+    fixture.componentInstance.searchTerm.set('Second');
+    expect(fixture.componentInstance.filtered().map((row) => row.id)).toEqual(['r2']);
     expect(fixture.componentInstance.canManage).toBeFalse();
     expect(fixture.componentInstance.loadError()).toBeFalse();
   });
