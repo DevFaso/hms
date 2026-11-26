@@ -8,6 +8,11 @@
 > For the project-loss / DB-restore / full-rebuild path, see
 > [disaster-recovery.md](./disaster-recovery.md). This file owns the
 > per-service config; that one owns the recovery sequence.
+>
+> **Railway stops reading `railway.toml` on 2026-12-01.** The replacement,
+> `.railway/railway.ts`, and the cutover procedure are in
+> [railway-config-as-code.md](./railway-config-as-code.md). Until that
+> procedure has been run, the toml files below still drive every deploy.
 
 ## Services
 
