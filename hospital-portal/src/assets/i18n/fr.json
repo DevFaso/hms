@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Journal des messages d'intégration",
-    "SUBTITLE": "Recherche de messages de style Bridges, file d'attente de lettres mortes et rejeu pour le trafic des protocoles partenaires.",
-    "DLQ_BADGE": "{{ count }} messages en échec en attente de rejeu",
-    "SHOW_DLQ_ONLY": "Afficher uniquement la DLQ",
+    "SUBTITLE": "Consultez les messages des partenaires et les échecs. Cette page enregistre une demande dans le journal ; elle ne renvoie pas le message au partenaire.",
+    "DLQ_BADGE": "{{ count }} messages en échec",
+    "SHOW_DLQ_ONLY": "Afficher les messages en échec",
     "SEARCH": "Rechercher",
     "SEARCHING": "Recherche…",
     "RESET": "Réinitialiser",
     "RETRY": "Réessayer",
     "LOAD_ERROR": "Impossible de charger le journal des messages. Réessayez.",
     "EMPTY": "Aucun message ne correspond aux filtres actuels.",
-    "REPLAY": "Rejouer",
-    "REPLAYING": "Rejeu…",
+    "REPLAY": "Enregistrer dans le journal",
+    "REPLAYING": "Enregistrement…",
     "PAGER": "Page {{ current }} sur {{ total }}",
     "CONTENT_PURGED": "Contenu purgé (politique de conservation)",
     "CONTENT_PURGED_TITLE": "Contenu du message effacé le {{ date }} selon la politique de conservation ; l'enregistrement de l'événement est conservé.",
@@ -902,7 +902,7 @@
       "SENT": "Envoyé",
       "RECEIVED": "Reçu",
       "FAILED": "Échoué",
-      "REPLAYED": "Rejoué"
+      "REPLAYED": "Événement enregistré"
     },
     "COL": {
       "RECEIVED_AT": "Reçu",
@@ -914,7 +914,7 @@
       "ERROR": "Erreur"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Échec du rejeu. Réessayez."
+      "REPLAY_FAILED": "Impossible d’enregistrer l’événement. Réessayez."
     }
   },
   "INTEGRATION_HEALTH": {

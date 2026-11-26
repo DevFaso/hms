@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Integration message log",
-    "SUBTITLE": "Bridges-style per-message search, dead-letter queue, and replay for partner-protocol traffic.",
-    "DLQ_BADGE": "{{ count }} failed messages awaiting replay",
-    "SHOW_DLQ_ONLY": "Show DLQ only",
+    "SUBTITLE": "Review partner messages and failures. This page records an event in the log; it does not resend the message to the partner.",
+    "DLQ_BADGE": "{{ count }} failed messages",
+    "SHOW_DLQ_ONLY": "Show failed messages",
     "SEARCH": "Search",
     "SEARCHING": "Searching…",
     "RESET": "Reset",
     "RETRY": "Retry",
     "LOAD_ERROR": "Could not load the message log. Try again.",
     "EMPTY": "No messages match the current filters.",
-    "REPLAY": "Replay",
-    "REPLAYING": "Replaying…",
+    "REPLAY": "Record in log",
+    "REPLAYING": "Recording…",
     "PAGER": "Page {{ current }} of {{ total }}",
     "CONTENT_PURGED": "Content purged (retention policy)",
     "CONTENT_PURGED_TITLE": "Message content erased on {{ date }} under the retention policy; the event record is kept.",
@@ -902,7 +902,7 @@
       "SENT": "Sent",
       "RECEIVED": "Received",
       "FAILED": "Failed",
-      "REPLAYED": "Replayed"
+      "REPLAYED": "Event recorded"
     },
     "COL": {
       "RECEIVED_AT": "Received",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Replay failed. Try again."
+      "REPLAY_FAILED": "Could not record the event. Try again."
     }
   },
   "INTEGRATION_HEALTH": {

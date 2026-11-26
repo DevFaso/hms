@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Registro de mensajes de integración",
-    "SUBTITLE": "Búsqueda de mensajes estilo Bridges, cola de mensajes fallidos y reenvío para el tráfico de protocolos de socios.",
-    "DLQ_BADGE": "{{ count }} mensajes fallidos esperando reenvío",
-    "SHOW_DLQ_ONLY": "Mostrar solo DLQ",
+    "SUBTITLE": "Consulte los mensajes de los socios y los errores. Esta página registra un evento; no reenvía el mensaje al socio.",
+    "DLQ_BADGE": "{{ count }} mensajes fallidos",
+    "SHOW_DLQ_ONLY": "Mostrar mensajes fallidos",
     "SEARCH": "Buscar",
     "SEARCHING": "Buscando…",
     "RESET": "Restablecer",
     "RETRY": "Reintentar",
     "LOAD_ERROR": "No se pudo cargar el registro de mensajes. Reintente.",
     "EMPTY": "Ningún mensaje coincide con los filtros actuales.",
-    "REPLAY": "Reenviar",
-    "REPLAYING": "Reenviando…",
+    "REPLAY": "Registrar en el historial",
+    "REPLAYING": "Registrando…",
     "PAGER": "Página {{ current }} de {{ total }}",
     "CONTENT_PURGED": "Contenido eliminado (política de conservación)",
     "CONTENT_PURGED_TITLE": "Contenido del mensaje eliminado el {{ date }} según la política de conservación; el registro del evento se conserva.",
@@ -902,7 +902,7 @@
       "SENT": "Enviado",
       "RECEIVED": "Recibido",
       "FAILED": "Fallido",
-      "REPLAYED": "Reenviado"
+      "REPLAYED": "Evento registrado"
     },
     "COL": {
       "RECEIVED_AT": "Recibido",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Error al reenviar. Reintente."
+      "REPLAY_FAILED": "No se pudo registrar el evento. Inténtelo de nuevo."
     }
   },
   "INTEGRATION_HEALTH": {
