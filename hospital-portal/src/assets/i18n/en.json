@@ -7071,7 +7071,7 @@
       "PERSONAL_NOTES_SURGICAL": "Personal notes about surgical history",
       "PERSONAL_NOTES_FAMILY": "Personal notes about family history",
       "PERSONAL_NOTES_SOCIAL": "Personal notes about social history",
-      "NOTES_DISCLAIMER": "These notes are kept in this browser tab until you sign out or close it, and are not shared with your care team.",
+      "NOTES_DISCLAIMER": "These notes are kept only while this page is open: they are cleared when you sign out, reload or close the page, and are not shared with your care team.",
       "ADD": "Add",
       "SAVE": "Save",
       "NO_MEDICAL": "No medical history on record.",

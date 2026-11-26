@@ -7071,7 +7071,7 @@
       "PERSONAL_NOTES_SURGICAL": "Notas personales sobre los antecedentes quirúrgicos",
       "PERSONAL_NOTES_FAMILY": "Notas personales sobre los antecedentes familiares",
       "PERSONAL_NOTES_SOCIAL": "Notas personales sobre los antecedentes sociales",
-      "NOTES_DISCLAIMER": "Estas notas se conservan en esta pestaña del navegador hasta que cierre la sesión o la pestaña, y no se comparten con su equipo de atención.",
+      "NOTES_DISCLAIMER": "Estas notas solo se conservan mientras esta página está abierta: se borran al cerrar la sesión, recargar o cerrar la página, y no se comparten con su equipo de atención.",
       "ADD": "Añadir",
       "SAVE": "Guardar",
       "NO_MEDICAL": "Sin antecedentes médicos registrados.",

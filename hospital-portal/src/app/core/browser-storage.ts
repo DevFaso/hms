@@ -1,15 +1,20 @@
 /**
  * Where the portal keeps state in the browser, in one place.
  *
+ * - The session itself (access token, user profile) and anything clinical
+ *   (the patient's personal notes) live in memory only, never in web storage.
+ *   After a reload the session comes back through the refresh cookie
+ *   (auth/session-restore.ts); a tab that never signed in does not ask.
  * - `localStorage` outlives the tab and the sign-out, and is shared by every
  *   person who uses this browser: it holds device preferences only (the
  *   language, the side-nav layout, a list filter, the username a person asked
- *   the sign-in page to remember). Never a token, a profile or clinical text.
- * - `sessionStorage` lives with the tab: it holds the signed-in user's session
- *   (the access token and profile, so a reload keeps the session) and the
- *   user's drafts. Every key of it the portal writes is listed below, and
- *   {@link clearSessionScopedStorage} removes them all at sign-out, at the end
- *   of the session and when another account takes over the tab.
+ *   the sign-in page to remember).
+ * - `sessionStorage` lives with the tab: it holds UI state of the signed-in
+ *   user (the idle lock, the roles the account holds, a reload guard) and the
+ *   flag saying this tab has a session to restore. Every key of it the portal
+ *   writes is listed below, and {@link clearSessionScopedStorage} removes them
+ *   all at sign-out, at the end of the session and when another account takes
+ *   over the tab.
  *
  * `npm run guards` (scripts/check-browser-storage.mjs) refuses a
  * `localStorage` write whose key is not in {@link LOCAL_STORAGE_ALLOWLIST} and
@@ -29,52 +34,50 @@ export const LOCAL_STORAGE_ALLOWLIST: readonly string[] = [
 /** The username the sign-in page fills in, when its owner ticked « remember my username ». */
 export const REMEMBERED_USERNAME_KEY = 'hms.login.rememberedUsername';
 
-/**
- * `localStorage` keys earlier builds wrote (the session and the patient's
- * personal notes); removed at start-up and at every sign-out.
- */
-export const LEGACY_LOCAL_STORAGE_KEYS: readonly string[] = [
-  'auth_token',
-  'auth_refresh_token',
-  'user_profile',
-];
-export const LEGACY_LOCAL_STORAGE_PREFIXES: readonly string[] = ['portal-notes-'];
+/** This tab signed in: after a reload it asks the refresh cookie for its session. Holds `'1'`. */
+export const TAB_SESSION_KEY = 'hms.session.tab';
 
 /** Every `sessionStorage` key the portal writes; all belong to the signed-in user. */
 export const SESSION_SCOPED_KEYS: readonly string[] = [
-  'auth_token',
-  'auth_refresh_token',
-  'user_profile',
+  'hms.session.tab',
   'hms_idle_locked',
   'hms_lock_ts',
   'hms-chunk-reload',
   'hms.heldRoles',
+];
+
+/**
+ * Keys earlier builds wrote (the session, the impersonation snapshot and the
+ * patient's notes); removed from both storages at start-up and at sign-out.
+ */
+export const LEGACY_STORAGE_KEYS: readonly string[] = [
+  'auth_token',
+  'auth_refresh_token',
+  'user_profile',
   'auth_token_pre_impersonation',
   'auth_remember_pre_impersonation',
   'auth_profile_pre_impersonation',
 ];
-
-/** The patient's personal history notes: `hms.patientNotes.<userId>.<section>`. */
-export const PATIENT_NOTE_PREFIX = 'hms.patientNotes.';
-export const SESSION_SCOPED_PREFIXES: readonly string[] = [PATIENT_NOTE_PREFIX];
-
-function keysWithPrefix(storage: Storage, prefixes: readonly string[]): string[] {
-  const keys: string[] = [];
-  for (let i = 0; i < storage.length; i++) {
-    const key = storage.key(i);
-    if (key && prefixes.some((prefix) => key.startsWith(prefix))) keys.push(key);
-  }
-  return keys;
-}
+export const LEGACY_STORAGE_PREFIXES: readonly string[] = ['portal-notes-', 'hms.patientNotes.'];
 
 function removeAll(storage: Storage, keys: readonly string[], prefixes: readonly string[]): void {
-  for (const key of [...keys, ...keysWithPrefix(storage, prefixes)]) storage.removeItem(key);
+  const prefixed: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (key && prefixes.some((prefix) => key.startsWith(prefix))) prefixed.push(key);
+  }
+  for (const key of [...keys, ...prefixed]) storage.removeItem(key);
 }
 
-/** Removes what earlier builds left in `localStorage` (session tokens, profile, notes). */
+/** Removes what earlier builds left in web storage (session tokens, profile, notes). */
 export function purgeLegacyBrowserStorage(): void {
   try {
-    removeAll(localStorage, LEGACY_LOCAL_STORAGE_KEYS, LEGACY_LOCAL_STORAGE_PREFIXES);
+    removeAll(localStorage, LEGACY_STORAGE_KEYS, LEGACY_STORAGE_PREFIXES);
+  } catch {
+    /* storage not available */
+  }
+  try {
+    removeAll(sessionStorage, LEGACY_STORAGE_KEYS, LEGACY_STORAGE_PREFIXES);
   } catch {
     /* storage not available */
   }
@@ -82,53 +85,70 @@ export function purgeLegacyBrowserStorage(): void {
 
 /**
  * Removes everything the signed-in user left in the browser: every
- * session-scoped `sessionStorage` key and the legacy `localStorage` ones.
- * Device preferences ({@link LOCAL_STORAGE_ALLOWLIST}) stay.
+ * session-scoped `sessionStorage` key, the in-memory drafts and the legacy
+ * keys. Device preferences ({@link LOCAL_STORAGE_ALLOWLIST}) stay.
  */
 export function clearSessionScopedStorage(): void {
   try {
-    removeAll(sessionStorage, SESSION_SCOPED_KEYS, SESSION_SCOPED_PREFIXES);
+    removeAll(sessionStorage, SESSION_SCOPED_KEYS, []);
   } catch {
     /* storage not available */
   }
+  clearUserDrafts();
   purgeLegacyBrowserStorage();
 }
 
-/**
- * Removes the user's own drafts (not the session itself): run when another
- * account takes over the tab, so nothing of the previous one is shown.
- */
-export function clearUserDrafts(): void {
+/** Marks this tab as signed in (a flag, no credential), so a reload restores the session. */
+export function markTabSession(): void {
   try {
-    removeAll(sessionStorage, [], SESSION_SCOPED_PREFIXES);
+    sessionStorage.setItem(TAB_SESSION_KEY, '1');
+  } catch {
+    /* storage not available: a reload signs in again */
+  }
+}
+
+export function hasTabSession(): boolean {
+  try {
+    return sessionStorage.getItem(TAB_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearTabSession(): void {
+  try {
+    sessionStorage.removeItem(TAB_SESSION_KEY);
   } catch {
     /* storage not available */
   }
+}
+
+/** The patient's personal notes, per user and section, for as long as the page is open. */
+const patientNotes = new Map<string, string>();
+
+/**
+ * Removes the user's own drafts (not the session itself): run at sign-out and
+ * when another account takes over the tab, so nothing of the previous one is shown.
+ */
+export function clearUserDrafts(): void {
+  patientNotes.clear();
 }
 
 function patientNoteKey(userId: string, section: string): string {
-  return `${PATIENT_NOTE_PREFIX}${userId}.${section}`;
+  return `${userId}.${section}`;
 }
 
-/** The patient's note for one history section, kept for this tab's session. */
+/** The patient's note for one history section, kept in memory for this page. */
 export function readPatientNote(userId: string | null, section: string): string {
   if (!userId) return '';
-  try {
-    return sessionStorage.getItem(patientNoteKey(userId, section)) ?? '';
-  } catch {
-    return '';
-  }
+  return patientNotes.get(patientNoteKey(userId, section)) ?? '';
 }
 
-/** Keeps (or, when empty, drops) the patient's note for this tab's session. */
+/** Keeps (or, when empty, drops) the patient's note for this page. */
 export function writePatientNote(userId: string | null, section: string, text: string): void {
   if (!userId) return;
-  try {
-    if (text) sessionStorage.setItem(patientNoteKey(userId, section), text);
-    else sessionStorage.removeItem(patientNoteKey(userId, section));
-  } catch {
-    /* storage not available */
-  }
+  if (text) patientNotes.set(patientNoteKey(userId, section), text);
+  else patientNotes.delete(patientNoteKey(userId, section));
 }
 
 /** The username the sign-in page should fill in, if its owner asked for it. */

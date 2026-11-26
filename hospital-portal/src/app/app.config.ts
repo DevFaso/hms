@@ -29,6 +29,7 @@ import { languageInterceptor } from './interceptors/language.interceptor';
 import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
 import { DEFAULT_LANG, currentLocale } from './shared/i18n/app-locale';
 import { translationsReady } from './shared/i18n/translations-ready';
+import { restoreSessionOnStartup } from './auth/session-restore';
 
 export function handleChunkLoadNavigationError(error: NavigationError): void {
   inject(ChunkRecoveryService).handle(error);
@@ -87,6 +88,9 @@ export const appConfig: ApplicationConfig = {
     // form-based login keeps working untouched during the rollout.
     provideOAuthClient(),
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
+    // The session lives in memory: a reload of a signed-in tab gets it back
+    // through the refresh cookie before the first route is resolved.
+    provideAppInitializer(() => restoreSessionOnStartup()),
     // QA D505: comma decimals in every numeric input, whatever the browser locale.
     provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
     // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when

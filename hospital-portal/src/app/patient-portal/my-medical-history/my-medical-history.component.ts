@@ -40,8 +40,8 @@ export class MyMedicalHistoryComponent implements OnInit {
   socialHistory = signal<SocialHistorySummary | null>(null);
   loading = signal(true);
 
-  // Personal notes: kept for this tab's session, per signed-in user, and
-  // cleared at sign-out (core/browser-storage.ts).
+  // Personal notes: kept in memory while the page is open, per signed-in
+  // user, and cleared at sign-out (core/browser-storage.ts).
   medicalNotes = signal('');
   surgicalNotes = signal('');
   familyNotes = signal('');

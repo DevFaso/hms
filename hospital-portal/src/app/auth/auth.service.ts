@@ -1,20 +1,22 @@
 import { isPlatformBrowser } from '@angular/common';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID, signal, DestroyRef } from '@angular/core';
 import { EMPTY, Observable, Subject, catchError } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
 import { ApiTimeoutService } from '../core/api-timeout.service';
+import { SESSION_RESTORE_HEADER, SESSION_RESTORE_REQUEST } from './session-lifetime';
 import {
   clearSessionScopedStorage,
+  clearTabSession,
   clearUserDrafts,
+  hasTabSession,
+  markTabSession,
   purgeLegacyBrowserStorage,
 } from '../core/browser-storage';
 
-const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
-const USER_PROFILE_KEY = 'user_profile';
 
 /**
  * Authoritative session context returned by GET /api/auth/session/bootstrap.
@@ -116,7 +118,7 @@ export class AuthService {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.endSession());
-    // Earlier builds kept the session in localStorage: remove what they left.
+    // Earlier builds kept the session in web storage: remove what they left.
     if (this.isBrowser) purgeLegacyBrowserStorage();
   }
 
@@ -126,46 +128,40 @@ export class AuthService {
   }
 
   // ---------- Storage ----------
-  // The access token lives in memory, mirrored into this tab's sessionStorage
-  // so a reload keeps the session; it is never written to localStorage (which
-  // outlives the tab and the sign-out). A new tab or a restarted browser signs
-  // in again. See core/browser-storage.ts.
+  // The access token lives in memory only, never in web storage. A reload of
+  // a tab that signed in restores it through the refresh cookie
+  // (session-restore.ts); a new tab or a restarted browser signs in again.
+  // See core/browser-storage.ts.
   private accessToken: string | null = null;
 
   getToken(): string | null {
     if (!this.isBrowser) return null;
-    if (this.accessToken) return this.accessToken;
-    try {
-      this.accessToken = sessionStorage.getItem(ACCESS_TOKEN_KEY) || null;
-    } catch {
-      this.accessToken = null;
-    }
     return this.accessToken;
   }
 
   setToken(token: string): void {
     if (!this.isBrowser) return;
     this.accessToken = token;
+    markTabSession();
     try {
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       // Clear any stale idle-lock flag from a prior session so the new
       // login does not land on the lock screen instead of the dashboard.
       sessionStorage.removeItem('hms_idle_locked');
       sessionStorage.removeItem('hms_lock_ts');
     } catch {
-      // Storage not available: the token stays in memory for this page.
+      // Storage not available
     }
   }
 
   clearToken(): void {
     if (!this.isBrowser) return;
     this.accessToken = null;
-    try {
-      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-    } catch {
-      // Storage not available
-    }
+    clearTabSession();
+  }
+
+  /** This tab signed in and has not signed out: a reload asks the refresh cookie. */
+  hasTabSession(): boolean {
+    return this.isBrowser && hasTabSession();
   }
 
   /**
@@ -236,19 +232,26 @@ export class AuthService {
    * session, it is forwarded once in the body so the backend can rotate it
    * and switch the user over to the cookie-based flow.
    */
-  refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
+  refreshTokenRequest(restore = false): Observable<{ accessToken: string; refreshToken: string }> {
     const legacyRefreshToken = this.getRefreshToken();
     const baseUrl = this.isBrowser ? `${globalThis.location.origin}/api` : '/api';
     const body = legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {};
     return this.http.post<{ accessToken: string; refreshToken: string }>(
       `${baseUrl}/auth/token/refresh`,
       body,
-      { withCredentials: true },
+      restore
+        ? {
+            withCredentials: true,
+            headers: { [SESSION_RESTORE_HEADER]: '1' },
+            context: new HttpContext().set(SESSION_RESTORE_REQUEST, true),
+          }
+        : { withCredentials: true },
     );
   }
 
   // ---------- User Profile ----------
-  // Same home as the token: memory, mirrored into this tab's sessionStorage.
+  // Same home as the token: memory only. After a reload the session
+  // bootstrap rebuilds it (SessionScopeService.hydrate).
   private profileCache: LoginUserProfile | null = null;
 
   setUserProfile(profile: LoginUserProfile): void {
@@ -264,11 +267,6 @@ export class AuthService {
     }
     this.profileCache = toStore;
     this.currentProfile.set(toStore);
-    try {
-      sessionStorage.setItem(USER_PROFILE_KEY, JSON.stringify(toStore));
-    } catch {
-      // Storage error: the profile stays in memory for this page.
-    }
   }
 
   /**
@@ -300,16 +298,6 @@ export class AuthService {
 
   getUserProfile(): LoginUserProfile | null {
     if (!this.isBrowser) return null;
-    if (this.profileCache) return this.profileCache;
-    try {
-      const raw = sessionStorage.getItem(USER_PROFILE_KEY);
-      this.profileCache = raw ? (JSON.parse(raw) as LoginUserProfile) : null;
-    } catch {
-      this.profileCache = null;
-    }
-    if (this.profileCache && !this.currentProfile()) {
-      this.currentProfile.set(this.profileCache);
-    }
     return this.profileCache;
   }
 
@@ -317,12 +305,25 @@ export class AuthService {
     if (!this.isBrowser) return;
     this.profileCache = null;
     this.currentProfile.set(null);
-    try {
-      sessionStorage.removeItem(USER_PROFILE_KEY);
-      localStorage.removeItem(USER_PROFILE_KEY);
-    } catch {
-      // Storage error
-    }
+  }
+
+  // ---------- Impersonation snapshot ----------
+  // The super-admin's own token and profile while impersonating: memory only,
+  // dropped with the rest of the session at sign-out.
+  private originalSession: { token: string | null; profile: LoginUserProfile | null } = {
+    token: null,
+    profile: null,
+  };
+
+  holdOriginalSession(token: string | null, profile: LoginUserProfile | null): void {
+    this.originalSession = { token, profile };
+  }
+
+  /** Hands the snapshot back once and forgets it. */
+  releaseOriginalSession(): { token: string | null; profile: LoginUserProfile | null } {
+    const held = this.originalSession;
+    this.originalSession = { token: null, profile: null };
+    return held;
   }
 
   // ---------- JWT Helpers ----------
@@ -480,6 +481,7 @@ export class AuthService {
   }
 
   private clearLocalState(): void {
+    this.releaseOriginalSession();
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();

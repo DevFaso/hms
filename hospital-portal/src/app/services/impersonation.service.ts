@@ -15,10 +15,10 @@ import { stepUpRequestOptions } from './step-up';
 /**
  * MVP-4 — Support impersonation client.
  *
- * Stash the original super-admin token under {@link ORIGINAL_TOKEN_KEY}
- * and the original profile snapshot under {@link ORIGINAL_PROFILE_KEY}
- * (this tab's sessionStorage, cleared at sign-out) before swapping in the
- * impersonation token; restore both on stop.
+ * Keep the original super-admin token and profile snapshot in memory (never
+ * in web storage; dropped when the session ends) before swapping in the
+ * impersonation token; restore both on stop. A reload during impersonation
+ * signs in again: the server refuses a refresh while it is active.
  *
  * <p>Beyond the obvious token swap, the service also re-hydrates
  * {@link RoleContextService} and the persisted user profile from the new
@@ -31,8 +31,6 @@ import { stepUpRequestOptions } from './step-up';
  * <p>The {@link active} signal mirrors the banner state so any component
  * can conditionally render off it without subscribing to an HTTP call.
  */
-const ORIGINAL_TOKEN_KEY = 'auth_token_pre_impersonation';
-const ORIGINAL_PROFILE_KEY = 'auth_profile_pre_impersonation';
 
 /**
  * MVP-4b — surface a countdown to the active impersonation TTL so the
@@ -58,8 +56,8 @@ export class ImpersonationService {
 
   /**
    * Wall-clock expiry of the active impersonation token, mirrored from
-   * the start response (or persisted across page reloads via
-   * sessionStorage). Null when no impersonation is active.
+   * the start response (or re-read from the server by refreshActive()).
+   * Null when no impersonation is active.
    */
   readonly expiresAt = signal<Date | null>(null);
 
@@ -104,8 +102,8 @@ export class ImpersonationService {
           // 1. Save original session state so stop() can restore it.
           this.preserveOriginalSession();
 
-          // 2. Swap in the impersonation token (memory + this tab's
-          //    sessionStorage, like every access token).
+          // 2. Swap in the impersonation token (memory only, like every
+          //    access token).
           this.auth.setToken(response.accessToken);
 
           // 3. Roles from the new token at once so the shell, the guards and
@@ -218,14 +216,8 @@ export class ImpersonationService {
   // ─── private helpers ──────────────────────────────────────────────
 
   private preserveOriginalSession(): void {
-    const original = this.auth.getToken();
-    if (original) {
-      sessionStorage.setItem(ORIGINAL_TOKEN_KEY, original);
-    }
     const profile = this.auth.getUserProfile();
-    if (profile) {
-      sessionStorage.setItem(ORIGINAL_PROFILE_KEY, JSON.stringify(profile));
-    }
+    this.auth.holdOriginalSession(this.auth.getToken(), profile ? { ...profile } : null);
   }
 
   private restoreOriginalSession(response: ImpersonationActiveResponse): void {
@@ -235,11 +227,11 @@ export class ImpersonationService {
     this.expiresAt.set(null);
     this.remainingMs.set(null);
 
-    const original = sessionStorage.getItem(ORIGINAL_TOKEN_KEY);
+    const held = this.auth.releaseOriginalSession();
+    const original = held.token;
 
     if (original) {
       this.auth.setToken(original);
-      sessionStorage.removeItem(ORIGINAL_TOKEN_KEY);
     } else {
       this.auth.clearToken();
     }
@@ -248,17 +240,10 @@ export class ImpersonationService {
     // then re-hydrate from the live session as the original user (E9
     // #55b). Without a snapshot (legacy session) the stored profile and
     // the restored token's roles stand in until the server answers.
-    const snapshot = sessionStorage.getItem(ORIGINAL_PROFILE_KEY);
+    const snapshot = held.profile;
     if (snapshot) {
-      try {
-        const profile = JSON.parse(snapshot) as LoginUserProfile;
-        this.auth.setUserProfile(profile);
-        this.sessionScope.applyStoredProfile();
-      } catch {
-        // Snapshot corrupt — the stored profile and the token's roles stand in
-        this.sessionScope.applyStoredProfile();
-      }
-      sessionStorage.removeItem(ORIGINAL_PROFILE_KEY);
+      this.auth.setUserProfile(snapshot);
+      this.sessionScope.applyStoredProfile();
     } else if (original) {
       this.sessionScope.applyStoredProfile();
     }

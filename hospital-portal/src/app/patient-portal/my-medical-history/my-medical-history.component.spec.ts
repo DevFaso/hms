@@ -4,6 +4,7 @@ import { of } from 'rxjs';
 import { MyMedicalHistoryComponent } from './my-medical-history.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { AuthService } from '../../auth/auth.service';
+import { clearUserDrafts, readPatientNote, writePatientNote } from '../../core/browser-storage';
 
 describe('MyMedicalHistoryComponent', () => {
   let component: MyMedicalHistoryComponent;
@@ -62,6 +63,7 @@ describe('MyMedicalHistoryComponent', () => {
   beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
+    clearUserDrafts();
     userId = 'patient-user-1';
 
     await TestBed.configureTestingModule({
@@ -80,6 +82,7 @@ describe('MyMedicalHistoryComponent', () => {
   afterEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    clearUserDrafts();
   });
 
   it('should create', () => {
@@ -110,18 +113,19 @@ describe('MyMedicalHistoryComponent', () => {
     expect(component.editingSection()).toBeNull();
   });
 
-  it("keeps a saved note in this tab's sessionStorage under the user's own key, never in localStorage", () => {
+  it("keeps a saved note in memory under the user's own key, never in web storage", () => {
     component.toggleNoteEdit('medical'); // open
     component.onNoteChange('medical', 'test note');
     component.toggleNoteEdit('medical'); // close → save
 
-    expect(sessionStorage.getItem('hms.patientNotes.patient-user-1.medical')).toBe('test note');
+    expect(readPatientNote('patient-user-1', 'medical')).toBe('test note');
+    expect(sessionStorage.length).toBe(0);
     expect(localStorage.length).toBe(0);
   });
 
   it("shows the signed-in user's notes only, not another user's from the same tab", () => {
-    sessionStorage.setItem('hms.patientNotes.patient-user-1.family', 'mine');
-    sessionStorage.setItem('hms.patientNotes.someone-else.surgical', 'theirs');
+    writePatientNote('patient-user-1', 'family', 'mine');
+    writePatientNote('someone-else', 'surgical', 'theirs');
     const f = TestBed.createComponent(MyMedicalHistoryComponent);
     f.detectChanges();
     expect(f.componentInstance.familyNotes()).toBe('mine');
@@ -133,12 +137,13 @@ describe('MyMedicalHistoryComponent', () => {
     component.toggleNoteEdit('social');
     component.onNoteChange('social', 'draft');
     component.toggleNoteEdit('social');
+    expect(readPatientNote(null, 'social')).toBe('');
     expect(sessionStorage.length).toBe(0);
     expect(localStorage.length).toBe(0);
   });
 
   it('an emptied note is dropped, and Escape restores the saved one', () => {
-    sessionStorage.setItem('hms.patientNotes.patient-user-1.medical', 'saved');
+    writePatientNote('patient-user-1', 'medical', 'saved');
     component.toggleNoteEdit('medical');
     component.onNoteChange('medical', 'typed but discarded');
     component.cancelNoteEdit('medical');
@@ -147,7 +152,7 @@ describe('MyMedicalHistoryComponent', () => {
     component.toggleNoteEdit('medical');
     component.onNoteChange('medical', '');
     component.toggleNoteEdit('medical');
-    expect(sessionStorage.getItem('hms.patientNotes.patient-user-1.medical')).toBeNull();
+    expect(readPatientNote('patient-user-1', 'medical')).toBe('');
   });
 
   it('should get notes by section', () => {

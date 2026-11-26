@@ -19,6 +19,7 @@ import { DashboardPage } from '../pages/dashboard.page';
 import { PatientListPage } from '../pages/patient-list.page';
 import { PatientFormPage } from '../pages/patient-form.page';
 import { ApiHelper } from '../helpers/api-helper';
+import { seedTabSession } from '../helpers/tab-session';
 
 // ─── Shared mock payloads ────────────────────────────────────────────────────
 
@@ -188,6 +189,37 @@ async function registerApiMocks(page: Page): Promise<void> {
   await page.route('**/api/patient-tracker**', (r) => jsonOk(r, MOCK_TRACKER_BOARD));
 }
 
+/** The super-admin global-setup signs in as (e2e/global-setup.ts): same token and identity. */
+const DEFAULT_SESSION_TOKEN =
+  'eyJhbGciOiJIUzM4NCJ9' +
+  '.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6OTk5OTk5OTk5OX0' +
+  '.fake-signature-for-e2e-testing';
+const DEFAULT_SESSION_USER = '00000000-0000-0000-0000-000000000001';
+
+/**
+ * The portal keeps the session in memory, so the saved storage state no longer
+ * carries it: a page of the authenticated project signs in as that super-admin
+ * through the start-up restore (helpers/tab-session.ts), and the session
+ * bootstrap answers with the same identity. A test may still mock either again.
+ */
+async function registerDefaultSession(page: Page): Promise<void> {
+  await seedTabSession(page, DEFAULT_SESSION_TOKEN);
+  await page.route('**/api/auth/session/bootstrap', (r) =>
+    jsonOk(r, {
+      userId: DEFAULT_SESSION_USER,
+      username: 'superadmin',
+      email: 'superadmin@seed.dev',
+      firstName: 'System',
+      lastName: 'SuperAdmin',
+      authSource: 'internal',
+      roles: ['ROLE_SUPER_ADMIN'],
+      superAdmin: true,
+      hospitalAdmin: false,
+      permittedHospitalIds: [],
+    }),
+  );
+}
+
 // ─── Fixture types ────────────────────────────────────────────────────────────
 
 interface HmsFixtures {
@@ -208,8 +240,11 @@ export const test = base.extend<HmsFixtures>({
   // Intercepts all /api/** calls with empty-state 200 JSON so the Angular
   // error interceptor never redirects to /login mid-test.
   autoMockApis: [
-    async ({ page }, use) => {
+    async ({ page, storageState }, use) => {
       await registerApiMocks(page);
+      // The authenticated projects point storageState at the saved file; a test
+      // that wants no session overrides it with an empty state.
+      if (typeof storageState === 'string') await registerDefaultSession(page);
       await use();
     },
     { auto: true },

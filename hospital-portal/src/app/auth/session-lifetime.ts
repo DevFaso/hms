@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpContextToken, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 
 /**
@@ -27,6 +27,16 @@ export function navigateToSignIn(router: Router, error: unknown): Promise<boolea
     ? router.navigate(['/login'], { queryParams: { reason: SESSION_LIFETIME_REASON } })
     : router.navigate(['/login']);
 }
+
+/**
+ * The start-up refresh that restores a reloaded tab's session (session-restore.ts).
+ * Its refusal is the expected end of a signed-out cookie: the error interceptor
+ * hands it back untouched (no second refresh, no server sign-out, no redirect).
+ */
+export const SESSION_RESTORE_REQUEST = new HttpContextToken<boolean>(() => false);
+
+/** Sent on that refresh, so logs (and the Playwright mocks) can tell it apart. */
+export const SESSION_RESTORE_HEADER = 'X-Session-Restore';
 
 /** The refresh minted a token for another account than the tab's (see AuthService.isTokenForShownAccount). */
 export const ACCOUNT_CHANGED_CODE = 'SESSION_ACCOUNT_CHANGED';

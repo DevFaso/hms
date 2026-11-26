@@ -6,10 +6,12 @@ import { AuthService, type SessionBootstrapResponse } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ApiTimeoutService } from '../core/api-timeout.service';
 import {
-  LEGACY_LOCAL_STORAGE_KEYS,
+  LEGACY_STORAGE_KEYS,
   LOCAL_STORAGE_ALLOWLIST,
-  PATIENT_NOTE_PREFIX,
   SESSION_SCOPED_KEYS,
+  TAB_SESSION_KEY,
+  readPatientNote,
+  writePatientNote,
 } from '../core/browser-storage';
 
 describe('AuthService — S-01 refresh-token cookie behaviour', () => {
@@ -239,43 +241,67 @@ describe('AuthService — where the session is kept', () => {
     TestBed.resetTestingModule();
   });
 
-  it("keeps the token in memory and this tab's sessionStorage, never localStorage", () => {
+  function storedValues(): string {
+    const values: string[] = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let i = 0; i < storage.length; i++) values.push(storage.getItem(storage.key(i)!) ?? '');
+    }
+    return values.join('|');
+  }
+
+  it('keeps the token in memory only, and marks the tab as signed in with a bare flag', () => {
     service = create();
     service.setToken('a.jwt');
     expect(service.getToken()).toBe('a.jwt');
-    expect(sessionStorage.getItem(KEY)).toBe('a.jwt');
+    expect(storedValues()).not.toContain('a.jwt');
     expect(localStorage.getItem(KEY)).toBeNull();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe('1');
+    expect(service.hasTabSession()).toBeTrue();
   });
 
-  it('a reload of the tab keeps the session (sessionStorage), the memory copy answers first', () => {
-    sessionStorage.setItem(KEY, 'reloaded.jwt');
+  it('a reload starts without a token (the start-up restore asks the refresh cookie)', () => {
+    sessionStorage.setItem(TAB_SESSION_KEY, '1');
     service = create();
-    expect(service.getToken()).toBe('reloaded.jwt');
-    sessionStorage.removeItem(KEY);
-    expect(service.getToken()).toBe('reloaded.jwt');
+    expect(service.getToken()).toBeNull();
+    expect(service.hasTabSession()).toBeTrue();
   });
 
-  it('keeps the profile in sessionStorage, never localStorage', () => {
+  it('keeps the profile in memory only', () => {
     service = create();
     service.setUserProfile({ id: 'u1', username: 'dr', email: '', roles: [], active: true });
-    expect(sessionStorage.getItem('user_profile')).toContain('"u1"');
-    expect(localStorage.getItem('user_profile')).toBeNull();
     expect(service.getUserProfile()?.id).toBe('u1');
+    expect(storedValues()).not.toContain('"u1"');
+    expect(sessionStorage.getItem('user_profile')).toBeNull();
+    expect(localStorage.getItem('user_profile')).toBeNull();
   });
 
-  it('removes the session an earlier build left in localStorage at start-up', () => {
-    localStorage.setItem('auth_token', 'old.jwt');
-    localStorage.setItem('auth_refresh_token', 'old.refresh');
-    localStorage.setItem('user_profile', '{"id":"u0"}');
+  it('clearing the token drops the tab flag', () => {
+    service = create();
+    service.setToken('a.jwt');
+    service.clearToken();
+    expect(service.getToken()).toBeNull();
+    expect(service.hasTabSession()).toBeFalse();
+  });
+
+  it('removes the session an earlier build left in web storage at start-up', () => {
+    for (const storage of [localStorage, sessionStorage]) {
+      storage.setItem('auth_token', 'old.jwt');
+      storage.setItem('auth_refresh_token', 'old.refresh');
+      storage.setItem('user_profile', '{"id":"u0"}');
+      storage.setItem('auth_token_pre_impersonation', 'old.jwt');
+      storage.setItem('auth_profile_pre_impersonation', '{"id":"u0"}');
+    }
     localStorage.setItem('portal-notes-medical', '{"c":"x"}');
+    sessionStorage.setItem('hms.patientNotes.u0.medical', 'x');
     localStorage.setItem('lang', 'fr');
 
     service = create();
 
-    expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
-    expect(localStorage.getItem('user_profile')).toBeNull();
+    expect(storedValues()).not.toContain('old.');
+    expect(storedValues()).not.toContain('u0');
     expect(localStorage.getItem('portal-notes-medical')).toBeNull();
+    expect(sessionStorage.getItem('hms.patientNotes.u0.medical')).toBeNull();
     expect(localStorage.getItem('lang')).toBe('fr');
     expect(service.getToken()).toBeNull();
     expect(service.getUserProfile()).toBeNull();
@@ -284,12 +310,12 @@ describe('AuthService — where the session is kept', () => {
   it("drops the previous user's drafts when another account takes over the tab", () => {
     service = create();
     service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
-    sessionStorage.setItem('hms.patientNotes.u1.medical', 'note');
+    writePatientNote('u1', 'medical', 'note');
     service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
-    expect(sessionStorage.getItem('hms.patientNotes.u1.medical')).toBe('note');
+    expect(readPatientNote('u1', 'medical')).toBe('note');
 
     service.setUserProfile({ id: 'u2', username: 'b', email: '', roles: [], active: true });
-    expect(sessionStorage.getItem('hms.patientNotes.u1.medical')).toBeNull();
+    expect(readPatientNote('u1', 'medical')).toBe('');
   });
 
   it('tells whether a refreshed token is for the account the tab shows', () => {
@@ -299,6 +325,17 @@ describe('AuthService — where the session is kept', () => {
     expect(service.isTokenForShownAccount(jwt({ uid: 'u2' }))).toBeFalse();
     // Nothing to compare against: accepted.
     expect(service.isTokenForShownAccount(jwt({ sub: 'x' }))).toBeTrue();
+  });
+
+  it('the impersonation snapshot is handed back once, and never outlives the session', () => {
+    service = create();
+    service.holdOriginalSession('original.jwt', null);
+    expect(service.releaseOriginalSession().token).toBe('original.jwt');
+    expect(service.releaseOriginalSession().token).toBeNull();
+
+    service.holdOriginalSession('original.jwt', null);
+    service.endLocalSession();
+    expect(service.releaseOriginalSession().token).toBeNull();
   });
 
   it('endLocalSession clears the tab without a server sign-out', () => {
@@ -418,8 +455,11 @@ describe('AuthService — logout revokes the server session', () => {
 
   it('clears every session-scoped key, including the patient notes, and keeps only device preferences', () => {
     for (const key of SESSION_SCOPED_KEYS) sessionStorage.setItem(key, 'x');
-    sessionStorage.setItem(`${PATIENT_NOTE_PREFIX}u1.medical`, 'note');
-    for (const key of LEGACY_LOCAL_STORAGE_KEYS) localStorage.setItem(key, 'x');
+    writePatientNote('u1', 'medical', 'note');
+    for (const key of LEGACY_STORAGE_KEYS) {
+      localStorage.setItem(key, 'x');
+      sessionStorage.setItem(key, 'x');
+    }
     localStorage.setItem('portal-notes-family', 'x');
     for (const key of LOCAL_STORAGE_ALLOWLIST) localStorage.setItem(key, 'pref');
 
@@ -427,6 +467,7 @@ describe('AuthService — logout revokes the server session', () => {
     httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
 
     expect(sessionStorage.length).toBe(0);
+    expect(readPatientNote('u1', 'medical')).toBe('');
     const left = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
     expect(left.sort()).toEqual([...LOCAL_STORAGE_ALLOWLIST].sort());
   });

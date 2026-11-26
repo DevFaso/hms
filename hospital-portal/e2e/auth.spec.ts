@@ -152,7 +152,7 @@ test.describe('Authentication', () => {
       await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
     });
 
-    test('keeps the auth token in sessionStorage, never localStorage, after login', async ({
+    test('keeps no token or profile in web storage after login, only the tab flag', async ({
       page,
     }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
@@ -161,30 +161,21 @@ test.describe('Authentication', () => {
       // Wait for dashboard to fully render — confirms no redirect back to /login occurred
       await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
 
-      const token = await page.evaluate(() => sessionStorage.getItem('auth_token'));
-      expect(token).toBeTruthy();
-      expect(token!.split('.')).toHaveLength(3); // JWT format
-      expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
-    });
-
-    test('keeps the user profile in sessionStorage, never localStorage, after login', async ({
-      page,
-    }) => {
-      await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([page.waitForResponse('**/api/auth/login'), loginPage.submit()]);
-      await page.waitForURL('**/dashboard', { timeout: 15_000 });
-      // Wait for dashboard to fully render — confirms no redirect back to /login occurred
-      await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
-
-      const profile = await page.evaluate(() => {
-        const raw = sessionStorage.getItem('user_profile');
-        return raw ? JSON.parse(raw) : null;
+      const stored = await page.evaluate(() => {
+        const all: Record<string, string | null> = {};
+        for (const storage of [localStorage, sessionStorage]) {
+          for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i)!;
+            all[key] = storage.getItem(key);
+          }
+        }
+        return all;
       });
-      expect(profile).toBeTruthy();
-      expect(profile.username).toBe('superadmin');
-      expect(profile.roles).toBeDefined();
-      expect(await page.evaluate(() => localStorage.getItem('user_profile'))).toBeNull();
-      expect(Array.isArray(profile.roles)).toBe(true);
+      expect(stored['hms.session.tab']).toBe('1');
+      for (const key of ['auth_token', 'auth_refresh_token', 'user_profile']) {
+        expect(stored[key]).toBeUndefined();
+      }
+      expect(JSON.stringify(stored)).not.toContain('superadmin@');
     });
 
     test('failed login shows error message', async () => {

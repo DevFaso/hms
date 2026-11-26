@@ -33,7 +33,12 @@ import {
   timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { accountChangedError, isAccountChanged, navigateToSignIn } from '../auth/session-lifetime';
+import {
+  SESSION_RESTORE_REQUEST,
+  accountChangedError,
+  isAccountChanged,
+  navigateToSignIn,
+} from '../auth/session-lifetime';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
@@ -335,10 +340,11 @@ export const REFRESH_SUPERSEDED_DELAY_MS = 600;
 
 export function refreshWithSupersededRetry(
   auth: AuthService,
+  restore = false,
 ): Observable<{ accessToken: string; refreshToken: string }> {
   // defer: each retry builds the request again, so a body-borne (legacy)
   // refresh token is re-read after the other tab stored the rotated one.
-  return defer(() => auth.refreshTokenRequest()).pipe(
+  return defer(() => auth.refreshTokenRequest(restore)).pipe(
     retry({
       count: REFRESH_SUPERSEDED_RETRIES,
       delay: (err: unknown, attempt: number) =>
@@ -472,6 +478,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      // The start-up session restore reports its own refusal (session-restore.ts).
+      if (req.context.get(SESSION_RESTORE_REQUEST)) {
+        return throwError(() => error);
+      }
       // A refused MFA step-up is the dialog's to report: never a refresh, a
       // sign-out or the forbidden page (an MFA-enrolled super-admin used to be
       // signed out by suspending a facility without a code).

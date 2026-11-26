@@ -2,8 +2,9 @@
 /**
  * Browser storage gate (`npm run guards`).
  *
- * `localStorage` outlives the tab and the sign-out and is shared by everyone
- * who uses the browser, so the portal writes only device preferences there:
+ * The session (token, profile) and clinical text live in memory, never in web
+ * storage. `localStorage` outlives the tab and the sign-out and is shared by
+ * everyone who uses the browser, so the portal writes only device preferences:
  * every `localStorage.setItem` key must be in `LOCAL_STORAGE_ALLOWLIST`. Every
  * `sessionStorage.setItem` key must be in `SESSION_SCOPED_KEYS`, the list the
  * sign-out clears. Both lists live in src/app/core/browser-storage.ts, the one
@@ -74,12 +75,12 @@ export function storageFindings(components, registry) {
       } else if (store === 'localStorage' && !registry.local.has(key)) {
         findings.push(
           `${where}: localStorage key '${key}' is not a device preference in LOCAL_STORAGE_ALLOWLIST ` +
-            `(${REGISTRY_FILE}). Tokens, profiles and clinical text never go to localStorage.`,
+            `(${REGISTRY_FILE}). Tokens, profiles and clinical text never go to web storage.`,
         );
       } else if (store === 'sessionStorage' && !registry.session.has(key)) {
         findings.push(
-          `${where}: sessionStorage key '${key}' is not in SESSION_SCOPED_KEYS (${REGISTRY_FILE}), ` +
-            `so sign-out would not clear it.`,
+          `${where}: sessionStorage key '${key}' is not in SESSION_SCOPED_KEYS (${REGISTRY_FILE}). ` +
+            `Tokens, profiles and clinical text stay in memory; other keys must be cleared at sign-out.`,
         );
       }
     }

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/test-fixtures';
+import { fakeToken, seedTabSession } from './helpers/tab-session';
 
 const ID = '00000000-0000-0000-0000-000000000101';
 const profile = {
@@ -12,15 +13,12 @@ const profile = {
 test.describe('super-admin control tower', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(
-      ({ profile }) => {
-        const payload = btoa(
-          JSON.stringify({ sub: profile.username, roles: profile.roles, exp: 9999999999 }),
-        );
-        sessionStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.review-signature`);
-        sessionStorage.setItem('user_profile', JSON.stringify(profile));
-      },
-      { profile },
+    await seedTabSession(
+      page,
+      fakeToken(
+        { sub: profile.username, roles: profile.roles, exp: 9999999999 },
+        'review-signature',
+      ),
     );
     await page.route('**/api/auth/session/bootstrap', (route) =>
       route.fulfill({

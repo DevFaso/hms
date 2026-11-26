@@ -120,13 +120,12 @@ export class AppComponent implements OnInit {
         },
       });
 
-    // Re-hydrate the session on every app bootstrap (hard refresh, direct
-    // URL, tab re-open). E9 #55b: the roles come from the token synchronously
-    // so the route guards can run at once; the hospital scope comes from the
-    // live session. The stored profile — the last thing the server said —
-    // fills the gap until the server replies, and stays if it cannot.
+    // Re-hydrate the session on app bootstrap when the start-up restore
+    // (session-restore.ts) has not already done it. E9 #55b: the roles come
+    // from the token synchronously so the route guards can run at once; the
+    // hospital scope comes from the live session.
     const token = this.auth.getToken();
-    if (token && !this.auth.isExpired(token)) {
+    if (token && !this.auth.isExpired(token) && !this.roleContext.sessionResolved()) {
       this.roleContext.setRoles(this.auth.getRoles());
       this.sessionScope.applyStoredProfile();
       this.sessionScope.hydrate().subscribe();
