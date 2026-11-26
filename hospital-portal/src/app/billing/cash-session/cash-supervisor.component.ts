@@ -17,6 +17,7 @@ import {
   CashSession,
   CashSessionService,
   RemovedInvoiceLine,
+  countedRoundOf,
 } from '../../services/cash-session.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -96,18 +97,23 @@ export class CashSupervisorComponent {
     this.expanded.set(this.expanded() === s.id ? null : s.id);
   }
 
-  /** The latest close's counted amount of a line, or null while not closed. */
+  /**
+   * The current close's counted amount of a line, or null while not counted. QA D3982 (r77): a reopened till is
+   * open again, so its last count is history, not its current figure.
+   */
   countedOf(s: CashSession, line: { method: string; operator?: string | null }): number | null {
     const key = cashLineKey(line.method, line.operator);
+    const current = countedRoundOf(s);
     const count = s.counts.find(
-      (c) => c.closeRound === s.closeRound && cashLineKey(c.method, c.operator) === key,
+      (c) => c.closeRound === current && cashLineKey(c.method, c.operator) === key,
     );
     return count ? count.counted : null;
   }
 
   explanationsOf(s: CashSession): string[] {
+    const current = countedRoundOf(s);
     return s.counts
-      .filter((c) => c.closeRound === s.closeRound && c.explanation)
+      .filter((c) => c.closeRound === current && c.explanation)
       .map((c) => c.explanation as string);
   }
 

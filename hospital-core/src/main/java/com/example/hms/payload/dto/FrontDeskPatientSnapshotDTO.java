@@ -64,7 +64,13 @@ public class FrontDeskPatientSnapshotDTO {
     @AllArgsConstructor
     public static class BillingSummary {
         private int openInvoiceCount;
+        /** QA D3985: everything the patient owes here: the open invoices plus the pharmacy fills still due. */
         private BigDecimal totalBalanceDue;
+        /** QA D3985: what the open invoices leave the patient to pay. */
+        private BigDecimal invoiceBalanceDue;
+        /** QA D3985: the pharmacy fills that left « à facturer » and are still due, and what they owe. */
+        private int pharmacyCreditCount;
+        private BigDecimal pharmacyCreditDue;
     }
 
     @Data
@@ -77,5 +83,7 @@ public class FrontDeskPatientSnapshotDTO {
         private boolean expiredInsurance;
         private boolean noPrimaryInsurance;
         private boolean outstandingBalance;
+        /** QA D3985: a pharmacy fill left « à facturer » and is not settled. */
+        private boolean pharmacyCreditDue;
     }
 }

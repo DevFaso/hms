@@ -45,6 +45,19 @@ public class InvoiceItemController {
         return new ResponseEntity<>(invoiceItemService.createInvoiceItem(dto, locale), HttpStatus.CREATED);
     }
 
+    /**
+     * Review of #1338 (QA D3980): the grid price of a price-list item for a line typed on this draft, on the
+     * invoice's service date (what the create checks against). The writers of a line only.
+     */
+    @GetMapping("/grid-price")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Grid price of a price-list item on a draft invoice's service date")
+    public ResponseEntity<com.example.hms.payload.dto.billing.InvoiceLineGridPriceDTO> gridPrice(
+        @org.springframework.web.bind.annotation.RequestParam UUID billingInvoiceId,
+        @org.springframework.web.bind.annotation.RequestParam UUID priceListItemId) {
+        return ResponseEntity.ok(invoiceItemService.gridPrice(billingInvoiceId, priceListItemId));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Invoice Item by ID")

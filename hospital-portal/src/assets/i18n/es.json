@@ -2588,7 +2588,7 @@
     "PDF_FAILED": "Error al descargar el PDF",
     "PENDING": "Pendiente",
     "RECORD_PAYMENT": "Registrar pago",
-    "REVENUE": "Ingresos",
+    "REVENUE": "Ingresos netos",
     "SUPPLEMENTARY_CONFIRM": "¿Crear de todos modos una factura complementaria para esta visita?",
     "SAVE_FAILED": "Error al guardar",
     "SEARCH": "Buscar facturas...",
@@ -3048,7 +3048,10 @@
       "REMOVED_LINE": "Línea retirada",
       "REMOVED_REASON": "Motivo",
       "REMOVED_BY": "Retirada por",
-      "CASH_DIFFERENCE_VALUE": "Diferencia en efectivo: {{ amount }}"
+      "CASH_DIFFERENCE_VALUE": "Diferencia en efectivo: {{ amount }}",
+      "HISTORY_TITLE": "Earlier closes (history)",
+      "HISTORY_ROUND": "Close {{round}}: cash expected {{expected}}, counted {{counted}}, difference {{difference}}; {{lines}} line(s) with a difference",
+      "HISTORY_ROUND_NO_CASH": "Close {{round}}: total difference {{difference}}; {{lines}} line(s) with a difference"
     },
     "UNPRICED_LINES_REASON": "Motivo de las líneas a 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "¿Por qué se emiten estas líneas sin coste?",
@@ -3058,7 +3061,14 @@
     "ADDED_LINE_REASON_REQUIRED": "Indique por qué esta línea se añade a mano en la factura de la visita.",
     "LINE_REMOVE_REASON": "Motivo de la retirada de esta línea",
     "LINE_REMOVE_REASON_PLACEHOLDER": "¿Por qué se retira esta línea de la factura?",
-    "LINE_REMOVE_REASON_REQUIRED": "Indique el motivo de la retirada de esta línea."
+    "LINE_REMOVE_REASON_REQUIRED": "Indique el motivo de la retirada de esta línea.",
+    "REVENUE_BREAKDOWN": "Received {{received}} − refunded {{refunded}}",
+    "LINE_PRICE_LIST_ITEM": "Price-list item (act)",
+    "LINE_PRICE_LIST_ITEM_NONE": "No item (line not covered)",
+    "LINE_PRICE_LIST_ITEM_HINT": "The line takes the price list's label and price, and the patient's insurance applies its rules to this act (exclusions, ceilings).",
+    "LINE_NOT_COVERED_HINT": "Without a price-list item, this line is not covered by insurance: the patient pays all of it.",
+    "LINE_GRID_PRICE": "Price-list price on the invoice date: {{price}}",
+    "LINE_GRID_PRICE_NONE": "No price-list price on the invoice date: type the price."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -9467,7 +9477,10 @@
     "PRE_CHECKED_IN_CONSENTED": "Registro previo hecho en el portal del paciente, consentimiento a la atención dado",
     "PRE_CHECKED_IN_AT": "Hecho en el portal del paciente el {{when}}",
     "PRE_CHECKED_IN_AT_CONSENTED": "Hecho en el portal del paciente el {{when}}, consentimiento a la atención dado",
-    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Dado por el paciente en el registro previo; se traslada a esta visita."
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Dado por el paciente en el registro previo; se traslada a esta visita.",
+    "PHARMACY_CREDIT_DUE_CHIP": "Pharmacy credit due: {{amount}}",
+    "INVOICE_BALANCE_DUE": "of which invoices",
+    "PHARMACY_CREDIT_DUE": "of which pharmacy credit « to bill » ({{count}})"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -16041,7 +16054,7 @@
       "APPOINTMENTS": "Citas",
       "ADMISSIONS": "Hospitalizaciones",
       "INVOICED": "Facturado",
-      "COLLECTED": "Cobrado",
+      "COLLECTED": "Cobrado, neto de reembolsos",
       "DEATHS": "Fallecimientos",
       "FEWER_THAN": "Menos de {{threshold}}",
       "SMALL_COUNTS": "Un número de fallecimientos inferior a {{threshold}} no se muestra, para proteger a las personas afectadas."

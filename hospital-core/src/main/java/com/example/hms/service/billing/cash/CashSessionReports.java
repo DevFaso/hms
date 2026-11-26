@@ -160,7 +160,9 @@ public class CashSessionReports {
             lines.add(new PricedLine(
                 item.getBillingInvoice() != null ? item.getBillingInvoice().getInvoiceNumber() : null,
                 BillingTextRenderer.render(item.getTextCode(), item.getTextArgs(), item.getItemDescription()),
-                item.getTariffUnitPrice(), item.getUnitPrice(), item.getOverrideReason()));
+                // QA D3980: a line added from the price list at its price shows that price as the grid's.
+                com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item), item.getUnitPrice(),
+                item.getOverrideReason()));
         }
         return lines;
     }

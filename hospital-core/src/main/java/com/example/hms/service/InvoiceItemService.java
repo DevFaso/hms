@@ -17,6 +17,12 @@ public interface InvoiceItemService {
 
     InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO requestDTO, Locale locale);
 
+    /**
+     * Review of #1338 (QA D3980): the grid price a line typed on this draft would take for this price-list item: the
+     * version in force on the invoice's service date, the one {@link #createInvoiceItem} checks against.
+     */
+    com.example.hms.payload.dto.billing.InvoiceLineGridPriceDTO gridPrice(UUID invoiceId, UUID priceListItemId);
+
     void deleteInvoiceItem(UUID id, Locale locale);
 
     /** Billing-money plan PR 3 (review #1197 M2): a price-list line is deleted only with a reason. */

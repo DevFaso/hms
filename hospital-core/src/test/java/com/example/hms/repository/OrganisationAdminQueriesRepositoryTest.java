@@ -153,6 +153,9 @@ class OrganisationAdminQueriesRepositoryTest {
         assertThat(totals.countAppointments(hospitalA.getId(), from, to)).isZero();
         assertThat(totals.sumInvoiced(hospitalA.getId(), from, to)).isEqualByComparingTo("0");
         assertThat(totals.sumCollected(hospitalA.getId(), from, to)).isEqualByComparingTo("0");
+        // QA D3981: the refunds paid out, taken off what was collected.
+        assertThat(totals.sumRefundedOut(hospitalA.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay()))
+            .isEqualByComparingTo("0");
         assertThat(totals.countDeaths(hospitalA.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay()))
             .isZero();
     }

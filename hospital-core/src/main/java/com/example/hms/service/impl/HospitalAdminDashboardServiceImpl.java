@@ -183,6 +183,15 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
             .build();
     }
 
+    /**
+     * QA D3981 (r77) class: what is still owed on an invoice: its total less the money the hospital keeps on it
+     * (received less the refunds paid out, {@code InvoiceBalance.keptOf}). It counted a refunded franc as still paid.
+     */
+    public static BigDecimal stillOwed(BillingInvoice invoice) {
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        return total.subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
+    }
+
     private HospitalAdminSummaryDTO.BillingMetrics buildBillingMetrics(UUID hospitalId) {
         var overdueStatuses = List.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
         var overdueInvoices = billingInvoiceRepository.findOverdue(LocalDate.now(), overdueStatuses);
@@ -190,12 +199,13 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
             .filter(inv -> inv.getHospital().getId().equals(hospitalId))
             .count();
 
-        // Open balance = sum(totalAmount - amountPaid) for non-PAID, non-CANCELLED invoices at this hospital
+        // Open balance = sum(totalAmount - money kept) for non-PAID, non-CANCELLED invoices at this hospital (the
+        // payers' shares included: still owed to the hospital). QA D3981 class: net of the refunds paid out.
         var allHospitalInvoices = billingInvoiceRepository.findByHospital_Id(
             hospitalId, PageRequest.of(0, Integer.MAX_VALUE));
         BigDecimal openBalance = allHospitalInvoices.getContent().stream()
             .filter(inv -> inv.getStatus() != InvoiceStatus.PAID && inv.getStatus() != InvoiceStatus.CANCELLED)
-            .map(inv -> inv.getTotalAmount().subtract(inv.getAmountPaid()))
+            .map(HospitalAdminDashboardServiceImpl::stillOwed)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return HospitalAdminSummaryDTO.BillingMetrics.builder()
@@ -324,7 +334,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         });
 
         BigDecimal grandTotal = open.stream()
-            .map(inv -> inv.getTotalAmount().subtract(inv.getAmountPaid()))
+            .map(HospitalAdminDashboardServiceImpl::stillOwed)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return HospitalAdminSummaryDTO.InvoiceAgingBuckets.builder()
@@ -337,7 +347,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
             String label, List<BillingInvoice> invoices, java.util.function.Predicate<BillingInvoice> filter) {
         var matching = invoices.stream().filter(filter).toList();
         BigDecimal total = matching.stream()
-            .map(inv -> inv.getTotalAmount().subtract(inv.getAmountPaid()))
+            .map(HospitalAdminDashboardServiceImpl::stillOwed)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         return HospitalAdminSummaryDTO.InvoiceAgingBucket.builder()
             .label(label).count(matching.size()).total(total).build();

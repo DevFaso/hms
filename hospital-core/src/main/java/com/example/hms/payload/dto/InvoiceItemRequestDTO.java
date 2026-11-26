@@ -61,4 +61,12 @@ public class InvoiceItemRequestDTO {
      */
     @jakarta.validation.constraints.Size(max = 500)
     private String overrideReason;
+
+    /**
+     * QA D3980 (r77): the price-list item a line typed at the till bills (create only). The line takes the item's act
+     * and category, so the patient's plan applies its rules to it (an excluded act is never claimed), and the price in
+     * force that day; a different price is an override (reason, billing roles). A line with no item has no act or
+     * category a plan can read and is never claimed from an insurer: the patient pays it.
+     */
+    private UUID priceListItemId;
 }

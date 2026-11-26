@@ -878,6 +878,34 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D3985 (r77): an unpaid pharmacy credit « à facturer » is in the desk balance and raises the alert")
+        void aPharmacyCreditStillDueIsInTheDeskBalance() {
+            patient.setHospitalRegistrations(Collections.emptySet());
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(Collections.emptyList());
+            when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+            com.example.hms.service.pharmacy.PatientPharmacyCredit credit =
+                    mock(com.example.hms.service.pharmacy.PatientPharmacyCredit.class);
+            when(credit.of(patientId, hospitalId)).thenReturn(
+                    new com.example.hms.service.pharmacy.PatientPharmacyCredit.Due(1, new BigDecimal("1500")));
+            service.setPharmacyCredit(credit);
+
+            FrontDeskPatientSnapshotDTO result = service.getPatientSnapshot(patientId, hospitalId);
+
+            // No open invoice, 1 500 F of pharmacy credit still due: the desk sees 1 500, not 0.
+            assertThat(result.getBilling().getOpenInvoiceCount()).isZero();
+            assertThat(result.getBilling().getInvoiceBalanceDue()).isEqualByComparingTo("0");
+            assertThat(result.getBilling().getPharmacyCreditCount()).isEqualTo(1);
+            assertThat(result.getBilling().getPharmacyCreditDue()).isEqualByComparingTo("1500");
+            assertThat(result.getBilling().getTotalBalanceDue()).isEqualByComparingTo("1500");
+            assertThat(result.getAlerts().isOutstandingBalance()).isTrue();
+            assertThat(result.getAlerts().isPharmacyCreditDue()).isTrue();
+        }
+
+        @Test
         @DisplayName("resolves MRN from hospital registration")
         void resolvesMrn() {
             PatientHospitalRegistration reg = mock(PatientHospitalRegistration.class);

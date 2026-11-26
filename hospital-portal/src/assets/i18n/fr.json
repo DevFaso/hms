@@ -2588,7 +2588,7 @@
     "PDF_FAILED": "Échec du téléchargement du PDF",
     "PENDING": "En attente",
     "RECORD_PAYMENT": "Enregistrer un paiement",
-    "REVENUE": "Revenus",
+    "REVENUE": "Revenus nets",
     "SUPPLEMENTARY_CONFIRM": "Créer quand même une facture complémentaire pour cette visite ?",
     "SAVE_FAILED": "Échec de l'enregistrement",
     "SEARCH": "Rechercher des factures…",
@@ -3048,7 +3048,10 @@
       "REMOVED_LINE": "Ligne retirée",
       "REMOVED_REASON": "Motif",
       "REMOVED_BY": "Retirée par",
-      "CASH_DIFFERENCE_VALUE": "Écart espèces : {{ amount }}"
+      "CASH_DIFFERENCE_VALUE": "Écart espèces : {{ amount }}",
+      "HISTORY_TITLE": "Clôtures précédentes (historique)",
+      "HISTORY_ROUND": "Clôture {{round}} : espèces attendues {{expected}}, comptées {{counted}}, écart {{difference}} ; {{lines}} ligne(s) avec écart",
+      "HISTORY_ROUND_NO_CASH": "Clôture {{round}} : écart total {{difference}} ; {{lines}} ligne(s) avec écart"
     },
     "UNPRICED_LINES_REASON": "Motif des lignes à 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "Pourquoi ces lignes sont-elles émises gratuitement ?",
@@ -3058,7 +3061,14 @@
     "ADDED_LINE_REASON_REQUIRED": "Indiquez pourquoi cette ligne est ajoutée à la main sur la facture de la visite.",
     "LINE_REMOVE_REASON": "Motif du retrait de cette ligne",
     "LINE_REMOVE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle retirée de la facture ?",
-    "LINE_REMOVE_REASON_REQUIRED": "Indiquez le motif du retrait de cette ligne."
+    "LINE_REMOVE_REASON_REQUIRED": "Indiquez le motif du retrait de cette ligne.",
+    "REVENUE_BREAKDOWN": "Encaissé {{received}} − remboursé {{refunded}}",
+    "LINE_PRICE_LIST_ITEM": "Acte de la grille",
+    "LINE_PRICE_LIST_ITEM_NONE": "Aucun acte (ligne non prise en charge)",
+    "LINE_PRICE_LIST_ITEM_HINT": "La ligne prend le libellé et le prix de la grille, et l’assurance du patient applique ses règles à cet acte (exclusions, plafonds).",
+    "LINE_NOT_COVERED_HINT": "Sans acte de la grille, cette ligne n’est pas prise en charge par l’assurance : le patient la paie en entier.",
+    "LINE_GRID_PRICE": "Prix de la grille à la date de la facture : {{price}}",
+    "LINE_GRID_PRICE_NONE": "Aucun prix de la grille à la date de la facture : saisissez le prix."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -9467,7 +9477,10 @@
     "PRE_CHECKED_IN_CONSENTED": "Pré-enregistré depuis le portail patient, consentement aux soins donné",
     "PRE_CHECKED_IN_AT": "Fait sur le portail patient le {{when}}",
     "PRE_CHECKED_IN_AT_CONSENTED": "Fait sur le portail patient le {{when}}, consentement aux soins donné",
-    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Donné par le patient au pré-enregistrement ; il est reporté sur cette visite."
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Donné par le patient au pré-enregistrement ; il est reporté sur cette visite.",
+    "PHARMACY_CREDIT_DUE_CHIP": "Crédit pharmacie à facturer : {{amount}}",
+    "INVOICE_BALANCE_DUE": "dont factures",
+    "PHARMACY_CREDIT_DUE": "dont crédit pharmacie « à facturer » ({{count}})"
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",
@@ -16041,7 +16054,7 @@
       "APPOINTMENTS": "Rendez-vous",
       "ADMISSIONS": "Hospitalisations",
       "INVOICED": "Facturé",
-      "COLLECTED": "Encaissé",
+      "COLLECTED": "Encaissé net des remboursements",
       "DEATHS": "Décès",
       "FEWER_THAN": "Moins de {{threshold}}",
       "SMALL_COUNTS": "Un nombre de décès inférieur à {{threshold}} n’est pas affiché, pour protéger les personnes concernées."
