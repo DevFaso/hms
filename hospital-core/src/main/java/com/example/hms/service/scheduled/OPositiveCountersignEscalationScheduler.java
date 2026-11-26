@@ -25,13 +25,27 @@ public class OPositiveCountersignEscalationScheduler {
     @SchedulerLock(name = "OPositiveCountersignEscalationScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${hms.transfusion.o-positive.countersign-escalation-cron:0 */15 * * * *}", zone = "UTC")
     public void runSweep() {
+        int filed = 0;
         try {
-            int filed = authority.escalateOverdueCountersigns();
-            if (filed > 0) {
-                log.warn("O positive countersignature sweep filed {} urgent item(s)", filed);
+            for (java.util.UUID id : authority.overdueCountersignIds()) {
+                filed += escalate(id);
             }
         } catch (RuntimeException ex) {
             log.error("O positive countersignature sweep failed: {}", ex.getMessage(), ex);
+        }
+        if (filed > 0) {
+            log.warn("O positive countersignature sweep filed {} urgent item(s)", filed);
+        }
+    }
+
+    /** One row, one transaction: a row whose alert cannot be delivered waits for the next sweep and holds no other. */
+    private int escalate(java.util.UUID decisionId) {
+        try {
+            return authority.escalateOverdueCountersign(decisionId);
+        } catch (RuntimeException ex) {
+            log.error("Overdue countersignature of O positive release decision {} not escalated, left to the next sweep: {}",
+                decisionId, ex.getClass().getSimpleName());
+            return 0;
         }
     }
 }

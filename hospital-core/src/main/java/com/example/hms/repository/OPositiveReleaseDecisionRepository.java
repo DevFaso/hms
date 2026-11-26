@@ -4,6 +4,7 @@ import com.example.hms.model.OPositiveReleaseDecision;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,8 +32,24 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
      */
     List<OPositiveReleaseDecision> findByPatientIdAndRhdExposureTrueOrderByIssuedAtDesc(UUID patientId);
 
-    /** The follow-ups of this patient that still wait for their antibody screen, at every hospital. */
-    List<OPositiveReleaseDecision> findByPatientIdAndFollowUpRequiredTrueAndAntibodyScreenDoneAtIsNull(UUID patientId);
+    /**
+     * Marks the antibody screen of this patient's follow-ups whose window has opened, at every hospital, in one
+     * statement that writes that column only: a countersignature, a review or a follow-up recorded at the same
+     * moment on the same row is never written over by a stale copy.
+     *
+     * @return the number of follow-ups that now have their screen
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE OPositiveReleaseDecision d
+        SET d.antibodyScreenDoneAt = :performedAt, d.updatedAt = :performedAt
+        WHERE d.patientId = :patientId
+          AND d.followUpRequired = TRUE
+          AND d.antibodyScreenDoneAt IS NULL
+          AND d.antibodyScreenDueFrom <= :performedOn
+        """)
+    int markAntibodyScreenDone(@Param("patientId") UUID patientId, @Param("performedAt") LocalDateTime performedAt,
+                               @Param("performedOn") java.time.LocalDate performedOn);
 
     /** Countersignatures past their deadline that nobody was told about yet, at every hospital. */
     @Query("""

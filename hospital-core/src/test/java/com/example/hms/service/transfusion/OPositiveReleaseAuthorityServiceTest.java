@@ -491,6 +491,41 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(atTheBench.getBiologistUserId()).isEqualTo(director);
     }
 
+    @Test
+    @DisplayName("row 3, incompatible release: a laboratory director who authorises it sits as the biologist, never as the physician")
+    void aDirectorIsNeverThePhysicianOfAKnownAntibody() {
+        man(40);
+        UUID secondDirector = UUID.randomUUID();
+        roles.put(secondDirector, SecurityConstants.ROLE_LAB_DIRECTOR);
+        TransfusionRequest request = request();
+
+        // Authorised by a director, a second director named as biologist: two biologists are not a physician.
+        EmergencyReleaseRequestDTO twoDirectors = naming(director);
+        twoDirectors.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        twoDirectors.setBiologistUserId(secondDirector);
+        OPositiveReleaseDecision decision = release(request, twoDirectors, null, true);
+        assertThat(decision.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.AUTHORITY_PENDING);
+        assertThat(decision.getDecidedByUserId()).as("no physician decided").isNull();
+        assertThat(decision.getBiologistUserId()).isEqualTo(secondDirector);
+        assertThat(decision.getCountersignDueAt()).isNotNull();
+
+        // Authorised by a director alone: the director is the biologist of the record, the physician is owed.
+        EmergencyReleaseRequestDTO oneDirector = naming(director);
+        oneDirector.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        OPositiveReleaseDecision alone = release(request, oneDirector, null, true);
+        assertThat(alone.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.AUTHORITY_PENDING);
+        assertThat(alone.getDecidedByUserId()).isNull();
+        assertThat(alone.getBiologistUserId()).isEqualTo(director);
+
+        // Authorised by a physician, with the biologist: the pair the rule asks for.
+        EmergencyReleaseRequestDTO pair = naming(doctor);
+        pair.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        pair.setBiologistUserId(director);
+        OPositiveReleaseDecision together = release(request, pair, null, true);
+        assertThat(together.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.PHYSICIAN_AND_BIOLOGIST);
+        assertThat(together.getDecidedByUserId()).isEqualTo(doctor);
+    }
+
     // ── Row 4 ───────────────────────────────────────────────────────────
 
     @Test
@@ -668,15 +703,17 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
-    @DisplayName("the antibody screen counts once its window has opened: one done the next week does not")
-    void theAntibodyScreenAfterThreeMonths() {
-        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
-        when(fixture.decisionRepository.findByPatientIdAndFollowUpRequiredTrueAndAntibodyScreenDoneAtIsNull(patient.getId()))
-            .thenReturn(List.of(decision));
-        service.noteAntibodyScreen(patient.getId(), NOW.plusDays(7));
-        assertThat(decision.getAntibodyScreenDoneAt()).isNull();
+    @DisplayName("an antibody screen is marked in one statement on its own column: no row is loaded and written back")
+    void theAntibodyScreenIsMarkedAtomically() {
+        release(request(), naming(doctor), null, false);
+        org.mockito.Mockito.clearInvocations(fixture.decisionRepository);
         service.noteAntibodyScreen(patient.getId(), NOW.plusMonths(4));
-        assertThat(decision.getAntibodyScreenDoneAt()).isEqualTo(NOW.plusMonths(4));
+        verify(fixture.decisionRepository).markAntibodyScreenDone(patient.getId(), NOW.plusMonths(4),
+            NOW.plusMonths(4).toLocalDate());
+        verify(fixture.decisionRepository, never()).save(any());
+        service.noteAntibodyScreen(null, NOW);
+        service.noteAntibodyScreen(patient.getId(), null);
+        org.mockito.Mockito.verifyNoMoreInteractions(fixture.decisionRepository);
     }
 
     @Test
@@ -693,30 +730,52 @@ class OPositiveReleaseAuthorityServiceTest {
 
     // ── The overdue countersignature ────────────────────────────────────
 
+    private List<CreateInBasketItemRequest> escalated() {
+        ArgumentCaptor<CreateInBasketItemRequest> captor = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(fixture.inBasket, org.mockito.Mockito.atLeast(0)).createItem(captor.capture());
+        return captor.getAllValues();
+    }
+
     @Test
     @DisplayName("an overdue countersignature is escalated to the laboratory director, once, and audited")
     void overdueCountersignIsEscalated() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
         decision.getRelease().getBloodUnit().setUnitNumber("U-OVERDUE");
-        when(fixture.decisionRepository.findOverdueCountersignIds(any())).thenReturn(List.of(decision.getId()));
+        when(fixture.decisionRepository.findOverdueCountersignIds(NOW)).thenReturn(List.of(decision.getId()));
         when(fixture.patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         org.mockito.Mockito.clearInvocations(fixture.inBasket, fixture.audit);
 
-        assertThat(service.escalateOverdueCountersigns()).isEqualTo(1);
+        assertThat(service.overdueCountersignIds()).containsExactly(decision.getId());
+        assertThat(service.escalateOverdueCountersign(decision.getId())).isEqualTo(1);
         assertThat(decision.getCountersignEscalatedAt()).isEqualTo(NOW);
-        assertThat(items()).singleElement().satisfies(item -> {
+        assertThat(escalated()).singleElement().satisfies(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.URGENT);
             assertThat(item.getReferenceType()).isEqualTo(OPositiveReleaseAuthorityService.OVERDUE_REFERENCE_TYPE);
             assertThat(item.getTitle()).contains("U-OVERDUE");
         });
+        // The alert is filed in the transaction of the mark, never after it.
+        verify(fixture.inBasket, never()).createItemInNewTransaction(any());
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(fixture.audit).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE);
 
         // The row is still listed by a stale read: it is not escalated twice.
-        assertThat(service.escalateOverdueCountersigns()).isZero();
-        verify(fixture.inBasket, times(1)).createItemInNewTransaction(any());
+        assertThat(service.escalateOverdueCountersign(decision.getId())).isZero();
+        verify(fixture.inBasket, times(1)).createItem(any());
+    }
+
+    @Test
+    @DisplayName("an alert that cannot be delivered fails the row's transaction: the mark is not kept and the next sweep tries again")
+    void anUndeliveredEscalationIsNotMarkedAsTold() {
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        when(fixture.patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(fixture.inBasket.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
+        UUID id = decision.getId();
+        // The exception leaves the transactional method: Spring rolls the mark back (on PostgreSQL in the IT).
+        assertThatThrownBy(() -> service.escalateOverdueCountersign(id)).isInstanceOf(IllegalStateException.class);
+        verify(fixture.audit, never()).logEvent(org.mockito.ArgumentMatchers.argThat(
+            event -> event.getEventType() == AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE));
     }
 
     @Test
@@ -727,12 +786,13 @@ class OPositiveReleaseAuthorityServiceTest {
         service.countersign(signed.getId(), hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(issuer);
         OPositiveReleaseDecision orphan = release(request(), naming(doctor), null, false);
-        when(fixture.decisionRepository.findOverdueCountersignIds(any())).thenReturn(List.of(signed.getId(), orphan.getId()));
         roles.remove(director);
 
-        assertThat(service.escalateOverdueCountersigns()).isZero();
+        assertThat(service.escalateOverdueCountersign(signed.getId())).isZero();
+        assertThat(service.escalateOverdueCountersign(orphan.getId())).isZero();
         assertThat(signed.getCountersignEscalatedAt()).isNull();
         assertThat(orphan.getCountersignEscalatedAt()).as("nobody was told: it is not marked as told").isNull();
+        assertThat(service.escalateOverdueCountersign(UUID.randomUUID())).as("a row that is gone").isZero();
     }
 
     // ── The protocol ────────────────────────────────────────────────────

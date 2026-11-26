@@ -774,17 +774,26 @@ class TransfusionEmergencyReleasePostgresIT {
                 com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.REVIEW_PENDING_BODY_KEY);
         });
 
-        assertThat(positiveAuthority.escalateOverdueCountersigns()).as("not yet overdue").isZero();
+        assertThat(positiveAuthority.overdueCountersignIds()).as("not yet overdue").isEmpty();
         sql("UPDATE clinical.o_positive_release_decisions SET countersign_due_at = now() - interval '1 hour' WHERE id = :id",
             decision.getId());
-        clearInvocations(inBasketService);
-        assertThat(positiveAuthority.escalateOverdueCountersigns()).isEqualTo(1);
-        assertThat(filed()).singleElement().satisfies(item -> {
-            assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_COUNTERSIGN_OVERDUE");
-            assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
-            assertThat(item.getTitle()).doesNotContain("{");
-        });
-        assertThat(positiveAuthority.escalateOverdueCountersigns()).as("told once").isZero();
+        assertThat(positiveAuthority.overdueCountersignIds()).containsExactly(decision.getId());
+
+        // An alert that cannot be delivered rolls the mark back: the row is still due at the next sweep.
+        when(inBasketService.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
+        UUID decisionId = decision.getId();
+        assertThatThrownBy(() -> positiveAuthority.escalateOverdueCountersign(decisionId)).isInstanceOf(IllegalStateException.class);
+        assertThat(positiveAuthority.overdueCountersignIds()).as("nobody was told: not marked as told").containsExactly(decisionId);
+
+        org.mockito.Mockito.reset(inBasketService);
+        assertThat(positiveAuthority.escalateOverdueCountersign(decisionId)).isEqualTo(1);
+        ArgumentCaptor<CreateInBasketItemRequest> escalated = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService).createItem(escalated.capture());
+        assertThat(escalated.getValue().getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_COUNTERSIGN_OVERDUE");
+        assertThat(escalated.getValue().getRecipientUserId()).isEqualTo(directorUser);
+        assertThat(escalated.getValue().getTitle()).doesNotContain("{");
+        assertThat(positiveAuthority.overdueCountersignIds()).as("told once").isEmpty();
+        assertThat(positiveAuthority.escalateOverdueCountersign(decisionId)).isZero();
         assertThat(service.listPositiveReleases(true).get(0).isCountersignOverdue()).isTrue();
     }
 

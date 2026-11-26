@@ -1124,7 +1124,9 @@ public class TransfusionServiceImpl implements TransfusionService {
         // V380: whose authority an O positive bag goes out on. It refuses a false record, never a missing person.
         com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
             positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessment(request));
-        UUID answerable = authorisation.applies() ? authorisation.answerable() : release.getAuthoriserUserId();
+        // An incompatible release names the authoriser its own rule validated above, whatever the O positive tier says.
+        boolean ownAuthoriser = !authorisation.applies() || release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
+        UUID answerable = ownAuthoriser ? release.getAuthoriserUserId() : authorisation.answerable();
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
         EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, authorisation, answerable, negativeShown);

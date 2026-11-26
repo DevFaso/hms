@@ -267,12 +267,17 @@ public class OPositiveReleaseAuthorityService {
                     : new Authorisation(assessment, OPositiveDecisionBasis.PHYSICIAN_ORDER, physician, null, verbal, issuer);
             }
             case KNOWN_ANTIBODY -> {
-                // An incompatible release is authorised by a doctor or the laboratory director: either is kept.
-                Set<String> roles = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE
-                    ? OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES
-                    : OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES;
-                UUID physician = physician(input, issuer, hospitalId, roles);
+                // The physician's seat is a physician's, whatever the release. An incompatible release may be
+                // authorised by the laboratory director: that director then sits as the biologist, the physician
+                // is owed, and the release goes out as its own rule allows.
+                boolean directorAuthorises = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE && named != null
+                    && !assignmentRepository.existsActiveWitness(named, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
+                UUID physician = directorAuthorises ? null
+                    : physician(input, issuer, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
                 UUID biologist = biologist(input, issuer, physician, hospitalId);
+                if (biologist == null && directorAuthorises) {
+                    biologist = named;
+                }
                 boolean together = physician != null && biologist != null;
                 yield new Authorisation(assessment,
                     together ? OPositiveDecisionBasis.PHYSICIAN_AND_BIOLOGIST : OPositiveDecisionBasis.AUTHORITY_PENDING,
@@ -700,14 +705,8 @@ public class OPositiveReleaseAuthorityService {
         if (patientId == null || performedAt == null) {
             return;
         }
-        for (OPositiveReleaseDecision decision
-                : decisionRepository.findByPatientIdAndFollowUpRequiredTrueAndAntibodyScreenDoneAtIsNull(patientId)) {
-            if (decision.getAntibodyScreenDueFrom() != null
-                    && !performedAt.toLocalDate().isBefore(decision.getAntibodyScreenDueFrom())) {
-                decision.setAntibodyScreenDoneAt(performedAt);
-                decisionRepository.save(decision);
-            }
-        }
+        // One statement on that column alone: the row may be countersigned or reviewed at the same moment.
+        decisionRepository.markAntibodyScreenDone(patientId, performedAt, performedAt.toLocalDate());
     }
 
     private static String bounded(String text, String field) {
@@ -739,48 +738,51 @@ public class OPositiveReleaseAuthorityService {
 
     // ── The overdue countersignature ────────────────────────────────────
 
+    /** The countersignatures past their deadline that nobody was told about yet, the oldest first. */
+    public List<UUID> overdueCountersignIds() {
+        return decisionRepository.findOverdueCountersignIds(LocalDateTime.now(clock));
+    }
+
     /**
-     * A countersignature past its deadline is escalated to the laboratory director, once. With no laboratory
-     * director the row is left to the next sweep, loudly: marking it escalated would say somebody was told.
+     * One countersignature past its deadline is escalated to the laboratory director, once. The alert is filed
+     * in the transaction that marks the row as escalated: if it cannot be delivered the mark is not kept, and
+     * the next sweep tries again. With no laboratory director the row is left to the next sweep, loudly: marking
+     * it escalated would say somebody was told.
      *
      * @return the number of items filed
      */
     @org.springframework.transaction.annotation.Transactional
-    public int escalateOverdueCountersigns() {
-        LocalDateTime now = LocalDateTime.now(clock);
-        int filed = 0;
-        for (UUID id : decisionRepository.findOverdueCountersignIds(now)) {
-            OPositiveReleaseDecision decision = decisionRepository.lockById(id)
-                .filter(row -> row.countersignOwed() && row.getCountersignEscalatedAt() == null).orElse(null);
-            if (decision == null) {
-                continue;
-            }
-            UUID hospitalId = decision.getHospital().getId();
-            List<UUID> directors = biologists(hospitalId);
-            if (directors.isEmpty()) {
-                log.error("Overdue countersignature of O positive release decision {} has no laboratory director to go to",
-                    decision.getId());
-                continue;
-            }
-            Patient patient = patientRepository.findByIdUnscoped(decision.getPatientId()).orElse(null);
-            String unitNumber = decision.getRelease().getBloodUnit().getUnitNumber();
-            Object[] titleArgs = {unitNumber};
-            Object[] bodyArgs = {unitNumber, patient != null ? patient.getFullName() : null,
-                decision.getReviewDeadlineHours()};
-            CreateInBasketItemRequest overdue = notice(decision, patient, null, OVERDUE_REFERENCE_TYPE, InBasketPriority.URGENT);
-            overdue.setTitleKey(OVERDUE_TITLE_KEY);
-            overdue.setBodyKey(OVERDUE_BODY_KEY);
-            List<CreateInBasketItemRequest> items = new ArrayList<>();
-            directors.forEach(director -> items.add(copyFor(director, overdue, titleArgs, bodyArgs)));
-            decision.setCountersignEscalatedAt(now);
-            decisionRepository.save(decision);
-            fileAfterCommit(items, decision.getId());
-            auditAfterCommit(AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE, decision, null,
-                "Emergency O positive release countersignature overdue, escalated to the laboratory director: decision "
-                    + decision.getId());
-            filed += items.size();
+    public int escalateOverdueCountersign(UUID decisionId) {
+        OPositiveReleaseDecision decision = decisionRepository.lockById(decisionId)
+            .filter(row -> row.countersignOwed() && row.getCountersignEscalatedAt() == null).orElse(null);
+        if (decision == null) {
+            return 0;
         }
-        return filed;
+        UUID hospitalId = decision.getHospital().getId();
+        List<UUID> directors = biologists(hospitalId);
+        if (directors.isEmpty()) {
+            log.error("Overdue countersignature of O positive release decision {} has no laboratory director to go to",
+                decision.getId());
+            return 0;
+        }
+        Patient patient = patientRepository.findByIdUnscoped(decision.getPatientId()).orElse(null);
+        String unitNumber = decision.getRelease().getBloodUnit().getUnitNumber();
+        Object[] titleArgs = {unitNumber};
+        Object[] bodyArgs = {unitNumber, patient != null ? patient.getFullName() : null,
+            decision.getReviewDeadlineHours()};
+        CreateInBasketItemRequest overdue = notice(decision, patient, null, OVERDUE_REFERENCE_TYPE, InBasketPriority.URGENT);
+        overdue.setTitleKey(OVERDUE_TITLE_KEY);
+        overdue.setBodyKey(OVERDUE_BODY_KEY);
+        decision.setCountersignEscalatedAt(LocalDateTime.now(clock));
+        decisionRepository.save(decision);
+        for (UUID director : directors) {
+            // In this transaction, not after it: a failure here undoes the mark above.
+            inBasketService.createItem(copyFor(director, overdue, titleArgs, bodyArgs));
+        }
+        auditAfterCommit(AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE, decision, null,
+            "Emergency O positive release countersignature overdue, escalated to the laboratory director: decision "
+                + decision.getId());
+        return directors.size();
     }
 
     // ── Reading ─────────────────────────────────────────────────────────

@@ -1413,4 +1413,31 @@ class TransfusionEmergencyReleaseTest {
         assertThat(service.getPositiveProtocol())
             .isEqualTo(new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(hospitalId, true, 45, true, 12));
     }
+
+    @Test
+    @DisplayName("V380 row 3: an incompatible O positive release authorised by the laboratory director keeps the director on the release row, and no physician on the decision")
+    void theIncompatibleReleaseKeepsItsOwnAuthoriser() {
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.POSITIVE);
+        noONegativeInStock();
+        when(assignmentRepository.existsActiveWitness(eq(director), eq(hospitalId),
+            eq(com.example.hms.service.support.OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES))).thenReturn(false);
+        when(assignmentRepository.existsActiveWitness(eq(issuer), eq(hospitalId),
+            eq(com.example.hms.service.support.OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES))).thenReturn(false);
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        resultOnFile(request, unit, false);
+        EmergencyReleaseRequestDTO byTheDirector = incompatibleRelease(unit);
+        byTheDirector.setAuthoriserUserId(director);
+
+        service.emergencyRelease(request.getId(), byTheDirector);
+
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getAuthoriser().getId()).isEqualTo(director));
+        assertThat(positive.decisions).singleElement().satisfies(decision -> {
+            assertThat(decision.getRiskTier()).isEqualTo(com.example.hms.enums.OPositiveRiskTier.KNOWN_ANTIBODY);
+            assertThat(decision.getDecisionBasis()).isEqualTo(com.example.hms.enums.OPositiveDecisionBasis.AUTHORITY_PENDING);
+            assertThat(decision.getDecidedByUserId()).isNull();
+            assertThat(decision.getBiologistUserId()).isEqualTo(director);
+        });
+    }
 }
