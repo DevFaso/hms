@@ -112,8 +112,8 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "lot_number", length = 120)
     private String lotNumber;
 
-    @Size(max = 200)
-    @Column(name = "supplier", length = 200)
+    @Size(max = 255)
+    @Column(name = "supplier", length = 255)
     private String supplier;
 
     @Size(max = 120)
@@ -123,6 +123,12 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
-    @Column(name = "unit_cost", precision = 12, scale = 2)
+    @Column(name = "unit_cost", precision = 12, scale = 4)
     private BigDecimal unitCost;
+
+    @Column(name = "receipt_date")
+    private LocalDate receiptDate;
+    @Size(max = 1000)
+    @Column(name = "receipt_notes", length = 1000)
+    private String receiptNotes;
 }

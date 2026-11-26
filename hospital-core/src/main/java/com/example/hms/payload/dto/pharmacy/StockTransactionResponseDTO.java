@@ -42,4 +42,6 @@ public class StockTransactionResponseDTO {
     private String poReference;
     private LocalDate expiryDate;
     private BigDecimal unitCost;
+    private LocalDate receiptDate;
+    private String receiptNotes;
 }

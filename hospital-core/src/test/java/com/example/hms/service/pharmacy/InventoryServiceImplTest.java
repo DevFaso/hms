@@ -729,11 +729,43 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate())).thenReturn(List.of(existing));
             when(stockLotRepository.addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any())).thenReturn(1);
+            dto.setSupplier("Second supplier");
+            dto.setNotes("Second delivery evidence");
             service.receiveStock(dto);
+            var receipt = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository).save(receipt.capture());
+            assertThat(receipt.getValue().getSupplier()).isEqualTo("Second supplier");
+            assertThat(receipt.getValue().getUnitCost()).isEqualByComparingTo("2.50");
+            assertThat(receipt.getValue().getReceiptDate()).isEqualTo(dto.getReceivedDate());
+            assertThat(receipt.getValue().getReceiptNotes()).isEqualTo("Second delivery evidence");
+            assertThat(existing.getSupplier()).isEqualTo("PharmaCo");
             verify(stockLotRepository, never()).save(any());
             verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
             verify(inventoryItemRepository).lockById(inventoryItemId);
             verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+        }
+
+        @Test
+        void existingLotWithDifferentCostIsRefusedBeforeAnyWrite() {
+            StockLotRequestDTO dto = buildLotRequest(); dto.setUnitCost(new BigDecimal("4.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber(), dto.getExpiryDate())).thenReturn(List.of(buildStockLot()));
+            assertThatThrownBy(() -> service.receiveStock(dto)).hasFieldOrPropertyWithValue("messageKey", "pharmacy.inventory.lot.costMismatch");
+            verify(stockLotRepository, never()).addReceipt(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verifyNoInteractions(stockTransactionRepository);
+        }
+
+        @Test
+        void partialRemainingQuantityOnTopUpIsNeverSilentlyIgnored() {
+            StockLotRequestDTO dto = buildLotRequest(); dto.setRemainingQuantity(new BigDecimal("20"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber(), dto.getExpiryDate())).thenReturn(List.of(buildStockLot()));
+            assertThatThrownBy(() -> service.receiveStock(dto)).hasFieldOrPropertyWithValue("messageKey", "pharmacy.inventory.lot.partialTopUp");
+            verify(stockLotRepository, never()).addReceipt(any(), any(), any());
+            verifyNoInteractions(stockTransactionRepository);
         }
 
         @Test

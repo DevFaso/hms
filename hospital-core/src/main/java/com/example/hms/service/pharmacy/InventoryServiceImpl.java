@@ -546,6 +546,17 @@ public class InventoryServiceImpl implements InventoryService {
             throw new com.example.hms.exception.FieldBusinessException("lotNumber", "pharmacy.inventory.lot.duplicate");
         }
 
+        if (!matching.isEmpty()) {
+            StockLot existing = matching.getFirst();
+            if (dto.getUnitCost() != null && (existing.getUnitCost() == null
+                || dto.getUnitCost().compareTo(existing.getUnitCost()) != 0)) {
+                throw new com.example.hms.exception.FieldBusinessException("unitCost", "pharmacy.inventory.lot.costMismatch");
+            }
+            if (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().compareTo(dto.getInitialQuantity()) != 0) {
+                throw new com.example.hms.exception.FieldBusinessException("remainingQuantity", "pharmacy.inventory.lot.partialTopUp");
+            }
+        }
+
         // The receipt is recorded against the signed-in user (D82): a
         // caller-supplied receiver let one user book a delivery in a
         // colleague's name.
@@ -581,7 +592,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Record stock transaction
         recordStockTransaction(item, savedLot, StockTransactionType.RECEIPT,
-                received, "Stock receipt: lot " + savedLot.getLotNumber(), witness);
+                received, "Stock receipt: lot " + savedLot.getLotNumber(), witness, dto);
 
         // Audit
         logAudit(AuditEventType.STOCK_RECEIPT,
@@ -765,6 +776,12 @@ public class InventoryServiceImpl implements InventoryService {
     private void recordStockTransaction(InventoryItem item, StockLot lot,
                                         StockTransactionType type, BigDecimal quantity, String reason,
                                         User witness) {
+        recordStockTransaction(item, lot, type, quantity, reason, witness, null);
+    }
+
+    private void recordStockTransaction(InventoryItem item, StockLot lot,
+                                        StockTransactionType type, BigDecimal quantity, String reason,
+                                        User witness, StockLotRequestDTO receipt) {
         User performer = resolveCurrentUser();
         StockTransaction tx = StockTransaction.builder()
                 .inventoryItem(item)
@@ -775,6 +792,14 @@ public class InventoryServiceImpl implements InventoryService {
                 .performedByUser(performer)
                 .witnessedByUser(witness)
                 .build();
+        if (receipt != null) {
+            tx.setLotNumber(receipt.getLotNumber());
+            tx.setExpiryDate(receipt.getExpiryDate());
+            tx.setSupplier(receipt.getSupplier());
+            tx.setUnitCost(receipt.getUnitCost());
+            tx.setReceiptDate(receipt.getReceivedDate());
+            tx.setReceiptNotes(receipt.getNotes());
+        }
         stockTransactionRepository.save(tx);
     }
 
