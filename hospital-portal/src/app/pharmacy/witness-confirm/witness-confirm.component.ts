@@ -118,21 +118,22 @@ export class WitnessConfirmComponent {
         this.confirming.set(false);
         // A refused secret is never kept on screen; the reason is said under the field.
         this.secret.set('');
-        // The server names what it refused (the secret, or the choice of witness): both are said here,
-        // where the witness is looking.
-        const fieldId = this.fieldId();
-        const named = refusedFieldReasons(err, { secret: fieldId, witnessedBy: fieldId });
-        if (named.length > 0) {
-          refuseFields(this.host.nativeElement, [{ id: fieldId, message: named[0][1] }], ids);
-          return;
-        }
-        refuseFields(
-          this.host.nativeElement,
-          ids,
-          ids,
-          refusalReason(err) ?? this.translate.instant('PHARMACY.WITNESS_CONFIRM_FAILED'),
-        );
+        this.showServerRefusal(err);
       },
     });
+  }
+
+  /**
+   * The server's own reason, under the field the witness is looking at: what it names for the secret or for
+   * the choice of witness, else its message, else a translated fallback. Never a raw body.
+   */
+  private showServerRefusal(err: unknown): void {
+    const fieldId = this.fieldId();
+    const named = refusedFieldReasons(err, { secret: fieldId, witnessedBy: fieldId });
+    const reason =
+      named[0]?.[1] ??
+      refusalReason(err) ??
+      this.translate.instant('PHARMACY.WITNESS_CONFIRM_FAILED');
+    refuseFields(this.host.nativeElement, [fieldId], [fieldId], reason);
   }
 }
