@@ -21,7 +21,11 @@
           type="button"
           class="btn-primary"
           (click)="openCreate()"
-          [disabled]="globalScope() && (loading() || loadError())"
+          [appSubmitGuard]="
+            globalScope() && (loading() || loadError())
+              ? ((loading() ? 'COMMON.LOADING' : 'REGISTRATIONS.LOAD_ERROR') | translate)
+              : null
+          "
         >
           <span class="material-symbols-outlined">add</span>
           {{ 'REGISTRATIONS.NEW' | translate }}
@@ -482,10 +486,11 @@
           class="btn-primary"
           [disabled]="formSaving()"
           [appSubmitGuard]="
+            (!editingRegistration() && globalScope() && !form.hospitalId) ||
             (!editingRegistration() && !form.patientId) ||
             (endsTheRegistration && !form.deactivationReason?.trim())
           "
-          [submitGuardFields]="['reg-patient', 'reg-deactivation-reason']"
+          [submitGuardFields]="['reg-hospital', 'reg-patient', 'reg-deactivation-reason']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}
