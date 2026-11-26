@@ -113,6 +113,8 @@ public class OPositiveReleaseAuthorityService {
     private static final String FIELD_BIOLOGIST = "biologistUserId";
     private static final String MSG_DECISION_NOT_FOUND = "transfusion.oPositive.decision.notFound";
     private static final int MAX_NOTE_LENGTH = 2000;
+    /** The most releases one read of the queue returns. */
+    private static final int MAX_LISTED = 200;
 
     /** What a reader acting at one hospital is told when the flag rests on the record of another. */
     public static final String REACH_DESCRIPTION =
@@ -792,7 +794,8 @@ public class OPositiveReleaseAuthorityService {
             rows = rows.stream().filter(row -> row.reviewOwed() || row.countersignOwed() || row.followUpOwed()
                 || (row.isFollowUpRequired() && row.getAntibodyScreenDoneAt() == null)).toList();
         }
-        return toDto(rows);
+        // The newest first; an old hospital's whole history is not sent to a screen.
+        return toDto(rows.stream().limit(MAX_LISTED).toList());
     }
 
     /** The decisions of these release rows, by release id, for the request detail. */

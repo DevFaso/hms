@@ -270,8 +270,9 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         PatientBloodGroup saved = bloodGroupRepository.save(group);
         moveOpenRequestsOnto(saved);
-        if (saved.getAntibodyScreen() != null) {
+        if (saved.getAntibodyScreen() == AntibodyScreenResult.NEGATIVE || saved.getAntibodyScreen() == AntibodyScreenResult.POSITIVE) {
             // V380: the antibody screen a clinician asked for after an RhD positive exposure is now on record.
+            // A grouping recorded with the screen not done is no screen.
             positiveAuthority.noteAntibodyScreen(patient.getId(), now);
         }
         if (antibodyScreen != null) {

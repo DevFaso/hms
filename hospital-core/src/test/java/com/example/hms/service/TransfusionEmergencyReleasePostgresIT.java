@@ -727,6 +727,14 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThat(after.getEmergencyReleases().get(0).getPositiveDecision().getAntibodyScreenDoneAt()).isNull();
         assertThat(after.isRhdPositiveExposed()).isTrue();
         assertThat(service.getCurrentBloodGroup(patient).isRhdPositiveExposed()).isTrue();
+
+        // Once the window has opened, a real screen closes that part; a grouping with the screen not done does not.
+        sql("UPDATE clinical.o_positive_release_decisions SET antibody_screen_due_from = current_date - 1 WHERE id = :id", decisionId);
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NOT_DONE);
+        assertThat(service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision().getAntibodyScreenDoneAt()).isNull();
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
+        assertThat(service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision().getAntibodyScreenDoneAt()).isNotNull();
+        assertThat(service.getRequest(requestId).isRhdPositiveExposed()).as("the flag is permanent").isTrue();
     }
 
     @Test
