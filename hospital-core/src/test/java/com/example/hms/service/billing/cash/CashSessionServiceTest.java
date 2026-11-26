@@ -602,4 +602,38 @@ class CashSessionServiceTest {
             assertThat(line.getExpected()).isEqualByComparingTo("700");
         });
     }
+
+    @Test
+    @DisplayName("QA D3982: a history round with no cash line keeps its own differences and no drawer figures")
+    void d3982_historyOfARoundWithoutCash() {
+        com.example.hms.model.CashSessionCount orange1 = com.example.hms.model.CashSessionCount.builder()
+            .closeRound(1).method("MOBILE_MONEY").mobileMoneyOperator("ORANGE_MONEY")
+            .expectedAmount(new BigDecimal("850")).countedAmount(new BigDecimal("800"))
+            .difference(new BigDecimal("-50")).build();
+        orange1.setCreatedAt(LocalDateTime.of(2026, 11, 20, 12, 0));
+        com.example.hms.model.CashSessionCount cash3 = com.example.hms.model.CashSessionCount.builder()
+            .closeRound(3).method("CASH").expectedAmount(new BigDecimal("500")).countedAmount(new BigDecimal("500"))
+            .difference(BigDecimal.ZERO).build();
+
+        // Round 2 has no stored count: nothing to show for it. Round 3 is the current close.
+        List<CashSessionDTO.CloseRound> history = CashSessionService.historyOf(List.of(orange1, cash3), 3, 3);
+
+        assertThat(history).singleElement().satisfies(h -> {
+            assertThat(h.getCloseRound()).isEqualTo(1);
+            assertThat(h.getClosedAt()).isEqualTo(LocalDateTime.of(2026, 11, 20, 12, 0));
+            assertThat(h.getCashExpected()).isNull();
+            assertThat(h.getCashCounted()).isNull();
+            assertThat(h.getCashDifference()).isNull();
+            assertThat(h.getTotalDifference()).isEqualByComparingTo("-50");
+            assertThat(h.getDifferenceLines()).isEqualTo(1);
+        });
+        // While open again (no current round), every close is history; a count without a time has none.
+        List<CashSessionDTO.CloseRound> open = CashSessionService.historyOf(List.of(orange1, cash3), 3, 0);
+        assertThat(open).extracting(CashSessionDTO.CloseRound::getCloseRound).containsExactly(1, 3);
+        assertThat(open.get(1).getClosedAt()).isNull();
+        assertThat(open.get(1).getCashCounted()).isEqualByComparingTo("500");
+        assertThat(open.get(1).getCashDifference()).isEqualByComparingTo("0");
+        assertThat(CashSessionService.countedRoundOf(CashSessionStatus.OPEN, 3)).isZero();
+        assertThat(CashSessionService.countedRoundOf(CashSessionStatus.CLOSED, 3)).isEqualTo(3);
+    }
 }

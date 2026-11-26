@@ -60,4 +60,25 @@ class PatientPharmacyCreditTest {
         assertThat(credit.of(PATIENT, HOSPITAL)).isEqualTo(PatientPharmacyCredit.Due.NONE);
         assertThat(credit.of(null, HOSPITAL)).isEqualTo(PatientPharmacyCredit.Due.NONE);
     }
+
+    @Test
+    @DisplayName("a missing hospital, a null answer or an unknown balance counts nothing")
+    void nullAnswersCountNothing() {
+        assertThat(credit.of(PATIENT, null)).isEqualTo(PatientPharmacyCredit.Due.NONE);
+        when(deferrals.findByHospitalIdAndPatientIdAndStatus(HOSPITAL, PATIENT, DispenseBillingDeferralStatus.EXECUTED))
+            .thenReturn(null);
+        assertThat(credit.of(PATIENT, HOSPITAL)).isEqualTo(PatientPharmacyCredit.Due.NONE);
+
+        DispenseBillingDeferral unknown = DispenseBillingDeferral.builder().hospitalId(HOSPITAL).patientId(PATIENT)
+            .kind(DispenseBillingDeferralKind.URGENCY_OVERRIDE).status(DispenseBillingDeferralStatus.EXECUTED).build();
+        unknown.setId(UUID.randomUUID());
+        when(balance.stillDue(unknown)).thenReturn(null);
+        DispenseBillingDeferral urgency = executed(DispenseBillingDeferralKind.URGENCY_OVERRIDE, HOSPITAL, "400");
+        when(deferrals.findByHospitalIdAndPatientIdAndStatus(HOSPITAL, PATIENT, DispenseBillingDeferralStatus.EXECUTED))
+            .thenReturn(List.of(unknown, urgency));
+
+        PatientPharmacyCredit.Due due = credit.of(PATIENT, HOSPITAL);
+        assertThat(due.count()).isEqualTo(1);
+        assertThat(due.amount()).isEqualByComparingTo("400");
+    }
 }
