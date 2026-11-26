@@ -91,6 +91,8 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1');
     expect(service.listRecent).toHaveBeenCalledWith('p1', 'h2');
     expect(panel.notes().map((note) => note.id)).toEqual(['n1']);
+    role.set({ roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'] });
+    expect(panel.canAddend({ ...dar, hospitalId: 'h2' })).toBeFalse();
     expect(role.effectiveHospitalIdForRequest()).toBeNull();
     panel.patientId = 'p2';
     panel.ngOnChanges();

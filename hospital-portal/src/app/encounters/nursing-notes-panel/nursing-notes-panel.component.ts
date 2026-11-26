@@ -167,7 +167,7 @@ export class NursingNotesPanelComponent implements OnChanges {
    * server loads the note by id AND hospital), to the roles that may write one.
    */
   canAddend(note: NursingNote): boolean {
-    if (!this.allowAddendum) return false;
+    if (!this.allowAddendum || this.needsLocalHospital()) return false;
     if (!this.roleContext.hasAnyActiveRole(NursingNoteService.ADDENDUM_ROLES)) return false;
     const hospitalId = this.effectiveHospitalId();
     return !hospitalId || !note.hospitalId || note.hospitalId === hospitalId;
