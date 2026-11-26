@@ -21,6 +21,7 @@ import {
   defer,
   filter,
   finalize,
+  map,
   shareReplay,
   tap,
   takeUntil,
@@ -32,7 +33,7 @@ import {
   timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { navigateToSignIn } from '../auth/session-lifetime';
+import { accountChangedError, isAccountChanged, navigateToSignIn } from '../auth/session-lifetime';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
@@ -345,6 +346,12 @@ export function refreshWithSupersededRetry(
           ? timer(REFRESH_SUPERSEDED_DELAY_MS * attempt)
           : throwError(() => err),
     }),
+    // The cookie is the browser's, not the tab's: a token for another account
+    // than the tab shows is refused (the tab signs in again).
+    map((tokens) => {
+      if (!auth.isTokenForShownAccount(tokens.accessToken)) throw accountChangedError();
+      return tokens;
+    }),
   );
 }
 
@@ -394,7 +401,12 @@ function tryRefreshAndRetry(
         const callerError = refreshFailureForCaller(error);
         refreshDone$.next({ error: callerError });
         refreshDone$.next(null);
-        if (isRefreshRejection(error)) {
+        if (isAccountChanged(error)) {
+          // Another account signed in from this browser: end this tab's
+          // session only, the server session is the other tab's.
+          auth.endLocalSession();
+          void router.navigate(['/login']);
+        } else if (isRefreshRejection(error)) {
           auth.logout();
           // A session past its lifetime is told so on the sign-in page.
           void navigateToSignIn(router, error);

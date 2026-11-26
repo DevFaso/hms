@@ -24,6 +24,5 @@ export const environment = {
     redirectUri: 'https://dev.e-keneya.com/login',
     postLogoutRedirectUri: 'https://dev.e-keneya.com/login',
     scope: 'openid profile email roles hms-claims',
-    remember: false,
   },
 };

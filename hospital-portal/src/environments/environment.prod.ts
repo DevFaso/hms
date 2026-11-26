@@ -21,6 +21,5 @@ export const environment = {
     // No `offline_access` — keep refresh tokens out of the browser. With short
     // access-token TTL + silent refresh this gives a balance of UX and safety.
     scope: 'openid profile email roles hms-claims',
-    remember: false,
   },
 };

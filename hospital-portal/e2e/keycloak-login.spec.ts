@@ -139,12 +139,13 @@ test.describe('KC-2b — Keycloak Auth-Code+PKCE happy path (live Keycloak)', ()
     // After the redirect callback, the portal should land on the dashboard.
     await page.waitForURL('**/dashboard', { timeout: 30_000 });
 
-    // Token must have been mirrored into Web Storage by OidcAuthService.
-    const tokenPresent = await page.evaluate(() => {
-      const fromSession = window.sessionStorage.getItem('auth_token');
-      const fromLocal = window.localStorage.getItem('auth_token');
-      return Boolean(fromSession || fromLocal);
-    });
-    expect(tokenPresent).toBe(true);
+    // Token must have been mirrored into this tab's sessionStorage by
+    // OidcAuthService, and never into localStorage.
+    const stored = await page.evaluate(() => ({
+      fromSession: window.sessionStorage.getItem('auth_token'),
+      fromLocal: window.localStorage.getItem('auth_token'),
+    }));
+    expect(Boolean(stored.fromSession)).toBe(true);
+    expect(stored.fromLocal).toBeNull();
   });
 });

@@ -41,8 +41,8 @@ test.describe('nursing oversight', () => {
             exp: 4102444800,
           }),
         );
-        localStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.review-signature`);
-        localStorage.setItem('user_profile', JSON.stringify(profile));
+        sessionStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.review-signature`);
+        sessionStorage.setItem('user_profile', JSON.stringify(profile));
       },
       { profile },
     );

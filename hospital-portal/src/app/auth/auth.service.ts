@@ -6,6 +6,11 @@ import { EMPTY, Observable, Subject, catchError } from 'rxjs';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
 import { ApiTimeoutService } from '../core/api-timeout.service';
+import {
+  clearSessionScopedStorage,
+  clearUserDrafts,
+  purgeLegacyBrowserStorage,
+} from '../core/browser-storage';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -111,6 +116,8 @@ export class AuthService {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.endSession());
+    // Earlier builds kept the session in localStorage: remove what they left.
+    if (this.isBrowser) purgeLegacyBrowserStorage();
   }
 
   private endSession(): void {
@@ -119,66 +126,59 @@ export class AuthService {
   }
 
   // ---------- Storage ----------
+  // The access token lives in memory, mirrored into this tab's sessionStorage
+  // so a reload keeps the session; it is never written to localStorage (which
+  // outlives the tab and the sign-out). A new tab or a restarted browser signs
+  // in again. See core/browser-storage.ts.
+  private accessToken: string | null = null;
+
   getToken(): string | null {
     if (!this.isBrowser) return null;
+    if (this.accessToken) return this.accessToken;
     try {
-      return (
-        localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY) || null
-      );
+      this.accessToken = sessionStorage.getItem(ACCESS_TOKEN_KEY) || null;
     } catch {
-      return null;
+      this.accessToken = null;
     }
+    return this.accessToken;
   }
 
-  setToken(token: string, remember = true): void {
+  setToken(token: string): void {
     if (!this.isBrowser) return;
+    this.accessToken = token;
     try {
-      // Always clear the OTHER storage before writing — a token must live in
-      // exactly one place. Without this, a remember-me login leaves the
-      // original JWT in localStorage; a subsequent setToken(impersonationToken,
-      // false) writes to sessionStorage but getToken() prefers localStorage,
-      // so every API call keeps using the original token (Copilot review #2
-      // on PR #224 — impersonation never takes effect for remembered sessions).
-      if (remember) {
-        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-        localStorage.setItem(ACCESS_TOKEN_KEY, token);
-      } else {
-        localStorage.removeItem(ACCESS_TOKEN_KEY);
-        sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
-      }
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       // Clear any stale idle-lock flag from a prior session so the new
       // login does not land on the lock screen instead of the dashboard.
       sessionStorage.removeItem('hms_idle_locked');
       sessionStorage.removeItem('hms_lock_ts');
+    } catch {
+      // Storage not available: the token stays in memory for this page.
+    }
+  }
+
+  clearToken(): void {
+    if (!this.isBrowser) return;
+    this.accessToken = null;
+    try {
+      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
     } catch {
       // Storage not available
     }
   }
 
   /**
-   * MVP-4 — return whether the current access token is in localStorage
-   * (remember-me) or sessionStorage. The {@code ImpersonationService} uses
-   * this to remember the original `remember` preference so that, on
-   * stop(), the original token is restored to its original storage rather
-   * than being silently promoted to localStorage (Copilot review #5).
+   * Whether a token the refresh cookie minted is for the account this tab
+   * shows. Every tab of the browser shares that cookie, so after someone else
+   * signs in from another tab it mints their token: the tab must then end its
+   * own session ({@link endLocalSession}) rather than act under another name.
    */
-  isTokenRemembered(): boolean {
-    if (!this.isBrowser) return false;
-    try {
-      return localStorage.getItem(ACCESS_TOKEN_KEY) != null;
-    } catch {
-      return false;
-    }
-  }
-
-  clearToken(): void {
-    if (!this.isBrowser) return;
-    try {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-    } catch {
-      // Storage not available
-    }
+  isTokenForShownAccount(token: string): boolean {
+    const shown = this.getUserProfile()?.id ?? this.getUserId();
+    const minted = this.decodePayload(token);
+    const mintedId = (minted?.uid as string) ?? (minted?.id as string) ?? null;
+    return !shown || !mintedId || shown === mintedId;
   }
 
   // ---------- Refresh Token ----------
@@ -248,18 +248,26 @@ export class AuthService {
   }
 
   // ---------- User Profile ----------
+  // Same home as the token: memory, mirrored into this tab's sessionStorage.
+  private profileCache: LoginUserProfile | null = null;
+
   setUserProfile(profile: LoginUserProfile): void {
     if (!this.isBrowser) return;
-    if (this.getUserProfile()?.id !== profile.id) this.timeouts.resetForSession();
+    if (this.getUserProfile()?.id !== profile.id) {
+      this.timeouts.resetForSession();
+      // Another account takes over the tab: nothing the previous one drafted stays.
+      if (this.profileCache) clearUserDrafts();
+    }
+    const toStore = { ...profile };
+    if (toStore.profileImageUrl) {
+      toStore.profileImageUrl = this.normalizeImageUrl(toStore.profileImageUrl);
+    }
+    this.profileCache = toStore;
+    this.currentProfile.set(toStore);
     try {
-      const toStore = { ...profile };
-      if (toStore.profileImageUrl) {
-        toStore.profileImageUrl = this.normalizeImageUrl(toStore.profileImageUrl);
-      }
-      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(toStore));
-      this.currentProfile.set(toStore);
+      sessionStorage.setItem(USER_PROFILE_KEY, JSON.stringify(toStore));
     } catch {
-      // Storage error
+      // Storage error: the profile stays in memory for this page.
     }
   }
 
@@ -292,23 +300,26 @@ export class AuthService {
 
   getUserProfile(): LoginUserProfile | null {
     if (!this.isBrowser) return null;
+    if (this.profileCache) return this.profileCache;
     try {
-      const raw = localStorage.getItem(USER_PROFILE_KEY);
-      const profile = raw ? (JSON.parse(raw) as LoginUserProfile) : null;
-      if (profile && !this.currentProfile()) {
-        this.currentProfile.set(profile);
-      }
-      return profile;
+      const raw = sessionStorage.getItem(USER_PROFILE_KEY);
+      this.profileCache = raw ? (JSON.parse(raw) as LoginUserProfile) : null;
     } catch {
-      return null;
+      this.profileCache = null;
     }
+    if (this.profileCache && !this.currentProfile()) {
+      this.currentProfile.set(this.profileCache);
+    }
+    return this.profileCache;
   }
 
   clearUserProfile(): void {
     if (!this.isBrowser) return;
+    this.profileCache = null;
+    this.currentProfile.set(null);
     try {
+      sessionStorage.removeItem(USER_PROFILE_KEY);
       localStorage.removeItem(USER_PROFILE_KEY);
-      this.currentProfile.set(null);
     } catch {
       // Storage error
     }
@@ -454,22 +465,28 @@ export class AuthService {
   logout(): void {
     this.endSession();
     this.revokeServerSession();
+    this.clearLocalState();
+  }
+
+  /**
+   * The local half of signing out: session-owned work stops, and the token,
+   * the profile, the role context and every session-scoped key the portal
+   * keeps in the browser (core/browser-storage.ts) are cleared, so the next
+   * person at this browser starts from nothing.
+   */
+  endLocalSession(): void {
+    this.endSession();
+    this.clearLocalState();
+  }
+
+  private clearLocalState(): void {
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();
     // The next user must not inherit this one's provider flag or a resolved
     // session (the shell's emergency-broadcast gate reads both).
     this.roleContext.clearSession();
-    // Clear idle lock state so the lock screen doesn't appear on next login
-    if (this.isBrowser) {
-      try {
-        sessionStorage.removeItem('hms_idle_locked');
-        sessionStorage.removeItem('hms_lock_ts');
-        sessionStorage.removeItem('hms-chunk-reload');
-      } catch {
-        /* storage not available */
-      }
-    }
+    if (this.isBrowser) clearSessionScopedStorage();
   }
 
   /**

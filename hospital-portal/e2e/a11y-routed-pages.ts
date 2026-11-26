@@ -118,11 +118,11 @@ test.describe('all routed pages', () => {
             const payload = btoa(
               JSON.stringify({ sub: profile.username, roles: profile.roles, exp: 9999999999 }),
             );
-            localStorage.setItem(
+            sessionStorage.setItem(
               'auth_token',
               `eyJhbGciOiJIUzI1NiJ9.${payload}.cdx-test-signature`,
             );
-            localStorage.setItem('user_profile', JSON.stringify(profile));
+            sessionStorage.setItem('user_profile', JSON.stringify(profile));
           },
           { profile },
         );

@@ -49,7 +49,9 @@ describe('LockScreenComponent — unlock', () => {
       'setRefreshToken',
       'getUserProfile',
       'getSubject',
+      'isTokenForShownAccount',
     ]);
+    auth.isTokenForShownAccount.and.returnValue(true);
     auth.getUserProfile.and.returnValue(null);
     auth.getSubject.and.returnValue('doctor_b');
     auth.refreshTokenRequest.and.returnValue(of(FRESH_TOKENS));
@@ -101,6 +103,19 @@ describe('LockScreenComponent — unlock', () => {
 
     expectVerify().flush({ message: 'Password verified.' });
     expect(idle.unlock).toHaveBeenCalled();
+  });
+
+  it('a renewal that mints another account signs the tab out locally, never verifying the password', () => {
+    setUp({ tokenExpired: true });
+    auth.isTokenForShownAccount.and.returnValue(false);
+    let changed = false;
+    component.accountChanged.subscribe(() => (changed = true));
+    component.unlock();
+
+    httpMock.expectNone('/auth/verify-password');
+    expect(auth.setToken).not.toHaveBeenCalled();
+    expect(idle.unlock).toHaveBeenCalled();
+    expect(changed).toBeTrue();
   });
 
   it('renews when no access token is stored at all', () => {

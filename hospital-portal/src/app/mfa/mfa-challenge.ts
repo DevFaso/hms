@@ -83,9 +83,9 @@ export class MfaChallengeComponent {
         }
 
         // Successful MFA — same flow as normal login completion
-        this.auth.setToken(token, true);
+        this.auth.setToken(token);
         if (res.refreshToken) {
-          this.auth.setRefreshToken(res.refreshToken, true);
+          this.auth.setRefreshToken(res.refreshToken);
         }
 
         // E9 #55b: the live session decides the hospital scope; the MFA body

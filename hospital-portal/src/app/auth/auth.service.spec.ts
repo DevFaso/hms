@@ -5,6 +5,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AuthService, type SessionBootstrapResponse } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ApiTimeoutService } from '../core/api-timeout.service';
+import {
+  LEGACY_LOCAL_STORAGE_KEYS,
+  LOCAL_STORAGE_ALLOWLIST,
+  PATIENT_NOTE_PREFIX,
+  SESSION_SCOPED_KEYS,
+} from '../core/browser-storage';
 
 describe('AuthService — S-01 refresh-token cookie behaviour', () => {
   let service: AuthService;
@@ -202,49 +208,108 @@ describe('AuthService — resolveLandingPath', () => {
   });
 });
 
-describe('AuthService — setToken storage swap (closes Copilot review #2 on PR #224)', () => {
+describe('AuthService — where the session is kept', () => {
   let service: AuthService;
+  let httpMock: HttpTestingController;
   const KEY = 'auth_token';
+
+  function jwt(payload: Record<string, unknown>): string {
+    const b64 = (v: string) =>
+      btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+    return `${b64('{"alg":"none"}')}.${b64(JSON.stringify(payload))}.sig`;
+  }
+
+  function create(): AuthService {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    return TestBed.inject(AuthService);
+  }
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    TestBed.configureTestingModule({
-      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
-    });
-    service = TestBed.inject(AuthService);
   });
 
   afterEach(() => {
+    httpMock?.verify();
     localStorage.clear();
     sessionStorage.clear();
     TestBed.resetTestingModule();
   });
 
-  it('setToken(token, false) clears localStorage so a remember-me original cannot shadow the new token', () => {
-    localStorage.setItem(KEY, 'original-remembered.jwt');
-
-    service.setToken('impersonation.jwt', false);
-
+  it("keeps the token in memory and this tab's sessionStorage, never localStorage", () => {
+    service = create();
+    service.setToken('a.jwt');
+    expect(service.getToken()).toBe('a.jwt');
+    expect(sessionStorage.getItem(KEY)).toBe('a.jwt');
     expect(localStorage.getItem(KEY)).toBeNull();
-    expect(sessionStorage.getItem(KEY)).toBe('impersonation.jwt');
-    expect(service.getToken()).toBe('impersonation.jwt');
   });
 
-  it('setToken(token, true) clears sessionStorage so a session-only token cannot leak across the swap', () => {
-    sessionStorage.setItem(KEY, 'session-only.jwt');
-
-    service.setToken('new-remembered.jwt', true);
-
-    expect(sessionStorage.getItem(KEY)).toBeNull();
-    expect(localStorage.getItem(KEY)).toBe('new-remembered.jwt');
+  it('a reload of the tab keeps the session (sessionStorage), the memory copy answers first', () => {
+    sessionStorage.setItem(KEY, 'reloaded.jwt');
+    service = create();
+    expect(service.getToken()).toBe('reloaded.jwt');
+    sessionStorage.removeItem(KEY);
+    expect(service.getToken()).toBe('reloaded.jwt');
   });
 
-  it('isTokenRemembered() reflects the storage where the token currently lives', () => {
-    service.setToken('a.jwt', true);
-    expect(service.isTokenRemembered()).toBeTrue();
-    service.setToken('b.jwt', false);
-    expect(service.isTokenRemembered()).toBeFalse();
+  it('keeps the profile in sessionStorage, never localStorage', () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'dr', email: '', roles: [], active: true });
+    expect(sessionStorage.getItem('user_profile')).toContain('"u1"');
+    expect(localStorage.getItem('user_profile')).toBeNull();
+    expect(service.getUserProfile()?.id).toBe('u1');
+  });
+
+  it('removes the session an earlier build left in localStorage at start-up', () => {
+    localStorage.setItem('auth_token', 'old.jwt');
+    localStorage.setItem('auth_refresh_token', 'old.refresh');
+    localStorage.setItem('user_profile', '{"id":"u0"}');
+    localStorage.setItem('portal-notes-medical', '{"c":"x"}');
+    localStorage.setItem('lang', 'fr');
+
+    service = create();
+
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
+    expect(localStorage.getItem('user_profile')).toBeNull();
+    expect(localStorage.getItem('portal-notes-medical')).toBeNull();
+    expect(localStorage.getItem('lang')).toBe('fr');
+    expect(service.getToken()).toBeNull();
+    expect(service.getUserProfile()).toBeNull();
+  });
+
+  it("drops the previous user's drafts when another account takes over the tab", () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    sessionStorage.setItem('hms.patientNotes.u1.medical', 'note');
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    expect(sessionStorage.getItem('hms.patientNotes.u1.medical')).toBe('note');
+
+    service.setUserProfile({ id: 'u2', username: 'b', email: '', roles: [], active: true });
+    expect(sessionStorage.getItem('hms.patientNotes.u1.medical')).toBeNull();
+  });
+
+  it('tells whether a refreshed token is for the account the tab shows', () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    expect(service.isTokenForShownAccount(jwt({ uid: 'u1' }))).toBeTrue();
+    expect(service.isTokenForShownAccount(jwt({ uid: 'u2' }))).toBeFalse();
+    // Nothing to compare against: accepted.
+    expect(service.isTokenForShownAccount(jwt({ sub: 'x' }))).toBeTrue();
+  });
+
+  it('endLocalSession clears the tab without a server sign-out', () => {
+    service = create();
+    service.setToken('a.jwt');
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    service.endLocalSession();
+    httpMock.expectNone((r) => r.url.endsWith('/api/auth/logout'));
+    expect(service.getToken()).toBeNull();
+    expect(service.getUserProfile()).toBeNull();
+    expect(sessionStorage.length).toBe(0);
   });
 });
 
@@ -321,7 +386,7 @@ describe('AuthService — logout revokes the server session', () => {
     notice.noteTimeout('POST');
     const ended = jasmine.createSpy('session ended');
     service.sessionEnded$.subscribe(ended);
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
 
     service.logout();
     expect(ended).toHaveBeenCalledTimes(1);
@@ -338,7 +403,7 @@ describe('AuthService — logout revokes the server session', () => {
 
   it('clears session flags and chunk recovery state on logout', () => {
     sessionStorage.setItem('hms-chunk-reload', 'legacy-private-route');
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setProviderUser(true);
     roleContext.markSessionResolved();
@@ -351,8 +416,23 @@ describe('AuthService — logout revokes the server session', () => {
     expect(roleContext.sessionResolved()).toBeFalse();
   });
 
+  it('clears every session-scoped key, including the patient notes, and keeps only device preferences', () => {
+    for (const key of SESSION_SCOPED_KEYS) sessionStorage.setItem(key, 'x');
+    sessionStorage.setItem(`${PATIENT_NOTE_PREFIX}u1.medical`, 'note');
+    for (const key of LEGACY_LOCAL_STORAGE_KEYS) localStorage.setItem(key, 'x');
+    localStorage.setItem('portal-notes-family', 'x');
+    for (const key of LOCAL_STORAGE_ALLOWLIST) localStorage.setItem(key, 'pref');
+
+    service.logout();
+    httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
+
+    expect(sessionStorage.length).toBe(0);
+    const left = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
+    expect(left.sort()).toEqual([...LOCAL_STORAGE_ALLOWLIST].sort());
+  });
+
   it('still signs out locally when the server call fails', () => {
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
     let thrown: unknown = null;
 
     try {

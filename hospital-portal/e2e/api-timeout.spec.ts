@@ -244,14 +244,14 @@ test('a stalled refresh retains the open patient view, its input and the existin
     const search = page.locator('.filter-toolbar .search-bar input');
     await expect(search).toBeVisible();
     await expect.poll(() => refreshCalls).toBe(1);
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await page.evaluate(() => sessionStorage.getItem('auth_token'));
     await search.fill('Keep this input');
     await page.clock.fastForward(30000);
     await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
     await expect(search).toHaveValue('Keep this input');
     await expect(page.getByTestId('api-timeout-banner')).toBeVisible();
     await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
-    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+    expect(await page.evaluate(() => sessionStorage.getItem('auth_token'))).toBe(token);
     expect(logoutCalls).toBe(0);
     expect(refreshCalls).toBe(1);
   } finally {
@@ -356,7 +356,7 @@ test('a business failure after a successful refresh keeps the user on the patien
   );
   await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
   await expect(page.locator('.filter-toolbar .search-bar input')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+  expect(await page.evaluate(() => sessionStorage.getItem('auth_token'))).toBe(token);
   expect(logoutCalls).toBe(0);
 });
 
@@ -395,7 +395,7 @@ test('an uncertain upload warning is cleared when the patient signs out', async 
     await page.getByTestId('shell-profile-menu').locator('button.logout').click();
     await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
     await expect(page.getByTestId('api-timeout-banner')).toHaveCount(0);
-    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+    expect(await page.evaluate(() => sessionStorage.getItem('auth_token'))).toBeNull();
   } finally {
     release();
   }
@@ -413,7 +413,7 @@ test('terminal refresh 410 ends the legacy session and opens login', async ({ pa
   );
   await page.goto('/patients');
   await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
-  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+  expect(await page.evaluate(() => sessionStorage.getItem('auth_token'))).toBeNull();
   expect(refreshCalls).toBe(1);
 });
 
@@ -489,7 +489,7 @@ for (const resourceConflict of [false, true]) {
       await expect(confirmation).toHaveCount(0);
       expect(writes).toBe(1);
       await expect(page).toHaveURL(/\/billing(?:[?#]|$)/);
-      expect(await page.evaluate(() => localStorage.getItem('auth_token'))).not.toBeNull();
+      expect(await page.evaluate(() => sessionStorage.getItem('auth_token'))).not.toBeNull();
     }
   });
 }

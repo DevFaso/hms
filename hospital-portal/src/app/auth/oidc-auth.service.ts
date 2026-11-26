@@ -152,10 +152,8 @@ export class OidcAuthService {
     const accessToken = this.oauth.getAccessToken();
     if (!accessToken) return;
 
-    // Default false — token lives in sessionStorage and dies with the tab.
-    // Opt in via `environment.oidc.remember = true` for trusted workstations.
-    const remember = environment.oidc?.remember === true;
-    this.auth.setToken(accessToken, remember);
+    // The token lives in memory and this tab's sessionStorage, never localStorage.
+    this.auth.setToken(accessToken);
 
     const claims = this.oauth.getIdentityClaims() as Record<string, unknown> | null;
     if (!claims) return;

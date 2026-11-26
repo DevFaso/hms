@@ -15,10 +15,10 @@ import { stepUpRequestOptions } from './step-up';
 /**
  * MVP-4 — Support impersonation client.
  *
- * Stash the original super-admin token under {@link ORIGINAL_TOKEN_KEY},
- * the original `remember` preference under {@link ORIGINAL_REMEMBER_KEY},
+ * Stash the original super-admin token under {@link ORIGINAL_TOKEN_KEY}
  * and the original profile snapshot under {@link ORIGINAL_PROFILE_KEY}
- * before swapping in the impersonation token; restore all three on stop.
+ * (this tab's sessionStorage, cleared at sign-out) before swapping in the
+ * impersonation token; restore both on stop.
  *
  * <p>Beyond the obvious token swap, the service also re-hydrates
  * {@link RoleContextService} and the persisted user profile from the new
@@ -32,7 +32,6 @@ import { stepUpRequestOptions } from './step-up';
  * can conditionally render off it without subscribing to an HTTP call.
  */
 const ORIGINAL_TOKEN_KEY = 'auth_token_pre_impersonation';
-const ORIGINAL_REMEMBER_KEY = 'auth_remember_pre_impersonation';
 const ORIGINAL_PROFILE_KEY = 'auth_profile_pre_impersonation';
 
 /**
@@ -102,18 +101,12 @@ export class ImpersonationService {
       )
       .pipe(
         tap((response) => {
-          // 1. Save original session state so stop() can restore it
-          //    bit-for-bit (closes Copilot review #5: don't silently
-          //    promote a session-only login to remember-me).
+          // 1. Save original session state so stop() can restore it.
           this.preserveOriginalSession();
 
-          // 2. Swap in the impersonation token. setToken() now clears the
-          //    OTHER storage so a remember-me login does not leave the
-          //    original token in localStorage shadowing the new one.
-          //    Impersonation tokens always go into sessionStorage so they
-          //    are dropped when the tab closes (defence in depth — see
-          //    Copilot review #2).
-          this.auth.setToken(response.accessToken, /* remember */ false);
+          // 2. Swap in the impersonation token (memory + this tab's
+          //    sessionStorage, like every access token).
+          this.auth.setToken(response.accessToken);
 
           // 3. Roles from the new token at once so the shell, the guards and
           //    the side-nav reflect the impersonated identity immediately;
@@ -229,7 +222,6 @@ export class ImpersonationService {
     if (original) {
       sessionStorage.setItem(ORIGINAL_TOKEN_KEY, original);
     }
-    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, this.auth.isTokenRemembered() ? '1' : '0');
     const profile = this.auth.getUserProfile();
     if (profile) {
       sessionStorage.setItem(ORIGINAL_PROFILE_KEY, JSON.stringify(profile));
@@ -244,16 +236,13 @@ export class ImpersonationService {
     this.remainingMs.set(null);
 
     const original = sessionStorage.getItem(ORIGINAL_TOKEN_KEY);
-    const rememberFlag = sessionStorage.getItem(ORIGINAL_REMEMBER_KEY);
-    const remember = rememberFlag !== '0'; // default true when flag missing/legacy
 
     if (original) {
-      this.auth.setToken(original, remember);
+      this.auth.setToken(original);
       sessionStorage.removeItem(ORIGINAL_TOKEN_KEY);
     } else {
       this.auth.clearToken();
     }
-    sessionStorage.removeItem(ORIGINAL_REMEMBER_KEY);
 
     // Restore profile + role context from the snapshot taken at start(),
     // then re-hydrate from the live session as the original user (E9

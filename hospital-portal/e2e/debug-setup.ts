@@ -62,8 +62,8 @@ setup('debug login', async ({ page }) => {
   await page.waitForTimeout(3000);
   console.log('After 3s wait, URL:', page.url());
   
-  const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-  console.log('Token in localStorage:', token ? token.substring(0, 50) + '...' : null);
+  const token = await page.evaluate(() => sessionStorage.getItem('auth_token'));
+  console.log('Token in sessionStorage:', token ? token.substring(0, 50) + '...' : null);
   
   const errMsg = await page.locator('[role="alert"]').textContent().catch(() => null);
   console.log('Error message:', errMsg);
