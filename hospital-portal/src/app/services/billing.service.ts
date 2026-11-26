@@ -143,6 +143,13 @@ export const INVOICE_ITEM_CATEGORIES: InvoiceItemCategory[] = [
   'GENERAL',
 ];
 
+/** Review of #1338: a price-list item's grid price on a draft invoice's service date. */
+export interface InvoiceLineGridPrice {
+  priceListItemId: string;
+  serviceDate: string;
+  unitPrice?: number | null;
+}
+
 export interface InvoiceItemRequest {
   billingInvoiceId: string;
   itemDescription: string;
@@ -154,6 +161,12 @@ export interface InvoiceItemRequest {
    * (QA D2703): also required to add a line by hand to a visit's invoice.
    */
   overrideReason?: string;
+  /**
+   * QA D3980 (r77), create only: the price-list item (act) the line bills. The server names the line after it,
+   * prices it at the grid and lets the patient's plan apply its rules; a line without one is never claimed from
+   * the insurer.
+   */
+  priceListItemId?: string;
 }
 
 /**
@@ -287,8 +300,12 @@ export interface BillingSummary {
   paid: number;
   outstanding: number;
   overdue: number;
+  /** QA D3981 (r77): net revenue: received less the refunds paid out. */
   totalRevenue: number;
   balance: number;
+  /** QA D3981: received before refunds, and the refunds paid out. */
+  grossReceived?: number | null;
+  refunded?: number | null;
 }
 
 /** Billing-money plan PR 8: money received at the till (IN) or handed back on a refund (OUT). */
@@ -447,6 +464,17 @@ export class BillingService {
 
   createInvoiceItem(req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
     return this.http.post<InvoiceItemResponse>('/invoice-items', req);
+  }
+
+  /**
+   * Review of #1338 (QA D3980): the grid price a line typed on this draft would take for a price-list item, on the
+   * invoice's own service date (the price the server checks the line against). Null when none is in force then.
+   */
+  getGridPrice(invoiceId: string, priceListItemId: string): Observable<InvoiceLineGridPrice> {
+    const params = new HttpParams()
+      .set('billingInvoiceId', invoiceId)
+      .set('priceListItemId', priceListItemId);
+    return this.http.get<InvoiceLineGridPrice>('/invoice-items/grid-price', { params });
   }
 
   /** The backend answers text/plain, so parse as text. */

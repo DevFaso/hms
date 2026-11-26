@@ -102,6 +102,17 @@ public class OrdonnancePdfService {
         this.controlledResolver = controlledResolver;
     }
 
+    /**
+     * QA D3865: the patient's known allergies on the ordonnance (a hand-built instance or a mocked slice bean may leave it
+     * out; each line's allergy override is printed regardless).
+     */
+    private PrescriptionAllergyNotice allergyNotice;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyNotice(PrescriptionAllergyNotice allergyNotice) {
+        this.allergyNotice = allergyNotice;
+    }
+
     @Transactional(readOnly = true)
     public byte[] forPrescriber(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
@@ -245,6 +256,16 @@ public class OrdonnancePdfService {
         if (mrn != null && !mrn.isBlank()) {
             pdf.field(label(locale, "pdf.ordonnance.mrn"), mrn, 11f);
         }
+        writeKnownAllergies(pdf, rx, locale);
+    }
+
+    /** QA D3865: the patient's known allergies, or none recorded, so an outside pharmacy reads them. */
+    private void writeKnownAllergies(PharmacyPdfWriter pdf, Prescription rx, Locale locale) throws IOException {
+        if (allergyNotice == null) {
+            return;
+        }
+        PrescriptionAllergyNotice.KnownAllergies known = allergyNotice.knownAllergies(rx, locale);
+        pdf.field(PrescriptionAllergyNotice.allergiesLabel(locale), allergyNotice.allergiesValue(known, locale), 11f);
     }
 
     /** The most recent measured weight in this hospital, explicitly dated rather than a dose snapshot. */
@@ -293,6 +314,11 @@ public class OrdonnancePdfService {
         }
         if (controlledResolver != null ? controlledResolver.isControlled(rx) : rx.isControlledSubstance()) {
             pdf.paragraph(PharmacyPdfWriter.BOLD, 9f, "   " + label(locale, "pdf.rxcopy.controlled"));
+        }
+        // QA D3865: a line signed over an allergy alert says so, with the prescriber's reason.
+        String allergyOverride = PrescriptionAllergyNotice.overrideLine(rx, locale);
+        if (allergyOverride != null) {
+            pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, "   " + allergyOverride);
         }
         pdf.space(6f);
     }

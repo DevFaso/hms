@@ -20,6 +20,7 @@ import {
   CashSession,
   CashSessionService,
   CashTill,
+  countedRoundOf,
 } from '../../services/cash-session.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
@@ -158,15 +159,19 @@ export class CashSessionComponent {
     return (
       s.counts.find(
         (c) =>
-          c.closeRound === s.closeRound &&
+          c.closeRound === countedRoundOf(s) &&
           cashLineKey(c.method, c.operator) === cashLineKey(line.method, line.operator),
       ) ?? null
     );
   }
 
-  /** Counts of the closes before the latest one (a reopened session closed again). */
+  /**
+   * QA D3982 (r77): the counts of every close but the current one: all of them while a reopened till is open
+   * again, the earlier ones once it is closed again. History, never the current figures.
+   */
   earlierCounts(s: CashSession): CashCount[] {
-    return s.counts.filter((c) => c.closeRound < s.closeRound);
+    const current = countedRoundOf(s);
+    return s.counts.filter((c) => c.closeRound !== current);
   }
 
   /** The id of a line's counted-amount input (a refusal marks and focuses it). */

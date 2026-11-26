@@ -157,4 +157,61 @@ class TariffResolverTest {
             .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
         assertThat(importQuery.replaceAll("\\s+", " ")).contains("ORDER BY i.code");
     }
+
+    @Test
+    @DisplayName("review of #1338: the picker's read of one item takes the version in force on the invoice's date, "
+        + "without a charge lock")
+    void peekItemReadsTheVersionOfThatDayWithoutALock() {
+        PriceListItem item = item(hospital, "Sérodiagnostic de Widal");
+        LocalDate invoiceDay = TODAY.minusDays(10);
+        PriceListPrice then = version(item, "3000", invoiceDay.minusDays(30), TODAY.minusDays(1));
+        PriceListPrice now = version(item, "3500", TODAY, null);
+        when(items.findByIdAndHospitalId(item.getId(), hospital)).thenReturn(java.util.Optional.of(item));
+        when(prices.findInForce(item.getId(), hospital, invoiceDay)).thenReturn(List.of(then));
+        when(prices.findInForce(item.getId(), hospital, TODAY)).thenReturn(List.of(now));
+
+        TariffResolver.Tariff onTheInvoiceDay = resolver.peekItem(hospital, item.getId(), invoiceDay).orElseThrow();
+        assertThat(onTheInvoiceDay.unitPrice()).isEqualByComparingTo("3000");
+        assertThat(onTheInvoiceDay.priceId()).isEqualTo(then.getId());
+        assertThat(onTheInvoiceDay.label()).isEqualTo("Sérodiagnostic de Widal");
+        assertThat(resolver.peekItem(hospital, item.getId(), TODAY).orElseThrow().unitPrice())
+            .isEqualByComparingTo("3500");
+        org.mockito.Mockito.verify(items, org.mockito.Mockito.never()).findActiveByIdForCharge(any(), any());
+    }
+
+    @Test
+    @DisplayName("review of #1338: no grid price for a missing input, a withdrawn or foreign item, or no version that day")
+    void peekItemFindsNothingOutsideTheHospitalsActiveItemAndItsVersions() {
+        UUID itemId = UUID.randomUUID();
+        assertThat(resolver.peekItem(null, itemId, TODAY)).isEmpty();
+        assertThat(resolver.peekItem(hospital, null, TODAY)).isEmpty();
+        assertThat(resolver.peekItem(hospital, itemId, null)).isEmpty();
+        verifyNoInteractions(items, prices);
+
+        // Not found at this hospital.
+        when(items.findByIdAndHospitalId(itemId, hospital)).thenReturn(java.util.Optional.empty());
+        assertThat(resolver.peekItem(hospital, itemId, TODAY)).isEmpty();
+
+        // Withdrawn.
+        PriceListItem withdrawn = item(hospital, "Ancien acte");
+        withdrawn.setActive(false);
+        when(items.findByIdAndHospitalId(withdrawn.getId(), hospital)).thenReturn(java.util.Optional.of(withdrawn));
+        assertThat(resolver.peekItem(hospital, withdrawn.getId(), TODAY)).isEmpty();
+
+        // A repository that answered another hospital's row.
+        PriceListItem foreign = item(UUID.randomUUID(), "Acte B");
+        when(items.findByIdAndHospitalId(foreign.getId(), hospital)).thenReturn(java.util.Optional.of(foreign));
+        assertThat(resolver.peekItem(hospital, foreign.getId(), TODAY)).isEmpty();
+
+        // A null answer, or only a version of another hospital or of another day.
+        PriceListItem active = item(hospital, "Acte");
+        when(items.findByIdAndHospitalId(active.getId(), hospital)).thenReturn(java.util.Optional.of(active));
+        when(prices.findInForce(active.getId(), hospital, TODAY)).thenReturn(null);
+        assertThat(resolver.peekItem(hospital, active.getId(), TODAY)).isEmpty();
+        PriceListPrice otherHospital = version(active, "1000", TODAY.minusDays(1), null);
+        otherHospital.setHospitalId(UUID.randomUUID());
+        PriceListPrice tomorrow = version(active, "1200", TODAY.plusDays(1), null);
+        when(prices.findInForce(active.getId(), hospital, TODAY)).thenReturn(List.of(otherHospital, tomorrow));
+        assertThat(resolver.peekItem(hospital, active.getId(), TODAY)).isEmpty();
+    }
 }

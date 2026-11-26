@@ -73,6 +73,14 @@
   margin-top: 2px;
 }
 
+/* QA D3981 (r77): what the net revenue nets (received − refunded), under its label. */
+.card-hint {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
 .tabs {
   display: flex;
   gap: 0.25rem;
@@ -739,4 +747,15 @@
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* QA D3980 (r77): the act picker of a line typed at the till takes the form's full width, never wider. */
+.line-act {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.line-act select {
+  width: 100%;
+  max-width: 100%;
 }

@@ -5,10 +5,13 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Staff;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.utility.NewsScoreCalculator;
 import com.example.hms.utility.NewsScoreCalculator.NewsScoreResult;
 import com.example.hms.utility.NewsScoreCalculator.RiskBand;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -27,12 +30,29 @@ import java.util.UUID;
  * physician (or the admitting provider when no attending is named). It runs
  * in the caller's transaction, like the critical-lab alert: if the vitals row
  * commits, so does the alert.
+ *
+ * <p>QA D3862 (r77, the sibling of D3304): a HIGH score (7 or more) is also an
+ * urgent alert to ACKNOWLEDGE, filed through the one escalation path every
+ * early-warning score uses ({@code ObstetricAlertEscalationService}): a
+ * CRITICAL in-basket item for the responsible doctor, the visit's clinician
+ * and the nurse in charge (and the covering doctor when no doctor is among
+ * them), reminders every 15 minutes until somebody other than the recorder
+ * acknowledges it, and the escalation row as its record. No threshold is new:
+ * HIGH is the RCP band this class already pages for. Who is told is the
+ * provisional rule NEWS2_ESCALATION.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.NEWS2_ESCALATION)
 public class News2EscalationService {
 
     public static final String NOTIFICATION_TYPE = "NEWS2_ESCALATION";
+    /** QA D3862: the alert type of a HIGH NEWS2 filed for acknowledgement. */
+    public static final String ALERT_TYPE_HIGH = "NEWS2_HIGH";
+    static final String ITEM_TITLE_KEY = "news2.alert.notification";
+    static final String ITEM_TYPE_PREFIX = "news2.alert.type.";
+    static final String ITEM_MESSAGE_PREFIX = "news2.alert.msg.";
 
     /** RCP NEWS2: HIGH = continuous monitoring; recorded here as a 15-minute round. */
     static final Duration HIGH_INTERVAL = Duration.ofMinutes(15);
@@ -43,6 +63,21 @@ public class News2EscalationService {
 
     private final AdmissionRepository admissionRepository;
     private final NotificationService notificationService;
+
+    /** QA D3862: the urgent-alert escalation (setter-injected; absent, a HIGH score stays a bell notice). */
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
+    private com.example.hms.service.i18n.NotificationLocalizer localizer;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
+                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts = urgentAlerts;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLocalizer(com.example.hms.service.i18n.NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
 
     /** The minimum interval to the next set of observations for this NEWS2 result. */
     public static Duration observationInterval(NewsScoreResult score, Duration routine) {
@@ -98,10 +133,49 @@ public class News2EscalationService {
         Object[] args = {score.total(), patientName != null ? patientName : "-",
             observationInterval(score, Duration.ofHours(12)).toMinutes()};
         String key = score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium";
+        Set<String> rang = new LinkedHashSet<>();
         for (String recipient : recipients) {
             notificationService.createNotification(key, args, recipient, NOTIFICATION_TYPE);
+            rang.add(recipient);
+        }
+        if (score.riskBand() == RiskBand.HIGH) {
+            fileForAcknowledgement(vital, score, patientId, hospitalId, rang);
         }
         return score;
+    }
+
+    /**
+     * QA D3862: a HIGH NEWS2 is an urgent alert to acknowledge. Filed after the commit of the vital set, never
+     * failing it; one alert per patient while it is still reminding (a HIGH set is re-measured every 15 minutes).
+     * {@code rang}: the people this page already rang; their first notice is the item, never a second bell.
+     */
+    private void fileForAcknowledgement(PatientVitalSign vital, NewsScoreResult score, UUID patientId, UUID hospitalId,
+                                        Set<String> rang) {
+        if (urgentAlerts == null || localizer == null || vital == null || vital.getId() == null) {
+            return;
+        }
+        try {
+            java.util.Locale staff = com.example.hms.service.i18n.NotificationLocales.STAFF;
+            String name = vital.getPatient() == null ? null : vital.getPatient().getFullName();
+            String patientName = name == null || name.isBlank()
+                ? localizer.render("patient.fallback.generic", java.util.List.of(), staff) : name;
+            // {0} the score, {1} observations every (min).
+            java.util.List<Object> messageArgs = com.example.hms.service.i18n.NotificationLocalizer.storable(
+                new Object[]{score.total(), HIGH_INTERVAL.toMinutes()});
+            String messageKey = ITEM_MESSAGE_PREFIX + ALERT_TYPE_HIGH;
+            String typeLabel = localizer.render(ITEM_TYPE_PREFIX + ALERT_TYPE_HIGH, java.util.List.of(), staff);
+            String message = localizer.render(messageKey, messageArgs, staff);
+            String title = localizer.render(ITEM_TITLE_KEY, java.util.List.of(typeLabel, patientName, message), staff);
+            Staff recorder = vital.getRecordedByStaff();
+            UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
+            urgentAlerts.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                hospitalId, patientId, patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWS2, vital.getId(),
+                ALERT_TYPE_HIGH, typeLabel, message, recorderUserId, title, messageKey, messageArgs, rang));
+        } catch (RuntimeException ex) {
+            // An urgent alert left without its item is a lost safety net, never a WARN; the vital set still saves.
+            log.error("NEWS2 alert not filed for acknowledgement: {}", ex.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -124,6 +198,12 @@ public class News2EscalationService {
     }
 
     private Optional<String> responsiblePhysicianUsername(UUID patientId, UUID hospitalId) {
+        return responsiblePhysicianUsername(admissionRepository, patientId, hospitalId);
+    }
+
+    /** The attending physician (else the admitting provider) of the patient's open stay at this hospital. */
+    private static Optional<String> responsiblePhysicianUsername(AdmissionRepository admissionRepository,
+                                                                UUID patientId, UUID hospitalId) {
         // QA D1065 class (round 18): this hospital's open stay, not the
         // patient's latest admission anywhere filtered afterwards.
         return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,

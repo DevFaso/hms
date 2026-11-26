@@ -77,9 +77,12 @@ public class ConsultationChargeSource implements VisitChargeSource {
                 // PR 3: the service's own tariff (a TREATMENT link) first, else the service's price.
                 Optional<TariffResolver.Tariff> tariff = treatment.getId() == null ? Optional.empty()
                     : visit.tariff(PriceListLinkType.TREATMENT, treatment.getId().toString());
+                // QA D3980 (r77): a line no plan rule can read is never covered (fail closed), so a service with
+                // no tariff says what it bills: a consultation when the hospital named it one, else another service
+                // (a plan's OTHER_SERVICE rule, or its default rate, applies). A tariffed one reads its item's.
                 lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
                     .orElseGet(() -> new VisitCharge(treatment.getName(), null, ItemCategory.SERVICE, 1,
-                        treatment.getPrice(), treatment)));
+                        treatment.getPrice(), treatment).coveredAs(serviceCategoryOf(treatment))));
             }
         }
         if (services.isEmpty() && !plannedAdmission(visit) && !billedOnTheEmergencyVisit(visit)) {
@@ -100,6 +103,13 @@ public class ConsultationChargeSource implements VisitChargeSource {
                 .coveredAs(PriceListCategory.CONSULTATION));
         }
         return lines;
+    }
+
+    /** QA D3980: the category of a hospital's own service billed with no tariff, by the words of its name. */
+    static PriceListCategory serviceCategoryOf(Treatment treatment) {
+        String name = treatment.getName() == null ? "" : treatment.getName().toLowerCase(java.util.Locale.ROOT);
+        return CONSULTATION_WORDS.stream().anyMatch(name::contains)
+            ? PriceListCategory.CONSULTATION : PriceListCategory.OTHER_SERVICE;
     }
 
     /**

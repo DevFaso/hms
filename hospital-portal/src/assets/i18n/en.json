@@ -2595,7 +2595,7 @@
     "PDF_FAILED": "Failed to download PDF",
     "PENDING": "Pending",
     "RECORD_PAYMENT": "Record payment",
-    "REVENUE": "Revenue",
+    "REVENUE": "Net revenue",
     "SUPPLEMENTARY_CONFIRM": "Create a supplementary invoice for this visit anyway?",
     "SAVE_FAILED": "Save failed",
     "SEARCH": "Search invoices...",
@@ -3055,7 +3055,10 @@
       "REMOVED_LINE": "Line removed",
       "REMOVED_REASON": "Reason",
       "REMOVED_BY": "Removed by",
-      "CASH_DIFFERENCE_VALUE": "Cash difference: {{ amount }}"
+      "CASH_DIFFERENCE_VALUE": "Cash difference: {{ amount }}",
+      "HISTORY_TITLE": "Earlier closes (history)",
+      "HISTORY_ROUND": "Close {{round}}: cash expected {{expected}}, counted {{counted}}, difference {{difference}}; {{lines}} line(s) with a difference",
+      "HISTORY_ROUND_NO_CASH": "Close {{round}}: total difference {{difference}}; {{lines}} line(s) with a difference"
     },
     "UNPRICED_LINES_REASON": "Reason for the lines at 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "Why are these lines issued free of charge?",
@@ -3065,7 +3068,14 @@
     "ADDED_LINE_REASON_REQUIRED": "Give the reason this line is added by hand to the visit’s invoice.",
     "LINE_REMOVE_REASON": "Reason for removing this line",
     "LINE_REMOVE_REASON_PLACEHOLDER": "Why is this line removed from the invoice?",
-    "LINE_REMOVE_REASON_REQUIRED": "Give the reason this line is removed from the invoice."
+    "LINE_REMOVE_REASON_REQUIRED": "Give the reason this line is removed from the invoice.",
+    "REVENUE_BREAKDOWN": "Received {{received}} − refunded {{refunded}}",
+    "LINE_PRICE_LIST_ITEM": "Price-list item (act)",
+    "LINE_PRICE_LIST_ITEM_NONE": "No item (line not covered)",
+    "LINE_PRICE_LIST_ITEM_HINT": "The line takes the price list's label and price, and the patient's insurance applies its rules to this act (exclusions, ceilings).",
+    "LINE_NOT_COVERED_HINT": "Without a price-list item, this line is not covered by insurance: the patient pays all of it.",
+    "LINE_GRID_PRICE": "Price-list price on the invoice date: {{price}}",
+    "LINE_GRID_PRICE_NONE": "No price-list price on the invoice date: type the price."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -7958,6 +7968,8 @@
         "NEWS2_ESCALATION": "NEWS2 escalation",
         "OBSTETRIC_ALERT": "Urgent Obstetric Alert",
         "OBSTETRIC_ALERT_ESCALATION": "Urgent Obstetric Alert Escalation",
+        "EARLY_WARNING_ALERT": "Early-warning score: urgent alert",
+        "EARLY_WARNING_ALERT_ESCALATION": "Early-warning score: urgent alert reminder",
         "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
         "CORRECTED_CULTURE_RESULT": "Corrected culture result",
@@ -9481,7 +9493,10 @@
     "PRE_CHECKED_IN_CONSENTED": "Pre-checked in from the patient portal, consent to care given",
     "PRE_CHECKED_IN_AT": "Done in the patient portal on {{when}}",
     "PRE_CHECKED_IN_AT_CONSENTED": "Done in the patient portal on {{when}}, consent to care given",
-    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Given by the patient at pre-check-in; it is carried onto this visit."
+    "CONSENT_GIVEN_AT_PRE_CHECK_IN": "Given by the patient at pre-check-in; it is carried onto this visit.",
+    "PHARMACY_CREDIT_DUE_CHIP": "Pharmacy credit due: {{amount}}",
+    "INVOICE_BALANCE_DUE": "of which invoices",
+    "PHARMACY_CREDIT_DUE": "of which pharmacy credit « to bill » ({{count}})"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -16145,7 +16160,7 @@
       "APPOINTMENTS": "Appointments",
       "ADMISSIONS": "Admissions",
       "INVOICED": "Invoiced",
-      "COLLECTED": "Collected",
+      "COLLECTED": "Collected, net of refunds",
       "DEATHS": "Deaths",
       "FEWER_THAN": "Fewer than {{threshold}}",
       "SMALL_COUNTS": "A number of deaths below {{threshold}} is not shown, to protect the people concerned."
