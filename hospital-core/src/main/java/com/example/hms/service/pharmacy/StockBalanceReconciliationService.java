@@ -84,7 +84,7 @@ public class StockBalanceReconciliationService {
         var difference = total.subtract(item.getQuantityOnHand());
         if (difference.signum() == 0) throw new FieldBusinessException("confirmed", "stockCount.alreadyReconciled");
         WholeUnitQuantity.require(item, total);
-        var actor = users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("user.notFound"));
+        var actor = users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         var actualWitness = witness.resolve(request.witnessedBy(), item, actor);
         var movement = ledger.saveAndFlush(StockTransaction.builder().inventoryItem(item).transactionType(StockTransactionType.ADJUSTMENT)
             .quantity(difference).reason(com.example.hms.utility.MessageUtil.resolve("stockCount.balanceAdjustmentReason", request.reason().trim()))
