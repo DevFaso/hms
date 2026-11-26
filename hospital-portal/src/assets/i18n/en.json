@@ -16183,7 +16183,6 @@
           "TODO": "Add the mutual and insurance payers if the hospital sees insured patients."
         },
         "CLINICAL_RULES": {
-          "SCOPE_CHANGED": "The hospital has changed. Close this form and reopen it in the correct hospital.",
           "TITLE": "Clinical rules signed off",
           "DONE": "Clinical rules signed off: {{count}} / {{total}}",
           "TODO": "Clinical rules signed off: {{count}} / {{total}}. Print the sign-off pack for the chief medical officer, then record each signature."
@@ -16326,6 +16325,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "The hospital has changed. Close this form and reopen it in the correct hospital.",
     "TITLE": "Clinical rules and sign-off",
     "SUBTITLE": "Every rule the platform applies, its source, who approves it, and whether this hospital has signed it off.",
     "BEHAVIOUR_NOTE": "A rule applies the same way whether it is signed off or not: the sign-off records the approver’s decision and changes the « provisional » label only.",

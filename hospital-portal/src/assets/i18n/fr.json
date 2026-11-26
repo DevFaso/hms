@@ -16183,7 +16183,6 @@
           "TODO": "Ajoutez les mutuelles et les assurances si l’établissement reçoit des patients assurés."
         },
         "CLINICAL_RULES": {
-          "SCOPE_CHANGED": "L’hôpital a changé. Fermez ce formulaire et ouvrez-le de nouveau dans le bon établissement.",
           "TITLE": "Règles cliniques validées",
           "DONE": "Règles cliniques validées : {{count}} / {{total}}",
           "TODO": "Règles cliniques validées : {{count}} / {{total}}. Imprimez le dossier de signature pour le médecin-chef, puis enregistrez chaque signature."
@@ -16326,6 +16325,7 @@
     "PRINTED_ON": "Imprimé le {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "L’hôpital a changé. Fermez ce formulaire et ouvrez-le de nouveau dans le bon établissement.",
     "TITLE": "Règles cliniques et validation",
     "SUBTITLE": "Chaque règle appliquée par la plateforme, sa source, qui l’approuve, et si cet établissement l’a validée.",
     "BEHAVIOUR_NOTE": "Une règle s’applique de la même façon, validée ou non : la validation enregistre la décision de l’approbateur et ne change que la mention « provisoire ».",

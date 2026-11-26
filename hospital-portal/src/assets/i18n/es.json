@@ -16183,7 +16183,6 @@
           "TODO": "Añada las mutuas y los seguros si el establecimiento atiende a pacientes asegurados."
         },
         "CLINICAL_RULES": {
-          "SCOPE_CHANGED": "El hospital ha cambiado. Cierre este formulario y vuelva a abrirlo en el hospital correcto.",
           "TITLE": "Reglas clínicas validadas",
           "DONE": "Reglas clínicas validadas: {{count}} / {{total}}",
           "TODO": "Reglas clínicas validadas: {{count}} / {{total}}. Imprima el dossier de firma para el médico jefe y registre cada firma."
@@ -16326,6 +16325,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "El hospital ha cambiado. Cierre este formulario y vuelva a abrirlo en el hospital correcto.",
     "TITLE": "Reglas clínicas y validación",
     "SUBTITLE": "Cada regla que aplica la plataforma, su fuente, quién la aprueba y si este establecimiento la ha validado.",
     "BEHAVIOUR_NOTE": "Una regla se aplica igual, validada o no: la validación registra la decisión del aprobador y solo cambia la mención « provisional ».",
