@@ -244,6 +244,20 @@ describe('UserListComponent registration', () => {
     expect(sent.hospitalId).toBeUndefined();
   });
 
+  it('does not show staff-only fields when editing a patient profile', () => {
+    users.getById.and.returnValue(of({ id: 'p1', roles: ['ROLE_PATIENT'] } as UserDetail));
+    component.openEdit({
+      id: 'p1',
+      firstName: 'A',
+      lastName: 'B',
+      profileType: 'PATIENT',
+    } as never);
+    fixture.detectChanges();
+    expect(fixture.debugElement.query(By.css('[data-testid="edit-staff-hospital"]'))).toBeNull();
+    expect(fixture.debugElement.query(By.css('#jobTitle'))).toBeNull();
+    expect(fixture.debugElement.query(By.css('#employmentType'))).toBeNull();
+  });
+
   it('D765 path re-verified: create still offers role checkboxes and sends the roles', () => {
     openCreateWith(['ROLE_DOCTOR']);
     component.createForm.email = 'awa@hopital.bf';
