@@ -60,6 +60,19 @@ describe('PatientDetailComponent — documents scope', () => {
     expect(documentsScope()).toBeNull();
   });
 
+  it('keeps emergency access in the selected hospital rather than the primary one', () => {
+    TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
+      providers: [provideRouter([]), provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    const ctx = roleContext();
+    const component = TestBed.runInInjectionContext(() => new PatientDetailComponent());
+    ctx.scopeToHospital('h-b');
+    expect(component.currentHospitalId()).toBe('h-b');
+    ctx.enableGlobalView();
+    expect(component.currentHospitalId()).toBeNull();
+  });
+
   it('reports the assignment for a plain clinician, and null for no scope at all', () => {
     TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot()],
