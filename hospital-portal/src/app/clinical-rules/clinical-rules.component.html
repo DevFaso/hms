@@ -18,6 +18,8 @@
     }
   </app-page-header>
 
+  <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
+
   <p class="rules-note" role="note">{{ 'CLINICAL_RULES.BEHAVIOUR_NOTE' | translate }}</p>
 
   @if (!hospitalId()) {

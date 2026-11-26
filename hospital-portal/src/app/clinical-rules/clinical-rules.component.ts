@@ -27,6 +27,7 @@ import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PageHeaderComponent } from '../shared/page-header/page-header.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
@@ -71,6 +72,7 @@ interface SignDraft {
     ModalDialogDirective,
     SubmitGuardDirective,
     PageHeaderComponent,
+    HospitalScopeChipComponent,
     DayMonthPipe,
     ReasonDialogComponent,
   ],
