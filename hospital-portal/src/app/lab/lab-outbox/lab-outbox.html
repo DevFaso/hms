@@ -52,6 +52,12 @@
     </div>
   }
 
+  @if (actionError()) {
+    <p class="state-error" role="alert" data-testid="outbox-action-error">
+      {{ 'LAB_OUTBOX.HOSPITAL_REQUIRED' | translate }}
+    </p>
+  }
+
   <div class="filter-bar">
     <label for="outbox-status-filter">{{ 'LAB_OUTBOX.FILTER_STATUS' | translate }}</label>
     <select

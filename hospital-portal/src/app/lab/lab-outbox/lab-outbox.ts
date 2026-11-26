@@ -69,6 +69,7 @@ export class LabOutboxComponent implements OnInit {
 
   loading = signal(true);
   error = signal<string | null>(null);
+  actionError = signal(false);
   page = signal<OutboxPage | null>(null);
   transport = signal<OutboxTransport | null>(null);
 
@@ -176,11 +177,12 @@ export class LabOutboxComponent implements OnInit {
 
   openDetail(row: OutboxMessage): void {
     const request = ++this.detailRequest;
+    this.actionError.set(false);
     const global = this.roleContext.isSuperAdmin() && this.roleContext.globalView();
     if (global && !row.orderingHospitalId) {
       this.detail.set(null);
       this.detailLoading.set(false);
-      this.toast.error(this.translate.instant('LAB_OUTBOX.HOSPITAL_REQUIRED'));
+      this.actionError.set(true);
       return;
     }
     const hospitalId = global ? row.orderingHospitalId || undefined : undefined;
@@ -233,12 +235,13 @@ export class LabOutboxComponent implements OnInit {
   }
 
   retry(row: OutboxMessage): void {
+    this.actionError.set(false);
     if (this.retryingId()) {
       return;
     }
     const global = this.roleContext.isSuperAdmin() && this.roleContext.globalView();
     if (global && !row.orderingHospitalId) {
-      this.toast.error(this.translate.instant('LAB_OUTBOX.HOSPITAL_REQUIRED'));
+      this.actionError.set(true);
       return;
     }
     const hospitalId = global ? row.orderingHospitalId || undefined : undefined;

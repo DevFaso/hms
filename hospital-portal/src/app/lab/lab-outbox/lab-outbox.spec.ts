@@ -127,7 +127,10 @@ describe('LabOutboxComponent', () => {
     outboxService.getMessage.calls.reset();
     component.openDetail(message({ orderingHospitalId: null }));
     expect(outboxService.getMessage).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('LAB_OUTBOX.HOSPITAL_REQUIRED');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="outbox-action-error"]')?.textContent,
+    ).toContain('LAB_OUTBOX.HOSPITAL_REQUIRED');
   });
 
   it('ignores a dismissed or superseded hospital detail response and error', () => {
