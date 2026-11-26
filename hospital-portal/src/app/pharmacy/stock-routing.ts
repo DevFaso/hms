@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
@@ -63,6 +63,7 @@ export class StockRoutingComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
   /** QA D966: opens the printed copy for printing. */
   private readonly printService = inject(PrintLabelService);
@@ -92,10 +93,8 @@ export class StockRoutingComponent implements OnInit {
     'ROLE_HOSPITAL_ADMIN',
   ]);
 
-  /** A deep link names an order in its original context and keeps that context. */
-  readonly canChooseHospital = !this.route.snapshot.paramMap.has('prescriptionId');
   readonly isSuperAdmin = this.roleContext.isSuperAdmin;
-  readonly scopeChanged = signal(false);
+  readonly scopeChanged = signal(this.route.snapshot.queryParamMap?.get('scopeChanged') === '1');
 
   /** A hospital switch invalidates order-specific reads and reloads the queue. */
   onScopeChange(): void {
@@ -113,6 +112,14 @@ export class StockRoutingComponent implements OnInit {
     this.queue.set([]);
     this.queueTotal.set(0);
     this.scopeChanged.set(true);
+    if (this.route.snapshot.paramMap.has('prescriptionId')) {
+      // The URL named an order in the old scope. Remove it before a reload
+      // could silently re-open that order under the new hospital.
+      void this.router.navigate(['/pharmacy/stock-routing'], {
+        queryParams: { scopeChanged: '1' },
+      });
+      return;
+    }
     this.loadQueue();
   }
 

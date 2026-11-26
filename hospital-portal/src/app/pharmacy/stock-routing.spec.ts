@@ -4,7 +4,7 @@ import { registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
@@ -186,6 +186,7 @@ describe('StockRoutingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
         { provide: PrintLabelService, useValue: printSvc },
@@ -221,6 +222,12 @@ describe('StockRoutingComponent', () => {
     pending.next(stockCheckResponse);
     f.detectChanges();
     expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    c.onScopeChange();
+    expect(c.prescriptionId).toBe('');
+    expect(navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing'], {
+      queryParams: { scopeChanged: '1' },
+    });
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {

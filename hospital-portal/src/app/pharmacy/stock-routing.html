@@ -10,7 +10,7 @@
     </div>
   </div>
 
-  @if (isSuperAdmin() && canChooseHospital) {
+  @if (isSuperAdmin()) {
     @if (!showPartnerForm() && !showBackOrderForm() && !saving() && !allergyHold()) {
       <app-hospital-scope-chip
         [preserveScope]="true"
