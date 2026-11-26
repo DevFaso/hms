@@ -579,7 +579,7 @@ public class InventoryServiceImpl implements InventoryService {
             ? dto.getRemainingQuantity() : dto.getInitialQuantity();
         StockLot savedLot;
         if (matching.isEmpty()) {
-            savedLot = stockLotRepository.save(stockLotMapper.toEntity(dto, item, receivedByUser));
+            savedLot = stockLotRepository.saveAndFlush(stockLotMapper.toEntity(dto, item, receivedByUser));
         } else {
             savedLot = matching.getFirst();
             if (stockLotRepository.addReceipt(savedLot.getId(), received, LocalDateTime.now(ZoneId.systemDefault())) != 1) {

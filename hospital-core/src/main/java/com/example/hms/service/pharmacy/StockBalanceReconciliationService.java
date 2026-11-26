@@ -42,7 +42,7 @@ public class StockBalanceReconciliationService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(com.example.hms.utility.MessageUtil.resolve("stockCount.forbidden"));
         }
         RequiredFields.check().requireValue(request.expectedOnHand(), "expectedOnHand", "stockCount.startRequired")
-            .requireValue(request.expectedLotTotal(), "expectedLotTotal", "stockCount.startRequired")
+            .requireValue(request.expectedLotQuantity(), "expectedLotQuantity", "stockCount.startRequired")
             .requireValue(request.expectedItemRevision(), "expectedItemRevision", "stockCount.startRequired")
             .requireValue(request.reason(), "reason", "stockCount.reasonRequired")
             .requireValue(request.lotCounts(), "lotCounts", "stockCount.lotCountEvidenceRequired")
@@ -80,7 +80,7 @@ public class StockBalanceReconciliationService {
         }
         if (!java.util.Objects.equals(item.getStockRevision(), request.expectedItemRevision())
             || item.getQuantityOnHand().compareTo(request.expectedOnHand()) != 0
-            || total.compareTo(request.expectedLotTotal()) != 0) throw new BusinessException("stockCount.changedSinceCount");
+            || total.compareTo(request.expectedLotQuantity()) != 0) throw new BusinessException("stockCount.changedSinceCount");
         var difference = total.subtract(item.getQuantityOnHand());
         if (difference.signum() == 0) throw new FieldBusinessException("confirmed", "stockCount.alreadyReconciled");
         WholeUnitQuantity.require(item, total);

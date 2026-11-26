@@ -37,7 +37,6 @@ public class StockTransactionMapper {
             .expiryDate(entity.getExpiryDate())
             .unitCost(entity.getUnitCost())
             .receiptDate(entity.getReceiptDate())
-            .receiptNotes(entity.getReceiptNotes())
             .build();
     }
 

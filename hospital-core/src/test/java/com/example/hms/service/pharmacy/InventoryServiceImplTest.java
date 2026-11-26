@@ -557,7 +557,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
 
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
             verify(stockTransactionRepository, never()).save(any());
         }
@@ -578,7 +578,7 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
-            when(stockLotRepository.save(lot)).thenReturn(lot);
+            when(stockLotRepository.saveAndFlush(lot)).thenReturn(lot);
 
             service.receiveStock(dto);
 
@@ -603,7 +603,7 @@ class InventoryServiceImplTest {
             stubHospitalScope();
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
-            when(stockLotRepository.save(lot)).thenReturn(lot);
+            when(stockLotRepository.saveAndFlush(lot)).thenReturn(lot);
             when(inventoryItemRepository.incrementOnHand(eq(inventoryItemId), any(), any()))
                     .thenAnswer(inv -> {
                         inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().add(inv.getArgument(1)));
@@ -622,7 +622,7 @@ class InventoryServiceImplTest {
             StockLotResponseDTO result = service.receiveStock(dto);
 
             // 1. Lot is saved
-            verify(stockLotRepository).save(lot);
+            verify(stockLotRepository).saveAndFlush(lot);
 
             // 2. Item quantity on hand is increased by lot's remaining quantity
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("150.00"));
@@ -664,7 +664,7 @@ class InventoryServiceImplTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
-            when(stockLotRepository.save(lot)).thenReturn(lot);
+            when(stockLotRepository.saveAndFlush(lot)).thenReturn(lot);
             when(stockTransactionRepository.save(any(StockTransaction.class)))
                     .thenAnswer(inv -> {
                         StockTransaction tx = inv.getArgument(0);
@@ -688,7 +688,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -703,7 +703,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -717,7 +717,7 @@ class InventoryServiceImplTest {
             assertThatThrownBy(() -> service.receiveStock(dto))
                 .extracting("field", "messageKey").containsExactly("stockLotId", "pharmacy.inventory.lot.balanceUnreconciled");
             verify(inventoryItemRepository).lockById(inventoryItemId);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -742,7 +742,7 @@ class InventoryServiceImplTest {
             assertThat(receipt.getValue().getReceiptDate()).isEqualTo(dto.getReceivedDate());
             assertThat(receipt.getValue().getReceiptNotes()).isEqualTo("Second delivery evidence");
             assertThat(existing.getSupplier()).isEqualTo("PharmaCo");
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
             verify(inventoryItemRepository).lockById(inventoryItemId);
             verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
@@ -794,7 +794,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -808,7 +808,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -821,7 +821,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -859,7 +859,7 @@ class InventoryServiceImplTest {
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
                     .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -880,7 +880,7 @@ class InventoryServiceImplTest {
                     // QA D1354 (round 30): on the quantity the lot cannot hold.
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .hasFieldOrPropertyWithValue("field", "remainingQuantity");
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -895,7 +895,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -911,7 +911,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         /** QA D779, the exact replay: POST /pharmacy/inventory/lots, qty 2.5 of a tablet item: 201 before. */
@@ -927,7 +927,7 @@ class InventoryServiceImplTest {
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(BusinessException.class)
                     .matches(e -> "stock.quantity.wholeUnitsOnly".equals(((BusinessException) e).getMessageKey()));
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
@@ -960,7 +960,7 @@ class InventoryServiceImplTest {
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(BusinessException.class)
                     .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
-            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository, never()).saveAndFlush(any());
         }
 
         @Test
