@@ -380,6 +380,8 @@ export class AdminAssignmentsComponent implements OnInit {
   }
 
   openRegen(row: AssignmentResponse): void {
+    // End the detail view and discard any revealed code before opening confirmation.
+    this.closeModal();
     this.selected.set(row);
     this.regenResend.set(true);
     this.modal.set('regen');

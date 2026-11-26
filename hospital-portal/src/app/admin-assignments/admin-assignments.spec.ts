@@ -1,3 +1,4 @@
+import { mouseClick } from '../testing/mouse-click';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -580,4 +581,76 @@ describe('D4021: reactivation links use the existing confirmation policy', () =>
       }
     });
   }
+});
+
+describe('D4021 rendered recovery dialog hand-off', () => {
+  it('a real mouse replaces details with confirmation and sends only after explicit confirmation', async () => {
+    const id = '00000000-0000-0000-0000-000000004021';
+    const row = {
+      id,
+      userId: 'colleague',
+      active: false,
+      confirmationVerified: false,
+      roleId: 'nurse',
+      roleCode: 'ROLE_NURSE',
+      hospitalId: 'hospital',
+    } as AssignmentResponse;
+    const service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', [
+      'list',
+      'getById',
+      'regenerateCode',
+      'update',
+    ]);
+    service.list.and.returnValue(
+      of({ content: [], number: 0, totalPages: 0, totalElements: 0 }) as never,
+    );
+    service.getById.and.returnValue(of(row));
+    service.regenerateCode.and.returnValue(of(row));
+    TestBed.configureTestingModule({
+      imports: [AdminAssignmentsComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: { list: () => of([]) } },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: () => false,
+            hasAnyActiveRole: () => true,
+            activeHospitalId: 'hospital',
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['error', 'success', 'warning']),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ reactivate: id }) } },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(AdminAssignmentsComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const reinvite = host.querySelector('[data-testid="assignment-reinvite"]') as HTMLButtonElement;
+    expect(reinvite).not.toBeNull();
+    mouseClick(reinvite);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(host.querySelector('#admin-assignments-dialog-3-title')).toBeNull();
+    expect(host.querySelector('#admin-assignments-dialog-2-title')).not.toBeNull();
+    expect(service.regenerateCode).not.toHaveBeenCalled();
+    const confirm = host.querySelector(
+      '[role="dialog"] .modal-actions .btn-primary',
+    ) as HTMLButtonElement;
+    mouseClick(confirm);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(service.regenerateCode).toHaveBeenCalledOnceWith(id, true);
+    expect(service.update).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
 });
