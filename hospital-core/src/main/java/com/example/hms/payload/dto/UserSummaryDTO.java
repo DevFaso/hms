@@ -60,6 +60,9 @@ public class UserSummaryDTO {
     @Schema(description = "Whether the user has been soft-deleted")
     private boolean deleted;
 
+    @Schema(description = "Server-computed support-session eligibility, independent of the displayed scoped role")
+    private Boolean impersonationEligible;
+
     @Schema(description = "Primary role code (e.g., ROLE_SUPER_ADMIN)")
     private String roleName;
 

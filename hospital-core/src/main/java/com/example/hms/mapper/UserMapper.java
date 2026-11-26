@@ -219,8 +219,15 @@ public class UserMapper {
 
         Set<Role> roles = safeRolesFromUserRoles(user);
         String roleName = pickPrimaryRole(roles, true);
-        String profileType = deriveProfileType(user);
+        UserSummaryDTO dto = accountSummary(user);
+        dto.setRoleName(roleName);
+        dto.setRoleCount(roles.size());
+        dto.setProfileType(deriveProfileType(user));
+        return dto;
+    }
 
+    private UserSummaryDTO accountSummary(User user) {
+        if (user == null) return null;
         return UserSummaryDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -230,15 +237,12 @@ public class UserMapper {
                 .profileImageUrl(user.getProfileImageUrl())
                 .active(user.isActive())
                 .deleted(user.isDeleted())
-                .roleName(roleName)
-                .profileType(profileType)
-                .roleCount(roles.size())
                 .build();
     }
 
     /** D4021: directory roles describe live grants in the displayed scope, never retired global role names. */
     public UserSummaryDTO toSummaryDTO(User user, java.util.Collection<UserRoleHospitalAssignment> visibleAssignments) {
-        UserSummaryDTO dto = toSummaryDTO(user);
+        UserSummaryDTO dto = accountSummary(user);
         if (dto == null) {
             return null;
         }

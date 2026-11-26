@@ -4068,8 +4068,7 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
-    <!-- =================================================================
-         V382: the audit tables are append-only (support.audit_event_logs,
+    <!-- ==========================================================         V382: the audit tables are append-only (support.audit_event_logs,
          support.frontend_audit_events, permission_matrix_audit_events,
          clinical.digital_signature_audit_log): triggers refuse UPDATE,
          DELETE and TRUNCATE; support.purge_expired_audit_rows() is the one
@@ -4084,4 +4083,13 @@
                  stripComments="false"/>
     </changeSet>
 
+=======
+    <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
+        <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
+        <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
+    </changeSet>
 </databaseChangeLog>
