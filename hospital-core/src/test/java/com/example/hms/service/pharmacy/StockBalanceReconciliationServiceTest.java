@@ -71,6 +71,8 @@ class StockBalanceReconciliationServiceTest {
         assertThat(entry.getValue().getStockLot()).isNull();
         assertThat(entry.getValue().getReason()).contains("Counted all batches");
         verify(jdbc).update(contains("INSERT INTO clinical.stock_balance_reconciliation_lot_counts"), eq(entry.getValue().getId()), eq(lotId), eq(new BigDecimal("15")));
+        verify(lots).findAllByInventoryItemIdOrderByExpiryDateAsc(itemId);
+        verify(lots).tryLockById(lotId);
         verifyNoMoreInteractions(lots);
     }
     @Test void withoutConfirmationNoStockOrLedgerIsTouched() {
