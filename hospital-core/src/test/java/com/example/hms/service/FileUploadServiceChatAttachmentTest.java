@@ -35,7 +35,7 @@ class FileUploadServiceChatAttachmentTest {
 
     @Test
     void uploadChatAttachment_storesPhotoAndReturnsDescriptor() throws IOException {
-        byte[] payload = "fake-jpeg-bytes".getBytes();
+        byte[] payload = com.example.hms.testsupport.UploadSamples.jpeg();
         MockMultipartFile file = new MockMultipartFile(
             "file", "patient-rash.jpg", "image/jpeg", payload);
 
@@ -56,7 +56,7 @@ class FileUploadServiceChatAttachmentTest {
 
     @Test
     void uploadChatAttachment_storesAudio() throws IOException {
-        byte[] payload = new byte[1024];
+        byte[] payload = com.example.hms.testsupport.UploadSamples.ogg(1024);
         MockMultipartFile file = new MockMultipartFile(
             "file", "memo.ogg", "audio/ogg", payload);
 
@@ -108,10 +108,20 @@ class FileUploadServiceChatAttachmentTest {
     }
 
     @Test
-    void uploadChatAttachment_rejectsUnsupportedPhotoMime() {
-        MockMultipartFile file = new MockMultipartFile("file", "x.jpg", "application/pdf", new byte[]{1});
+    void uploadChatAttachment_storesTheTypeOfTheContentWhateverTheClientDeclared() throws IOException {
+        MockMultipartFile file = new MockMultipartFile("file", "x.jpg", "application/pdf", com.example.hms.testsupport.UploadSamples.jpeg());
+        assertEquals("image/jpeg",
+            service.uploadChatAttachment(file, ChatAttachmentKind.PHOTO, UPLOADER).contentType());
+    }
+
+    @Test
+    void uploadChatAttachment_rejectsContentThatIsNotWhatTheNameSays() {
+        MockMultipartFile html = new MockMultipartFile("file", "x.jpg", "image/jpeg", com.example.hms.testsupport.UploadSamples.html());
         assertThrows(IllegalArgumentException.class,
-            () -> service.uploadChatAttachment(file, ChatAttachmentKind.PHOTO, UPLOADER));
+            () -> service.uploadChatAttachment(html, ChatAttachmentKind.PHOTO, UPLOADER));
+        MockMultipartFile photoAsVoice = new MockMultipartFile("file", "x.ogg", "audio/ogg", com.example.hms.testsupport.UploadSamples.jpeg());
+        assertThrows(IllegalArgumentException.class,
+            () -> service.uploadChatAttachment(photoAsVoice, ChatAttachmentKind.AUDIO, UPLOADER));
     }
 
     @Test
@@ -125,7 +135,7 @@ class FileUploadServiceChatAttachmentTest {
 
     @Test
     void resolveChatAttachment_rebuildsDescriptorFromDiskForPhoto() throws IOException {
-        byte[] payload = "trusted-jpeg".getBytes();
+        byte[] payload = com.example.hms.testsupport.UploadSamples.jpeg();
         MockMultipartFile file = new MockMultipartFile(
             "file", "rash.jpg", "image/jpeg", payload);
         FileUploadService.StoredFileDescriptor uploaded =
@@ -168,7 +178,7 @@ class FileUploadServiceChatAttachmentTest {
     @Test
     void resolveChatAttachment_rejectsKindMismatchAgainstStoredFile() throws IOException {
         MockMultipartFile file = new MockMultipartFile(
-            "file", "v.ogg", "audio/ogg", new byte[]{1, 2, 3});
+            "file", "v.ogg", "audio/ogg", com.example.hms.testsupport.UploadSamples.ogg());
         FileUploadService.StoredFileDescriptor uploaded =
             service.uploadChatAttachment(file, ChatAttachmentKind.AUDIO, UPLOADER);
         String storageKey = uploaded.storageKey();

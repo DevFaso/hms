@@ -8,6 +8,13 @@ import com.example.hms.service.PatientPhotoService;
 import com.example.hms.storage.FileStorage;
 import com.example.hms.storage.StorageKeys;
 import com.example.hms.storage.StoredObject;
+import com.example.hms.upload.ContentSniffer;
+import com.example.hms.upload.UploadAdmission;
+import com.example.hms.upload.UploadAdmission.VettedUpload;
+import com.example.hms.upload.UploadKind;
+import com.example.hms.upload.UploadLedger;
+import com.example.hms.upload.UploadScanStatus;
+import com.example.hms.upload.UploadType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,9 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -30,26 +35,35 @@ import java.util.UUID;
  * only through the authenticated streaming endpoint: the only stored class
  * served without a token is profile images ({@code ProfileImageController},
  * SecurityConfig). The patient row stores the bare file name.
- * Validation mirrors the profile-image rules (5 MB, image/*, extension allowlist).
+ *
+ * <p>A photo is a JPEG, PNG, GIF or WebP by its own bytes ({@link UploadAdmission}),
+ * 5 MB at most; the type stored on the patient row is the one the content
+ * showed. What is read back is checked again: bytes that are not one of those
+ * images (a row stored before the content check) are not served.
  */
 @Slf4j
 @Service
 @Transactional
 public class PatientPhotoServiceImpl implements PatientPhotoService {
 
-    private static final long MAX_PHOTO_SIZE = 5L * 1024 * 1024;
-    private static final Set<String> ALLOWED_EXTENSIONS =
-        Set.of(".jpg", ".jpeg", ".png", ".gif", ".webp");
-
     /** The storage prefix of patient photos: the subdirectory they had under the upload root. */
     static final String PHOTO_PREFIX = "patient-photos/";
 
     private final PatientRepository patientRepository;
     private final FileStorage storage;
+    /** Null only in a unit test that builds the service on a bare store. */
+    private final UploadLedger ledger;
 
-    public PatientPhotoServiceImpl(PatientRepository patientRepository, FileStorage storage) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public PatientPhotoServiceImpl(PatientRepository patientRepository, FileStorage storage, UploadLedger ledger) {
         this.patientRepository = patientRepository;
         this.storage = storage;
+        this.ledger = ledger;
+    }
+
+    /** For tests of the storage paths alone: no upload record, no malware check. */
+    PatientPhotoServiceImpl(PatientRepository patientRepository, FileStorage storage) {
+        this(patientRepository, storage, null);
     }
 
     @Override
@@ -64,9 +78,12 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             // a distinct answer told a caller holding the id that the patient exists at another hospital.
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
-        validate(file);
+        if (file == null || file.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("file", "patient.photo.required");
+        }
+        VettedUpload vetted = UploadAdmission.vet(file, UploadKind.PATIENT_PHOTO);
 
-        String extension = extensionOf(file.getOriginalFilename());
+        String extension = vetted.extension();
         // A random suffix, not a timestamp. This was
         // System.currentTimeMillis(), which collides whenever a photo is
         // replaced inside the same millisecond as the one before it -- a
@@ -89,13 +106,18 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         }
         try {
             try (InputStream in = file.getInputStream()) {
-                storage.put(key, in, file.getSize(), file.getContentType());
+                storage.put(key, in, file.getSize(), vetted.mediaType());
+            }
+            if (ledger != null && ledger.record(new UploadLedger.StoredUpload(key, UploadKind.PATIENT_PHOTO,
+                    vetted.mediaType(), file.getSize(), null, null, hospitalId)) == UploadScanStatus.INFECTED) {
+                // Kept, unserved; the patient keeps the photo they had.
+                throw new BusinessException("file.upload.blocked");
             }
 
             String previousPath = patient.getPhotoFilePath();
             LocalDateTime now = LocalDateTime.now();
             patient.setPhotoFilePath(filename);
-            patient.setPhotoContentType(file.getContentType());
+            patient.setPhotoContentType(vetted.mediaType());
             patient.setPhotoUpdatedAt(now);
             patientRepository.save(patient);
             deleteQuietly(previousPath);
@@ -117,6 +139,9 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         if (key == null) {
             throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
+        if (ledger != null) {
+            ledger.requireServable(key);
+        }
         try {
             Optional<StoredObject> stored = storage.get(key);
             if (stored.isEmpty()) {
@@ -125,8 +150,13 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
                 throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
             }
             try (StoredObject object = stored.get()) {
-                return new PhotoPayload(object.content().readAllBytes(),
-                    patient.getPhotoContentType() != null ? patient.getPhotoContentType() : "image/jpeg");
+                byte[] bytes = object.content().readAllBytes();
+                // The type comes from the bytes, never from the row: a row written before the
+                // content check may hold whatever type a client declared.
+                byte[] head = java.util.Arrays.copyOf(bytes, Math.min(bytes.length, ContentSniffer.HEAD_BYTES));
+                UploadType type = ContentSniffer.detect(head).filter(UploadType::isRasterImage)
+                    .orElseThrow(() -> new ResourceNotFoundException("patientPhoto.notFound", patientId));
+                return new PhotoPayload(bytes, type.mediaType());
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read the patient photo", e);
@@ -157,31 +187,6 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return patient;
-    }
-
-    private void validate(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("file", "patient.photo.required");
-        }
-        if (file.getSize() > MAX_PHOTO_SIZE) {
-            throw new BusinessException("patient.photo.tooLarge");
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BusinessException("patient.photo.imageOnly");
-        }
-        String extension = extensionOf(file.getOriginalFilename());
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new BusinessException("patient.photo.typeUnsupported");
-        }
-    }
-
-    private String extensionOf(String filename) {
-        if (filename == null) {
-            return "";
-        }
-        int dot = filename.lastIndexOf('.');
-        return dot >= 0 ? filename.substring(dot).toLowerCase(Locale.ROOT) : "";
     }
 
     /** The storage key of a stored photo name, or {@code null} when the name is not a plain file name. */

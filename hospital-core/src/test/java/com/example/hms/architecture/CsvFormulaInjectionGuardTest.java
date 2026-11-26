@@ -63,6 +63,10 @@ class CsvFormulaInjectionGuardTest {
         // Attaches the report the generator wrote; it writes no cell itself.
         "service/reporting/ScheduledReportService.java", List.of("service/reporting/ReportGenerationService.java"));
 
+    /** A file that names the CSV type of a file the application reads, and writes none: with its reason. */
+    private static final Map<String, String> READERS = Map.of(
+        "upload/UploadType.java", "the media type and extension an uploaded CSV file is recognised by (an import)");
+
     /** Writers that do not escape cell by cell. Empty: a new entry is never the way to pass. */
     private static final Set<String> UNESCAPED = Set.of();
 
@@ -73,7 +77,7 @@ class CsvFormulaInjectionGuardTest {
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(file).toString().replace('\\', '/');
-                if (!PRODUCES_CSV.matcher(code(file)).find()) {
+                if (!PRODUCES_CSV.matcher(code(file)).find() || READERS.containsKey(rel)) {
                     continue;
                 }
                 producers.add(rel);

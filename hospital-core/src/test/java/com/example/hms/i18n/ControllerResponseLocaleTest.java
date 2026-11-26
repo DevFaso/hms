@@ -79,6 +79,6 @@ class ControllerResponseLocaleTest {
     }
 
     private static MockMultipartFile file() {
-        return new MockMultipartFile("file", "cdx.png", "image/png", new byte[]{1});
+        return new MockMultipartFile("file", "cdx.png", "image/png", com.example.hms.testsupport.UploadSamples.png());
     }
 }

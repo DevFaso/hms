@@ -145,6 +145,13 @@ final class ComputedKeys {
             "PrescriptionStatus.java|cds.enum.");
         site(r, d, "com/example/hms/enums/RoutingDecisionStatus.java|\"stock.routing.statusLabel.\" + name()",
             "RoutingDecisionStatus.java|stock.routing.statusLabel.");
+        // The size and type refusals of an upload path: one pair of keys per UploadKind.
+        r.put("com/example/hms/upload/UploadAdmission.java|kind.tooLargeKey()",
+            values("", java.util.Arrays.stream(com.example.hms.upload.UploadKind.values())
+                .map(com.example.hms.upload.UploadKind::tooLargeKey).toList()));
+        r.put("com/example/hms/upload/UploadAdmission.java|kind.unsupportedKey()",
+            values("", java.util.Arrays.stream(com.example.hms.upload.UploadKind.values())
+                .map(com.example.hms.upload.UploadKind::unsupportedKey).toList()));
         r.put("com/example/hms/exception/GlobalExceptionHandler.java|reason",
             new Open("an exception message passed through: a key a thrower chose, resolved if it is one, else shown as written"));
         r.put("com/example/hms/exception/GlobalExceptionHandler.java|message",

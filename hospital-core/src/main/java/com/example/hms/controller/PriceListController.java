@@ -95,6 +95,7 @@ public class PriceListController {
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @com.example.hms.upload.UploadPolicy(com.example.hms.upload.UploadKind.CSV_IMPORT)
     @PreAuthorize(MAINTAINERS)
     @Operation(summary = "Check (dryRun=true, the default) or apply (dryRun=false) a price-list CSV file; "
         + "an apply with any refused row writes nothing (422)")
@@ -108,6 +109,7 @@ public class PriceListController {
         if (file.getSize() > PriceListCsv.MAX_BYTES) {
             throw new FieldBusinessException(PriceListCsv.FIELD_FILE, "billing.priceList.import.fileTooLarge");
         }
+        com.example.hms.upload.UploadAdmission.vet(file, com.example.hms.upload.UploadKind.CSV_IMPORT);
         PriceListImportReportDTO report = priceListImportService.importFile(file.getBytes(),
             file.getOriginalFilename(), dryRun, replaceScheduled);
         // 422 when an apply refused a row and wrote nothing; the body is the same per-row report.

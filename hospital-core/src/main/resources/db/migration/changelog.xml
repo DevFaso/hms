@@ -4098,4 +4098,11 @@
     <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
     </changeSet>
+
+    <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
+         malware check; the daily upload allowance is counted from it. -->
+    <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V384__upload_records.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
 </databaseChangeLog>

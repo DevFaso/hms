@@ -1138,5 +1138,22 @@ public class GlobalExceptionHandler {
                 com.example.hms.service.FileUploadService.maxUploadLabel()), request);
     }
 
+    /**
+     * The upload rate or a daily upload allowance is spent: 429 in the caller's
+     * language, with Retry-After when a moment can be named. Without this
+     * handler the catch-all answered it as a 500.
+     */
+    @ExceptionHandler(com.example.hms.upload.UploadLimitExceededException.class)
+    public ResponseEntity<Object> handleUploadLimit(com.example.hms.upload.UploadLimitExceededException ex,
+                                                    WebRequest request) {
+        ResponseEntity<Object> refusal = buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request);
+        if (ex.getRetryAfterSeconds() <= 0) {
+            return refusal;
+        }
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+            .body(refusal.getBody());
+    }
+
 
 }

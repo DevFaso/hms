@@ -33,7 +33,9 @@ class ProfileImageControllerTest {
         Files.createDirectories(uploads.resolve("patient-documents"));
         Files.writeString(uploads.resolve("profile-images").resolve("u_profile_1_abc.PNG"), "png-bytes");
         Files.writeString(uploads.resolve("patient-documents").resolve("secret.png"), "phi");
-        controller = new ProfileImageController(new LocalFileStorage(uploads));
+        controller = new ProfileImageController(new LocalFileStorage(uploads),
+            new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(com.example.hms.upload.UploadLedger.class));
     }
 
     @Test
