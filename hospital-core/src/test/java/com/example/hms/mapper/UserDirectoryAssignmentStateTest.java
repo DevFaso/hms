@@ -79,6 +79,15 @@ class UserDirectoryAssignmentStateTest {
         assertThat(all.getReactivationOptions()).extracting("roleCode").containsExactlyInAnyOrder("ROLE_NURSE", "ROLE_MIDWIFE");
     }
 
+    @Test
+    void scopedSummaryNeverLoadsHistoricalRolesOrLazyProfiles() {
+        User user = org.mockito.Mockito.spy(user());
+        mapper.toSummaryDTO(user, List.of(assignment("ROLE_NURSE", true)));
+        org.mockito.Mockito.verify(user, org.mockito.Mockito.never()).getUserRoles();
+        org.mockito.Mockito.verify(user, org.mockito.Mockito.never()).getStaffProfile();
+        org.mockito.Mockito.verify(user, org.mockito.Mockito.never()).getPatientProfile();
+    }
+
     private static User user() {
         User user = new User();
         user.setId(UUID.randomUUID());
