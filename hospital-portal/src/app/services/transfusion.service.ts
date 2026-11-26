@@ -368,6 +368,99 @@ export interface OPositiveFollowUpRequest {
   note?: string;
 }
 
+/* ── Release despite an incompatible crossmatch (V381, owner decision 2026-11-26) ── */
+
+export type IncompatibleReleaseBasis = 'NAMED_PHYSICIAN' | 'AUTHORITY_PENDING';
+export type PatientInformedStatus = 'PATIENT_INFORMED' | 'FAMILY_INFORMED' | 'NOT_POSSIBLE';
+export type IncompatibleMonitoringOutcome = 'NO_REACTION' | 'REACTION_REPORTED' | 'NOT_TRANSFUSED';
+export type IncompatibleAntibodyStatus = 'ANTIBODY_ON_RECORD' | 'NO_ANTIBODY_ON_RECORD';
+export type IncompatibleAuthorityTiming = 'BEFORE_ISSUE' | 'AFTER_ISSUE' | 'PENDING';
+export type IncompatibleMonitoringCheck =
+  | 'BEDSIDE_ABO_CHECK'
+  | 'SLOW_START'
+  | 'TUBING_KEPT'
+  | 'URINE_DIPSTICK'
+  | 'FULL_BLOOD_COUNT'
+  | 'RETICULOCYTES'
+  | 'BILIRUBIN'
+  | 'LDH'
+  | 'HAPTOGLOBIN'
+  | 'CREATININE'
+  | 'COAGULATION';
+
+/** The hospital's fallback for an incompatible release with no physician reachable. Off by default. */
+export interface IncompatibleReleaseProtocol {
+  hospitalId?: string;
+  fallbackEnabled: boolean;
+  /** The roles that may declare that no physician can be reached. */
+  declarerRoles: string[];
+  /** Read-only: the deadline of the hospital's emergency release protocol. */
+  countersignDeadlineHours?: number;
+  /** Read-only: the roles the setting may name. */
+  allowedDeclarerRoles?: string[];
+}
+
+/** What the incompatible release rule says at this hospital for the caller. The server still decides. */
+export interface IncompatibleRule {
+  fallbackEnabled: boolean;
+  callerMayDeclare: boolean;
+  countersignDeadlineHours: number;
+}
+
+/** One release despite an incompatible crossmatch, with what is still owed on it. */
+export interface IncompatibleReleaseDecision {
+  id: string;
+  releaseId: string;
+  requestId: string;
+  bloodUnitId: string;
+  unitNumber: string | null;
+  patientId: string;
+  patientName: string | null;
+  decisionBasis: IncompatibleReleaseBasis;
+  fallback: boolean;
+  countersignDeadlineHours: number;
+  issuedByName: string | null;
+  authoriserName: string | null;
+  declarerRole: string | null;
+  unreachableReason: string | null;
+  authorityTiming: IncompatibleAuthorityTiming;
+  antibodyStatus: IncompatibleAntibodyStatus;
+  antibodyDetail: string | null;
+  crossmatchFinding: string | null;
+  recipientAbo: string | null;
+  recipientRh: string | null;
+  unitAbo: string;
+  unitRh: string | null;
+  rhdMatched: boolean;
+  rhKellMatched: boolean | null;
+  antigenNegative: boolean | null;
+  leastIncompatible: boolean;
+  candidatesConsidered: number;
+  unitChoiceReason: string;
+  patientInformed: PatientInformedStatus;
+  patientInformedAt: string | null;
+  patientInformedByName: string | null;
+  issuedAt: string;
+  countersignDueAt: string | null;
+  countersignedByName: string | null;
+  countersignedAt: string | null;
+  countersignOverdue: boolean;
+  countersignEscalatedAt: string | null;
+  monitoringChecklist: IncompatibleMonitoringCheck[];
+  monitoringChecksDone: IncompatibleMonitoringCheck[];
+  monitoringOutcome: IncompatibleMonitoringOutcome | null;
+  monitoringNote: string | null;
+  monitoringRecordedByName: string | null;
+  monitoringRecordedAt: string | null;
+}
+
+export interface IncompatibleMonitoringRequest {
+  outcome?: IncompatibleMonitoringOutcome;
+  checksDone?: IncompatibleMonitoringCheck[];
+  patientInformed?: boolean;
+  note?: string;
+}
+
 /** One bag's emergency release, as the request detail shows it. */
 export interface EmergencyBloodRelease {
   id: string;
@@ -385,6 +478,8 @@ export interface EmergencyBloodRelease {
   negativeUnitsShown?: string | null;
   /** O positive red cells: the tier, who decided and what is still owed (V380). */
   positiveDecision?: OPositiveReleaseDecision | null;
+  /** A release despite an incompatible crossmatch: its authority, its bag and its monitoring (V381). */
+  incompatibleDecision?: IncompatibleReleaseDecision | null;
 }
 
 export interface EmergencyReleaseUnitOption {
@@ -407,6 +502,12 @@ export interface IncompatibleUnitOption {
   incompatibilityReason: string | null;
   /** False when the patient's group excludes the bag or it is held for another request. */
   releasable: boolean;
+  /** V381: what makes a bag more or less incompatible, as the laboratory recorded it. */
+  rhdMatched?: boolean;
+  rhKellMatched?: boolean | null;
+  antigenNegative?: boolean | null;
+  /** V381: no releasable bag ranks better. With no physician reachable only such a bag is released. */
+  leastIncompatible?: boolean;
   /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
   statementRequired?: boolean;
 }
@@ -423,6 +524,8 @@ export interface EmergencyReleaseOptions {
   authorisers: VerifierCandidate[];
   /** What the O positive authority rule says for this patient (V380). */
   positiveRule?: OPositiveRule | null;
+  /** What the incompatible release rule says at this hospital for the caller (V381). */
+  incompatibleRule?: IncompatibleRule | null;
 }
 
 export interface EmergencyReleaseRequest {
@@ -433,8 +536,17 @@ export interface EmergencyReleaseRequest {
   authoriserUserId?: string;
   /** The statement that the O negative shown cannot be obtained in time. */
   negativeUnobtainable?: boolean;
-  /** O positive outside the low-risk tier: no physician can be reached. The bag goes out, the director is alerted. */
+  /**
+   * No physician can be reached. O positive outside the low-risk tier: the bag goes out, the director is alerted.
+   * An incompatible release (V381): accepted only where the hospital enabled it, with {@link unreachableReason}.
+   */
   physicianUnreachable?: boolean;
+  /** V381, the fallback of an incompatible release: who was called and when. */
+  unreachableReason?: string;
+  /** V381, every incompatible release: why this bag was chosen. */
+  unitChoiceReason?: string;
+  /** V381, every incompatible release: whether the patient or the family was told of the risk. */
+  patientInformation?: PatientInformedStatus;
   /** The physician's order was verbal (the default): it is countersigned. */
   verbalOrder?: boolean;
   /** A known antibody: the biologist deciding with the physician, when named. */
@@ -700,6 +812,47 @@ export class TransfusionService {
     return this.http.post<OPositiveReleaseDecision>(
       `${this.baseUrl}/o-positive-releases/${decisionId}/follow-up`,
       followUp,
+    );
+  }
+
+  /* ── Release despite an incompatible crossmatch (V381) ── */
+
+  getIncompatibleProtocol(): Observable<IncompatibleReleaseProtocol> {
+    return this.http.get<IncompatibleReleaseProtocol>(
+      `${this.baseUrl}/incompatible-release-protocol`,
+    );
+  }
+
+  setIncompatibleProtocol(
+    protocol: Pick<IncompatibleReleaseProtocol, 'fallbackEnabled' | 'declarerRoles'>,
+  ): Observable<IncompatibleReleaseProtocol> {
+    return this.http.put<IncompatibleReleaseProtocol>(
+      `${this.baseUrl}/incompatible-release-protocol`,
+      protocol,
+    );
+  }
+
+  listIncompatibleReleases(openOnly: boolean): Observable<IncompatibleReleaseDecision[]> {
+    const params = new HttpParams().set('openOnly', String(openOnly));
+    return this.http.get<IncompatibleReleaseDecision[]>(`${this.baseUrl}/incompatible-releases`, {
+      params,
+    });
+  }
+
+  countersignIncompatibleRelease(decisionId: string): Observable<IncompatibleReleaseDecision> {
+    return this.http.post<IncompatibleReleaseDecision>(
+      `${this.baseUrl}/incompatible-releases/${decisionId}/countersign`,
+      null,
+    );
+  }
+
+  recordIncompatibleMonitoring(
+    decisionId: string,
+    monitoring: IncompatibleMonitoringRequest,
+  ): Observable<IncompatibleReleaseDecision> {
+    return this.http.post<IncompatibleReleaseDecision>(
+      `${this.baseUrl}/incompatible-releases/${decisionId}/monitoring`,
+      monitoring,
     );
   }
 

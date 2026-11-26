@@ -60,7 +60,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class, com.example.hms.service.transfusion.IncompatibleReleaseDecisions.class, com.example.hms.service.transfusion.IncompatibleReleaseNotices.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
     PatientBloodGroupStatusService.class, PatientMapper.class,
     com.example.hms.security.EncryptionKeyHolder.class, PatientBloodGroupOnRecordPostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -261,6 +261,15 @@ class PatientBloodGroupOnRecordPostgresIT {
         assertThat(chart.getAntibodySpecificities()).isEqualTo("anti-E");
         assertThat(chart.getConfirmed()).isEqualTo("B+");
         assertThat(onTheRecord().getAlloImmunised()).as("a list read does not look").isNull();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Patient knownPositive = entityManager.find(Patient.class, patient);
+            var batch = patientMapper.toPatientDTOs(java.util.List.of(knownPositive), hospital).getFirst().getBloodGroup();
+            var previousIndividual = patientMapper.toPatientDTO(knownPositive, hospital).getBloodGroup();
+            assertThat(batch.getAlloImmunised()).as("bulk and previous individual mapper both leave antibodies unassessed")
+                .isNull();
+            assertThat(previousIndividual.getAlloImmunised()).isNull();
+            assertThat(batch.getConfirmed()).isEqualTo(previousIndividual.getConfirmed());
+        });
     }
     @Test
     @DisplayName("C-PERF: two and forty patient rows each prepare one scoped laboratory query, never forty")

@@ -17,6 +17,9 @@ import java.util.UUID;
 
 @Repository
 public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
+    /** A transfer never waits for a lot while it holds another stock row. */
+    @Query(value = "SELECT * FROM clinical.stock_lots WHERE id = :id FOR UPDATE NOWAIT", nativeQuery = true)
+    java.util.Optional<StockLot> tryLockById(@Param("id") UUID id);
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
@@ -46,6 +49,10 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
          + "l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now WHERE l.id = :id")
     int addReceipt(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                    @Param("now") LocalDateTime now);
+
+    /** All lots, including expired ones: the book balance is not just stock currently available for dispensing. */
+    @Query("SELECT COALESCE(SUM(l.remainingQuantity), 0) FROM StockLot l WHERE l.inventoryItem.id = :itemId")
+    BigDecimal sumRemainingForItem(@Param("itemId") UUID itemId);
 
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);

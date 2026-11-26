@@ -83,6 +83,15 @@ public class StockTransactionController {
         return ResponseEntity.ok(ApiResponseWrapper.success(stockTransactionService.listWitnessCandidates()));
     }
 
+    @GetMapping("/returnable-transfers")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Paired transfers with stock available to return")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO>>>
+            listReturnableTransfers(@RequestParam UUID inventoryItemId,
+                                   @RequestParam(required = false) UUID stockLotId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(stockTransactionService.listReturnableTransfers(inventoryItemId, stockLotId)));
+    }
+
     @GetMapping("/returnable-dispenses")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Fills a return can be booked against",

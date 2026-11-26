@@ -253,6 +253,8 @@
     "src/app/super-admin/integration-messages/integration-messages.html::row.messageType",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::p.decisionReason",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::row.decisionReason",
+    "src/app/transfusion/incompatible-releases/incompatible-releases.component.html::r.unitChoiceReason",
+    "src/app/transfusion/incompatible-releases/incompatible-releases.component.html::r.unreachableReason",
     "src/app/transfusion/transfusion.html::<option>a",
     "src/app/transfusion/transfusion.html::a.stopReason",
     "src/app/transfusion/transfusion.html::g.correctionReason",

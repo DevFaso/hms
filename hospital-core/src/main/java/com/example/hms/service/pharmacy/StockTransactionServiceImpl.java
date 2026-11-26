@@ -77,6 +77,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final FefoLotPolicy fefoLotPolicy;
     /** QA D3415 (r70): a return that may not go back on sale is set aside. */
     private final StockQuarantine stockQuarantine;
+    private final StockTransferBooking transferBooking;
 
     @Override
     @Transactional
@@ -90,6 +91,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        StockTransferBooking.Route transferRoute = transferBooking.prepare(dto, item);
         requireFefoForTransfer(dto, lot);
         // QA D668 (returns), D779 (every movement): an item counted in whole
         // units never moves by a fraction, or its stock shows decimals.
@@ -111,6 +113,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         StockTransaction tx = stockTransactionMapper.toEntity(dto, item, lot, performer);
         tx.setWitnessedByUser(witness);
         StockTransaction saved = stockTransactionRepository.save(tx);
+        transferBooking.bookCounterpart(transferRoute, saved);
 
         // QA D3415 (r70): a returned morphine ampoule went straight back into the saleable lot. A return that may
         // not be sold again (not intact, or a controlled drug back from outside) stays off the lot, set aside.
@@ -206,6 +209,23 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO> listReturnableTransfers(UUID inventoryItemId, UUID stockLotId) {
+        InventoryItem item = resolveInventoryItem(inventoryItemId);
+        enforceHospitalScope(item.getPharmacy());
+        if (stockLotId != null) requireLotOfItem(stockLotId, item);
+        return stockTransactionRepository.findReturnablePairedTransfers(item.getId(), stockLotId != null, stockLotId).stream()
+            .map(row -> {
+                BigDecimal available = nz(row.getOutstandingQuantity()).min(nz(row.getDestinationQuantity()));
+                if (row.getLotQuantity() != null) available = available.min(row.getLotQuantity());
+                return new com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO(row.getTransferId(), row.getStockLotId(), row.getDestinationName(),
+                    row.getTransferredAt(), available.max(BigDecimal.ZERO));
+            })
+            .filter(row -> row.returnableQuantity().signum() > 0)
+            .toList();
+    }
+
     /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
     private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
             com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
@@ -258,14 +278,19 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         return out;
     }
 
+    private StockLot requireLotOfItem(UUID stockLotId, InventoryItem item) {
+        StockLot lot = stockLotRepository.findById(stockLotId)
+            .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+        if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+        }
+        return lot;
+    }
+
     /** Every fill of the item (of the lot, when one is named) a return may be booked against, newest first. */
     private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
         if (stockLotId != null) {
-            StockLot lot = stockLotRepository.findById(stockLotId)
-                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
-            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
-                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
-            }
+            requireLotOfItem(stockLotId, item);
             return dispenseRepository.findReturnableFillsOfLot(stockLotId,
                     RETURNABLE_FILL_STATES);
         }
@@ -573,6 +598,10 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         inventoryItemRepository.lockById(item.getId());
+        if (stockTransactionRepository.hasPairedTransfer(item.getId(), lot != null, lot == null ? null : lot.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("referenceId",
+                "stockTransaction.transfer.referenceRequired");
+        }
         BigDecimal transferred;
         BigDecimal returned;
         if (lot != null) {

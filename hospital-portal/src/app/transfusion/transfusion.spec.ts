@@ -1076,6 +1076,9 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
 
         component.emergencyAuthoriserId = 'dir';
         component.emergencyReason = 'Rien à temps';
+        // V381: every incompatible release says why this bag and whether the patient was told.
+        component.incompatibleChoiceReason = 'Seule poche testée';
+        component.incompatiblePatientInformed = 'NOT_POSSIBLE';
         component.emergencyVerbalOrder = false;
         component.emergencyBiologistId = 'bio';
         component.submitIncompatibleRelease();
@@ -1083,6 +1086,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           bloodUnitId: 'opos',
           releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
           reason: 'Rien à temps',
+          unitChoiceReason: 'Seule poche testée',
+          patientInformation: 'NOT_POSSIBLE',
           authoriserUserId: 'dir',
           verbalOrder: false,
           biologistUserId: 'bio',
@@ -1096,6 +1101,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           bloodUnitId: 'opos',
           releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
           reason: 'Rien à temps',
+          unitChoiceReason: 'Seule poche testée',
+          patientInformation: 'NOT_POSSIBLE',
           authoriserUserId: 'dir',
           verbalOrder: false,
           biologistUserId: 'bio',
@@ -1347,6 +1354,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       component.emergencyUnitId = 'opos';
       component.emergencyAuthoriserId = 'dir';
       component.emergencyReason = 'Rien à temps';
+      component.incompatibleChoiceReason = 'Seule poche testée';
+      component.incompatiblePatientInformed = 'FAMILY_INFORMED';
       fixture.detectChanges();
       expect(el('si-o-negative-first')).not.toBeNull();
       expect(fixture.nativeElement.querySelector('#si-statement')).not.toBeNull();
@@ -1360,6 +1369,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         bloodUnitId: 'opos',
         releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
         reason: 'Rien à temps',
+        unitChoiceReason: 'Seule poche testée',
+        patientInformation: 'FAMILY_INFORMED',
         authoriserUserId: 'dir',
         negativeUnobtainable: true,
       });
@@ -1525,6 +1536,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           await pick('#si-unit', 'bag');
           await pick('#si-authoriser', 'dir');
           await type('#si-reason', 'Rien de compatible à temps');
+          await type('#si-choice', 'Seule poche testée');
+          await pick('#si-informed', 'PATIENT_INFORMED');
           await expectToggles('#si-statement');
 
           el('submit-incompatible-release')!.click();
@@ -1532,6 +1545,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
             bloodUnitId: 'bag',
             releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
             reason: 'Rien de compatible à temps',
+            unitChoiceReason: 'Seule poche testée',
+            patientInformation: 'PATIENT_INFORMED',
             authoriserUserId: 'dir',
             negativeUnobtainable: true,
           });
@@ -1608,13 +1623,110 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         component.emergencyAuthoriserId = 'dir';
         component.emergencyReason = 'Rien de compatible à temps';
         component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+        // V381: every incompatible release says why this bag and whether the patient was told.
+        component.incompatibleChoiceReason = '  Seule poche compatible ABO testée  ';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+        component.incompatiblePatientInformed = 'NOT_POSSIBLE';
+        // With the hospital's fallback off, nothing offers to release without a physician.
+        fixture.detectChanges();
+        expect(el('si-unreachable')).toBeNull();
+        component.submitIncompatibleRelease();
         expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
           bloodUnitId: 'bag',
           releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
           reason: 'Rien de compatible à temps',
+          unitChoiceReason: 'Seule poche compatible ABO testée',
+          patientInformation: 'NOT_POSSIBLE',
           authoriserUserId: 'dir',
         });
         expect(component.showIncompatibleModal()).toBeFalse();
+      });
+
+      it('V381: where the hospital enabled it, « aucun médecin joignable » replaces the name and sends its reason', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        const bag = (id: string, leastIncompatible: boolean) => ({
+          id,
+          unitNumber: id.toUpperCase(),
+          aboGroup: 'A' as const,
+          rhFactor: 'POSITIVE' as RhFactor,
+          incompatibilityReason: 'Anti-K',
+          releasable: true,
+          rhdMatched: true,
+          rhKellMatched: leastIncompatible,
+          antigenNegative: null,
+          leastIncompatible,
+        });
+        stubOptions({
+          incompatibleUnits: [bag('bag', true), bag('worse', false)],
+          incompatibleRule: {
+            fallbackEnabled: true,
+            callerMayDeclare: true,
+            countersignDeadlineHours: 6,
+          },
+        });
+        txSpy.emergencyRelease = jasmine
+          .createSpy()
+          .and.returnValue(of(mockUnit({ id: 'bag', status: 'ISSUED' })));
+        el('incompatible-release')!.click();
+        fixture.detectChanges();
+        expect(el('si-unreachable')).not.toBeNull();
+        expect(el('si-fallback-off')).toBeNull();
+        expect(document.getElementById('si-authoriser')).not.toBeNull();
+
+        component.emergencyUnitId = 'worse';
+        component.emergencyAuthoriserId = 'dir';
+        component.emergencyReason = 'Hémorragie massive';
+        component.incompatibleChoiceReason = 'Seule poche testée';
+        component.incompatiblePatientInformed = 'NOT_POSSIBLE';
+        component.incompatibleUnreachable = true;
+        component.onIncompatibleUnreachableChanged();
+        fixture.detectChanges();
+        // The declaration stands in for the name: nobody is named, and nobody is waited for.
+        expect(component.emergencyAuthoriserId).toBe('');
+        expect(document.getElementById('si-authoriser')).toBeNull();
+        expect(el('si-fallback-hint')!.textContent).toContain('TRANSFUSION.INCOMPAT.FALLBACK_HINT');
+        expect(el('si-not-least')).not.toBeNull();
+        expect(el('si-unit-facts')).not.toBeNull();
+
+        component.emergencyUnitId = 'bag';
+        fixture.detectChanges();
+        expect(el('si-not-least')).toBeNull();
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+        component.incompatibleUnreachableReason = ' Dr de garde appelé à 01 h 40, sans réponse ';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'bag',
+          releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+          reason: 'Hémorragie massive',
+          unitChoiceReason: 'Seule poche testée',
+          patientInformation: 'NOT_POSSIBLE',
+          physicianUnreachable: true,
+          unreachableReason: 'Dr de garde appelé à 01 h 40, sans réponse',
+        });
+      });
+
+      it('V381: the fallback is not offered when the hospital left it off, or the caller may not declare it', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        for (const rule of [
+          { fallbackEnabled: false, callerMayDeclare: false, countersignDeadlineHours: 24 },
+          { fallbackEnabled: true, callerMayDeclare: false, countersignDeadlineHours: 24 },
+        ]) {
+          stubOptions({ incompatibleRule: rule });
+          component.openIncompatibleRelease(withResult);
+          // A stale tick from another form changes nothing: the server's rule decides what is asked.
+          component.incompatibleUnreachable = true;
+          fixture.detectChanges();
+          expect(component.incompatibleFallbackOffered()).toBeFalse();
+          expect(component.incompatibleDeclaring()).toBeFalse();
+          expect(el('si-unreachable')).toBeNull();
+          expect(el('si-fallback-off')).not.toBeNull();
+          expect(document.getElementById('si-authoriser')).not.toBeNull();
+        }
       });
 
       it('releasing with nothing filled in is refused on its fields', async () => {
@@ -1625,7 +1737,13 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         const marked = expectEmptySubmitRefusal(fixture, {
           button: '[data-testid="submit-incompatible-release"]',
         });
-        expect(marked).toEqual(['si-unit', 'si-authoriser', 'si-reason']);
+        expect(marked).toEqual([
+          'si-unit',
+          'si-choice',
+          'si-authoriser',
+          'si-informed',
+          'si-reason',
+        ]);
       });
 
       it('a refusal shows the server reason and keeps the form', async () => {
@@ -1638,6 +1756,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         component.emergencyUnitId = 'bag';
         component.emergencyAuthoriserId = 'dir';
         component.emergencyReason = 'x';
+        component.incompatibleChoiceReason = 'y';
+        component.incompatiblePatientInformed = 'NOT_POSSIBLE';
         component.submitIncompatibleRelease();
         expect(toastSpy.error).toHaveBeenCalledWith('Groupe exclu');
         expect(component.showIncompatibleModal()).toBeTrue();

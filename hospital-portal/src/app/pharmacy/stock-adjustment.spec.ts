@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Observable, of, NEVER } from 'rxjs';
+import { Observable, of, NEVER, throwError } from 'rxjs';
 import { StockAdjustmentComponent } from './stock-adjustment';
 import { PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
@@ -26,10 +26,12 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'receiveStock',
       'listWitnessCandidates',
       'listReturnableDispenses',
+      'listReturnableTransfers',
       'listQuarantine',
       'destroyQuarantined',
     ]);
     svc.listReturnableDispenses.and.returnValue(of({ data: [] }) as never);
+    svc.listReturnableTransfers.and.returnValue(of({ data: [] }) as never);
     svc.listQuarantine.and.returnValue(of({ data: [] }) as never);
     svc.listWitnessCandidates.and.returnValue(
       of({ data: [{ userId: 'u-2', displayName: 'Awa Traore' }] } as unknown as ReturnType<
@@ -54,6 +56,28 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     });
     return TestBed.createComponent(StockAdjustmentComponent).componentInstance;
   }
+
+  it('D3943: lists every other active store of the source hospital, including ward stores', () => {
+    const c = create();
+    c.selectedPharmacyId = 'source';
+    const timestamps = { createdAt: '2026-11-25T00:00:00', updatedAt: '2026-11-25T00:00:00' };
+    c.pharmacies.set([
+      { ...timestamps, id: 'source', hospitalId: 'A', name: 'Central', active: true },
+      {
+        ...timestamps,
+        id: 'ward',
+        hospitalId: 'A',
+        name: 'Ward store',
+        active: true,
+        pharmacyType: 'HOSPITAL_DISPENSARY',
+      },
+      { ...timestamps, id: 'foreign', hospitalId: 'B', name: 'Other hospital', active: true },
+      { ...timestamps, id: 'closed', hospitalId: 'A', name: 'Closed', active: false },
+    ]);
+    expect(c.transferDestinationOptions().map((p) => p.id)).toEqual(['ward']);
+    c.selectedPharmacyId = 'missing';
+    expect(c.transferDestinationOptions()).toEqual([]);
+  });
 
   it('does not offer DISPENSE as a manual stock movement', () => {
     const c = create();
@@ -284,6 +308,96 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       c.submitForm();
       expect(toast.error).not.toHaveBeenCalled();
       expect(svc.recordTransaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('paired transfer returns', () => {
+    const transfer = {
+      transferId: 'transfer-77',
+      stockLotId: 'lot-1',
+      destinationName: 'Ward store',
+      transferredAt: '2026-11-26T08:00:00',
+      returnableQuantity: 6,
+    };
+
+    function open(c: StockAdjustmentComponent): void {
+      svc.listReturnableTransfers.and.returnValue(of({ data: [transfer] }) as never);
+      c.openForm();
+      c.onTypeChange('RETURN');
+      c.onItemChange('item-1');
+      c.form.quantity = 2;
+      c.returnCondition = 'INTACT';
+    }
+
+    it('selects the original transfer and lot and sends no request before explicit save', () => {
+      const c = create();
+      open(c);
+      c.returnTransferId = transfer.transferId;
+      c.onReturnTransferChange();
+      expect(c.form.stockLotId).toBe('lot-1');
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+      svc.recordTransaction.and.returnValue(NEVER);
+      c.submitForm();
+      expect(svc.recordTransaction).toHaveBeenCalled();
+      const request = svc.recordTransaction.calls.mostRecent().args[0];
+      expect(request.referenceId).toBe(transfer.transferId);
+      expect(request.reason).toContain(transfer.destinationName);
+    });
+
+    it('an internal transfer return never offers a patient refund', () => {
+      const c = create();
+      open(c);
+      c.returnTransferId = transfer.transferId;
+      c.onReturnTransferChange();
+      svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+      svc.listTransactionsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+      svc.listTransactionsByType.and.returnValue(of({ data: { content: [] } }) as never);
+      svc.recordTransaction.and.returnValue(of({ data: { id: 'internal-return-77' } }) as never);
+      c.submitForm();
+      expect(svc.recordTransaction).toHaveBeenCalled();
+      expect(c.refundPrompt()).toBeNull();
+    });
+
+    it('requires a real source choice rather than treating typed text as a transfer ID', () => {
+      const c = create();
+      open(c);
+      c.returnReference = 'typed reference';
+      c.submitForm();
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_SOURCE_REQUIRED');
+    });
+
+    it('refuses an excessive quantity and keeps patient dispenses and transfer choices exclusive', () => {
+      const c = create();
+      open(c);
+      c.returnDispenseId = 'earlier-fill';
+      c.returnTransferId = transfer.transferId;
+      c.onReturnTransferChange();
+      expect(c.returnDispenseId).toBe('');
+      c.form.quantity = 7;
+      c.submitForm();
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_EXCEEDS_TRANSFER');
+    });
+
+    it('a failed source lookup shows a refusal and remains retryable', () => {
+      const c = create();
+      svc.listReturnableTransfers.and.returnValue(
+        throwError(() => new Error('Synthetic lookup failure')),
+      );
+      c.openForm();
+      c.onTypeChange('RETURN');
+      c.onItemChange('item-1');
+      c.form.quantity = 1;
+      c.returnReference = 'legacy';
+      c.returnCondition = 'INTACT';
+      c.submitForm();
+      expect(c.returnableFailed()).toBeTrue();
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+      svc.listReturnableTransfers.and.returnValue(of({ data: [transfer] }) as never);
+      c.loadReturnableDispenses();
+      expect(c.returnableFailed()).toBeFalse();
+      expect(c.returnableTransfers()).toEqual([transfer]);
     });
   });
 
