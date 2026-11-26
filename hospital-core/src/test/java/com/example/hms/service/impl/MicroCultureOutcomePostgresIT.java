@@ -135,8 +135,8 @@ class MicroCultureOutcomePostgresIT {
                 .setParameter("phone", "+226 71 " + tag).executeUpdate();
             UUID definition = UUID.randomUUID();
             entityManager.createNativeQuery("""
-                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, created_at, updated_at)
-                VALUES (:id, :code, 'Blood culture', true, now(), now())
+                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, culture, created_at, updated_at)
+                VALUES (:id, :code, 'Blood culture', true, true, now(), now())
                 """).setParameter("id", definition).setParameter("code", "CX9" + tag).executeUpdate();
             entityManager.createNativeQuery("""
                 INSERT INTO lab.lab_orders (id, hospital_id, patient_id, lab_test_definition_id, ordering_staff_id,
@@ -175,6 +175,24 @@ class MicroCultureOutcomePostgresIT {
                 "SELECT count(*) FROM lab.micro_culture_results WHERE lab_order_id = :order")
                 .setParameter("order", order).getSingleResult()).longValue());
         assertThat(count).as("the refused request creates no second report").isEqualTo(1L);
+    }
+
+    @Test
+    void anotherPreliminaryCultureReopensAFinishedOrderUntilItTooIsFinalized() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        service.finalizeCulture(culture, hospital, null);
+        var created = service.createCulture(hospital, null,
+            com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build());
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(created.getStatus()).isEqualTo(com.example.hms.enums.MicroCultureStatus.PRELIMINARY);
+        assertThat(result).isEqualTo("RESULTED");
     }
 
     @Test

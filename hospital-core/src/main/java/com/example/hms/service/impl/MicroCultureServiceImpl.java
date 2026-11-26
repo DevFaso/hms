@@ -140,11 +140,15 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (order.getHospital() == null || !Objects.equals(order.getHospital().getId(), hospitalId)) {
             throw new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId());
         }
-        if (order.getStatus() == LabOrderStatus.CANCELLED) {
+        // Creation and finalization serialize on the same order. Read its committed state, not the pre-lock snapshot.
+        labOrderRepository.findWithLockById(order.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId()));
+        LabOrderStatus committed = labOrderRepository.findStatusById(order.getId());
+        if (committed == LabOrderStatus.CANCELLED) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.orderCancelled");
         }
         // QA D820: nor can one voided as entered in error.
-        if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+        if (committed == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.order.enteredInError");
         }
         if (order.getLabTestDefinition() == null || !order.getLabTestDefinition().isCulture()) {
@@ -182,7 +186,12 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
                 .ifPresent(culture::setReportedByStaff);
         }
-        return toDto(saveCulture(culture));
+        MicroCultureResult saved = saveCulture(culture);
+        LabOrderStatus target = com.example.hms.service.lab.LabOrderLifecycle.statusAfterNewResult(committed);
+        if (target != null) {
+            labOrderRepository.updateStatusFrom(order.getId(), committed, target);
+        }
+        return toDto(saved);
     }
 
     @Override

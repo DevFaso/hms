@@ -31,6 +31,10 @@ class CultureDefinitionWorkflowGuardTest {
         assertThat(body.indexOf("!order.getLabTestDefinition().isCulture()"))
             .isGreaterThanOrEqualTo(0).isLessThan(body.indexOf("MicroCultureResult.builder()"));
         assertThat(body).doesNotContain("getCategory()", "getTestCode()");
+        assertThat(body.indexOf("labOrderRepository.findWithLockById(order.getId())"))
+            .isGreaterThanOrEqualTo(0).isLessThan(body.indexOf("MicroCultureResult.builder()"));
+        assertThat(body).contains("LabOrderLifecycle.statusAfterNewResult(committed)",
+            "labOrderRepository.updateStatusFrom(order.getId(), committed, target)");
         assertThat(service.split("cultureRepository\\.save\\(", -1)).hasSize(2);
         assertThat(service).contains("statusAfterAllResultsReleased(committed)",
             "labOrderRepository.updateStatusFrom(orderId, committed, target)");

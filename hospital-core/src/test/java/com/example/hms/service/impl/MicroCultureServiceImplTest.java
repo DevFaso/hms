@@ -151,6 +151,8 @@ class MicroCultureServiceImplTest {
         culture.setId(cultureId);
 
         when(labOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(orderId)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(orderId)).thenAnswer(call -> order.getStatus());
         when(cultureRepository.findById(cultureId)).thenReturn(Optional.of(culture));
         when(cultureRepository.save(any(MicroCultureResult.class))).thenAnswer(i -> i.getArgument(0));
         when(isolateRepository.save(any(MicroIsolate.class))).thenAnswer(i -> i.getArgument(0));
@@ -198,6 +200,18 @@ class MicroCultureServiceImplTest {
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .extracting("messageKey").isEqualTo("micro.culture.cultureOrderRequired");
         verify(cultureRepository, never()).save(any());
+    }
+
+    @Test
+    void creatingAnotherPreliminaryCultureReopensACompletedOrderUnderItsLock() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        service.createCulture(hospitalId, null, MicroCultureRequestDTO.builder().labOrderId(orderId).build());
+        var sequence = org.mockito.Mockito.inOrder(labOrderRepository, cultureRepository);
+        sequence.verify(labOrderRepository).findById(orderId);
+        sequence.verify(labOrderRepository).findWithLockById(orderId);
+        sequence.verify(labOrderRepository).findStatusById(orderId);
+        sequence.verify(cultureRepository).save(any(MicroCultureResult.class));
+        sequence.verify(labOrderRepository).updateStatusFrom(orderId, LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
     }
 
     @Test
