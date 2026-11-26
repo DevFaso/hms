@@ -209,6 +209,23 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO> listReturnableTransfers(UUID inventoryItemId, UUID stockLotId) {
+        InventoryItem item = resolveInventoryItem(inventoryItemId);
+        enforceHospitalScope(item.getPharmacy());
+        if (stockLotId != null) requireLotOfItem(stockLotId, item);
+        return stockTransactionRepository.findReturnablePairedTransfers(item.getId(), stockLotId != null, stockLotId).stream()
+            .map(row -> {
+                BigDecimal available = nz(row.getOutstandingQuantity()).min(nz(row.getDestinationQuantity()));
+                if (row.getLotQuantity() != null) available = available.min(row.getLotQuantity());
+                return new com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO(row.getTransferId(), row.getStockLotId(), row.getDestinationName(),
+                    row.getTransferredAt(), available.max(BigDecimal.ZERO));
+            })
+            .filter(row -> row.returnableQuantity().signum() > 0)
+            .toList();
+    }
+
     /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
     private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
             com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
@@ -261,14 +278,19 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         return out;
     }
 
+    private StockLot requireLotOfItem(UUID stockLotId, InventoryItem item) {
+        StockLot lot = stockLotRepository.findById(stockLotId)
+            .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+        if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+        }
+        return lot;
+    }
+
     /** Every fill of the item (of the lot, when one is named) a return may be booked against, newest first. */
     private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
         if (stockLotId != null) {
-            StockLot lot = stockLotRepository.findById(stockLotId)
-                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
-            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
-                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
-            }
+            requireLotOfItem(stockLotId, item);
             return dispenseRepository.findReturnableFillsOfLot(stockLotId,
                     RETURNABLE_FILL_STATES);
         }

@@ -104,7 +104,7 @@ class StockTransferPostgresIT {
             entityManager.persist(medication);
             medicationId = medication.getId();
             InventoryItem item = InventoryItem.builder().pharmacy(source).medicationCatalogItem(medication)
-                .unit("comprim?").quantityOnHand(new BigDecimal("30")).build();
+                .unit("comprim?").unitPrice(new BigDecimal("500")).quantityOnHand(new BigDecimal("30")).build();
             entityManager.persist(item);
             sourceItemId = item.getId();
             StockLot lot = StockLot.builder().inventoryItem(item).lotNumber("D3943-" + tag)
@@ -124,11 +124,19 @@ class StockTransferPostgresIT {
         InventoryItem destinationItem = items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId).orElseThrow();
         assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
         assertThat(destinationItem.getQuantityOnHand()).isEqualByComparingTo("10");
-        StockTransaction receipt = ledger.findByReferenceIdAndTransactionType(transferred.getId(), StockTransactionType.RECEIPT).orElseThrow();
+        assertThat(destinationItem.getUnitPrice()).as("a new destination does not inherit the source selling price").isNull();
+        assertThat(items.findById(sourceItemId).orElseThrow().getUnitPrice()).isEqualByComparingTo("500");
+        StockTransaction receipt = ledger.findByTransferOriginId(transferred.getId()).orElseThrow();
         StockLot receivedLot = lots.findById(receipt.getStockLot().getId()).orElseThrow();
         assertThat(receivedLot.getRemainingQuantity()).isEqualByComparingTo("10");
         assertThat(receivedLot.getExpiryDate()).isEqualTo(LocalDate.now().plusYears(1));
         assertThat(receivedLot.getUnitCost()).isEqualByComparingTo("25");
+        assertThat(service.listReturnableTransfers(sourceItemId, sourceLotId)).singleElement().satisfies(transfer -> {
+            assertThat(transfer.transferId()).isEqualTo(transferred.getId());
+            assertThat(transfer.stockLotId()).isEqualTo(sourceLotId);
+            assertThat(transfer.destinationName()).isEqualTo("Ward store");
+            assertThat(transfer.returnableQuantity()).isEqualByComparingTo("10");
+        });
 
         StockTransactionRequestDTO returned = StockTransactionRequestDTO.builder().inventoryItemId(sourceItemId)
             .stockLotId(sourceLotId).transactionType(StockTransactionType.RETURN).quantity(new BigDecimal("3"))
@@ -139,12 +147,65 @@ class StockTransferPostgresIT {
         assertThat(items.findById(destinationItem.getId()).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("7");
         assertThat(lots.findById(sourceLotId).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("23");
         assertThat(lots.findById(receivedLot.getId()).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("7");
+        assertThat(service.listReturnableTransfers(sourceItemId, sourceLotId)).singleElement()
+            .satisfies(transfer -> assertThat(transfer.returnableQuantity()).isEqualByComparingTo("7"));
+    }
+
+    @Test
+    void existingDestinationKeepsItsOwnPersistedSellingPrice() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            InventoryItem source = entityManager.find(InventoryItem.class, sourceItemId);
+            entityManager.persist(InventoryItem.builder().pharmacy(entityManager.find(Pharmacy.class, destinationId))
+                .medicationCatalogItem(source.getMedicationCatalogItem()).unit(source.getUnit())
+                .unitPrice(new BigDecimal("375")).build());
+        });
+        service.recordTransaction(transfer("10"));
+        assertThat(items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId).orElseThrow().getUnitPrice())
+            .isEqualByComparingTo("375");
+    }
+
+    @Test
+    void duplicateGenericReceiptReferencesCannotRedirectOrBlockATransferReturn() {
+        StockTransactionResponseDTO transferred = service.recordTransaction(transfer("10"));
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            for (int index = 0; index < 2; index++) {
+                entityManager.persist(StockTransaction.builder().inventoryItem(entityManager.find(InventoryItem.class, sourceItemId))
+                    .transactionType(StockTransactionType.RECEIPT).quantity(BigDecimal.ONE).referenceId(transferred.getId())
+                    .performedByUser(entityManager.find(User.class, actorId)).reason("Synthetic unrelated receipt").build());
+            }
+        });
+        service.recordTransaction(StockTransactionRequestDTO.builder().inventoryItemId(sourceItemId).stockLotId(sourceLotId)
+            .transactionType(StockTransactionType.RETURN).quantity(new BigDecimal("3")).referenceId(transferred.getId())
+            .reason("Return unused stock").stockCondition(ReturnedStockCondition.INTACT).build());
+        assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("23");
+        assertThat(items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId).orElseThrow().getQuantityOnHand())
+            .isEqualByComparingTo("7");
+        assertThat(ledger.findByTransferOriginId(transferred.getId())).isPresent();
+    }
+
+    @Test
+    void returnChoicesAreCappedByTheReceiversCurrentStockAndRemainHospitalScoped() {
+        var transferred = service.recordTransaction(transfer("10"));
+        var receipt = ledger.findByTransferOriginId(transferred.getId()).orElseThrow();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE clinical.inventory_items SET quantity_on_hand = 4 WHERE id = :id")
+                .setParameter("id", receipt.getInventoryItem().getId()).executeUpdate();
+            entityManager.createNativeQuery("UPDATE clinical.stock_lots SET remaining_quantity = 4 WHERE id = :id")
+                .setParameter("id", receipt.getStockLot().getId()).executeUpdate();
+        });
+        assertThat(service.listReturnableTransfers(sourceItemId, null)).singleElement()
+            .satisfies(transfer -> assertThat(transfer.returnableQuantity()).isEqualByComparingTo("4"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        assertThatThrownBy(() -> service.listReturnableTransfers(sourceItemId, sourceLotId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test
     void sourceRefusalRollsBackTheDestinationItemLotAndReceipt() {
         long before = ledger.count();
-        assertThatThrownBy(() -> service.recordTransaction(transfer("31"))).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> service.recordTransaction(transfer("31")))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("stock.lot.insufficient");
         assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("30");
         assertThat(lots.findById(sourceLotId).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("30");
         assertThat(items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId)).isEmpty();
@@ -154,7 +215,7 @@ class StockTransferPostgresIT {
     @Test
     void aReturnCannotTakeBackStockAlreadyUsedAtTheDestinationAndRollsBackBothLedgers() {
         StockTransactionResponseDTO transferred = service.recordTransaction(transfer("10"));
-        StockTransaction receipt = ledger.findByReferenceIdAndTransactionType(transferred.getId(), StockTransactionType.RECEIPT).orElseThrow();
+        StockTransaction receipt = ledger.findByTransferOriginId(transferred.getId()).orElseThrow();
         UUID receivingItemId = receipt.getInventoryItem().getId();
         UUID receivingLotId = receipt.getStockLot().getId();
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -200,7 +261,7 @@ class StockTransferPostgresIT {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> lots.deleteById(sourceLotId));
         sourceLotId = null;
         StockTransactionResponseDTO moved = service.recordTransaction(transfer("10"));
-        StockTransaction receipt = ledger.findByReferenceIdAndTransactionType(moved.getId(), StockTransactionType.RECEIPT).orElseThrow();
+        StockTransaction receipt = ledger.findByTransferOriginId(moved.getId()).orElseThrow();
         UUID receiver = receipt.getInventoryItem().getId();
         UUID laterLot = new TransactionTemplate(transactionManager).execute(status -> {
             var now = java.time.LocalDateTime.now();

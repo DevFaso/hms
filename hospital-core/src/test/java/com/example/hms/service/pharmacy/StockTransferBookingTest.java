@@ -67,6 +67,7 @@ class StockTransferBookingTest {
 
     @Test
     void transferBooksTheDestinationLotWithOriginalExpiryCostAndLinkedLedger() {
+        destinationItem.setUnitPrice(new BigDecimal("375"));
         when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
             .thenReturn(Optional.of(destinationItem));
         when(lots.findSameLot(destinationItem.getId(), sourceLot.getLotNumber(), sourceLot.getExpiryDate())).thenReturn(List.of());
@@ -80,13 +81,57 @@ class StockTransferBookingTest {
         StockTransaction received = ledger.getValue();
         assertThat(received.getTransactionType()).isEqualTo(StockTransactionType.RECEIPT);
         assertThat(received.getReferenceId()).isEqualTo(outgoing.getId());
+        assertThat(received.getTransferOriginId()).isEqualTo(outgoing.getId());
         assertThat(received.getInventoryItem()).isSameAs(destinationItem);
         assertThat(received.getStockLot().getLotNumber()).isEqualTo(sourceLot.getLotNumber());
         assertThat(received.getStockLot().getExpiryDate()).isEqualTo(sourceLot.getExpiryDate());
         assertThat(received.getStockLot().getUnitCost()).isEqualByComparingTo(sourceLot.getUnitCost());
         assertThat(received.getStockLot().getInitialQuantity()).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(received.getStockLot().getRemainingQuantity()).isEqualByComparingTo(BigDecimal.TEN);
-        assertThat(destinationItem.getUnitPrice()).isNull();
+        assertThat(destinationItem.getUnitPrice()).isEqualByComparingTo("375");
+    }
+
+    @Test
+    void mergingALotKeepsItsHistoryButRecordsTheIncomingSupplier() {
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
+            .thenReturn(Optional.of(destinationItem));
+        StockLot existing = StockLot.builder().inventoryItem(destinationItem).lotNumber(sourceLot.getLotNumber())
+            .expiryDate(sourceLot.getExpiryDate()).unitCost(sourceLot.getUnitCost()).supplier("Earlier supplier").build();
+        existing.setId(UUID.randomUUID());
+        when(lots.findSameLot(destinationItem.getId(), sourceLot.getLotNumber(), sourceLot.getExpiryDate())).thenReturn(List.of(existing));
+        when(lots.tryLockById(existing.getId())).thenReturn(Optional.of(existing));
+        when(lots.addReceipt(eq(existing.getId()), eq(BigDecimal.TEN), any())).thenReturn(1);
+        when(items.incrementOnHand(eq(destinationItem.getId()), eq(BigDecimal.TEN), any())).thenReturn(1);
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+        ArgumentCaptor<StockTransaction> receipt = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(transactions).save(receipt.capture());
+        assertThat(receipt.getValue().getSupplier()).isEqualTo(sourceLot.getSupplier());
+        assertThat(existing.getSupplier()).isEqualTo("Earlier supplier");
+    }
+
+    @Test
+    void aGenericReceiptReferenceCannotRedirectOrReplaceTheOwnedCounterpart() {
+        when(transactions.findById(outgoing.getId())).thenReturn(Optional.of(outgoing));
+        when(transactions.findByTransferOriginId(outgoing.getId())).thenReturn(Optional.empty());
+        var request = StockTransactionRequestDTO.builder().inventoryItemId(sourceItem.getId())
+            .transactionType(StockTransactionType.RETURN).referenceId(outgoing.getId()).quantity(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> booking.prepare(request, sourceItem))
+            .extracting("messageKey").isEqualTo("stockTransaction.transfer.destinationUnavailable");
+        verify(transactions, never()).findByReferenceIdAndTransactionType(any(), any());
+        verifyNoInteractions(pharmacies);
+    }
+
+    @Test
+    void anOwnedCounterpartWithTheWrongDestinationIsRefused() {
+        var wrong = StockTransaction.builder().inventoryItem(sourceItem).transactionType(StockTransactionType.RECEIPT)
+            .transferOriginId(outgoing.getId()).build();
+        when(transactions.findById(outgoing.getId())).thenReturn(Optional.of(outgoing));
+        when(transactions.findByTransferOriginId(outgoing.getId())).thenReturn(Optional.of(wrong));
+        var request = StockTransactionRequestDTO.builder().transactionType(StockTransactionType.RETURN)
+            .referenceId(outgoing.getId()).quantity(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> booking.prepare(request, sourceItem))
+            .extracting("messageKey").isEqualTo("stockTransaction.transfer.destinationUnavailable");
+        verifyNoInteractions(pharmacies);
     }
 
     @Test

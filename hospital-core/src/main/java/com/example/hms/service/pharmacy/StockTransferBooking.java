@@ -72,12 +72,15 @@ public class StockTransferBooking {
             if (original == null) {
                 return null;
             }
-            StockTransaction receipt = transactions.findByReferenceIdAndTransactionType(
-                request.getReferenceId(), StockTransactionType.RECEIPT).orElse(null);
-            if (receipt != null) {
-                Pharmacy destination = receipt.getInventoryItem().getPharmacy();
-                return new Route(lockStores(source.getPharmacy(), destination.getId()), receipt, request.getFefoOverrideReason());
-            }
+            StockTransaction receipt = transactions.findByTransferOriginId(original.getId())
+                .filter(row -> row.getTransactionType() == StockTransactionType.RECEIPT)
+                .filter(row -> row.getInventoryItem() != null && row.getInventoryItem().getPharmacy() != null)
+                .filter(row -> Objects.equals(row.getInventoryItem().getPharmacy().getId(), original.getReferenceId()))
+                .filter(row -> Objects.equals(row.getInventoryItem().getMedicationCatalogItem().getId(),
+                    original.getInventoryItem().getMedicationCatalogItem().getId()))
+                .orElseThrow(() -> refused("stockTransaction.transfer.destinationUnavailable"));
+            Pharmacy destination = receipt.getInventoryItem().getPharmacy();
+            return new Route(lockStores(source.getPharmacy(), destination.getId()), receipt, request.getFefoOverrideReason());
         }
         return null;
     }
@@ -127,15 +130,17 @@ public class StockTransferBooking {
         }
         StockTransaction receipt = StockTransaction.builder()
             .inventoryItem(item).stockLot(lot).transactionType(StockTransactionType.RECEIPT)
-            .quantity(source.getQuantity()).referenceId(source.getId()).reason(source.getReason())
+            .quantity(source.getQuantity()).referenceId(source.getId()).transferOriginId(source.getId()).reason(source.getReason())
             .performedByUser(source.getPerformedByUser()).witnessedByUser(source.getWitnessedByUser()).build();
         if (lot != null) {
             receipt.setLotNumber(lot.getLotNumber());
             receipt.setExpiryDate(lot.getExpiryDate());
             receipt.setUnitCost(lot.getUnitCost());
-            receipt.setSupplier(lot.getSupplier());
+            receipt.setSupplier(source.getStockLot().getSupplier());
         }
         entityManager.refresh(item);
+        // The self-FK must see the immutable origin even when insert batching reorders UUIDs.
+        transactions.flush();
         transactions.save(receipt);
     }
 

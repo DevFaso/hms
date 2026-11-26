@@ -29,6 +29,27 @@ class StockTransferBookingGuardTest {
         assertThat(movement).contains("transferBooking.prepare(dto, item)",
             "transferBooking.bookCounterpart(transferRoute, saved)");
         String counterpart = Files.readString(root.resolve("com/example/hms/service/pharmacy/StockTransferBooking.java"));
+        assertThat(counterpart).contains("findByTransferOriginId(original.getId())", ".transferOriginId(source.getId())",
+            "original.getReferenceId()", "original.getInventoryItem().getMedicationCatalogItem().getId()")
+            .doesNotContain("findByReferenceIdAndTransactionType(");
+        assertThat(movement.indexOf("transferBooking.bookCounterpart(transferRoute, saved)"))
+            .isLessThan(movement.indexOf("applyQuantityChange(item, lot, dto.getTransactionType(), dto.getQuantity())"));
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
+                if (!path.getFileName().toString().equals("StockTransferBooking.java")) {
+                    assertThat(Files.readString(path)).as("only the paired booking owns this identity: " + path)
+                        .doesNotContain(".setTransferOriginId(", ".transferOriginId(");
+                }
+            }
+        }
+        String transactionRepository = Files.readString(root.resolve("com/example/hms/repository/pharmacy/StockTransactionRepository.java"));
+        assertThat(transactionRepository).contains("r.transferOriginId = t.id", "receipt.transferOriginId = t.id", "findReturnablePairedTransfers");
+        assertThat(Files.readString(root.resolve("com/example/hms/payload/dto/pharmacy/StockTransactionRequestDTO.java")))
+            .doesNotContain("transferOriginId");
+        String returnScreen = Files.readString(Path.of("../hospital-portal/src/app/pharmacy/stock-adjustment.ts"));
+        assertThat(returnScreen).contains("this.svc.listReturnableTransfers(itemId, lotId || undefined)",
+            "this.form.referenceId = this.returnDispenseId || this.returnTransferId || undefined",
+            "this.isReturn() && !this.returnTransferId");
         assertThat(counterpart).contains("Propagation.MANDATORY", "receive(route.destination(), movement)",
             "takeBack(route.originalReceipt(), movement, route.fefoOverrideReason())");
         assertThat(counterpart).contains("lockItem(source.getId())", "lockLot(request.getStockLotId())",

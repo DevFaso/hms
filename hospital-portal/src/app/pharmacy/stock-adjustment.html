@@ -362,16 +362,84 @@
               }
             </div>
             <div class="field">
+              <label for="retTransfer">{{ 'PHARMACY.RETURN_TRANSFER' | translate }}</label>
+              <select
+                appFormControl
+                id="retTransfer"
+                aria-describedby="return-transfer-hint"
+                name="returnTransferId"
+                data-testid="return-transfer"
+                [(ngModel)]="returnTransferId"
+                (ngModelChange)="onReturnTransferChange()"
+                [disabled]="returnableLoading() || returnableFailed() || !form.inventoryItemId"
+              >
+                <option value="">{{ 'PHARMACY.RETURN_TRANSFER_PLACEHOLDER' | translate }}</option>
+                @for (transfer of returnableTransfers(); track transfer.transferId) {
+                  <option [value]="transfer.transferId">
+                    {{ transfer.destinationName }} ·
+                    {{ transfer.transferredAt | serverTime | date: 'short' }} ·
+                    {{
+                      'PHARMACY.RETURN_TRANSFER_AVAILABLE'
+                        | translate: { quantity: (transfer.returnableQuantity | number: '1.0-2') }
+                    }}
+                  </option>
+                }
+              </select>
+              @if (!form.inventoryItemId) {
+                <small id="return-transfer-hint" class="field-hint">{{
+                  'PHARMACY.RETURN_TRANSFER_CHOOSE_ITEM' | translate
+                }}</small>
+              } @else if (returnableLoading()) {
+                <small id="return-transfer-hint" class="field-hint">{{
+                  'COMMON.LOADING' | translate
+                }}</small>
+              } @else if (returnableFailed()) {
+                <small id="return-transfer-hint" role="alert" class="field-hint">{{
+                  'PHARMACY.RETURN_SOURCES_FAILED' | translate
+                }}</small>
+                <button type="button" class="btn btn-secondary" (click)="loadReturnableDispenses()">
+                  {{ 'COMMON.RETRY' | translate }}
+                </button>
+              } @else if (!returnableLoading() && !returnableTransfers().length) {
+                <small id="return-transfer-hint" class="field-hint">{{
+                  'PHARMACY.RETURN_TRANSFER_EMPTY' | translate
+                }}</small>
+              } @else {
+                <small id="return-transfer-hint" class="field-hint">{{
+                  'PHARMACY.RETURN_TRANSFER_HINT' | translate
+                }}</small>
+              }
+            </div>
+            @if (returnTransferId) {
+              <div class="field">
+                <label for="returnTransferFefo">{{
+                  'PHARMACY.RETURN_TRANSFER_FEFO' | translate
+                }}</label>
+                <input
+                  appFormControl
+                  id="returnTransferFefo"
+                  aria-describedby="return-transfer-fefo-hint"
+                  name="returnTransferFefoReason"
+                  type="text"
+                  maxlength="300"
+                  [(ngModel)]="fefoReason"
+                />
+                <small id="return-transfer-fefo-hint" class="field-hint">{{
+                  'PHARMACY.RETURN_TRANSFER_FEFO_HINT' | translate
+                }}</small>
+              </div>
+            }
+            <div class="field">
               <label for="retRef"
                 >{{ 'PHARMACY.RETURN_REFERENCE' | translate
-                }}{{ returnDispenseId ? '' : ' *' }}</label
+                }}{{ returnDispenseId || returnTransferId ? '' : ' *' }}</label
               >
               <input
                 id="retRef"
                 type="text"
                 [(ngModel)]="returnReference"
                 name="returnReference"
-                [required]="!returnDispenseId"
+                [required]="!returnDispenseId && !returnTransferId"
               />
             </div>
           </div>

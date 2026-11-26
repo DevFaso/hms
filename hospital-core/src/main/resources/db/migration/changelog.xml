@@ -4073,4 +4073,7 @@
                  splitStatements="true" stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
+        <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
+    </changeSet>
 </databaseChangeLog>
