@@ -35,9 +35,15 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
     @Query("SELECT d.id FROM OPositiveReleaseDecision d WHERE d.noticesFiledAt IS NULL ORDER BY d.issuedAt")
     List<UUID> findPendingNoticeIds();
 
-    /** How many times this bag was hung: it exposed the patient only once it was given. */
-    @Query("SELECT COUNT(a) FROM TransfusionAdministration a WHERE a.bloodUnit.id = :bloodUnitId")
-    long countAdministrations(@Param("bloodUnitId") UUID bloodUnitId);
+    /**
+     * How many times this bag was hung ON THIS REQUEST: it exposed this patient only when it was given on the
+     * request it was released against. The same bag hung later on another request exposed somebody else.
+     */
+    @Query("""
+        SELECT COUNT(a) FROM TransfusionAdministration a
+        WHERE a.bloodUnit.id = :bloodUnitId AND a.request.id = :requestId
+        """)
+    long countAdministrations(@Param("bloodUnitId") UUID bloodUnitId, @Param("requestId") UUID requestId);
 
     /** The releases of one hospital, the newest first. */
     List<OPositiveReleaseDecision> findByHospital_IdOrderByIssuedAtDesc(UUID hospitalId);
@@ -50,8 +56,15 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
 
         String getHospitalName();
 
+        /** The request the bag was released against. */
+        UUID getRequestId();
+
         com.example.hms.enums.BloodUnitStatus getUnitStatus();
 
+        /** The request that holds the bag now; null when it is back in stock. */
+        UUID getUnitRequestId();
+
+        /** How many times the bag was hung on the request of this release. */
         long getAdministrations();
     }
 
@@ -61,11 +74,14 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
      * read, no entity loaded.
      */
     @Query("""
-        SELECT d.issuedAt AS issuedAt, h.id AS hospitalId, h.name AS hospitalName, u.status AS unitStatus,
-               (SELECT COUNT(a) FROM TransfusionAdministration a WHERE a.bloodUnit.id = d.bloodUnitId) AS administrations
+        SELECT d.issuedAt AS issuedAt, h.id AS hospitalId, h.name AS hospitalName, d.requestId AS requestId,
+               u.status AS unitStatus, ur.id AS unitRequestId,
+               (SELECT COUNT(a) FROM TransfusionAdministration a
+                 WHERE a.bloodUnit.id = d.bloodUnitId AND a.request.id = d.requestId) AS administrations
         FROM OPositiveReleaseDecision d
         JOIN d.hospital h
         JOIN BloodUnit u ON u.id = d.bloodUnitId
+        LEFT JOIN u.request ur
         WHERE d.patientId = :patientId AND d.rhdExposure = TRUE
         ORDER BY d.issuedAt DESC
         """)

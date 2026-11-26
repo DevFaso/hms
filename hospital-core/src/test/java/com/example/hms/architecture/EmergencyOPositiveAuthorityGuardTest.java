@@ -179,6 +179,8 @@ class EmergencyOPositiveAuthorityGuardTest {
             .contains("risk_tier = 'LOW_RISK' AND protocol_active = TRUE")
             .contains("decided_by_user_id IS DISTINCT FROM issued_by_user_id")
             .contains("notices_filed_at            TIMESTAMP")
+            // A pending O positive decision names nobody; an incompatible release still must.
+            .contains("authoriser_user_id IS NOT NULL OR release_type = 'O_POSITIVE_DECISION'")
             .contains("CONSTRAINT ck_o_positive_decision_countersign  CHECK (risk_tier = 'LOW_RISK' OR countersign_due_at IS NOT NULL)");
         assertThat(read(MIGRATIONS.resolve("changelog.xml")))
             .contains("<sqlFile path=\"V380__emergency_o_positive_release_authority.sql\"");

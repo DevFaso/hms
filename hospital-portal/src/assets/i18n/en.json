@@ -1931,7 +1931,7 @@
       "CROSS_HOSPITAL_ANTIBODY_FLAG": "Allo-immunisation flag of another hospital read (transfusion safety, shown whatever the record-sharing choice)",
       "CROSS_HOSPITAL_RHD_EXPOSURE_FLAG": "RhD positive exposure flag of another hospital read (transfusion safety, shown whatever the record-sharing choice)",
       "O_POSITIVE_RELEASE_DECIDED": "Emergency O positive release decision recorded for unit {{unit}} against request {{request}}",
-      "O_POSITIVE_RELEASE_COUNTERSIGNED": "Emergency O positive release countersigned by a physician (decision {{decision}})",
+      "O_POSITIVE_RELEASE_COUNTERSIGNED": "Emergency O positive release countersigned (decision {{decision}})",
       "O_POSITIVE_RELEASE_REVIEWED": "Emergency O positive release reviewed by the biologist (decision {{decision}})",
       "O_POSITIVE_FOLLOW_UP_RECORDED": "RhD positive exposure follow-up recorded (decision {{decision}})",
       "O_POSITIVE_COUNTERSIGN_OVERDUE": "Countersignature of an emergency O positive release overdue, escalated to the laboratory director (decision {{decision}})",
@@ -13617,6 +13617,7 @@
   },
   "TRANSFUSION": {
     "OPOS": {
+      "INCOMPATIBLE_HINT": "O RhD positive for a patient at risk: this release needs the doctor or laboratory director named above, who is not you. Say how the order was given; it is countersigned within {{hours}} h, and the biologist reviews it.",
       "BASIS_BIOLOGIST_AUTHORITY": "On the laboratory director’s authority",
       "COVERING": "covering signature: not the physician named",
       "EXPOSURE_CONFIRMED": "Unit given: exposure confirmed",

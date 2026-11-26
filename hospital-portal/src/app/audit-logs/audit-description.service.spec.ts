@@ -439,7 +439,7 @@ describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
         'AUDIT.DESC.O_POSITIVE_RELEASE_DECIDED',
       ],
       [
-        'Emergency O positive release countersigned by a physician: decision d',
+        'Emergency O positive release countersigned: decision d',
         'AUDIT.DESC.O_POSITIVE_RELEASE_COUNTERSIGNED',
       ],
       [

@@ -174,13 +174,25 @@ public final class OPositiveReleaseAuthority {
 
     /**
      * An issued bag is not a transfused one: the flag says « exposed » once the bag is hung, « issued,
-     * administration not confirmed » while it is out, and nothing when it came back unused.
+     * administration not confirmed » while it is out, and nothing when it came back unused. Both facts are about
+     * THIS release (the request it went out against), never about the bag alone: a bag returned unused and later
+     * given to somebody else exposed that other patient, not this one.
      */
-    public static ExposureState exposureState(boolean administered, com.example.hms.enums.BloodUnitStatus unitStatus) {
-        if (administered || unitStatus == com.example.hms.enums.BloodUnitStatus.TRANSFUSED) {
+    public static ExposureState exposureState(boolean administeredOnThisRelease, boolean stillOutOnThisRelease) {
+        if (administeredOnThisRelease) {
             return ExposureState.CONFIRMED;
         }
-        return unitStatus == com.example.hms.enums.BloodUnitStatus.ISSUED ? ExposureState.UNCONFIRMED : ExposureState.NOT_GIVEN;
+        return stillOutOnThisRelease ? ExposureState.UNCONFIRMED : ExposureState.NOT_GIVEN;
+    }
+
+    /**
+     * The bag is still out on THIS release: issued, and held by the request it was released against. A bag that
+     * came back and went out again for another request, or another patient, says nothing more about this one.
+     */
+    public static boolean stillOut(com.example.hms.enums.BloodUnitStatus unitStatus, java.util.UUID heldByRequestId,
+                                   java.util.UUID releaseRequestId) {
+        return unitStatus == com.example.hms.enums.BloodUnitStatus.ISSUED && heldByRequestId != null
+            && heldByRequestId.equals(releaseRequestId);
     }
 
     /**

@@ -1139,6 +1139,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
             positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessmentFor(request, unit));
         // An incompatible release names the authoriser its own rule validated above, whatever the O positive tier says.
+        // An O positive decision names who decided, and nobody while its authority is owed: never the issuer.
         boolean ownAuthoriser = !authorisation.applies() || release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
         UUID answerable = ownAuthoriser ? release.getAuthoriserUserId() : authorisation.answerable();
         log.warn("EMERGENCY {} release of unit {} against request {}",

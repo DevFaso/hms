@@ -766,6 +766,9 @@ class TransfusionEmergencyReleasePostgresIT {
             service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision();
         assertThat(decision.getDecisionBasis()).isEqualTo(com.example.hms.enums.OPositiveDecisionBasis.AUTHORITY_PENDING);
         assertThat(decision.getDecidedByName()).isNull();
+        // Nobody authorised it yet: the technician is its issuer, never its authoriser (V266's constraint, relaxed for this).
+        assertThat(service.getRequest(requestId).getEmergencyReleases().get(0).getAuthoriserName()).isNull();
+        assertThat(service.getRequest(requestId).getEmergencyReleases().get(0).getIssuedByName()).contains("ROLE_LAB_TECHNICIAN");
         assertThat(decision.getCountersignDueAt()).isEqualTo(decision.getIssuedAt().plusHours(12));
         assertThat(filed()).anySatisfy(item -> {
             assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_REVIEW");
@@ -840,6 +843,22 @@ class TransfusionEmergencyReleasePostgresIT {
         sql("UPDATE clinical.blood_units SET status = 'RETURNED', request_id = NULL WHERE id = :id", bagId);
         assertThat(status(bagId)).isEqualTo("RETURNED");
         assertThat(service.getAntibodyStatus(patient).isRhdPositiveExposed()).isFalse();
+        assertThat(service.listPositiveReleases(false)).singleElement()
+            .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
+        // No exposure follow-up is recorded on a bag that came back.
+        actingAs(doctorUser);
+        assertThatThrownBy(() -> service.recordPositiveFollowUp(decisionId,
+            com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build()))
+            .hasMessageContaining("came back unused");
+
+        // The same bag goes out again on another request and is hung there: that says nothing about this release.
+        UUID other = emergencyRequest().getId();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE clinical.blood_units SET status = 'ISSUED', request_id = :r WHERE id = :id")
+                .setParameter("r", other).setParameter("id", bagId).executeUpdate());
+        hang(other, bagId);
+        assertThat(service.getAntibodyStatus(patient).isRhdPositiveExposed())
+            .as("the exposure is the release's, not the bag's").isFalse();
         assertThat(service.listPositiveReleases(false)).singleElement()
             .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
     }

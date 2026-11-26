@@ -172,11 +172,11 @@ public class OPositiveReleaseAuthorityService {
         }
 
         /**
-         * The name the release row carries as answering for it: who decided, and while the authority is owed
-         * the person who released the bag, who is the one who took that step.
+         * The name the release row carries as answering for it: who decided. Null while the authority is owed:
+         * the person who released the bag is its issuer, never its authoriser.
          */
         public UUID answerable() {
-            return decidedBy != null ? decidedBy : issuer;
+            return decidedBy;
         }
     }
 
@@ -450,13 +450,18 @@ public class OPositiveReleaseAuthorityService {
         if (!assignmentRepository.existsActiveWitness(caller, hospitalId, roles)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.countersign.physicianOnly"));
         }
+        if (decision.getRiskTier() == OPositiveRiskTier.KNOWN_ANTIBODY && Objects.equals(caller, decision.getBiologistUserId())) {
+            // A physician and a biologist together are two people: the biologist of this release, who may also
+            // hold a physician's role, does not sign the physician's part.
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.countersign.notBiologist"));
+        }
         decision.setCountersignedByUserId(caller);
         decision.setCountersignedAt(LocalDateTime.now(clock));
         decisionRepository.save(decision);
         resolveItems(decision.getId(), OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE,
             OPositiveReleaseNotices.OVERDUE_REFERENCE_TYPE);
         auditAfterCommit(AuditEventType.O_POSITIVE_RELEASE_COUNTERSIGNED, decision, caller,
-            "Emergency O positive release countersigned by a physician: decision " + decision.getId());
+            "Emergency O positive release countersigned: decision " + decision.getId());
         return toDto(List.of(decision)).get(0);
     }
 
@@ -494,6 +499,10 @@ public class OPositiveReleaseAuthorityService {
         if (caller == null || !assignmentRepository.existsActiveWitness(caller, hospitalId,
                 OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.followUp.physicianOnly"));
+        }
+        if (exposureStateOf(decision, decision.getRelease().getBloodUnit()) == ExposureState.NOT_GIVEN) {
+            // The bag came back unused: nobody was exposed, and there is nothing to decide or to tell.
+            throw new FieldBusinessException("decisionId", "transfusion.oPositive.followUp.notGiven");
         }
         boolean informs = Boolean.TRUE.equals(request.getPatientInformed()) && decision.getPatientInformedAt() == null;
         boolean decides = request.getAntiDDecision() != null;
@@ -713,8 +722,10 @@ public class OPositiveReleaseAuthorityService {
     }
 
     private ExposureState exposureStateOf(OPositiveReleaseDecision decision, BloodUnit unit) {
-        boolean administered = decisionRepository.countAdministrations(decision.getBloodUnitId()) > 0;
-        return OPositiveReleaseAuthority.exposureState(administered, unit != null ? unit.getStatus() : null);
+        boolean administered = decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId()) > 0;
+        UUID heldBy = unit != null && unit.getRequest() != null ? unit.getRequest().getId() : null;
+        return OPositiveReleaseAuthority.exposureState(administered,
+            OPositiveReleaseAuthority.stillOut(unit != null ? unit.getStatus() : null, heldBy, decision.getRequestId()));
     }
 
     /**
@@ -732,7 +743,8 @@ public class OPositiveReleaseAuthorityService {
         RhdExposure unconfirmed = null;
         List<UUID> sources = new ArrayList<>();
         for (OPositiveReleaseDecisionRepository.ExposureRow row : decisionRepository.findExposures(patientId)) {
-            ExposureState state = OPositiveReleaseAuthority.exposureState(row.getAdministrations() > 0, row.getUnitStatus());
+            ExposureState state = OPositiveReleaseAuthority.exposureState(row.getAdministrations() > 0,
+                OPositiveReleaseAuthority.stillOut(row.getUnitStatus(), row.getUnitRequestId(), row.getRequestId()));
             if (state == ExposureState.NOT_GIVEN) {
                 continue;
             }

@@ -1931,7 +1931,7 @@
       "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerta de aloinmunización de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "CROSS_HOSPITAL_RHD_EXPOSURE_FLAG": "Indicación de exposición a RhD positivo de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "O_POSITIVE_RELEASE_DECIDED": "Decisión de entrega de urgencia de O positivo registrada para la unidad {{unit}}, solicitud {{request}}",
-      "O_POSITIVE_RELEASE_COUNTERSIGNED": "Entrega de urgencia de O positivo contrafirmada por un médico (decisión {{decision}})",
+      "O_POSITIVE_RELEASE_COUNTERSIGNED": "Entrega de urgencia de O positivo contrafirmada (decisión {{decision}})",
       "O_POSITIVE_RELEASE_REVIEWED": "Entrega de urgencia de O positivo revisada por el biólogo (decisión {{decision}})",
       "O_POSITIVE_FOLLOW_UP_RECORDED": "Seguimiento de la exposición a RhD positivo registrado (decisión {{decision}})",
       "O_POSITIVE_COUNTERSIGN_OVERDUE": "Contrafirma de una entrega de urgencia de O positivo atrasada, comunicada al director del laboratorio (decisión {{decision}})",
@@ -13617,6 +13617,7 @@
   },
   "TRANSFUSION": {
     "OPOS": {
+      "INCOMPATIBLE_HINT": "O RhD positivo para un paciente de riesgo: esta entrega exige el médico o el director del laboratorio indicado arriba, distinto de usted. Indique cómo se dio la orden; se contrafirma en {{hours}} h y el biólogo la revisa.",
       "BASIS_BIOLOGIST_AUTHORITY": "Bajo la autoridad del director del laboratorio",
       "COVERING": "firma de cobertura: otro médico que el designado",
       "EXPOSURE_CONFIRMED": "Unidad transfundida: exposición confirmada",

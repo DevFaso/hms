@@ -8,6 +8,7 @@
 --    the sex and age of the patient then, who decided, the verbal order and its countersignature, the review by
 --    the biologist and the follow-up of an RhD positive exposure. review_note and follow_up_note are encrypted
 --    by the converter of the entity, hence TEXT.
+-- 3. clinical.emergency_blood_releases (V266): the authoriser of an O positive decision may be owed.
 -- Releases before this table have no row: there is no decision to backfill.
 -- Plain statements, no DO block. Idempotent.
 
@@ -118,3 +119,11 @@ CREATE INDEX IF NOT EXISTS idx_o_positive_decision_notices_owed
 CREATE INDEX IF NOT EXISTS idx_o_positive_decision_countersign_due
     ON clinical.o_positive_release_decisions (countersign_due_at)
     WHERE countersigned_at IS NULL AND countersign_escalated_at IS NULL;
+
+-- 3. An O positive decision released with no physician reachable names nobody as authorising it (the decision row
+--    says the authority is owed): V266 required a name for every documented release. A serologically incompatible
+--    release still requires one.
+ALTER TABLE clinical.emergency_blood_releases DROP CONSTRAINT IF EXISTS ck_emergency_release_documented;
+ALTER TABLE clinical.emergency_blood_releases ADD CONSTRAINT ck_emergency_release_documented
+    CHECK (release_type = 'UNCROSSMATCHED'
+        OR (reason IS NOT NULL AND (authoriser_user_id IS NOT NULL OR release_type = 'O_POSITIVE_DECISION')));

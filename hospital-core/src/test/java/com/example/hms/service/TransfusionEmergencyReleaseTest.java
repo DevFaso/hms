@@ -1308,8 +1308,8 @@ class TransfusionEmergencyReleaseTest {
         assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
         assertThat(rows).singleElement().satisfies(row -> {
             assertThat(row.getReleaseType()).isEqualTo(EmergencyReleaseType.O_POSITIVE_DECISION);
-            // The release row names who answers for the step taken; the decision row says no physician did.
-            assertThat(row.getAuthoriser().getId()).isEqualTo(issuer);
+            // Nobody authorised it yet: the technician is its issuer, never its authoriser.
+            assertThat(row.getAuthoriser()).isNull();
             assertThat(row.getIssuedBy().getId()).isEqualTo(issuer);
         });
         assertThat(positive.decisions).singleElement().satisfies(decision -> {

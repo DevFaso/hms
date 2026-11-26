@@ -623,10 +623,55 @@ class OPositiveReleaseAuthorityServiceTest {
     void theTasksAlwaysHaveSomebodyWhoCanDoThem() {
         roles.put(requester, SecurityConstants.ROLE_MIDWIFE);
         release(request(), nobodyReachable(), null, false);
+        // The countersignature of a high-risk release may be a physician's or the laboratory director's: all are asked.
         assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE))
-            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, otherDoctor);
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, otherDoctor, director);
+        // The anti-D decision is a physician's.
         assertThat(items(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, otherDoctor);
+    }
+
+    @Test
+    @DisplayName("a notice with nobody who can act on it keeps the row owed: the director is told now, and the rest is delivered when somebody can")
+    void aNoticeWithNobodyKeepsTheRowOwed() {
+        roles.put(requester, SecurityConstants.ROLE_MIDWIFE);
+        roles.remove(doctor);
+        roles.remove(otherDoctor);
+        OPositiveReleaseDecision decision = release(request(), nobodyReachable(), null, false);
+
+        // No physician at the hospital tonight: the director reviews and is asked to sign; the follow-up has nobody.
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactly(director);
+        assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactly(director);
+        assertThat(items(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE)).isEmpty();
+        assertThat(decision.getNoticesFiledAt()).as("not everything was delivered: still owed").isNull();
+        assertThat(fixture.notices.deliver(decision.getId())).isZero();
+
+        // A physician is back: the sweep delivers the follow-up, and the row is settled.
+        roles.put(doctor, SecurityConstants.ROLE_DOCTOR);
+        assertThat(fixture.notices.deliver(decision.getId())).isPositive();
+        assertThat(decision.getNoticesFiledAt()).isEqualTo(NOW);
+        assertThat(items(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactly(doctor);
+    }
+
+    @Test
+    @DisplayName("what was done while the delivery was down is not asked again when it comes back")
+    void aDelayedDeliveryDoesNotRecreateDoneWork() {
+        when(fixture.inBasket.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        assertThat(decision.getNoticesFiledAt()).isNull();
+        // From the queue, meanwhile: the director reviews, the physician countersigns.
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        service.review(decision.getId(), hospitalId, null);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        service.countersign(decision.getId(), hospitalId);
+
+        org.mockito.Mockito.reset(fixture.inBasket);
+        assertThat(fixture.notices.deliver(decision.getId())).isEqualTo(2);
+        assertThat(items()).extracting(CreateInBasketItemRequest::getReferenceType)
+            .containsOnly(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
     }
 
     // ── Countersignature ────────────────────────────────────────────────
@@ -673,6 +718,27 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(service.countersign(antibody, hospitalId).getCountersignedByName()).isNotBlank();
     }
 
+    @Test
+    @DisplayName("known antibody: the biologist of the release, even holding a physician's role too, does not sign the physician's part")
+    void theBiologistDoesNotSignThePhysiciansPart() {
+        man(40);
+        // The laboratory director is also a physician here.
+        when(assignmentRepository.existsActiveWitness(eq(director), eq(hospitalId),
+            eq(com.example.hms.service.support.OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES))).thenReturn(true);
+        EmergencyReleaseRequestDTO input = nobodyReachable();
+        input.setBiologistUserId(director);
+        OPositiveReleaseDecision decision = release(request(), input, null, true);
+        assertThat(decision.getDecisionBasis()).as("the emergency issue still succeeds").isEqualTo(OPositiveDecisionBasis.AUTHORITY_PENDING);
+        assertThat(decision.getBiologistUserId()).isEqualTo(director);
+
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        assertThatThrownBy(() -> service.countersign(decision.getId(), hospitalId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class).hasMessageContaining("biologist of this release");
+        assertThat(decision.getCountersignedAt()).as("the independent signature stays owed").isNull();
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        assertThat(service.countersign(decision.getId(), hospitalId).getCountersignedAt()).isEqualTo(NOW);
+    }
+
     // ── Review ──────────────────────────────────────────────────────────
 
     @Test
@@ -697,6 +763,8 @@ class OPositiveReleaseAuthorityServiceTest {
     @DisplayName("the follow-up stays open until a physician has decided on anti-D or exchange AND the patient was told")
     void followUp() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        decision.getRelease().getBloodUnit().setRequest(decision.getRelease().getRequest());
         UUID id = decision.getId();
         OPositiveFollowUpRequestDTO empty = new OPositiveFollowUpRequestDTO();
         OPositiveFollowUpRequestDTO decides = OPositiveFollowUpRequestDTO.builder().antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build();
@@ -746,14 +814,19 @@ class OPositiveReleaseAuthorityServiceTest {
         org.mockito.Mockito.verifyNoMoreInteractions(fixture.decisionRepository);
     }
 
+    /** One release as the flag reads it: what became of the bag ON THAT RELEASE. */
     private static com.example.hms.repository.OPositiveReleaseDecisionRepository.ExposureRow exposure(
-            LocalDateTime issuedAt, UUID hospital, String name, com.example.hms.enums.BloodUnitStatus status, long hung) {
+            LocalDateTime issuedAt, UUID hospital, com.example.hms.enums.BloodUnitStatus status, boolean heldByItsRequest,
+            long hungOnItsRequest) {
+        UUID releasedAgainst = UUID.randomUUID();
         var row = org.mockito.Mockito.mock(com.example.hms.repository.OPositiveReleaseDecisionRepository.ExposureRow.class);
         when(row.getIssuedAt()).thenReturn(issuedAt);
         when(row.getHospitalId()).thenReturn(hospital);
-        when(row.getHospitalName()).thenReturn(name);
+        when(row.getHospitalName()).thenReturn("Clinique A");
+        when(row.getRequestId()).thenReturn(releasedAgainst);
         when(row.getUnitStatus()).thenReturn(status);
-        when(row.getAdministrations()).thenReturn(hung);
+        when(row.getUnitRequestId()).thenReturn(heldByItsRequest ? releasedAgainst : UUID.randomUUID());
+        when(row.getAdministrations()).thenReturn(hungOnItsRequest);
         return row;
     }
 
@@ -762,9 +835,9 @@ class OPositiveReleaseAuthorityServiceTest {
     void theFlagSaysWhatBecameOfTheBag() {
         UUID elsewhere = UUID.randomUUID();
         UUID acting = UUID.randomUUID();
-        var returned = exposure(NOW, elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.RETURNED, 0);
-        var stillOut = exposure(NOW.minusDays(1), elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.ISSUED, 0);
-        var given = exposure(NOW.minusDays(9), elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.DISCARDED, 1);
+        var returned = exposure(NOW, elsewhere, com.example.hms.enums.BloodUnitStatus.RETURNED, false, 0);
+        var stillOut = exposure(NOW.minusDays(1), elsewhere, com.example.hms.enums.BloodUnitStatus.ISSUED, true, 0);
+        var given = exposure(NOW.minusDays(9), elsewhere, com.example.hms.enums.BloodUnitStatus.DISCARDED, false, 1);
 
         // A bag issued and returned unused exposed nobody: no lifelong statement rests on it.
         when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(returned));
@@ -789,17 +862,48 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
+    @DisplayName("the exposure is the release's, not the bag's: a bag returned unused and then given to somebody else exposed that other patient only")
+    void theExposureIsTheReleasesNotTheBags() {
+        UUID acting = UUID.randomUUID();
+        // Patient A's bag came back and went out again on another request (another patient): issued, but not on A's.
+        var reissued = exposure(NOW, acting, com.example.hms.enums.BloodUnitStatus.ISSUED, false, 0);
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(reissued));
+        assertThat(service.exposureShownAt(patient.getId(), acting)).as("out for somebody else").isNull();
+
+        // It is then hung for that other patient: transfused, with no administration on A's request.
+        var givenToAnother = exposure(NOW, acting, com.example.hms.enums.BloodUnitStatus.TRANSFUSED, false, 0);
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(givenToAnother));
+        assertThat(service.exposureShownAt(patient.getId(), acting)).as("given to somebody else").isNull();
+
+        // The queue reads the same two facts, for this release's request only.
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        BloodUnit unit = decision.getRelease().getBloodUnit();
+        unit.setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        TransfusionRequest another = request();
+        unit.setRequest(another);
+        when(fixture.decisionRepository.countAdministrations(unit.getId(), another.getId())).thenReturn(1L);
+        when(fixture.decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId)).thenReturn(List.of(decision));
+        assertThat(service.list(hospitalId, false)).singleElement()
+            .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        OPositiveFollowUpRequestDTO informs = OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build();
+        assertThatThrownBy(() -> service.recordFollowUp(decision.getId(), hospitalId, informs))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("came back unused");
+    }
+
+    @Test
     @DisplayName("the queue says what became of each bag, and a covering signature is shown as one")
     void theQueueSaysWhatIsTrue() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
         decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        decision.getRelease().getBloodUnit().setRequest(decision.getRelease().getRequest());
         when(fixture.decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId)).thenReturn(List.of(decision));
         assertThat(service.list(hospitalId, true)).singleElement().satisfies(row -> {
             assertThat(row.getExposureState()).isEqualTo("UNCONFIRMED");
             assertThat(row.isCountersignCovering()).isFalse();
         });
 
-        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId())).thenReturn(1L);
+        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId())).thenReturn(1L);
         when(roleValidator.getCurrentUserId()).thenReturn(otherDoctor);
         assertThat(service.countersign(decision.getId(), hospitalId)).satisfies(row -> {
             assertThat(row.getExposureState()).isEqualTo("CONFIRMED");
@@ -809,8 +913,9 @@ class OPositiveReleaseAuthorityServiceTest {
         // Reviewed and countersigned; the bag came back unused: nothing is owed on it any more.
         when(roleValidator.getCurrentUserId()).thenReturn(director);
         service.review(decision.getId(), hospitalId, null);
-        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId())).thenReturn(0L);
+        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId())).thenReturn(0L);
         decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.RETURNED);
+        decision.getRelease().getBloodUnit().setRequest(null);
         assertThat(service.list(hospitalId, false)).singleElement()
             .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
         assertThat(service.list(hospitalId, true)).isEmpty();

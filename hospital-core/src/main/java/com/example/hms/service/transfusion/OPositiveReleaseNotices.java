@@ -99,9 +99,10 @@ public class OPositiveReleaseNotices {
      * Files the notices of one release and marks the row, in one transaction of its own: the review item of
      * every biologist; the countersignature task of the physician named; the follow-up task of the exposure for
      * the clinicians of the request. With no biologist at the hospital the review goes to the clinicians instead
-     * of nowhere. With nobody at all to tell, the row stays owed, loudly.
+     * of nowhere. What is already done (a review made from the queue meanwhile) is not asked again. When one of
+     * the notices has nobody who can act on it, what can be filed is filed and the row stays owed, loudly.
      *
-     * @return the number of items filed; 0 when they were filed before, or nobody could be told
+     * @return the number of items filed when the row is now settled; 0 when it was settled before, or stays owed
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int deliver(UUID decisionId) {
@@ -124,17 +125,16 @@ public class OPositiveReleaseNotices {
         if (requester != null && requester.getUser() != null && !Objects.equals(requester.getUser().getId(), issuer)) {
             clinicians.add(requester.getUser().getId());
         }
+        // Each obligation is filed for whoever can do it NOW; the row is marked only when every one of them had
+        // somebody. Filing is idempotent (one item a reference and reader), so a row left owed is tried again.
+        boolean complete = true;
         List<UUID> biologists = biologists(hospitalId);
         Collection<UUID> reviewers = biologists;
         if (biologists.isEmpty()) {
+            // No biologist: the clinicians of the request who still hold a role here, else the hospital's.
             log.warn("O positive release decision {} has no biologist to review it at hospital {}: its clinicians are told",
                 decision.getId(), hospitalId);
-            reviewers = clinicians;
-        }
-        if (reviewers.isEmpty()) {
-            log.error("O positive release decision {} has nobody to review it at hospital {}: its notices stay owed",
-                decision.getId(), hospitalId);
-            return 0;
+            reviewers = whoCanAct(clinicians, hospitalId, OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES, issuer);
         }
         UUID encounterId = request.getEncounter() != null ? request.getEncounter().getId() : null;
         List<CreateInBasketItemRequest> items = new ArrayList<>();
@@ -154,7 +154,11 @@ public class OPositiveReleaseNotices {
             review.setBodyKey(REVIEW_ROUTINE_BODY_KEY);
         }
         Object[] reviewArgs = {unit.getUnitNumber(), patientName, decider, decision.getReviewDeadlineHours()};
-        reviewers.forEach(reviewer -> items.add(copyFor(reviewer, review, unitArg, reviewArgs)));
+        // What is already done is not asked again: a review made from the queue before a delayed delivery.
+        if (decision.reviewOwed()) {
+            complete &= !reviewers.isEmpty();
+            reviewers.forEach(reviewer -> items.add(copyFor(reviewer, review, unitArg, reviewArgs)));
+        }
 
         if (decision.countersignOwed()) {
             CreateInBasketItemRequest countersign = notice(decision, patient, encounterId, COUNTERSIGN_REFERENCE_TYPE,
@@ -166,10 +170,11 @@ public class OPositiveReleaseNotices {
             // only a physician can give is asked of physicians, the hospital's when the request names none.
             Set<String> signers = decision.getRiskTier() == OPositiveRiskTier.KNOWN_ANTIBODY
                 ? OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES : OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES;
-            whoCanAct(clinicians, hospitalId, signers, issuer)
-                .forEach(physician -> items.add(copyFor(physician, countersign, unitArg, args)));
+            Collection<UUID> askedToSign = whoCanAct(clinicians, hospitalId, signers, issuer);
+            complete &= !askedToSign.isEmpty();
+            askedToSign.forEach(physician -> items.add(copyFor(physician, countersign, unitArg, args)));
         }
-        if (decision.isFollowUpRequired()) {
+        if (decision.followUpOwed()) {
             CreateInBasketItemRequest followUp = notice(decision, patient, encounterId, FOLLOW_UP_REFERENCE_TYPE,
                 InBasketPriority.URGENT);
             followUp.setTitleKey(FOLLOW_UP_TITLE_KEY);
@@ -177,20 +182,26 @@ public class OPositiveReleaseNotices {
             Object[] titleArgs = {patientName};
             Object[] args = {patientName, unit.getUnitNumber(), DisplayDates.date(decision.getAntibodyScreenDueFrom()),
                 DisplayDates.date(decision.getAntibodyScreenDueBy())};
-            whoCanAct(clinicians, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES, issuer)
-                .forEach(clinician -> items.add(copyFor(clinician, followUp, titleArgs, args)));
+            Collection<UUID> followers = whoCanAct(clinicians, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES, issuer);
+            complete &= !followers.isEmpty();
+            followers.forEach(clinician -> items.add(copyFor(clinician, followUp, titleArgs, args)));
         }
-        // In this transaction: an item that cannot be filed undoes the mark below, and the sweep delivers again.
+        // In this transaction: an item that cannot be filed undoes everything here, and the sweep delivers again.
         items.forEach(inBasketService::createItem);
+        if (!complete) {
+            log.error("O positive release decision {} at hospital {}: a notice has nobody who can act on it; "
+                + "what could be filed was filed, the rest stays owed", decision.getId(), hospitalId);
+            return 0;
+        }
         decision.setNoticesFiledAt(LocalDateTime.now(clock));
         decisionRepository.save(decision);
         return items.size();
     }
 
     /**
-     * Those of the request's clinicians who hold a role that lets them do the task; when none does (a midwife's
-     * request, nobody named), every physician of the hospital, so the task is never filed for nobody. The issuer
-     * is never asked to sign their own release.
+     * Those of the request's clinicians who hold, now and at this hospital, a role that lets them do the task;
+     * when none does (a midwife's request, nobody named, somebody who left), everyone at the hospital who holds
+     * such a role, so the task is never filed for nobody. The issuer is never asked to sign their own release.
      */
     private Collection<UUID> whoCanAct(Set<UUID> clinicians, UUID hospitalId, Set<String> roles, UUID issuer) {
         List<UUID> able = clinicians.stream()
@@ -198,8 +209,7 @@ public class OPositiveReleaseNotices {
         if (!able.isEmpty()) {
             return able;
         }
-        return assignmentRepository
-            .findLiveUsersAtHospitalWithRoleCodes(hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES)
+        return assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, roles)
             .stream().map(User::getId).filter(id -> !Objects.equals(id, issuer)).distinct().toList();
     }
 

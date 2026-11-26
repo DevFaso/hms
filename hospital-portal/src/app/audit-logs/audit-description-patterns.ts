@@ -631,7 +631,7 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.O_POSITIVE_RELEASE_COUNTERSIGNED',
-    re: /^Emergency O positive release countersigned by a physician: decision (\S+)$/,
+    re: /^Emergency O positive release countersigned: decision (\S+)$/,
     params: ['decision'],
   },
   {
