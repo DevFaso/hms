@@ -31,4 +31,6 @@ public class EmergencyBloodReleaseResponseDTO {
     private String negativeUnitsShown;
     /** O positive red cells: the tier, who decided, and what is still owed (V380). Null for any other bag. */
     private OPositiveReleaseDecisionDTO positiveDecision;
+    /** A release despite an incompatible crossmatch: its authority, the bag chosen and the monitoring (V381). */
+    private IncompatibleReleaseDecisionDTO incompatibleDecision;
 }

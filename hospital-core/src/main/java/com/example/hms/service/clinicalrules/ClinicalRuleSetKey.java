@@ -55,6 +55,8 @@ public enum ClinicalRuleSetKey {
     DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING),
     /** Owner decision 2026-11-25 (V380): who decides an emergency O RhD positive release, by patient tier. */
     EMERGENCY_O_POSITIVE_AUTHORITY(ClinicalRuleArea.LAB),
+    /** Owner decision 2026-11-26 (V381): who authorises a release despite an incompatible crossmatch, and the fallback. */
+    INCOMPATIBLE_RELEASE_AUTHORITY(ClinicalRuleArea.LAB),
     /** QA D3862 (r77): who acknowledges an adult HIGH NEWS2, and who the reminders reach. */
     NEWS2_ESCALATION(ClinicalRuleArea.VITALS);
 

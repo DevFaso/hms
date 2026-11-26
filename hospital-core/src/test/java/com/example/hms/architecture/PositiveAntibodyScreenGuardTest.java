@@ -145,8 +145,14 @@ class PositiveAntibodyScreenGuardTest {
         }
         // QA D3901 (r77): the patient record and the safety strip show the flag too, through one read-only call of
         // the accounted status read, made inside the read-only transaction of the chart read that shows it.
+        // V381: the decision row of an incompatible release keeps whether the permanent flag stood then, through one
+        // read (alloImmunised) made inside the release transaction of the transfusion service; it declares none.
         assertThat(callers).containsExactlyInAnyOrder("TransfusionServiceImpl.java",
-            "PatientBloodGroupStatusService.java");
+            "PatientBloodGroupStatusService.java", "IncompatibleReleaseDecisions.java");
+        String incompatible = code(MAIN.resolve("service/transfusion/IncompatibleReleaseDecisions.java"));
+        assertThat(incompatible).doesNotContain("@Transactional");
+        assertThat(incompatible.split("antibodyScreen\\.", -1)).as("one read of the flag, nothing else of the rule").hasSize(2);
+        assertThat(incompatible).contains("antibodyScreen.alloImmunised(request.getPatient().getId())");
         String record = code(MAIN.resolve("service/transfusion/PatientBloodGroupStatusService.java"));
         assertThat(record).contains("screens.status(patient.getId(), hospitalId)")
             .doesNotContainPattern("screens\\.(?!status\\()\\w+\\(");

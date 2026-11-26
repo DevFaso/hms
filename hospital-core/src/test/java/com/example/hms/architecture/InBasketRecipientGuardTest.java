@@ -65,6 +65,12 @@ class InBasketRecipientGuardTest {
         // V380: an emergency O positive release, for the hospital's biologists (the review, the overdue
         // countersignature), the physician named and the clinician who asked for the blood (the
         // countersignature, the follow-up of the exposure).
+        // V381: a release despite an incompatible crossmatch, for whoever may countersign it (a physician, the
+        // laboratory director), whoever watches the patient afterwards, and the laboratory directors.
+        Map.entry("IncompatibleReleaseNotices.java", union(
+            codes(com.example.hms.service.support.IncompatibleReleaseAuthority.AUTHORISER_ROLE_CODES),
+            codes(com.example.hms.service.transfusion.IncompatibleReleaseNotices.MONITOR_ROLE_CODES),
+            codes(com.example.hms.service.transfusion.IncompatibleReleaseNotices.DIRECTOR_ROLE_CODES))),
         Map.entry("OPositiveReleaseNotices.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             codes(com.example.hms.service.support.OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES),

@@ -1,0 +1,406 @@
+<section class="opos" data-testid="incompatible-releases">
+  <!-- ══ The hospital's fallback setting ══ -->
+  @if (protocol(); as p) {
+    <div class="opos-protocol" [class.inactive]="!p.fallbackEnabled" data-testid="incompat-setting">
+      <div class="opos-protocol-head">
+        <h3>{{ 'TRANSFUSION.INCOMPAT.SETTING_TITLE' | translate }}</h3>
+        <span
+          class="opos-chip"
+          [class.chip-warn]="p.fallbackEnabled"
+          [class.chip-ok]="!p.fallbackEnabled"
+          data-testid="incompat-setting-state"
+        >
+          {{
+            (p.fallbackEnabled
+              ? 'TRANSFUSION.INCOMPAT.SETTING_ON'
+              : 'TRANSFUSION.INCOMPAT.SETTING_OFF'
+            ) | translate
+          }}
+        </span>
+      </div>
+      @if (!editingProtocol()) {
+        <p class="opos-note" role="status">
+          {{
+            (p.fallbackEnabled
+              ? 'TRANSFUSION.INCOMPAT.SETTING_HINT_ON'
+              : 'TRANSFUSION.INCOMPAT.SETTING_HINT_OFF'
+            ) | translate: { hours: p.countersignDeadlineHours }
+          }}
+        </p>
+        @if (p.fallbackEnabled) {
+          <p class="opos-note" data-testid="incompat-setting-roles">
+            {{ 'TRANSFUSION.INCOMPAT.SETTING_ROLES' | translate }}{{ 'COMMON.COLON' | translate }}
+            @for (role of p.declarerRoles; track role; let last = $last) {
+              {{ 'TRANSFUSION.INCOMPAT.ROLE_' + role | translate }}{{ last ? '' : ', ' }}
+            }
+          </p>
+        }
+        <p class="opos-note">{{ 'TRANSFUSION.INCOMPAT.PROVISIONAL_NOTE' | translate }}</p>
+        @if (canSetProtocol) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="incompat-edit-setting"
+            (click)="editProtocol()"
+          >
+            {{ 'TRANSFUSION.INCOMPAT.EDIT_SETTING' | translate }}
+          </button>
+        }
+      } @else {
+        <div class="opos-form">
+          <label class="checkbox-field">
+            <input
+              type="checkbox"
+              id="incompat-enabled"
+              data-testid="incompat-enabled"
+              [(ngModel)]="draftEnabled"
+            />
+            {{ 'TRANSFUSION.INCOMPAT.FIELD_ENABLED' | translate }}
+          </label>
+          <fieldset class="field">
+            <legend>{{ 'TRANSFUSION.INCOMPAT.SETTING_ROLES' | translate }}</legend>
+            @for (role of p.allowedDeclarerRoles ?? []; track role) {
+              <label class="checkbox-field" [for]="'incompat-role-' + role">
+                <input
+                  type="checkbox"
+                  [id]="'incompat-role-' + role"
+                  [(ngModel)]="draftRoles[role]"
+                />
+                {{ 'TRANSFUSION.INCOMPAT.ROLE_' + role | translate }}
+              </label>
+            }
+          </fieldset>
+          <div class="opos-actions">
+            <button type="button" class="btn-secondary" (click)="cancelProtocol()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="incompat-save-setting"
+              [disabled]="savingProtocol() || draftRoleList().length === 0"
+              (click)="saveProtocol()"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ══ The releases ══ -->
+  <div class="opos-list-head">
+    <h3>{{ 'TRANSFUSION.INCOMPAT.LIST_TITLE' | translate }}</h3>
+    <div
+      class="opos-toggle"
+      role="group"
+      [attr.aria-label]="'TRANSFUSION.INCOMPAT.LIST_TITLE' | translate"
+    >
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="openOnly()"
+        [attr.aria-pressed]="openOnly()"
+        (click)="setOpenOnly(true)"
+      >
+        {{ 'TRANSFUSION.INCOMPAT.FILTER_OPEN' | translate }}
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="!openOnly()"
+        [attr.aria-pressed]="!openOnly()"
+        (click)="setOpenOnly(false)"
+      >
+        {{ 'TRANSFUSION.INCOMPAT.FILTER_ALL' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (!loading() && !loadFailed() && releases().length === 0) {
+    <div class="empty-state" data-testid="incompat-empty">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">task_alt</span>
+      <h3>{{ 'TRANSFUSION.INCOMPAT.EMPTY' | translate }}</h3>
+      <p>{{ 'TRANSFUSION.INCOMPAT.EMPTY_HINT' | translate }}</p>
+    </div>
+  }
+
+  @for (r of releases(); track r.id) {
+    <article class="opos-card" [class.tier-high]="r.fallback" data-testid="incompat-card">
+      <header class="opos-card-head">
+        <div>
+          <strong class="mono">{{ r.unitNumber || '—' }}</strong>
+          <span class="opos-patient">{{ r.patientName || '—' }}</span>
+        </div>
+        <span
+          class="opos-chip"
+          [class.chip-warn]="!r.fallback"
+          [class.chip-danger]="r.fallback"
+          data-testid="incompat-basis"
+        >
+          {{ 'TRANSFUSION.INCOMPAT.BASIS_' + r.decisionBasis | translate }}
+        </span>
+      </header>
+
+      <dl class="opos-grid">
+        <div>
+          <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_AT' | translate }}</dt>
+          <dd>{{ r.issuedAt | serverTime | date: 'short' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_BY' | translate }}</dt>
+          <dd>{{ r.issuedByName || '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.AUTHORITY' | translate }}</dt>
+          <dd data-testid="incompat-authority">
+            {{ 'TRANSFUSION.INCOMPAT.TIMING_' + r.authorityTiming | translate }}
+            @if (r.authoriserName) {
+              — {{ r.authoriserName }}
+            }
+            @if (r.fallback) {
+              <span class="warn-inline">
+                {{
+                  'TRANSFUSION.INCOMPAT.DECLARED_BY'
+                    | translate
+                      : {
+                          name: r.issuedByName || '—',
+                          role: ('TRANSFUSION.INCOMPAT.ROLE_' + r.declarerRole | translate),
+                        }
+                }}
+              </span>
+            }
+          </dd>
+        </div>
+        @if (r.unreachableReason) {
+          <div>
+            <dt>{{ 'TRANSFUSION.INCOMPAT.UNREACHABLE_REASON' | translate }}</dt>
+            <dd data-testid="incompat-unreachable-reason">{{ r.unreachableReason }}</dd>
+          </div>
+        }
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.ANTIBODY' | translate }}</dt>
+          <dd>
+            {{ 'TRANSFUSION.INCOMPAT.ANTIBODY_' + r.antibodyStatus | translate }}
+            @if (r.antibodyDetail) {
+              ({{ r.antibodyDetail }})
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.CROSSMATCH_FINDING' | translate }}</dt>
+          <dd>{{ r.crossmatchFinding || '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.GROUPS' | translate }}</dt>
+          <dd>
+            @if (r.recipientAbo) {
+              {{ r.recipientAbo }}{{ r.recipientRh === 'POSITIVE' ? '+' : '−' }}
+            } @else {
+              {{ 'TRANSFUSION.INCOMPAT.GROUP_UNKNOWN' | translate }}
+            }
+            / {{ r.unitAbo }}{{ r.unitRh === 'POSITIVE' ? '+' : '−' }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.UNIT_CHOSEN' | translate }}</dt>
+          <dd data-testid="incompat-choice">
+            {{
+              (r.leastIncompatible
+                ? 'TRANSFUSION.INCOMPAT.CHOSEN_LEAST'
+                : 'TRANSFUSION.INCOMPAT.CHOSEN_NOT_LEAST'
+              ) | translate: { count: r.candidatesConsidered }
+            }}
+            ·
+            {{
+              (r.rhdMatched
+                ? 'TRANSFUSION.INCOMPAT.FACT_RHD_MATCHED'
+                : 'TRANSFUSION.INCOMPAT.FACT_RHD_MISMATCH'
+              ) | translate
+            }}
+            ·
+            {{
+              (r.rhKellMatched
+                ? 'TRANSFUSION.INCOMPAT.FACT_KELL_MATCHED'
+                : 'TRANSFUSION.INCOMPAT.FACT_KELL_NOT_RECORDED'
+              ) | translate
+            }}
+            ·
+            {{
+              (r.antigenNegative
+                ? 'TRANSFUSION.INCOMPAT.FACT_ANTIGEN_NEGATIVE'
+                : 'TRANSFUSION.INCOMPAT.FACT_ANTIGEN_NOT_RECORDED'
+              ) | translate
+            }}
+            — {{ r.unitChoiceReason }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.INCOMPAT.PATIENT_INFORMED' | translate }}</dt>
+          <dd data-testid="incompat-informed">
+            {{ 'TRANSFUSION.INCOMPAT.INFORMED_' + r.patientInformed | translate }}
+            @if (r.patientInformedAt) {
+              ·
+              {{
+                'TRANSFUSION.INCOMPAT.INFORMED_LATER'
+                  | translate
+                    : {
+                        name: r.patientInformedByName || '—',
+                        at: (r.patientInformedAt | serverTime | date: 'short'),
+                      }
+              }}
+            }
+            @if (informOwed(r) && canMonitor) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="incompat-informed-action"
+                [disabled]="busyId() === r.id"
+                (click)="recordInformed(r)"
+              >
+                {{ 'TRANSFUSION.INCOMPAT.INFORMED_LATER_ACTION' | translate }}
+              </button>
+            }
+          </dd>
+        </div>
+      </dl>
+
+      <!-- Countersignature: only a release that went out with no physician reachable owes one -->
+      @if (r.countersignDueAt) {
+        <div
+          class="opos-step"
+          [class.done]="r.countersignedAt"
+          [class.overdue]="r.countersignOverdue"
+        >
+          <span class="opos-step-label">{{ 'TRANSFUSION.INCOMPAT.COUNTERSIGN' | translate }}</span>
+          @if (r.countersignedAt) {
+            <span data-testid="incompat-countersigned">
+              {{
+                'TRANSFUSION.INCOMPAT.DONE_BY'
+                  | translate
+                    : {
+                        name: r.countersignedByName || '—',
+                        at: (r.countersignedAt | serverTime | date: 'short'),
+                      }
+              }}
+            </span>
+          } @else {
+            <span data-testid="incompat-countersign-due">
+              {{
+                (r.countersignOverdue
+                  ? 'TRANSFUSION.INCOMPAT.OVERDUE_SINCE'
+                  : 'TRANSFUSION.INCOMPAT.DUE_BY'
+                ) | translate: { at: (r.countersignDueAt | serverTime | date: 'short') }
+              }}
+            </span>
+            @if (canCountersign) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                data-testid="incompat-countersign"
+                [disabled]="busyId() === r.id"
+                (click)="countersign(r)"
+              >
+                {{ 'TRANSFUSION.INCOMPAT.COUNTERSIGN_ACTION' | translate }}
+              </button>
+            }
+          }
+        </div>
+      }
+
+      <!-- Monitoring and the haemovigilance outcome -->
+      <div class="opos-step" [class.done]="!monitoringOwed(r)" data-testid="incompat-monitoring">
+        <span class="opos-step-label">{{ 'TRANSFUSION.INCOMPAT.MONITORING' | translate }}</span>
+        @if (r.monitoringOutcome) {
+          <span data-testid="incompat-outcome-done">
+            {{ 'TRANSFUSION.INCOMPAT.OUTCOME_' + r.monitoringOutcome | translate }}
+            @if (r.monitoringRecordedByName) {
+              ·
+              {{
+                'TRANSFUSION.INCOMPAT.DONE_BY'
+                  | translate
+                    : {
+                        name: r.monitoringRecordedByName,
+                        at: (r.monitoringRecordedAt | serverTime | date: 'short'),
+                      }
+              }}
+            }
+          </span>
+        }
+        <p class="opos-note">{{ 'TRANSFUSION.INCOMPAT.MONITORING_HINT' | translate }}</p>
+        <ul class="opos-facts" data-testid="incompat-checklist">
+          @for (check of r.monitoringChecklist; track check) {
+            <li>
+              <label class="checkbox-field" [for]="'incompat-check-' + r.id + '-' + check">
+                <input
+                  type="checkbox"
+                  [id]="'incompat-check-' + r.id + '-' + check"
+                  [checked]="isChecked(r, check)"
+                  [disabled]="
+                    !canMonitor || r.monitoringChecksDone.includes(check) || !monitoringOwed(r)
+                  "
+                  (change)="setChecked(r, check, $any($event.target).checked)"
+                />
+                {{ 'TRANSFUSION.INCOMPAT.CHECK_' + check | translate }}
+              </label>
+            </li>
+          }
+        </ul>
+        @if (r.monitoringNote) {
+          <p class="opos-note" data-testid="incompat-note-kept">{{ r.monitoringNote }}</p>
+        }
+        @if (monitoringOwed(r) && canMonitor) {
+          <div class="opos-inline-form">
+            <textarea
+              appFormControl
+              rows="2"
+              maxlength="2000"
+              [id]="'incompat-note-' + r.id"
+              [attr.aria-label]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
+              [placeholder]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
+              [(ngModel)]="notes[r.id]"
+            ></textarea>
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              data-testid="incompat-save-checks"
+              [disabled]="busyId() === r.id || (!hasNewChecks(r) && !(notes[r.id] || '').trim())"
+              (click)="saveChecks(r)"
+            >
+              {{ 'TRANSFUSION.INCOMPAT.SAVE_CHECKS' | translate }}
+            </button>
+          </div>
+          <div class="opos-inline-form">
+            <div class="field">
+              <label [for]="'incompat-outcome-' + r.id">{{
+                'TRANSFUSION.INCOMPAT.OUTCOME' | translate
+              }}</label>
+              <select
+                appFormControl
+                [id]="'incompat-outcome-' + r.id"
+                data-testid="incompat-outcome"
+                [(ngModel)]="outcome[r.id]"
+              >
+                <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                @for (o of outcomes; track o) {
+                  <option [value]="o">{{ 'TRANSFUSION.INCOMPAT.OUTCOME_' + o | translate }}</option>
+                }
+              </select>
+            </div>
+            <button
+              type="button"
+              class="btn-primary btn-sm"
+              data-testid="incompat-record-outcome"
+              [disabled]="busyId() === r.id || !outcome[r.id]"
+              (click)="recordOutcome(r)"
+            >
+              {{ 'TRANSFUSION.INCOMPAT.OUTCOME_ACTION' | translate }}
+            </button>
+          </div>
+          <p class="opos-note">{{ 'TRANSFUSION.INCOMPAT.OUTCOME_HINT' | translate }}</p>
+        }
+      </div>
+    </article>
+  }
+</section>

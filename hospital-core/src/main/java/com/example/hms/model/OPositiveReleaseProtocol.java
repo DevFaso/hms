@@ -61,6 +61,19 @@ public class OPositiveReleaseProtocol extends BaseEntity {
     @Builder.Default
     private int reviewDeadlineHours = 24;
 
+    /**
+     * V381 (rule set INCOMPATIBLE_RELEASE_AUTHORITY): the laboratory director allows a release despite an
+     * incompatible crossmatch when no physician can be reached. Off until switched on.
+     */
+    @Column(name = "incompatible_fallback_enabled", nullable = false)
+    @Builder.Default
+    private boolean incompatibleFallbackEnabled = false;
+
+    /** V381: the roles that may declare that no physician can be reached, comma-separated. Laboratory staff by default. */
+    @Column(name = "incompatible_fallback_declarer_roles", nullable = false, length = 200)
+    @Builder.Default
+    private String incompatibleFallbackDeclarerRoles = "ROLE_LAB_SCIENTIST,ROLE_LAB_TECHNICIAN,ROLE_LAB_MANAGER,ROLE_LAB_DIRECTOR";
+
     @Column(name = "updated_by_user_id")
     private UUID updatedByUserId;
 }

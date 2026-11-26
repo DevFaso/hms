@@ -345,6 +345,11 @@ final class ComputedKeys {
             new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
             new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // V381: the notices of an incompatible release; the keys are the literals set on the item.
+        r.put("com/example/hms/service/transfusion/IncompatibleReleaseNotices.java|titleKey",
+            new Open("read back from the item: the COUNTERSIGN, MONITORING, HAEMOVIGILANCE and OVERDUE title keys, all literal constants"));
+        r.put("com/example/hms/service/transfusion/IncompatibleReleaseNotices.java|bodyKey",
+            new Open("read back from the item: the COUNTERSIGN, MONITORING, HAEMOVIGILANCE (two) and OVERDUE body keys, all literal constants"));
         // V380: the notices of an O positive release; the keys are the literals set on the item (setTitleKey / setBodyKey).
         r.put("com/example/hms/service/transfusion/OPositiveReleaseNotices.java|titleKey",
             new Open("read back from the item: the REVIEW, COUNTERSIGN, FOLLOW_UP and OVERDUE title keys, all literal constants"));

@@ -141,6 +141,25 @@ public interface TransfusionService {
     com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO recordPositiveFollowUp(UUID decisionId,
         com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO request);
 
+    // ── Release despite an incompatible crossmatch (V381) ───────────────
+
+    /** The fallback setting of the acting hospital; off, laboratory staff, when it set nothing. */
+    com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO getIncompatibleProtocol();
+
+    /** The laboratory director of the acting hospital switches the fallback and says who may declare it. */
+    com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO setIncompatibleProtocol(
+        com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO update);
+
+    /** The incompatible releases of the acting hospital: all, or those with something still owed. */
+    java.util.List<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> listIncompatibleReleases(boolean openOnly);
+
+    /** A physician or the laboratory director, who did not issue the bag, takes the decision a fallback left owed. */
+    com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO countersignIncompatibleRelease(UUID decisionId);
+
+    /** The checks done, what the monitoring found, and that the patient was told. */
+    com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO recordIncompatibleMonitoring(UUID decisionId,
+        com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO request);
+
     // ── Bedside ─────────────────────────────────────────────────────────
 
     TransfusionAdministrationResponseDTO startAdministration(TransfusionAdministrationRequestDTO request);
