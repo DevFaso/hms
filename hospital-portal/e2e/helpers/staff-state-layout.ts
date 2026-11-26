@@ -207,6 +207,54 @@ export function registerStaffStateLayoutChecks(): void {
         expect(writes).toEqual(['/api/assignments/' + ASSIGNMENT + '/regenerate-code']);
       });
 
+      test(`directory support eligibility is independent of the displayed role at ${width}`, async ({
+        page,
+      }, testInfo) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await signInAs(page, 'ROLE_SUPER_ADMIN', testInfo.project.use.baseURL as string);
+        await installLocalIconFonts(page);
+        await page.addInitScript(() => localStorage.setItem('lang', 'fr'));
+        const writes: string[] = [];
+        page.on('request', (request) => {
+          if (request.method() !== 'GET' && /\/impersonation(?:\/|$)/.test(request.url()))
+            writes.push(request.url());
+        });
+        await page.route(/\/api\/users(?:\?.*)?$/, (route) =>
+          route.fulfill({
+            json: {
+              content: [false, true].map((eligible, index) => ({
+                id: index === 0 ? SUBJECT : STAFF,
+                username: eligible ? 'demo.ordinary' : 'demo.protected',
+                email: 'synthetic@example.test',
+                firstName: 'Synthetic',
+                lastName: eligible ? 'Ordinary' : 'Protected',
+                active: true,
+                accessActive: true,
+                deleted: false,
+                manageable: true,
+                roleName: 'ROLE_NURSE',
+                roleCount: 1,
+                profileType: 'STAFF',
+                impersonationEligible: eligible,
+              })),
+              number: 0,
+              totalElements: 2,
+              totalPages: 1,
+            },
+          }),
+        );
+        await page.goto('/users');
+        await expect(page.locator('tbody tr')).toHaveCount(2);
+        await expect(page.locator('[data-test="impersonate-demo.protected"]')).toHaveCount(0);
+        await page.locator('[data-test="impersonate-demo.ordinary"]').click();
+        await expect(page.locator('[data-test="impersonate-modal"]')).toBeVisible();
+        expect(writes).toEqual([]);
+        await testInfo.attach(`support-eligibility-${width}`, {
+          body: await page.screenshot({ animations: 'disabled' }),
+          contentType: 'image/png',
+        });
+      });
+
       test(`directory inactive filter uses hospital access at ${width}`, async ({
         page,
       }, testInfo) => {
