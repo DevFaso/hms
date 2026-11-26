@@ -37,6 +37,8 @@ public class NotificationLocalizer {
     private static final String UNIT = "unit";
     /** QA D1710: a calendar day, written the reader's way when read ("13 nov. 2026", "Nov 13, 2026"). */
     private static final String DATE = "date";
+    private static final String DRUG_NAME_EN = "drugNameEn";
+    private static final String DRUG_NAME_DISPLAY = "drugNameDisplay";
 
     private final MessageSource messageSource;
 
@@ -114,13 +116,13 @@ public class NotificationLocalizer {
         String english = com.example.hms.utility.DrugDisplayNames.forReader(item, Locale.ENGLISH);
         String display = com.example.hms.utility.DrugDisplayNames.forReader(item, Locale.FRENCH);
         if (english == null && display == null) return key("inventory.lowStock.unknown");
-        return Map.of("drugNameEn", english == null ? "" : english, "drugNameDisplay", display == null ? "" : display);
+        return Map.of(DRUG_NAME_EN, english == null ? "" : english, DRUG_NAME_DISPLAY, display == null ? "" : display);
     }
 
     /** {@code arg} as a reader in {@code locale} sees it: a lab value or a day written their way, else itself. */
     static Object renderValue(Object arg, Locale locale) {
-        if (arg instanceof Map<?, ?> map && map.get("drugNameEn") instanceof String english
-            && map.get("drugNameDisplay") instanceof String display) {
+        if (arg instanceof Map<?, ?> map && map.get(DRUG_NAME_EN) instanceof String english
+            && map.get(DRUG_NAME_DISPLAY) instanceof String display) {
             return locale != null && "en".equals(locale.getLanguage()) ? english : display;
         }
         String labValue = renderLabValue(arg, locale);
@@ -153,9 +155,9 @@ public class NotificationLocalizer {
         if (arg instanceof LocalDate day) {
             return date(day);
         }
-        if (arg instanceof Map<?, ?> map && map.get("drugNameEn") instanceof String english
-            && map.get("drugNameDisplay") instanceof String display) {
-            return Map.of("drugNameEn", english, "drugNameDisplay", display);
+        if (arg instanceof Map<?, ?> map && map.get(DRUG_NAME_EN) instanceof String english
+            && map.get(DRUG_NAME_DISPLAY) instanceof String display) {
+            return Map.of(DRUG_NAME_EN, english, DRUG_NAME_DISPLAY, display);
         }
         if (arg instanceof Map<?, ?> map && map.get(DATE) instanceof String iso) {
             return Map.of(DATE, iso);
