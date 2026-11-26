@@ -1688,6 +1688,7 @@ public class UserServiceImpl implements UserService {
             dto.setEmail(null);
             dto.setUsername(null);
             dto.setReactivationAssignmentId(null);
+            dto.setReactivationOptions(null);
         }
         // QA D914: the list offered edit and delete on accounts a hospital admin
         // may not administer, and the save came back "user not found". Decided

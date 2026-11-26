@@ -52,6 +52,11 @@ public class UserSummaryDTO {
     @Schema(description = "An inactive staff assignment in this visible scope; reactivation follows its existing approval flow")
     private UUID reactivationAssignmentId;
 
+    @Schema(description = "Retired staff assignments in the already authorized directory scope; choose before recovering access")
+    private java.util.List<ReactivationOption> reactivationOptions;
+
+    public record ReactivationOption(UUID assignmentId, String hospitalName, String roleCode) { }
+
     @Schema(description = "Whether the user has been soft-deleted")
     private boolean deleted;
 

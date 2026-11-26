@@ -369,8 +369,28 @@ export class UserListComponent implements OnInit, OnDestroy {
     return user.active && user.accessActive !== false;
   }
 
+  readonly canRecoverAssignments = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ADMIN',
+  ]);
+
+  reactivationOptions(user: UserSummary) {
+    return this.canRecoverAssignments &&
+      !this.isSelf(user) &&
+      !user.deleted &&
+      user.active &&
+      user.accessActive === false
+      ? (user.reactivationOptions ?? [])
+      : [];
+  }
+
+  assignmentHref(id: string): string | null {
+    return assignmentReactivationHref(id);
+  }
+
   reactivationHref(user: UserSummary): string | null {
-    if (this.isSelf(user)) return null;
+    if (!this.canRecoverAssignments || this.isSelf(user) || user.deleted) return null;
     return user.active && user.accessActive === false
       ? assignmentReactivationHref(user.reactivationAssignmentId)
       : null;

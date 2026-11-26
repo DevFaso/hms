@@ -23,7 +23,9 @@ class UserDirectoryAssignmentStateTest {
         assertThat(row.getAccessActive()).isFalse();
         assertThat(row.getRoleCount()).isZero();
         assertThat(row.getRoleName()).isNull();
-        assertThat(row.getReactivationAssignmentId()).isIn(nurse.getId(), midwife.getId());
+        assertThat(row.getReactivationAssignmentId()).isNull();
+        assertThat(row.getReactivationOptions()).extracting("assignmentId")
+            .containsExactlyInAnyOrder(nurse.getId(), midwife.getId());
     }
 
     @Test
@@ -62,6 +64,21 @@ class UserDirectoryAssignmentStateTest {
         assertThat(mapper.toSummaryDTO(null, List.of())).isNull();
     }
 
+    @Test
+    void recoveryNeverChoosesARetiredRoleByUuidAndDoesNotExposeOutOfScopeHistory() {
+        User user = user();
+        var local = assignment("ROLE_NURSE", false);
+        var other = assignment("ROLE_MIDWIFE", false);
+        user.addRole(other.getRole());
+        var scoped = mapper.toSummaryDTO(user, List.of(local));
+        assertThat(scoped.getReactivationAssignmentId()).isEqualTo(local.getId());
+        assertThat(scoped.getReactivationOptions()).hasSize(1);
+        assertThat(scoped.getReactivationOptions().getFirst().hospitalName()).isEqualTo(local.getHospital().getName());
+        var all = mapper.toSummaryDTO(user, List.of(local, other));
+        assertThat(all.getReactivationAssignmentId()).isNull();
+        assertThat(all.getReactivationOptions()).extracting("roleCode").containsExactlyInAnyOrder("ROLE_NURSE", "ROLE_MIDWIFE");
+    }
+
     private static User user() {
         User user = new User();
         user.setId(UUID.randomUUID());
@@ -77,6 +94,10 @@ class UserDirectoryAssignmentStateTest {
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setRole(role);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        hospital.setName("Synthetic hospital " + code);
+        assignment.setHospital(hospital);
         assignment.setActive(active);
         return assignment;
     }

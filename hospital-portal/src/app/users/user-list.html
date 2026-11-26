@@ -209,18 +209,25 @@
                       <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
-                  @if (!user.deleted && isManageable(user)) {
-                    @if (reactivationHref(user); as href) {
-                      <a
-                        class="action-link restore"
-                        [href]="href"
-                        [title]="'USERS.REACTIVATE_ACCESS' | translate"
-                        [attr.aria-label]="'USERS.REACTIVATE_ACCESS' | translate"
-                        data-testid="user-reactivate-access"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
-                      </a>
-                    }
+                  @if (reactivationHref(user); as href) {
+                    <a
+                      class="action-link restore"
+                      [href]="href"
+                      [title]="'USERS.REACTIVATE_ACCESS' | translate"
+                      [attr.aria-label]="'USERS.REACTIVATE_ACCESS' | translate"
+                      data-testid="user-reactivate-access"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+                    </a>
+                  } @else if (reactivationOptions(user).length > 1) {
+                    <details class="recovery-options" data-testid="user-recovery-options">
+                      <summary>{{ 'USERS.REACTIVATE_ACCESS' | translate }}</summary>
+                      @for (option of reactivationOptions(user); track option.assignmentId) {
+                        <a [href]="assignmentHref(option.assignmentId)">
+                          {{ option.hospitalName }} · {{ option.roleCode | roleLabel }}
+                        </a>
+                      }
+                    </details>
                   }
                   @if (user.deleted) {
                     <button

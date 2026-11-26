@@ -568,6 +568,16 @@ describe('D4021: reactivation links use the existing confirmation policy', () =>
       expect(service.update).not.toHaveBeenCalled();
       expect(service.create).not.toHaveBeenCalled();
       expect(service.regenerateCode).not.toHaveBeenCalled();
+      if (!superAdmin) {
+        const row = component.selected()!;
+        component.openRegen(row);
+        expect(component.modal()).toBe('regen');
+        expect(service.regenerateCode).not.toHaveBeenCalled();
+        service.regenerateCode.and.returnValue(of(row));
+        component.submitRegen();
+        expect(service.regenerateCode).toHaveBeenCalledOnceWith(id, true);
+        expect(service.update).not.toHaveBeenCalled();
+      }
     });
   }
 });

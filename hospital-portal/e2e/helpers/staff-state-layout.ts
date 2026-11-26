@@ -37,8 +37,8 @@ export function registerStaffStateLayoutChecks(): void {
                 userId: SUBJECT,
                 assignmentId: ASSIGNMENT,
                 hospitalId: TEST_ID,
-                hospitalName: 'H?pital de d?monstration',
-                name: 'Alimata D?monstration',
+                hospitalName: 'Hôpital de démonstration',
+                name: 'Alimata Démonstration',
                 username: 'demo.staff',
                 email: 'staff@example.test',
                 jobTitle: 'NURSE',
@@ -55,7 +55,7 @@ export function registerStaffStateLayoutChecks(): void {
             json: [
               {
                 id: TEST_ID,
-                name: 'H?pital de d?monstration',
+                name: 'Hôpital de démonstration',
                 code: 'DEMO',
                 active: true,
                 facilityType: 'HOSPITAL',
@@ -76,9 +76,9 @@ export function registerStaffStateLayoutChecks(): void {
             json: {
               id: ASSIGNMENT,
               userId: SUBJECT,
-              userName: 'Alimata D?monstration',
+              userName: 'Alimata Démonstration',
               hospitalId: TEST_ID,
-              hospitalName: 'H?pital de d?monstration',
+              hospitalName: 'Hôpital de démonstration',
               roleId: 'r-nurse',
               roleCode: 'ROLE_NURSE',
               roleName: 'ROLE_NURSE',
@@ -98,16 +98,113 @@ export function registerStaffStateLayoutChecks(): void {
           '/admin-assignments?reactivate=' + ASSIGNMENT,
         );
         await testInfo.attach(`staff-inactive-${width}`, {
-          body: await page.screenshot(),
+          body: await page.screenshot({ animations: 'disabled' }),
           contentType: 'image/png',
         });
         await recovery.click();
         await expect(page.locator('[role="dialog"], dialog[open]').first()).toBeVisible();
         expect(assignmentWrites).toEqual([]);
         await testInfo.attach(`assignment-review-${width}`, {
-          body: await page.screenshot(),
+          body: await page.screenshot({ animations: 'disabled' }),
           contentType: 'image/png',
         });
+      });
+
+      test(`hospital admin chooses a retired role and explicitly re-invites at ${width}`, async ({
+        page,
+      }, testInfo) => {
+        await page.setViewportSize({ width, height: 1000 });
+        await signInAs(page, 'ROLE_HOSPITAL_ADMIN', testInfo.project.use.baseURL as string);
+        await installLocalIconFonts(page);
+        await page.addInitScript(() => localStorage.setItem('lang', 'fr'));
+        const other = '00000000-0000-0000-0000-000000004024';
+        const writes: string[] = [];
+        page.on('request', (request) => {
+          if (/\/api\/assignments(?:[/?]|$)/.test(request.url()) && request.method() !== 'GET')
+            writes.push(new URL(request.url()).pathname);
+        });
+        const row = {
+          id: ASSIGNMENT,
+          userId: SUBJECT,
+          userName: 'Synthetic colleague',
+          hospitalId: TEST_ID,
+          hospitalName: 'Hospital A',
+          roleId: 'nurse',
+          roleCode: 'ROLE_NURSE',
+          active: false,
+          confirmationVerified: false,
+        };
+        await page.route(/\/api\/users(?:\?.*)?$/, (route) =>
+          route.fulfill({
+            json: {
+              content: [
+                {
+                  id: SUBJECT,
+                  firstName: 'Synthetic',
+                  lastName: 'Colleague',
+                  active: true,
+                  accessActive: false,
+                  manageable: false,
+                  deleted: false,
+                  roleCount: 0,
+                  reactivationOptions: [
+                    {
+                      assignmentId: ASSIGNMENT,
+                      hospitalName: 'Hospital A',
+                      roleCode: 'ROLE_NURSE',
+                    },
+                    { assignmentId: other, hospitalName: 'Hospital A', roleCode: 'ROLE_MIDWIFE' },
+                  ],
+                },
+              ],
+              number: 0,
+              totalPages: 1,
+              totalElements: 1,
+            },
+          }),
+        );
+        await page.route(/\/api\/assignments(?:\?.*)?$/, (route) =>
+          route.fulfill({
+            json: {
+              content: [],
+              number: 0,
+              totalPages: 0,
+              totalElements: 0,
+            },
+          }),
+        );
+        await page.route(new RegExp('/api/assignments/' + ASSIGNMENT + '(?:\\?.*)?$'), (route) =>
+          route.fulfill({ json: row }),
+        );
+        await page.route('**/api/assignments/' + ASSIGNMENT + '/regenerate-code**', (route) =>
+          route.fulfill({ json: row }),
+        );
+        await page.route(/\/api\/roles(?:\?.*)?$/, (route) => route.fulfill({ json: [] }));
+        await page.route(/\/api\/hospitals(?:\?.*)?$/, (route) => route.fulfill({ json: [] }));
+        await page.goto('/users');
+        const choices = page.locator('[data-testid="user-recovery-options"]');
+        await choices.locator('summary').click();
+        await expect(choices.locator('a')).toHaveCount(2);
+        await expect(choices).toContainText('Hospital A');
+        expect(writes).toEqual([]);
+        await testInfo.attach(`recovery-choice-${width}`, {
+          body: await page.screenshot({ animations: 'disabled' }),
+          contentType: 'image/png',
+        });
+        await choices.locator('a').first().click();
+        const reinvite = page.locator('[data-testid="assignment-reinvite"]');
+        await expect(reinvite).toBeVisible();
+        expect(writes).toEqual([]);
+        await reinvite.click();
+        await expect(page.locator('#admin-assignments-dialog-2-title')).toBeVisible();
+        expect(writes).toEqual([]);
+        await testInfo.attach(`reinvitation-confirm-${width}`, {
+          body: await page.screenshot({ animations: 'disabled' }),
+          contentType: 'image/png',
+        });
+        await page.locator('[role="dialog"] .modal-actions .btn-primary').click();
+        await expect.poll(() => writes.length).toBe(1);
+        expect(writes).toEqual(['/api/assignments/' + ASSIGNMENT + '/regenerate-code']);
       });
 
       test(`directory inactive filter uses hospital access at ${width}`, async ({
@@ -126,7 +223,7 @@ export function registerStaffStateLayoutChecks(): void {
                   username: 'demo.staff',
                   email: 'staff@example.test',
                   firstName: 'Alimata',
-                  lastName: 'D?monstration',
+                  lastName: 'Démonstration',
                   active: true,
                   accessActive: false,
                   roleName: null,
@@ -152,7 +249,7 @@ export function registerStaffStateLayoutChecks(): void {
         );
         await expect(page.locator('.access-hint')).toBeVisible();
         await testInfo.attach(`directory-inactive-${width}`, {
-          body: await page.screenshot(),
+          body: await page.screenshot({ animations: 'disabled' }),
           contentType: 'image/png',
         });
       });

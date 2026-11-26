@@ -20,10 +20,11 @@ class UserDirectoryAssignmentStateGuardTest {
         }
         String mapper = Files.readString(root.resolve("mapper/UserMapper.java"));
         assertThat(mapper).contains("safeRolesFromAssignments(activeOnly(visible))",
-            "dto.setAccessActive(!roles.isEmpty())", "dto.setRoleCount(roles.size())");
+            "dto.setAccessActive(!roles.isEmpty())", "dto.setRoleCount(roles.size())",
+            "retired.size() == 1", "dto.setReactivationOptions(retired)");
         String service = Files.readString(root.resolve("service/UserServiceImpl.java"));
         assertThat(service).contains("findDirectoryAssignments(ids, scope.everyone(), directoryHospitals(scope))",
-            "new DirectoryScope(false, one, scope.seesPatientContacts())", "dto.setReactivationAssignmentId(null)");
+            "new DirectoryScope(false, one, scope.seesPatientContacts())", "dto.setReactivationAssignmentId(null)", "dto.setReactivationOptions(null)");
         String repository = Files.readString(root.resolve("repository/UserRoleHospitalAssignmentRepository.java"));
         assertThat(repository).contains("a.user.id IN :userIds", ":allHospitals = true OR h.id IN :hospitalIds");
     }
@@ -39,4 +40,16 @@ class UserDirectoryAssignmentStateGuardTest {
         assertThat(link).contains("/admin-assignments?reactivate=", "encodeURIComponent(assignmentId)")
             .doesNotContain(".post(", ".put(", ".patch(");
     }
+    @Test
+    void recoveryUsesAssignmentRightsAndExplicitReinvitationWithoutAutomaticSend() throws Exception {
+        Path portal = Path.of("../hospital-portal/src/app");
+        assertThat(Files.readString(portal.resolve("users/user-list.ts")))
+            .contains("canRecoverAssignments", "reactivationOptions(user: UserSummary)");
+        String users = Files.readString(portal.resolve("users/user-list.html"));
+        assertThat(users).contains("user-recovery-options", "option.hospitalName", "option.roleCode | roleLabel")
+            .doesNotContain("isManageable(user)) {\n                    @if (reactivationHref");
+        assertThat(Files.readString(portal.resolve("admin-assignments/admin-assignments.html")))
+            .contains("!row.active && !isOwnRow(row)", "assignment-reinvite", "openRegen(row)");
+    }
+
 }

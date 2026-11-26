@@ -248,12 +248,18 @@ public class UserMapper {
         dto.setRoleName(pickPrimaryRole(roles, true));
         dto.setRoleCount(roles.size());
         dto.setAccessActive(!roles.isEmpty());
-        dto.setReactivationAssignmentId(roles.isEmpty() ? visible.stream()
+        var retired = roles.isEmpty() ? visible.stream()
             .filter(a -> a != null && Boolean.FALSE.equals(a.getActive()) && a.getRole() != null)
             .filter(a -> a.getRole().getCode() != null
                 && !"ROLE_PATIENT".equalsIgnoreCase(a.getRole().getCode())
                 && !"PATIENT".equalsIgnoreCase(a.getRole().getCode()))
-            .map(UserRoleHospitalAssignment::getId).filter(Objects::nonNull).sorted().findFirst().orElse(null) : null);
+            .filter(a -> a.getId() != null && a.getHospital() != null)
+            .map(a -> new UserSummaryDTO.ReactivationOption(a.getId(), a.getHospital().getName(), a.getRole().getCode()))
+            .sorted(java.util.Comparator.comparing(UserSummaryDTO.ReactivationOption::assignmentId)).toList()
+            : java.util.List.<UserSummaryDTO.ReactivationOption>of();
+        // A retired role is not a default: ambiguous history needs an explicit hospital/role choice.
+        dto.setReactivationOptions(retired);
+        dto.setReactivationAssignmentId(retired.size() == 1 ? retired.getFirst().assignmentId() : null);
         return dto;
     }
 

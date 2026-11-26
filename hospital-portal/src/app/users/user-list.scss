@@ -405,3 +405,16 @@ dialog[data-testid='mfa-reset-dialog'] {
   color: var(--text-secondary);
   white-space: normal;
 }
+
+.recovery-options {
+  max-width: 20rem;
+  summary {
+    cursor: pointer;
+    color: var(--primary, #0d766b);
+  }
+  a {
+    display: block;
+    padding: 0.5rem;
+    overflow-wrap: anywhere;
+  }
+}

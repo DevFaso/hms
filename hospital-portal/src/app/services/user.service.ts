@@ -15,6 +15,7 @@ export interface UserSummary {
   active: boolean;
   accessActive?: boolean;
   reactivationAssignmentId?: string;
+  reactivationOptions?: { assignmentId: string; hospitalName: string; roleCode: string }[];
   deleted: boolean;
   roleName: string;
   profileType: string;

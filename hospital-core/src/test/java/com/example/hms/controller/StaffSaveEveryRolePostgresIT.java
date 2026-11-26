@@ -403,7 +403,28 @@ class StaffSaveEveryRolePostgresIT {
     }
 
     @Test
-    void d4021_deactivationIsVisibleInBothListsWithoutRetiringAnotherHospitalsAccess() throws Exception {
+    void d4021_inactiveHospitalAccessIsVisibleWithoutFallingBackToHistoricalGlobalRoles() throws Exception {
+        User subject = userWithRole("ROLE_NURSE");
+        subject.addRole(role("ROLE_NURSE"));
+        subject.addRole(role("ROLE_MIDWIFE"));
+        subject = userRepository.saveAndFlush(subject);
+        UUID subjectId = subject.getId();
+        String staffId = create(formBody(subject, "ROLE_NURSE", "NURSE"), EN);
+
+        staffService.deleteStaff(UUID.fromString(staffId), Locale.ENGLISH);
+
+        assertThat(staffService.getStaffById(UUID.fromString(staffId), Locale.ENGLISH).isActive()).isFalse();
+        assertThat(userRepository.findById(subjectId).orElseThrow().isActive()).isTrue();
+        var own = directory.getUsersAtHospital(hospital.getId(), 0, 100).getContent().stream()
+            .filter(row -> row.getId().equals(subjectId)).findFirst().orElseThrow();
+        assertThat(own.getAccessActive()).isFalse();
+        assertThat(own.getRoleName()).isNull();
+        assertThat(own.getRoleCount()).isZero();
+        assertThat(own.getReactivationAssignmentId()).isNotNull();
+    }
+
+    @Test
+    void d4021_deactivationPreservesAnotherHospitalsAccessAndTheExistingDirectoryPrivacyRule() throws Exception {
         User subject = userWithRole("ROLE_NURSE");
         subject.addRole(role("ROLE_NURSE"));
         subject.addRole(role("ROLE_MIDWIFE"));
@@ -425,12 +446,10 @@ class StaffSaveEveryRolePostgresIT {
             staffService.deleteStaff(UUID.fromString(staffId), Locale.ENGLISH);
             assertThat(staffService.getStaffById(UUID.fromString(staffId), Locale.ENGLISH).isActive()).isFalse();
             assertThat(userRepository.findById(subjectId).orElseThrow().isActive()).isTrue();
-            var own = directory.getUsersAtHospital(hospital.getId(), 0, 100).getContent().stream()
-                .filter(row -> row.getId().equals(subjectId)).findFirst().orElseThrow();
-            assertThat(own.getAccessActive()).isFalse();
-            assertThat(own.getRoleName()).isNull();
-            assertThat(own.getRoleCount()).isZero();
-            assertThat(own.getReactivationAssignmentId()).isNotNull();
+            // The standing directory privacy rule hides former staff now active only elsewhere.
+            // The local staff record remains inactive; a revoked grant must not expose another hospital's user row.
+            assertThat(directory.getUsersAtHospital(hospital.getId(), 0, 100).getContent())
+                .noneMatch(row -> row.getId().equals(subjectId));
             var other = directory.getUsersAtHospital(elsewhere.getId(), 0, 100).getContent().stream()
                 .filter(row -> row.getId().equals(subjectId)).findFirst().orElseThrow();
             assertThat(other.getAccessActive()).isTrue();
