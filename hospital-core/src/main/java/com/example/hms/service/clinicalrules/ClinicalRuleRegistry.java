@@ -165,6 +165,11 @@ public final class ClinicalRuleRegistry {
             "service.support.OPositiveReleaseAuthority", "service.transfusion.OPositiveReleaseAuthorityService",
             "service.transfusion.OPositiveReleaseNotices",
             "service.scheduled.OPositiveCountersignEscalationScheduler"),
+        // Owner decision 2026-11-26 (option B), research report « Incompatible blood release authority »: a named
+        // physician, or the fallback a hospital switched on; never an ABO-excluded bag.
+        rule(ClinicalRuleSetKey.INCOMPATIBLE_RELEASE_AUTHORITY, "2026-11-26.1",
+            "service.support.IncompatibleReleaseAuthority", "service.transfusion.IncompatibleReleaseDecisions",
+            "service.transfusion.IncompatibleReleaseNotices"),
         // QA D3862 (r77): a HIGH NEWS2 is an urgent alert to acknowledge (the D3304 path), not a bell alone.
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-25.1",
             "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"));

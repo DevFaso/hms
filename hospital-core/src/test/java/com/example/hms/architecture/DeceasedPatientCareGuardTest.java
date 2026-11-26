@@ -213,6 +213,8 @@ class DeceasedPatientCareGuardTest {
         Transfusion#receiveUnit,discardUnit | blood bank stock, no patient
         Transfusion#countersignPositiveRelease,reviewPositiveRelease,recordPositiveFollowUp | V380: the signature, the review and the follow-up record of an O positive bag that already went out; none gives care, and a death does not end the duty to sign or review
         Transfusion#setPositiveProtocol | V380: a hospital's emergency O positive protocol, no patient
+        Transfusion#countersignIncompatibleRelease,recordIncompatibleMonitoring | V381: the countersignature and the monitoring record of an incompatible release already made; neither gives care, and a death does not end the duty to sign or to report what was seen
+        Transfusion#setIncompatibleProtocol | V381: a hospital's fallback setting for an incompatible release, no patient
         TreatmentConsent#revoke | closes a consent
         TreatmentPlan#update,addFollowUp,updateFollowUp,addReview | an existing plan, late documentation
         Ultrasound#updateOrder,cancelOrder,createOrUpdateReport,markReportReviewed,markPatientNotified | closes or reports an order made before the death

@@ -655,6 +655,32 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Emergency O positive release protocol changed$/,
   },
   {
+    // V381: the decision behind a release despite an incompatible crossmatch; the basis is in the details.
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_DECIDED',
+    re: /^Incompatible release decision recorded for blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_COUNTERSIGNED',
+    re: /^Incompatible release countersigned: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_MONITORING_RECORDED',
+    re: /^Incompatible release monitoring recorded: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_COUNTERSIGN_OVERDUE',
+    re: /^Incompatible release countersignature overdue, escalated to the laboratory director: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    // V381: a hospital's fallback for an incompatible release changed (the values are in the details).
+    key: 'AUDIT.DESC.INCOMPATIBLE_PROTOCOL_CHANGED',
+    re: /^Incompatible release fallback setting changed$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],

@@ -26,6 +26,7 @@ import {
   EmergencyReleaseOptions,
   OPositiveRule,
   PatientBloodGroupResponse,
+  PatientInformedStatus,
   RhFactor,
   TransfusionAdministrationResponse,
   TransfusionReactionSeverity,
@@ -56,6 +57,7 @@ import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { OPositiveReleasesComponent } from './o-positive-releases/o-positive-releases.component';
+import { IncompatibleReleasesComponent } from './incompatible-releases/incompatible-releases.component';
 type Tab = 'requests' | 'units' | 'opositive';
 
 /**
@@ -84,6 +86,7 @@ type Tab = 'requests' | 'units' | 'opositive';
     EnumLabelPipe,
     PatientPickerComponent,
     OPositiveReleasesComponent,
+    IncompatibleReleasesComponent,
   ],
   templateUrl: './transfusion.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -890,6 +893,17 @@ export class TransfusionComponent implements OnInit {
   emergencyBiologistId = '';
   /** Incompatible O positive release: the physician who ordered O positive, when not the authoriser. */
   emergencyOrderingId = '';
+  /** V381, every incompatible release: why this bag, and whether the patient was told. */
+  incompatibleChoiceReason = '';
+  incompatiblePatientInformed: PatientInformedStatus | '' = '';
+  /** V381, the hospital's fallback: no physician can be reached, and who was called. */
+  incompatibleUnreachable = false;
+  incompatibleUnreachableReason = '';
+  readonly patientInformedStatuses: PatientInformedStatus[] = [
+    'PATIENT_INFORMED',
+    'FAMILY_INFORMED',
+    'NOT_POSSIBLE',
+  ];
 
   /** V380: what the O positive authority rule says for the open request; the server still decides. */
   positiveRule() {
@@ -1006,6 +1020,10 @@ export class TransfusionComponent implements OnInit {
     this.emergencyVerbalOrder = true;
     this.emergencyBiologistId = '';
     this.emergencyOrderingId = '';
+    this.incompatibleChoiceReason = '';
+    this.incompatiblePatientInformed = '';
+    this.incompatibleUnreachable = false;
+    this.incompatibleUnreachableReason = '';
     this.emergencyOptions.set(null);
     this.transfusion.emergencyReleaseOptions(request.id).subscribe({
       // A late answer for a request the panel has left is dropped.
@@ -1088,19 +1106,57 @@ export class TransfusionComponent implements OnInit {
     this.showIncompatibleModal.set(false);
   }
 
-  submitIncompatibleRelease(): void {
-    const request = this.selectedRequest();
-    if (
-      !request ||
+  /**
+   * V381: the hospital switched on « Libération incompatible sans médecin joignable » and the caller holds a role
+   * it allows to declare it. Otherwise a named physician is required, as before; the server decides either way.
+   */
+  incompatibleFallbackOffered(): boolean {
+    const rule = this.emergencyOptions()?.incompatibleRule;
+    return !!rule && rule.fallbackEnabled && rule.callerMayDeclare;
+  }
+
+  /** The fallback is in use on this form: nobody is named, the declaration and its reason stand in. */
+  incompatibleDeclaring(): boolean {
+    return this.incompatibleFallbackOffered() && this.incompatibleUnreachable;
+  }
+
+  onIncompatibleUnreachableChanged(): void {
+    if (this.incompatibleUnreachable) this.emergencyAuthoriserId = '';
+  }
+
+  /** The bag picked on the incompatible form, with what the server says of it. */
+  incompatibleUnitPicked() {
+    return (
+      this.emergencyOptions()?.incompatibleUnits.find((u) => u.id === this.emergencyUnitId) ?? null
+    );
+  }
+
+  /** With no physician reachable only the least incompatible bag goes out: the form says so before the server does. */
+  incompatibleNotLeast(): boolean {
+    const bag = this.incompatibleUnitPicked();
+    return this.incompatibleDeclaring() && !!bag && bag.leastIncompatible === false;
+  }
+
+  /** What the submit button waits for. On the fallback it waits for no person. */
+  incompatibleFormIncomplete(): boolean {
+    const declaring = this.incompatibleDeclaring();
+    return (
       !this.emergencyUnitId ||
       !this.emergencyReason.trim() ||
-      !this.emergencyAuthoriserId ||
-      this.incompatibleSubmitting()
-    ) {
+      !this.incompatibleChoiceReason.trim() ||
+      !this.incompatiblePatientInformed ||
+      (declaring ? !this.incompatibleUnreachableReason.trim() : !this.emergencyAuthoriserId) ||
+      (this.emergencyStatementRequired() && !this.emergencyNegativeStated)
+    );
+  }
+
+  submitIncompatibleRelease(): void {
+    const request = this.selectedRequest();
+    if (!request || this.incompatibleFormIncomplete() || this.incompatibleSubmitting()) {
       return;
     }
     const stating = this.emergencyStatementRequired();
-    if (stating && !this.emergencyNegativeStated) return;
+    const declaring = this.incompatibleDeclaring();
     const positiveTier = this.incompatiblePositiveTier();
     this.incompatibleSubmitting.set(true);
     this.transfusion
@@ -1108,7 +1164,15 @@ export class TransfusionComponent implements OnInit {
         bloodUnitId: this.emergencyUnitId,
         releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
         reason: this.emergencyReason.trim(),
-        authoriserUserId: this.emergencyAuthoriserId,
+        unitChoiceReason: this.incompatibleChoiceReason.trim(),
+        patientInformation: this.incompatiblePatientInformed as PatientInformedStatus,
+        // V381: a named physician, or (where the hospital enabled it) the declaration that none can be reached.
+        ...(declaring
+          ? {
+              physicianUnreachable: true,
+              unreachableReason: this.incompatibleUnreachableReason.trim(),
+            }
+          : { authoriserUserId: this.emergencyAuthoriserId }),
         ...(stating ? { negativeUnobtainable: true } : {}),
         // V380: an O positive bag for a patient at risk records how the order was given, and the biologist.
         ...(positiveTier ? { verbalOrder: this.emergencyVerbalOrder } : {}),

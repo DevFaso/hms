@@ -194,6 +194,8 @@
   <!-- ══ Emergency O positive releases (V380) ══ -->
   @if (tab() === 'opositive') {
     <app-o-positive-releases />
+    <!-- Releases despite an incompatible crossmatch, and the hospital's fallback (V381) -->
+    <app-incompatible-releases />
   }
 
   <!-- ══ Units ══ -->
@@ -472,6 +474,18 @@
                               'TRANSFUSION.RELEASE_NEGATIVE_STATEMENT'
                                 | translate: { units: r.negativeUnitsShown }
                             }}
+                          </div>
+                        }
+                        @if (r.incompatibleDecision; as i) {
+                          <div class="warn-inline" data-testid="release-incompat-decision">
+                            {{ 'TRANSFUSION.INCOMPAT.BASIS_' + i.decisionBasis | translate }} ·
+                            {{ 'TRANSFUSION.INCOMPAT.TIMING_' + i.authorityTiming | translate }}
+                            @if (i.countersignedByName) {
+                              ({{ i.countersignedByName }})
+                            }
+                            @if (!i.monitoringOutcome) {
+                              · {{ 'TRANSFUSION.INCOMPAT.MONITORING_OWED' | translate }}
+                            }
                           </div>
                         }
                         @if (r.positiveDecision; as d) {
@@ -1702,17 +1716,121 @@
                   {{ u.unitNumber }} — {{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }}
                   @if (!u.releasable) {
                     — {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE_REFUSED' | translate }}
+                  } @else if (u.leastIncompatible) {
+                    — {{ 'TRANSFUSION.INCOMPAT.LEAST_INCOMPATIBLE' | translate }}
                   }
                 </option>
               }
             </select>
           </div>
+          @if (incompatibleUnitPicked(); as bag) {
+            <!-- V381: what makes this bag more or less incompatible, as the laboratory recorded it. -->
+            <p class="modal-hint" data-testid="si-unit-facts">
+              {{
+                (bag.rhdMatched
+                  ? 'TRANSFUSION.INCOMPAT.FACT_RHD_MATCHED'
+                  : 'TRANSFUSION.INCOMPAT.FACT_RHD_MISMATCH'
+                ) | translate
+              }}
+              ·
+              {{
+                (bag.rhKellMatched
+                  ? 'TRANSFUSION.INCOMPAT.FACT_KELL_MATCHED'
+                  : 'TRANSFUSION.INCOMPAT.FACT_KELL_NOT_RECORDED'
+                ) | translate
+              }}
+              ·
+              {{
+                (bag.antigenNegative
+                  ? 'TRANSFUSION.INCOMPAT.FACT_ANTIGEN_NEGATIVE'
+                  : 'TRANSFUSION.INCOMPAT.FACT_ANTIGEN_NOT_RECORDED'
+                ) | translate
+              }}
+            </p>
+          }
           <div class="field">
-            <label for="si-authoriser">{{ 'TRANSFUSION.AUTHORISER' | translate }} *</label>
-            <select required id="si-authoriser" [(ngModel)]="emergencyAuthoriserId">
+            <label for="si-choice"
+              >{{ 'TRANSFUSION.INCOMPAT.UNIT_CHOICE_REASON' | translate }} *</label
+            >
+            <textarea
+              required
+              id="si-choice"
+              rows="2"
+              maxlength="2000"
+              data-testid="si-choice-reason"
+              [(ngModel)]="incompatibleChoiceReason"
+            ></textarea>
+          </div>
+          @if (incompatibleFallbackOffered()) {
+            <!-- V381: the hospital enabled the release with no physician reachable; the caller may declare it. -->
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                id="si-unreachable"
+                data-testid="si-unreachable"
+                [(ngModel)]="incompatibleUnreachable"
+                (ngModelChange)="onIncompatibleUnreachableChanged()"
+              />
+              {{ 'TRANSFUSION.INCOMPAT.UNREACHABLE_CHECK' | translate }}
+            </label>
+          }
+          @if (incompatibleDeclaring()) {
+            <p class="modal-hint warn" role="status" data-testid="si-fallback-hint">
+              {{
+                'TRANSFUSION.INCOMPAT.FALLBACK_HINT'
+                  | translate
+                    : { hours: emergencyOptions()?.incompatibleRule?.countersignDeadlineHours }
+              }}
+            </p>
+            @if (incompatibleNotLeast()) {
+              <p class="modal-hint warn" role="alert" data-testid="si-not-least">
+                {{ 'TRANSFUSION.INCOMPAT.NOT_LEAST_HINT' | translate }}
+              </p>
+            }
+            <div class="field">
+              <label for="si-unreachable-reason"
+                >{{ 'TRANSFUSION.INCOMPAT.UNREACHABLE_REASON' | translate }} *</label
+              >
+              <textarea
+                required
+                id="si-unreachable-reason"
+                rows="2"
+                maxlength="2000"
+                data-testid="si-unreachable-reason"
+                [(ngModel)]="incompatibleUnreachableReason"
+              ></textarea>
+            </div>
+          } @else {
+            <div class="field">
+              <label for="si-authoriser">{{ 'TRANSFUSION.AUTHORISER' | translate }} *</label>
+              <select required id="si-authoriser" [(ngModel)]="emergencyAuthoriserId">
+                <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                @for (c of emergencyOptions()?.authorisers ?? []; track c.userId) {
+                  <option [value]="c.userId">{{ c.displayName }}</option>
+                }
+              </select>
+            </div>
+            @if (emergencyOptions()?.incompatibleRule && !incompatibleFallbackOffered()) {
+              <p class="modal-hint" data-testid="si-fallback-off">
+                {{ 'TRANSFUSION.INCOMPAT.FALLBACK_OFF_HINT' | translate }}
+              </p>
+            }
+          }
+          <div class="field">
+            <label for="si-informed"
+              >{{ 'TRANSFUSION.INCOMPAT.PATIENT_INFORMED' | translate }} *</label
+            >
+            <select
+              required
+              id="si-informed"
+              data-testid="si-patient-informed"
+              [(ngModel)]="incompatiblePatientInformed"
+            >
               <option value="">{{ 'COMMON.SELECT' | translate }}</option>
-              @for (c of emergencyOptions()?.authorisers ?? []; track c.userId) {
-                <option [value]="c.userId">{{ c.displayName }}</option>
+              @for (status of patientInformedStatuses; track status) {
+                <option [value]="status">
+                  {{ 'TRANSFUSION.INCOMPAT.INFORMED_' + status | translate }}
+                </option>
               }
             </select>
           </div>
@@ -1790,13 +1908,16 @@
             data-testid="submit-incompatible-release"
             (click)="submitIncompatibleRelease()"
             [disabled]="incompatibleSubmitting()"
-            [appSubmitGuard]="
-              !emergencyUnitId ||
-              !emergencyAuthoriserId ||
-              !emergencyReason.trim() ||
-              (emergencyStatementRequired() && !emergencyNegativeStated)
-            "
-            [submitGuardFields]="['si-unit', 'si-authoriser', 'si-reason', 'si-statement']"
+            [appSubmitGuard]="incompatibleFormIncomplete()"
+            [submitGuardFields]="[
+              'si-unit',
+              'si-choice',
+              'si-authoriser',
+              'si-unreachable-reason',
+              'si-informed',
+              'si-reason',
+              'si-statement',
+            ]"
           >
             {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
           </button>
