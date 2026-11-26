@@ -31,7 +31,7 @@ public final class UploadAdmission {
     private UploadAdmission() {
     }
 
-    /** A file that passed: the type its content showed, and its (checked) extension. */
+    /** A file that passed: the type its content showed, and the extension to store it under. */
     public record VettedUpload(UploadType type, String extension, long sizeBytes) {
         /** The media type to store and serve the file with. */
         public String mediaType() {
@@ -63,10 +63,17 @@ public final class UploadAdmission {
         if (file.getSize() > kind.maxBytes()) {
             throw new UploadRefusedException(kind.tooLargeKey(), FileUploadService.maxUploadLabel());
         }
-        String extension = extensionOf(file.getOriginalFilename());
+        String named = extensionOf(file.getOriginalFilename());
+        if (kind.takesPhotosByBytes()) {
+            Optional<VettedUpload> photo = photoByBytes(file, kind, named);
+            if (photo.isPresent()) {
+                return photo.get();
+            }
+        }
+        String extension = named;
         // The name first: a file no accepted type is ever named like is not this path's.
         if (!kind.acceptsExtension(extension)) {
-            throw new UploadRefusedException(kind.unsupportedKey());
+            throw notAccepted(kind);
         }
         // Then the bytes: an accepted type, and the one the name announces.
         Optional<UploadType> detected = ContentSniffer.detect(headOf(file), extension)
@@ -89,6 +96,35 @@ public final class UploadAdmission {
             throw new UploadRefusedException("file.contentMismatch", extension);
         }
         return new VettedUpload(type, extension, file.getSize());
+    }
+
+    /**
+     * On a path that takes photos: an accepted raster image by its bytes,
+     * whatever it is named, kept under the extension of the image it is (its
+     * own when the name already says so). Empty when the bytes are no such
+     * image and the path also takes other files, which the name rule then
+     * decides.
+     */
+    private static Optional<VettedUpload> photoByBytes(MultipartFile file, UploadKind kind, String named) {
+        Optional<UploadType> image = ContentSniffer.detect(headOf(file), named)
+            .filter(UploadType::isRasterImage)
+            .filter(kind.allowedTypes()::contains);
+        if (image.isEmpty()) {
+            if (!kind.isRasterOnly()) {
+                return Optional.empty();
+            }
+            throw kind.acceptsExtension(named)
+                ? new UploadRefusedException("file.contentMismatch", named)
+                : notAccepted(kind);
+        }
+        UploadType type = image.get();
+        String extension = type.extensions().contains(named) ? named : type.extension();
+        return Optional.of(new VettedUpload(type, extension, file.getSize()));
+    }
+
+    /** The refusal of a file that is not of a type the path takes. */
+    private static UploadRefusedException notAccepted(UploadKind kind) {
+        return new UploadRefusedException(kind.unsupportedKey());
     }
 
     private static byte[] headOf(MultipartFile file) {

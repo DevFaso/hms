@@ -92,6 +92,19 @@ class FileUploadServiceUploadLedgerTest {
     }
 
     @Test
+    @DisplayName("a WebP picked as profile_photo.jpg is stored as the WebP it is, under a .webp name")
+    void aMisnamedPhotoIsStoredUnderItsOwnType() throws Exception {
+        String url = service.uploadProfileImage(file("profile_photo.jpg", "image/jpeg", UploadSamples.webp()),
+            UPLOADER);
+
+        assertThat(url).endsWith(".webp");
+        ArgumentCaptor<UploadLedger.StoredUpload> recorded = ArgumentCaptor.forClass(UploadLedger.StoredUpload.class);
+        verify(ledger).record(recorded.capture());
+        assertThat(recorded.getValue().contentType()).isEqualTo("image/webp");
+        assertThat(recorded.getValue().storageKey()).startsWith("profile-images/").endsWith(".webp");
+    }
+
+    @Test
     @DisplayName("a file the malware check refuses is not linked: the upload is refused and the file kept")
     void anInfectedUploadIsRefusedAndKept() throws Exception {
         when(ledger.record(any())).thenReturn(UploadScanStatus.INFECTED);

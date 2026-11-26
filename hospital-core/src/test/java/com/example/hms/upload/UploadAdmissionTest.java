@@ -83,9 +83,70 @@ class UploadAdmissionTest {
     }
 
     @Test
+    @DisplayName("a photo path takes any accepted image by its bytes, whatever its name, under the image's extension")
+    void aPhotoIsTypedByItsBytesAlone() {
+        // What a phone gallery hands over: a WebP or a GIF under the name the app gave it.
+        for (UploadKind kind : new UploadKind[] {UploadKind.PROFILE_IMAGE, UploadKind.PATIENT_PHOTO,
+            UploadKind.CHAT_PHOTO}) {
+            UploadAdmission.VettedUpload webp = UploadAdmission.vet(
+                file("profile_photo.jpg", "image/jpeg", UploadSamples.webp()), kind);
+            assertThat(webp.type()).as("%s", kind).isEqualTo(UploadType.WEBP);
+            assertThat(webp.mediaType()).isEqualTo("image/webp");
+            assertThat(webp.extension()).isEqualTo(".webp");
+
+            assertThat(UploadAdmission.vet(file("photo", "image/jpeg", UploadSamples.png()), kind).extension())
+                .as("%s, no extension", kind).isEqualTo(".png");
+            assertThat(UploadAdmission.vet(file("photo.jpeg", "image/jpeg", UploadSamples.jpeg()), kind).extension())
+                .as("%s keeps a right extension", kind).isEqualTo(".jpeg");
+        }
+        assertThat(UploadAdmission.vet(file("profile_photo.jpg", "image/jpeg", UploadSamples.gif()),
+            UploadKind.PROFILE_IMAGE).extension()).isEqualTo(".gif");
+        // The chat upload endpoint takes a photo or a voice memo: the photo by its bytes, the memo by name too.
+        assertThat(UploadAdmission.vet(file("photo.jpg", "image/jpeg", UploadSamples.webp()),
+            UploadKind.CHAT_ATTACHMENT).type()).isEqualTo(UploadType.WEBP);
+        refused(UploadKind.CHAT_ATTACHMENT, "memo.mp3", "audio/mpeg", UploadSamples.ogg(), "file.contentMismatch");
+        // A type the path does not take stays refused, under any name.
+        refused(UploadKind.CHAT_PHOTO, "photo.jpg", "image/jpeg", UploadSamples.gif(), "file.contentMismatch");
+        refused(UploadKind.PROFILE_IMAGE, "profile_photo.jpg", "image/jpeg", UploadSamples.pdf(),
+            "file.contentMismatch");
+        byte[] heif = {0, 0, 0, 0x18, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0};
+        refused(UploadKind.PROFILE_IMAGE, "profile_photo.jpg", "image/jpeg", heif, "file.contentMismatch");
+        refused(UploadKind.PATIENT_PHOTO, "photo", "image/jpeg", UploadSamples.svg(),
+            "patient.photo.typeUnsupported");
+    }
+
+    @Test
+    @DisplayName("UTF-16 text is text, not audio: its byte-order mark is no MPEG frame")
+    void utf16TextIsAccepted() {
+        for (java.nio.charset.Charset charset : new java.nio.charset.Charset[] {StandardCharsets.UTF_16LE,
+            StandardCharsets.UTF_16BE}) {
+            byte[] mark = charset == StandardCharsets.UTF_16LE
+                ? new byte[] {(byte) 0xFF, (byte) 0xFE} : new byte[] {(byte) 0xFE, (byte) 0xFF};
+            byte[] text = "code;libelle;prix\nCS-GEN;Consultation générale;2000\n".getBytes(charset);
+            byte[] content = Arrays.copyOf(mark, mark.length + text.length);
+            System.arraycopy(text, 0, content, mark.length, text.length);
+
+            assertThat(UploadAdmission.vet(file("notes.txt", "text/plain", content), UploadKind.PATIENT_DOCUMENT)
+                .type()).as("%s .txt", charset).isEqualTo(UploadType.TEXT);
+            assertThat(UploadAdmission.vet(file("grille.csv", "text/csv", content), UploadKind.CSV_IMPORT).type())
+                .as("%s .csv", charset).isEqualTo(UploadType.CSV);
+            refused(UploadKind.CHAT_AUDIO, "memo.mp3", "audio/mpeg", content, "file.contentMismatch");
+        }
+        assertThat(ContentSniffer.detect(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, 0x64, 0, 0}))
+            .contains(UploadType.MP3);
+        byte[] utf16Markup = "<script>alert(1)</script>".getBytes(StandardCharsets.UTF_16LE);
+        byte[] marked = new byte[utf16Markup.length + 2];
+        marked[0] = (byte) 0xFF;
+        marked[1] = (byte) 0xFE;
+        System.arraycopy(utf16Markup, 0, marked, 2, utf16Markup.length);
+        refused(UploadKind.PATIENT_DOCUMENT, "notes.txt", "text/plain", marked, "file.contentMismatch");
+    }
+
+    @Test
     @DisplayName("content of one accepted type under the name of another is refused")
     void theNameMustAnnounceTheContent() {
-        refused(UploadKind.PATIENT_PHOTO, "face.png", "image/png", UploadSamples.jpeg(), "file.contentMismatch");
+        refused(UploadKind.IMAGING_IMAGE, "x.png", "image/png", UploadSamples.jpeg(), "file.contentMismatch");
+        refused(UploadKind.PATIENT_DOCUMENT, "scan.jpg", "image/jpeg", UploadSamples.png(), "file.contentMismatch");
         refused(UploadKind.IMAGING_IMAGE, "x.pdf", "application/pdf", UploadSamples.png(), "file.contentMismatch");
         refused(UploadKind.CHAT_AUDIO, "memo.ogg", "audio/ogg", UploadSamples.jpeg(), "file.contentMismatch");
         refused(UploadKind.PATIENT_DOCUMENT, "notes.pdf", "application/pdf",

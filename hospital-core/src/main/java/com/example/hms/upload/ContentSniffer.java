@@ -97,6 +97,10 @@ public final class ContentSniffer {
     }
 
     private static UploadType audioTypeOf(byte[] head) {
+        // A UTF-16 byte-order mark (FF FE) reads as an MPEG frame sync: it is text.
+        if (utf16Of(head) != null) {
+            return null;
+        }
         if (startsWith(head, EBML_MAGIC) && indexOf(head, ascii("webm"), 64) >= 0) {
             return UploadType.WEBM_AUDIO;
         }
@@ -112,12 +116,23 @@ public final class ContentSniffer {
         if (head.length >= 2 && (head[0] & 0xFF) == 0xFF && (head[1] & 0xE0) == 0xE0) {
             int layer = (head[1] >> 1) & 0x03;
             if (layer != 0) {
-                return UploadType.MP3;
+                return isMpegAudioFrame(head) ? UploadType.MP3 : null;
             }
             // An ADTS frame: twelve sync bits, layer 00.
             return (head[1] & 0xF0) == 0xF0 ? UploadType.AAC : null;
         }
         return null;
+    }
+
+    /** A real MPEG audio frame header: a defined version, bit rate and sampling rate. */
+    private static boolean isMpegAudioFrame(byte[] head) {
+        if (head.length < 4) {
+            return false;
+        }
+        int version = (head[1] >> 3) & 0x03;
+        int bitRate = (head[2] >> 4) & 0x0F;
+        int samplingRate = (head[2] >> 2) & 0x03;
+        return version != 1 && bitRate != 0 && bitRate != 0x0F && samplingRate != 3;
     }
 
     /** "BM", then the file size and two reserved zero words: two letters alone are not a bitmap. */

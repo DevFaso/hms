@@ -79,6 +79,24 @@ public enum UploadKind {
         return allowedTypes;
     }
 
+    /**
+     * A path that takes raster images and nothing else (a profile image, a
+     * patient photo, a chat photo). The bytes alone decide there: phone
+     * galleries hand over a WebP or a GIF under a {@code .jpg} name, and such
+     * a file is stored as the image it is, under that image's extension.
+     */
+    public boolean isRasterOnly() {
+        return allowedTypes.stream().allMatch(UploadType::isRasterImage);
+    }
+
+    /**
+     * Whether an accepted image is taken by its bytes alone on this path: the
+     * photo paths, and the chat upload endpoint, which takes a photo too.
+     */
+    public boolean takesPhotosByBytes() {
+        return this == CHAT_ATTACHMENT || isRasterOnly();
+    }
+
     /** Whether a file under this extension could be of an accepted type at all. */
     public boolean acceptsExtension(String extension) {
         return allowedTypes.stream().anyMatch(type -> type.extensions().contains(extension));

@@ -30,11 +30,18 @@ public enum UploadType {
     AAC("audio/aac", ".aac");
 
     private final String mediaType;
+    private final String extension;
     private final Set<String> extensions;
 
     UploadType(String mediaType, String... extensions) {
         this.mediaType = mediaType;
+        this.extension = extensions[0];
         this.extensions = Set.of(extensions);
+    }
+
+    /** The extension a file of this type is stored under when its own name announces another. */
+    public String extension() {
+        return extension;
     }
 
     /** The media type a file of this type is stored and served with. */

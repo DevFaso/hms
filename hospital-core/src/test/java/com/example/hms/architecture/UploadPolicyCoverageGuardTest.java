@@ -124,7 +124,14 @@ class UploadPolicyCoverageGuardTest {
         for (UploadKind photo : EnumSet.of(UploadKind.PATIENT_PHOTO, UploadKind.PROFILE_IMAGE,
                 UploadKind.CHAT_PHOTO)) {
             assertThat(photo.allowedTypes()).as("%s takes raster images only", photo)
+                .isNotEmpty()
                 .allMatch(com.example.hms.upload.UploadType::isRasterImage);
+            assertThat(photo.isRasterOnly()).as("%s is typed by its bytes alone", photo).isTrue();
+        }
+        for (UploadKind named : EnumSet.complementOf(EnumSet.of(UploadKind.PATIENT_PHOTO, UploadKind.PROFILE_IMAGE,
+                UploadKind.CHAT_PHOTO))) {
+            assertThat(named.isRasterOnly()).as("%s keeps the rule that the name announces the content", named)
+                .isFalse();
         }
         for (com.example.hms.upload.UploadType type : com.example.hms.upload.UploadType.values()) {
             assertThat(Set.of("image/svg+xml", "text/html", "application/xhtml+xml", "text/xml", "application/xml",
