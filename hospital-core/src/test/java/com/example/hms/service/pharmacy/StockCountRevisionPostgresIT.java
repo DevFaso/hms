@@ -46,7 +46,7 @@ import static org.mockito.ArgumentMatchers.*;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({StockCountService.class, StockTransactionServiceImpl.class, StockTransactionMapper.class,
+@Import({StockCountService.class, StockBalanceReconciliationService.class, StockTransactionServiceImpl.class, StockTransactionMapper.class,
     LowStockAlertDelivery.class, StockCountRevisionPostgresIT.TestClock.class,
     com.example.hms.security.EncryptionKeyHolder.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -70,6 +70,7 @@ class StockCountRevisionPostgresIT {
         @Bean Clock stockCountClock() { return Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC); }
     }
     @Autowired StockCountService counts;
+    @Autowired StockBalanceReconciliationService reconciliation;
     @Autowired LowStockAlertDelivery delivery;
     @Autowired InventoryItemRepository items;
     @Autowired StockLotRepository lots;
@@ -239,6 +240,31 @@ class StockCountRevisionPostgresIT {
         });
         assertThat(jdbc.queryForObject("SELECT count(*) FROM clinical.low_stock_alert_receipts WHERE inventory_item_id = ?", Integer.class, itemId)).isEqualTo(1);
         verify(notifications).createNotification(eq("inventory.lowStock.notification"), any(), eq("synthetic-recipient"), eq("REORDER_ALERT"), eq(itemId));
+    }
+
+    @Test
+    void physicallyVerifiedLotBalancesRepairOnlyTheAggregateAndRecordAnAdjustment() {
+        UUID lotId = transaction.execute(status -> {
+            var lot = StockLot.builder().inventoryItem(items.findById(itemId).orElseThrow()).lotNumber("COUNT-REPAIR")
+                .expiryDate(LocalDate.now().plusYears(1)).initialQuantity(new BigDecimal("15"))
+                .remainingQuantity(new BigDecimal("15")).receivedDate(LocalDate.now())
+                .receivedByUser(entityManager.find(User.class, actorId)).unitCost(BigDecimal.ONE).build();
+            return lots.saveAndFlush(lot).getId();
+        });
+        Long revision = items.findById(itemId).orElseThrow().getStockRevision();
+        var request = new StockBalanceReconciliationRequest(new BigDecimal("20"), new BigDecimal("15"), revision,
+            true, "Physical count verified", null,
+            List.of(new StockBalanceReconciliationRequest.LotCount(lotId, new BigDecimal("15"))));
+        UUID movementId = reconciliation.reconcile(itemId, request);
+        assertThat(items.findById(itemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("15");
+        assertThat(lots.findById(lotId).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("15");
+        var movement = ledger.findById(movementId).orElseThrow();
+        assertThat(movement.getQuantity()).isEqualByComparingTo("-5");
+        assertThat(movement.getStockLot()).isNull();
+        assertThat(movement.getReason()).contains("Physical count verified");
+        assertThatThrownBy(() -> reconciliation.reconcile(itemId, request))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.changedSinceCount");
+        assertThat(ledger.findByInventoryItemId(itemId, org.springframework.data.domain.Pageable.unpaged()).getTotalElements()).isEqualTo(1);
     }
 
     @Test
