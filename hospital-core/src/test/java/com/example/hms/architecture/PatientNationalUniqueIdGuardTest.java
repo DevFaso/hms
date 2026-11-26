@@ -138,6 +138,9 @@ class PatientNationalUniqueIdGuardTest {
             .doesNotContain(".active(", ".deceased(", ".chartRestricted(");
         String mapper = sourceAt(MAIN.resolve("mapper/PatientMapper.java"));
         assertThat(methodBody(mapper, "public PatientResponseDTO toPatientDTO(Patient patient,\n"))
+            .contains("return toPatientDTO(patient, scopedHospitalId, includeHospital, includeDepartment, group)");
+        // Single reads and batches share the same identity/status builder after resolving the scoped group.
+        assertThat(methodBody(mapper, "private PatientResponseDTO toPatientDTO(Patient patient, UUID scopedHospitalId,"))
             .contains("withIdentityStatus(PatientResponseDTO.builder(), patient)");
         String flags = methodBody(mapper, "public static PatientResponseDTO.PatientResponseDTOBuilder withIdentityStatus(");
         assertThat(flags).contains(".active(patient.isActive())", ".deceased(patient.isDeceased())",

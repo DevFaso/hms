@@ -120,7 +120,7 @@ class NurseDashboardServiceImplTest {
 
         when(registrationRepository.findActiveForHospitalWithPatient(hospitalId))
             .thenReturn(List.of(registration));
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(baseDto));
         when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId))
             .thenReturn(Optional.of(snapshot));
 
@@ -157,7 +157,7 @@ class NurseDashboardServiceImplTest {
         registration.setReadyByStaffId(nurseUserId);
         PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
         when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(baseDto));
         when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
         when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
         com.example.hms.model.PatientAllergy local = com.example.hms.model.PatientAllergy.builder()
@@ -179,7 +179,7 @@ class NurseDashboardServiceImplTest {
         registration.setReadyByStaffId(nurseUserId);
         PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
         when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(baseDto));
         when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
         when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
         when(recordAccessPolicy.decide(nurseB, patient.getId(), hospitalId)).thenReturn(
@@ -225,7 +225,7 @@ class NurseDashboardServiceImplTest {
 
         when(registrationRepository.findActiveForHospitalWithPatient(hospitalId))
             .thenReturn(List.of(included, discharged, future));
-        when(patientMapper.toPatientDTO(patientIncluded, hospitalId)).thenReturn(includedDto);
+        when(patientMapper.toPatientDTOs(List.of(patientIncluded), hospitalId)).thenReturn(List.of(includedDto));
         when(patientVitalSignService.getLatestSnapshot(patientIncluded.getId(), hospitalId))
             .thenReturn(Optional.empty());
 

@@ -6,6 +6,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
+import com.example.hms.payload.dto.BloodGroupStatusDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +60,37 @@ public class PatientMapper {
         return toPatientDTO(patient, null, true, true);
     }
 
+    /** Scoped, bounded laboratory reads for a collection; never reuses another hospital's status. */
+    public List<PatientResponseDTO> toPatientDTOs(List<Patient> patients, UUID hospitalId) {
+        Map<UUID, BloodGroupStatusDTO> groups = preloadBloodGroups(patients, hospitalId);
+        return patients.stream()
+            .map(patient -> toPatientDTO(patient, hospitalId, true, true, batchGroup(patient, groups)))
+            .toList();
+    }
+
+    /** Unpaged hospital lists can exceed PostgreSQL's parameter limit; pages normally need just one read. */
+    private Map<UUID, BloodGroupStatusDTO> preloadBloodGroups(List<Patient> patients, UUID hospitalId) {
+        if (bloodGroupStatus == null) {
+            return Map.of();
+        }
+        List<Patient> present = patients.stream().filter(Objects::nonNull).toList();
+        Map<UUID, BloodGroupStatusDTO> groups = new java.util.HashMap<>();
+        final int batchSize = 1_000;
+        for (int start = 0; start < present.size(); start += batchSize) {
+            groups.putAll(bloodGroupStatus.ofAll(present.subList(start, Math.min(start + batchSize, present.size())), hospitalId));
+        }
+        return groups;
+    }
+
+    private static BloodGroupStatusDTO batchGroup(Patient patient, Map<UUID, BloodGroupStatusDTO> groups) {
+        if (patient == null) {
+            return null;
+        }
+        BloodGroupStatusDTO group = patient.getId() == null ? null : groups.get(patient.getId());
+        return group != null ? group
+            : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType());
+    }
+
     /** Status flags have the same meaning on a minimal identity result and a full patient response. */
     public static PatientResponseDTO.PatientResponseDTOBuilder withIdentityStatus(
             PatientResponseDTO.PatientResponseDTOBuilder builder, Patient patient) {
@@ -78,6 +111,18 @@ public class PatientMapper {
                                            UUID scopedHospitalId,
                                            boolean includeHospital,
                                            boolean includeDepartment) {
+        if (patient == null) {
+            return null;
+        }
+        BloodGroupStatusDTO group = bloodGroupStatus != null ? bloodGroupStatus.of(patient, scopedHospitalId)
+            : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType());
+        return toPatientDTO(patient, scopedHospitalId, includeHospital, includeDepartment, group);
+    }
+
+    @SuppressWarnings("java:S3776")
+    private PatientResponseDTO toPatientDTO(Patient patient, UUID scopedHospitalId,
+                                            boolean includeHospital, boolean includeDepartment,
+                                            BloodGroupStatusDTO group) {
         if (patient == null) return null;
 
         // ---------- SAFE DEFAULTS (never-null targets) ----------
@@ -217,9 +262,7 @@ public class PatientMapper {
             .emergencyContactRelationship(patient.getEmergencyContactRelationship())
             .bloodType(patient.getBloodType())
             // QA D3901: the confirmed group of the hospital this read is scoped to, beside the declared one.
-            .bloodGroup(bloodGroupStatus != null
-                ? bloodGroupStatus.of(patient, scopedHospitalId)
-                : com.example.hms.service.transfusion.PatientBloodGroupStatusService.declaredOnly(patient.getBloodType()))
+            .bloodGroup(group)
             .allergies(resolveMessage(patient.getAllergies()))
             .medicalHistorySummary(resolveMessage(patient.getMedicalHistorySummary()))
             .preferredPharmacy(patient.getPreferredPharmacy())

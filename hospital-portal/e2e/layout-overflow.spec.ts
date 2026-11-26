@@ -7,6 +7,7 @@ import { test, expect } from './fixtures/test-fixtures';
 import { routedPages } from './helpers/routed-page-inventory';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
 import { signInAs, TEST_ID } from './helpers/role-session';
+import { registerStaffStateLayoutChecks } from './helpers/staff-state-layout';
 import { auditAtWidths, formatOffenders, heightFor, LAYOUT_WIDTHS } from './helpers/layout-audit';
 
 /**
@@ -25,6 +26,8 @@ import { auditAtWidths, formatOffenders, heightFor, LAYOUT_WIDTHS } from './help
  * Runs in the a11y-smoke CI job (`npm run e2e:layout`), against the mocked
  * backend in fixtures/test-fixtures.ts; no live server.
  */
+
+registerStaffStateLayoutChecks();
 
 const PUBLIC = new Set([
   '/login',

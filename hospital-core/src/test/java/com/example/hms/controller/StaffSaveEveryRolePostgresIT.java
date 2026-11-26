@@ -110,6 +110,8 @@ class StaffSaveEveryRolePostgresIT {
     private final AtomicInteger sequence = new AtomicInteger();
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private com.example.hms.service.UserService directory;
+    @Autowired private com.example.hms.service.StaffService staffService;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private StaffRepository staffRepository;
     @Autowired private DepartmentRepository departmentRepository;
@@ -398,6 +400,65 @@ class StaffSaveEveryRolePostgresIT {
 
         assertThat(edited.getResponse().getStatus())
             .as(edited.getResponse().getContentAsString(StandardCharsets.UTF_8)).isEqualTo(200);
+    }
+
+    @Test
+    void d4021_inactiveHospitalAccessIsVisibleWithoutFallingBackToHistoricalGlobalRoles() throws Exception {
+        User subject = userWithRole("ROLE_NURSE");
+        subject.addRole(role("ROLE_NURSE"));
+        subject.addRole(role("ROLE_MIDWIFE"));
+        subject = userRepository.saveAndFlush(subject);
+        UUID subjectId = subject.getId();
+        String staffId = create(formBody(subject, "ROLE_NURSE", "NURSE"), EN);
+
+        staffService.deleteStaff(UUID.fromString(staffId), Locale.ENGLISH);
+
+        assertThat(staffService.getStaffById(UUID.fromString(staffId), Locale.ENGLISH).isActive()).isFalse();
+        assertThat(userRepository.findById(subjectId).orElseThrow().isActive()).isTrue();
+        var own = directory.getUsersAtHospital(hospital.getId(), 0, 100).getContent().stream()
+            .filter(row -> row.getId().equals(subjectId)).findFirst().orElseThrow();
+        assertThat(own.getAccessActive()).isFalse();
+        assertThat(own.getRoleName()).isNull();
+        assertThat(own.getRoleCount()).isZero();
+        assertThat(own.getReactivationAssignmentId()).isNotNull();
+    }
+
+    @Test
+    void d4021_deactivationPreservesAnotherHospitalsAccessAndTheExistingDirectoryPrivacyRule() throws Exception {
+        User subject = userWithRole("ROLE_NURSE");
+        subject.addRole(role("ROLE_NURSE"));
+        subject.addRole(role("ROLE_MIDWIFE"));
+        subject = userRepository.saveAndFlush(subject);
+        UUID subjectId = subject.getId();
+        String staffId = create(formBody(subject, "ROLE_NURSE", "NURSE"), EN);
+        UserRoleHospitalAssignment extra = assignmentRepository.saveAndFlush(UserRoleHospitalAssignment.builder()
+            .assignmentCode("D4021-" + UUID.randomUUID()).user(subject).registeredBy(subject)
+            .hospital(hospital).role(role("ROLE_MIDWIFE")).assignedAt(LocalDateTime.now())
+            .startDate(LocalDate.now()).active(true).build());
+        assignments.add(extra.getId());
+        Hospital elsewhere = hospitalRepository.saveAndFlush(Hospital.builder().code("D4021-" + UUID.randomUUID())
+            .name("Synthetic second hospital").active(true).build());
+        UserRoleHospitalAssignment outside = assignmentRepository.saveAndFlush(UserRoleHospitalAssignment.builder()
+            .assignmentCode("D4021-" + UUID.randomUUID()).user(subject).registeredBy(subject)
+            .hospital(elsewhere).role(role("ROLE_NURSE")).assignedAt(LocalDateTime.now())
+            .startDate(LocalDate.now()).active(true).build());
+        try {
+            staffService.deleteStaff(UUID.fromString(staffId), Locale.ENGLISH);
+            assertThat(staffService.getStaffById(UUID.fromString(staffId), Locale.ENGLISH).isActive()).isFalse();
+            assertThat(userRepository.findById(subjectId).orElseThrow().isActive()).isTrue();
+            // The standing directory privacy rule hides former staff now active only elsewhere.
+            // The local staff record remains inactive; a revoked grant must not expose another hospital's user row.
+            assertThat(directory.getUsersAtHospital(hospital.getId(), 0, 100).getContent())
+                .noneMatch(row -> row.getId().equals(subjectId));
+            var other = directory.getUsersAtHospital(elsewhere.getId(), 0, 100).getContent().stream()
+                .filter(row -> row.getId().equals(subjectId)).findFirst().orElseThrow();
+            assertThat(other.getAccessActive()).isTrue();
+            assertThat(other.getRoleName()).isEqualTo("ROLE_NURSE");
+            assertThat(assignmentRepository.findById(outside.getId()).orElseThrow().getActive()).isTrue();
+        } finally {
+            assignmentRepository.deleteById(outside.getId());
+            hospitalRepository.deleteById(elsewhere.getId());
+        }
     }
 
     // ---- helpers ------------------------------------------------------------------------------
