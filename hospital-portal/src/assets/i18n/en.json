@@ -14861,6 +14861,8 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Choose a hospital to read its notes. This choice does not change the rest of the chart.",
+    "CHOOSE_HOSPITAL": "Choose a hospital",
     "ACTION": "Action:",
     "ASSESSMENT": "Assessment:",
     "DATA": "Data:",

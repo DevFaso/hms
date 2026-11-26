@@ -26,6 +26,8 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
+import { HospitalTypeaheadComponent } from '../../shared/hospital-typeahead/hospital-typeahead.component';
+import { HospitalResponse } from '../../services/hospital.service';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -44,6 +46,7 @@ export interface NursingNotePart {
   imports: [
     FormControlStyleDirective,
     NoteAddendaComponent,
+    HospitalTypeaheadComponent,
     CommonModule,
     FormsModule,
     SubmitGuardDirective,
@@ -93,9 +96,44 @@ export class NursingNotesPanelComponent implements OnChanges {
   readonly failed = signal(false);
 
   private request?: Subscription;
+  private lastPatientId?: string;
+  private lastInputHospitalId: string | null | undefined;
+  readonly localHospital = signal<HospitalResponse | null>(null);
+  readonly choosingHospital = signal(false);
+
+  needsLocalHospital(): boolean {
+    return (
+      !this.hospitalId && this.roleContext.isSuperAdmin() && !this.roleContext.hasHospitalScope()
+    );
+  }
+
+  selectLocalHospital(hospital: HospitalResponse): void {
+    if (this.addendumFor() || this.addendumSaving()) return;
+    this.localHospital.set(hospital);
+    this.choosingHospital.set(false);
+    this.ngOnChanges();
+  }
+
+  private effectiveHospitalId(): string | undefined {
+    return this.hospitalId ?? (this.needsLocalHospital() ? this.localHospital()?.id : undefined);
+  }
 
   ngOnChanges(): void {
+    const inputHospitalId = this.hospitalId ?? null;
+    if (this.lastPatientId !== this.patientId || this.lastInputHospitalId !== inputHospitalId) {
+      this.localHospital.set(null);
+      this.choosingHospital.set(false);
+      this.lastPatientId = this.patientId;
+      this.lastInputHospitalId = inputHospitalId;
+    }
     if (!this.patientId) return;
+    if (this.needsLocalHospital() && !this.localHospital()) {
+      this.request?.unsubscribe();
+      this.notes.set([]);
+      this.loading.set(false);
+      this.failed.set(false);
+      return;
+    }
     // Review of #971: the panel is reused when another visit is opened; the
     // previous patient's request is dropped so its late answer cannot put
     // that patient's notes under this visit.
@@ -107,7 +145,7 @@ export class NursingNotesPanelComponent implements OnChanges {
       // A closed visit reads further back: the newest notes may all be a later visit's.
       .listRecent(
         this.patientId,
-        this.hospitalId ?? undefined,
+        this.effectiveHospitalId(),
         ...(this.until ? [NursingNotesPanelComponent.CLOSED_VISIT_LIMIT] : []),
       )
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -131,7 +169,8 @@ export class NursingNotesPanelComponent implements OnChanges {
   canAddend(note: NursingNote): boolean {
     if (!this.allowAddendum) return false;
     if (!this.roleContext.hasAnyActiveRole(NursingNoteService.ADDENDUM_ROLES)) return false;
-    return !this.hospitalId || !note.hospitalId || note.hospitalId === this.hospitalId;
+    const hospitalId = this.effectiveHospitalId();
+    return !hospitalId || !note.hospitalId || note.hospitalId === hospitalId;
   }
 
   openAddendum(note: NursingNote): void {
@@ -151,7 +190,12 @@ export class NursingNotesPanelComponent implements OnChanges {
     if (!content || this.addendumSaving()) return;
     this.addendumSaving.set(true);
     this.service
-      .appendAddendum(note.id, content, this.addendumAttested, this.hospitalId ?? note.hospitalId)
+      .appendAddendum(
+        note.id,
+        content,
+        this.addendumAttested,
+        this.effectiveHospitalId() ?? note.hospitalId,
+      )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {

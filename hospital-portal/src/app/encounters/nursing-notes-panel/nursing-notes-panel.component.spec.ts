@@ -4,6 +4,7 @@ import { Subject, of, throwError } from 'rxjs';
 import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { roleContextStub } from '../../testing/role-context.stub';
 import {
   expectEmptySubmitRefusal,
   expectFieldsMarked,
@@ -48,6 +49,40 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
 
   beforeEach(() => {
     service = jasmine.createSpyObj('NursingNoteService', ['listRecent']);
+  });
+
+  it('chooses a hospital for notes without changing the chart scope or accepting stale notes', () => {
+    const role = roleContextStub({
+      superAdmin: true,
+      hospitalId: null,
+      roles: ['ROLE_SUPER_ADMIN'],
+    });
+    const previous = new Subject<NursingNote[]>();
+    service.listRecent.and.returnValues(previous, of([dar]));
+    TestBed.configureTestingModule({
+      imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: NursingNoteService, useValue: service },
+        { provide: RoleContextService, useValue: role },
+      ],
+    });
+    const fixture = TestBed.createComponent(NursingNotesPanelComponent);
+    const panel = fixture.componentInstance;
+    panel.patientId = 'p1';
+    panel.ngOnChanges();
+    fixture.detectChanges();
+    expect(service.listRecent).not.toHaveBeenCalled();
+    panel.selectLocalHospital({ id: 'h1', name: 'First' } as never);
+    panel.selectLocalHospital({ id: 'h2', name: 'Second' } as never);
+    previous.next([older]);
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1');
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h2');
+    expect(panel.notes().map((note) => note.id)).toEqual(['n1']);
+    expect(role.effectiveHospitalIdForRequest()).toBeNull();
+    panel.patientId = 'p2';
+    panel.ngOnChanges();
+    expect(panel.localHospital()).toBeNull();
+    expect(panel.notes()).toEqual([]);
   });
 
   it('QA D1076 class: names the note template instead of printing its code', () => {
