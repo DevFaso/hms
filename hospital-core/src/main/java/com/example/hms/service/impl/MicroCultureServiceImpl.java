@@ -100,7 +100,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     private final Clock clock;
 
     /** D3905: every final/corrected culture write also closes its finished worklist item. */
-    private MicroCultureResult saveCulture(MicroCultureResult culture) {
+    private MicroCultureResult saveCulture(MicroCultureResult culture, UUID hospitalId) {
         MicroCultureResult saved = cultureRepository.save(culture);
         if (saved.getStatus() != MicroCultureStatus.FINAL && saved.getStatus() != MicroCultureStatus.CORRECTED) {
             return saved;
@@ -110,19 +110,27 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             return saved;
         }
         UUID orderId = order.getId();
-        labOrderRepository.findWithLockById(orderId);
-        LabOrderStatus committed = labOrderRepository.findStatusById(orderId);
+        if (hospitalId == null || saved.getHospital() == null
+            || !hospitalId.equals(saved.getHospital().getId())) {
+            throw new ResourceNotFoundException("microculture.culture.notFound", saved.getId());
+        }
+        LabOrder lockedOrder = labOrderRepository.findWithLockByIdAndHospitalId(orderId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("microculture.culture.notFound", saved.getId()));
+        // Legacy reports may predate the culture flag. They can be corrected, but must never close a non-culture order.
+        if (lockedOrder.getLabTestDefinition() == null || !lockedOrder.getLabTestDefinition().isCulture()
+            || !com.example.hms.service.lab.LabDefinitionEligibility.canResultOrderedVersion(lockedOrder.getLabTestDefinition())) {
+            return saved;
+        }
+        LabOrderStatus committed = labOrderRepository.findStatusByIdAndHospitalId(orderId, hospitalId);
         LabOrderStatus target = com.example.hms.service.lab.LabOrderLifecycle.statusAfterAllResultsReleased(committed);
         if (target == null) {
             return saved;
         }
-        boolean culturesFinished = cultureRepository.findByLabOrder_IdOrderByCreatedAtDesc(orderId).stream()
+        boolean culturesFinished = cultureRepository.findByLabOrder_IdAndHospital_IdOrderByCreatedAtDesc(orderId, hospitalId).stream()
             .allMatch(row -> row.getStatus() == MicroCultureStatus.FINAL || row.getStatus() == MicroCultureStatus.CORRECTED);
-        java.util.List<com.example.hms.model.LabResult> results = labResultRepository.findByLabOrder_Id(orderId);
-        java.util.Set<UUID> superseded = com.example.hms.service.lab.SupersededLabResults.supersededRowIds(results, results);
-        boolean resultsFinished = results.stream().allMatch(row -> row.isReleased() || superseded.contains(row.getId()));
-        if (culturesFinished && resultsFinished) {
-            labOrderRepository.updateStatusFrom(orderId, committed, target);
+        java.util.List<com.example.hms.model.LabResult> results = labResultRepository.findByLabOrder_IdAndLabOrder_Hospital_Id(orderId, hospitalId);
+        if (com.example.hms.service.lab.LabOrderCompletion.allReleased(results, culturesFinished, true)) {
+            labOrderRepository.updateStatusFromInHospital(orderId, hospitalId, committed, target);
         }
         return saved;
     }
@@ -153,6 +161,9 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         }
         if (order.getLabTestDefinition() == null || !order.getLabTestDefinition().isCulture()) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.cultureOrderRequired");
+        }
+        if (!com.example.hms.service.lab.LabDefinitionEligibility.canResultOrderedVersion(order.getLabTestDefinition())) {
+            throw new FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.orderDefinitionUnapproved");
         }
         Patient patient = order.getPatient();
         if (patient == null) {
@@ -186,7 +197,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
                 .ifPresent(culture::setReportedByStaff);
         }
-        MicroCultureResult saved = saveCulture(culture);
+        MicroCultureResult saved = saveCulture(culture, hospitalId);
         LabOrderStatus target = com.example.hms.service.lab.LabOrderLifecycle.statusAfterNewResult(committed);
         if (target != null) {
             labOrderRepository.updateStatusFrom(order.getId(), committed, target);
@@ -246,7 +257,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (request.getNotes() != null) {
             culture.setNotes(request.getNotes());
         }
-        MicroCultureResult saved = saveCulture(culture);
+        MicroCultureResult saved = saveCulture(culture, hospitalId);
         notifyIfCorrectionChangedOutcome(saved, outcomeBefore);
         return toDto(saved);
     }
@@ -265,7 +276,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         culture.setStatus(MicroCultureStatus.FINAL);
         culture.setFinalizedAt(LocalDateTime.now(clock));
         culture.setFinalizedByUserId(actorUserId);
-        MicroCultureResult saved = saveCulture(culture);
+        MicroCultureResult saved = saveCulture(culture, hospitalId);
 
         if (saved.getGrowthResult() == MicroGrowthResult.GROWTH) {
             notifyOrderingProviderBestEffort(saved);
@@ -300,7 +311,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             .notes(request.getNotes())
             .build();
         isolateRepository.save(isolate);
-        MicroCultureResult saved = saveCulture(culture);
+        MicroCultureResult saved = saveCulture(culture, hospitalId);
         notifyIfCorrectionChangedOutcome(saved, outcomeBefore);
         return toDto(saved);
     }
@@ -319,7 +330,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         isolate.setGrowthQuantity(request.getGrowthQuantity());
         isolate.setNotes(request.getNotes());
         isolateRepository.save(isolate);
-        return toDto(saveCulture(culture));
+        return toDto(saveCulture(culture, hospitalId));
     }
 
     @Override
@@ -334,7 +345,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 "micro.culture.lastIsolateNeedsOutcome");
         }
         removeWithSusceptibilities(List.of(isolate));
-        return toDto(saveCulture(culture));
+        return toDto(saveCulture(culture, hospitalId));
     }
 
     @Override
@@ -357,7 +368,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             .notes(request.getNotes())
             .build();
         susceptibilityRepository.save(row);
-        return toDto(saveCulture(culture));
+        return toDto(saveCulture(culture, hospitalId));
     }
 
     @Override
@@ -370,7 +381,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             .orElseThrow(() -> new ResourceNotFoundException("microculture.susceptibility.notFound", susceptibilityId));
         applyCorrectionGuard(culture, correctionReason);
         susceptibilityRepository.delete(row);
-        return toDto(saveCulture(culture));
+        return toDto(saveCulture(culture, hospitalId));
     }
 
     /* ── Guards ────────────────────────────────────────────────────────── */

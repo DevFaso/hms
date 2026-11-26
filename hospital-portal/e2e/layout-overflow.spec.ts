@@ -1726,6 +1726,23 @@ test.describe('r77 diagnostic worklist controls', () => {
     expect(received).not.toBeNull();
     expect(actions).not.toBeNull();
     expect(received!.x + received!.width).toBeLessThanOrEqual(actions!.x + 1);
+    const receivedText = await headers.nth(6).evaluate((header) => {
+      const range = document.createRange();
+      range.selectNodeContents(header);
+      return [...range.getClientRects()]
+        .filter((rect) => rect.width > 0)
+        .map((rect) => ({
+          left: rect.left,
+          right: rect.right,
+        }));
+    });
+    expect(receivedText.length).toBeGreaterThan(0);
+    for (const text of receivedText) {
+      expect(text.left).toBeGreaterThanOrEqual(received!.x - 1);
+      expect(text.right).toBeLessThanOrEqual(received!.x + received!.width + 1);
+      expect(text.right).toBeLessThanOrEqual(actions!.x + 1);
+    }
+
     await testInfo.attach('release-worklist-1440', {
       body: await page.screenshot(),
       contentType: 'image/png',

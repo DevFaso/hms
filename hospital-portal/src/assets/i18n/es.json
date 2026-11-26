@@ -4849,8 +4849,8 @@
       "ADD_RANGE": "Add a range",
       "ADD": "Add a component"
     },
-    "CULTURE": "Culture (culture and susceptibility report)",
-    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version."
+    "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
+    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",

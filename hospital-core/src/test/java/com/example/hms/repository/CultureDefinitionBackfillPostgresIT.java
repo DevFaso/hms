@@ -30,15 +30,19 @@ class CultureDefinitionBackfillPostgresIT {
             new Definition("CREAT", "Créatinine", "Biochimie", false),
             new Definition("PREL-SANG", "Prélèvement sanguin", "Biochimie", false),
             new Definition("ECBU", "ECBU", "Analyses urinaires", true),
-            new Definition("HEMO", "HÉMOCULTURE", "Bilan infectieux", true),
+            new Definition("BLOOD-CULTURE", "HÉMOCULTURE", "Bilan infectieux", true),
             new Definition("COPROCULTURE", "Examen des selles", "Autre", true),
             new Definition("PV", "Prélèvement vaginal / antibiogramme", "Autre", true),
-            new Definition("MICRO", "Examen bactériologique", "MICROBIOLOGY", true),
-            new Definition("BACT", "Examen bactérien", "Bactériologie", true),
+            new Definition("MICRO", "Examen bactériologique", "MICROBIOLOGY", false),
+            new Definition("BACT", "Examen bactérien", "Bactériologie", false),
             new Definition("TWP-ECBU", "ECBU", "Microbiologie", true),
             new Definition("TWP-CREA", "Créatinine", "Biochimie", false),
             new Definition("TWP-GS-RH", "Groupe sanguin et rhésus", "Hématologie", false),
-            new Definition("MICRO-FR", "Examen microbiologique", "  MICROBIOLOGIE  ", true));
+            new Definition("MICRO-FR", "Examen microbiologique", "  MICROBIOLOGIE  ", false),
+            new Definition("HEMO-COUNT", "Hemogram", "Microbiology", false),
+            new Definition("HEMO", "Creatinine", "Microbiology", false),
+            new Definition("MISC-CREA", "Creatinine", "Microbiology", false),
+            new Definition("SENS-EN", "Antibiogram", "Other", true));
         try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             try (var schema = connection.createStatement()) {
                 schema.execute("CREATE SCHEMA lab");
@@ -66,7 +70,7 @@ class CultureDefinitionBackfillPostgresIT {
                     if (actual) flagged.add(code);
                 }
             }
-            assertThat(flagged).containsExactly("BACT", "COPROCULTURE", "ECBU", "HEMO", "MICRO", "MICRO-FR", "PV", "TWP-ECBU");
+            assertThat(flagged).containsExactly("BLOOD-CULTURE", "COPROCULTURE", "ECBU", "PV", "SENS-EN", "TWP-ECBU");
             System.out.println("V394|fictional-clinic flags|" + String.join(",", flagged));
             System.out.println("V394|existing synthetic seed definitions unchanged|DEV-CBC,DEV-HBA1C,DEV-LIPID");
             try (var query = connection.createStatement(); var rows = query.executeQuery("SELECT is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'lab' AND table_name = 'lab_test_definitions' AND column_name = 'culture'")) {
