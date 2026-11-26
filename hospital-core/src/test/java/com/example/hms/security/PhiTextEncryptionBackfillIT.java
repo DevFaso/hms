@@ -48,6 +48,10 @@ class PhiTextEncryptionBackfillIT extends BaseIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private IntegrationMessageEventRepository messageEventRepository;
     @Autowired private IntegrationMessageRecorder messageRecorder;
+    @Autowired private com.example.hms.repository.NotificationRepository notificationRepository;
+    @Autowired private com.example.hms.service.NotificationService notificationService;
+
+    private final List<UUID> notificationIds = new ArrayList<>();
 
     private final List<UUID> identityIds = new ArrayList<>();
     private final List<UUID> mergeEventIds = new ArrayList<>();
@@ -58,6 +62,8 @@ class PhiTextEncryptionBackfillIT extends BaseIT {
         mergeEventRepository.deleteAllByIdInBatch(mergeEventIds);
         identityRepository.deleteAllByIdInBatch(identityIds);
         messageEventRepository.deleteAllByIdInBatch(messageEventIds);
+        notificationRepository.deleteAllByIdInBatch(notificationIds);
+        notificationIds.clear();
         mergeEventIds.clear();
         identityIds.clear();
         messageEventIds.clear();
@@ -169,5 +175,82 @@ class PhiTextEncryptionBackfillIT extends BaseIT {
     private String storedNotes(UUID eventId) {
         return jdbcTemplate.queryForObject(
             "SELECT notes FROM empi.merge_events WHERE id = ?", String.class, eventId);
+    }
+
+    // ---------- V387 (scorecard K4): the in-app notification ----------
+
+    private com.example.hms.model.Notification notification(String recipient, String body, List<Object> args) {
+        com.example.hms.model.Notification saved = notificationRepository.save(
+            com.example.hms.model.Notification.builder().message(body).messageKey("k4b.test.key").messageArgs(args)
+                .recipientUsername(recipient).type("CRITICAL_LAB_RESULT")
+                .createdAt(java.time.LocalDateTime.now()).read(false).build());
+        notificationIds.add(saved.getId());
+        return saved;
+    }
+
+    private String storedBody(UUID id) {
+        return jdbcTemplate.queryForObject("SELECT message FROM security.notifications WHERE id = ?", String.class, id);
+    }
+
+    private String storedArgs(UUID id) {
+        return jdbcTemplate.queryForObject(
+            "SELECT CAST(message_args AS TEXT) FROM security.notifications WHERE id = ?", String.class, id);
+    }
+
+    @Test
+    @DisplayName("a notification written now is ciphertext at rest (body and arguments), reads back whole and is still searchable")
+    void aNotificationWrittenNowIsCiphertextAtRest() {
+        String recipient = "k4b-" + UUID.randomUUID();
+        String body = "Résultat critique : Potassium 6,8 mmol/L pour Traore Awa. ".repeat(6);
+        List<Object> args = List.of(7, "Traore Awa", java.util.Map.of("key", "lab.test.potassium"));
+        UUID id = notification(recipient, body, args).getId();
+
+        assertThat(body.length()).as("longer than the column once held").isGreaterThan(255);
+        assertThat(storedBody(id)).startsWith("gcm1:").doesNotContain("Traore", "Potassium");
+        assertThat(storedArgs(id)).contains("sealed", "gcm1:").doesNotContain("Traore", "potassium");
+
+        com.example.hms.model.Notification read = notificationRepository.findById(id).orElseThrow();
+        assertThat(read.getMessage()).isEqualTo(body);
+        assertThat(read.getMessageArgs()).isEqualTo(args);
+
+        assertThat(notificationService.getNotificationsForUser(recipient, null, "POTASSIUM",
+            org.springframework.data.domain.PageRequest.of(0, 10)).getContent())
+            .extracting(com.example.hms.model.Notification::getId).containsExactly(id);
+        assertThat(notificationService.getNotificationsForUser(recipient, false, "sodium",
+            org.springframework.data.domain.PageRequest.of(0, 10)).getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a notification written before is read as it is, then encrypted by the backfill, once")
+    void aNotificationWrittenBeforeIsEncryptedByTheBackfill() {
+        UUID id = notification("k4b-" + UUID.randomUUID(), "to be replaced", List.of("x")).getId();
+        UUID bare = notification("k4b-" + UUID.randomUUID(), "to be replaced", null).getId();
+        String legacyBody = "Résultat critique : Potassium 6,8 mmol/L pour Traore Awa";
+        jdbcTemplate.update("UPDATE security.notifications SET message = ?,"
+            + " message_args = CAST(? AS jsonb) WHERE id = ?", legacyBody, "[7, \"Traore Awa\", {\"key\": \"a.b\"}]", id);
+        jdbcTemplate.update("UPDATE security.notifications SET message = ?, message_args = NULL WHERE id = ?",
+            legacyBody, bare);
+        List<Object> legacyArgs = List.of(7, "Traore Awa", java.util.Map.of("key", "a.b"));
+
+        com.example.hms.model.Notification before = notificationRepository.findById(id).orElseThrow();
+        assertThat(before.getMessage()).isEqualTo(legacyBody);
+        assertThat(before.getMessageArgs()).isEqualTo(legacyArgs);
+
+        backfill.backfill();
+
+        String body = storedBody(id);
+        String args = storedArgs(id);
+        assertThat(body).startsWith("gcm1:").doesNotContain("Traore");
+        assertThat(args).contains("sealed").doesNotContain("Traore");
+        assertThat(storedBody(bare)).startsWith("gcm1:");
+        assertThat(storedArgs(bare)).isNull();
+        com.example.hms.model.Notification after = notificationRepository.findById(id).orElseThrow();
+        assertThat(after.getMessage()).isEqualTo(legacyBody);
+        assertThat(after.getMessageArgs()).isEqualTo(legacyArgs);
+
+        backfill.backfill();
+
+        assertThat(storedBody(id)).as("idempotent").isEqualTo(body);
+        assertThat(storedArgs(id)).as("idempotent").isEqualTo(args);
     }
 }

@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 public class EmailVerificationRequestDTO {
 
-    @NotBlank(message = "{emailVerification.email.required}")
+    /** Optional: the mailed link carries the token alone. Sent by clients that ask for the address beside it. */
     @Email(message = "{emailVerification.email.invalid}")
     private String email;
 

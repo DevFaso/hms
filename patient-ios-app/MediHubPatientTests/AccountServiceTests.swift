@@ -64,6 +64,14 @@ final class AccountServiceTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.sent.first?.bodyJSON?["token"] as? String, "abc123")
     }
 
+    func testATokenInTheLinkFragmentIsRead() {
+        XCTAssertEqual(AccountLinkParser.token(from: "https://e-keneya.com/reset-password#token=abc-123_x"), "abc-123_x")
+        XCTAssertEqual(AccountLinkParser.token(from: " https://dev.e-keneya.com/verify#token=tok "), "tok")
+        XCTAssertEqual(AccountLinkParser.token(from: "https://e-keneya.com/reset-password?token=old"), "old")
+        XCTAssertEqual(AccountLinkParser.token(from: "bare-code"), "bare-code")
+        XCTAssertNil(AccountLinkParser.email(from: "https://dev.e-keneya.com/verify#token=tok"))
+    }
+
     // MARK: - '+' in an e-mail address
 
     func testPlusInAQueryValueIsPercentEncoded() throws {

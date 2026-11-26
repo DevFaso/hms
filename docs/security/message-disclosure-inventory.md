@@ -1,7 +1,8 @@
 # Message disclosure inventory (scorecard K4)
 
 Every message the platform sends out of the building (SMS, e-mail and its attachment, the links
-inside them), what each one carries, and whether that is the minimum. Reviewed 2026-11-23.
+inside them), what each one carries, and whether that is the minimum; then the urgent clinical
+messages and how each is acknowledged and escalated. Reviewed 2026-11-26.
 
 `MessageDisclosureGuardTest` reads this file: every outgoing template key in every bundle and
 locale must be covered by an entry below (a key, or one message family such as `email.invoice.*`;
@@ -31,12 +32,29 @@ invoice is the one attachment, and its mailed copy names no test and no medicine
 line, payer reason or cancellation reason whose words reveal one of those categories. Its amounts,
 shares and balance are the desk copy's.
 
-Links point at the portal and require sign-in (see « Links »).
+Links point at the portal. A link to something of the patient's requires sign-in; an account link
+(activation, password reset) carries one single-use token and nothing else (see « Links »).
 
-The in-app bell and the in-app message thread are read inside the signed-in portal and app, so they
-may name the test or the clinician; they are not on this list. The server sends no push
-notification today (no FCM/APNs sender in `hospital-core`); the patient apps' local notification
-text is the app's own neutral « Nouveau message ».
+A one-time code goes to the person it is for, on their own number or address, and to nobody else:
+a copy of an account message sent to staff says that a code was sent and where (masked), never the
+code.
+
+The in-app bell, the in-basket and the in-app message thread are read inside the signed-in portal
+and app, so a clinician's notice, or a patient's own, may name the test or the clinician; they are
+not listed template by template. Two rules still apply to them:
+
+- At rest, the body of a notification and its arguments are stored encrypted with the PHI key, like
+  clinical text (`Notification`, V387). The search filter matches the reader's own notifications
+  after they are decrypted. Rows written before V387 are encrypted by the startup backfill
+  (`PhiTextEncryptionBackfill`).
+- A copy for a non-clinical role is a flag with no clinical content. The model is the critical
+  result ladder's notice to administrators: it says that an alert is unresolved, without the test,
+  the value or the patient (see « Urgent clinical messages »).
+
+The server sends no push notification today: `hospital-core` has no FCM/APNs sender and no
+device-token endpoint. The patient apps show a title and a body supplied by the server when one is
+sent, and their own neutral « Nouveau message » otherwise. A push sender, when one is built, takes
+its text from templates listed here, never from a bell's text.
 
 ## SMS to the patient
 
@@ -94,14 +112,14 @@ something critical is waiting and for whom (initials).
 
 | Template | Arguments | Verdict |
 |---|---|---|
-| `sms.activation.patient` | hospital, code, activation link | OK |
-| `sms.activation.staff` | role, hospital, code, link | OK (staff) |
+| `sms.activation.patient` | hospital, code, assignment link | OK: to the patient's own number. The code is valid 48 h (see « Links ») |
+| `sms.activation.staff` | role, hospital, code, link | OK (staff): to the staff member's own number |
 | `sms.activation.staff.platform` | role, code, link | OK (staff) |
-| `sms.activation.registrar` | person, role, hospital, code | **Fixed (K4)**: a patient's full name went to the registrar's phone; now first name and initial |
-| `sms.activation.registrar.platform` | person, role, code | **Fixed (K4)**: as above |
-| `sms.activation.hospital` | person, role, code | **Fixed (K4)**: as above, to the hospital's number |
+| `sms.activation.registrar` | person, role, hospital, where the code was sent (masked) | OK: the registrar's copy. A patient is named by first name and initial; the copy says that the activation code was sent and to which number or address, masked (`+226*****56`), never the code. No copy is sent when the person has no number and no address |
+| `sms.activation.registrar.platform` | person, role, where the code was sent (masked) | OK: as above |
+| `sms.activation.hospital` | person, role, where the code was sent (masked) | OK: as above, to the hospital's main number |
 | `sms.username.reminder` | username | OK |
-| `sms.passwordReset.link` | reset link | Account link (see « Links ») |
+| `sms.passwordReset.link` | reset link | Account link: valid 2 h, single use (see « Links ») |
 | `sms.passwordReset.changed` | none | OK |
 | `sms.phoneVerification.code` | code, minutes | OK |
 | `recipientVerification.code` | code | OK (SMS or e-mail body) |
@@ -115,6 +133,10 @@ The SMS gateway's own outcome texts are shown to staff on screen, never sent:
 `sms.provider.rejected`, `sms.provider.unknownOutcome`, `sms.provider.authFailed`,
 `sms.provider.unreachable`, `sms.recipient.notSupported`, `sms.recipient.notAllowlisted`,
 `sms.message.required`.
+
+Staff-assisted activation does not need the code in a message: the registrar, or the desk of the
+patient's hospital, reads the pending code on screen through « show the code », which is audited
+(who, which assignment, never the code), and can send it again.
 
 ## E-mail to the patient
 
@@ -131,7 +153,7 @@ The SMS gateway's own outcome texts are shown to staff on screen, never sent:
 | `email.appointment.links.*` | n/a (link labels) | n/a | n/a | OK |
 | `email.appointment.contact` | n/a | hospital e-mail and phone | n/a | OK |
 | `encounter.visitSummary.email.subject`, `encounter.visitSummary.email.title`, `encounter.visitSummary.email.greeting`, `encounter.visitSummary.email.body`, `encounter.visitSummary.email.provider`, `encounter.visitSummary.email.closing`, `encounter.visitSummary.email.patientFallback`, `encounter.visitSummary.email.careTeamFallback` | « Votre résumé de visite est disponible » | greeting by name, hospital, clinician, « connectez-vous » | none: the summary itself stays in the portal | OK |
-| `email.invoice.*` | « Facture N – hospital » | number, dates, total, balance, the clerk's optional note | invoice PDF | **Fixed (K4)**: the attached PDF listed every test and medicine by name (« Sérologie VIH », an antiretroviral). The mailed copy (`PdfInvoiceService.generateMailedInvoicePdf`) prints a test or a medicine by its category only, and any other line or payer reason whose words reveal a protected category by its category or not at all. The desk copy and the portal are unchanged. The clerk's free-text note is the clerk's responsibility |
+| `email.invoice.*` | « Facture N – hospital » | number, dates, total, balance, the clerk's optional note | invoice PDF | **Fixed (K4)**: the attached PDF listed every test and medicine by name (« Sérologie VIH », an antiretroviral). The mailed copy (`PdfInvoiceService.generateMailedInvoicePdf`) prints a test or a medicine by its category only, and any other line or payer reason whose words reveal a protected category by its category or not at all. The desk copy and the portal are unchanged. The clerk's free-text note is the clerk's responsibility. Recipients (`InvoiceMailRecipients`): the patient's own verified address, or the address of an active guarantor on the patient's file at the invoice's hospital; any other address only with the clerk's reason, which is recorded. Three addresses at most in one send, all lists together. Each recipient leaves an audit row: the address masked, the invoice, patient and guarantor by id, the reason when one was needed; never the subject or the note |
 | `email.patient.welcome.*` | « Bienvenue à hospital » | hospital, code, activation button | none | OK |
 | `email.activation.*` | neutral | activation link | none | Account link (see « Links ») |
 
@@ -143,9 +165,11 @@ The SMS gateway's own outcome texts are shown to staff on screen, never sent:
 | `email.role.assignment.*` | OK: role, hospital, code, verification link |
 | `email.role.label.*` | n/a: role labels used inside the account e-mails |
 | `email.admin.welcome.*` | OK: account e-mail to the new staff member |
+| `email.bootstrap.welcome.*` | OK: to the first super administrator, once, when the platform's first account is created: a greeting by first name and the username; no password, no link. Every value is escaped |
 
-Scheduled reports (`ScheduledReportService`) mail aggregate counts only, written in code and not
-from a template: « Aggregate counts only — no patient data ».
+Scheduled reports (`ScheduledReportService`) are written in code and not from a template. Subject:
+« [HMS] report name — period ». Body: « Aggregate counts only — no patient data ». Attachment: a
+CSV of aggregate counts. Recipients: the addresses on the report's definition.
 
 ## E-mail for accounts and security
 
@@ -169,7 +193,65 @@ from a template: « Aggregate counts only — no patient data ».
   route through `AuthGuard` to the patient's own appointments, where the server checks ownership. No
   patient id, no token, no query string.
 - « Connectez-vous à votre espace patient »: the portal's sign-in, no parameter.
-- Account links: out of scope for this change; tracked separately.
+- Account links are built in one place (`ActivationLinks`) and carry one opaque token in the URL
+  fragment, which a browser does not send to the host that serves the portal: no query string, no
+  address, no username, no code. The page reads the token, clears the address bar and exchanges it
+  by POST. `AccountLinkGuardTest` fails the build on a link with a token, an address or a code in a
+  query string, and on an account link built anywhere else.
+  - Activation (`email.activation.*`): `{portal}/verify#token=…`, exchanged at
+    `POST /auth/verify-email`. The token is 256 random bits; the account keeps its SHA-256 only. Valid
+    24 h, cleared at first use, replaced when a new link is asked for.
+  - Password reset and first password (`email.password.reset.*`, `sms.passwordReset.link`):
+    `{portal}/reset-password#token=…`, exchanged at `POST /auth/password/confirm`. 256 random bits,
+    SHA-256 stored, valid 2 h, single use, one live token per account. The answer is the same
+    whether or not the account exists.
+  - Links sent before this rule (token, and for activation the address, in the query string) keep
+    working until they expire. The patient apps take a pasted link of either form; they still send
+    the address the patient types with the token to the deprecated `GET /auth/verify-email`, which
+    is removed once the apps post.
+- Assignment links (`sms.activation.*`, `email.role.assignment.*`, `email.patient.welcome.*`,
+  `email.admin.welcome.*`): `{portal}/…/{assignmentCode}`, a reference in the path. The page
+  answers the same for every reference; who, what and where are shown only once the 6-digit code is
+  proven. The code is valid 48 h, with 5 wrong tries per 15 minutes, and goes only to the person.
+
+## Other outbound messages
+
+| Message | Recipient | Carries | Verdict |
+|---|---|---|---|
+| Webhooks: appointment booked, cancelled, rescheduled; ping | The endpoint an administrator registered | Identifiers only (no name, no clinical field); HMAC-signed | OK |
+| Scheduled report | See « E-mail to staff » | Aggregate counts | OK |
+
+## Urgent clinical messages: acknowledgment and escalation
+
+The second half of K4: an urgent clinical message is acknowledged by a person who can act, and is
+escalated while nobody has. The reference is the critical laboratory result ladder
+(`CriticalResultEscalationLadder`, `CriticalResultRecipients`):
+
+- the first notice is filed in the result's own transaction, in-app, to the prescriber and the nurse
+  in charge, with a neutral SMS (initials only) to the prescriber;
+- acknowledgment is a read-back by a clinician;
+- unacknowledged, it widens: the covering doctor at 15 minutes, the médecin-chef and the biologist
+  at 30, then « non résolu » at 60 with an incident record and a flag to administrators that
+  carries no test, value or patient; reminders continue, slowing to daily, with no cap;
+- an SMS goes to the people added at each step. It says only that an alert is waiting and for whom
+  (initials).
+
+| Alert | First notice | Acknowledgment | Escalation while unacknowledged | SMS |
+|---|---|---|---|---|
+| Critical laboratory result | Prescriber and nurse in charge | Read-back by a clinician | The ladder above, no cap | Initials only, at each widening step |
+| Critical imaging finding | Ordering provider | Acknowledge action | Repeated every 30 minutes, no cap; the hospital's administrators are added from the second round | Ordering provider, initials only |
+| Critical questionnaire answer | Recorder, panel owners, fallback role | Acknowledge action | Repeated every 30 minutes, no cap; the hospital's administrators are added from the second round | Recorder, initials only |
+| Partograph, delivery, postpartum, labour transfer | On-call doctors and midwives (else all), with a CRITICAL in-basket item | In-basket acknowledgment by somebody other than the documenter | Every 15 minutes, three rounds, widening to all doctors, midwives and nurses | None |
+| Maternal early warning (medium, high, red) | Care circle, senior doctor, on call; filed as above | As above | As above | None |
+| Adult early warning, high | Recorder, responsible doctor, ward nurses, covering doctor; filed as above | As above | As above | None |
+| Adult early warning, medium | Recorder and responsible physician (bell) | None | None | None |
+| Newborn danger sign | Obstetric circle, always a physician; filed as above | As above | As above | None |
+| Severe hypertension | Recorder, responsible physician, visit clinician | Obstetric: through the maternal early-warning filing | Obstetric: as above | None |
+| Positive culture | Ordering provider (bell) | None | None | None |
+| Emergency O positive release | Biologist review, physician countersignature, exposure follow-up (owed tasks, redelivered by a sweep) | Task completion | An overdue countersignature goes to the laboratory director | None |
+| Release despite an incompatible crossmatch | CRITICAL countersignature task to the director, the requester and on-call physicians; monitoring and haemovigilance tasks | Task completion | An overdue countersignature goes to the laboratory director | None |
+
+An alert that joins the ladder is moved in this table in the same change.
 
 ## Residual risks
 
