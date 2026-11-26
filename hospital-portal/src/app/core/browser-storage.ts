@@ -44,6 +44,10 @@ export const SESSION_SCOPED_KEYS: readonly string[] = [
   'hms_lock_ts',
   'hms-chunk-reload',
   'hms.heldRoles',
+  'PKCE_verifier',
+  'nonce',
+  'session_state',
+  'requested_route',
 ];
 
 /**
@@ -148,6 +152,61 @@ export function clearIdleLock(): void {
     for (const key of IDLE_LOCK_KEYS) sessionStorage.removeItem(key);
   } catch {
     /* storage not available */
+  }
+}
+
+/**
+ * The single-use values of an OIDC sign-in that must survive the redirect to
+ * the identity provider and back (they hold no token).
+ */
+const OIDC_REDIRECT_KEYS: readonly string[] = [
+  'PKCE_verifier',
+  'nonce',
+  'session_state',
+  'requested_route',
+];
+
+/**
+ * The OIDC library's storage (angular-oauth2-oidc `OAuthStorage`): its tokens
+ * and claims stay in memory like the portal's own; only the redirect values
+ * above go to the tab's sessionStorage (and are cleared at sign-out).
+ */
+export class PortalOAuthStorage {
+  private readonly memory = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    if (OIDC_REDIRECT_KEYS.includes(key)) {
+      try {
+        return sessionStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
+    return this.memory.get(key) ?? null;
+  }
+
+  setItem(key: string, data: string): void {
+    if (OIDC_REDIRECT_KEYS.includes(key)) {
+      try {
+        sessionStorage.setItem(key, data);
+      } catch {
+        /* storage not available: the redirect sign-in starts again */
+      }
+      return;
+    }
+    this.memory.set(key, data);
+  }
+
+  removeItem(key: string): void {
+    if (OIDC_REDIRECT_KEYS.includes(key)) {
+      try {
+        sessionStorage.removeItem(key);
+      } catch {
+        /* storage not available */
+      }
+      return;
+    }
+    this.memory.delete(key);
   }
 }
 

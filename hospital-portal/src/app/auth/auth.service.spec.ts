@@ -284,6 +284,18 @@ describe('AuthService — where the session is kept', () => {
     expect(await service.isTokenForThisTab(jwt({ uid: 'user-a' }))).toBeFalse();
   });
 
+  it('while impersonating, the tab stays bound to the super admin, so a reload brings the admin back', async () => {
+    service = create();
+    const admin = jwt({ uid: 'admin-1' });
+    service.setToken(admin);
+    await settle();
+    service.holdOriginalSession(admin, null);
+    service.setToken(jwt({ uid: 'target-9' }));
+    await settle();
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe(await tabBindingFor('admin-1'));
+    expect(await service.isTokenForThisTab(admin)).toBeTrue();
+  });
+
   it('a new token never clears the idle lock (only a fresh sign-in does)', () => {
     sessionStorage.setItem('hms_idle_locked', 'true');
     sessionStorage.setItem('hms_lock_ts', '1');

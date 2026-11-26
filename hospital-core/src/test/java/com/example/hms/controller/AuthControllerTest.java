@@ -114,6 +114,7 @@ class AuthControllerTest {
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
     @MockitoBean private AuthBootstrapService authBootstrapService;
     @MockitoBean private com.example.hms.security.provider.ProviderMfaGate providerMfaGate;
+    @MockitoBean private com.example.hms.service.SupportImpersonationService supportImpersonationService;
 
     /**
      * Spring Security 7's DaoAuthenticationProvider adds a
@@ -159,6 +160,38 @@ class AuthControllerTest {
                 // One ROLE_ authority means one role: straight in, no picker.
                 .andExpect(jsonPath("$.roleSelectionRequired").value(false))
                 .andExpect(jsonPath("$.accessToken").value("mock.access.token"));
+    }
+
+    /** A super admin signing in again ends the impersonation the previous session left tracked (audited by the service). */
+    @Test
+    void login_endsAnImpersonationTheUserLeftTracked() throws Exception {
+        givenAuthenticatedWith("ROLE_SUPER_ADMIN");
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("admin1")
+                .email("admin1@example.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        when(userRepository.findByUsername("admin1")).thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+                .thenReturn("mock.refresh.token");
+        when(impersonationSessionTracker.hasActive(userId)).thenReturn(true);
+        when(supportImpersonationService.endForImpersonator(eq(userId), any())).thenReturn(true);
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("admin1");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("mock.access.token"));
+        verify(supportImpersonationService).endForImpersonator(userId, "the super admin signed in again");
     }
 
     @Test

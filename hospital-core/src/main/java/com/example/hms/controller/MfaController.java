@@ -81,6 +81,8 @@ public class MfaController {
     private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.provider.ProviderMfaGate> providerMfaGate;
     /** The session lifetimes, for the sign-in answer's sessionEndsAt; a provider so a slice need not build it. */
     private final org.springframework.beans.factory.ObjectProvider<com.example.hms.controller.support.AuthControllerProperties> authProps;
+    /** Ends a super admin's tracked impersonation on a new sign-in; a provider so a slice need not build it. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.SupportImpersonationService> supportImpersonation;
 
     /**
      * Why {@link #honouredPick} refused, told apart: a challenge that no longer
@@ -410,6 +412,10 @@ public class MfaController {
         String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, verifiedAt, sessionId);
 
         userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
+        // A super admin signing in again leaves any impersonation of the
+        // previous session behind: end it (audited) so the new session works.
+        supportImpersonation.ifAvailable(
+                service -> service.endForImpersonator(user.getId(), "the super admin signed in again"));
         // The sign-in is complete only now: clear the password-failure count
         // here, as the password-only sign-in does, or a challenged user stays
         // one typo from the lockout.

@@ -146,6 +146,9 @@ export class AuthService {
     // Bind the tab to this account for a reload (an opaque digest, no credential).
     // The idle lock is left alone: a refresh while the screen is locked, or the
     // restore after a reload, must not unlock it (see clearIdleLock for sign-in).
+    // While impersonating, the tab stays bound to the super admin: a reload
+    // restores the admin's own session (the server ends the impersonation).
+    if (this.originalSession.token) return;
     const subject = this.tokenSubject(token);
     if (!subject) return;
     void tabBindingFor(subject)

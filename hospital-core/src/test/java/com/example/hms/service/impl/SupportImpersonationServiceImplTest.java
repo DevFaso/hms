@@ -382,6 +382,32 @@ class SupportImpersonationServiceImplTest {
             .satisfies(error -> assertThat(error).extracting("messageKey").isEqualTo("support.session.missing"));
     }
 
+    @Test
+    @DisplayName("endForImpersonator(): ends a tracked session without its token — audited, token blacklisted, entry removed")
+    void endForImpersonatorEndsTheTrackedSession() {
+        java.time.Instant expiresAt = java.time.Instant.now().plusSeconds(900);
+        sessionTracker.register(actorId, targetId, "imp-jti", expiresAt);
+
+        assertThat(service.endForImpersonator(actorId, "the portal was reloaded")).isTrue();
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.IMPERSONATION_ENDED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(actorId);
+        assertThat(audit.getValue().getResourceId()).isEqualTo(targetId.toString());
+        assertThat(audit.getValue().getEventDescription()).contains("the portal was reloaded");
+        verify(tokenBlacklistService).blacklist("imp-jti", expiresAt.toEpochMilli());
+        assertThat(sessionTracker.hasActive(actorId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("endForImpersonator(): nothing tracked → false, no audit, no blacklist")
+    void endForImpersonatorWithoutSessionIsANoOp() {
+        assertThat(service.endForImpersonator(actorId, "the super admin signed in again")).isFalse();
+        verify(auditEventLogService, never()).logEvent(any());
+        verify(tokenBlacklistService, never()).blacklist(any(), anyLong());
+    }
+
     private void authenticateSuperAdmin() {
         TestingAuthenticationToken auth = new TestingAuthenticationToken(
             "super.admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
