@@ -230,6 +230,20 @@ describe('ClinicalRulesComponent (V356)', () => {
     expect(createUrl).not.toHaveBeenCalled();
   });
 
+  it('explains a changed hospital and refuses revocation before sending', () => {
+    load(overview(true, [rule('RULE', 'SIGNED')]));
+    q<HTMLButtonElement>('rule-revoke')!.click();
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE', 'SIGNED')]), hospitalId: 'h-2' });
+    answerReasonDialog(fixture, 'Reason');
+    fixture.detectChanges();
+    expect(q('revoke-scope-changed')?.getAttribute('role')).toBe('alert');
+    httpMock.expectNone('/hospitals/h-2/clinical-rules/RULE/revocation');
+  });
+
   it('does not apply a previous hospital revocation to the current overview', () => {
     load(overview(true, [rule('RULE', 'SIGNED')]));
     q<HTMLButtonElement>('rule-revoke')!.click();

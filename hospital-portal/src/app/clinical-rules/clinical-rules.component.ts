@@ -103,6 +103,7 @@ export class ClinicalRulesComponent {
   protected draft: SignDraft = this.emptyDraft();
   /** The rule set whose sign-off is being revoked. */
   protected readonly revoking = signal<ClinicalRuleStatus | null>(null);
+  protected readonly revokeScopeChanged = signal(false);
 
   protected readonly today = localDateString();
   protected readonly text = ruleText;
@@ -159,6 +160,7 @@ export class ClinicalRulesComponent {
   }
 
   protected openRevoke(rule: ClinicalRuleStatus): void {
+    this.revokeScopeChanged.set(false);
     this.revokeHospitalId = this.hospitalId();
     this.revoking.set(rule);
   }
@@ -248,7 +250,7 @@ export class ClinicalRulesComponent {
     const hospitalId = this.hospitalId();
     if (this.busy()) return;
     if (!hospitalId || hospitalId !== this.revokeHospitalId) {
-      this.toast.error(this.translate.instant('CLINICAL_RULES.SCOPE_CHANGED'));
+      this.revokeScopeChanged.set(true);
       return;
     }
     const generation = this.scopeGeneration;

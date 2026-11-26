@@ -298,5 +298,10 @@
     <p>
       <strong>{{ text(rule.title) }}</strong>
     </p>
+    @if (revokeScopeChanged()) {
+      <p class="rules-note rules-note--error" role="alert" data-testid="revoke-scope-changed">
+        {{ 'CLINICAL_RULES.SCOPE_CHANGED' | translate }}
+      </p>
+    }
   </app-reason-dialog>
 }
