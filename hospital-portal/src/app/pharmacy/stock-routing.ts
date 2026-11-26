@@ -99,6 +99,7 @@ export class StockRoutingComponent implements OnInit {
   /** A hospital switch invalidates order-specific reads and reloads the queue. */
   onScopeChange(): void {
     this.checkSeq++;
+    this.queueSeq++;
     this.scopeSeq++;
     this.printingCopy.set(false);
     this.checking.set(false);
@@ -117,9 +118,12 @@ export class StockRoutingComponent implements OnInit {
     if (this.route.snapshot.paramMap.has('prescriptionId')) {
       // The URL named an order in the old scope. Remove it before a reload
       // could silently re-open that order under the new hospital.
-      void this.router.navigate(['/pharmacy/stock-routing'], {
-        queryParams: { scopeChanged: '1' },
-      });
+      void this.router
+        .navigate(['/pharmacy/stock-routing'], { queryParams: { scopeChanged: '1' } })
+        .then((navigated) => {
+          if (!navigated) this.loadQueue();
+        })
+        .catch(() => this.loadQueue());
       return;
     }
     this.loadQueue();
