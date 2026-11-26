@@ -55,6 +55,9 @@
           </div>
           <div class="dept-info">
             <h4>{{ dept.name }}</h4>
+            @if (dept.hospitalName) {
+              <p class="dept-desc">{{ dept.hospitalName }}</p>
+            }
             <span class="dept-code">{{ dept.departmentCode }}</span>
             @if (dept.description) {
               <p class="dept-desc">{{ dept.description }}</p>

@@ -58,6 +58,12 @@ management:
       show-details: when_authorized
       show-components: when_authorized
       roles: SUPER_ADMIN
+  # Production requires the shared Redis session store (SessionStoreStartupGuard), so its
+  # health counts: a deploy whose Redis cannot be reached fails the healthcheck and the
+  # previous deployment keeps serving. REDIS_HEALTH_ENABLED=false turns it off.
+  health:
+    redis:
+      enabled: ${REDIS_HEALTH_ENABLED:true}
   # OTLP metrics export now lives in application.properties so the dev profile gets it
   # too — see "Micrometer OTLP metrics export" there. Prod adds no overrides.
 

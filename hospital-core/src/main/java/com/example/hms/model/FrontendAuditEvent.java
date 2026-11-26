@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import org.hibernate.annotations.Immutable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
@@ -15,6 +16,7 @@ import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 @Entity
+@Immutable
 @Table(
     name = "frontend_audit_events",
     schema = "support",

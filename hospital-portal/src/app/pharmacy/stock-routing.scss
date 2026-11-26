@@ -1,6 +1,15 @@
 @use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
+.scope-switch-note {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  background: var(--primary-soft);
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+}
+
 // Local accent variant — see dispensing.scss for the shared rationale.
 .form-card-accent {
   background: var(--primary-soft);

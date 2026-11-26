@@ -176,6 +176,12 @@
           </div>
           <div class="staff-info">
             <h4>{{ member.name }}</h4>
+            @if (member.hospitalName) {
+              <p class="staff-dept">
+                <span class="material-symbols-outlined dept-icon">local_hospital</span>
+                {{ member.hospitalName }}
+              </p>
+            }
             <p class="staff-role">
               {{ (member.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate) }}
             </p>

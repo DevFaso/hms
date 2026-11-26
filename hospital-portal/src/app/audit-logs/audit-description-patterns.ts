@@ -2190,6 +2190,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
   },
+  // V382: the retention purge of the audit tables records itself (counts and cutoff in details).
+  {
+    key: 'AUDIT.DESC.AUDIT_RETENTION_PURGED',
+    re: /^Audit rows past the retention period removed$/,
+    params: [],
+  },
   // QA r70 D3206: the desk showed or re-sent a patient's portal activation (never the code).
   {
     key: 'AUDIT.DESC.PATIENT_ACTIVATION_CODE_SHOWN',

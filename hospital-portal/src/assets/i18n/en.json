@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Integration message log",
-    "SUBTITLE": "Bridges-style per-message search, dead-letter queue, and replay for partner-protocol traffic.",
-    "DLQ_BADGE": "{{ count }} failed messages awaiting replay",
-    "SHOW_DLQ_ONLY": "Show DLQ only",
+    "SUBTITLE": "Review partner messages and failures. This page records an event in the log; it does not resend the message to the partner.",
+    "DLQ_BADGE": "{{ count }} failed messages",
+    "SHOW_DLQ_ONLY": "Show failed messages",
     "SEARCH": "Search",
     "SEARCHING": "Searching…",
     "RESET": "Reset",
     "RETRY": "Retry",
     "LOAD_ERROR": "Could not load the message log. Try again.",
     "EMPTY": "No messages match the current filters.",
-    "REPLAY": "Replay",
-    "REPLAYING": "Replaying…",
+    "REPLAY": "Record in log",
+    "REPLAYING": "Recording…",
     "PAGER": "Page {{ current }} of {{ total }}",
     "CONTENT_PURGED": "Content purged (retention policy)",
     "CONTENT_PURGED_TITLE": "Message content erased on {{ date }} under the retention policy; the event record is kept.",
@@ -902,7 +902,7 @@
       "SENT": "Sent",
       "RECEIVED": "Received",
       "FAILED": "Failed",
-      "REPLAYED": "Replayed"
+      "REPLAYED": "Event recorded"
     },
     "COL": {
       "RECEIVED_AT": "Received",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Replay failed. Try again."
+      "REPLAY_FAILED": "Could not record the event. Try again."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -2197,6 +2197,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
+      "AUDIT_RETENTION_PURGED": "Audit rows past the retention period removed",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
       "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk",
@@ -7853,7 +7854,8 @@
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set signed off",
-        "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked"
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked",
+        "AUDIT_RETENTION_PURGED": "Audit rows past retention removed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -11871,6 +11873,7 @@
     "NETWORK_HELP": "Choose a hospital to view its procedure requests, consent records and schedules."
   },
   "REGISTRATIONS": {
+    "HOSPITAL_REQUIRED": "Choose the hospital for this registration.",
     "DEACTIVATE_TITLE": "Deactivate this registration?",
     "DEACTIVATE_BODY": "The patient leaves this hospital's active list. You can reactivate the registration later.",
     "DEACTIVATE_REASON": "Reason for deactivation",
@@ -13430,6 +13433,7 @@
     "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "These fields contain the saved text, which may be in a different language from the text shown in the list. Changes replace this text for all hospitals.",
     "ACTIONS": "Actions",
     "ACTIVE": "Active",
     "ADD": "Add interaction",
@@ -14863,6 +14867,8 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Choose the hospital context for reading notes. This choice does not change the rest of the chart.",
+    "CHOOSE_HOSPITAL": "Choose a hospital",
     "ACTION": "Action:",
     "ASSESSMENT": "Assessment:",
     "DATA": "Data:",
@@ -15225,6 +15231,8 @@
     "CONFIG_NOTE": "Test versions, specimen types and reference ranges in one place."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Complete or cancel the current action before changing hospitals.",
+    "SCOPE_CHANGED": "Hospital changed. Choose a prescription from the queue again.",
     "LABEL": "Pharmacy workspace",
     "CLAIMS_SUBTITLE": "Track claims, decisions and reimbursements.",
     "LOADED_CLAIMS": "claims loaded",
@@ -16325,6 +16333,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "The hospital has changed. Close this form and reopen it in the correct hospital.",
     "TITLE": "Clinical rules and sign-off",
     "SUBTITLE": "Every rule the platform applies, its source, who approves it, and whether this hospital has signed it off.",
     "BEHAVIOUR_NOTE": "A rule applies the same way whether it is signed off or not: the sign-off records the approver’s decision and changes the « provisional » label only.",

@@ -1,0 +1,8 @@
+{
+  "name": "e-keneya-railway-iac",
+  "private": true,
+  "description": "Tooling for .railway/railway.ts (Railway Infrastructure as Code). Used only by `railway config plan` / `apply` on an operator's machine; not part of any deployed image.",
+  "devDependencies": {
+    "railway": "3.19.0"
+  }
+}

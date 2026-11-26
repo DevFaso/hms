@@ -18,6 +18,10 @@
     }
   </app-page-header>
 
+  @if (!signing() && !revoking() && !busy() && !printing()) {
+    <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
+  }
+
   <p class="rules-note" role="note">{{ 'CLINICAL_RULES.BEHAVIOUR_NOTE' | translate }}</p>
 
   @if (!hospitalId()) {
@@ -158,7 +162,7 @@
                 [class.btn-secondary]="rule.status === 'SIGNED'"
                 [attr.data-testid]="rule.status === 'SIGNED' ? 'rule-revoke' : 'rule-sign'"
                 [disabled]="busy()"
-                (click)="rule.status === 'SIGNED' ? revoking.set(rule) : openSign(rule)"
+                (click)="rule.status === 'SIGNED' ? openRevoke(rule) : openSign(rule)"
               >
                 {{
                   (rule.status === 'SIGNED'
@@ -294,5 +298,10 @@
     <p>
       <strong>{{ text(rule.title) }}</strong>
     </p>
+    @if (revokeScopeChanged()) {
+      <p class="rules-note rules-note--error" role="alert" data-testid="revoke-scope-changed">
+        {{ 'CLINICAL_RULES.SCOPE_CHANGED' | translate }}
+      </p>
+    }
   </app-reason-dialog>
 }

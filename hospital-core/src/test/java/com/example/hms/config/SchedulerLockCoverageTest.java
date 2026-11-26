@@ -44,7 +44,8 @@ class SchedulerLockCoverageTest {
         "RateLimitFilter.evictStaleBuckets", "local rate-limit buckets",
         "WsTicketService.evictExpired", "local WebSocket ticket map",
         "DowntimeStateService.refresh", "polls the DB flag into this instance's cache",
-        "GlobalSessionRevocationService.refresh", "polls the global min-iat into this instance's cache"
+        "GlobalSessionRevocationService.refresh", "polls the global min-iat into this instance's cache",
+        "AsyncLogDropMonitor.report", "reports the log events this instance's async appender dropped"
     );
 
     /**

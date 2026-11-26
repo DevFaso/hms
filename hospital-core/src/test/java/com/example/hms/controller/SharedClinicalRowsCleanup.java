@@ -38,8 +38,29 @@ final class SharedClinicalRowsCleanup {
     private SharedClinicalRowsCleanup() {
     }
 
+    /**
+     * The audit table is append-only on PostgreSQL (V382). A subclass run on PostgreSQL
+     * (AppointmentBookingEndpointPostgresIT) wipes it with the trigger switched off around the wipe,
+     * in its own throwaway container; on H2 there is no trigger.
+     */
+    private static void wipeAuditRows(ApplicationContext context) {
+        org.springframework.jdbc.core.JdbcTemplate jdbc = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        Boolean postgres = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) connection ->
+            connection.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgres"));
+        if (!Boolean.TRUE.equals(postgres)) {
+            context.getBean(AuditEventLogRepository.class).deleteAllInBatch();
+            return;
+        }
+        jdbc.execute("ALTER TABLE support.audit_event_logs DISABLE TRIGGER trg_audit_append_only");
+        try {
+            jdbc.update("DELETE FROM support.audit_event_logs");
+        } finally {
+            jdbc.execute("ALTER TABLE support.audit_event_logs ENABLE TRIGGER trg_audit_append_only");
+        }
+    }
+
     static void deleteAll(ApplicationContext context) {
-        context.getBean(AuditEventLogRepository.class).deleteAllInBatch();
+        wipeAuditRows(context);
         context.getBean(NotificationRepository.class).deleteAll();
         // A released result files an in-basket RESULT row for the ordering
         // clinician (QA D178), which pins the user through fk_inbasket_recipient.

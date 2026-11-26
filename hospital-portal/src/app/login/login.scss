@@ -345,7 +345,20 @@
 
   .forgot-links {
     width: 100%;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 0.25rem;
+
+    .forgot-link {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    .link-separator {
+      display: none;
+    }
   }
 
   .btn-login {
