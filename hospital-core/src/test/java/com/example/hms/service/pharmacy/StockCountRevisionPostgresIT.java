@@ -224,6 +224,24 @@ class StockCountRevisionPostgresIT {
         assertThat(args.getValue()).containsExactly(java.util.Map.of("drugNameEn", "Synthetic medicine", "drugNameDisplay", "Synthetic medicine"), "Synthetic store", new BigDecimal("3.00"), new BigDecimal("10.00"));
     }
     @Test
+    void aStaleRecoveredSnapshotCannotHideANewShortage() {
+        User recipient = new User(); recipient.setId(actorId); recipient.setUsername("synthetic-recipient");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId, LowStockAlertDelivery.RECIPIENT_ROLES))
+            .thenReturn(List.of(recipient));
+        jdbc.update("UPDATE clinical.inventory_items SET quantity_on_hand = 50 WHERE id = ?", itemId);
+        transaction.executeWithoutResult(status -> {
+            InventoryItem stale = items.findById(itemId).orElseThrow();
+            var independent = new TransactionTemplate(manager);
+            independent.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            independent.executeWithoutResult(ignored -> jdbc.update("UPDATE clinical.inventory_items SET quantity_on_hand = 3 WHERE id = ?", itemId));
+            assertThat(stale.getQuantityOnHand()).isEqualByComparingTo("50");
+            assertThat(delivery.deliver(itemId)).isEqualTo(1);
+        });
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM clinical.low_stock_alert_receipts WHERE inventory_item_id = ?", Integer.class, itemId)).isEqualTo(1);
+        verify(notifications).createNotification(eq("inventory.lowStock.notification"), any(), eq("synthetic-recipient"), eq("REORDER_ALERT"), eq(itemId));
+    }
+
+    @Test
     void consumptionQueryExcludesTransferReturnsFromQuantitiesAndSourceMovementCount() {
         UUID origin = UUID.randomUUID();
         transaction.executeWithoutResult(status -> {

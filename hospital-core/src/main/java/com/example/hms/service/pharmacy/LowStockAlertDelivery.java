@@ -29,15 +29,19 @@ public class LowStockAlertDelivery {
     private final org.springframework.transaction.PlatformTransactionManager transactions;
 
     public int deliver(UUID itemId) {
-        InventoryItem item = itemId == null ? null : items.findForAlertDelivery(itemId).orElse(null);
-        if (!eligible(item)) return 0;
-        UUID hospitalId = item.getPharmacy().getHospital().getId();
+        if (itemId == null) return 0;
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // The caller may already hold a stale managed item, so even recipient discovery needs a fresh context.
+        UUID hospitalId = transaction.execute(status -> {
+            InventoryItem current = items.findForAlertDelivery(itemId).orElse(null);
+            return eligible(current) ? current.getPharmacy().getHospital().getId() : null;
+        });
+        if (hospitalId == null) return 0;
         var recipients = new LinkedHashMap<UUID, User>();
         assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES).stream()
             .filter(user -> user.getId() != null && user.getUsername() != null && !user.getUsername().isBlank())
             .forEach(user -> recipients.putIfAbsent(user.getId(), user));
-        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactions);
-        transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         int sent = 0;
         for (User recipient : recipients.values()) {
             try {
