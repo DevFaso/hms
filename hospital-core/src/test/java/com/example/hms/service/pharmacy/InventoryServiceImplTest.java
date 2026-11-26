@@ -104,6 +104,8 @@ class InventoryServiceImplTest {
     void setUp() {
         org.mockito.Mockito.lenient().when(stockLotRepository.sumRemainingForItem(any(UUID.class)))
             .thenAnswer(call -> inventoryItem.getQuantityOnHand());
+        org.mockito.Mockito.lenient().when(pharmacyRepository.findLockedByIdAndHospitalId(any(), any()))
+            .thenAnswer(call -> Optional.of(pharmacy));
         org.mockito.Mockito.lenient().when(clock.instant()).thenAnswer(i -> java.time.Instant.now());
         org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         hospital = new Hospital();

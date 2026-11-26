@@ -36,6 +36,54 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
         @Param("outTypes") Collection<StockTransactionType> outTypes,
         @Param("returnType") StockTransactionType returnType, @Param("transferType") StockTransactionType transferType);
 
+    /** An unreferenced return cannot reverse a paired transfer without debiting its receiving store. */
+    @Query("SELECT CASE WHEN COUNT(t) > 0 THEN true ELSE false END FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id = :itemId AND (:withLot = false OR t.stockLot.id = :lotId) "
+         + "AND t.transactionType = com.example.hms.enums.StockTransactionType.TRANSFER "
+         + "AND EXISTS (SELECT r.id FROM StockTransaction r WHERE r.transferOriginId = t.id "
+         + "AND r.transactionType = com.example.hms.enums.StockTransactionType.RECEIPT)")
+    boolean hasPairedTransfer(@Param("itemId") UUID itemId, @Param("withLot") boolean withLot,
+                              @Param("lotId") UUID lotId);
+
+    interface ReturnableTransferRow {
+        UUID getTransferId();
+        UUID getStockLotId();
+        String getDestinationName();
+        LocalDateTime getTransferredAt();
+        BigDecimal getOutstandingQuantity();
+        BigDecimal getDestinationQuantity();
+        BigDecimal getLotQuantity();
+    }
+
+    @Query("""
+        SELECT t.id AS transferId, sourceLot.id AS stockLotId, d.pharmacy.name AS destinationName, t.createdAt AS transferredAt,
+            t.quantity - COALESCE((SELECT SUM(back.quantity) FROM StockTransaction back
+                WHERE back.referenceId = t.id AND back.transactionType = com.example.hms.enums.StockTransactionType.RETURN), 0)
+                AS outstandingQuantity,
+            d.quantityOnHand AS destinationQuantity, destinationLot.remainingQuantity AS lotQuantity
+        FROM StockTransaction t JOIN StockTransaction receipt ON receipt.transferOriginId = t.id
+        JOIN t.inventoryItem i JOIN receipt.inventoryItem d LEFT JOIN t.stockLot sourceLot LEFT JOIN receipt.stockLot destinationLot
+        WHERE i.id = :itemId AND (:withLot = false OR t.stockLot.id = :lotId)
+            AND t.transactionType = com.example.hms.enums.StockTransactionType.TRANSFER
+            AND receipt.transactionType = com.example.hms.enums.StockTransactionType.RECEIPT
+            AND d.pharmacy.id = t.referenceId AND d.pharmacy.hospital.id = i.pharmacy.hospital.id
+            AND d.medicationCatalogItem.id = i.medicationCatalogItem.id
+            AND d.active = true AND d.pharmacy.active = true AND d.pharmacy.hospital.active = true
+            AND (d.unit = i.unit OR (d.unit IS NULL AND i.unit IS NULL))
+            AND (d.unitsPerPack = i.unitsPerPack OR (d.unitsPerPack IS NULL AND i.unitsPerPack IS NULL))
+            AND (receipt.stockLot IS NOT NULL OR NOT EXISTS
+                (SELECT tracked.id FROM StockLot tracked WHERE tracked.inventoryItem.id = d.id))
+        ORDER BY t.createdAt DESC, t.id
+        """)
+    java.util.List<ReturnableTransferRow> findReturnablePairedTransfers(@Param("itemId") UUID itemId,
+        @Param("withLot") boolean withLot, @Param("lotId") UUID lotId);
+
+    /** The counterpart receipt of one atomic inter-store transfer. */
+    java.util.Optional<StockTransaction> findByTransferOriginId(UUID transferOriginId);
+
+    java.util.Optional<StockTransaction> findByReferenceIdAndTransactionType(UUID referenceId,
+                                                                            StockTransactionType transactionType);
+
     Page<StockTransaction> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
     Page<StockTransaction> findByStockLotId(UUID stockLotId, Pageable pageable);

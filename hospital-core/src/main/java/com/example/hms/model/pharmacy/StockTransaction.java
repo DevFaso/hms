@@ -88,6 +88,11 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "reference_id")
     private UUID referenceId;
 
+    /** Server-owned counterpart identity; never populated from request DTOs or generic references. */
+    @Column(name = "transfer_origin_id", unique = true)
+    private UUID transferOriginId;
+
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "performed_by", nullable = false,

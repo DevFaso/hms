@@ -1812,16 +1812,7 @@
          alike. New tables, so they carry REAL foreign keys.
 
          Re-added for the THIRD time. Every migration's changeSet goes
-         immediately before     <changeSet id="V401-stock-count-confirmation-provenance" author="codex" runOnChange="false">
-        <sqlFile path="V401__stock_count_confirmation_provenance.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
-    </changeSet>
-    <changeSet id="V402-stock-balance-reconciliation-evidence" author="codex" runOnChange="false">
-        <sqlFile path="V402__stock_balance_reconciliation_evidence.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
-    </changeSet>
-    <changeSet id="V403-stock-receipt-metadata" author="codex" runOnChange="false">
-        <sqlFile path="V403__stock_receipt_metadata.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
-    </changeSet>
-</databaseChangeLog>, so any two branches that
+         immediately before </databaseChangeLog>, so any two branches that
          add one collide on the same lines; resolving that collision by
          taking develop drops the branch's own migration while leaving its
          .sql on disk, which looks like nothing happened. GitHub's "Update
@@ -4077,6 +4068,15 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
+        <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
+        <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
+    </changeSet>
+
     <changeSet id="V396-pharmacy-stock-controls" author="codex" runOnChange="false">
         <sqlFile path="V396__pharmacy_stock_controls.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
@@ -4103,4 +4103,5 @@
     <changeSet id="V403-stock-receipt-metadata" author="codex" runOnChange="false">
         <sqlFile path="V403__stock_receipt_metadata.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
     </changeSet>
+
 </databaseChangeLog>

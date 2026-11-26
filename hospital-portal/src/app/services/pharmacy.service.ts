@@ -321,6 +321,14 @@ export interface ControlledRegister {
  * QA D932: a fill a return can be booked against (completed or partial, of
  * the chosen item and lot, with stock still out).
  */
+export interface ReturnableTransfer {
+  transferId: string;
+  stockLotId?: string | null;
+  destinationName: string;
+  transferredAt: string;
+  returnableQuantity: number;
+}
+
 export interface ReturnableDispense {
   dispenseId: string;
   prescriptionId?: string;
@@ -1118,6 +1126,18 @@ export class PharmacyService {
     let params = new HttpParams().set('pharmacyId', pharmacyId).set('from', from).set('to', to);
     if (inventoryItemId) params = params.set('inventoryItemId', inventoryItemId);
     return params;
+  }
+
+  listReturnableTransfers(
+    inventoryItemId: string,
+    stockLotId?: string,
+  ): Observable<ApiResponse<ReturnableTransfer[]>> {
+    let params = new HttpParams().set('inventoryItemId', inventoryItemId);
+    if (stockLotId) params = params.set('stockLotId', stockLotId);
+    return this.http.get<ApiResponse<ReturnableTransfer[]>>(
+      '/pharmacy/stock-transactions/returnable-transfers',
+      { params },
+    );
   }
 
   /** QA D932: the fills a return of this item (and lot) can be booked against. */
