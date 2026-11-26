@@ -1,4 +1,4 @@
-import { allRowsOfArrays } from '../shared/all-pages';
+import { ALL_PAGES_SIZE, allRowsOfArrays } from '../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -24,7 +24,7 @@ import {
   switchMap,
   throwError,
 } from 'rxjs';
-import { HospitalService } from '../services/hospital.service';
+import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -197,6 +197,8 @@ export class RegistrationsComponent implements OnInit {
     !this.globalScope() &&
     this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN']);
   /** Cross-tenant summary — backend excludes RECEPTIONIST. */
+  readonly canCreate = this.canManage || this.roleContext.isSuperAdmin();
+  readonly networkHospitals = signal<HospitalResponse[]>([]);
   readonly canSeeMultiHospital = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_DOCTOR',
@@ -265,12 +267,15 @@ export class RegistrationsComponent implements OnInit {
       );
     const rows = this.globalScope()
       ? this.hospitalService.list().pipe(
-          switchMap((hospitals) =>
-            from(hospitals).pipe(
-              concatMap((hospital) => this.readHospitalSnapshot(hospital.id, filter)),
+          switchMap((hospitals) => {
+            this.networkHospitals.set(hospitals);
+            return from(hospitals).pipe(
+              concatMap((hospital) =>
+                this.readHospitalSnapshot(hospital.id, filter, ALL_PAGES_SIZE),
+              ),
               reduce((all, next) => all.concat(next), [] as HospitalRegistration[]),
-            ),
-          ),
+            );
+          }),
         )
       : readHospital(this.hospitalId ?? undefined);
     this.listSubscription = rows.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -298,7 +303,7 @@ export class RegistrationsComponent implements OnInit {
   private readHospitalSnapshot(
     hospitalId: string,
     filter: ActiveFilter,
-    size = 200,
+    size: number,
   ): Observable<HospitalRegistration[]> {
     const ceiling = 40001;
     return defer(() =>
@@ -395,6 +400,12 @@ export class RegistrationsComponent implements OnInit {
 
   submitForm(): void {
     const editing = this.editingRegistration();
+    if (!editing && this.globalScope() && !this.form.hospitalId) {
+      const message = this.translate.instant('REGISTRATIONS.HOSPITAL_REQUIRED');
+      refuseFields(this.host.nativeElement, ['reg-hospital'], ['reg-hospital'], message);
+      this.toast.error(message);
+      return;
+    }
     if (!editing && !this.form.patientId) {
       const message = this.translate.instant('REGISTRATIONS.PATIENT_REQUIRED');
       refuseFields(this.host.nativeElement, ['reg-patient'], ['reg-patient'], message);
@@ -413,13 +424,18 @@ export class RegistrationsComponent implements OnInit {
       this.toast.error(message);
       return;
     }
-    refuseFields(this.host.nativeElement, [], ['reg-patient', DEACTIVATION_REASON_FIELD], '');
+    refuseFields(
+      this.host.nativeElement,
+      [],
+      ['reg-hospital', 'reg-patient', DEACTIVATION_REASON_FIELD],
+      '',
+    );
     this.formSaving.set(true);
     const op = editing
       ? this.registrationService.update(editing.id, this.form)
       : this.registrationService.create({
           ...this.form,
-          hospitalId: this.hospitalId ?? undefined,
+          hospitalId: this.globalScope() ? this.form.hospitalId : (this.hospitalId ?? undefined),
         });
     op.subscribe({
       next: (saved) => {

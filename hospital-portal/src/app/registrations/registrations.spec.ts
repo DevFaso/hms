@@ -418,6 +418,39 @@ describe('RegistrationsComponent global super-admin view', () => {
     expect(fixture.componentInstance.totalPages()).toBe(21);
   });
 
+  it('requires and submits the destination hospital for a global registration', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.canCreate).toBeTrue();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    fixture.componentInstance.form.patientId = 'p1';
+    fixture.componentInstance.submitForm();
+    http.expectNone((r) => r.method === 'POST' && r.url === '/registrations');
+    fixture.componentInstance.form.hospitalId = 'h2';
+    fixture.componentInstance.submitForm();
+    const post = http.expectOne((r) => r.method === 'POST' && r.url === '/registrations');
+    expect(post.request.body.hospitalId).toBe('h2');
+    expect(post.request.body.patientId).toBe('p1');
+    post.flush({ id: 'new', hospitalId: 'h2', active: true });
+    http.expectOne('/hospitals').flush([
+      { id: 'h1', name: 'First' },
+      { id: 'h2', name: 'Second' },
+    ]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([]);
+  });
+
   it('reports a failed hospital instead of displaying incomplete network totals', () => {
     const { fixture, http } = page();
     http

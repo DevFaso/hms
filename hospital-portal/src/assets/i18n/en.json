@@ -11868,6 +11868,7 @@
     "NETWORK_HELP": "Choose a hospital to view its procedure requests, consent records and schedules."
   },
   "REGISTRATIONS": {
+    "HOSPITAL_REQUIRED": "Choose the hospital for this registration.",
     "DEACTIVATE_TITLE": "Deactivate this registration?",
     "DEACTIVATE_BODY": "The patient leaves this hospital's active list. You can reactivate the registration later.",
     "DEACTIVATE_REASON": "Reason for deactivation",
