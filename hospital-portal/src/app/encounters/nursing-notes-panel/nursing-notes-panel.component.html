@@ -5,7 +5,6 @@
 >
   <h3 id="nursing-notes-title">{{ 'NURSING_NOTES.TITLE' | translate }}</h3>
   @if (needsHospitalScope()) {
-    <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
     <p class="nursing-notes__state" role="status">
       {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
     </p>

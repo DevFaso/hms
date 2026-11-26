@@ -26,7 +26,6 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
-import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -44,7 +43,6 @@ export interface NursingNotePart {
   standalone: true,
   imports: [
     FormControlStyleDirective,
-    HospitalScopeChipComponent,
     NoteAddendaComponent,
     CommonModule,
     FormsModule,

@@ -164,6 +164,15 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     }
   });
 
+  it('rebuilds the patient chart on scope changes while retaining global access', () => {
+    const patient = routes
+      .find((route) => route.children)
+      ?.children?.find((route) => route.path === 'patients');
+    const chart = patient?.children?.find((route) => route.path === ':id');
+    expect(chart?.data?.['requiresHospitalScope']).toBeTrue();
+    expect(chart?.data?.['supportsGlobalHospitalView']).toBeTrue();
+  });
+
   it('names every facility-only network workspace, including routes absent from navigation', () => {
     const { items, component } = createComponent({
       activeRole: 'ROLE_SUPER_ADMIN',
@@ -1885,6 +1894,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'mortality',
         'nurse-station',
         'patient-tracker',
+        'patients/:id',
         'procedure-orders',
         'reception',
         'registrations',
