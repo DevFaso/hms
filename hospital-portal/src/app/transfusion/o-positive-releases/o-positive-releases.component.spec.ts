@@ -11,6 +11,11 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { roleContextStub } from '../../testing/role-context.stub';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 function decision(over: Partial<OPositiveReleaseDecision> = {}): OPositiveReleaseDecision {
   return {
@@ -163,6 +168,31 @@ describe('OPositiveReleasesComponent (V380)', () => {
     el('opos-informed-save')!.click();
     expect(tx.recordPositiveFollowUp).toHaveBeenCalledWith('d1', { patientInformed: true });
     expect(component.followUpOwed(component.releases()[0])).toBeFalse();
+  });
+
+  it('the anti-D decision is refused empty on its field, and a server refusal marks the field it names', async () => {
+    await start(['ROLE_DOCTOR']);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="opos-anti-d-save"]',
+        sent: tx.recordPositiveFollowUp,
+      });
+      expect(marked).toEqual(['opos-antid-d1']);
+
+      // The clinician picks a value: the guard lets the click through, and the server answers.
+      component.followUpDecision['d1'] = 'NOT_INDICATED';
+      fixture.detectChanges();
+      tx.recordPositiveFollowUp.and.returnValue(
+        throwError(() => fieldErrorsResponse({ antiDDecision: 'Décision déjà enregistrée' })),
+      );
+      component.recordAntiD(component.releases()[0]);
+      fixture.detectChanges();
+      expectFieldsMarked(fixture, { 'opos-antid-d1': 'Décision déjà enregistrée' });
+      expect(toast.error).toHaveBeenCalled();
+    } finally {
+      fixture.nativeElement.remove();
+    }
   });
 
   it('the biologist reviews with a note, and sets the protocol', async () => {

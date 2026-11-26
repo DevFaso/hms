@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -12,7 +19,8 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
@@ -44,6 +52,7 @@ export class OPositiveReleasesComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Role gates: mirror TransfusionController ── */
   readonly canSetProtocol = this.roleContext.hasAnyActiveRole(['ROLE_LAB_DIRECTOR']);
@@ -192,6 +201,7 @@ export class OPositiveReleasesComponent implements OnInit {
         ...this.noteOf(row),
       }),
       'FOLLOW_UP_SAVED',
+      { antiDDecision: 'opos-antid-' + row.id, note: 'opos-fu-note-' + row.id },
     );
   }
 
@@ -217,6 +227,7 @@ export class OPositiveReleasesComponent implements OnInit {
     row: OPositiveReleaseDecision,
     call: ReturnType<TransfusionService['countersignPositiveRelease']>,
     doneKey: string,
+    fieldIds: Readonly<Record<string, string>> = {},
   ): void {
     if (this.busyId()) return;
     this.busyId.set(row.id);
@@ -231,6 +242,15 @@ export class OPositiveReleasesComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.busyId.set(null);
+        // A 400 naming a field marks that field with the server's reason.
+        const refused = refusedFieldReasons(err, fieldIds);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            Object.values(fieldIds),
+          );
+        }
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('TRANSFUSION.OPOS.ACTION_ERROR'),
         );
