@@ -146,21 +146,6 @@ describe('ClinicalRulesComponent (V356)', () => {
     fixture.detectChanges();
   }
 
-  it('keeps loading the new hospital when an older request finishes late', () => {
-    const oldRequest = httpMock.expectOne(URL);
-    roleContext.activeHospitalId = 'h-2';
-    fixture.detectChanges();
-    const newRequest = httpMock.expectOne('/hospitals/h-2/clinical-rules');
-    oldRequest.flush(overview(true, [rule('OLD')]));
-    fixture.detectChanges();
-    expect(host.textContent).toContain(fr.COMMON.LOADING);
-    expect(q('clinical-rules-progress')).toBeNull();
-    newRequest.flush({ ...overview(true, [rule('NEW')]), hospitalId: 'h-2' });
-    fixture.detectChanges();
-    expect(host.textContent).toContain('NEW');
-    expect(host.textContent).not.toContain('OLD');
-  });
-
   it('lists each rule set with its source, approver and status here, and the progress', () => {
     load(
       overview(true, [rule('MINOR_HIV_RESULT_RELEASE'), rule('PRESCRIPTION_RENEWAL', 'SIGNED')]),

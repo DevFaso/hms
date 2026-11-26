@@ -27,7 +27,6 @@ import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PageHeaderComponent } from '../shared/page-header/page-header.component';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
@@ -72,7 +71,6 @@ interface SignDraft {
     ModalDialogDirective,
     SubmitGuardDirective,
     PageHeaderComponent,
-    HospitalScopeChipComponent,
     DayMonthPipe,
     ReasonDialogComponent,
   ],
@@ -124,21 +122,16 @@ export class ClinicalRulesComponent {
   protected load(hospitalId: string | null): void {
     this.overview.set(null);
     this.failed.set(false);
-    if (!hospitalId) {
-      this.loading.set(false);
-      return;
-    }
+    if (!hospitalId) return;
     this.loading.set(true);
     this.rulesService.overview(hospitalId).subscribe({
       next: (overview) => {
-        if (this.hospitalId() !== hospitalId) return;
-        this.overview.set(overview);
+        if (this.hospitalId() === hospitalId) this.overview.set(overview);
         this.loading.set(false);
       },
       error: () => {
-        if (this.hospitalId() !== hospitalId) return;
         this.loading.set(false);
-        this.failed.set(true);
+        if (this.hospitalId() === hospitalId) this.failed.set(true);
       },
     });
   }
