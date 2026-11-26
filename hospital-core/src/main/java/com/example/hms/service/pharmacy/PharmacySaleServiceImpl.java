@@ -97,6 +97,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         // QA D1129: the same mobile-money transaction is not counted at two tills. A keyed sale is checked once its
         // key is known to be new (below): its own retry carries the reference it already recorded.
         boolean mobileMoney = dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY;
+        if (mobileMoney && (dto.getReferenceNumber() == null || dto.getReferenceNumber().isBlank())) {
+            throw new com.example.hms.exception.FieldBusinessException("referenceNumber", "pharmacy.payment.mobileMoneyReferenceRequired");
+        }
         if (mobileMoney && dto.getClientRequestId() == null) {
             referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
         }

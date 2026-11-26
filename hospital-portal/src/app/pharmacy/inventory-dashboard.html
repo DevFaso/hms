@@ -578,7 +578,10 @@
                       class="expiry-badge"
                       [class.urgent]="getDaysUntilExpiry(lot.expiryDate) <= 30"
                     >
-                      {{ getDaysUntilExpiry(lot.expiryDate) }} days
+                      {{
+                        'PHARMACY.DAYS_REMAINING_VALUE'
+                          | translate: { days: getDaysUntilExpiry(lot.expiryDate) }
+                      }}
                     </span>
                   }
                 </td>

@@ -16,6 +16,24 @@ import java.util.UUID;
 
 @Repository
 public interface StockTransactionRepository extends JpaRepository<StockTransaction, UUID> {
+    /** Stock issues and recorded returns, grouped by the actual recorded unit; internal transfer returns are excluded. */
+    @Query("""
+        SELECT i.id, i.medicationCatalogItem.id, t.unitSnapshot,
+            SUM(CASE WHEN t.transactionType IN :outTypes THEN t.quantity ELSE 0 END),
+            SUM(CASE WHEN t.transactionType = :returnType AND NOT EXISTS
+                (SELECT origin.id FROM StockTransaction origin
+                 WHERE origin.id = t.referenceId AND origin.transactionType = :transferType)
+                THEN t.quantity ELSE 0 END), COUNT(t.id)
+        FROM StockTransaction t JOIN t.inventoryItem i
+        WHERE i.pharmacy.id = :pharmacyId AND t.createdAt >= :from AND t.createdAt < :to
+          AND (t.transactionType IN :outTypes OR t.transactionType = :returnType)
+        GROUP BY i.id, i.medicationCatalogItem.id, t.unitSnapshot
+        ORDER BY i.id, t.unitSnapshot
+        """)
+    java.util.List<Object[]> consumptionByRecordedUnit(@Param("pharmacyId") UUID pharmacyId,
+        @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+        @Param("outTypes") Collection<StockTransactionType> outTypes,
+        @Param("returnType") StockTransactionType returnType, @Param("transferType") StockTransactionType transferType);
 
     Page<StockTransaction> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 

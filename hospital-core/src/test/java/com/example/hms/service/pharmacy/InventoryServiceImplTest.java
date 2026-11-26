@@ -74,7 +74,7 @@ class InventoryServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
-    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
+    @Mock private LowStockAlertDelivery lowStockAlertDelivery;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     /** QA D655: the controlled-stock witness rule. */
@@ -703,23 +703,21 @@ class InventoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D733: the same lot received twice adds to the one row")
-        void sameLotTwiceAddsToTheRow() {
+        @DisplayName("D3946: an external receipt of an existing lot is refused without adding stock")
+        void sameLotTwiceIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();
-            StockLot existing = buildStockLot();
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
-            when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate()))
-                    .thenReturn(List.of(existing));
+            when(stockLotRepository.existsLotNumberForItem(inventoryItemId, dto.getLotNumber().trim()))
+                    .thenReturn(true);
 
-            service.receiveStock(dto);
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                .extracting("field", "messageKey").containsExactly("lotNumber", "pharmacy.inventory.lot.duplicate");
 
             verify(stockLotRepository, never()).save(any());
-            verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
+            verify(stockLotRepository, never()).addReceipt(any(), any(), any());
             verify(inventoryItemRepository).lockById(inventoryItemId);
-            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
         @Test
@@ -1224,12 +1222,9 @@ class InventoryServiceImplTest {
             when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
                     .thenReturn(List.of(inventoryItem));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-
             service.triggerReorderAlerts();
 
-            verify(notificationService).created(
-                    any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
+            verify(lowStockAlertDelivery).deliver(eq(inventoryItem), any());
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
 
@@ -1240,7 +1235,6 @@ class InventoryServiceImplTest {
             when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
                     .thenReturn(List.of(inventoryItem));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
             try {
                 service.triggerReorderAlerts();
@@ -1265,7 +1259,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(notificationService, never()).created(any(), any(), any());
+            verify(lowStockAlertDelivery, never()).deliver(any(), any());
         }
 
         @Test
@@ -1284,17 +1278,15 @@ class InventoryServiceImplTest {
             when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
                     .thenReturn(List.of(inventoryItem, secondItem));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(userRepository.findById(userId))
-                    .thenReturn(Optional.of(user))
-                    .thenReturn(Optional.of(user));
-            when(notificationService.created(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
+            when(lowStockAlertDelivery.deliver(any(), any()))
                     .thenThrow(new RuntimeException("Notification service down"))
-                    .thenReturn(null);
+                    .thenReturn(1);
 
             service.triggerReorderAlerts();
 
             // Audit is still logged for both items despite notification failure
             verify(auditEventLogService, times(2)).logEvent(any(AuditEventRequestDTO.class));
+            verify(lowStockAlertDelivery, times(2)).deliver(any(), any());
         }
     }
 

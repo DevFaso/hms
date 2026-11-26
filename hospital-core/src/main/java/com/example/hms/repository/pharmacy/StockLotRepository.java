@@ -17,8 +17,17 @@ import java.util.UUID;
 
 @Repository
 public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
+    /** A transfer never waits for a lot while it holds another stock row. */
+    @Query(value = "SELECT * FROM clinical.stock_lots WHERE id = :id FOR UPDATE NOWAIT", nativeQuery = true)
+    java.util.Optional<StockLot> tryLockById(@Param("id") UUID id);
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
+
+    /** D3946: external goods receipt cannot create a second identity for an existing batch. */
+    @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+        + "AND UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string)))")
+    boolean existsLotNumberForItem(@Param("inventoryItemId") UUID inventoryItemId,
+                                  @Param("lotNumber") String lotNumber);
 
     /** QA D2674 (r65): every lot of an item, shortest-dated first. */
     List<StockLot> findAllByInventoryItemIdOrderByExpiryDateAsc(UUID inventoryItemId);

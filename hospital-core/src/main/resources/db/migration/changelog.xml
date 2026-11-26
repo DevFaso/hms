@@ -4055,4 +4055,16 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <changeSet id="V396-pharmacy-stock-controls" author="codex" runOnChange="false">
+        <sqlFile path="V396__pharmacy_stock_controls.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V397-physical-stock-counts" author="codex" runOnChange="false">
+        <sqlFile path="V397__physical_stock_counts.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V398-stock-movement-unit-snapshot" author="codex" runOnChange="false">
+        <sqlFile path="V398__stock_movement_unit_snapshot.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
 </databaseChangeLog>

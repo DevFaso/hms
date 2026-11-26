@@ -71,6 +71,16 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "quantity", nullable = false, precision = 12, scale = 2)
     private BigDecimal quantity;
 
+    /** Unit in which this immutable movement was recorded; older rows stay unknown rather than being guessed. */
+    @Size(max = 60)
+    @Column(name = "unit_snapshot", length = 60, updatable = false)
+    private String unitSnapshot;
+
+    @jakarta.persistence.PrePersist
+    void captureStockUnit() {
+        unitSnapshot = inventoryItem == null ? null : inventoryItem.getUnit();
+    }
+
     @Size(max = 500)
     @Column(name = "reason", length = 500)
     private String reason;
