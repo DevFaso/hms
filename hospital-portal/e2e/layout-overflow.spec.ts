@@ -1719,6 +1719,9 @@ test.describe('D3943 paired transfer return form', () => {
       await expect(page.locator('#retTransfer')).toBeFocused();
       expect(recorded).toHaveLength(0);
       await page.locator('#retTransfer').selectOption(TRANSFER);
+      await expect(page.locator('[data-testid="return-transfer-available"]')).toBeVisible();
+      await expect(page.locator('[data-testid="return-transfer-available"]')).toContainText('6');
+      await expect(page.locator('.toast-close')).toHaveCount(0, { timeout: 10000 });
       await expect(page.locator('#txLot option:checked')).toContainText('SYNTHETIC-TRANSFER-77');
       await page.locator('#retRef').fill('');
       await page
@@ -1727,6 +1730,12 @@ test.describe('D3943 paired transfer return form', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width + 1,
       );
+      await page.locator('#txType').scrollIntoViewIfNeeded();
+      await testInfo.attach(`paired-stock-return-top-${width}`, {
+        body: await page.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+      await page.locator('#returnTransferFefo').scrollIntoViewIfNeeded();
       await testInfo.attach(`paired-stock-return-${width}`, {
         body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
         contentType: 'image/png',

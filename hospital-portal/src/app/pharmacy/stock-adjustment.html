@@ -366,7 +366,11 @@
               <select
                 appFormControl
                 id="retTransfer"
-                aria-describedby="return-transfer-hint"
+                [attr.aria-describedby]="
+                  returnTransferId
+                    ? 'return-transfer-hint return-transfer-available'
+                    : 'return-transfer-hint'
+                "
                 name="returnTransferId"
                 data-testid="return-transfer"
                 [(ngModel)]="returnTransferId"
@@ -380,7 +384,7 @@
                     {{ transfer.transferredAt | serverTime | date: 'short' }} ·
                     {{
                       'PHARMACY.RETURN_TRANSFER_AVAILABLE'
-                        | translate: { quantity: (transfer.returnableQuantity | number: '1.0-2') }
+                        | translate: { quantity: (transfer.returnableQuantity | number: '1.0-4') }
                     }}
                   </option>
                 }
@@ -413,6 +417,18 @@
                 }}<small id="return-transfer-hint" class="field-hint">{{
                   'PHARMACY.RETURN_TRANSFER_HINT' | translate
                 }}</small>
+              }
+              @if (selectedReturnTransfer(); as transfer) {
+                <p
+                  id="return-transfer-available"
+                  class="field-hint"
+                  data-testid="return-transfer-available"
+                >
+                  {{
+                    'PHARMACY.RETURN_TRANSFER_AVAILABLE'
+                      | translate: { quantity: (transfer.returnableQuantity | number: '1.0-4') }
+                  }}
+                </p>
               }
             </div>
             @if (returnTransferId) {
