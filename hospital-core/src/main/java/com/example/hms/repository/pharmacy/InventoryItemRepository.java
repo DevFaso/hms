@@ -18,6 +18,9 @@ import java.util.UUID;
 
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, UUID> {
+    /** Transfers hold several stock rows: refuse contention immediately rather than waiting with a partial lock set. */
+    @Query(value = "SELECT * FROM clinical.inventory_items WHERE id = :id FOR UPDATE NOWAIT", nativeQuery = true)
+    Optional<InventoryItem> tryLockById(@Param("id") UUID id);
 
     Page<InventoryItem> findByPharmacyIdAndActiveTrue(UUID pharmacyId, Pageable pageable);
 
