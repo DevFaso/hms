@@ -94,6 +94,7 @@ export class RegistrationsComponent implements OnInit {
           (!term ||
             [
               r.patientFullName,
+              r.hospitalName,
               r.patientUsername,
               r.mri,
               r.registrationCode,
