@@ -16,8 +16,11 @@ import java.util.regex.Pattern;
  *
  * <p>Recognised literal forms, all of which a resolver would accept:
  * <ul>
- *   <li>IPv4 in one to four parts, each decimal, octal ({@code 0177}) or hex ({@code 0x7f}):
- *       {@code 127.0.0.1}, {@code 127.1}, {@code 2130706433}, {@code 0x7f.0.0.1};</li>
+ *   <li>IPv4 in one to four parts: {@code 127.0.0.1}, {@code 127.1}, {@code 2130706433},
+ *       {@code 0x7f.0.0.1}. A part with a leading zero or a {@code 0x} prefix reads differently
+ *       to different parsers: Java and the Redis client read {@code 0127} as decimal 127,
+ *       {@code inet_aton} as octal 87. Such a literal is read both ways and refused when either
+ *       reading is local (fail closed);</li>
  *   <li>IPv6 in full, compressed or with an IPv4 tail, optionally in brackets and with a zone:
  *       {@code ::1}, {@code 0:0:0:0:0:0:0:1}, {@code [::1]}, {@code ::ffff:127.0.0.1}.</li>
  * </ul>
@@ -28,7 +31,8 @@ final class LocalAddressCheck {
 
     /** Every label numeric (decimal, octal or hex): the host is meant as an IPv4 literal. */
     private static final Pattern NUMERIC_IPV4 = Pattern.compile("^(0x[0-9a-f]*|[0-9]+)(\\.(0x[0-9a-f]*|[0-9]+))*$");
-    private static final Pattern HEX_GROUP = Pattern.compile("^[0-9a-f]{1,4}$");
+    /** Zero or more colon-separated hex groups of one to four digits. */
+    private static final Pattern HEX_GROUPS = Pattern.compile("^([0-9a-f]{1,4}(:[0-9a-f]{1,4})*)?$");
     private static final Pattern DECIMAL_OCTET = Pattern.compile("^[0-9]{1,3}$");
     /** What the parsers return for a literal that does not parse. */
     private static final byte[] INVALID = new byte[0];
@@ -57,7 +61,15 @@ final class LocalAddressCheck {
         }
         String name = host.endsWith(".") ? host.substring(0, host.length() - 1) : host;
         if (NUMERIC_IPV4.matcher(name).matches()) {
-            return isLocalAddress(parseIpv4(name));
+            // Fail closed on the ambiguous forms: local if either reading that parses is local,
+            // or if neither parses.
+            byte[] decimal = parseIpv4(name, false);
+            byte[] inetAton = parseIpv4(name, true);
+            if (decimal.length == 0 && inetAton.length == 0) {
+                return true;
+            }
+            return (decimal.length != 0 && isLocalAddress(decimal))
+                || (inetAton.length != 0 && isLocalAddress(inetAton));
         }
         return "localhost".equals(name) || name.endsWith(".localhost");
     }
@@ -91,15 +103,19 @@ final class LocalAddressCheck {
         return true;
     }
 
-    /** inet_aton rules: one to four parts, the last filling the remaining bytes. Empty if invalid. */
-    static byte[] parseIpv4(String host) {
+    /**
+     * One to four parts, the last filling the remaining bytes. With {@code inetAton}, a leading
+     * zero means octal and {@code 0x} hex; without, every part is decimal (leading zeros ignored,
+     * hex invalid), as Java reads it. Empty if invalid.
+     */
+    static byte[] parseIpv4(String host, boolean inetAton) {
         String[] parts = host.split("\\.", -1);
         if (parts.length > 4) {
             return INVALID;
         }
         long address = 0;
         for (int i = 0; i < parts.length; i++) {
-            long value = parseIpv4Part(parts[i]);
+            long value = parseIpv4Part(parts[i], inetAton);
             boolean last = i == parts.length - 1;
             long limit = last ? 1L << (8 * (5 - parts.length)) : 0x100;
             if (value < 0 || value >= limit) {
@@ -112,9 +128,12 @@ final class LocalAddressCheck {
         };
     }
 
-    /** A part in decimal, octal (leading 0) or hex (0x); -1 if invalid. */
-    private static long parseIpv4Part(String part) {
+    /** A part in decimal, or with {@code inetAton} also octal (leading 0) or hex (0x); -1 if invalid. */
+    private static long parseIpv4Part(String part, boolean inetAton) {
         try {
+            if (!inetAton) {
+                return part.isEmpty() || part.length() > 12 || part.startsWith("0x") ? -1 : Long.parseLong(part);
+            }
             if (part.startsWith("0x")) {
                 return part.length() == 2 || part.length() > 10 ? -1 : Long.parseLong(part.substring(2), 16);
             }
@@ -146,31 +165,32 @@ final class LocalAddressCheck {
         if (halves.length > 2) {
             return INVALID;
         }
-        try {
-            int[] head = groups(halves[0]);
-            int[] rest = halves.length == 2 ? groups(halves[1]) : new int[0];
-            int total = head.length + rest.length;
-            if (halves.length == 1 ? total != 8 : total > 7) {
+        for (String half : halves) {
+            if (!HEX_GROUPS.matcher(half).matches()) {
                 return INVALID;
             }
-            int[] all = new int[8];
-            System.arraycopy(head, 0, all, 0, head.length);
-            System.arraycopy(rest, 0, all, 8 - rest.length, rest.length);
-            byte[] bytes = new byte[16];
-            for (int i = 0; i < 8; i++) {
-                bytes[2 * i] = (byte) (all[i] >>> 8);
-                bytes[2 * i + 1] = (byte) all[i];
-            }
-            if (tail.length == 4) {
-                System.arraycopy(tail, 0, bytes, 12, 4);
-            }
-            return bytes;
-        } catch (IllegalArgumentException e) {
+        }
+        int[] head = groups(halves[0]);
+        int[] rest = halves.length == 2 ? groups(halves[1]) : new int[0];
+        int total = head.length + rest.length;
+        if (halves.length == 1 ? total != 8 : total > 7) {
             return INVALID;
         }
+        int[] all = new int[8];
+        System.arraycopy(head, 0, all, 0, head.length);
+        System.arraycopy(rest, 0, all, 8 - rest.length, rest.length);
+        byte[] bytes = new byte[16];
+        for (int i = 0; i < 8; i++) {
+            bytes[2 * i] = (byte) (all[i] >>> 8);
+            bytes[2 * i + 1] = (byte) all[i];
+        }
+        if (tail.length == 4) {
+            System.arraycopy(tail, 0, bytes, 12, 4);
+        }
+        return bytes;
     }
 
-    /** Colon-separated hex groups; throws on a malformed group. */
+    /** Colon-separated hex groups, already checked against {@link #HEX_GROUPS}. */
     private static int[] groups(String text) {
         if (text.isEmpty()) {
             return new int[0];
@@ -178,9 +198,6 @@ final class LocalAddressCheck {
         String[] parts = text.split(":", -1);
         int[] values = new int[parts.length];
         for (int i = 0; i < parts.length; i++) {
-            if (!HEX_GROUP.matcher(parts[i]).matches()) {
-                throw new IllegalArgumentException("not a hex group");
-            }
             values[i] = Integer.parseInt(parts[i], 16);
         }
         return values;

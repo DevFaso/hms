@@ -18,6 +18,8 @@ class LocalAddressCheckTest {
         // IPv4 loopback, the whole 127.0.0.0/8, in every notation a resolver accepts
         "127.0.0.1", "127.0.0.2", "127.0.1.1", "127.255.255.254", "127.1", "127.0.1", "2130706433",
         "0x7f.0.0.1", "0x7f000001", "0177.0.0.1", "127.0.0.1.",
+        // leading zeros: decimal to Java and the Redis client, octal to inet_aton; local either way is refused
+        "0127.0.0.1", "00127.0.0.1", "0x7f.1", "127.000.000.001", "0127.1",
         // IPv4 unspecified
         "0.0.0.0", "0", "0x0",
         // IPv6 loopback in any form
@@ -42,7 +44,9 @@ class LocalAddressCheckTest {
         "redis.railway.internal", "redis", "my-redis-123.example.com", "localhost.example.com", "notlocalhost",
         "10.0.0.5", "172.16.3.4", "192.168.1.10", "128.0.0.1", "126.255.255.255", "8.8.8.8", "10.1",
         "fd12:3456:789a::1", "[fd12:3456:789a::1]", "2001:db8::1", "::2", "::ffff:10.0.0.5", "fe80::1%eth0",
-        "1:2:3:4:5:6:7:8", "1.2.3.example"
+        "1:2:3:4:5:6:7:8", "1.2.3.example",
+        // ambiguous forms whose every reading is a shared address
+        "010.0.0.5", "0xa.0.0.5"
     })
     void sharedForms(String host) {
         assertThat(LocalAddressCheck.isLocal(host)).isFalse();

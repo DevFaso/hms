@@ -148,7 +148,8 @@ class SessionStoreStartupGuardTest {
     @DisplayName("production refuses every loopback or unspecified notation of REDIS_HOST")
     @ValueSource(strings = {
         "127.0.0.2", "127.0.1.1", "127.1", "2130706433", "0x7f.0.0.1", "0.0.0.0", "localhost.", "redis.localhost",
-        "0:0:0:0:0:0:0:1", "[::1]", "::ffff:127.0.0.1", "::", "::127.0.0.1"
+        "0:0:0:0:0:0:0:1", "[::1]", "::ffff:127.0.0.1", "::", "::127.0.0.1",
+        "0127.0.0.1", "00127.0.0.1", "0x7f.1", "127.000.000.001"
     })
     void productionRefusesEveryLocalHostNotation(String host) {
         MockEnvironment env = configuredProduction().withProperty(SessionStoreStartupGuard.REDIS_HOST, host);
