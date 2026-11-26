@@ -14861,7 +14861,7 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
-    "HOSPITAL_CONTEXT": "Seleccione un hospital para leer sus notas. Esta selección no cambia el resto de la historia.",
+    "HOSPITAL_CONTEXT": "Elija el contexto hospitalario para leer las notas. Esta selección no cambia el resto de la historia.",
     "CHOOSE_HOSPITAL": "Elegir hospital",
     "ACTION": "Acción:",
     "ASSESSMENT": "Valoración:",
