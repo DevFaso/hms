@@ -12985,6 +12985,7 @@
     "PASSWORD_AGE": "Edad de la contraseña",
     "ROTATION_DUE": "Rotación prevista",
     "DAYS_UNTIL_DUE": "Días hasta vencer",
+    "DAYS_ONE": "{{days}} día",
     "DAYS_N": "{{days}} días",
     "IMPORT_USERS_HINT": "CSV con fila de encabezado. Columnas requeridas: username, email, firstname, lastname, phonenumber, roles. Opcionales: password, hospitalid, licensenumber, jobtitle. Los roles pueden separarse con coma, punto y coma, barra vertical o espacio.",
     "FORCE_PASSWORD_CHANGE": "Forzar cambio de contraseña en el primer inicio",

@@ -12985,6 +12985,7 @@
     "PASSWORD_AGE": "Password age",
     "ROTATION_DUE": "Rotation due",
     "DAYS_UNTIL_DUE": "Days until due",
+    "DAYS_ONE": "{{days}} day",
     "DAYS_N": "{{days}} days",
     "IMPORT_USERS_HINT": "CSV with a header row. Required columns: username, email, firstname, lastname, phonenumber, roles. Optional: password, hospitalid, licensenumber, jobtitle. Roles may be separated by comma, semicolon, pipe or space.",
     "FORCE_PASSWORD_CHANGE": "Force password change at first login",

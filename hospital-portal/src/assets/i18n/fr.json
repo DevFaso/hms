@@ -12985,6 +12985,7 @@
     "PASSWORD_AGE": "Âge du mot de passe",
     "ROTATION_DUE": "Échéance de rotation",
     "DAYS_UNTIL_DUE": "Jours avant échéance",
+    "DAYS_ONE": "{{days}} jour",
     "DAYS_N": "{{days}} jours",
     "IMPORT_USERS_HINT": "CSV avec ligne d'en-tête. Colonnes requises : username, email, firstname, lastname, phonenumber, roles. Optionnelles : password, hospitalid, licensenumber, jobtitle. Les rôles peuvent être séparés par virgule, point-virgule, barre verticale ou espace.",
     "FORCE_PASSWORD_CHANGE": "Forcer le changement de mot de passe à la première connexion",
