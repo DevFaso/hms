@@ -1,6 +1,7 @@
 import { personName } from '../shared/pipes/person-name.pipe';
 import {
   Component,
+  DestroyRef,
   computed,
   inject,
   OnInit,
@@ -8,9 +9,9 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
@@ -25,6 +26,7 @@ import {
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../services/print-label.service';
 
@@ -49,6 +51,7 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
     TranslateModule,
     EnumLabelPipe,
     HospitalScopeHintComponent,
+    HospitalScopeChipComponent,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
   ],
@@ -61,6 +64,9 @@ export class StockRoutingComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly location = inject(Location);
   private readonly roleContext = inject(RoleContextService);
   /** QA D966: opens the printed copy for printing. */
   private readonly printService = inject(PrintLabelService);
@@ -89,6 +95,47 @@ export class StockRoutingComponent implements OnInit {
     'ROLE_PHARMACY_VERIFIER',
     'ROLE_HOSPITAL_ADMIN',
   ]);
+
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  readonly scopeChanged = signal(this.route.snapshot.queryParamMap?.get('scopeChanged') === '1');
+
+  /** A hospital switch invalidates order-specific reads and reloads the queue. */
+  onScopeChange(): void {
+    this.checkSeq++;
+    this.queueSeq++;
+    this.scopeSeq++;
+    this.printingCopy.set(false);
+    this.checking.set(false);
+    this.prescriptionId = '';
+    this.selected.set(null);
+    this.stockResult.set(null);
+    this.decisionRequests.next(false);
+    this.decisions.set([]);
+    this.decisionsPage = 0;
+    this.decisionsTotalPages = 0;
+    this.decisionsLoading.set(false);
+    this.decisionsError.set(false);
+    this.queue.set([]);
+    this.queueTotal.set(0);
+    this.scopeChanged.set(true);
+    if (this.route.snapshot.paramMap.has('prescriptionId')) {
+      // The URL named an order in the old scope. Remove it before a reload
+      // could silently re-open that order under the new hospital.
+      this.location.replaceState('/pharmacy/stock-routing', 'scopeChanged=1');
+      const recover = () => {
+        if (this.destroyRef.destroyed || this.router.currentNavigation()) return;
+        this.loadQueue();
+      };
+      void this.router
+        .navigate(['/pharmacy/stock-routing'], { queryParams: { scopeChanged: '1' } })
+        .then((navigated) => {
+          if (!navigated) recover();
+        })
+        .catch(recover);
+      return;
+    }
+    this.loadQueue();
+  }
 
   // Prescription lookup
   prescriptionId = '';
@@ -133,6 +180,8 @@ export class StockRoutingComponent implements OnInit {
   /** True once the window reached the server's ceiling: nothing older can be read. */
   readonly queueAtLimit = signal(false);
   private queueSeq = 0;
+  private checkSeq = 0;
+  private scopeSeq = 0;
   readonly rxSearch = signal('');
   readonly selected = signal<WorkQueuePrescription | null>(null);
   /** At most this many matches are listed; typing more narrows them. */
@@ -380,9 +429,12 @@ export class StockRoutingComponent implements OnInit {
 
   // Action state
   saving = signal(false);
+  printingCopy = signal(false);
 
   checkStock(): void {
     if (!this.prescriptionId.trim()) return;
+    const seq = ++this.checkSeq;
+    this.scopeChanged.set(false);
     // Reset pagination whenever a new prescription is checked
     this.decisionsPage = 0;
     this.checking.set(true);
@@ -399,11 +451,13 @@ export class StockRoutingComponent implements OnInit {
     this.decisionsError.set(false);
     this.svc.checkStock(this.prescriptionId).subscribe({
       next: (res) => {
+        if (seq !== this.checkSeq) return;
         this.stockResult.set(res.data);
         this.checking.set(false);
         this.loadDecisions();
       },
       error: (err) => {
+        if (seq !== this.checkSeq) return;
         this.toast.error(this.errorMessage(err, 'PHARMACY.STOCK_CHECK_FAILED'));
         this.checking.set(false);
       },
@@ -507,12 +561,21 @@ export class StockRoutingComponent implements OnInit {
   }
 
   private openPrintedCopy(prescriptionId: string): void {
+    const scope = this.scopeSeq;
+    this.printingCopy.set(true);
     this.svc.getPrintedPrescriptionCopy(prescriptionId).subscribe({
-      next: (blob) => this.printService.openForPrint(blob),
-      error: (err: unknown) =>
+      next: (blob) => {
+        if (scope !== this.scopeSeq) return;
+        this.printingCopy.set(false);
+        this.printService.openForPrint(blob);
+      },
+      error: (err: unknown) => {
+        if (scope !== this.scopeSeq) return;
+        this.printingCopy.set(false);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_COPY_FAILED'),
-        ),
+        );
+      },
     });
   }
 

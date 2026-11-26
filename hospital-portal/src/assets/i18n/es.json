@@ -15228,6 +15228,8 @@
     "CONFIG_NOTE": "Versiones de pruebas, tipos de muestra e intervalos de referencia."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Complete o cancele la acción actual antes de cambiar de hospital.",
+    "SCOPE_CHANGED": "Hospital cambiado. Vuelva a elegir una receta de la lista.",
     "LABEL": "Espacio de farmacia",
     "CLAIMS_SUBTITLE": "Seguir las solicitudes, decisiones y reembolsos.",
     "LOADED_CLAIMS": "solicitudes cargadas",

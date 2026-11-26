@@ -15228,6 +15228,8 @@
     "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Terminez ou annulez l’action en cours avant de changer d’hôpital.",
+    "SCOPE_CHANGED": "Hôpital modifié. Choisissez de nouveau une ordonnance dans la file.",
     "LABEL": "Espace pharmacie",
     "CLAIMS_SUBTITLE": "Suivre les demandes, les décisions et les remboursements.",
     "LOADED_CLAIMS": "demandes chargées",
