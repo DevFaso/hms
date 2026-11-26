@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LOCALE_ID, signal } from '@angular/core';
-import { registerLocaleData } from '@angular/common';
+import { Location, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -245,6 +245,11 @@ describe('StockRoutingComponent', () => {
     expect(navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing'], {
       queryParams: { scopeChanged: '1' },
     });
+    const replace = spyOn(TestBed.inject(Location), 'replaceState');
+    navigate.and.resolveTo(false);
+    c.onScopeChange();
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledWith('/pharmacy/stock-routing', 'scopeChanged=1');
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {

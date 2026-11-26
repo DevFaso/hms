@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -64,6 +64,7 @@ export class StockRoutingComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly roleContext = inject(RoleContextService);
   /** QA D966: opens the printed copy for printing. */
   private readonly printService = inject(PrintLabelService);
@@ -118,12 +119,16 @@ export class StockRoutingComponent implements OnInit {
     if (this.route.snapshot.paramMap.has('prescriptionId')) {
       // The URL named an order in the old scope. Remove it before a reload
       // could silently re-open that order under the new hospital.
+      const recover = () => {
+        this.location.replaceState('/pharmacy/stock-routing', 'scopeChanged=1');
+        this.loadQueue();
+      };
       void this.router
         .navigate(['/pharmacy/stock-routing'], { queryParams: { scopeChanged: '1' } })
         .then((navigated) => {
-          if (!navigated) this.loadQueue();
+          if (!navigated) recover();
         })
-        .catch(() => this.loadQueue());
+        .catch(recover);
       return;
     }
     this.loadQueue();
