@@ -7,18 +7,19 @@ import { compactBody } from '../shared/identifier-body';
 
 export interface UserSummary {
   id: string;
-  username: string;
-  email: string;
+  username?: string | null;
+  email?: string | null;
   firstName: string;
   lastName: string;
   profileImageUrl?: string;
   active: boolean;
   accessActive?: boolean;
+  impersonationEligible?: boolean;
   reactivationAssignmentId?: string;
   reactivationOptions?: { assignmentId: string; hospitalName: string; roleCode: string }[];
   deleted: boolean;
-  roleName: string;
-  profileType: string;
+  roleName?: string | null;
+  profileType?: string | null;
   roleCount: number;
   /** QA D914: may the caller edit or delete this account (absent: yes). */
   manageable?: boolean;

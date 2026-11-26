@@ -81,6 +81,26 @@ describe('UserListComponent registration', () => {
     fixture.detectChanges();
   }
 
+  it('support sessions use server eligibility even when a super-admin displays a nurse role', () => {
+    const target = {
+      id: 'platform-admin',
+      username: 'platform',
+      email: '',
+      firstName: 'Synthetic',
+      lastName: 'Admin',
+      active: true,
+      accessActive: true,
+      deleted: false,
+      roleName: 'ROLE_NURSE',
+      roleCount: 1,
+      profileType: 'STAFF',
+      impersonationEligible: false,
+    };
+    expect(component.canImpersonate(target)).toBeFalse();
+    expect(component.canImpersonate({ ...target, impersonationEligible: true })).toBeTrue();
+    expect(component.canImpersonate({ ...target, impersonationEligible: undefined })).toBeFalse();
+  });
+
   it('D4021: an enabled account with revoked scoped access appears in the inactive filter', () => {
     const retired = {
       id: 'retired',
