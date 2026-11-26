@@ -31,22 +31,30 @@ public class PatientConsentServiceImpl implements PatientConsentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getAllConsents(Pageable pageable) {
-        return consentRepository.findAll(pageable).map(this::mapWithDetails);
+        return mapPage(consentRepository.findAll(pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByPatient(UUID patientId, Pageable pageable) {
-        return consentRepository.findAllByPatientId(patientId, pageable).map(this::mapWithDetails);
+        return mapPage(consentRepository.findAllByPatientId(patientId, pageable));
     }
 
-    private PatientConsentResponseDTO mapWithDetails(PatientConsent consent) {
-        PatientResponseDTO patientDTO = patientMapper.toPatientDTO(
-            consent.getPatient(),
-            consent.getFromHospital().getId(),
-            true,
-            true
-        );
+    private Page<PatientConsentResponseDTO> mapPage(Page<PatientConsent> page) {
+        java.util.Map<UUID, java.util.List<PatientConsent>> byHospital = page.getContent().stream()
+            .collect(java.util.stream.Collectors.groupingBy(consent -> consent.getFromHospital().getId()));
+        java.util.Map<PatientConsent, PatientResponseDTO> patients = new java.util.IdentityHashMap<>();
+        byHospital.forEach((hospitalId, consents) -> {
+            java.util.List<PatientResponseDTO> mapped = patientMapper.toPatientDTOs(
+                consents.stream().map(PatientConsent::getPatient).toList(), hospitalId);
+            for (int index = 0; index < consents.size(); index++) {
+                patients.put(consents.get(index), mapped.get(index));
+            }
+        });
+        return page.map(consent -> mapWithDetails(consent, patients.get(consent)));
+    }
+
+    private PatientConsentResponseDTO mapWithDetails(PatientConsent consent, PatientResponseDTO patientDTO) {
         HospitalResponseDTO fromHospitalDTO = hospitalMapper.toHospitalDTO(consent.getFromHospital());
         HospitalResponseDTO toHospitalDTO = hospitalMapper.toHospitalDTO(consent.getToHospital());
         return consentMapper.toDto(consent, patientDTO, fromHospitalDTO, toHospitalDTO);

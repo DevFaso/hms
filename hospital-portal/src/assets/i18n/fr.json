@@ -10116,7 +10116,7 @@
     "DEACTIVATE_CONFIRM": "Êtes-vous sûr de vouloir désactiver",
     "DEACTIVATE_FAILED": "Échec de la désactivation du membre du personnel",
     "DEACTIVATE_STAFF": "Désactiver le personnel",
-    "DEACTIVATE_WARNING": "Son rôle dans cet hôpital est désactivé immédiatement : il/elle ne pourra plus y travailler. Son compte utilisateur reste actif pour un autre hôpital.",
+    "DEACTIVATE_WARNING": "Les accès du personnel seront désactivés dans cet hôpital. Le compte est conservé ; les accès aux autres hôpitaux suivent leurs propres affectations.",
     "DEACTIVATING": "Désactivation…",
     "DEPARTMENT": "Département",
     "DEPARTMENT_EMAIL": "E-mail du département",
@@ -10191,7 +10191,9 @@
     "VIEW_DEPARTMENT_DETAILS": "Voir les détails du département",
     "WEEKLY_SHIFTS": "Quarts hebdomadaires",
     "NO_DEPARTMENT_OPTION": "— Aucun département —",
-    "DEPARTMENTS_LOAD_FAILED": "Les départements n’ont pas pu être chargés."
+    "DEPARTMENTS_LOAD_FAILED": "Les départements n’ont pas pu être chargés.",
+    "REACTIVATE": "Réactiver",
+    "REQUIRES_ASSIGNMENT": "Gérer les affectations pour rétablir les accès du personnel"
   },
   "TREATMENT": {
     "ACTIVE": "Actif",
@@ -10359,7 +10361,9 @@
     "HOSPITAL_SCOPE": "Hôpital : {{name}}",
     "HOSPITAL_SCOPE_CLEAR": "Afficher tous les hôpitaux",
     "DEPARTMENT": "Département",
-    "DEPARTMENT_HINT": "Le département où le soignant reçoit les rendez-vous. Modifiable ensuite dans « Personnel »."
+    "DEPARTMENT_HINT": "Le département où le soignant reçoit les rendez-vous. Modifiable ensuite dans « Personnel ».",
+    "ACCOUNT_RETAINED_NO_ACCESS": "Compte conservé ; aucun rôle actif dans ce périmètre.",
+    "REACTIVATE_ACCESS": "Réactiver les accès à l’hôpital"
   },
   "TRIAGE": {
     "ACUITY": "Niveau de gravité",

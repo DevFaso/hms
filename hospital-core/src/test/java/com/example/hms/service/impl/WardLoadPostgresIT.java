@@ -130,6 +130,7 @@ class WardLoadPostgresIT {
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private NurseTaskService nurseTasks;
+    @Autowired private com.example.hms.service.PatientService patients;
     @Autowired private PrescriptionService prescriptions;
     @Autowired private com.example.hms.service.NurseDashboardService nurseDashboard;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
@@ -239,6 +240,24 @@ class WardLoadPostgresIT {
     }
 
     /* ── the reads ───────────────────────────────────────────────────── */
+
+    @Test
+    @DisplayName("C-PERF: patient pages of one and fifty rows each read confirmed blood groups once")
+    void patientListBloodGroupsAreBatched() {
+        for (int size : new int[] {1, 50}) {
+            Measured measured = measure("patients-page-" + size, () -> {
+                Page<com.example.hms.payload.dto.PatientResponseDTO> page = patients.getPatientPageByHospital(
+                    HOSPITAL, true, PageRequest.of(0, size));
+                assertThat(page.getTotalElements()).isEqualTo(REGISTERED_PATIENTS);
+                assertThat(page.getContent()).allSatisfy(row -> assertThat(row.getBloodGroup()).isNotNull());
+                return (long) page.getNumberOfElements();
+            });
+            assertThat(measured.rows()).isEqualTo(size);
+            assertThat(StatementShapes.SEEN.getOrDefault("clinical.patient_blood_groups",
+                new java.util.concurrent.atomic.LongAdder()).sum())
+                .as("confirmed blood-group queries for %s patient rows", size).isEqualTo(1);
+        }
+    }
 
     /** F4: nobody on this ward has a hold: the hold flags add one question for the whole screen, whatever its rows. */
     @Test
@@ -695,6 +714,7 @@ class WardLoadPostgresIT {
                 insert("\"security\".users", Map.of("id", user, "username", "patient" + i, "email", "patient" + i + "@load.test",
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i, "is_active", true));
                 Map<String, Object> patientRow = new LinkedHashMap<>(Map.of("id", patient, "user_id", user,
+                    "is_active", true,
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i,
                     "date_of_birth", LocalDate.of(1980, 1, 1).plusDays(i), "email", "patient" + i + "@load.test",
                     "phone_number_primary", "+2267" + (1000000 + i)));
