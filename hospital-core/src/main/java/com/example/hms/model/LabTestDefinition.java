@@ -72,6 +72,11 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "category", length = 100)
     private String category;
 
+    /** The order is resulted through the culture/antibiogram workflow; changed through catalogue approval. */
+    @Column(name = "culture", nullable = false)
+    @Builder.Default
+    private boolean culture = false;
+
     @Size(max = 2048)
     @Column(name = "description", length = 2048)
     private String description;

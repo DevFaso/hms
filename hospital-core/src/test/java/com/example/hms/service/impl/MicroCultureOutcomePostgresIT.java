@@ -157,6 +157,41 @@ class MicroCultureOutcomePostgresIT {
         });
     }
 
+    @Test
+    void creatinineOrderCannotCreateACultureEvenWithAMicrobiologyCategory() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("""
+                UPDATE lab.lab_test_definitions SET name = 'Creatinine', category = 'Microbiology', culture = false
+                WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :order)
+                """).setParameter("order", order).executeUpdate());
+
+        assertThatThrownBy(() -> service.createCulture(hospital, null,
+            com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("micro.culture.cultureOrderRequired");
+
+        Long count = new TransactionTemplate(transactionManager).execute(status ->
+            ((Number) entityManager.createNativeQuery(
+                "SELECT count(*) FROM lab.micro_culture_results WHERE lab_order_id = :order")
+                .setParameter("order", order).getSingleResult()).longValue());
+        assertThat(count).as("the refused request creates no second report").isEqualTo(1L);
+    }
+
+    @Test
+    void d3905_aFinalCultureLeavesTheInAnalysisWorklist() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        service.finalizeCulture(culture, hospital, null);
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(result).isEqualTo("COMPLETED");
+    }
+
     private UUID isolate(int number, String organism) {
         UUID id = UUID.randomUUID();
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->

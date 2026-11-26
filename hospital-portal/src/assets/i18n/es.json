@@ -4831,7 +4831,9 @@
       "REMOVE_RANGE": "Remove this range",
       "ADD_RANGE": "Add a range",
       "ADD": "Add a component"
-    }
+    },
+    "CULTURE": "Culture (culture and susceptibility report)",
+    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",

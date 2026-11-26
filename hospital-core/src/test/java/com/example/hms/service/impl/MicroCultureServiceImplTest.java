@@ -74,6 +74,7 @@ class MicroCultureServiceImplTest {
     @Mock private MicroIsolateRepository isolateRepository;
     @Mock private MicroSusceptibilityRepository susceptibilityRepository;
     @Mock private LabOrderRepository labOrderRepository;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private StaffRepository staffRepository;
@@ -108,7 +109,7 @@ class MicroCultureServiceImplTest {
         org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         service = new MicroCultureServiceImpl(
             cultureRepository, isolateRepository, susceptibilityRepository, correctionRepository,
-            labOrderRepository, specimenRepository, patientChartAccess,
+            labOrderRepository, labResultRepository, specimenRepository, patientChartAccess,
             staffRepository, userRepository, notificationService,
             TestMessageSources.bundles(), java.time.Clock.systemDefaultZone());
 
@@ -137,6 +138,7 @@ class MicroCultureServiceImplTest {
             .orderingStaff(orderingStaff)
             .status(LabOrderStatus.IN_PROGRESS)
             .build();
+        order.setLabTestDefinition(com.example.hms.model.LabTestDefinition.builder().culture(true).build());
         order.setId(orderId);
 
         cultureId = UUID.randomUUID();
@@ -174,6 +176,29 @@ class MicroCultureServiceImplTest {
     }
 
     /* ── create ────────────────────────────────────────────────────────── */
+
+    @Test
+    void d3904_creatinineCannotOpenACultureAndAFreeTextCategoryCannotOverrideTheFlag() {
+        order.setLabTestDefinition(com.example.hms.model.LabTestDefinition.builder()
+            .name("Créatinine").testCode("CREAT").category("Microbiologie").culture(false).build());
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+        assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("micro.culture.cultureOrderRequired");
+        verify(cultureRepository, never()).save(any());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+                .hasMessageContaining("rapport de culture et antibiogramme");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        }
+        order.setLabTestDefinition(null);
+        assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("micro.culture.cultureOrderRequired");
+        verify(cultureRepository, never()).save(any());
+    }
 
     @Test
     void createAttachesTheCultureToTheOrder() {
@@ -255,6 +280,39 @@ class MicroCultureServiceImplTest {
         assertThatThrownBy(() -> service.finalizeCulture(cultureId, hospitalId, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("at least one isolate");
+    }
+
+    @Test
+    void d3905_finalCultureCompletesItsOrderUsingTheCommittedStatus() {
+        culture.setGrowthResult(MicroGrowthResult.NO_GROWTH);
+        when(labOrderRepository.findStatusById(orderId)).thenReturn(LabOrderStatus.RECEIVED);
+        when(cultureRepository.findByLabOrder_IdOrderByCreatedAtDesc(orderId)).thenReturn(List.of(culture));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of());
+        service.finalizeCulture(cultureId, hospitalId, null);
+        verify(labOrderRepository).findWithLockById(orderId);
+        verify(labOrderRepository).updateStatusFrom(orderId, LabOrderStatus.RECEIVED, LabOrderStatus.COMPLETED);
+    }
+
+    @Test
+    void d3905_anotherPreliminaryCultureKeepsTheOrderOpen() {
+        culture.setGrowthResult(MicroGrowthResult.NO_GROWTH);
+        when(labOrderRepository.findStatusById(orderId)).thenReturn(LabOrderStatus.RECEIVED);
+        MicroCultureResult pending = MicroCultureResult.builder().status(MicroCultureStatus.PRELIMINARY).build();
+        when(cultureRepository.findByLabOrder_IdOrderByCreatedAtDesc(orderId)).thenReturn(List.of(culture, pending));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of());
+        service.finalizeCulture(cultureId, hospitalId, null);
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+    }
+
+    @Test
+    void d3905_voidedAndCancelledOrdersNeverReopen() {
+        culture.setGrowthResult(MicroGrowthResult.NO_GROWTH);
+        for (LabOrderStatus terminal : List.of(LabOrderStatus.CANCELLED, LabOrderStatus.ENTERED_IN_ERROR)) {
+            culture.setStatus(MicroCultureStatus.PRELIMINARY);
+            when(labOrderRepository.findStatusById(orderId)).thenReturn(terminal);
+            service.finalizeCulture(cultureId, hospitalId, null);
+        }
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
     }
 
     @Test
@@ -667,7 +725,7 @@ class MicroCultureServiceImplTest {
 
     @Test
     void dtoAssemblesTheFullReportTree() {
-        order.setLabTestDefinition(com.example.hms.model.LabTestDefinition.builder()
+        order.setLabTestDefinition(com.example.hms.model.LabTestDefinition.builder().culture(true)
             .name("Blood Culture").build());
         hospital.setName("CHU Ouaga");
         User reporterUser = new User();

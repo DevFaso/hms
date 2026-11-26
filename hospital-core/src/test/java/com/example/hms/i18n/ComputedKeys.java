@@ -198,6 +198,8 @@ final class ComputedKeys {
             new Open("the first finding of the definition validator; each finding is built with a literal key"));
         site(r, d, "com/example/hms/service/LabTestDefinitionServiceImpl.java|\"lab.definition.status.\" + status.name()",
             "LabTestDefinitionServiceImpl.java|lab.definition.status.");
+        site(r, d, "com/example/hms/service/LabTestDefinitionServiceImpl.java|\"lab.definition.nextAction.\" + definition.getApprovalStatus().name()",
+            "LabTestDefinitionServiceImpl.java|lab.definition.nextAction.");
         site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + certificate.type().name()",
             "MedicalCertificateServiceImpl.java|medicalCertificate.title.");
         site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + c.type().name()",
@@ -545,6 +547,8 @@ final class ComputedKeys {
         r.put("IsolationServiceImpl.java|isolation.type.", enumValues("isolation.type.", IsolationPrecautionType.class));
         r.put("LabTestDefinitionServiceImpl.java|lab.definition.status.",
             enumValues("lab.definition.status.", LabTestDefinitionApprovalStatus.class));
+        r.put("LabTestDefinitionServiceImpl.java|lab.definition.nextAction.",
+            enumValues("lab.definition.nextAction.", LabTestDefinitionApprovalStatus.class));
         r.put("LaborAlertArgs.java|labor.liquor.", enumValues("labor.liquor.", LiquorColour.class));
         r.put("LaborServiceImpl.java|labor.liquor.", enumValues("labor.liquor.", LiquorColour.class));
         r.put("LaborServiceImpl.java|labor.alert.type.", enumValues("labor.alert.type.", LaborAlertType.class));

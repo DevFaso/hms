@@ -991,6 +991,23 @@ class LabTestDefinitionServiceImplTest {
     }
 
     @Test
+    void d3907_approvalOnADraftExplainsTheNextActionNotTheDirectorsQueueStatus() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("APPROVE")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Submit for quality review")
+                .hasMessageNotContaining("Pending director approval");
+            verify(repository, never()).save(any());
+        }
+    }
+
+    @Test
     void processApproval_submitForQa_wrongStatus_throwsIllegalState() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
         User scientist = userWithRole("ROLE_LAB_SCIENTIST");
@@ -1826,6 +1843,12 @@ class LabTestDefinitionServiceImplTest {
                     LabTestDefinitionApprovalStatus.APPROVED,
                     LabTestDefinitionApprovalStatus.ACTIVE)) {
                 definition.setApprovalStatus(status);
+                requestDTO.setSampleType("Plasma");
+                requestDTO.setTestCode("CBC");
+                requestDTO.setLoincCode("2345-7");
+                requestDTO.setCulture(true);
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+                requestDTO.setCulture(null);
                 requestDTO.setSampleType("Serum");
                 requestDTO.setLoincCode("2345-7");
                 assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
@@ -2223,6 +2246,7 @@ class LabTestDefinitionServiceImplTest {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
         definition.setUnit("g/L");
         definition.setPointOfCare(true);
+        definition.setCulture(true);
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
             when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
@@ -2242,6 +2266,7 @@ class LabTestDefinitionServiceImplTest {
             assertThat(next.getTestCode()).isEqualTo("CBC");
             assertThat(next.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
             assertThat(next.isActive()).isFalse();
+            assertThat(next.isCulture()).isTrue();
             assertThat(next.getSupersedesDefinitionId()).isEqualTo(defId);
             assertThat(next.getVersionNumber()).isEqualTo(2);
             assertThat(next.getHospital()).isSameAs(hospital);
