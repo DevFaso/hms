@@ -3,6 +3,8 @@ package com.example.hms.service;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.InstrumentOutboxStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ChartRestrictedException;
+import com.example.hms.security.chart.RestrictedChartGate;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.model.Hospital;
@@ -41,6 +43,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +56,7 @@ class InstrumentOutboxServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private RestrictedChartGate restrictedChartGate;
 
     // Real properties, not a mock: the transport endpoint must report the
     // actual defaults, and a mock would pass with all-zero nonsense.
@@ -74,6 +79,9 @@ class InstrumentOutboxServiceImplTest {
         labOrder = LabOrder.builder().build();
         labOrder.setId(labOrderId);
         labOrder.setHospital(hospital);
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        labOrder.setPatient(patient);
     }
 
     private InstrumentOutbox message(InstrumentOutboxStatus status) {
@@ -297,6 +305,81 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
+    void restrictedChartRefusesPayloadAndRetryBeforeMutation() {
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ERROR);
+        UUID patientId = labOrder.getPatient().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        doThrow(new ChartRestrictedException(patientId)).when(restrictedChartGate).requireReadable(patientId);
+
+        assertThatThrownBy(() -> service.getMessage(row.getId())).isInstanceOf(ChartRestrictedException.class);
+        assertThatThrownBy(() -> service.retry(row.getId())).isInstanceOf(ChartRestrictedException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+        verify(outboxRepository, never()).save(any());
+        assertThat(row.getStatus()).isEqualTo(InstrumentOutboxStatus.ERROR);
+    }
+
+    @Test
+    void retryRequiresAHospitalBeforeLoadingOrChangingTheMessage() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        assertThatThrownBy(() -> service.retry(UUID.randomUUID()))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Hospital context required");
+        verify(outboxRepository, never()).findById(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void missingPatientIdentityCannotExposePayloadOrRetry() {
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ERROR);
+        labOrder.setPatient(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+
+        assertThatThrownBy(() -> service.getMessage(row.getId())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.retry(row.getId())).isInstanceOf(ResourceNotFoundException.class);
+        verify(restrictedChartGate, never()).requireReadable(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void realRestrictedChartGateBlocksAdministratorUntilBreakGlass() {
+        UUID patientId = labOrder.getPatient().getId();
+        UUID actor = UUID.randomUUID();
+        var patients = mock(com.example.hms.repository.PatientRepository.class);
+        var registrations = mock(com.example.hms.repository.PatientHospitalRegistrationRepository.class);
+        var sessions = mock(com.example.hms.repository.BreakGlassSessionRepository.class);
+        var breakGlass = mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
+        var realGate = new RestrictedChartGate(patients, registrations, breakGlass, sessions,
+            java.time.Clock.systemUTC());
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "restrictedChartGate", realGate);
+        var auth = org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+            "administrator", "n/a", org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actor).activeHospitalId(hospitalId)
+                .permittedHospitalIds(java.util.Set.of(hospitalId)).staffHospitalIds(java.util.Set.of(hospitalId)).build());
+        try {
+            InstrumentOutbox row = message(InstrumentOutboxStatus.ERROR);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+            when(patients.findChartRestrictedById(patientId)).thenReturn(Optional.of(true));
+            when(registrations.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(breakGlass.liveSession(actor, patientId, hospitalId)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> service.getMessage(row.getId())).isInstanceOf(ChartRestrictedException.class);
+            assertThatThrownBy(() -> service.retry(row.getId())).isInstanceOf(ChartRestrictedException.class);
+            verify(outboxRepository, never()).save(any());
+            when(breakGlass.liveSession(actor, patientId, hospitalId))
+                .thenReturn(Optional.of(new com.example.hms.model.BreakGlassSession()));
+            assertThat(service.getMessage(row.getId()).getPayload()).isEqualTo(row.getPayload());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     void getMessage_foreignHospitalReadsAsNotFound() {
         InstrumentOutbox row = message(InstrumentOutboxStatus.ACK);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
@@ -389,6 +472,7 @@ class InstrumentOutboxServiceImplTest {
         InstrumentOutboxResponseDTO dto = service.retry(row.getId());
 
         assertThat(dto.getStatus()).isEqualTo("PENDING");
+        assertThat(dto.getPayload()).isNull();
         // Attempts must reset: findDispatchable requires attempts < maxAttempts,
         // so a row requeued at the ceiling would be re-parked before reaching
         // the wire.
