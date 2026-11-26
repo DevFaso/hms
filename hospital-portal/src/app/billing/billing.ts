@@ -71,6 +71,7 @@ import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import { PriceListService, type PriceListItem } from '../services/price-list.service';
 import {
   MOBILE_MONEY_OPERATORS,
   MobileMoneyOperator,
@@ -138,6 +139,8 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
 })
 export class BillingComponent implements OnInit {
   private readonly billingService = inject(BillingService);
+  /** QA D3980: the price list a line typed at the till is picked from. */
+  private readonly priceListService = inject(PriceListService);
   private readonly toast = inject(ToastService);
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
@@ -251,7 +254,17 @@ export class BillingComponent implements OnInit {
   filterFromDate = signal('');
   filterToDate = signal('');
 
-  stats = signal({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 });
+  stats = signal<{
+    total: number;
+    paid: number;
+    outstanding: number;
+    overdue: number;
+    totalRevenue: number;
+    balance: number;
+    /** QA D3981 (r77): what the net revenue nets (received before refunds, and the refunds paid out). */
+    grossReceived?: number;
+    refunded?: number;
+  }>({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 });
 
   /* ── CRUD signals ── */
   showModal = signal(false);
@@ -294,6 +307,91 @@ export class BillingComponent implements OnInit {
   newItemQuantity = signal<number | null>(1);
   newItemUnitPrice = signal<number | null>(null);
   readonly itemCategories: InvoiceItemCategory[] = INVOICE_ITEM_CATEGORIES;
+
+  /**
+   * QA D3980 (r77): the act of the hospital's price list a line typed at the till bills. Picked, the line is named
+   * and priced from the grid and the patient's plan applies its rules (an excluded act is never claimed); left
+   * empty, the line is the patient's to pay, never claimed from the insurer.
+   */
+  newItemPriceListItemId = signal('');
+  /** The active price-list items with a price in force, read once when a draft's lines can be edited. */
+  priceListItems = signal<PriceListItem[]>([]);
+  private priceListRequested = false;
+
+  /** The item picked for the new line, if any. */
+  readonly pickedPriceListItem = computed(
+    () => this.priceListItems().find((item) => item.id === this.newItemPriceListItemId()) ?? null,
+  );
+
+  /** Reads the price list once (only for those who may read it); a failure leaves the free-text line. */
+  private ensurePriceList(): void {
+    if (this.priceListRequested || !this.canReadPriceList) return;
+    this.priceListRequested = true;
+    this.priceListService.list(null, false).subscribe({
+      next: (rows) =>
+        this.priceListItems.set(
+          (rows ?? []).filter((item) => item.active).sort((a, b) => a.label.localeCompare(b.label)),
+        ),
+      error: () => {
+        this.priceListRequested = false;
+      },
+    });
+  }
+
+  /**
+   * Review of #1338: the picked act's grid price on the invoice's own date (undefined while it is read, null when
+   * none is in force that day). A backdated draft takes the price of its date, never today's.
+   */
+  pickedGridPrice = signal<number | null | undefined>(undefined);
+
+  /** Picking an act fills the line from the grid: its label, a lab test or a service, its price on the invoice's date. */
+  pickPriceListItem(id: string): void {
+    this.newItemPriceListItemId.set(id ?? '');
+    this.pickedGridPrice.set(undefined);
+    const item = this.pickedPriceListItem();
+    const inv = this.selectedInvoice();
+    if (!item || !inv) return;
+    this.newItemDescription.set(item.label);
+    this.newItemCategory.set(item.category === 'LAB_TEST' ? 'LAB_TEST' : 'SERVICE');
+    this.newItemUnitPrice.set(null);
+    this.billingService.getGridPrice(inv.id, item.id).subscribe({
+      next: (grid) => {
+        // A later pick wins: an earlier answer arriving late changes nothing.
+        if (this.newItemPriceListItemId() !== item.id) return;
+        const price = grid?.unitPrice;
+        const known = price !== null && price !== undefined ? Number(price) : null;
+        this.pickedGridPrice.set(known);
+        this.newItemUnitPrice.set(known);
+      },
+      error: () => {
+        if (this.newItemPriceListItemId() !== item.id) return;
+        this.pickedGridPrice.set(null);
+      },
+    });
+  }
+
+  /**
+   * The one reason field of a new line says why it is asked: a line added to a visit's invoice, or (QA D3980) a
+   * picked act priced away from the grid.
+   */
+  newItemReasonRequiredKey(inv: BillingInvoiceResponse): string {
+    return this.addedLineNeedsReason(inv)
+      ? 'BILLING.ADDED_LINE_REASON_REQUIRED'
+      : 'BILLING.OVERRIDE_REASON_REQUIRED';
+  }
+
+  /** Whether the price typed differs from the act's grid price on the invoice's date (an override: a reason is asked). */
+  newItemOverridesGrid(): boolean {
+    const grid = this.pickedGridPrice();
+    const price = this.newItemUnitPrice();
+    return (
+      !!this.pickedPriceListItem() &&
+      grid !== null &&
+      grid !== undefined &&
+      price !== null &&
+      Number(price) !== Number(grid)
+    );
+  }
 
   showDeleteConfirm = signal(false);
   deletingInv = signal<BillingInvoiceResponse | null>(null);
@@ -840,6 +938,9 @@ export class BillingComponent implements OnInit {
           overdue: Number(summary?.overdue ?? 0),
           totalRevenue: Number(summary?.totalRevenue ?? 0),
           balance: Number(summary?.balance ?? 0),
+          // QA D3981 (r77): the net figure is shown with what it nets (received − refunded).
+          grossReceived: Number(summary?.grossReceived ?? summary?.totalRevenue ?? 0),
+          refunded: Number(summary?.refunded ?? 0),
         });
       },
       error: () => {
@@ -917,6 +1018,7 @@ export class BillingComponent implements OnInit {
   viewInvoice(inv: BillingInvoiceResponse): void {
     this.selectedInvoice.set(inv);
     this.resetNewItem();
+    if (this.canEditLines(inv)) this.ensurePriceList();
     this.loadItems(inv.id);
     this.loadPayments(inv.id);
     this.resetAdjustment();
@@ -962,6 +1064,8 @@ export class BillingComponent implements OnInit {
   }
 
   private resetNewItem(): void {
+    this.newItemPriceListItemId.set('');
+    this.pickedGridPrice.set(undefined);
     this.newItemReason.set('');
     this.newItemDescription.set('');
     this.newItemCategory.set('SERVICE');
@@ -998,10 +1102,10 @@ export class BillingComponent implements OnInit {
       });
     }
     const reason = this.newItemReason().trim();
-    if (this.addedLineNeedsReason(inv) && !reason) {
+    if ((this.addedLineNeedsReason(inv) || this.newItemOverridesGrid()) && !reason) {
       refusals.push({
         id: 'line-reason',
-        message: this.translate.instant('BILLING.ADDED_LINE_REASON_REQUIRED'),
+        message: this.translate.instant(this.newItemReasonRequiredKey(inv)),
       });
     }
     if (refusals.length > 0) {
@@ -1022,6 +1126,9 @@ export class BillingComponent implements OnInit {
         quantity: this.newItemQuantity() ?? 1,
         unitPrice: this.newItemUnitPrice() ?? 0,
         ...(reason ? { overrideReason: reason } : {}),
+        ...(this.newItemPriceListItemId()
+          ? { priceListItemId: this.newItemPriceListItemId() }
+          : {}),
       })
       .subscribe({
         next: () => {

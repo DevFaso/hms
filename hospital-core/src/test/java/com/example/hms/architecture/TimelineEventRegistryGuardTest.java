@@ -82,6 +82,8 @@ class TimelineEventRegistryGuardTest {
     /** Patient-owned entities that are not chronology events, each with why. Decide before adding one. */
     static final Map<String, String> NOT_EVENTS = Map.ofEntries(
         Map.entry("PatientRecipientChallenge", "C-K2b: ephemeral contact-security code, hash and resend budget; no clinical event or code material belongs on a shared clinical chronology"),
+        Map.entry("OPositiveReleaseDecision", "V380: who decided an emergency O positive release and what is owed on it,"
+            + " read on the transfusion request and the blood bank's review queue; the transfusion it belongs to is the event"),
         Map.entry("PatientAntibodyWorkup", "QA D3351: the biologist's record of an antibody, read on the transfusion"
             + " screens with the permanent flag; the antibody screen and the transfusion it conditions are the events"),
         Map.entry("ProxySensitiveRelease", "policy 2026-11-20: a disclosure of an existing result to a parent, on the"

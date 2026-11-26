@@ -59,6 +59,16 @@ public class CashSessionDTO {
     /** PR 10 review: how many lines of the latest close have a difference, whatever their sum. */
     private int differenceLines;
 
+    /**
+     * QA D3982 (r77): the close round whose counts are the session's CURRENT figures: the latest one while the session
+     * is closed (or reviewed), 0 while it is open, a reopened one included. The differences above belong to this
+     * round only, so a reopened till never shows its old count beside a new expected amount.
+     */
+    private int countedRound;
+
+    /** QA D3982: the earlier closes (every round but {@link #countedRound}), oldest first: history, never current. */
+    private List<CloseRound> history;
+
     /** Every close round's counts, oldest first. */
     private List<Count> counts;
     private List<Movement> movements;
@@ -77,6 +87,23 @@ public class CashSessionDTO {
         private long outCount;
         private BigDecimal outAmount;
         private BigDecimal expected;
+    }
+
+    /** QA D3982: one earlier close of the session, as history: when, and what the drawer and the lines showed. */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class CloseRound {
+        private int closeRound;
+        private LocalDateTime closedAt;
+        /** The CASH line of that close (null when the session took no cash). */
+        private BigDecimal cashExpected;
+        private BigDecimal cashCounted;
+        private BigDecimal cashDifference;
+        private BigDecimal totalDifference;
+        private int differenceLines;
     }
 
     /** One counted line of one close round. */

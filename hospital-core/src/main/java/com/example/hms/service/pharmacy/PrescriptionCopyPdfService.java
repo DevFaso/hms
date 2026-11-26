@@ -65,6 +65,17 @@ public class PrescriptionCopyPdfService {
         this.controlledResolver = controlledResolver;
     }
 
+    /**
+     * QA D3865: the patient's known allergies on the copy an outside pharmacy dispenses from (a hand-built instance
+     * in a unit test may leave it out; the line's allergy override is printed regardless).
+     */
+    private PrescriptionAllergyNotice allergyNotice;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyNotice(PrescriptionAllergyNotice allergyNotice) {
+        this.allergyNotice = allergyNotice;
+    }
+
     /** The copy for the pharmacy that printed it (the active hospital's prescriptions only). */
     @Transactional(readOnly = true)
     public byte[] copyForStaff(UUID prescriptionId) {
@@ -110,6 +121,11 @@ public class PrescriptionCopyPdfService {
             pdf.rule();
             pdf.space(4f);
             writeWhoAndWhen(pdf, rx, locale, date);
+            if (allergyNotice != null) {
+                // QA D3865: the patient's known allergies, or none recorded.
+                pdf.field(PrescriptionAllergyNotice.allergiesLabel(locale),
+                        allergyNotice.allergiesValue(allergyNotice.knownAllergies(rx, locale), locale), 11f);
+            }
             pdf.space(6f);
             pdf.rule();
             pdf.space(4f);
@@ -173,6 +189,12 @@ public class PrescriptionCopyPdfService {
         if (controlledResolver != null ? controlledResolver.isControlled(rx) : rx.isControlledSubstance()) {
             pdf.space(4f);
             pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, label(locale, "pdf.rxcopy.controlled"));
+        }
+        // QA D3865: signed over an allergy alert: said, with the prescriber's reason.
+        String allergyOverride = PrescriptionAllergyNotice.overrideLine(rx, locale);
+        if (allergyOverride != null) {
+            pdf.space(4f);
+            pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, allergyOverride);
         }
     }
 

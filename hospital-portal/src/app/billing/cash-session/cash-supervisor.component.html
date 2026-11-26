@@ -221,6 +221,48 @@
                       {{ 'BILLING.CASH_SESSION.EXPLANATION_VALUE' | translate: { text: text } }}
                     </p>
                   }
+                  <!-- QA D3982 (r77): the earlier closes of a reopened till, as history, apart from the current figures. -->
+                  @if ((s.history ?? []).length > 0) {
+                    <div class="cash-history" [attr.data-testid]="'cash-history-' + s.id">
+                      <p class="field-hint">
+                        <strong>{{ 'BILLING.CASH_SESSION.HISTORY_TITLE' | translate }}</strong>
+                      </p>
+                      <ul>
+                        @for (h of s.history; track h.closeRound) {
+                          <li [attr.data-testid]="'cash-history-round-' + h.closeRound">
+                            @if (h.cashCounted !== null && h.cashCounted !== undefined) {
+                              {{
+                                'BILLING.CASH_SESSION.HISTORY_ROUND'
+                                  | translate
+                                    : {
+                                        round: h.closeRound,
+                                        expected: (h.cashExpected | cfa),
+                                        counted: (h.cashCounted | cfa),
+                                        difference: (h.cashDifference ?? 0 | cfa),
+                                        lines: h.differenceLines,
+                                      }
+                              }}
+                            } @else {
+                              {{
+                                'BILLING.CASH_SESSION.HISTORY_ROUND_NO_CASH'
+                                  | translate
+                                    : {
+                                        round: h.closeRound,
+                                        difference: (h.totalDifference ?? 0 | cfa),
+                                        lines: h.differenceLines,
+                                      }
+                              }}
+                            }
+                            @if (h.closedAt) {
+                              <span class="field-hint">
+                                — {{ h.closedAt | serverTime | date: 'short' }}</span
+                              >
+                            }
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                  }
                   @if (s.reviewNote) {
                     <p class="field-hint">
                       {{

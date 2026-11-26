@@ -177,4 +177,24 @@ class CoverageCategoryPriceSourceGuardTest {
             line.getQuantity(), InvoiceCoverageService.categoryOf(line, itemCategories), line.getPriceListItemId());
         return CoverageCalculator.compute(List.of(input), terms, List.of(rule), BigDecimal.ZERO).total();
     }
+
+    /**
+     * QA D3980: a hospital's own service billed with no tariff says what it bills (a line with no category is never
+     * covered): a consultation when the hospital named it one, in any of its words, else another service.
+     */
+    @Test
+    void anUntariffedServiceIsAConsultationWhenNamedOneElseAnotherService() {
+        Treatment tele = new Treatment();
+        tele.setName("Téléconsultation de suivi");
+        Treatment consulta = new Treatment();
+        consulta.setName("Consulta general");
+        Treatment dressing = new Treatment();
+        dressing.setName("Pansement simple");
+        Treatment unnamed = new Treatment();
+
+        assertThat(ConsultationChargeSource.serviceCategoryOf(tele)).isEqualTo(PriceListCategory.CONSULTATION);
+        assertThat(ConsultationChargeSource.serviceCategoryOf(consulta)).isEqualTo(PriceListCategory.CONSULTATION);
+        assertThat(ConsultationChargeSource.serviceCategoryOf(dressing)).isEqualTo(PriceListCategory.OTHER_SERVICE);
+        assertThat(ConsultationChargeSource.serviceCategoryOf(unnamed)).isEqualTo(PriceListCategory.OTHER_SERVICE);
+    }
 }

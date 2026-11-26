@@ -81,6 +81,8 @@ something critical is waiting and for whom (initials).
 |---|---|---|
 | `sms.partner.offer` | reference, medicine, patient's initials | OK by necessity: the pharmacy must know what to dispense; initials only, never the name |
 | `sms.partner.offer.partial` | reference, medicine, remaining quantity, initials | OK, as above |
+| `sms.partner.allergies` | the patient's known allergies (allergen, severity) | OK by necessity (QA D3865): appended to the offer; the pharmacy must know the allergies of the patient it dispenses for |
+| `sms.partner.allergyOverride` | known allergies, the prescriber's reason for prescribing despite one (first 120 characters) | OK by necessity (QA D3865): appended to the offer, so a pharmacy never dispenses an overridden order as a plain one |
 | `sms.partner.reminder` | reference | OK |
 | `sms.partner.autoRejected` | reference | OK |
 | `sms.partner.superseded` | reference | OK |

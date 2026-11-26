@@ -99,6 +99,35 @@ describe('PatientSnapshotDrawerComponent', () => {
     expect(component.attestNotes()).toBe('');
   });
 
+  it('QA D3985 (r77): an unpaid pharmacy credit « à facturer » shows in the balance and as an alert', () => {
+    mockReceptionService.getPatientSnapshot = () =>
+      of({
+        ...mockSnapshot,
+        alerts: { ...mockSnapshot.alerts, outstandingBalance: true, pharmacyCreditDue: true },
+        billing: {
+          openInvoiceCount: 0,
+          totalBalanceDue: 1500,
+          invoiceBalanceDue: 0,
+          pharmacyCreditCount: 1,
+          pharmacyCreditDue: 1500,
+        },
+      });
+    component.patientId = 'p1';
+    component.ngOnChanges({
+      patientId: {
+        currentValue: 'p1',
+        previousValue: null,
+        firstChange: true,
+        isFirstChange: () => true,
+      },
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="snapshot-pharmacy-credit-chip"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="snapshot-pharmacy-credit"]')).not.toBeNull();
+    mockReceptionService.getPatientSnapshot = () => of(mockSnapshot);
+  });
+
   /** QA D1038 / D986: a non-primary policy is never labelled the primary payer. */
   for (const hasPrimary of [true, false]) {
     it(`labels the payer as ${hasPrimary ? 'primary' : 'an insurer'} when hasPrimary=${hasPrimary}`, () => {
