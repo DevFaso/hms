@@ -1,3 +1,4 @@
+import { assignmentReactivationHref } from '../shared/assignment-reactivation';
 import { allRows } from '../shared/all-pages';
 import {
   Component,
@@ -468,6 +469,10 @@ export class StaffListComponent implements OnInit {
   isOwnCard(member: StaffResponse): boolean {
     const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
     return !!me && member.userId === me;
+  }
+
+  reactivationHref(member: StaffResponse): string | null {
+    return assignmentReactivationHref(member.assignmentId);
   }
 
   confirmDelete(member: StaffResponse): void {

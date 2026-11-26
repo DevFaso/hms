@@ -204,3 +204,64 @@ describe('joinReasons — one sentence per refused field (QA r41 L2)', () => {
     expect(joinReasons([])).toBe('');
   });
 });
+
+describe('D4021: staff deactivation is visible and reactivation follows the assignment workflow', () => {
+  it('replaces Deactivate with an inactive badge and a recovery link, and shows the success toast', () => {
+    let active = true;
+    const assignmentId = '00000000-0000-0000-0000-000000004021';
+    const staff = jasmine.createSpyObj<StaffService>('StaffService', [
+      'list',
+      'deactivate',
+      'update',
+    ]);
+    staff.list.and.callFake(() =>
+      of([
+        {
+          id: 's-other',
+          userId: 'someone-else',
+          name: 'Synthetic colleague',
+          assignmentId,
+          active,
+          jobTitle: 'NURSE',
+        } as StaffResponse,
+      ]),
+    );
+    staff.deactivate.and.callFake(() => {
+      active = false;
+      return of(undefined);
+    });
+    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      imports: [StaffListComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: StaffService, useValue: staff },
+        { provide: HospitalService, useValue: { getMyHospitalAsResponse: () => of(null) } },
+        { provide: UserService, useValue: { list: () => of({ content: [] }) } },
+        { provide: ToastService, useValue: toast },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      COMMON: { ACTIVE: 'Active', INACTIVE: 'Inactive' },
+      STAFF: { DEACTIVATED: 'Staff deactivated', REACTIVATE: 'Reactivate' },
+    });
+    translate.use('en');
+    const fixture = TestBed.createComponent(StaffListComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    (root.querySelector('[data-test="staff-deactivate"]') as HTMLButtonElement).click();
+    fixture.componentInstance.executeDelete();
+    fixture.detectChanges();
+    expect(root.querySelector('.staff-status')?.textContent).toContain('Inactive');
+    expect(root.querySelector('[data-test="staff-deactivate"]')).toBeNull();
+    expect(root.querySelector('[data-test="staff-reactivate"]')?.getAttribute('href')).toBe(
+      '/admin-assignments?reactivate=' + assignmentId,
+    );
+    expect(toast.success).toHaveBeenCalledWith('Staff deactivated');
+    expect(staff.deactivate).toHaveBeenCalledOnceWith('s-other');
+    expect(staff.update).not.toHaveBeenCalled();
+  });
+});

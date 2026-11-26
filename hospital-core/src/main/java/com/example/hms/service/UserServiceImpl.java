@@ -1582,7 +1582,7 @@ public class UserServiceImpl implements UserService {
             : userRepository.findStaffDirectoryPaged(
                 scoped, directoryHospitals(scope), !scoped && includeDeleted, !scoped && onlyDeleted, pageable);
         Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
-        return users.map(u -> directoryRow(u, scope, manageable));
+        return directoryPage(users, scope, manageable);
     }
 
     @Override
@@ -1600,7 +1600,7 @@ public class UserServiceImpl implements UserService {
             ? userRepository.findAllPaged(false, false, true, one, pageable)
             : userRepository.findStaffDirectoryPaged(true, one, false, false, pageable);
         Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
-        return users.map(u -> directoryRow(u, scope, manageable));
+        return directoryPage(users, new DirectoryScope(false, one, scope.seesPatientContacts()), manageable);
     }
 
     @Override
@@ -1626,7 +1626,7 @@ public class UserServiceImpl implements UserService {
             : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
-        return users.map(u -> directoryRow(u, scope, manageable));
+        return directoryPage(users, scope, manageable);
     }
 
     @Override
@@ -1638,12 +1638,13 @@ public class UserServiceImpl implements UserService {
         }
         int bounded = Math.clamp(size, 1, MAX_CHAT_RECIPIENTS);
         Pageable pageable = PageRequest.of(0, bounded, Sort.by("lastName", "firstName"));
-        return userRepository.findStaffDirectoryPaged(
-                !scope.everyone(), directoryHospitals(scope), false, false, pageable)
-            .stream()
+        List<User> colleagues = userRepository.findStaffDirectoryPaged(
+                !scope.everyone(), directoryHospitals(scope), false, false, pageable).getContent();
+        Map<UUID, List<UserRoleHospitalAssignment>> assignments = directoryAssignments(colleagues, scope);
+        return colleagues.stream()
             .filter(User::isActive)
             .map(u -> {
-                UserSummaryDTO row = userMapper.toSummaryDTO(u);
+                UserSummaryDTO row = userMapper.toSummaryDTO(u, assignments.getOrDefault(u.getId(), List.of()));
                 return com.example.hms.payload.dto.ChatRecipientDTO.builder()
                     .id(u.getId())
                     .firstName(u.getFirstName())
@@ -1662,14 +1663,32 @@ public class UserServiceImpl implements UserService {
      * account without a loaded profile slipped past, and staff addresses are no
      * business of a nurse's directory either. Administrators keep the full row.
      */
-    private UserSummaryDTO directoryRow(User user, DirectoryScope scope, Set<UUID> manageable) {
-        UserSummaryDTO dto = userMapper.toSummaryDTO(user);
+    private Page<UserSummaryDTO> directoryPage(Page<User> users, DirectoryScope scope, Set<UUID> manageable) {
+        Map<UUID, List<UserRoleHospitalAssignment>> assignments = directoryAssignments(users.getContent(), scope);
+        return users.map(user -> directoryRow(user, scope, manageable,
+            assignments.getOrDefault(user.getId(), List.of())));
+    }
+
+    private Map<UUID, List<UserRoleHospitalAssignment>> directoryAssignments(List<User> users, DirectoryScope scope) {
+        if (users.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> ids = users.stream().map(User::getId).collect(java.util.stream.Collectors.toSet());
+        return assignmentRepository.findDirectoryAssignments(ids, scope.everyone(), directoryHospitals(scope)).stream()
+            .collect(java.util.stream.Collectors.groupingBy(row -> row.getUser().getId()));
+    }
+
+    private UserSummaryDTO directoryRow(User user, DirectoryScope scope, Set<UUID> manageable,
+                                        List<UserRoleHospitalAssignment> assignments) {
+        UserSummaryDTO dto = userMapper.toSummaryDTO(user, assignments);
         if (dto == null) {
             return null;
         }
         if (!scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
+            dto.setReactivationAssignmentId(null);
+            dto.setReactivationOptions(null);
         }
         // QA D914: the list offered edit and delete on accounts a hospital admin
         // may not administer, and the save came back "user not found". Decided

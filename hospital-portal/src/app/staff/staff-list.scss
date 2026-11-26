@@ -344,3 +344,22 @@
 .staff-card .staff-email {
   overflow-wrap: anywhere;
 }
+
+.staff-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  &.active {
+    color: #056f55;
+    background: #e4f7ee;
+  }
+  &.inactive {
+    color: #8d3030;
+    background: #fff0f0;
+  }
+}

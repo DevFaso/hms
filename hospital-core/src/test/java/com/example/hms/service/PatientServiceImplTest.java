@@ -256,6 +256,31 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void patientPageBatchesAfterPagingAndStillShapesEachPatientsPrivateFields() {
+        Pageable pageable = PageRequest.of(1, 10);
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).allergies("Foreign, Local").build();
+        when(patientRepository.findPageByHospitalIdAndActive(hospitalId, true, pageable))
+            .thenReturn(new PageImpl<>(List.of(patient), pageable, 31));
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(dto));
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        PatientAllergy local = PatientAllergy.builder().allergenDisplay("Local").active(true).build();
+        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(local));
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        Page<PatientResponseDTO> result = patientService.getPatientPageByHospital(hospitalId, true, pageable);
+
+        assertThat(result.getContent()).containsExactly(dto);
+        assertThat(result.getTotalElements()).isEqualTo(31);
+        assertThat(result.getNumber()).isEqualTo(1);
+        assertThat(result.getSize()).isEqualTo(10);
+        assertThat(dto.isAllergiesWithheld()).isTrue();
+        assertThat(dto.isRecordsWithheld()).isTrue();
+        assertThat(dto.getAllergies()).isEqualTo("Local");
+        verify(patientMapper).toPatientDTOs(List.of(patient), hospitalId);
+        verify(patientMapper, never()).toPatientDTO(any(), any());
+    }
+
+    @Test
     void getPatientByIdReturnsDtoWhenRegistered() {
         PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
 
@@ -461,7 +486,7 @@ class PatientServiceImplTest {
         when(patientRepository.findAllByEmailIgnoreCase("family@example.com")).thenReturn(List.of(elsewhere, patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(elsewhere.getId(), hospitalId)).thenReturn(false);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(scoped));
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         assertThat(patientService.lookupPatients("family@example.com", null, null, null, null, hospitalId, Locale.ENGLISH))
@@ -488,7 +513,7 @@ class PatientServiceImplTest {
         when(patientRepository.findByMrn("CHW5448")).thenReturn(List.of(patient));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(scoped));
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         assertThat(patientService.lookupPatients(null, null, null, null, "CHW5448", null, Locale.ENGLISH))
@@ -778,7 +803,7 @@ class PatientServiceImplTest {
 
         when(patientRepository.searchPatientsExtended(anyString(), anyString(), anyString(), anyString(), anyString(), any(), anyBoolean(), any(Pageable.class)))
             .thenReturn(patientPage);
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(dto));
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         List<PatientResponseDTO> results = patientService.searchPatients(criteria, 0, 10, Locale.ENGLISH);
@@ -848,8 +873,8 @@ class PatientServiceImplTest {
     void aTypedSearchTermIsSearchedAsWhatItIs(String typed, String name, String dob, String phone, String email) {
         when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(patient)));
-        lenient().when(patientMapper.toPatientDTO(patient, hospitalId))
-            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        lenient().when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(PatientResponseDTO.builder().id(patientId).build()));
+
         lenient().when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         patientService.searchPatients(PatientSearchCriteria.builder().name(typed).hospitalId(hospitalId)
@@ -886,7 +911,7 @@ class PatientServiceImplTest {
         when(provider.getIfAvailable()).thenReturn(identities);
         org.springframework.test.util.ReflectionTestUtils.setField(patientService, "nationalUniqueIds", provider);
         PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).build();
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(dto));
         lenient().when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         List<PatientResponseDTO> found = patientService.searchPatients(PatientSearchCriteria.builder()
@@ -917,7 +942,7 @@ class PatientServiceImplTest {
         when(patientRepository.searchPatientsExtended(isNull(), isNull(), isNull(), isNull(), eq("%awa.kabore%"),
             eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(byEmail)));
         PatientResponseDTO dto = PatientResponseDTO.builder().id(byEmail.getId()).build();
-        when(patientMapper.toPatientDTO(byEmail, hospitalId)).thenReturn(dto);
+        when(patientMapper.toPatientDTOs(List.of(byEmail), hospitalId)).thenReturn(List.of(dto));
         when(patientVitalSignService.getLatestSnapshot(byEmail.getId(), hospitalId)).thenReturn(Optional.empty());
 
         assertThat(patientService.searchPatients(PatientSearchCriteria.builder().name("awa.kabore")
@@ -928,7 +953,7 @@ class PatientServiceImplTest {
     void aFullPageOfNameMatchesIsNotExtendedByEmailMatches() {
         when(patientRepository.searchPatientsExtended(isNull(), eq("%awa%"), isNull(), isNull(), isNull(),
             eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(PatientResponseDTO.builder().id(patientId).build()));
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         patientService.searchPatients(PatientSearchCriteria.builder().name("awa").hospitalId(hospitalId)
@@ -944,7 +969,7 @@ class PatientServiceImplTest {
             eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).build();
-        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        when(patientMapper.toPatientDTOs(List.of(patient), hospitalId)).thenReturn(List.of(dto));
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
         assertThat(patientService.lookupPatients("03/11/1993", null, null, null, null, hospitalId, Locale.FRENCH))

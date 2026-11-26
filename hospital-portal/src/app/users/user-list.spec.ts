@@ -81,6 +81,64 @@ describe('UserListComponent registration', () => {
     fixture.detectChanges();
   }
 
+  it('D4021: an enabled account with revoked scoped access appears in the inactive filter', () => {
+    const retired = {
+      id: 'retired',
+      active: true,
+      accessActive: false,
+      deleted: false,
+      reactivationAssignmentId: '00000000-0000-0000-0000-000000004021',
+    } as never;
+    const working = { id: 'working', active: true, accessActive: true, deleted: false } as never;
+    component.users.set([retired, working]);
+    component.statusFilter = 'inactive';
+    component.applyFilter();
+    expect(component.filtered()).toEqual([retired]);
+    expect(component.isDirectoryActive(retired)).toBeFalse();
+    expect(component.reactivationHref(retired)).toContain('/admin-assignments?reactivate=');
+    expect(component.reactivationHref(working)).toBeNull();
+  });
+
+  it('offers scoped assignment recovery independently of global account edit rights', () => {
+    const retired = {
+      id: 'scoped-retired',
+      active: true,
+      accessActive: false,
+      manageable: false,
+      deleted: false,
+      reactivationAssignmentId: 'local-assignment',
+    } as never;
+    component.users.set([retired]);
+    component.applyFilter();
+    fixture.detectChanges();
+    expect(component.isManageable(retired)).toBeFalse();
+    const link = fixture.nativeElement.querySelector('[data-testid="user-reactivate-access"]');
+    expect(link?.getAttribute('href')).toBe('/admin-assignments?reactivate=local-assignment');
+  });
+
+  it('requires an explicit hospital and role choice for ambiguous retired assignments', () => {
+    const retired = {
+      id: 'ambiguous',
+      active: true,
+      accessActive: false,
+      manageable: false,
+      deleted: false,
+      reactivationOptions: [
+        { assignmentId: 'a', hospitalName: 'Hospital A', roleCode: 'ROLE_NURSE' },
+        { assignmentId: 'b', hospitalName: 'Hospital B', roleCode: 'ROLE_MIDWIFE' },
+      ],
+    } as never;
+    component.users.set([retired]);
+    component.applyFilter();
+    fixture.detectChanges();
+    expect(component.reactivationHref(retired)).toBeNull();
+    const choice = fixture.nativeElement.querySelector('[data-testid="user-recovery-options"]');
+    expect(choice?.textContent).toContain('Hospital A');
+    expect(choice?.textContent).toContain('Hospital B');
+    expect(choice?.querySelectorAll('a').length).toBe(2);
+    expect(users.update).not.toHaveBeenCalled();
+  });
+
   it('ends the delete confirmation with no doubled question mark (D192)', () => {
     component.confirmDelete({ id: 'u7', firstName: 'Awa', lastName: 'Traoré' } as never);
     fixture.detectChanges();
