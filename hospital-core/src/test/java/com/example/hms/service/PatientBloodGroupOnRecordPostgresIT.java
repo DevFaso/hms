@@ -261,6 +261,15 @@ class PatientBloodGroupOnRecordPostgresIT {
         assertThat(chart.getAntibodySpecificities()).isEqualTo("anti-E");
         assertThat(chart.getConfirmed()).isEqualTo("B+");
         assertThat(onTheRecord().getAlloImmunised()).as("a list read does not look").isNull();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Patient knownPositive = entityManager.find(Patient.class, patient);
+            var batch = patientMapper.toPatientDTOs(java.util.List.of(knownPositive), hospital).getFirst().getBloodGroup();
+            var previousIndividual = patientMapper.toPatientDTO(knownPositive, hospital).getBloodGroup();
+            assertThat(batch.getAlloImmunised()).as("bulk and previous individual mapper both leave antibodies unassessed")
+                .isNull();
+            assertThat(previousIndividual.getAlloImmunised()).isNull();
+            assertThat(batch.getConfirmed()).isEqualTo(previousIndividual.getConfirmed());
+        });
     }
     @Test
     @DisplayName("C-PERF: two and forty patient rows each prepare one scoped laboratory query, never forty")

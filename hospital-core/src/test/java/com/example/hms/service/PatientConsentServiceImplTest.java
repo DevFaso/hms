@@ -40,6 +40,7 @@ class PatientConsentServiceImplTest {
     @Mock private PatientConsentMapper consentMapper;
     @Mock private PatientMapper patientMapper;
     @Mock private HospitalMapper hospitalMapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private PatientConsentServiceImpl service;
 
@@ -64,6 +65,8 @@ class PatientConsentServiceImplTest {
 
     @Test
     void mixedHospitalPagesBatchEachHospitalAndKeepTheOriginalPageOrder() {
+        // Only the authenticated super-admin global scope may include both hospitals.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         PatientConsent first = consentFor(patient);
@@ -131,5 +134,41 @@ class PatientConsentServiceImplTest {
         Page<PatientConsentResponseDTO> result = service.getConsentsByPatient(patientId, PageRequest.of(0, 10));
 
         assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    void hospitalCallerUsesTheScopedQueryBeforePaginationAndMapsOnlyInItsOwnScope() {
+        UUID hospital = UUID.randomUUID();
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        PatientConsent row = consentFor(patient);
+        row.getToHospital().setId(hospital);
+        Pageable pageable = PageRequest.of(0, 1);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(consentRepository.findVisibleInHospital(hospital, null, pageable))
+            .thenReturn(new PageImpl<>(List.of(row), pageable, 2));
+        stubMappers(patient);
+        Page<PatientConsentResponseDTO> result = service.getAllConsents(pageable);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        org.mockito.Mockito.verify(consentRepository, org.mockito.Mockito.never()).findAll(any(Pageable.class));
+        org.mockito.Mockito.verify(patientMapper).toPatientDTOs(List.of(patient), hospital);
+    }
+
+    @Test
+    void hospitalPatientLookupUsesTheSameScopedPaginationQuery() {
+        UUID hospital = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 1);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(consentRepository.findVisibleInHospital(hospital, patient, pageable)).thenReturn(Page.empty(pageable));
+        assertThat(service.getConsentsByPatient(patient, pageable).getTotalElements()).isZero();
+        org.mockito.Mockito.verify(consentRepository, org.mockito.Mockito.never()).findAllByPatientId(any(), any());
+    }
+    @Test
+    void missingOrRefusedHospitalContextCannotReachAnUnscopedRepositoryRead() {
+        when(roleValidator.requireActiveHospitalId()).thenThrow(new com.example.hms.exception.BusinessException("request.hospitalContext.required"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getAllConsents(PageRequest.of(0, 10)))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.mockito.Mockito.verifyNoInteractions(consentRepository, patientMapper);
     }
 }

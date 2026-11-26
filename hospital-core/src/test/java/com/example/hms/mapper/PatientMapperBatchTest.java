@@ -40,10 +40,17 @@ class PatientMapperBatchTest {
             .mapToObj(index -> patient("A+")).toList();
         UUID hospital = UUID.randomUUID();
         mapper.setBloodGroupStatus(groups);
-        when(groups.ofAll(patients.subList(0, 1_000), hospital)).thenReturn(Map.of());
-        when(groups.ofAll(patients.subList(1_000, 1_001), hospital)).thenReturn(Map.of());
-        assertThat(mapper.toPatientDTOs(patients, hospital)).extracting(PatientResponseDTO::getId)
+        BloodGroupStatusDTO firstBatch = BloodGroupStatusDTO.builder().confirmed("B+").discrepancy(true).build();
+        BloodGroupStatusDTO lastBatch = BloodGroupStatusDTO.builder().confirmed("O-").discrepancy(true).build();
+        when(groups.ofAll(patients.subList(0, 1_000), hospital))
+            .thenReturn(Map.of(patients.getFirst().getId(), firstBatch));
+        when(groups.ofAll(patients.subList(1_000, 1_001), hospital))
+            .thenReturn(Map.of(patients.getLast().getId(), lastBatch));
+        List<PatientResponseDTO> mapped = mapper.toPatientDTOs(patients, hospital);
+        assertThat(mapped).extracting(PatientResponseDTO::getId)
             .containsExactlyElementsOf(patients.stream().map(Patient::getId).toList());
+        assertThat(mapped.getFirst().getBloodGroup()).isSameAs(firstBatch);
+        assertThat(mapped.getLast().getBloodGroup()).isSameAs(lastBatch);
         verify(groups).ofAll(patients.subList(0, 1_000), hospital);
         verify(groups).ofAll(patients.subList(1_000, 1_001), hospital);
         verifyNoMoreInteractions(groups);
