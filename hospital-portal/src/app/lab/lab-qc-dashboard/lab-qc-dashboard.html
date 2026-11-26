@@ -316,7 +316,9 @@
             <span class="material-symbols-outlined">verified</span>
           </div>
           <div>
-            <div class="value">{{ totalValidationStudies() > 0 ? (overallPassRate() | measure: '%') : '—' }}</div>
+            <div class="value">
+              {{ totalValidationStudies() > 0 ? (overallPassRate() | measure: '%') : '—' }}
+            </div>
             <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
           </div>
         </div>
