@@ -714,6 +714,7 @@ class WardLoadPostgresIT {
                 insert("\"security\".users", Map.of("id", user, "username", "patient" + i, "email", "patient" + i + "@load.test",
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i, "is_active", true));
                 Map<String, Object> patientRow = new LinkedHashMap<>(Map.of("id", patient, "user_id", user,
+                    "is_active", true,
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i,
                     "date_of_birth", LocalDate.of(1980, 1, 1).plusDays(i), "email", "patient" + i + "@load.test",
                     "phone_number_primary", "+2267" + (1000000 + i)));
