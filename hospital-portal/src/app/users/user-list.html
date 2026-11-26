@@ -190,6 +190,7 @@
                   }}
                 </span>
                 @if (user.active && user.accessActive === false && !user.deleted) {
+                  {{ ' ' }}
                   <small class="access-hint">{{
                     'USERS.ACCOUNT_RETAINED_NO_ACCESS' | translate
                   }}</small>

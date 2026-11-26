@@ -234,7 +234,10 @@ export class AdminAssignmentsComponent implements OnInit {
             this.openDetail(row);
           }
         },
-        error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+        error: (err) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR'),
+          ),
       });
     }
     const hospitals$: Observable<HospitalOption[]> = this.fullAdmin

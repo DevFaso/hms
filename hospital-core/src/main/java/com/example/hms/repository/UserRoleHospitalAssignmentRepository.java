@@ -373,7 +373,7 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     @Query("SELECT a FROM UserRoleHospitalAssignment a LEFT JOIN a.hospital h "
          + "WHERE a.user.id IN :userIds AND (:allHospitals = true OR h.id IN :hospitalIds)")
     List<UserRoleHospitalAssignment> findDirectoryAssignments(@Param("userIds") Set<UUID> userIds,
-        @Param("allHospitals") boolean allHospitals, @Param("hospitalIds") Set<UUID> hospitalIds);
+        @Param("allHospitals") boolean allHospitals, @Param("hospitalIds") Collection<UUID> hospitalIds);
 
     /** Batch-fetch assignments for multiple users (avoids N+1 on paged endpoints). */
     @EntityGraph(attributePaths = {"role"})
