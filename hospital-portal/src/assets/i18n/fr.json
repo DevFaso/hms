@@ -10101,7 +10101,8 @@
     "RESET_FILTERS": "Réinitialiser les filtres",
     "LOAD_ERROR": "Impossible de charger les signatures. Veuillez réessayer.",
     "NO_MATCHES": "Aucune signature ne correspond à ces filtres.",
-    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports. Vous pouvez aussi consulter un rapport avec sa référence."
+    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports.",
+    "EMPTY_LOOKUP_HELP": "Vous pouvez aussi consulter un rapport avec sa référence."
   },
   "STAFF": {
     "ADD_STAFF": "Ajouter un membre",

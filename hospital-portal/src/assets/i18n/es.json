@@ -10101,7 +10101,8 @@
     "RESET_FILTERS": "Restablecer filtros",
     "LOAD_ERROR": "No se pudieron cargar las firmas. Inténtelo de nuevo.",
     "NO_MATCHES": "Ninguna firma coincide con estos filtros.",
-    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes. También puede consultar un informe por su referencia."
+    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes.",
+    "EMPTY_LOOKUP_HELP": "También puede consultar un informe por su referencia."
   },
   "STAFF": {
     "ADD_STAFF": "Agregar personal",
