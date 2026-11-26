@@ -2,6 +2,8 @@ package com.example.hms.bootstrap;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.env.PropertiesPropertySourceLoader;
 import org.springframework.boot.env.YamlPropertySourceLoader;
@@ -140,6 +142,43 @@ class SessionStoreStartupGuardTest {
         assertThatThrownBy(() -> SessionStoreStartupGuard.check(noHost))
             .isInstanceOf(StartupConfigurationException.class)
             .hasMessageContaining("REDIS_HOST");
+    }
+
+    @ParameterizedTest(name = "[{index}] REDIS_HOST=''{0}'' is refused")
+    @DisplayName("production refuses every loopback or unspecified notation of REDIS_HOST")
+    @ValueSource(strings = {
+        "127.0.0.2", "127.0.1.1", "127.1", "2130706433", "0x7f.0.0.1", "0.0.0.0", "localhost.", "redis.localhost",
+        "0:0:0:0:0:0:0:1", "[::1]", "::ffff:127.0.0.1", "::", "::127.0.0.1"
+    })
+    void productionRefusesEveryLocalHostNotation(String host) {
+        MockEnvironment env = configuredProduction().withProperty(SessionStoreStartupGuard.REDIS_HOST, host);
+        assertThatThrownBy(() -> SessionStoreStartupGuard.check(env))
+            .isInstanceOf(StartupConfigurationException.class)
+            .hasMessageContaining("REDIS_HOST")
+            .hasMessageContaining("names this machine");
+    }
+
+    @ParameterizedTest(name = "[{index}] ''{0}'' is refused")
+    @DisplayName("production refuses a SPRING_DATA_REDIS_URL whose host names this machine, in any notation")
+    @ValueSource(strings = {
+        "redis://default:secret@127.0.0.2:6379", "redis://default:secret@127.0.1.1:6379",
+        "redis://default:secret@[0:0:0:0:0:0:0:1]:6379", "redis://default:secret@[::ffff:127.0.0.1]:6379",
+        "rediss://default:secret@0.0.0.0:6380", "redis://default:secret@LOCALHOST.:6379", "redis://default:secret@[::]:6379"
+    })
+    void productionRefusesALocalRedisUrl(String url) {
+        MockEnvironment env = configuredProduction().withProperty(SessionStoreStartupGuard.REDIS_URL, url);
+        assertThatThrownBy(() -> SessionStoreStartupGuard.check(env))
+            .isInstanceOf(StartupConfigurationException.class)
+            .hasMessageContaining("SPRING_DATA_REDIS_URL")
+            .hasMessageNotContaining("secret");
+    }
+
+    @ParameterizedTest(name = "[{index}] REDIS_HOST=''{0}'' starts")
+    @DisplayName("production starts with a shared service's name or a routable address")
+    @ValueSource(strings = {"redis.railway.internal", "10.0.0.5", "fd12:3456:789a::1", "[fd12:3456:789a::1]", "redis"})
+    void productionStartsWithASharedHost(String host) {
+        MockEnvironment env = configuredProduction().withProperty(SessionStoreStartupGuard.REDIS_HOST, host);
+        assertThatCode(() -> SessionStoreStartupGuard.check(env)).doesNotThrowAnyException();
     }
 
     @Test

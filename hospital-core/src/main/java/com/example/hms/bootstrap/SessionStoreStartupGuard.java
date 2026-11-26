@@ -28,7 +28,8 @@ import java.util.Set;
  *       matches neither condition: the service would start with no store, or the wrong one.</li>
  *   <li><strong>Production</strong> (a {@code prod} / {@code production} profile, or a Railway
  *       environment named {@code prod} / {@code production}): both switches must be {@code true},
- *       the Redis host must be set and not a loopback address, and the port must be a number from
+ *       the Redis host must be set and not name this machine (any loopback or unspecified
+ *       address, or {@code localhost}: see {@link LocalAddressCheck}), and the port must be a number from
  *       1 to 65535. In-memory state is lost at every restart and is not shared between instances,
  *       so a signed-out session would come back after a deploy.</li>
  * </ul>
@@ -51,8 +52,6 @@ public class SessionStoreStartupGuard implements EnvironmentPostProcessor, Order
 
     /** Variables Railway sets to the environment's name on every service. */
     static final List<String> PLATFORM_ENVIRONMENT_NAMES = List.of("RAILWAY_ENVIRONMENT_NAME", "RAILWAY_ENVIRONMENT");
-
-    private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0");
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
@@ -125,20 +124,20 @@ public class SessionStoreStartupGuard implements EnvironmentPostProcessor, Order
         if (StringUtils.hasText(url)) {
             // spring.data.redis.url, when set, takes precedence over host and port.
             String host = hostOf(url);
-            if (host == null || isLoopback(host)) {
+            if (host == null || LocalAddressCheck.isLocal(host)) {
                 throw new StartupConfigurationException(
                     "Production requires a reachable shared Redis: SPRING_DATA_REDIS_URL (" + REDIS_URL
                         + ") must name the Redis service's host, not "
-                        + (host == null ? "an unreadable URL" : quoted(host)) + ".");
+                        + (host == null ? "an unreadable URL" : quoted(host) + ", which names this machine") + ".");
             }
             return;
         }
         String host = environment.getProperty(REDIS_HOST);
-        if (!StringUtils.hasText(host) || isLoopback(host.strip())) {
+        if (!StringUtils.hasText(host) || LocalAddressCheck.isLocal(host)) {
             throw new StartupConfigurationException(
                 "Production requires a reachable shared Redis: set REDIS_HOST (" + REDIS_HOST
                     + ") to the Redis service's host; it is "
-                    + (StringUtils.hasText(host) ? quoted(host) : "empty") + ".");
+                    + (StringUtils.hasText(host) ? quoted(host) + ", which names this machine" : "empty") + ".");
         }
         String port = environment.getProperty(REDIS_PORT);
         if (!isValidPort(port)) {
@@ -155,10 +154,6 @@ public class SessionStoreStartupGuard implements EnvironmentPostProcessor, Order
         } catch (URISyntaxException e) {
             return null;
         }
-    }
-
-    private static boolean isLoopback(String host) {
-        return LOOPBACK_HOSTS.contains(host.toLowerCase(Locale.ROOT));
     }
 
     private static boolean isValidPort(String port) {
