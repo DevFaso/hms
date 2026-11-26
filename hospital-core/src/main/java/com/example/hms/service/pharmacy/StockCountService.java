@@ -43,6 +43,7 @@ public class StockCountService {
     private final StockLotRepository lots;
     private final PharmacyRepository pharmacies;
     private final UserRepository users;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignments;
     private final StockTransactionService movements;
     private final RoleValidator roles;
     private final EntityManager entityManager;
@@ -99,6 +100,11 @@ public class StockCountService {
             throw new BusinessException("stockCount.changedSinceCount");
         }
         User actor = actor();
+        boolean samePerson = count.getRecordedBy() != null && actor.getId().equals(count.getRecordedBy().getId());
+        if (samePerson && assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId,
+                LowStockAlertDelivery.RECIPIENT_ROLES).stream().anyMatch(other -> other.getId() != null && !actor.getId().equals(other.getId()))) {
+            throw new FieldBusinessException("confirmed", "stockCount.otherConfirmerRequired");
+        }
         if (count.getVariance().signum() != 0) {
             StockTransactionResponseDTO adjustment = movements.recordTransaction(StockTransactionRequestDTO.builder()
                 .inventoryItemId(item.getId()).stockLotId(lot == null ? null : lot.getId())
@@ -107,6 +113,7 @@ public class StockCountService {
                 .referenceId(count.getId()).witnessedBy(confirmation.witnessedBy()).build());
             count.setAdjustmentId(adjustment.getId());
         }
+        count.setSamePersonConfirmation(samePerson);
         count.setAppliedAt(LocalDateTime.now(clock));
         count.setAppliedBy(actor);
         count.setAppliedByName(actorName(actor));
@@ -232,7 +239,7 @@ public class StockCountService {
         return new StockCountResponseDTO(count.getId(), count.getInventoryItem().getId(),
             count.getStockLot() == null ? null : count.getStockLot().getId(), name, count.getLotNumber(), count.getUnit(),
             count.getBookQuantity(), count.getCountedQuantity(), count.getVariance(), count.getReason(), count.getRecordedByName(),
-            count.getRecordedAt(), count.getAppliedAt(), count.getAppliedByName(), count.getAdjustmentId());
+            count.getRecordedAt(), count.getAppliedAt(), count.getAppliedByName(), count.getAdjustmentId(), count.getSamePersonConfirmation());
     }
 
     private static ResourceNotFoundException notFound(UUID id) {

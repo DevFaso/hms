@@ -34,4 +34,18 @@ class StockCountConfirmationGuardTest {
         int open = source.indexOf('{', source.indexOf(signature));
         return source.substring(open, SourceScan.closingBrace(source, open));
     }
+    @Test void allCountConfirmationsGoThroughTheTwoPersonAndProvenanceGate() throws Exception {
+        Path root = Path.of("src/main/java/com/example/hms");
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String source = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(path));
+                if (source.contains(".setSamePersonConfirmation(")) {
+                    assertThat(root.relativize(path).toString().replace('\\', '/')).isEqualTo("service/pharmacy/StockCountService.java");
+                }
+            }
+        }
+        String service = Files.readString(root.resolve("service/pharmacy/StockCountService.java"));
+        assertThat(service).contains("findLiveUsersAtHospitalWithRoleCodes(hospitalId,", "stockCount.otherConfirmerRequired", "count.setSamePersonConfirmation(samePerson)");
+        assertThat(service.indexOf("stockCount.otherConfirmerRequired")).isLessThan(service.indexOf("movements.recordTransaction("));
+    }
 }

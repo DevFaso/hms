@@ -27,4 +27,5 @@ public class StockCountResponseDTO {
     private LocalDateTime appliedAt;
     private String appliedByName;
     private UUID adjustmentId;
+    private Boolean samePersonConfirmation;
 }

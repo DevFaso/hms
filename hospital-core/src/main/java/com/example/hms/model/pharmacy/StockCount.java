@@ -61,6 +61,8 @@ public class StockCount extends BaseEntity {
     private User appliedBy;
     @Column(name = "applied_by_name", length = 201)
     private String appliedByName;
+    @Column(name = "same_person_confirmation")
+    private Boolean samePersonConfirmation;
     @Column(name = "adjustment_id", unique = true)
     private UUID adjustmentId;
 }

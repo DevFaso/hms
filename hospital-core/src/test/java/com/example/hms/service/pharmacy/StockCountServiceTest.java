@@ -32,6 +32,7 @@ class StockCountServiceTest {
     @Mock private StockLotRepository lots;
     @Mock private PharmacyRepository pharmacies;
     @Mock private UserRepository users;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignments;
     @Mock private StockTransactionService movements;
     @Mock private RoleValidator roles;
     @Mock private EntityManager entityManager;
@@ -44,7 +45,7 @@ class StockCountServiceTest {
 
     @BeforeEach
     void fixture() {
-        service = new StockCountService(counts, items, lots, pharmacies, users, movements, roles, entityManager, jdbc,
+        service = new StockCountService(counts, items, lots, pharmacies, users, assignments, movements, roles, entityManager, jdbc,
             Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC));
         hospital = new Hospital(); hospital.setId(UUID.randomUUID());
         Pharmacy pharmacy = Pharmacy.builder().hospital(hospital).active(true).build();
@@ -127,6 +128,7 @@ class StockCountServiceTest {
         when(movements.recordTransaction(any())).thenReturn(StockTransactionResponseDTO.builder().id(movementId).build());
         var confirmation = new StockCountConfirmationDTO(true, witness);
         assertThat(service.confirm(count.getId(), confirmation).getAdjustmentId()).isEqualTo(movementId);
+        assertThat(count.getSamePersonConfirmation()).isTrue();
         assertThat(service.confirm(count.getId(), confirmation).getAdjustmentId()).isEqualTo(movementId);
         var movement = ArgumentCaptor.forClass(StockTransactionRequestDTO.class);
         verify(movements, times(1)).recordTransaction(movement.capture());
@@ -134,6 +136,33 @@ class StockCountServiceTest {
         assertThat(movement.getValue().getWitnessedBy()).isEqualTo(witness);
         assertThat(movement.getValue().getReferenceId()).isEqualTo(count.getId());
         assertThat(count.getAppliedAt()).isEqualTo(LocalDateTime.of(2026, 11, 26, 8, 0));
+    }
+
+    @Test
+    void recorderCannotConfirmWhenAnotherEligibleColleagueExists() {
+        stock();
+        when(users.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(counts.findLocked(count.getId(), hospital.getId())).thenReturn(Optional.of(count));
+        User other = new User(); other.setId(UUID.randomUUID());
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(eq(hospital.getId()), any())).thenReturn(java.util.List.of(actor, other));
+        assertThatThrownBy(() -> service.confirm(count.getId(), new StockCountConfirmationDTO(true, null)))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.otherConfirmerRequired");
+        verifyNoInteractions(movements);
+        verify(counts, never()).save(any());
+    }
+
+    @Test
+    void anotherPersonCanConfirmAndTheResponseRecordsThatFact() {
+        stock();
+        User original = new User(); original.setId(UUID.randomUUID());
+        count.setRecordedBy(original);
+        when(users.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(counts.findLocked(count.getId(), hospital.getId())).thenReturn(Optional.of(count));
+        when(counts.save(count)).thenReturn(count);
+        when(movements.recordTransaction(any())).thenReturn(StockTransactionResponseDTO.builder().id(UUID.randomUUID()).build());
+        var result = service.confirm(count.getId(), new StockCountConfirmationDTO(true, null));
+        assertThat(result.getSamePersonConfirmation()).isFalse();
+        verifyNoInteractions(assignments);
     }
 
     @Test
