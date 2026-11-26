@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class StockCountController {
     private final StockCountService counts;
+    private final com.example.hms.service.pharmacy.StockBalanceReconciliationService balanceReconciliation;
     private final com.example.hms.service.pharmacy.PharmacyConsumptionService consumption;
 
     @GetMapping("/consumption")
@@ -31,6 +32,12 @@ public class StockCountController {
     @PreAuthorize("hasAnyRole('PHARMACIST','INVENTORY_CLERK','STORE_MANAGER','HOSPITAL_ADMIN','SUPER_ADMIN')")
     public StockCountResponseDTO record(@Valid @RequestBody StockCountRequestDTO request) {
         return counts.record(request);
+    }
+
+    @PostMapping("/items/{itemId}/reconcile-balance")
+    @PreAuthorize("hasAnyRole('PHARMACIST','STORE_MANAGER','HOSPITAL_ADMIN','SUPER_ADMIN')")
+    public UUID reconcileBalance(@PathVariable UUID itemId, @Valid @RequestBody StockBalanceReconciliationRequest request) {
+        return balanceReconciliation.reconcile(itemId, request);
     }
 
     @PostMapping("/{id}/confirm-adjustment")
