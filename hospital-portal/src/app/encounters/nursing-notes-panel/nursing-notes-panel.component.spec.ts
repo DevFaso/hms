@@ -106,6 +106,12 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'NURSING_NOTES.LOAD_FAILED',
     );
+    service.listRecent.and.returnValue(of([dar]));
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button')!.click();
+    fixture.detectChanges();
+    expect(service.listRecent).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.failed()).toBeFalse();
+    expect(fixture.componentInstance.notes().map((note) => note.id)).toEqual(['n1']);
   });
 });
 
