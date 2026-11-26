@@ -173,6 +173,21 @@ public class OPositiveReleaseDecision extends BaseEntity {
     private LocalDateTime noticesFiledAt;
 
     /**
+     * A known antibody asks for two different people (the physician's signature, the biologist's review). True
+     * when one person did both and stated that nobody else could be reached: recorded, never hidden.
+     */
+    @Column(name = "four_eyes_waived", nullable = false)
+    private boolean fourEyesWaived;
+
+    /** What became of the bag of THIS release; null while it is out. Written once. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "disposition", length = 20)
+    private com.example.hms.enums.OPositiveBagDisposition disposition;
+
+    @Column(name = "disposition_at")
+    private LocalDateTime dispositionAt;
+
+    /**
      * This release put O RhD positive red cells out for a patient at risk: the permanent flag rests on it, once
      * the bag is given or while it is still out. A bag that came back unused exposed nobody. Never cleared.
      */
@@ -219,8 +234,17 @@ public class OPositiveReleaseDecision extends BaseEntity {
         return reviewedAt == null;
     }
 
-    /** The clinician still owes the anti-D or exchange decision, or telling the patient. */
+    /** The bag of this release came back unused, or went out again as another release: nobody was exposed by it. */
+    public boolean bagNotGiven() {
+        return disposition == com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED
+            || disposition == com.example.hms.enums.OPositiveBagDisposition.SUPERSEDED;
+    }
+
+    /**
+     * The clinician still owes the anti-D or exchange decision, or telling the patient. Nothing is owed on a bag
+     * that was not given: its follow-up is closed by that fact.
+     */
     public boolean followUpOwed() {
-        return followUpRequired && (antiDDecision == null || patientInformedAt == null);
+        return followUpRequired && !bagNotGiven() && (antiDDecision == null || patientInformedAt == null);
     }
 }

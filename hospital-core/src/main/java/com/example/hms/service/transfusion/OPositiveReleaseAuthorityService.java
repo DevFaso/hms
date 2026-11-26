@@ -230,6 +230,8 @@ public class OPositiveReleaseAuthorityService {
         }
         UUID named = input.getAuthoriserUserId();
         boolean verbal = !Boolean.FALSE.equals(input.getVerbalOrder());
+        // Only an incompatible release has a second name: on the O positive form the one name IS the physician.
+        UUID ordering = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE ? input.getOrderingPhysicianUserId() : null;
         return switch (assessment.riskTier()) {
             case LOW_RISK -> {
                 // Under the protocol the issuer decides alone: with nobody named, the decision is the issuer's.
@@ -240,7 +242,10 @@ public class OPositiveReleaseAuthorityService {
                 yield new Authorisation(assessment, OPositiveDecisionBasis.PROTOCOL, decider, null, false, issuer);
             }
             case HIGH_RISK -> {
-                UUID decider = physician(input, issuer, hospitalId, OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES);
+                // An incompatible release may name, beside its own authoriser, the physician who ordered O positive.
+                UUID decider = ordering != null
+                    ? physician(input, ordering, issuer, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES)
+                    : physician(input, input.getAuthoriserUserId(), issuer, hospitalId, OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES);
                 if (decider == null) {
                     yield new Authorisation(assessment, OPositiveDecisionBasis.AUTHORITY_PENDING, null, null, false, issuer);
                 }
@@ -253,15 +258,23 @@ public class OPositiveReleaseAuthorityService {
                     decider, null, verbal, issuer);
             }
             case KNOWN_ANTIBODY -> {
-                // The physician's seat is a physician's, whatever the release. An incompatible release may be
-                // authorised by the laboratory director: that director then sits as the biologist, the physician
-                // is owed, and the release goes out as its own rule allows.
-                boolean directorAuthorises = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE && named != null
+                // The physician's seat is a physician's, whatever the release. An incompatible release has two
+                // roles: who authorises it (a doctor or the laboratory director) and who ordered O positive. When
+                // both are named, each is recorded in its seat; a director who authorises sits as the biologist.
+                boolean incompatible = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
+                boolean directorAuthorises = incompatible && named != null
                     && !assignmentRepository.existsActiveWitness(named, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
-                UUID physician = directorAuthorises ? null
-                    : physician(input, issuer, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
+                UUID physician;
+                if (ordering != null) {
+                    physician = physician(input, ordering, issuer, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
+                } else {
+                    physician = directorAuthorises ? null
+                        : physician(input, input.getAuthoriserUserId(), issuer, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
+                }
                 UUID biologist = biologist(input, issuer, physician, hospitalId);
-                if (biologist == null && directorAuthorises) {
+                boolean authoriserIsBiologist = incompatible && named != null && !Objects.equals(named, physician)
+                    && assignmentRepository.existsActiveWitness(named, hospitalId, OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES);
+                if (biologist == null && authoriserIsBiologist) {
                     biologist = named;
                 }
                 boolean together = physician != null && biologist != null;
@@ -288,10 +301,8 @@ public class OPositiveReleaseAuthorityService {
      * The physician the release names, who is never the issuer; or null when the issuer states that none can be
      * reached. Naming nobody without that statement, or naming oneself, is asked again: the answer is one field.
      */
-    private UUID physician(EmergencyReleaseRequestDTO input, UUID issuer, UUID hospitalId, Set<String> roles) {
-        UUID named = input.getAuthoriserUserId();
-        boolean unreachable = Boolean.TRUE.equals(input.getPhysicianUnreachable());
-        if (unreachable && (named == null || Objects.equals(named, issuer))) {
+    private UUID physician(EmergencyReleaseRequestDTO input, UUID named, UUID issuer, UUID hospitalId, Set<String> roles) {
+        if (Boolean.TRUE.equals(input.getPhysicianUnreachable()) && (named == null || Objects.equals(named, issuer))) {
             return null;
         }
         requireNamed(named, "transfusion.emergency.oPositive.physicianRequired");
@@ -341,6 +352,9 @@ public class OPositiveReleaseAuthorityService {
         OPositiveReviewPriority priority = OPositiveReleaseAuthority.reviewPriority(tier);
         boolean exposure = OPositiveReleaseAuthority.exposureFollowUp(tier, subject.typedRh());
         LocalDate issuedOn = issuedAt.toLocalDate();
+        // A bag released again is a new release with its own row: the one before it, if its bag was never hung,
+        // is closed here, so nothing that happens to this release is read back onto that one.
+        noteBagBack(unit.getId(), com.example.hms.enums.OPositiveBagDisposition.SUPERSEDED);
         OPositiveReleaseDecision saved = decisionRepository.save(OPositiveReleaseDecision.builder()
             .release(release)
             .requestId(request.getId())
@@ -435,7 +449,7 @@ public class OPositiveReleaseAuthorityService {
      * one named, or another answering for the service), a laboratory director too outside the antibody tier;
      * never the person who issued the bag.
      */
-    public OPositiveReleaseDecisionDTO countersign(UUID decisionId, UUID hospitalId) {
+    public OPositiveReleaseDecisionDTO countersign(UUID decisionId, UUID hospitalId, boolean noOtherPersonReachable) {
         OPositiveReleaseDecision decision = lockScoped(decisionId, hospitalId);
         UUID caller = roleValidator.getCurrentUserId();
         if (!decision.countersignOwed()) {
@@ -450,11 +464,10 @@ public class OPositiveReleaseAuthorityService {
         if (!assignmentRepository.existsActiveWitness(caller, hospitalId, roles)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.countersign.physicianOnly"));
         }
-        if (decision.getRiskTier() == OPositiveRiskTier.KNOWN_ANTIBODY && Objects.equals(caller, decision.getBiologistUserId())) {
-            // A physician and a biologist together are two people: the biologist of this release, who may also
-            // hold a physician's role, does not sign the physician's part.
-            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.countersign.notBiologist"));
-        }
+        // A physician and a biologist together are two people: the biologist of this release, or the person who
+        // reviewed it, does not also sign the physician's part.
+        requireSecondPerson(decision, noOtherPersonReachable,
+            Objects.equals(caller, decision.getBiologistUserId()) || Objects.equals(caller, decision.getReviewedByUserId()));
         decision.setCountersignedByUserId(caller);
         decision.setCountersignedAt(LocalDateTime.now(clock));
         decisionRepository.save(decision);
@@ -465,8 +478,25 @@ public class OPositiveReleaseAuthorityService {
         return toDto(List.of(decision)).get(0);
     }
 
+    /**
+     * Four eyes on a known antibody: the physician's signature and the biologist's review are two different
+     * people. When the same person comes to the second step, it is refused with the way out named: stating that
+     * nobody else can be reached, which is accepted and recorded on the row. The bag left long ago; this holds
+     * nothing back.
+     */
+    private static void requireSecondPerson(OPositiveReleaseDecision decision, boolean noOtherPersonReachable,
+                                            boolean samePerson) {
+        if (decision.getRiskTier() != OPositiveRiskTier.KNOWN_ANTIBODY || !samePerson) {
+            return;
+        }
+        if (!noOtherPersonReachable) {
+            throw new FieldBusinessException("noOtherPersonReachable", "transfusion.oPositive.fourEyes.required");
+        }
+        decision.setFourEyesWaived(true);
+    }
+
     /** The review of the biologist: the laboratory director of this hospital, once. */
-    public OPositiveReleaseDecisionDTO review(UUID decisionId, UUID hospitalId, String note) {
+    public OPositiveReleaseDecisionDTO review(UUID decisionId, UUID hospitalId, String note, boolean noOtherPersonReachable) {
         OPositiveReleaseDecision decision = lockScoped(decisionId, hospitalId);
         UUID caller = roleValidator.getCurrentUserId();
         if (caller == null || !assignmentRepository.existsActiveWitness(caller, hospitalId,
@@ -476,6 +506,9 @@ public class OPositiveReleaseAuthorityService {
         if (!decision.reviewOwed()) {
             throw new FieldBusinessException("decisionId", "transfusion.oPositive.review.alreadyReviewed");
         }
+        // The physician who ordered or countersigned it does not also review it as the biologist.
+        requireSecondPerson(decision, noOtherPersonReachable,
+            Objects.equals(caller, decision.getCountersignedByUserId()) || Objects.equals(caller, decision.getDecidedByUserId()));
         decision.setReviewedByUserId(caller);
         decision.setReviewedAt(LocalDateTime.now(clock));
         decision.setReviewNote(bounded(note, "note"));
@@ -501,8 +534,15 @@ public class OPositiveReleaseAuthorityService {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.followUp.physicianOnly"));
         }
         if (exposureStateOf(decision, decision.getRelease().getBloodUnit()) == ExposureState.NOT_GIVEN) {
-            // The bag came back unused: nobody was exposed, and there is nothing to decide or to tell.
-            throw new FieldBusinessException("decisionId", "transfusion.oPositive.followUp.notGiven");
+            // The bag came back unused: nobody was exposed. The follow-up is closed by that fact, here if no
+            // return wrote it yet, and the caller is shown the closed row instead of a refusal.
+            if (decision.getDisposition() == null) {
+                decision.setDisposition(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
+                decision.setDispositionAt(LocalDateTime.now(clock));
+                decisionRepository.save(decision);
+            }
+            resolveItems(decision.getId(), OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
+            return toDto(List.of(decision)).get(0);
         }
         boolean informs = Boolean.TRUE.equals(request.getPatientInformed()) && decision.getPatientInformedAt() == null;
         boolean decides = request.getAntiDDecision() != null;
@@ -658,6 +698,8 @@ public class OPositiveReleaseAuthorityService {
                 .reviewedAt(row.getReviewedAt())
                 .reviewNote(row.getReviewNote())
                 .rhdExposure(row.isRhdExposure())
+                .fourEyesWaived(row.isFourEyesWaived())
+                .disposition(row.getDisposition() != null ? row.getDisposition().name() : null)
                 .exposureState(row.isRhdExposure() ? exposureStateOf(row, unit).name() : null)
                 .countersignCovering(row.getCountersignedByUserId() != null && row.getDecidedByUserId() != null
                     && !Objects.equals(row.getCountersignedByUserId(), row.getDecidedByUserId()))
@@ -722,10 +764,44 @@ public class OPositiveReleaseAuthorityService {
     }
 
     private ExposureState exposureStateOf(OPositiveReleaseDecision decision, BloodUnit unit) {
+        if (decision.getDisposition() != null) {
+            return OPositiveReleaseAuthority.exposureState(decision.getDisposition(), false, false);
+        }
         boolean administered = decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId()) > 0;
         UUID heldBy = unit != null && unit.getRequest() != null ? unit.getRequest().getId() : null;
         return OPositiveReleaseAuthority.exposureState(administered,
             OPositiveReleaseAuthority.stillOut(unit != null ? unit.getStatus() : null, heldBy, decision.getRequestId()));
+    }
+
+    // ── What became of the bag ──────────────────────────────────────────
+
+    /**
+     * The bag was hung on this request: the release still open for it is the one that was given. Written on the
+     * release's own row, once; called where an administration starts.
+     */
+    public void noteAdministered(UUID bloodUnitId, UUID requestId, LocalDateTime at) {
+        if (bloodUnitId != null && requestId != null) {
+            decisionRepository.markAdministered(bloodUnitId, requestId, at);
+        }
+    }
+
+    /** The bag came back to the laboratory, or was discarded, without being hung. */
+    public void noteBagBack(UUID bloodUnitId) {
+        noteBagBack(bloodUnitId, com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
+    }
+
+    /**
+     * Closes the releases of this bag that are still open, as not given: nobody was exposed by them, no flag
+     * rests on them, and their exposure follow-up is closed with that reason; the tasks filed for it leave the
+     * in-baskets. The countersignature and the review of the release stay owed: the decision was still taken.
+     */
+    private void noteBagBack(UUID bloodUnitId, com.example.hms.enums.OPositiveBagDisposition disposition) {
+        List<UUID> open = bloodUnitId == null ? List.of() : decisionRepository.findOpenIdsForUnit(bloodUnitId);
+        if (open.isEmpty()) {
+            return;
+        }
+        decisionRepository.markNotGiven(open, disposition, LocalDateTime.now(clock));
+        open.forEach(id -> resolveItems(id, OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE));
     }
 
     /**
@@ -743,7 +819,7 @@ public class OPositiveReleaseAuthorityService {
         RhdExposure unconfirmed = null;
         List<UUID> sources = new ArrayList<>();
         for (OPositiveReleaseDecisionRepository.ExposureRow row : decisionRepository.findExposures(patientId)) {
-            ExposureState state = OPositiveReleaseAuthority.exposureState(row.getAdministrations() > 0,
+            ExposureState state = OPositiveReleaseAuthority.exposureState(row.getDisposition(), row.getAdministrations() > 0,
                 OPositiveReleaseAuthority.stillOut(row.getUnitStatus(), row.getUnitRequestId(), row.getRequestId()));
             if (state == ExposureState.NOT_GIVEN) {
                 continue;

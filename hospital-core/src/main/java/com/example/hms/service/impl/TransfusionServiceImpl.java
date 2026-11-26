@@ -446,6 +446,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
         unit.setStatus(BloodUnitStatus.DISCARDED);
         unit.setDiscardReason(reason);
+        // V380: discarded without being hung (a hung bag's release is already written as given).
+        positiveAuthority.noteBagBack(unit.getId());
         return mapper.toDto(unitRepository.save(unit));
     }
 
@@ -609,6 +611,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             if (held && administrationRepository.findByBloodUnit_Id(unit.getId()).isEmpty()) {
                 unit.setStatus(BloodUnitStatus.RETURNED);
                 unitRepository.save(unit);
+                // V380: an O positive bag that comes back unused exposed nobody; its follow-up is closed.
+                positiveAuthority.noteBagBack(unit.getId());
             }
         }
         request.setStatus(TransfusionRequestStatus.CANCELLED);
@@ -789,6 +793,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 // hang refuse it, and it is hidden from the units that can be crossmatched.
                 unit.setStatus(BloodUnitStatus.RETURNED);
                 unitRepository.save(unit);
+                positiveAuthority.noteBagBack(unit.getId());
             }
         }
         return mapper.toDto(saved);
@@ -1571,6 +1576,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             .build();
 
         TransfusionAdministration saved = administrationRepository.save(administration);
+        // V380: the O positive release this bag went out on is the one that was given.
+        positiveAuthority.noteAdministered(unit.getId(), transfusionRequest.getId(), saved.getStartedAt());
         return toDetail(saved, List.of());
     }
 
@@ -2064,13 +2071,15 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     @Override
-    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId) {
-        return positiveAuthority.countersign(decisionId, requireHospital());
+    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId,
+            boolean noOtherPersonReachable) {
+        return positiveAuthority.countersign(decisionId, requireHospital(), noOtherPersonReachable);
     }
 
     @Override
-    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note) {
-        return positiveAuthority.review(decisionId, requireHospital(), note);
+    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note,
+            boolean noOtherPersonReachable) {
+        return positiveAuthority.review(decisionId, requireHospital(), note, noOtherPersonReachable);
     }
 
     @Override

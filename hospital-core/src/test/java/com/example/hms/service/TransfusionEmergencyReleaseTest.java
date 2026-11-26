@@ -1457,4 +1457,43 @@ class TransfusionEmergencyReleaseTest {
         verify(positive.decisionRepository, never()).save(any());
         assertThat(positive.decisions).isEmpty();
     }
+
+    @Test
+    @DisplayName("pr1346: an incompatible O positive release keeps its authoriser on the release row and the ordering physician on the decision")
+    void theIncompatibleFormNamesBothPeople() {
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
+        noONegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        resultOnFile(request, unit, false);
+        EmergencyReleaseRequestDTO release = incompatibleRelease(unit);
+        release.setAuthoriserUserId(director);
+        release.setOrderingPhysicianUserId(doctor);
+
+        service.emergencyRelease(request.getId(), release);
+
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getAuthoriser().getId()).isEqualTo(director));
+        assertThat(positive.decisions).singleElement()
+            .satisfies(decision -> assertThat(decision.getDecidedByUserId()).isEqualTo(doctor));
+    }
+
+    @Test
+    @DisplayName("pr1346: hanging the bag writes « given » on its release; a bag that comes back or is discarded unused closes it")
+    void whatBecomesOfTheBagIsWrittenOnItsRelease() {
+        adultMale();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.issueUnit(request.getId(), unit.getId());
+        hang(request, unit);
+        verify(positive.decisionRepository).markAdministered(eq(unit.getId()), eq(request.getId()), any());
+
+        BloodUnit unused = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        TransfusionRequest second = emergency();
+        service.issueUnit(second.getId(), unused.getId());
+        when(positive.decisionRepository.findOpenIdsForUnit(unused.getId())).thenReturn(List.of(positive.last().getId()));
+        service.discardUnit(unused.getId(), "Broken seal");
+        verify(positive.decisionRepository).markNotGiven(eq(List.of(positive.last().getId())),
+            eq(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED), any());
+        verify(positive.inBasket).removeOpenItemsForReference(positive.last().getId(), "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
+    }
 }

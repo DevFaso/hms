@@ -172,7 +172,7 @@ describe('OPositiveReleasesComponent (V380)', () => {
     );
     el('opos-countersign')!.click();
     fixture.detectChanges();
-    expect(tx.countersignPositiveRelease).toHaveBeenCalledWith('d1');
+    expect(tx.countersignPositiveRelease).toHaveBeenCalledWith('d1', false);
     expect(el('opos-countersigned')).not.toBeNull();
     expect(el('opos-countersign')).toBeNull();
     expect(toast.success).toHaveBeenCalled();
@@ -241,7 +241,7 @@ describe('OPositiveReleasesComponent (V380)', () => {
     );
     el('opos-review')!.click();
     fixture.detectChanges();
-    expect(tx.reviewPositiveRelease).toHaveBeenCalledWith('d1', 'Anti-D discuté');
+    expect(tx.reviewPositiveRelease).toHaveBeenCalledWith('d1', 'Anti-D discuté', false);
     expect(el('opos-reviewed')!.textContent).toContain('Anti-D discuté');
 
     el('opos-edit-protocol')!.click();
@@ -270,6 +270,94 @@ describe('OPositiveReleasesComponent (V380)', () => {
     expect(toast.error).toHaveBeenCalledWith('Vous avez délivré cette poche');
     expect(component.busyId()).toBeNull();
     expect(component.releases()[0].countersignedAt).toBeNull();
+  });
+
+  it('pr1346: a known antibody takes two different people; « nobody else reachable » is stated, sent and shown', async () => {
+    // Outside the known-antibody tier nothing is asked.
+    await start(['ROLE_DOCTOR']);
+    expect(el('opos-four-eyes')).toBeNull();
+
+    TestBed.resetTestingModule();
+    await start(
+      ['ROLE_DOCTOR'],
+      [decision({ riskTier: 'KNOWN_ANTIBODY', tierReason: 'KNOWN_ANTIBODY' })],
+    );
+    expect(el('opos-four-eyes')).not.toBeNull();
+    expect(el('opos-four-eyes-waived')).toBeNull();
+    // The server refuses the same person: its reason is shown, the statement is marked.
+    tx.countersignPositiveRelease.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'Deux personnes différentes',
+          fieldErrors: { noOtherPersonReachable: 'Deux personnes différentes' },
+        },
+      })),
+    );
+    el('opos-countersign')!.click();
+    expect(tx.countersignPositiveRelease).toHaveBeenCalledWith('d1', false);
+    expect(toast.error).toHaveBeenCalledWith('Deux personnes différentes');
+
+    component.noOtherReachable['d1'] = true;
+    tx.countersignPositiveRelease.and.returnValue(
+      of(
+        decision({
+          riskTier: 'KNOWN_ANTIBODY',
+          countersignedAt: '2026-11-26T08:00:00',
+          countersignedByName: 'Dr Physician',
+          fourEyesWaived: true,
+        }),
+      ),
+    );
+    el('opos-countersign')!.click();
+    fixture.detectChanges();
+    expect(tx.countersignPositiveRelease).toHaveBeenCalledWith('d1', true);
+    expect(el('opos-four-eyes-waived')).not.toBeNull();
+    expect(component.noOtherReachable['d1']).toBeUndefined();
+  });
+
+  it('pr1346: the biologist states it on the review too', async () => {
+    await start(['ROLE_LAB_DIRECTOR'], [decision({ riskTier: 'KNOWN_ANTIBODY' })]);
+    component.noOtherReachable['d1'] = true;
+    tx.reviewPositiveRelease.and.returnValue(
+      of(decision({ riskTier: 'KNOWN_ANTIBODY', reviewedAt: '2026-11-26T08:00:00' })),
+    );
+    el('opos-review')!.click();
+    expect(tx.reviewPositiveRelease).toHaveBeenCalledWith('d1', '', true);
+  });
+
+  it('pr1346: a bag that came back unused has its follow-up closed, with the reason; one not written yet can be closed', async () => {
+    await start(
+      ['ROLE_DOCTOR'],
+      [decision({ exposureState: 'NOT_GIVEN', disposition: 'RETURNED_UNUSED' })],
+    );
+    expect(component.followUpOwed(component.releases()[0])).toBeFalse();
+    expect(el('opos-follow-up-closed')).not.toBeNull();
+    expect(el('opos-anti-d-save')).toBeNull();
+    expect(el('opos-informed-save')).toBeNull();
+    expect(el('opos-close-not-given')).toBeNull();
+
+    TestBed.resetTestingModule();
+    await start(['ROLE_DOCTOR'], [decision({ exposureState: 'NOT_GIVEN', disposition: null })]);
+    expect(el('opos-anti-d-save')).toBeNull();
+    tx.recordPositiveFollowUp.and.returnValue(
+      of(decision({ exposureState: 'NOT_GIVEN', disposition: 'RETURNED_UNUSED' })),
+    );
+    el('opos-close-not-given')!.click();
+    fixture.detectChanges();
+    expect(tx.recordPositiveFollowUp).toHaveBeenCalledWith('d1', { bagNotGiven: true });
+    expect(el('opos-close-not-given')).toBeNull();
+    expect(el('opos-follow-up-closed')).not.toBeNull();
+  });
+
+  it('pr1346: a release superseded by a reissue of its bag says so and asks for no follow-up', async () => {
+    await start(
+      ['ROLE_DOCTOR'],
+      [decision({ exposureState: 'NOT_GIVEN', disposition: 'SUPERSEDED' })],
+    );
+    expect(el('opos-superseded')).not.toBeNull();
+    expect(el('opos-anti-d-save')).toBeNull();
+    expect(el('opos-close-not-given')).toBeNull();
   });
 
   it('« Toutes » asks the server for every release', async () => {

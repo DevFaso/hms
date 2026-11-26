@@ -1733,6 +1733,17 @@
               />
               {{ 'TRANSFUSION.OPOS.VERBAL_ORDER_CHECK' | translate }}
             </label>
+            <div class="field">
+              <label for="si-ordering">{{
+                'TRANSFUSION.OPOS.ORDERING_PHYSICIAN' | translate
+              }}</label>
+              <select id="si-ordering" data-testid="si-ordering" [(ngModel)]="emergencyOrderingId">
+                <option value="">{{ 'TRANSFUSION.OPOS.ORDERING_SAME' | translate }}</option>
+                @for (c of rule.physicians; track c.userId) {
+                  <option [value]="c.userId">{{ c.displayName }}</option>
+                }
+              </select>
+            </div>
             @if (rule.riskTier === 'KNOWN_ANTIBODY') {
               <div class="field">
                 <label for="si-biologist">{{ 'TRANSFUSION.OPOS.BIOLOGIST' | translate }}</label>

@@ -130,10 +130,12 @@ public interface TransfusionService {
     java.util.List<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> listPositiveReleases(boolean openOnly);
 
     /** A physician who did not issue the bag signs the order it went out on. */
-    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId);
+    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId,
+        boolean noOtherPersonReachable);
 
     /** The review of the biologist. */
-    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note);
+    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note,
+        boolean noOtherPersonReachable);
 
     /** The anti-D or exchange decision of a clinician, and that the patient was told. */
     com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO recordPositiveFollowUp(UUID decisionId,

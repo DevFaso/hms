@@ -1054,6 +1054,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
             riskTier: 'KNOWN_ANTIBODY',
             tierReason: 'KNOWN_ANTIBODY',
             biologists: [{ userId: 'bio', displayName: 'Dr Bio' }],
+            physicians: [{ userId: 'phys', displayName: 'Dr Physician' }],
           }),
         });
         txSpy.emergencyRelease = jasmine
@@ -1086,6 +1087,26 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           verbalOrder: false,
           biologistUserId: 'bio',
         });
+
+        // pr1346: who authorises and who ordered O positive are two names, each sent in its own field.
+        expect(el('si-ordering')).not.toBeNull();
+        component.emergencyOrderingId = 'phys';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+          reason: 'Rien à temps',
+          authoriserUserId: 'dir',
+          verbalOrder: false,
+          biologistUserId: 'bio',
+          orderingPhysicianUserId: 'phys',
+        });
+        // The same person named twice is one name.
+        component.emergencyOrderingId = 'dir';
+        component.submitIncompatibleRelease();
+        expect(
+          txSpy.emergencyRelease.calls.mostRecent().args[1].orderingPhysicianUserId,
+        ).toBeUndefined();
       });
 
       it('a bag still out is shown as issued, administration not confirmed; once given, as an exposure', async () => {

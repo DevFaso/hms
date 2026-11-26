@@ -147,4 +147,19 @@ class OPositiveReleaseAuthorityTest {
         // Typed RhD positive by the laboratory: O positive is no RhD exposure, and no flag states one.
         assertThat(OPositiveReleaseAuthority.exposureFollowUp(OPositiveRiskTier.HIGH_RISK, RhFactor.POSITIVE)).isFalse();
     }
+
+    @Test
+    @DisplayName("what was written on the release decides its state; the bag is read only while nothing is written")
+    void whatIsWrittenOnTheReleaseWins() {
+        var given = com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED;
+        var back = com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED;
+        var again = com.example.hms.enums.OPositiveBagDisposition.SUPERSEDED;
+        assertThat(OPositiveReleaseAuthority.exposureState(given, false, false)).isEqualTo(OPositiveReleaseAuthority.ExposureState.CONFIRMED);
+        // Closed as not given: a later hang of the same bag, on the same request even, does not revive it.
+        assertThat(OPositiveReleaseAuthority.exposureState(back, true, true)).isEqualTo(OPositiveReleaseAuthority.ExposureState.NOT_GIVEN);
+        assertThat(OPositiveReleaseAuthority.exposureState(again, true, true)).isEqualTo(OPositiveReleaseAuthority.ExposureState.NOT_GIVEN);
+        assertThat(OPositiveReleaseAuthority.exposureState(null, true, false)).isEqualTo(OPositiveReleaseAuthority.ExposureState.CONFIRMED);
+        assertThat(OPositiveReleaseAuthority.exposureState(null, false, true)).isEqualTo(OPositiveReleaseAuthority.ExposureState.UNCONFIRMED);
+        assertThat(OPositiveReleaseAuthority.exposureState(null, false, false)).isEqualTo(OPositiveReleaseAuthority.ExposureState.NOT_GIVEN);
+    }
 }

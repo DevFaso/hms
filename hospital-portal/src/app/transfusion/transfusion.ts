@@ -888,6 +888,8 @@ export class TransfusionComponent implements OnInit {
   emergencyVerbalOrder = true;
   /** V380: the biologist deciding with the physician, for a patient with a known antibody. */
   emergencyBiologistId = '';
+  /** Incompatible O positive release: the physician who ordered O positive, when not the authoriser. */
+  emergencyOrderingId = '';
 
   /** V380: what the O positive authority rule says for the open request; the server still decides. */
   positiveRule() {
@@ -1003,6 +1005,7 @@ export class TransfusionComponent implements OnInit {
     this.emergencyUnreachable = false;
     this.emergencyVerbalOrder = true;
     this.emergencyBiologistId = '';
+    this.emergencyOrderingId = '';
     this.emergencyOptions.set(null);
     this.transfusion.emergencyReleaseOptions(request.id).subscribe({
       // A late answer for a request the panel has left is dropped.
@@ -1111,6 +1114,12 @@ export class TransfusionComponent implements OnInit {
         ...(positiveTier ? { verbalOrder: this.emergencyVerbalOrder } : {}),
         ...(positiveTier && this.emergencyBiologistId
           ? { biologistUserId: this.emergencyBiologistId }
+          : {}),
+        // Who authorises the incompatible release and who ordered O positive are two names, each kept.
+        ...(positiveTier &&
+        this.emergencyOrderingId &&
+        this.emergencyOrderingId !== this.emergencyAuthoriserId
+          ? { orderingPhysicianUserId: this.emergencyOrderingId }
           : {}),
       })
       .subscribe({

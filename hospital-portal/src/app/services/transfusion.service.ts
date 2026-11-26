@@ -344,6 +344,10 @@ export interface OPositiveReleaseDecision {
   rhdExposure: boolean;
   /** Null when the release flags no exposure. */
   exposureState?: OPositiveExposureState | null;
+  /** What became of the bag of THIS release, once written; a bag released again is a new release. */
+  disposition?: 'ADMINISTERED' | 'RETURNED_UNUSED' | 'SUPERSEDED' | null;
+  /** Known antibody: one person took two of its steps, stating that nobody else could be reached. */
+  fourEyesWaived?: boolean;
   followUpRequired: boolean;
   antibodyScreenDueFrom: string | null;
   antibodyScreenDueBy: string | null;
@@ -359,6 +363,8 @@ export interface OPositiveReleaseDecision {
 export interface OPositiveFollowUpRequest {
   antiDDecision?: AntiDDecision;
   patientInformed?: boolean;
+  /** Closes the follow-up of a bag that came back unused; the server decides whether it did. */
+  bagNotGiven?: boolean;
   note?: string;
 }
 
@@ -433,6 +439,8 @@ export interface EmergencyReleaseRequest {
   verbalOrder?: boolean;
   /** A known antibody: the biologist deciding with the physician, when named. */
   biologistUserId?: string;
+  /** An incompatible O positive release: the physician who ordered O positive, when not its authoriser. */
+  orderingPhysicianUserId?: string;
 }
 
 export interface TransfusionAdministrationRequest {
@@ -663,17 +671,25 @@ export class TransfusionService {
     });
   }
 
-  countersignPositiveRelease(decisionId: string): Observable<OPositiveReleaseDecision> {
+  /** `noOtherPersonReachable`: a known antibody's second step taken by the person who took the first. */
+  countersignPositiveRelease(
+    decisionId: string,
+    noOtherPersonReachable = false,
+  ): Observable<OPositiveReleaseDecision> {
     return this.http.post<OPositiveReleaseDecision>(
       `${this.baseUrl}/o-positive-releases/${decisionId}/countersign`,
-      null,
+      noOtherPersonReachable ? { noOtherPersonReachable: true } : null,
     );
   }
 
-  reviewPositiveRelease(decisionId: string, note: string): Observable<OPositiveReleaseDecision> {
+  reviewPositiveRelease(
+    decisionId: string,
+    note: string,
+    noOtherPersonReachable = false,
+  ): Observable<OPositiveReleaseDecision> {
     return this.http.post<OPositiveReleaseDecision>(
       `${this.baseUrl}/o-positive-releases/${decisionId}/review`,
-      { note },
+      { note, ...(noOtherPersonReachable ? { noOtherPersonReachable: true } : {}) },
     );
   }
 

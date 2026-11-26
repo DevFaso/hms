@@ -31,6 +31,34 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
 
     List<OPositiveReleaseDecision> findByRelease_IdIn(Collection<UUID> releaseIds);
 
+    /** The releases of this bag whose outcome is not written yet (the bag is, or was last known, out). */
+    @Query("SELECT d.id FROM OPositiveReleaseDecision d WHERE d.bloodUnitId = :bloodUnitId AND d.disposition IS NULL")
+    List<UUID> findOpenIdsForUnit(@Param("bloodUnitId") UUID bloodUnitId);
+
+    /**
+     * The bag was hung on this request: the release still open for it is the one that was given. One statement
+     * on its own columns; a release already closed (returned, superseded) is not touched.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE OPositiveReleaseDecision d
+        SET d.disposition = com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED, d.dispositionAt = :at, d.updatedAt = :at
+        WHERE d.bloodUnitId = :bloodUnitId AND d.requestId = :requestId AND d.disposition IS NULL
+        """)
+    int markAdministered(@Param("bloodUnitId") UUID bloodUnitId, @Param("requestId") UUID requestId,
+                         @Param("at") LocalDateTime at);
+
+    /** Closes the open releases named, as not given, in one statement on their own columns. */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE OPositiveReleaseDecision d
+        SET d.disposition = :disposition, d.dispositionAt = :at, d.updatedAt = :at
+        WHERE d.id IN :ids AND d.disposition IS NULL
+        """)
+    int markNotGiven(@Param("ids") Collection<UUID> ids,
+                     @Param("disposition") com.example.hms.enums.OPositiveBagDisposition disposition,
+                     @Param("at") LocalDateTime at);
+
     /** The releases whose notices are still owed, at every hospital, the oldest first. */
     @Query("SELECT d.id FROM OPositiveReleaseDecision d WHERE d.noticesFiledAt IS NULL ORDER BY d.issuedAt")
     List<UUID> findPendingNoticeIds();
@@ -66,6 +94,9 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
 
         /** How many times the bag was hung on the request of this release. */
         long getAdministrations();
+
+        /** What became of the bag of this release, once written; null while it is out. */
+        com.example.hms.enums.OPositiveBagDisposition getDisposition();
     }
 
     /**
@@ -76,6 +107,7 @@ public interface OPositiveReleaseDecisionRepository extends JpaRepository<OPosit
     @Query("""
         SELECT d.issuedAt AS issuedAt, h.id AS hospitalId, h.name AS hospitalName, d.requestId AS requestId,
                u.status AS unitStatus, ur.id AS unitRequestId,
+               d.disposition AS disposition,
                (SELECT COUNT(a) FROM TransfusionAdministration a
                  WHERE a.bloodUnit.id = d.bloodUnitId AND a.request.id = d.requestId) AS administrations
         FROM OPositiveReleaseDecision d

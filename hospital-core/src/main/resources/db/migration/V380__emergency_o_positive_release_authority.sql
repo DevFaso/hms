@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS clinical.o_positive_release_decisions (
     reviewed_at                 TIMESTAMP,
     review_note                 TEXT,
     notices_filed_at            TIMESTAMP,
+    four_eyes_waived            BOOLEAN      NOT NULL DEFAULT FALSE,
+    disposition                 VARCHAR(20),
+    disposition_at              TIMESTAMP,
     rhd_exposure                BOOLEAN      NOT NULL DEFAULT FALSE,
     follow_up_required          BOOLEAN      NOT NULL DEFAULT FALSE,
     antibody_screen_due_from    DATE,
@@ -96,6 +99,9 @@ CREATE TABLE IF NOT EXISTS clinical.o_positive_release_decisions (
     CONSTRAINT ck_o_positive_decision_basis        CHECK (decision_basis IN ('PROTOCOL', 'PHYSICIAN_ORDER', 'BIOLOGIST_AUTHORITY', 'PHYSICIAN_AND_BIOLOGIST', 'AUTHORITY_PENDING')),
     CONSTRAINT ck_o_positive_decision_priority     CHECK (review_priority IN ('ROUTINE', 'URGENT', 'IMMEDIATE')),
     CONSTRAINT ck_o_positive_decision_sex          CHECK (patient_sex IN ('MALE', 'FEMALE', 'UNKNOWN')),
+    -- What became of the bag of THIS release; null while it is out.
+    CONSTRAINT ck_o_positive_decision_disposition  CHECK (disposition IS NULL
+        OR disposition IN ('ADMINISTERED', 'RETURNED_UNUSED', 'SUPERSEDED')),
     CONSTRAINT ck_o_positive_decision_o_negative   CHECK (o_negative_status IN ('OUT_OF_STOCK', 'STATED_UNOBTAINABLE', 'PROTOCOL_FIRST_LINE')),
     -- The issuer alone decides only in the low-risk tier, under the active protocol of the hospital.
     CONSTRAINT ck_o_positive_decision_issuer_alone CHECK (decision_basis <> 'PROTOCOL'
@@ -116,6 +122,9 @@ CREATE INDEX IF NOT EXISTS idx_o_positive_decision_patient
 CREATE INDEX IF NOT EXISTS idx_o_positive_decision_notices_owed
     ON clinical.o_positive_release_decisions (issued_at)
     WHERE notices_filed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_o_positive_decision_unit_out
+    ON clinical.o_positive_release_decisions (blood_unit_id)
+    WHERE disposition IS NULL;
 CREATE INDEX IF NOT EXISTS idx_o_positive_decision_countersign_due
     ON clinical.o_positive_release_decisions (countersign_due_at)
     WHERE countersigned_at IS NULL AND countersign_escalated_at IS NULL;

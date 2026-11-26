@@ -700,14 +700,14 @@ class TransfusionEmergencyReleasePostgresIT {
             .extracting(com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO::getId).containsExactly(decisionId);
 
         // The issuer never countersigns; a physician does; the biologist reviews; a physician follows up.
-        assertThatThrownBy(() -> service.countersignPositiveRelease(decisionId))
+        assertThatThrownBy(() -> service.countersignPositiveRelease(decisionId, false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         actingAs(doctorUser);
-        assertThat(service.countersignPositiveRelease(decisionId).getCountersignedByName()).contains("ROLE_DOCTOR");
-        assertThatThrownBy(() -> service.reviewPositiveRelease(decisionId, "seen"))
+        assertThat(service.countersignPositiveRelease(decisionId, false).getCountersignedByName()).contains("ROLE_DOCTOR");
+        assertThatThrownBy(() -> service.reviewPositiveRelease(decisionId, "seen", false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         actingAs(directorUser);
-        assertThat(service.reviewPositiveRelease(decisionId, "Anti-D discussed with the obstetrician").getReviewedByName())
+        assertThat(service.reviewPositiveRelease(decisionId, "Anti-D discussed with the obstetrician", false).getReviewedByName())
             .contains("ROLE_LAB_DIRECTOR");
         Object rawNote = entityManager.createNativeQuery(
             "SELECT review_note FROM clinical.o_positive_release_decisions WHERE id = :id").setParameter("id", decisionId).getSingleResult();
@@ -845,11 +845,15 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThat(service.getAntibodyStatus(patient).isRhdPositiveExposed()).isFalse();
         assertThat(service.listPositiveReleases(false)).singleElement()
             .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
-        // No exposure follow-up is recorded on a bag that came back.
+        // Recording a follow-up on a bag that came back closes it instead of refusing the only action left.
         actingAs(doctorUser);
-        assertThatThrownBy(() -> service.recordPositiveFollowUp(decisionId,
+        assertThat(service.recordPositiveFollowUp(decisionId,
             com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build()))
-            .hasMessageContaining("came back unused");
+            .satisfies(row -> {
+                assertThat(row.getDisposition()).as("closed with its reason, not refused").isEqualTo("RETURNED_UNUSED");
+                assertThat(row.getPatientInformedAt()).isNull();
+            });
+        actingAs(techUser);
 
         // The same bag goes out again on another request and is hung there: that says nothing about this release.
         UUID other = emergencyRequest().getId();
@@ -890,5 +894,56 @@ class TransfusionEmergencyReleasePostgresIT {
             assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
             assertThat(item.getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.NORMAL);
         });
+    }
+
+    @Test
+    @DisplayName("pr1346: a bag discarded unused closes its follow-up; released again on the SAME request it is a new release, and only that one is confirmed when hung")
+    void aReissueOnTheSameRequestIsANewRelease() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        service.emergencyRelease(requestId, documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION));
+        UUID first = service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision().getId();
+
+        // A follow-up recorded while the bag is out is accepted (the anti-D window does not wait for the hang).
+        actingAs(doctorUser);
+        service.recordPositiveFollowUp(first, com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder()
+            .antiDDecision(com.example.hms.enums.AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build());
+        actingAs(techUser);
+
+        // The bag comes back to the laboratory unused, by hand in the database: no hook wrote it.
+        sql("UPDATE clinical.blood_units SET status = 'RETURNED', request_id = NULL WHERE id = :id", bagId);
+        assertThat(service.getAntibodyStatus(patient).isRhdPositiveExposed()).isFalse();
+
+        // Released again on the same request: a new release row and a new decision; the first is closed.
+        service.emergencyRelease(requestId, documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION));
+        List<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> both = service.listPositiveReleases(false);
+        assertThat(both).hasSize(2);
+        assertThat(both).filteredOn(row -> row.getId().equals(first)).singleElement().satisfies(row -> {
+            assertThat(row.getDisposition()).isEqualTo("SUPERSEDED");
+            assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN");
+            assertThat(row.getAntiDDecision()).as("what was written stays as written").isNotNull();
+        });
+
+        hang(requestId, bagId);
+        both = service.listPositiveReleases(false);
+        assertThat(both).filteredOn(row -> row.getId().equals(first)).singleElement()
+            .satisfies(row -> assertThat(row.getExposureState()).as("not revived by the later hang").isEqualTo("NOT_GIVEN"));
+        assertThat(both).filteredOn(row -> !row.getId().equals(first)).singleElement().satisfies(row -> {
+            assertThat(row.getDisposition()).isEqualTo("ADMINISTERED");
+            assertThat(row.getExposureState()).isEqualTo("CONFIRMED");
+        });
+        assertThat(service.getAntibodyStatus(patient).getRhdPositiveExposureConfirmed()).isTrue();
+
+        // A second bag, discarded by the laboratory before anybody hung it: its follow-up tasks leave the in-baskets.
+        UUID otherBag = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        service.emergencyRelease(requestId, documented(otherBag, EmergencyReleaseType.O_POSITIVE_DECISION));
+        UUID third = service.listPositiveReleases(false).stream().filter(row -> row.getBloodUnitId().equals(otherBag))
+            .findFirst().orElseThrow().getId();
+        clearInvocations(inBasketService);
+        service.discardUnit(otherBag, "Broken seal");
+        verify(inBasketService).removeOpenItemsForReference(third, "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
+        assertThat(service.listPositiveReleases(false)).filteredOn(row -> row.getId().equals(third)).singleElement()
+            .satisfies(row -> assertThat(row.getDisposition()).isEqualTo("RETURNED_UNUSED"));
     }
 }

@@ -89,6 +89,8 @@ export class OPositiveReleasesComponent implements OnInit {
 
   /** What is being typed for one release, by its id. */
   reviewNotes: Record<string, string> = {};
+  /** Known antibody: « nobody else can be reached », stated by the person taking a second step. */
+  noOtherReachable: Record<string, boolean> = {};
   followUpDecision: Record<string, AntiDDecision | ''> = {};
   followUpNotes: Record<string, string> = {};
 
@@ -174,19 +176,59 @@ export class OPositiveReleasesComponent implements OnInit {
     return !row.reviewedAt;
   }
 
+  /** The bag of this release was not given (returned unused, or released again): nothing follows from it. */
+  bagNotGiven(row: OPositiveReleaseDecision): boolean {
+    return row.disposition === 'RETURNED_UNUSED' || row.disposition === 'SUPERSEDED';
+  }
+
   followUpOwed(row: OPositiveReleaseDecision): boolean {
-    return row.followUpRequired && (!row.antiDDecision || !row.patientInformedAt);
+    return (
+      row.followUpRequired &&
+      !this.bagNotGiven(row) &&
+      (!row.antiDDecision || !row.patientInformedAt)
+    );
+  }
+
+  /**
+   * A known antibody takes two different people (signature, review). The statement that nobody else can be
+   * reached is offered to whoever can still take a step; the server asks for it only of the same person.
+   */
+  secondPersonAsked(row: OPositiveReleaseDecision): boolean {
+    return (
+      row.riskTier === 'KNOWN_ANTIBODY' &&
+      ((this.countersignOwed(row) && this.canCountersign) ||
+        (this.reviewOwed(row) && this.canReview))
+    );
   }
 
   countersign(row: OPositiveReleaseDecision): void {
-    this.act(row, this.transfusion.countersignPositiveRelease(row.id), 'COUNTERSIGNED');
+    this.act(
+      row,
+      this.transfusion.countersignPositiveRelease(row.id, !!this.noOtherReachable[row.id]),
+      'COUNTERSIGNED',
+      { noOtherPersonReachable: 'opos-noother-' + row.id },
+    );
   }
 
   review(row: OPositiveReleaseDecision): void {
     this.act(
       row,
-      this.transfusion.reviewPositiveRelease(row.id, (this.reviewNotes[row.id] ?? '').trim()),
+      this.transfusion.reviewPositiveRelease(
+        row.id,
+        (this.reviewNotes[row.id] ?? '').trim(),
+        !!this.noOtherReachable[row.id],
+      ),
       'REVIEWED',
+      { noOtherPersonReachable: 'opos-noother-' + row.id },
+    );
+  }
+
+  /** The bag came back unused and nothing wrote it yet: the follow-up is closed with that reason. */
+  closeNotGiven(row: OPositiveReleaseDecision): void {
+    this.act(
+      row,
+      this.transfusion.recordPositiveFollowUp(row.id, { bagNotGiven: true }),
+      'FOLLOW_UP_CLOSED',
     );
   }
 
@@ -236,6 +278,7 @@ export class OPositiveReleasesComponent implements OnInit {
         this.busyId.set(null);
         this.releases.update((rows) => rows.map((r) => (r.id === updated.id ? updated : r)));
         delete this.reviewNotes[row.id];
+        delete this.noOtherReachable[row.id];
         delete this.followUpDecision[row.id];
         delete this.followUpNotes[row.id];
         this.toast.success(this.translate.instant('TRANSFUSION.OPOS.' + doneKey));

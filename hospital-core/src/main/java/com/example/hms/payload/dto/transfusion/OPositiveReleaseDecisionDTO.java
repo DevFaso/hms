@@ -66,6 +66,10 @@ public class OPositiveReleaseDecisionDTO {
      * (came back unused: nobody was exposed). Null when the release flags no exposure.
      */
     private String exposureState;
+    /** One person signed and reviewed a known-antibody release, stating nobody else could be reached. */
+    private boolean fourEyesWaived;
+    /** ADMINISTERED, RETURNED_UNUSED or SUPERSEDED once written on the release; null while the bag is out. */
+    private String disposition;
     private boolean followUpRequired;
     private LocalDate antibodyScreenDueFrom;
     private LocalDate antibodyScreenDueBy;

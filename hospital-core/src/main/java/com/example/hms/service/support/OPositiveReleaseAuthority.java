@@ -186,6 +186,21 @@ public final class OPositiveReleaseAuthority {
     }
 
     /**
+     * The state of one release: what was written on its row when the bag was hung or came back, and only while
+     * nothing is written, what the bag and its request say now.
+     */
+    public static ExposureState exposureState(com.example.hms.enums.OPositiveBagDisposition disposition,
+                                              boolean administeredOnThisRelease, boolean stillOutOnThisRelease) {
+        if (disposition == com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED) {
+            return ExposureState.CONFIRMED;
+        }
+        if (disposition != null) {
+            return ExposureState.NOT_GIVEN;
+        }
+        return exposureState(administeredOnThisRelease, stillOutOnThisRelease);
+    }
+
+    /**
      * The bag is still out on THIS release: issued, and held by the request it was released against. A bag that
      * came back and went out again for another request, or another patient, says nothing more about this one.
      */

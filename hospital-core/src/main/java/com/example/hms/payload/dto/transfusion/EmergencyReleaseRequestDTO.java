@@ -49,6 +49,13 @@ public class EmergencyReleaseRequestDTO {
     private UUID biologistUserId;
 
     /**
+     * A serologically incompatible release of an O positive bag: the physician who ordered O positive for this
+     * patient, when that is not the person authorising the incompatible release ({@link #authoriserUserId}).
+     * Two roles, two names: each is recorded where it belongs.
+     */
+    private UUID orderingPhysicianUserId;
+
+    /**
      * For O positive when the system shows O negative in stock: the person states it cannot be
      * obtained in time. Required then, on its field; ignored otherwise.
      */

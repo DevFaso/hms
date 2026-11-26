@@ -198,6 +198,25 @@
         </div>
       </dl>
 
+      @if (r.fourEyesWaived) {
+        <p class="opos-note warn-inline" role="status" data-testid="opos-four-eyes-waived">
+          {{ 'TRANSFUSION.OPOS.FOUR_EYES_WAIVED' | translate }}
+        </p>
+      }
+      @if (secondPersonAsked(r)) {
+        <div class="opos-step" data-testid="opos-four-eyes">
+          <span class="opos-step-label">{{ 'TRANSFUSION.OPOS.FOUR_EYES' | translate }}</span>
+          <label class="checkbox-field" [for]="'opos-noother-' + r.id">
+            <input
+              type="checkbox"
+              [id]="'opos-noother-' + r.id"
+              [(ngModel)]="noOtherReachable[r.id]"
+            />
+            {{ 'TRANSFUSION.OPOS.NO_OTHER_PERSON_CHECK' | translate }}
+          </label>
+        </div>
+      }
+
       <!-- Countersignature -->
       @if (r.countersignDueAt) {
         <div
@@ -313,6 +332,16 @@
               {{ 'TRANSFUSION.OPOS.EXPOSURE_' + r.exposureState | translate }}
             </span>
           }
+          @if (r.disposition === 'SUPERSEDED') {
+            <p class="opos-note" data-testid="opos-superseded">
+              {{ 'TRANSFUSION.OPOS.DISPOSITION_SUPERSEDED' | translate }}
+            </p>
+          }
+          @if (r.disposition === 'RETURNED_UNUSED') {
+            <p class="opos-note" data-testid="opos-follow-up-closed">
+              {{ 'TRANSFUSION.OPOS.FOLLOW_UP_CLOSED_UNUSED' | translate }}
+            </p>
+          }
           <ul class="opos-facts">
             <li>
               {{ 'TRANSFUSION.OPOS.ANTI_D' | translate }}{{ 'COMMON.COLON' | translate }}
@@ -350,6 +379,17 @@
           </ul>
           @if (r.followUpNote) {
             <p class="opos-note">{{ r.followUpNote }}</p>
+          }
+          @if (canFollowUp && followUpOwed(r) && r.exposureState === 'NOT_GIVEN') {
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              data-testid="opos-close-not-given"
+              [disabled]="busyId() === r.id"
+              (click)="closeNotGiven(r)"
+            >
+              {{ 'TRANSFUSION.OPOS.CLOSE_NOT_GIVEN_ACTION' | translate }}
+            </button>
           }
           @if (canFollowUp && followUpOwed(r) && r.exposureState !== 'NOT_GIVEN') {
             <div class="opos-inline-form">

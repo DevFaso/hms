@@ -316,8 +316,14 @@ public class TransfusionController {
         description = "A physician of the hospital who did not issue the bag; the laboratory director too outside "
             + "the known-antibody tier.")
     public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> countersignPositiveRelease(
-        @PathVariable UUID decisionId) {
-        return ResponseEntity.ok(transfusionService.countersignPositiveRelease(decisionId));
+        @PathVariable UUID decisionId,
+        @RequestBody(required = false) com.example.hms.payload.dto.transfusion.OPositiveReviewRequestDTO body) {
+        return ResponseEntity.ok(transfusionService.countersignPositiveRelease(decisionId, waived(body)));
+    }
+
+    /** Known antibody: the caller states that nobody else can be reached for the second of the two steps. */
+    private static boolean waived(com.example.hms.payload.dto.transfusion.OPositiveReviewRequestDTO body) {
+        return body != null && Boolean.TRUE.equals(body.getNoOtherPersonReachable());
     }
 
     @PostMapping("/o-positive-releases/{decisionId}/review")
@@ -326,7 +332,8 @@ public class TransfusionController {
     public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> reviewPositiveRelease(
         @PathVariable UUID decisionId,
         @RequestBody(required = false) com.example.hms.payload.dto.transfusion.OPositiveReviewRequestDTO review) {
-        return ResponseEntity.ok(transfusionService.reviewPositiveRelease(decisionId, review == null ? null : review.getNote()));
+        return ResponseEntity.ok(transfusionService.reviewPositiveRelease(decisionId, review == null ? null : review.getNote(),
+            waived(review)));
     }
 
     @PostMapping("/o-positive-releases/{decisionId}/follow-up")

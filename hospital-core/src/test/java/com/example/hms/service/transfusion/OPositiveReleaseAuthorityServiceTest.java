@@ -194,6 +194,9 @@ class OPositiveReleaseAuthorityServiceTest {
         EmergencyBloodRelease row = EmergencyBloodRelease.builder().request(request).bloodUnit(unit).hospital(hospital)
             .releaseType(type).issuedAt(NOW).build();
         row.setId(UUID.randomUUID());
+        // The bag as the issue leaves it: out on its request.
+        unit.setStatus(BloodUnitStatus.ISSUED);
+        unit.setRequest(request);
         return service.record(row, authorisation, request, unit, ONegativeStatus.OUT_OF_STOCK);
     }
 
@@ -664,9 +667,9 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(decision.getNoticesFiledAt()).isNull();
         // From the queue, meanwhile: the director reviews, the physician countersigns.
         when(roleValidator.getCurrentUserId()).thenReturn(director);
-        service.review(decision.getId(), hospitalId, null);
+        service.review(decision.getId(), hospitalId, null, false);
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        service.countersign(decision.getId(), hospitalId);
+        service.countersign(decision.getId(), hospitalId, false);
 
         org.mockito.Mockito.reset(fixture.inBasket);
         assertThat(fixture.notices.deliver(decision.getId())).isEqualTo(2);
@@ -682,22 +685,22 @@ class OPositiveReleaseAuthorityServiceTest {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
         UUID id = decision.getId();
 
-        assertThatThrownBy(() -> service.countersign(id, hospitalId))
+        assertThatThrownBy(() -> service.countersign(id, hospitalId, false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class).hasMessageContaining("issued the unit");
         when(roleValidator.getCurrentUserId()).thenReturn(midwife);
-        assertThatThrownBy(() -> service.countersign(id, hospitalId))
+        assertThatThrownBy(() -> service.countersign(id, hospitalId, false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class).hasMessageContaining("physician");
-        assertThatThrownBy(() -> service.countersign(id, UUID.randomUUID())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.countersign(id, UUID.randomUUID(), false)).isInstanceOf(ResourceNotFoundException.class);
         assertThat(decision.getCountersignedAt()).isNull();
 
         // Another physician answering for the service may sign for the one named.
         when(roleValidator.getCurrentUserId()).thenReturn(otherDoctor);
-        assertThat(service.countersign(id, hospitalId).getCountersignedAt()).isEqualTo(NOW);
+        assertThat(service.countersign(id, hospitalId, false).getCountersignedAt()).isEqualTo(NOW);
         assertThat(decision.getCountersignedByUserId()).isEqualTo(otherDoctor);
         assertThat(decision.getDecidedByUserId()).as("what was decided at release is not rewritten").isEqualTo(doctor);
         verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE);
 
-        assertThatThrownBy(() -> service.countersign(id, hospitalId))
+        assertThatThrownBy(() -> service.countersign(id, hospitalId, false))
             .isInstanceOf(FieldBusinessException.class).hasMessageContaining("No countersignature is owed");
     }
 
@@ -707,24 +710,29 @@ class OPositiveReleaseAuthorityServiceTest {
         man(40);
         UUID low = release(request(), null, null, false).getId();
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        assertThatThrownBy(() -> service.countersign(low, hospitalId)).hasMessageContaining("No countersignature is owed");
+        assertThatThrownBy(() -> service.countersign(low, hospitalId, false)).hasMessageContaining("No countersignature is owed");
 
         when(roleValidator.getCurrentUserId()).thenReturn(issuer);
         UUID antibody = release(request(), naming(doctor), null, true).getId();
         when(roleValidator.getCurrentUserId()).thenReturn(director);
-        assertThatThrownBy(() -> service.countersign(antibody, hospitalId))
+        assertThatThrownBy(() -> service.countersign(antibody, hospitalId, false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        assertThat(service.countersign(antibody, hospitalId).getCountersignedByName()).isNotBlank();
+        assertThat(service.countersign(antibody, hospitalId, false).getCountersignedByName()).isNotBlank();
+    }
+
+    // ── pr1346 round 4: two different people, and tasks only for those who can do them ──
+
+    private void directorIsAlsoAPhysician() {
+        when(assignmentRepository.existsActiveWitness(eq(director), eq(hospitalId),
+            eq(com.example.hms.service.support.OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES))).thenReturn(true);
     }
 
     @Test
-    @DisplayName("known antibody: the biologist of the release, even holding a physician's role too, does not sign the physician's part")
+    @DisplayName("known antibody, four eyes: the release's biologist does not sign the physician's part, unless nobody else can be reached, and then the row says so")
     void theBiologistDoesNotSignThePhysiciansPart() {
         man(40);
-        // The laboratory director is also a physician here.
-        when(assignmentRepository.existsActiveWitness(eq(director), eq(hospitalId),
-            eq(com.example.hms.service.support.OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES))).thenReturn(true);
+        directorIsAlsoAPhysician();
         EmergencyReleaseRequestDTO input = nobodyReachable();
         input.setBiologistUserId(director);
         OPositiveReleaseDecision decision = release(request(), input, null, true);
@@ -732,11 +740,233 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(decision.getBiologistUserId()).isEqualTo(director);
 
         when(roleValidator.getCurrentUserId()).thenReturn(director);
-        assertThatThrownBy(() -> service.countersign(decision.getId(), hospitalId))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class).hasMessageContaining("biologist of this release");
+        assertThatThrownBy(() -> service.countersign(decision.getId(), hospitalId, false))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("two different people");
         assertThat(decision.getCountersignedAt()).as("the independent signature stays owed").isNull();
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        assertThat(service.countersign(decision.getId(), hospitalId).getCountersignedAt()).isEqualTo(NOW);
+        assertThat(service.countersign(decision.getId(), hospitalId, false).getCountersignedAt()).isEqualTo(NOW);
+        assertThat(decision.isFourEyesWaived()).isFalse();
+    }
+
+    @Test
+    @DisplayName("known antibody, four eyes in both orders: one person does not both countersign and review; « nobody else reachable » is accepted and recorded")
+    void onePersonDoesNotCountersignAndReview() {
+        man(40);
+        directorIsAlsoAPhysician();
+        // Signed first, then the same person comes to review.
+        OPositiveReleaseDecision first = release(request(), nobodyReachable(), null, true);
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        service.countersign(first.getId(), hospitalId, false);
+        assertThatThrownBy(() -> service.review(first.getId(), hospitalId, "seen", false))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("two different people");
+        assertThat(first.getReviewedAt()).isNull();
+
+        // Reviewed first, then the same person comes to sign.
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        OPositiveReleaseDecision second = release(request(), nobodyReachable(), null, true);
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        service.review(second.getId(), hospitalId, null, false);
+        assertThatThrownBy(() -> service.countersign(second.getId(), hospitalId, false))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("two different people");
+        assertThat(second.getCountersignedAt()).isNull();
+
+        // Nobody else can be reached: the step is taken, and the row keeps that the rule was waived.
+        assertThat(service.countersign(second.getId(), hospitalId, true).isFourEyesWaived()).isTrue();
+        assertThat(second.getCountersignedByUserId()).isEqualTo(director);
+        assertThat(service.review(first.getId(), hospitalId, "seen", true).isFourEyesWaived()).isTrue();
+
+        // Outside the known-antibody tier nothing of this applies.
+        woman(30);
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        OPositiveReleaseDecision highRisk = release(request(), naming(doctor), null, false);
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        service.countersign(highRisk.getId(), hospitalId, false);
+        assertThat(service.review(highRisk.getId(), hospitalId, null, false).isFourEyesWaived()).isFalse();
+    }
+
+    @Test
+    @DisplayName("known antibody: the countersignature is asked only of those it will accept: not the release's biologist, even as its requester; with nobody else, the row stays owed")
+    void theCountersignTaskGoesToSomebodyWhoCanSign() {
+        man(40);
+        // The requester is the laboratory director, who is also a physician, and sits as the biologist of the release.
+        roles.put(requester, SecurityConstants.ROLE_LAB_DIRECTOR);
+        when(assignmentRepository.existsActiveWitness(eq(requester), eq(hospitalId),
+            eq(com.example.hms.service.support.OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES))).thenReturn(true);
+        EmergencyReleaseRequestDTO input = nobodyReachable();
+        input.setBiologistUserId(requester);
+        OPositiveReleaseDecision decision = release(request(), input, null, true);
+
+        assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId)
+            .as("the hospital's other physicians, never the one person the signature refuses")
+            .containsExactlyInAnyOrder(doctor, otherDoctor).doesNotContain(requester);
+        assertThat(decision.getNoticesFiledAt()).isEqualTo(NOW);
+
+        // No other physician at all: nothing is filed for the ineligible person, and the notice stays owed.
+        roles.remove(doctor);
+        roles.remove(otherDoctor);
+        org.mockito.Mockito.clearInvocations(fixture.inBasket);
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        OPositiveReleaseDecision alone = release(request(), input, null, true);
+        ArgumentCaptor<CreateInBasketItemRequest> filed = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(fixture.inBasket, org.mockito.Mockito.atLeast(0)).createItem(filed.capture());
+        assertThat(filed.getAllValues()).extracting(CreateInBasketItemRequest::getReferenceType)
+            .doesNotContain(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE);
+        assertThat(alone.getNoticesFiledAt()).as("never settled by a notice nobody can act on").isNull();
+    }
+
+    @Test
+    @DisplayName("no biologist at the hospital: the clinicians are told, but only a biologist can review, so the review stays owed until one holds the role")
+    void aReviewNobodyCanDoStaysOwed() {
+        roles.remove(director);
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, requester);
+        assertThat(decision.getNoticesFiledAt()).as("a copy to somebody who cannot review settles nothing").isNull();
+        assertThat(fixture.notices.deliver(decision.getId())).isZero();
+
+        roles.put(director, SecurityConstants.ROLE_LAB_DIRECTOR);
+        assertThat(fixture.notices.deliver(decision.getId())).isPositive();
+        assertThat(decision.getNoticesFiledAt()).isEqualTo(NOW);
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).contains(director);
+    }
+
+    @Test
+    @DisplayName("incompatible release: who authorises it and who ordered O positive are two names, each recorded in its seat")
+    void theIncompatibleReleaseRecordsBothRoles() {
+        man(40);
+        TransfusionRequest request = request();
+        // Known antibody: the director authorises the incompatible release, a physician ordered O positive.
+        EmergencyReleaseRequestDTO both = naming(director);
+        both.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        both.setOrderingPhysicianUserId(doctor);
+        OPositiveReleaseDecision decision = release(request, both, null, true);
+        assertThat(decision.getDecisionBasis()).as("both took part: not « physician owed »")
+            .isEqualTo(OPositiveDecisionBasis.PHYSICIAN_AND_BIOLOGIST);
+        assertThat(decision.getDecidedByUserId()).isEqualTo(doctor);
+        assertThat(decision.getBiologistUserId()).isEqualTo(director);
+
+        // The ordering physician is a physician who is not the issuer, like any other.
+        EmergencyReleaseRequestDTO byTheIssuer = naming(director);
+        byTheIssuer.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        byTheIssuer.setOrderingPhysicianUserId(issuer);
+        assertThatThrownBy(() -> release(request, byTheIssuer, null, true)).isInstanceOf(FieldBusinessException.class);
+        EmergencyReleaseRequestDTO byAMidwife = naming(director);
+        byAMidwife.setReleaseType(EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        byAMidwife.setOrderingPhysicianUserId(midwife);
+        assertThatThrownBy(() -> release(request, byAMidwife, null, true)).isInstanceOf(FieldBusinessException.class);
+
+        // High risk: the physician who ordered it is the one recorded as deciding, not the director who authorised.
+        woman(30);
+        OPositiveReleaseDecision highRisk = release(request(), both, null, false);
+        assertThat(highRisk.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.PHYSICIAN_ORDER);
+        assertThat(highRisk.getDecidedByUserId()).isEqualTo(doctor);
+
+        // On the O positive form there is one name: a second one is not read.
+        EmergencyReleaseRequestDTO oneName = naming(doctor);
+        oneName.setOrderingPhysicianUserId(otherDoctor);
+        assertThat(release(request(), oneName, null, false).getDecidedByUserId()).isEqualTo(doctor);
+    }
+
+    @Test
+    @DisplayName("a bag that comes back unused closes its exposure follow-up, with the reason; recording on it afterwards shows the closed row instead of refusing")
+    void aReturnedBagClosesItsFollowUp() {
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        UUID unitId = decision.getBloodUnitId();
+        when(fixture.decisionRepository.findOpenIdsForUnit(unitId)).thenReturn(List.of(decision.getId()));
+        when(fixture.decisionRepository.markNotGiven(any(), any(), any())).thenAnswer(call -> {
+            decision.setDisposition(call.getArgument(1));
+            decision.setDispositionAt(call.getArgument(2));
+            return 1;
+        });
+
+        service.noteBagBack(unitId);
+
+        verify(fixture.decisionRepository).markNotGiven(List.of(decision.getId()),
+            com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED, NOW);
+        verify(fixture.inBasket).removeOpenItemsForReference(decision.getId(), OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
+        verify(fixture.inBasket, never()).removeOpenItemsForReference(decision.getId(), OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE);
+        assertThat(decision.followUpOwed()).as("closed by the return").isFalse();
+        assertThat(decision.countersignOwed()).as("the decision was still taken: its signature stays owed").isTrue();
+
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        OPositiveFollowUpRequestDTO informs = OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build();
+        assertThat(service.recordFollowUp(decision.getId(), hospitalId, informs)).satisfies(row -> {
+            assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN");
+            assertThat(row.getDisposition()).isEqualTo("RETURNED_UNUSED");
+            assertThat(row.getPatientInformedAt()).as("nothing is recorded as told about an exposure that did not happen").isNull();
+        });
+        // The closing action of the queue, by name; on a bag that is out it records nothing and says so.
+        assertThat(service.recordFollowUp(decision.getId(), hospitalId,
+            OPositiveFollowUpRequestDTO.builder().bagNotGiven(Boolean.TRUE).build()).getDisposition()).isEqualTo("RETURNED_UNUSED");
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        OPositiveReleaseDecision out = release(request(), naming(doctor), null, false);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        assertThatThrownBy(() -> service.recordFollowUp(out.getId(), hospitalId,
+            OPositiveFollowUpRequestDTO.builder().bagNotGiven(Boolean.TRUE).build())).isInstanceOf(FieldBusinessException.class);
+        assertThat(out.getDisposition()).isNull();
+        // A bag with no open release: nothing to do, nothing read back.
+        service.noteBagBack(UUID.randomUUID());
+        service.noteBagBack(null);
+        verify(fixture.decisionRepository, times(1)).markNotGiven(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a follow-up recorded while the bag was out is voided cleanly when the bag comes back unused: what was written stays, nothing is owed, no flag")
+    void aFollowUpRecordedBeforeAnUnusedReturnIsVoided() {
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        BloodUnit unit = decision.getRelease().getBloodUnit();
+        unit.setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        unit.setRequest(decision.getRelease().getRequest());
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        // The clinician does not wait for the hang to be recorded: the anti-D window is short.
+        service.recordFollowUp(decision.getId(), hospitalId,
+            OPositiveFollowUpRequestDTO.builder().antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build());
+        assertThat(decision.followUpOwed()).isTrue();
+
+        decision.setDisposition(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
+        when(fixture.decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId)).thenReturn(List.of(decision));
+        assertThat(decision.followUpOwed()).isFalse();
+        assertThat(service.list(hospitalId, false)).singleElement().satisfies(row -> {
+            assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN");
+            assertThat(row.getAntiDDecision()).as("what was written is kept as written").isEqualTo(AntiDDecision.ANTI_D_IMMUNOGLOBULIN);
+        });
+        // The flag does not rest on it, whatever the bag does next.
+        var row = exposure(NOW, hospitalId, com.example.hms.enums.BloodUnitStatus.ISSUED, true, 1);
+        when(row.getDisposition()).thenReturn(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(row));
+        assertThat(service.exposureShownAt(patient.getId(), hospitalId)).isNull();
+    }
+
+    @Test
+    @DisplayName("a bag released again, even on the same request, is a new release: the one before it is closed and keeps its own state")
+    void aReissueIsANewRelease() {
+        TransfusionRequest request = request();
+        OPositiveReleaseDecision first = release(request, naming(doctor), null, false);
+        UUID unitId = first.getBloodUnitId();
+        when(fixture.decisionRepository.findOpenIdsForUnit(any())).thenReturn(List.of(first.getId()));
+
+        // The same bag goes out again (the helper builds a new bag: the repository answers for it as for the first).
+        release(request, naming(doctor), null, false);
+        verify(fixture.decisionRepository).markNotGiven(List.of(first.getId()),
+            com.example.hms.enums.OPositiveBagDisposition.SUPERSEDED, NOW);
+
+        // Later the bag is hung on that same request: the old release, closed, is not confirmed by it.
+        var old = exposure(NOW.minusHours(2), hospitalId, com.example.hms.enums.BloodUnitStatus.ISSUED, true, 1);
+        when(old.getDisposition()).thenReturn(com.example.hms.enums.OPositiveBagDisposition.SUPERSEDED);
+        var current = exposure(NOW, hospitalId, com.example.hms.enums.BloodUnitStatus.ISSUED, true, 1);
+        when(current.getDisposition()).thenReturn(com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED);
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(current, old));
+        assertThat(service.exposureShownAt(patient.getId(), hospitalId)).satisfies(shown -> {
+            assertThat(shown.confirmed()).isTrue();
+            assertThat(shown.issuedAt()).as("the release that was given").isEqualTo(NOW);
+        });
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(old));
+        assertThat(service.exposureShownAt(patient.getId(), hospitalId)).as("the superseded release alone exposes nobody").isNull();
+
+        service.noteAdministered(unitId, request.getId(), NOW);
+        verify(fixture.decisionRepository).markAdministered(unitId, request.getId(), NOW);
     }
 
     // ── Review ──────────────────────────────────────────────────────────
@@ -746,15 +976,15 @@ class OPositiveReleaseAuthorityServiceTest {
     void review() {
         UUID id = release(request(), naming(doctor), null, false).getId();
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        assertThatThrownBy(() -> service.review(id, hospitalId, "seen"))
+        assertThatThrownBy(() -> service.review(id, hospitalId, "seen", false))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         when(roleValidator.getCurrentUserId()).thenReturn(director);
-        assertThat(service.review(id, hospitalId, "  Anti-D immunoglobulin discussed with Dr X  ").getReviewNote())
+        assertThat(service.review(id, hospitalId, "  Anti-D immunoglobulin discussed with Dr X  ", false).getReviewNote())
             .isEqualTo("Anti-D immunoglobulin discussed with Dr X");
         assertThat(fixture.last().getReviewedByUserId()).isEqualTo(director);
         assertThat(fixture.last().getReviewedAt()).isEqualTo(NOW);
         verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE);
-        assertThatThrownBy(() -> service.review(id, hospitalId, null)).hasMessageContaining("already been reviewed");
+        assertThatThrownBy(() -> service.review(id, hospitalId, null, false)).hasMessageContaining("already been reviewed");
     }
 
     // ── Follow-up and the permanent flag ────────────────────────────────
@@ -887,8 +1117,11 @@ class OPositiveReleaseAuthorityServiceTest {
             .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
         OPositiveFollowUpRequestDTO informs = OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build();
-        assertThatThrownBy(() -> service.recordFollowUp(decision.getId(), hospitalId, informs))
-            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("came back unused");
+        // Recording on it closes it with its reason, instead of refusing the only action left.
+        assertThat(service.recordFollowUp(decision.getId(), hospitalId, informs)).satisfies(row -> {
+            assertThat(row.getDisposition()).isEqualTo("RETURNED_UNUSED");
+            assertThat(row.getPatientInformedAt()).isNull();
+        });
     }
 
     @Test
@@ -905,14 +1138,14 @@ class OPositiveReleaseAuthorityServiceTest {
 
         when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId())).thenReturn(1L);
         when(roleValidator.getCurrentUserId()).thenReturn(otherDoctor);
-        assertThat(service.countersign(decision.getId(), hospitalId)).satisfies(row -> {
+        assertThat(service.countersign(decision.getId(), hospitalId, false)).satisfies(row -> {
             assertThat(row.getExposureState()).isEqualTo("CONFIRMED");
             assertThat(row.isCountersignCovering()).as("signed by another physician than the one named").isTrue();
         });
 
         // Reviewed and countersigned; the bag came back unused: nothing is owed on it any more.
         when(roleValidator.getCurrentUserId()).thenReturn(director);
-        service.review(decision.getId(), hospitalId, null);
+        service.review(decision.getId(), hospitalId, null, false);
         when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId(), decision.getRequestId())).thenReturn(0L);
         decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.RETURNED);
         decision.getRelease().getBloodUnit().setRequest(null);
@@ -976,7 +1209,7 @@ class OPositiveReleaseAuthorityServiceTest {
     void whatTheSweepLeaves() {
         OPositiveReleaseDecision signed = release(request(), naming(doctor), null, false);
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        service.countersign(signed.getId(), hospitalId);
+        service.countersign(signed.getId(), hospitalId, false);
         when(roleValidator.getCurrentUserId()).thenReturn(issuer);
         OPositiveReleaseDecision orphan = release(request(), naming(doctor), null, false);
         roles.remove(director);
