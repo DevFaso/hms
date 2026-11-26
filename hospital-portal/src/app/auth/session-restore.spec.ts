@@ -119,6 +119,41 @@ describe('restoreSessionOnStartup — the session after a reload comes from the 
     expect(auth.getUserProfile()?.forceUsernameChange).toBeTrue();
   });
 
+  it('fails closed when the credential status cannot be read: the tab signs in again', async () => {
+    await bindTo('u1');
+    const done = run();
+    http.expectOne((r) => isRefresh(r.url)).flush({ accessToken: tokenFor('u1') });
+    await settle();
+    http
+      .expectOne((r) => r.url.endsWith('/auth/credentials/me'))
+      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+    await done;
+
+    http.expectNone((r) => r.url.endsWith('auth/session/bootstrap'));
+    http.expectNone((r) => r.url.endsWith('/api/auth/logout'));
+    expect(auth.getToken()).toBeNull();
+    expect(auth.getUserProfile()).toBeNull();
+    expect(auth.hasTabSession()).toBeFalse();
+  });
+
+  it('fails closed when the session bootstrap cannot be read', async () => {
+    await bindTo('u1');
+    const done = run();
+    http.expectOne((r) => isRefresh(r.url)).flush({ accessToken: tokenFor('u1') });
+    await settle();
+    http.expectOne((r) => r.url.endsWith('/auth/credentials/me')).flush({});
+    await settle();
+    http
+      .expectOne((r) => r.url.endsWith('auth/session/bootstrap'))
+      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+    await done;
+
+    http.expectNone((r) => r.url.endsWith('/api/auth/logout'));
+    expect(auth.getToken()).toBeNull();
+    expect(auth.getUserProfile()).toBeNull();
+    expect(auth.hasTabSession()).toBeFalse();
+  });
+
   it('a refused cookie clears the tab locally, without a server sign-out', async () => {
     await bindTo('u1');
     const done = run();

@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, firstValueFrom, of } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 import { AuthService } from './auth.service';
 import { SessionScopeService } from '../core/session-scope.service';
@@ -27,6 +27,9 @@ interface CredentialStatus {
  *   the account-setup guard still holds after the reload;
  * - runs the session bootstrap for the roles, the profile and the scope.
  *
+ * Any of these failing ends the restore locally (no server sign-out): routes
+ * open only after a complete restore, otherwise on the sign-in page.
+ *
  * The idle lock is untouched: a tab locked before the reload stays locked.
  * When the cookie is refused the tab's state is cleared locally and the guards
  * send the user to the sign-in page (with the page they asked for as
@@ -49,20 +52,18 @@ export function restoreSessionOnStartup(): Promise<void> {
         throw new Error('another account');
       }
       auth.setToken(tokens.accessToken);
-      const status = await firstValueFrom(
-        http
-          .get<CredentialStatus>('/auth/credentials/me')
-          .pipe(catchError(() => of<CredentialStatus>({}))),
-      );
-      // The bootstrap sets the roles and the profile (or, when it cannot be
-      // asked, the token's roles stand in), with the forced changes on it.
-      await firstValueFrom(
+      // Fail closed: without the credential status or the session bootstrap
+      // the forced changes and the scope are unknown, so the tab signs in again
+      // rather than opening routes without them.
+      const status = await firstValueFrom(http.get<CredentialStatus>('/auth/credentials/me'));
+      const session = await firstValueFrom(
         sessionScope.hydrate({
-          forcePasswordChange: status.forcePasswordChange,
-          forceUsernameChange: status.forceUsernameChange,
+          forcePasswordChange: status?.forcePasswordChange === true,
+          forceUsernameChange: status?.forceUsernameChange === true,
         }),
         { defaultValue: null },
       );
+      if (!session) throw new Error('session bootstrap unavailable');
     })
     .catch(() => auth.endLocalSession());
 }
