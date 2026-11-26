@@ -66,12 +66,19 @@ public class ObstetricAlertEscalationWorker {
     public static final String REFERENCE_TYPE = "OBSTETRIC_ALERT";
     public static final String NOTIFICATION_TYPE = "OBSTETRIC_ALERT";
     public static final String ESCALATION_TYPE = "OBSTETRIC_ALERT_ESCALATION";
+    /**
+     * QA D3862: an adult's NEWS2 is not an obstetric alert; its bell and its reminders carry their own types, so the
+     * notification list never labels it « Alerte obstétricale urgente ».
+     */
+    public static final String EARLY_WARNING_NOTIFICATION_TYPE = "EARLY_WARNING_ALERT";
+    public static final String EARLY_WARNING_ESCALATION_TYPE = "EARLY_WARNING_ALERT_ESCALATION";
 
     /** The physician of the first circle; policy rule 2: a newborn's danger sign always reaches one. */
     private static final String NEWBORN_PHYSICIAN_ROLE = "ROLE_DOCTOR";
     private static final String MIDWIFE_ROLE = "ROLE_MIDWIFE";
     private static final List<String> FIRST_NOTICE_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE);
-    private static final List<String> REMINDER_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE, "ROLE_NURSE");
+    private static final String NURSE_ROLE = "ROLE_NURSE";
+    private static final List<String> REMINDER_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE, NURSE_ROLE);
     private static final int TITLE_MAX = 500;
     static final String REMINDER_KEY = "obstetric.alert.escalation";
     /**
@@ -97,10 +104,31 @@ public class ObstetricAlertEscalationWorker {
     @Value("${hms.maternity.alert-escalation.max-rounds:3}")
     private short maxRounds = 3;
 
+    /**
+     * QA D3862: who stands for a patient's adult early warning (setter-injected; absent, every doctor and nurse of
+     * the hospital stands in). The nurse in charge and the covering doctor are the critical-result ladder's.
+     */
+    private com.example.hms.service.lab.CriticalResultRecipients clinicalRecipients;
+    private com.example.hms.repository.AdmissionRepository admissionRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setClinicalRecipients(com.example.hms.service.lab.CriticalResultRecipients clinicalRecipients) {
+        this.clinicalRecipients = clinicalRecipients;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAdmissionRepository(com.example.hms.repository.AdmissionRepository admissionRepository) {
+        this.admissionRepository = admissionRepository;
+    }
+
     /** First notice of one URGENT alert: the row, the team's notifications and in-basket items. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID raise(ObstetricAlertEscalationService.UrgentAlert alert) {
         LocalDateTime now = LocalDateTime.now(clock);
+        if (stillEscalating(alert)) {
+            // QA D3862: the alert this reading repeats is still reminding; a second item would only bury it.
+            return null;
+        }
         closeSupersededStillbirthEscalations(alert, now);
         ObstetricAlertEscalation row = escalationRepository.save(ObstetricAlertEscalation.builder()
             .hospitalId(alert.hospitalId())
@@ -115,11 +143,7 @@ public class ObstetricAlertEscalationWorker {
             .documentedByUserId(alert.documentedByUserId())
             .lastEscalationAt(now)
             .build());
-        Set<String> recipients = firstNoticeRecipients(alert.hospitalId(),
-            usernameOf(alert.documentedByUserId()));
-        if (ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(alert.sourceType())) {
-            recipients = withAPhysician(recipients, alert.hospitalId());
-        }
+        Set<String> recipients = firstCircle(alert);
         // QA D665: each reader gets the notice in her own language; the stored
         // staff-locale text only titles the in-basket item.
         Object[] args = {typeLabelArg(alert.sourceType(), alert.alertType(), alert.typeLabel()),
@@ -128,9 +152,11 @@ public class ObstetricAlertEscalationWorker {
             alertMessageArg(alert.alertMessageKey(), alert.alertMessageArgs(), alert.alertMessage())};
         // QA D3304: the maternal early-warning page already rang its circle for this reading; its first notice
         // here is the item to acknowledge only, never a second bell. Its reminders ring like every other alert's.
+        // QA D3862: a vital set's NEWS2 or newborn page rang part of the circle; only the others get a bell.
         boolean alreadyRang = ObstetricAlertEscalationService.SOURCE_VITAL_SIGN.equals(alert.sourceType());
         int reached = deliver(row, firstNoticeKey(alert.sourceType()), args, alert.notificationText(),
-            alert.patientName(), recipients, alreadyRang ? null : NOTIFICATION_TYPE);
+            alert.patientName(), recipients, alreadyRang ? null : noticeType(alert.sourceType(), false),
+            alert.alreadyNotified());
         if (reached == 0) {
             log.warn("Urgent obstetric alert {} at hospital {} has nobody on call and no other doctor or midwife to notify",
                 row.getId(), alert.hospitalId());
@@ -222,15 +248,123 @@ public class ObstetricAlertEscalationWorker {
         String documenter = usernameOf(row.getDocumentedByUserId());
         if (documenter != null) {
             // The documenter learns it is still unanswered; she cannot answer it herself.
-            notifyQuietly(DOCUMENTER_REMINDER_KEY, reminderArgs, documenter, ESCALATION_TYPE, row.getId());
+            notifyQuietly(DOCUMENTER_REMINDER_KEY, reminderArgs, documenter, noticeType(row.getSourceType(), true),
+                row.getId());
         }
-        deliver(row, REMINDER_KEY, reminderArgs, message, patientName, reminderRecipients(row.getHospitalId()),
-            ESCALATION_TYPE);
+        deliver(row, REMINDER_KEY, reminderArgs, message, patientName,
+            reminderCircle(row.getSourceType(), row.getHospitalId(), row.getPatientId()),
+            noticeType(row.getSourceType(), true), Set.of());
         if (next >= maxRounds) {
             log.warn("Urgent obstetric alert {} at hospital {} still unacknowledged after {} reminder(s); no more rounds",
                 row.getId(), row.getHospitalId(), next);
         }
         return true;
+    }
+
+    /**
+     * QA D3862: an alert of a vital set's early warning repeats while the first one is still reminding: the same
+     * patient, source and alert type, unacknowledged, rounds left. A reading after the cap, or after an
+     * acknowledgement, files a new one.
+     */
+    private boolean stillEscalating(ObstetricAlertEscalationService.UrgentAlert alert) {
+        return ObstetricAlertEscalationService.VITAL_SET_EARLY_WARNING_SOURCES.contains(alert.sourceType())
+            && escalationRepository.existsOpenForPatient(alert.hospitalId(), alert.patientId(), alert.sourceType(),
+                alert.alertType() == null ? "" : alert.alertType(), maxRounds);
+    }
+
+    /**
+     * Who takes the first notice of an alert.
+     * <ul>
+     *   <li>An adult NEWS2 (QA D3862): the people the vital set's page rang (the recorder, the stay's responsible
+     *       doctor, the visit's clinician), the nurse in charge, and the covering doctor whenever no other doctor
+     *       is among them. Never the obstetric team: an adult's NEWS2 is not a midwife's alert.</li>
+     *   <li>A newborn finding, from the assessment or from a vital set: the obstetric circle, always with a
+     *       physician (policy rule 2); a vital set's also keeps the people its page rang.</li>
+     *   <li>Every other source: the obstetric circle.</li>
+     * </ul>
+     */
+    Set<String> firstCircle(ObstetricAlertEscalationService.UrgentAlert alert) {
+        UUID hospitalId = alert.hospitalId();
+        String documenter = usernameOf(alert.documentedByUserId());
+        if (ObstetricAlertEscalationService.SOURCE_NEWS2.equals(alert.sourceType())) {
+            Set<String> circle = new LinkedHashSet<>(alert.alreadyNotified());
+            circle.addAll(nursesInCharge(hospitalId));
+            return withADoctor(circle, hospitalId, documenter);
+        }
+        Set<String> recipients = firstNoticeRecipients(hospitalId, documenter);
+        if (ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN.equals(alert.sourceType())) {
+            Set<String> widened = new LinkedHashSet<>(alert.alreadyNotified());
+            widened.addAll(recipients);
+            recipients = widened;
+        }
+        if (ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(alert.sourceType())
+                || ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN.equals(alert.sourceType())) {
+            recipients = withAPhysician(recipients, hospitalId);
+        }
+        return recipients;
+    }
+
+    /**
+     * Who each reminder goes to. An adult NEWS2 (QA D3862): the stay's responsible doctor, the covering doctor,
+     * and every doctor and nurse of the hospital, never its midwives. Every other source: the obstetric circle
+     * widened to the hospital's doctors, midwives and nurses.
+     */
+    Set<String> reminderCircle(String sourceType, UUID hospitalId, UUID patientId) {
+        if (!ObstetricAlertEscalationService.SOURCE_NEWS2.equals(sourceType)) {
+            return reminderRecipients(hospitalId);
+        }
+        Set<String> recipients = new LinkedHashSet<>();
+        responsibleDoctor(patientId, hospitalId).ifPresent(recipients::add);
+        if (clinicalRecipients != null) {
+            recipients.addAll(clinicalRecipients.cover(hospitalId, null));
+        }
+        recipients.addAll(doctors(hospitalId));
+        recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));
+        return recipients;
+    }
+
+    /** The nurse in charge (the critical-result ladder's: on duty now, else every nurse); every nurse without it. */
+    private Set<String> nursesInCharge(UUID hospitalId) {
+        if (clinicalRecipients != null) {
+            return clinicalRecipients.nursesInCharge(hospitalId, true);
+        }
+        return new LinkedHashSet<>(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));
+    }
+
+    /** The active holders of a doctor role at the hospital, whichever of the three it assigned. */
+    private Set<String> doctors(UUID hospitalId) {
+        Set<String> doctors = new LinkedHashSet<>();
+        for (String role : com.example.hms.service.lab.CriticalResultRecipients.DOCTOR_ROLES) {
+            doctors.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
+        }
+        return doctors;
+    }
+
+    /**
+     * QA D3862: an adult's HIGH NEWS2 always reaches a doctor other than the recorder. When nobody else in the
+     * circle holds a doctor role at the hospital (a triage set with no visit doctor, a stay with no attending),
+     * the covering doctor is added: on call, else on duty, else every doctor.
+     */
+    private Set<String> withADoctor(Set<String> circle, UUID hospitalId, String documenter) {
+        Set<String> doctorsLower = new LinkedHashSet<>();
+        doctors(hospitalId).forEach(u -> doctorsLower.add(u.toLowerCase(Locale.ROOT)));
+        boolean reached = circle.stream().anyMatch(u -> u != null && doctorsLower.contains(u.toLowerCase(Locale.ROOT))
+            && (documenter == null || !u.equalsIgnoreCase(documenter)));
+        if (reached) {
+            return circle;
+        }
+        Set<String> widened = new LinkedHashSet<>(circle);
+        widened.addAll(clinicalRecipients != null ? clinicalRecipients.cover(hospitalId, documenter) : doctors(hospitalId));
+        return widened;
+    }
+
+    /** The attending (else the admitting provider) of the patient's open stay at this hospital, when one is named. */
+    private Optional<String> responsibleDoctor(UUID patientId, UUID hospitalId) {
+        if (admissionRepository == null || patientId == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        return com.example.hms.service.vitals.News2EscalationService.responsiblePhysicianUsername(
+            admissionRepository, patientId, hospitalId);
     }
 
     /**
@@ -305,10 +439,11 @@ public class ObstetricAlertEscalationWorker {
      *
      * @param notificationType the bell notice's type; {@code null} files the in-basket items with no bell notice
      *                         (the page that raised the alert already rang these people: QA D3304)
+     * @param alreadyRang      the people the raising module already rang for this reading: an item, no bell (D3862)
      * @return how many people other than the documenter were notified
      */
     private int deliver(ObstetricAlertEscalation row, String messageKey, Object[] args, String message,
-                        String patientName, Set<String> usernames, String notificationType) {
+                        String patientName, Set<String> usernames, String notificationType, Set<String> alreadyRang) {
         String documenter = usernameOf(row.getDocumentedByUserId());
         List<String> others = usernames.stream()
             .filter(Objects::nonNull)
@@ -317,7 +452,10 @@ public class ObstetricAlertEscalationWorker {
         if (others.isEmpty()) {
             return 0;
         }
-        ring(others, messageKey, args, notificationType, row.getId());
+        Set<String> rangLower = new LinkedHashSet<>();
+        alreadyRang.stream().filter(Objects::nonNull).forEach(u -> rangLower.add(u.toLowerCase(Locale.ROOT)));
+        List<String> unrung = others.stream().filter(u -> !rangLower.contains(u.toLowerCase(Locale.ROOT))).toList();
+        ring(unrung, messageKey, args, notificationType, row.getId());
         List<String> lower = others.stream().map(u -> u.toLowerCase(Locale.ROOT)).toList();
         String text = message == null ? "" : message;
         String title = text.length() > TITLE_MAX ? text.substring(0, TITLE_MAX) : text;
@@ -352,6 +490,14 @@ public class ObstetricAlertEscalationWorker {
         return others.size();
     }
 
+    /** The bell's type: an adult's NEWS2 has its own (QA D3862); every other source is an obstetric alert. */
+    static String noticeType(String sourceType, boolean reminder) {
+        if (ObstetricAlertEscalationService.SOURCE_NEWS2.equals(sourceType)) {
+            return reminder ? EARLY_WARNING_ESCALATION_TYPE : EARLY_WARNING_NOTIFICATION_TYPE;
+        }
+        return reminder ? ESCALATION_TYPE : NOTIFICATION_TYPE;
+    }
+
     /** The bell notice of each recipient; none when {@code notificationType} is null (QA D3304). */
     private void ring(List<String> usernames, String messageKey, Object[] args, String notificationType, UUID escalationId) {
         if (notificationType == null) {
@@ -368,6 +514,10 @@ public class ObstetricAlertEscalationWorker {
             // every type this worker emits and require a label for each.
             if (ESCALATION_TYPE.equals(type)) {
                 notificationService.createNotification(messageKey, args, username, ESCALATION_TYPE);
+            } else if (EARLY_WARNING_ESCALATION_TYPE.equals(type)) {
+                notificationService.createNotification(messageKey, args, username, EARLY_WARNING_ESCALATION_TYPE);
+            } else if (EARLY_WARNING_NOTIFICATION_TYPE.equals(type)) {
+                notificationService.createNotification(messageKey, args, username, EARLY_WARNING_NOTIFICATION_TYPE);
             } else {
                 notificationService.createNotification(messageKey, args, username, NOTIFICATION_TYPE);
             }
@@ -388,7 +538,7 @@ public class ObstetricAlertEscalationWorker {
     }
 
     /** The source module's own notification key: the first notice reads as it always did. */
-    static String firstNoticeKey(String sourceType) {
+    public static String firstNoticeKey(String sourceType) {
         return typePrefix(sourceType) + "notification";
     }
 
@@ -401,8 +551,12 @@ public class ObstetricAlertEscalationWorker {
     }
 
     private static String typePrefix(String sourceType) {
-        if (ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(sourceType)) {
+        if (ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(sourceType)
+                || ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN.equals(sourceType)) {
             return "newborn.alert.";
+        }
+        if (ObstetricAlertEscalationService.SOURCE_NEWS2.equals(sourceType)) {
+            return "news2.alert.";
         }
         if (ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(sourceType)) {
             return "postpartum.alert.";

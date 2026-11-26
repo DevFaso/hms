@@ -39,6 +39,8 @@ import java.util.Optional;
  *       alert a corrected outcome took off the record (provisional, 2026-11-14).</li>
  *   <li>A newborn's Apgar alert stops once that baby is a confirmed stillbirth
  *       (provisional, 2026-11-14).</li>
+ *   <li>An adult HIGH NEWS2 (QA D3862): a later complete vital set of the
+ *       patient at the hospital scored below HIGH.</li>
  * </ul>
  * QA D658 (High, patient safety): a later record that did not measure a
  * value says nothing about it. Only the newest later record that re-measured
@@ -75,8 +77,43 @@ public class ObstetricAlertCurrency {
             case ObstetricAlertEscalationService.SOURCE_NEWBORN -> newbornResolved(row);
             case ObstetricAlertEscalationService.SOURCE_POSTPARTUM -> postpartumResolved(row);
             case ObstetricAlertEscalationService.SOURCE_DELIVERY -> deliveryResolved(row);
+            case ObstetricAlertEscalationService.SOURCE_NEWS2 -> news2Resolved(row);
             default -> false;
         };
+    }
+
+    /** QA D3862: the vital sets, read for a HIGH NEWS2 (setter-injected; absent, the alert stands). */
+    private com.example.hms.repository.PatientVitalSignRepository vitalSignRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setVitalSignRepository(com.example.hms.repository.PatientVitalSignRepository vitalSignRepository) {
+        this.vitalSignRepository = vitalSignRepository;
+    }
+
+    /**
+     * QA D3862: a HIGH NEWS2 no longer stands once a later vital set of the patient at the same hospital measured
+     * every NEWS2 parameter (a complete score: D658, a set that left one out says nothing) and scored below HIGH.
+     * The newest complete later set decides.
+     */
+    private boolean news2Resolved(ObstetricAlertEscalation row) {
+        if (vitalSignRepository == null) {
+            return false;
+        }
+        Optional<com.example.hms.model.PatientVitalSign> found = vitalSignRepository.findById(row.getSourceId());
+        if (found.isEmpty() || found.get().getRecordedAt() == null) {
+            return false;
+        }
+        com.example.hms.model.PatientVitalSign source = found.get();
+        return vitalSignRepository.findWithinRange(row.getPatientId(), row.getHospitalId(), source.getRecordedAt(), null,
+                org.springframework.data.domain.PageRequest.of(0, 50))
+            .stream()
+            .filter(later -> !Objects.equals(later.getId(), source.getId()))
+            .filter(later -> later.getRecordedAt() != null && later.getRecordedAt().isAfter(source.getRecordedAt()))
+            .map(com.example.hms.utility.NewsScoreCalculator::score)
+            .filter(com.example.hms.utility.NewsScoreCalculator.NewsScoreResult::complete)
+            .findFirst()
+            .map(score -> score.riskBand() != com.example.hms.utility.NewsScoreCalculator.RiskBand.HIGH)
+            .orElse(false);
     }
 
     private boolean partographResolved(ObstetricAlertEscalation row) {

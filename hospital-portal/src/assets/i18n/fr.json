@@ -7912,6 +7912,8 @@
         "NEWS2_ESCALATION": "Escalade NEWS2",
         "OBSTETRIC_ALERT": "Alerte obstétricale urgente",
         "OBSTETRIC_ALERT_ESCALATION": "Escalade d’alerte obstétricale urgente",
+        "EARLY_WARNING_ALERT": "Score d’alerte précoce : alerte urgente",
+        "EARLY_WARNING_ALERT_ESCALATION": "Score d’alerte précoce : rappel d’alerte urgente",
         "PHARMACY_EVENT": "Information de la pharmacie",
         "POSITIVE_CULTURE_RESULT": "Culture positive",
         "CORRECTED_CULTURE_RESULT": "Culture corrigée",

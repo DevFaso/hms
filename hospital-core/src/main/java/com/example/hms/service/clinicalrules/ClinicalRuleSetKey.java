@@ -52,7 +52,9 @@ public enum ClinicalRuleSetKey {
     TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
     CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB),
     /** QA D3940 (r77): the product dispensed is the prescribed one, or a substitute of the same ingredient and strength. */
-    DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING);
+    DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING),
+    /** QA D3862 (r77): who acknowledges an adult HIGH NEWS2, and who the reminders reach. */
+    NEWS2_ESCALATION(ClinicalRuleArea.VITALS);
 
     private final ClinicalRuleArea area;
 

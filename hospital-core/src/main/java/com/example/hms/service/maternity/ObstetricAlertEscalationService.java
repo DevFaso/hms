@@ -44,6 +44,19 @@ public class ObstetricAlertEscalationService {
      * while a partograph alert of the same severity on the same woman had both.
      */
     public static final String SOURCE_VITAL_SIGN = "VITAL_SIGN";
+    /**
+     * QA D3862 (r77, the D3304 sibling): an adult NEWS2 in the HIGH band from any vital set (ward, triage, the
+     * vitals API). It reached the responsible doctor as a bell notice only, with nothing to acknowledge and no
+     * reminder, while a maternal MEWS of the same severity had both. Its circle is the responsible doctor and the
+     * nurse in charge, never the obstetric team ({@code ObstetricAlertEscalationWorker}).
+     */
+    public static final String SOURCE_NEWS2 = "NEWS2_VITAL_SIGN";
+    /**
+     * QA D3862 (the class): an URGENT newborn finding on a vital set recorded outside the newborn assessment (the
+     * nurse station, triage, the vitals API). The same finding recorded in the assessment was an item to
+     * acknowledge; on a vital set it was a bell notice only.
+     */
+    public static final String SOURCE_NEWBORN_VITAL_SIGN = "NEWBORN_VITAL_SIGN";
 
     /**
      * Every source type an escalation row may carry. The column's CHECK
@@ -51,7 +64,16 @@ public class ObstetricAlertEscalationService {
      * ObstetricAlertEscalationSourceTypeGuardTest fails when the two drift.
      */
     public static final java.util.Set<String> SOURCE_TYPES = java.util.Set.of(
-        SOURCE_PARTOGRAPH, SOURCE_DELIVERY, SOURCE_NEWBORN, SOURCE_POSTPARTUM, SOURCE_TRANSFER, SOURCE_VITAL_SIGN);
+        SOURCE_PARTOGRAPH, SOURCE_DELIVERY, SOURCE_NEWBORN, SOURCE_POSTPARTUM, SOURCE_TRANSFER, SOURCE_VITAL_SIGN,
+        SOURCE_NEWS2, SOURCE_NEWBORN_VITAL_SIGN);
+
+    /**
+     * QA D3862: the early-warning sources of a vital set. Each is filed once per patient and alert type while an
+     * earlier one is still being escalated (a HIGH NEWS2 is re-measured every 15 minutes: one alert keeps reminding,
+     * a new item per set would bury it), and its first notice rings only the people the raising module did not.
+     */
+    public static final java.util.Set<String> VITAL_SET_EARLY_WARNING_SOURCES = java.util.Set.of(
+        SOURCE_NEWS2, SOURCE_NEWBORN_VITAL_SIGN);
 
     /**
      * One URGENT alert, as plain values: the callback runs after the commit,
@@ -60,11 +82,27 @@ public class ObstetricAlertEscalationService {
     public record UrgentAlert(UUID hospitalId, UUID patientId, String patientName,
                               String sourceType, UUID sourceId, String alertType, String typeLabel,
                               String alertMessage, UUID documentedByUserId, String notificationText,
-                              String alertMessageKey, java.util.List<Object> alertMessageArgs) {
+                              String alertMessageKey, java.util.List<Object> alertMessageArgs,
+                              java.util.Set<String> alreadyNotified) {
 
-        /** QA D665: the alert sentence as a key and its arguments, so each reader gets it in her language. */
+        /**
+         * QA D665: the alert sentence as a key and its arguments, so each reader gets it in her language.
+         * QA D3862: {@code alreadyNotified}, the people the raising module rang for this very reading (a vital set's
+         * page): they are in the first circle and get their item to acknowledge, never a second bell.
+         */
         public UrgentAlert {
             alertMessageArgs = alertMessageArgs == null ? null : java.util.List.copyOf(alertMessageArgs);
+            alreadyNotified = alreadyNotified == null ? java.util.Set.of()
+                : java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(alreadyNotified));
+        }
+
+        /** An alert whose raising module rang nobody before it. */
+        public UrgentAlert(UUID hospitalId, UUID patientId, String patientName,
+                           String sourceType, UUID sourceId, String alertType, String typeLabel,
+                           String alertMessage, UUID documentedByUserId, String notificationText,
+                           String alertMessageKey, java.util.List<Object> alertMessageArgs) {
+            this(hospitalId, patientId, patientName, sourceType, sourceId, alertType, typeLabel, alertMessage,
+                documentedByUserId, notificationText, alertMessageKey, alertMessageArgs, null);
         }
 
         /** An alert with no message key: its notices carry the stored staff-locale sentence. */
