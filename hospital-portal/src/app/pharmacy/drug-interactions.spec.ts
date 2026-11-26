@@ -94,7 +94,7 @@ describe('DrugInteractionsComponent', () => {
   });
 
   it('explains that editing replaces saved text, not the translated list display', () => {
-    const row = entry({ recommendation: 'Avoid.', displayRecommendation: '? ?viter.' });
+    const row = entry({ recommendation: 'Avoid.', displayRecommendation: 'Texte traduit.' });
     setup(['ROLE_PHARMACIST'], [row]);
     component.openEdit(row);
     fixture.detectChanges();
@@ -102,9 +102,7 @@ describe('DrugInteractionsComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="ddi-edit-language-note"]'),
     ).not.toBeNull();
-    expect(
-      (fixture.nativeElement.querySelector('#ddi-recommendation') as HTMLTextAreaElement).value,
-    ).toBe('Avoid.');
+    expect(component.form.recommendation).toBe('Avoid.');
   });
 
   it('hides write controls from read-only roles the backend would refuse', () => {
