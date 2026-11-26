@@ -123,7 +123,7 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
-    @Column(name = "unit_cost", precision = 12, scale = 4)
+    @Column(name = "unit_cost", precision = 14, scale = 4)
     private BigDecimal unitCost;
 
     @Column(name = "receipt_date")

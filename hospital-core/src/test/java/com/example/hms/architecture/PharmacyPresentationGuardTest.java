@@ -119,4 +119,19 @@ class PharmacyPresentationGuardTest {
             .contains("V399__stock_count_revisions.sql");
     }
 
+    @Test
+    void newReceiptAndCountMessagesPreserveFrenchAndSpanishAccents() throws Exception {
+        for (String locale : new String[]{"fr", "es"}) {
+            Properties messages = new Properties();
+            try (var reader = Files.newBufferedReader(Path.of("src/main/resources/i18n/messages-pharmacy_" + locale + ".properties"))) {
+                messages.load(reader);
+            }
+            for (String key : java.util.List.of("stockCount.otherConfirmerRequired", "stockCount.alreadyReconciled",
+                    "stockCount.lotCountEvidenceRequired", "stockCount.balanceAdjustmentReason",
+                    "pharmacy.inventory.lot.costMismatch", "pharmacy.inventory.lot.partialTopUp")) {
+                assertThat(messages.getProperty(key)).as(locale + " " + key).isNotBlank().doesNotContain("?");
+            }
+        }
+    }
+
 }
