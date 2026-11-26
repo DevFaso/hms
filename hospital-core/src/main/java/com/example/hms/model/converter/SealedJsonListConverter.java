@@ -45,6 +45,9 @@ public class SealedJsonListConverter implements AttributeConverter<List<Object>,
         }
         try {
             JsonNode node = JSON.readTree(dbData);
+            if (node.isNull()) {
+                return null;
+            }
             if (node.isArray()) {
                 return JSON.treeToValue(node, List.class);
             }
