@@ -247,7 +247,12 @@ export function registerStaffStateLayoutChecks(): void {
         await expect(page.locator('tbody tr')).toHaveCount(2);
         await expect(page.locator('[data-test="impersonate-demo.protected"]')).toHaveCount(0);
         await page.locator('[data-test="impersonate-demo.ordinary"]').click();
-        await expect(page.locator('[data-test="impersonate-modal"]')).toBeVisible();
+        const dialog = page
+          .getByRole('dialog')
+          .filter({ has: page.locator('#impersonate-reason') });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText('Synthetic Ordinary');
+        await expect(dialog.locator('#impersonate-reason')).toBeVisible();
         expect(writes).toEqual([]);
         await testInfo.attach(`support-eligibility-${width}`, {
           body: await page.screenshot({ animations: 'disabled' }),
