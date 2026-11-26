@@ -130,6 +130,32 @@ describe('LabOutboxComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('LAB_OUTBOX.HOSPITAL_REQUIRED');
   });
 
+  it('ignores a dismissed or superseded hospital detail response and error', () => {
+    const first = message({ id: 'a', labOrderId: undefined, orderingHospitalId: 'h1' });
+    const second = message({ id: 'b', labOrderId: undefined, orderingHospitalId: 'h2' });
+    setup(['ROLE_SUPER_ADMIN'], pageOf([first, second]));
+    const late = new Subject<OutboxMessage>();
+    const current = new Subject<OutboxMessage>();
+    outboxService.getMessage.and.returnValues(late, current);
+    component.openDetail(first);
+    component.closeDetail();
+    component.openDetail(second);
+    current.next(second);
+    current.complete();
+    late.next(first);
+    late.complete();
+    expect(component.detail()?.message.id).toBe('b');
+
+    const lateError = new Subject<OutboxMessage>();
+    outboxService.getMessage.and.returnValue(lateError);
+    component.openDetail(first);
+    component.closeDetail();
+    toast.error.calls.reset();
+    lateError.error(new Error('late failure'));
+    expect(component.detail()).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('retries a global row with its own hospital', () => {
     const row = message({ status: 'ERROR', orderingHospitalId: 'h2' });
     setup(['ROLE_SUPER_ADMIN'], pageOf([row]));

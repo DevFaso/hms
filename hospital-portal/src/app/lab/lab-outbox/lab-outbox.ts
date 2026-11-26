@@ -81,6 +81,7 @@ export class LabOutboxComponent implements OnInit {
 
   detail = signal<{ message: OutboxMessage; siblings: OutboxMessage[] } | null>(null);
   detailLoading = signal(false);
+  private detailRequest = 0;
 
   /** Display-only reading of the open message; null = show the raw text only. */
   detailSummary = computed(() => {
@@ -174,8 +175,11 @@ export class LabOutboxComponent implements OnInit {
   }
 
   openDetail(row: OutboxMessage): void {
+    const request = ++this.detailRequest;
     const global = this.roleContext.isSuperAdmin() && this.roleContext.globalView();
     if (global && !row.orderingHospitalId) {
+      this.detail.set(null);
+      this.detailLoading.set(false);
       this.toast.error(this.translate.instant('LAB_OUTBOX.HOSPITAL_REQUIRED'));
       return;
     }
@@ -194,10 +198,12 @@ export class LabOutboxComponent implements OnInit {
         : of([] as OutboxMessage[]),
     }).subscribe({
       next: ({ message, siblings }) => {
+        if (request !== this.detailRequest) return;
         this.detail.set({ message, siblings: siblings.filter((s) => s.id !== message.id) });
         this.detailLoading.set(false);
       },
       error: (err) => {
+        if (request !== this.detailRequest) return;
         console.error('Failed to load outbox message', err);
         this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
         this.detailLoading.set(false);
@@ -221,6 +227,7 @@ export class LabOutboxComponent implements OnInit {
   }
 
   closeDetail(): void {
+    this.detailRequest++;
     this.detail.set(null);
     this.detailLoading.set(false);
   }
