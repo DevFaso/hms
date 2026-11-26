@@ -68,6 +68,7 @@ export default defineConfig({
         /smoke\.spec\.ts/,
         /mobile\.spec\.ts/,
         /identity-decisions\.spec\.ts/,
+        /wcag-scope\.spec\.ts/,
       ],
     },
 

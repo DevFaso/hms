@@ -101,3 +101,48 @@ test('lazy navigation keeps the open page and shows a slow-connection state', as
   await expect(page.getByTestId('route-loading')).toHaveCount(0);
   await expect(page.locator('#main-content h1').first()).toBeVisible();
 });
+
+test('D1636: the sign-in form never shows without its words while the language file is late', async ({
+  page,
+}) => {
+  // r44: on Slow 3G the form appeared at 24 s with no label, no button caption
+  // and « · · · » placeholders, because fr.json (180 KB) arrived after it.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/assets/i18n/*.json', async (route) => {
+    await held;
+    await route.continue();
+  });
+  const wordless = () =>
+    page.evaluate(() => {
+      const shown = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
+      return (
+        Array.from(
+          document.querySelectorAll('app-root label, app-root button, app-root h1, app-root a'),
+        )
+          .filter(shown)
+          .filter((el) => !el.closest('#boot-screen'))
+          // An icon-only control is worded by its aria-label.
+          .map((el) => (el.getAttribute('aria-label') ?? el.textContent ?? '').trim())
+          .filter((text) => text === '' || /^[A-Z_]+(\.[A-Z0-9_]+)+$/.test(text))
+      );
+    });
+  try {
+    await page.goto('/login', { waitUntil: 'load' });
+    // Loading feedback stays up for as long as the words are missing.
+    for (let sample = 0; sample < 6; sample++) {
+      expect(await wordless(), 'no empty or raw-key label, caption or title').toEqual([]);
+      await expect(
+        page.locator('#boot-screen, [data-testid="route-loading"]').first(),
+      ).toBeVisible();
+      await page.waitForTimeout(500);
+    }
+  } finally {
+    release();
+  }
+  await expect(page.locator('label[for="username"]')).toContainText("Nom d'utilisateur");
+  await expect(page.locator('#boot-screen')).toHaveCount(0);
+  expect(await wordless()).toEqual([]);
+});

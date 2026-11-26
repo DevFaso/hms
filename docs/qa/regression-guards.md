@@ -1213,3 +1213,11 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | Guard | Class it fails on | Allowlist |
 |---|---|---|
 | `architecture/MarSupplyGuardTest` (new) | D3941: an eMAR read that filters on what the pharmacy supplied. The MAR's statuses must be every status that stands (`MarOrderStanding.stands`, the dose gate's own rule), the supply statuses included; the ward query must be asked for them and its text must not name a supply status or a dispense; `NurseTaskServiceImpl` keeps no status list of its own and its MAR reads (list, tiles, workboard, `onWardMar`) name no supply status and read no dispense. What was supplied is said on the row (`MarSupply`), never used to hide it. | none |
+
+## Guards added by go-live P5 (feat/a11y-wcag-scope)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| portal `e2e/wcag-scope.spec.ts` (new, `npm run e2e:wcag-scope`, production bundle, CI job `a11y-smoke`) | A page of the ten main journeys ([wcag-scope.md](wcag-scope.md) §3), as its working role, at 390 / 768 / 1440 px: a serious or critical WCAG 2.1 A/AA violation; no `main`, a duplicated or unnamed-twin landmark, content outside a landmark, no `h1`; a touch target under 24 px at 390 px; sideways page scroll; a first Tab stop that is not the skip link, a Tab stop that is off screen, has no focus indicator or a positive `tabindex`; an entry dialog that is unnamed, not modal, lets Tab out or does not give focus back on Escape. | `/account-setup`: `landmark-one-main` and `region` are reported, not blocking, until #1345 merges (`pending` in `e2e/helpers/wcag-journey-pages.ts`) |
+| portal `scripts/wcag-journey-scope.test.mjs` (new, `npm run test:scripts`) | The scope document and the scanned page list drifting apart; a scope page scanned as a role its route does not admit; a rule switched off in the suite; a page routed outside the shell without its own `<main>`; the closed phone drawer moved off screen without `visibility: hidden` (its menu links kept taking focus invisibly). | `account-setup` (same reason, shrinks only) |
+| portal `e2e/slow-network.spec.ts` (widened) | D1636, second half: the sign-in form shown with empty or raw-key labels while the language file is still loading. | none |
