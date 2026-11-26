@@ -177,6 +177,22 @@ class StockTransferPostgresIT {
     }
 
     @Test
+    void anUnreferencedReturnCannotDuplicateAPairedTransfer() {
+        service.recordTransaction(transfer("10"));
+        assertThat(ledger.hasPairedTransfer(sourceItemId, false, null)).isTrue();
+        long before = ledger.count();
+        var returned = StockTransactionRequestDTO.builder().inventoryItemId(sourceItemId).stockLotId(sourceLotId)
+            .transactionType(StockTransactionType.RETURN).quantity(BigDecimal.TEN)
+            .reason("Synthetic unreferenced return").stockCondition(ReturnedStockCondition.INTACT).build();
+        assertThatThrownBy(() -> service.recordTransaction(returned))
+            .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.transfer.referenceRequired");
+        assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
+        assertThat(ledger.count()).isEqualTo(before);
+        var destination = items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId).orElseThrow();
+        assertThat(destination.getQuantityOnHand()).isEqualByComparingTo("10");
+    }
+
+    @Test
     void aBusyLotRefusesTheTransferPromptlyAndLeavesNoDestinationCredit() throws Exception {
         long before = ledger.count();
         var locked = new java.util.concurrent.CountDownLatch(1);

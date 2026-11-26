@@ -33,8 +33,13 @@ public class StockTransferBooking {
     private final StockLotRepository lots;
     private final StockTransactionRepository transactions;
     private final EntityManager entityManager;
+    private final FefoLotPolicy fefoLotPolicy;
 
-    public record Route(Pharmacy destination, StockTransaction originalReceipt) { }
+    public record Route(Pharmacy destination, StockTransaction originalReceipt, String fefoOverrideReason) {
+        public Route(Pharmacy destination, StockTransaction originalReceipt) {
+            this(destination, originalReceipt, null);
+        }
+    }
 
     /** Serialise store pairs in the same order before any stock row is changed. */
     public Route prepare(StockTransactionRequestDTO request, InventoryItem source) {
@@ -47,8 +52,8 @@ public class StockTransferBooking {
                 }
             }
             return route;
-        } catch (org.springframework.dao.PessimisticLockingFailureException busy) {
-            throw refused("stockTransaction.transfer.stockBusy", busy);
+        } catch (org.springframework.dao.DataAccessException busy) {
+            throw lockFailure(busy);
         }
     }
 
@@ -71,7 +76,7 @@ public class StockTransferBooking {
                 request.getReferenceId(), StockTransactionType.RECEIPT).orElse(null);
             if (receipt != null) {
                 Pharmacy destination = receipt.getInventoryItem().getPharmacy();
-                return new Route(lockStores(source.getPharmacy(), destination.getId()), receipt);
+                return new Route(lockStores(source.getPharmacy(), destination.getId()), receipt, request.getFefoOverrideReason());
             }
         }
         return null;
@@ -97,24 +102,25 @@ public class StockTransferBooking {
     public void bookCounterpart(Route route, StockTransaction movement) {
         try {
             book(route, movement);
-        } catch (org.springframework.dao.PessimisticLockingFailureException busy) {
-            throw refused("stockTransaction.transfer.stockBusy", busy);
+        } catch (org.springframework.dao.DataAccessException busy) {
+            throw lockFailure(busy);
         }
     }
 
     private void book(Route route, StockTransaction movement) {
         if (movement.getTransactionType() == StockTransactionType.TRANSFER) {
             if (route == null) {
-                throw new IllegalStateException("Transfer route must be prepared before stock changes");
+                throw refused("stockTransaction.transfer.destinationRequired");
             }
             receive(route.destination(), movement);
         } else if (route != null && route.originalReceipt() != null) {
-            takeBack(route.originalReceipt(), movement);
+            takeBack(route.originalReceipt(), movement, route.fefoOverrideReason());
         }
     }
 
     private void receive(Pharmacy destination, StockTransaction source) {
         InventoryItem item = destinationItem(destination, source.getInventoryItem());
+        WholeUnitQuantity.require(item, source.getQuantity(), WholeUnitQuantity.DEFAULT_KEY);
         StockLot lot = destinationLot(item, source);
         if (items.incrementOnHand(item.getId(), source.getQuantity(), LocalDateTime.now()) != 1) {
             throw refused("stockTransaction.transfer.destinationUnavailable");
@@ -129,8 +135,8 @@ public class StockTransferBooking {
             receipt.setUnitCost(lot.getUnitCost());
             receipt.setSupplier(lot.getSupplier());
         }
-        transactions.save(receipt);
         entityManager.refresh(item);
+        transactions.save(receipt);
     }
 
     private InventoryItem destinationItem(Pharmacy destination, InventoryItem source) {
@@ -165,7 +171,7 @@ public class StockTransferBooking {
             }
             return null;
         }
-        if (original.getExpiryDate().isBefore(LocalDate.now())) {
+        if (original.getExpiryDate() == null || !original.getExpiryDate().isAfter(LocalDate.now())) {
             throw refused("stockTransaction.transfer.expiredLot");
         }
         if (lots.existsOtherExpiryForLot(item.getId(), original.getLotNumber(), original.getExpiryDate())) {
@@ -192,7 +198,7 @@ public class StockTransferBooking {
             .receivedByUser(source.getPerformedByUser()).build());
     }
 
-    private void takeBack(StockTransaction receipt, StockTransaction returned) {
+    private void takeBack(StockTransaction receipt, StockTransaction returned, String fefoOverrideReason) {
         BigDecimal quantity = returned.getQuantity();
         LocalDateTime now = LocalDateTime.now();
         StockLot lot = receipt.getStockLot();
@@ -201,21 +207,41 @@ public class StockTransferBooking {
         if (lot != null) {
             lockLot(lot.getId());
         }
+        InventoryItem source = returned.getInventoryItem();
+        if (!Objects.equals(item.getUnit(), source.getUnit())
+                || !Objects.equals(item.getUnitsPerPack(), source.getUnitsPerPack())) {
+            throw refused("stockTransaction.transfer.unitsDiffer");
+        }
+        WholeUnitQuantity.require(item, quantity, WholeUnitQuantity.DEFAULT_KEY);
+        String override = lot == null ? null : fefoLotPolicy.requireFefoOrReason(lot, fefoOverrideReason);
         if (lot != null && lots.decrementRemaining(lot.getId(), quantity, now) != 1) {
             throw refused("stockTransaction.transfer.destinationInsufficient");
         }
         if (items.decrementOnHand(item.getId(), quantity, now) != 1) {
             throw refused("stockTransaction.transfer.destinationInsufficient");
         }
-        // A signed adjustment records the receiving store's return without inventing another outbound transfer.
-        transactions.save(StockTransaction.builder().inventoryItem(item).stockLot(lot)
-            .transactionType(StockTransactionType.ADJUSTMENT).quantity(quantity.negate())
-            .referenceId(returned.getId()).reason(returned.getReason()).performedByUser(returned.getPerformedByUser())
-            .witnessedByUser(returned.getWitnessedByUser()).build());
         entityManager.refresh(item);
         if (lot != null) {
             entityManager.refresh(lot);
         }
+        // Keep an explicit FEFO override on the receiving store's ledger too.
+        String reason = override == null ? returned.getReason() : returned.getReason() + " | FEFO: " + override;
+        if (reason != null && reason.length() > 500) {
+            throw new FieldBusinessException("fefoOverrideReason", "pharmacy.fefo.reasonTooLong",
+                String.valueOf(Math.max(0, 500 - returned.getReason().length() - " | FEFO: ".length())));
+        }
+        // A signed adjustment records the receiving store's return without inventing another outbound transfer.
+        transactions.save(StockTransaction.builder().inventoryItem(item).stockLot(lot)
+            .transactionType(StockTransactionType.ADJUSTMENT).quantity(quantity.negate())
+            .referenceId(returned.getId()).reason(reason).performedByUser(returned.getPerformedByUser())
+            .witnessedByUser(returned.getWitnessedByUser()).build());
+    }
+
+    private static RuntimeException lockFailure(org.springframework.dao.DataAccessException failure) {
+        if (StockRowLocks.isContention(failure)) {
+            return refused("stockTransaction.transfer.stockBusy", failure);
+        }
+        return failure;
     }
 
     private InventoryItem lockItem(UUID id) {

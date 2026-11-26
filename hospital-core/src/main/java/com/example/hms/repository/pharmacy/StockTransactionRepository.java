@@ -17,6 +17,15 @@ import java.util.UUID;
 @Repository
 public interface StockTransactionRepository extends JpaRepository<StockTransaction, UUID> {
 
+    /** An unreferenced return cannot reverse a paired transfer without debiting its receiving store. */
+    @Query("SELECT CASE WHEN COUNT(t) > 0 THEN true ELSE false END FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id = :itemId AND (:withLot = false OR t.stockLot.id = :lotId) "
+         + "AND t.transactionType = com.example.hms.enums.StockTransactionType.TRANSFER "
+         + "AND EXISTS (SELECT r.id FROM StockTransaction r WHERE r.referenceId = t.id "
+         + "AND r.transactionType = com.example.hms.enums.StockTransactionType.RECEIPT)")
+    boolean hasPairedTransfer(@Param("itemId") UUID itemId, @Param("withLot") boolean withLot,
+                              @Param("lotId") UUID lotId);
+
     /** The counterpart receipt of one atomic inter-store transfer. */
     java.util.Optional<StockTransaction> findByReferenceIdAndTransactionType(UUID referenceId,
                                                                             StockTransactionType transactionType);

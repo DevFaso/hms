@@ -576,6 +576,10 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         inventoryItemRepository.lockById(item.getId());
+        if (stockTransactionRepository.hasPairedTransfer(item.getId(), lot != null, lot == null ? null : lot.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("referenceId",
+                "stockTransaction.transfer.referenceRequired");
+        }
         BigDecimal transferred;
         BigDecimal returned;
         if (lot != null) {

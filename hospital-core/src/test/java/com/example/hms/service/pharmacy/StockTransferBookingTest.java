@@ -29,6 +29,7 @@ class StockTransferBookingTest {
     @Mock StockLotRepository lots;
     @Mock StockTransactionRepository transactions;
     @Mock EntityManager entityManager;
+    @Mock FefoLotPolicy fefoLotPolicy;
     @InjectMocks StockTransferBooking booking;
     private Pharmacy source;
     private Pharmacy destination;
@@ -167,6 +168,54 @@ class StockTransferBookingTest {
             .extracting("messageKey").isEqualTo("stockTransaction.transfer.stockBusy");
         verifyNoInteractions(lots, transactions);
         verify(items, never()).decrementOnHand(any(), any(), any());
+    }
+
+    @Test
+    void countedDestinationUnitsCannotReceiveAFraction() {
+        outgoing.setQuantity(new BigDecimal("1.5"));
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(destinationItem));
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing))
+            .extracting("messageKey").isEqualTo(WholeUnitQuantity.DEFAULT_KEY);
+        verify(items, never()).incrementOnHand(any(), any(), any());
+        verifyNoInteractions(lots, transactions);
+    }
+
+    @Test
+    void aTransferReturnAsksTheReceivingLotsFefoRuleBeforeDebitingIt() {
+        StockLot destinationLot = StockLot.builder().inventoryItem(destinationItem).build();
+        destinationLot.setId(UUID.randomUUID());
+        when(lots.tryLockById(destinationLot.getId())).thenReturn(Optional.of(destinationLot));
+        var receipt = StockTransaction.builder().inventoryItem(destinationItem).stockLot(destinationLot).build();
+        var returned = StockTransaction.builder().inventoryItem(sourceItem).transactionType(StockTransactionType.RETURN)
+            .quantity(BigDecimal.ONE).build();
+        when(fefoLotPolicy.requireFefoOrReason(destinationLot, null))
+            .thenThrow(new com.example.hms.exception.FieldBusinessException("fefoOverrideReason", "pharmacy.fefo.reasonRequired"));
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, receipt), returned))
+            .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+        verify(lots, never()).decrementRemaining(any(), any(), any());
+        verify(items, never()).decrementOnHand(any(), any(), any());
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void aTransferCannotCreditALotExpiringToday() {
+        sourceLot.setExpiryDate(LocalDate.now());
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(destinationItem));
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing))
+            .extracting("messageKey").isEqualTo("stockTransaction.transfer.expiredLot");
+        verifyNoInteractions(lots, transactions);
+    }
+
+    @Test
+    void aReturnRefusesChangedDestinationUnitsBeforeEitherQuantityIsChanged() {
+        destinationItem.setUnit("capsule");
+        var receipt = StockTransaction.builder().inventoryItem(destinationItem).build();
+        var returned = StockTransaction.builder().inventoryItem(sourceItem).transactionType(StockTransactionType.RETURN)
+            .quantity(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, receipt), returned))
+            .extracting("messageKey").isEqualTo("stockTransaction.transfer.unitsDiffer");
+        verify(items, never()).decrementOnHand(any(), any(), any());
+        verifyNoInteractions(lots, transactions);
     }
 
     @Test

@@ -58,17 +58,19 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
   it('D3943: lists every other active store of the source hospital, including ward stores', () => {
     const c = create();
     c.selectedPharmacyId = 'source';
+    const timestamps = { createdAt: '2026-11-25T00:00:00', updatedAt: '2026-11-25T00:00:00' };
     c.pharmacies.set([
-      { id: 'source', hospitalId: 'A', name: 'Central', active: true },
+      { ...timestamps, id: 'source', hospitalId: 'A', name: 'Central', active: true },
       {
+        ...timestamps,
         id: 'ward',
         hospitalId: 'A',
         name: 'Ward store',
         active: true,
         pharmacyType: 'HOSPITAL_DISPENSARY',
       },
-      { id: 'foreign', hospitalId: 'B', name: 'Other hospital', active: true },
-      { id: 'closed', hospitalId: 'A', name: 'Closed', active: false },
+      { ...timestamps, id: 'foreign', hospitalId: 'B', name: 'Other hospital', active: true },
+      { ...timestamps, id: 'closed', hospitalId: 'A', name: 'Closed', active: false },
     ]);
     expect(c.transferDestinationOptions().map((p) => p.id)).toEqual(['ward']);
     c.selectedPharmacyId = 'missing';

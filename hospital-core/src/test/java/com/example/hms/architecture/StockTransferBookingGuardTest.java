@@ -11,14 +11,15 @@ class StockTransferBookingGuardTest {
     void everyTransferWriterMustBookItsCounterpartInTheSameTransaction() throws Exception {
         Path root = Path.of("src/main/java");
         Set<String> owners = Set.of("StockTransactionServiceImpl.java", "StockTransferBooking.java",
-            "PharmacyReconciliationService.java", "PharmacyConsumptionService.java"); // reports only read the ledger
+            "PharmacyReconciliationService.java", "PharmacyConsumptionService.java", "StockTransactionRepository.java"); // reports and repository queries only read the ledger
         try (var paths = Files.walk(root)) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = Files.readString(path);
                 if (source.contains("StockTransactionType.TRANSFER") || source.contains("case TRANSFER")) {
                     assertThat(owners).as("new transfer path %s must use the paired booking", path)
                         .contains(path.getFileName().toString());
-                    if (path.getFileName().toString().equals("PharmacyConsumptionService.java")) {
+                    if (Set.of("PharmacyConsumptionService.java", "StockTransactionRepository.java")
+                            .contains(path.getFileName().toString())) {
                         assertThat(source).doesNotContain(".save(", ".saveAndFlush(", ".delete(", "executeUpdate(");
                     }
                 }
@@ -29,9 +30,11 @@ class StockTransferBookingGuardTest {
             "transferBooking.bookCounterpart(transferRoute, saved)");
         String counterpart = Files.readString(root.resolve("com/example/hms/service/pharmacy/StockTransferBooking.java"));
         assertThat(counterpart).contains("Propagation.MANDATORY", "receive(route.destination(), movement)",
-            "takeBack(route.originalReceipt(), movement)");
+            "takeBack(route.originalReceipt(), movement, route.fefoOverrideReason())");
         assertThat(counterpart).contains("lockItem(source.getId())", "lockLot(request.getStockLotId())",
-            "PessimisticLockingFailureException", "stockTransaction.transfer.stockBusy");
+            "StockRowLocks.isContention(failure)", "stockTransaction.transfer.stockBusy");
+        assertThat(Files.readString(root.resolve("com/example/hms/service/pharmacy/StockRowLocks.java")))
+            .contains("PessimisticLockingFailureException", "\"55P03\"");
         for (String repository : java.util.List.of("InventoryItemRepository.java", "StockLotRepository.java")) {
             assertThat(Files.readString(root.resolve("com/example/hms/repository/pharmacy/" + repository)))
                 .contains("FOR UPDATE NOWAIT");
