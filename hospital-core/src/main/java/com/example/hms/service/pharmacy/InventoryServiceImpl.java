@@ -698,7 +698,7 @@ public class InventoryServiceImpl implements InventoryService {
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
 
-            pushReorderAlert(item, locale);
+            pushReorderAlert(item);
 
             logAudit(AuditEventType.STOCK_REORDER_ALERT,
                 messageSource.getMessage("inventory.lowStock.notification", auditArgs, Locale.ENGLISH),
@@ -709,7 +709,7 @@ public class InventoryServiceImpl implements InventoryService {
     // ── Private helpers ──────────────────────────────────────────────────
 
     /** One item's failed delivery must not stop the remaining items. */
-    private void pushReorderAlert(InventoryItem item, Locale locale) {
+    private void pushReorderAlert(InventoryItem item) {
         try {
             lowStockAlertDelivery.deliver(item.getId());
         } catch (Exception e) {
