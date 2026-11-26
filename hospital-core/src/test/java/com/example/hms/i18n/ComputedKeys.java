@@ -345,6 +345,11 @@ final class ComputedKeys {
             new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
             new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // V380: the notices of an O positive release; the keys are the literals set on the item (setTitleKey / setBodyKey).
+        r.put("com/example/hms/service/transfusion/OPositiveReleaseNotices.java|titleKey",
+            new Open("read back from the item: the REVIEW, COUNTERSIGN, FOLLOW_UP and OVERDUE title keys, all literal constants"));
+        r.put("com/example/hms/service/transfusion/OPositiveReleaseNotices.java|bodyKey",
+            new Open("read back from the item: the REVIEW (four), COUNTERSIGN, FOLLOW_UP and OVERDUE body keys, all literal constants"));
         // QA D3351: what a routine issue to an allo-immunised patient still lacks (PositiveAntibodyScreenPolicy.Missing).
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|lack.messageKey()",
             values("transfusion.antibody.", List.of("workupRequired", "antiglobulinRequired", "antigenNegativeRequired",
@@ -371,6 +376,17 @@ final class ComputedKeys {
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|TYPE_PREFIX + finding.type().name()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
+        // QA D3862: an URGENT newborn finding on a vital set, filed for acknowledgement with its own code and type.
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|String messageKey = ALERT_MSG_PREFIX + finding.code()",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|TYPE_PREFIX + finding.type().name() #2",
+            "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
+        // QA D3862: the in-basket item of a HIGH NEWS2.
+        r.put("com/example/hms/service/vitals/News2EscalationService.java|String messageKey = ITEM_MESSAGE_PREFIX + ALERT_TYPE_HIGH",
+            values("news2.alert.msg.", List.of("NEWS2_HIGH")));
+        // QA D3865: the severity of a known allergy printed on a prescription.
+        r.put("com/example/hms/service/pharmacy/PrescriptionAllergyNotice.java|KEY_SEVERITY_PREFIX + allergy.getSeverity().name()",
+            enumValues("cds.severity.", AllergySeverity.class));
         r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.titleKey()",
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
         r.put("com/example/hms/service/impl/OrderReviewAfterCommit.java|notice.bodyKey()",
@@ -551,11 +567,14 @@ final class ComputedKeys {
         r.put("NewbornAssessmentServiceImpl.java|newborn.alert.type.", enumValues("newborn.alert.type.", NewbornAlertType.class));
         r.put("PostpartumCareServiceImpl.java|postpartum.alert.type.",
             enumValues("postpartum.alert.type.", PostpartumAlertType.class));
-        // typePrefix(sourceType) + "type." + alertType: the three obstetric sources and their type enums.
+        // typePrefix(sourceType) + "type." + alertType: the obstetric sources and their type enums, the maternal
+        // early warning's levels (D3304) and the adult NEWS2's high band (D3862).
         r.put("ObstetricAlertEscalationWorker.java|type.", union(
             enumValues("labor.alert.type.", LaborAlertType.class),
             enumValues("newborn.alert.type.", NewbornAlertType.class),
-            enumValues("postpartum.alert.type.", PostpartumAlertType.class)));
+            enumValues("postpartum.alert.type.", PostpartumAlertType.class),
+            values("maternalWarning.alert.type.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")),
+            values("news2.alert.type.", List.of("NEWS2_HIGH"))));
         r.put("MedicalCertificateServiceImpl.java|medicalCertificate.title.",
             enumValues("medicalCertificate.title.", MedicalCertificateType.class));
         r.put("PdfInvoiceService.java|pdf.invoice.adjustment.",

@@ -65,6 +65,9 @@ class AllergyActiveReadersGuardTest {
             new Reader("alreadyCharted(known", "QA D2220: an import's dedupe over EVERY row on purpose, so a deactivated or entered-in-error allergy is never re-created from old text; shows nothing to a reader")),
         Map.entry("service/AfterVisitSummarySections.java",
             new Reader("filter(PatientAllergy::isActive)", "the after-visit summary's known allergies: active rows only")),
+        // QA D3865: the known allergies printed on a prescription (ordonnance, printed copy, partner offer).
+        Map.entry("service/pharmacy/PrescriptionAllergyNotice.java",
+            new Reader("filter(PatientAllergy::isActive)", "the known allergies printed on a prescription: active rows only")),
         Map.entry("service/allergy/AllergySharingVisibility.java",
             new Reader("repository.findVisibleAt", "the shared read itself: every row, for the callers above")));
 

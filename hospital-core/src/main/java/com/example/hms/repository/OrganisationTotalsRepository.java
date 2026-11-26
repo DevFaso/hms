@@ -53,6 +53,17 @@ public interface OrganisationTotalsRepository extends Repository<Hospital, UUID>
                             @Param("to") LocalDate to);
 
     /**
+     * QA D3981 (r77) class: what one hospital handed back on refunds paid out in the period (a reversal is not one: its
+     * payment already left the confirmed payments). Taken off {@link #sumCollected}, as the till's day report does.
+     */
+    @Query("SELECT COALESCE(SUM(r.amount), 0) FROM InvoiceRefund r WHERE r.hospitalId = :hospitalId "
+        + "AND r.status = com.example.hms.enums.InvoiceRefundStatus.PAID AND r.reversedPaymentId IS NULL "
+        + "AND r.paidAt >= :from AND r.paidAt < :toExclusive")
+    BigDecimal sumRefundedOut(@Param("hospitalId") UUID hospitalId,
+                              @Param("from") LocalDateTime from,
+                              @Param("toExclusive") LocalDateTime toExclusive);
+
+    /**
      * Deaths recorded at one hospital in the period (records entered in error
      * left out). A SENSITIVE count: the service never returns a value from 1
      * to 4 ({@code SmallCounts}).

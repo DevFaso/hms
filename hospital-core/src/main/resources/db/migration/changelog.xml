@@ -4040,6 +4040,12 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V375 (QA r77 D3862): the escalation path accepts an adult NEWS2 and a newborn vital-set finding. -->
+    <changeSet id="V375-early-warning-escalation-sources" author="hms-team" runOnChange="false">
+        <sqlFile path="V375__early_warning_escalation_sources.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V391-patient-recipient-verification" author="codex" runOnChange="false">
         <sqlFile path="V391__patient_recipient_verification.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
@@ -4052,6 +4058,13 @@
 
     <changeSet id="V393-patient-record-rights" author="codex" runOnChange="false">
         <sqlFile path="V393__patient_record_rights.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V380 (owner decision 2026-11-25): the emergency O positive protocol of a hospital, and the decision,
+         countersignature, review and follow-up kept for every O positive red-cell release. -->
+    <changeSet id="V380-emergency-o-positive-release-authority" author="hms-team" runOnChange="false">
+        <sqlFile path="V380__emergency_o_positive_release_authority.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 

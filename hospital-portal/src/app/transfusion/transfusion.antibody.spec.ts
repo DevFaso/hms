@@ -318,6 +318,53 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
     expect(component.needsVitalUrgency).toBeFalse();
   });
 
+  it('V380: an RhD positive exposure recorded at another hospital shows on the request form with no blood group here', async () => {
+    await setUp(['ROLE_DOCTOR']);
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null));
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(
+        status({
+          alloImmunised: false,
+          positiveScreenAt: null,
+          rhdPositiveExposed: true,
+          rhdPositiveExposureConfirmed: true,
+          rhdPositiveExposedAt: '2026-11-25T22:00:00',
+          rhdPositiveExposedHospitalName: 'CHU Yalgado',
+        }),
+      ),
+    );
+    component.openNewRequest();
+    component.onPatientPicked({
+      id: 'p1',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+    } as PatientResponse);
+    fixture.detectChanges();
+
+    expect(component.patientGroup()).toBeNull();
+    const flag = el().querySelector('[data-testid="request-rhd-exposed"]');
+    expect(flag).not.toBeNull();
+    expect(flag!.textContent).toContain('TRANSFUSION.OPOS.EXPOSED_BANNER');
+    expect(el().querySelector('[data-testid="request-antibody-known"]')).toBeNull();
+
+    // Issued elsewhere and never recorded as given: shown, and said to be unconfirmed.
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(
+        status({
+          patientId: 'p2',
+          alloImmunised: false,
+          rhdPositiveExposed: true,
+          rhdPositiveExposureConfirmed: false,
+        }),
+      ),
+    );
+    component.onPatientPicked({ id: 'p2', firstName: 'Fatou', lastName: 'Sow' } as PatientResponse);
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="request-rhd-exposed"]')!.textContent).toContain(
+      'TRANSFUSION.OPOS.EXPOSED_BANNER_UNCONFIRMED',
+    );
+  });
+
   it('a positive screen not identified says so, and an answer for a patient no longer picked is dropped', async () => {
     await setUp(['ROLE_DOCTOR']);
     txSpy.getCurrentBloodGroup.and.returnValue(of(null));

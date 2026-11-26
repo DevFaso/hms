@@ -22,6 +22,8 @@ const CLINICAL_SCREENS = {
   'pharmacy dispensing': '../src/app/pharmacy/dispensing.html',
   'discharge summary (write and read)': '../src/app/discharge/discharge.html',
   'nurse station (vitals, care note)': '../src/app/nurse-station/nurse-station.html',
+  // QA D3867: the prescription dialog shows the allergies and the dated weight before the order is created.
+  'new prescription dialog': '../src/app/prescriptions/prescriptions.html',
 };
 
 const HEADER_TEMPLATE =

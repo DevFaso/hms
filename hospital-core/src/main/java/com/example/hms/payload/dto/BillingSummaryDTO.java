@@ -19,6 +19,14 @@ public class BillingSummaryDTO {
     private long paid;
     private long outstanding;
     private long overdue;
+    /**
+     * QA D3981 (r77): the money kept on the invoices in scope: received less the refunds paid out (reversed payments
+     * already left the amount paid). Shown as « Revenus nets ».
+     */
     private BigDecimal totalRevenue;
+    /** QA D3981: every franc received on those invoices, before refunds. */
+    private BigDecimal grossReceived;
+    /** QA D3981: what was handed back to patients on refunds paid out. */
+    private BigDecimal refunded;
     private BigDecimal balance;
 }

@@ -304,9 +304,17 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .map(this::balanceDue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // QA D3985 (r77): a pharmacy fill that left « à facturer » and is not settled is owed too (1 500 F was
+        // invisible at the desk): counted in the balance, named apart, and it raises the balance alert.
+        com.example.hms.service.pharmacy.PatientPharmacyCredit.Due pharmacyDue = pharmacyCredit != null
+                ? pharmacyCredit.of(patientId, hospitalId)
+                : com.example.hms.service.pharmacy.PatientPharmacyCredit.Due.NONE;
         FrontDeskPatientSnapshotDTO.BillingSummary billingSummary = FrontDeskPatientSnapshotDTO.BillingSummary.builder()
                 .openInvoiceCount(openInvoices.size())
-                .totalBalanceDue(totalBalance)
+                .invoiceBalanceDue(totalBalance)
+                .pharmacyCreditCount(pharmacyDue.count())
+                .pharmacyCreditDue(pharmacyDue.amount())
+                .totalBalanceDue(totalBalance.add(pharmacyDue.amount()))
                 .build();
 
         // Alert flags
@@ -316,7 +324,8 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .missingInsurance(insurances.isEmpty())
                 .expiredInsurance(!insurances.isEmpty() && !hasActive)
                 .noPrimaryInsurance(!insurances.isEmpty() && !hasPrimary)
-                .outstandingBalance(!openInvoices.isEmpty())
+                .outstandingBalance(!openInvoices.isEmpty() || pharmacyDue.count() > 0)
+                .pharmacyCreditDue(pharmacyDue.count() > 0)
                 .build();
 
         return FrontDeskPatientSnapshotDTO.builder()
@@ -1448,6 +1457,14 @@ public class ReceptionServiceImpl implements ReceptionService {
     @org.springframework.beans.factory.annotation.Autowired
     public void setTariffResolver(TariffResolver tariffResolver) {
         this.tariffResolver = tariffResolver;
+    }
+
+    /** QA D3985: the pharmacy fills the patient still owes. A required setter; a unit test may omit it. */
+    private com.example.hms.service.pharmacy.PatientPharmacyCredit pharmacyCredit;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setPharmacyCredit(com.example.hms.service.pharmacy.PatientPharmacyCredit pharmacyCredit) {
+        this.pharmacyCredit = pharmacyCredit;
     }
 
     /** The coverage the front-desk snapshot reads when none is in force: the primary one, else the oldest. */

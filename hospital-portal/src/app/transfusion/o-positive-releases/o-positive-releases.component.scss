@@ -1,0 +1,181 @@
+@use '../../shared/styles/page-common';
+
+.opos {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.opos-protocol,
+.opos-card {
+  border: 1px solid #dfe5e8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  min-width: 0;
+}
+
+.opos-protocol.inactive {
+  border-color: #e8c887;
+  background: #fffaf0;
+}
+
+.opos-protocol-head,
+.opos-card-head,
+.opos-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+}
+
+.opos-patient {
+  margin-left: 10px;
+  overflow-wrap: anywhere;
+}
+
+.opos-chip {
+  display: inline-block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 12px;
+  background: #eef3f2;
+  color: #46585e;
+
+  &.chip-ok {
+    background: #e6f4ea;
+    color: #1e6b34;
+  }
+  &.chip-warn {
+    background: #fdf0dc;
+    color: #8a5a00;
+  }
+  &.chip-danger {
+    background: #fdecea;
+    color: #b3261e;
+  }
+}
+
+.opos-note {
+  margin: 8px 0;
+  font-size: 0.86rem;
+  color: #5a6672;
+  overflow-wrap: anywhere;
+
+  &.warn {
+    color: #8a5a00;
+    font-weight: 600;
+  }
+}
+
+.opos-facts {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 0.9rem;
+
+  li {
+    overflow-wrap: anywhere;
+  }
+}
+
+.opos-form,
+.opos-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  max-width: 520px;
+}
+
+.opos-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.opos-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.opos-card.tier-high {
+  border-left: 4px solid #d98a00;
+}
+
+.opos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 16px;
+  margin: 12px 0;
+
+  dt {
+    font-size: 0.74rem;
+    color: #5a6672;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.opos-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-top: 1px solid #edf0f2;
+  font-size: 0.9rem;
+
+  &.done {
+    color: #46585e;
+  }
+  &.overdue {
+    color: #b3261e;
+    font-weight: 600;
+  }
+
+  .opos-facts,
+  .opos-inline-form,
+  .opos-note {
+    flex-basis: 100%;
+  }
+}
+
+.opos-step-label {
+  font-weight: 700;
+}
+
+.warn-inline {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9rem;
+}
