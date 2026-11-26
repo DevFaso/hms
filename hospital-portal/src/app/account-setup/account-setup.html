@@ -30,11 +30,12 @@
             </div>
             <p class="section-desc">{{ 'SETUP.USERNAME_DESC' | translate }}</p>
             <div class="form-group">
-              <label for="newUsername">{{ 'SETUP.NEW_USERNAME' | translate }}</label>
+              <label for="newUsername">{{ 'SETUP.NEW_USERNAME' | translate }} *</label>
               <input
                 type="text"
                 id="newUsername"
                 name="newUsername"
+                required
                 [(ngModel)]="newUsername"
                 [placeholder]="'SETUP.USERNAME_PLACEHOLDER' | translate"
                 maxlength="50"
@@ -58,12 +59,13 @@
           }
 
           <div class="form-group">
-            <label for="currentPassword">{{ 'SETUP.CURRENT_PASSWORD' | translate }}</label>
-            <div class="password-field">
+            <label for="currentPassword">{{ 'SETUP.CURRENT_PASSWORD' | translate }} *</label>
+            <div class="password-field input-wrapper">
               <input
                 [type]="showCurrentPassword ? 'text' : 'password'"
                 id="currentPassword"
                 name="currentPassword"
+                required
                 [(ngModel)]="currentPassword"
                 [placeholder]="'SETUP.CURRENT_PLACEHOLDER' | translate"
                 autocomplete="current-password"
@@ -85,12 +87,13 @@
 
           @if (needsPassword()) {
             <div class="form-group">
-              <label for="newPassword">{{ 'SETUP.NEW_PASSWORD' | translate }}</label>
-              <div class="password-field">
+              <label for="newPassword">{{ 'SETUP.NEW_PASSWORD' | translate }} *</label>
+              <div class="password-field input-wrapper">
                 <input
                   [type]="showNewPassword ? 'text' : 'password'"
                   id="newPassword"
                   name="newPassword"
+                  required
                   [(ngModel)]="newPassword"
                   [placeholder]="'SETUP.NEW_PLACEHOLDER' | translate"
                   autocomplete="new-password"
@@ -111,11 +114,12 @@
             </div>
 
             <div class="form-group">
-              <label for="confirmPassword">{{ 'SETUP.CONFIRM_PASSWORD' | translate }}</label>
+              <label for="confirmPassword">{{ 'SETUP.CONFIRM_PASSWORD' | translate }} *</label>
               <input
                 type="password"
                 id="confirmPassword"
                 name="confirmPassword"
+                required
                 [(ngModel)]="confirmPassword"
                 [placeholder]="'SETUP.CONFIRM_PLACEHOLDER' | translate"
                 autocomplete="new-password"
@@ -137,6 +141,7 @@
           class="btn-primary"
           [disabled]="loading"
           [appSubmitGuard]="!canSubmit"
+          submitGuardRequired
         >
           @if (loading) {
             <span class="spinner"></span>

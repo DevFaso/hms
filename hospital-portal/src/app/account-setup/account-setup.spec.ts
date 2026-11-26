@@ -69,6 +69,34 @@ describe('AccountSetupComponent', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  it('D3851: an empty submit marks and focuses every missing password field without posting', () => {
+    const fixture = create(profile({ forcePasswordChange: true }));
+    const element: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(element);
+    try {
+      element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      fixture.detectChanges();
+      for (const id of ['currentPassword', 'newPassword', 'confirmPassword']) {
+        expect(element.querySelector(`#${id}`)!.getAttribute('aria-invalid')).toBe('true');
+        expect(element.querySelector(`#${id}-invalid-msg`)!.textContent).toBeTruthy();
+      }
+      expect(document.activeElement).toBe(element.querySelector('#currentPassword'));
+      expect(profiles.completeSetup).not.toHaveBeenCalled();
+    } finally {
+      element.remove();
+    }
+  });
+
+  it('D3851: a direct submit marks an invalid username and does not send credentials', () => {
+    const fixture = create(profile({ forceUsernameChange: true }));
+    fill(fixture.componentInstance, { newUsername: 'a', currentPassword: 'temporary-password' });
+    fixture.componentInstance.submit();
+    expect(fixture.nativeElement.querySelector('#newUsername').getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+    expect(profiles.completeSetup).not.toHaveBeenCalled();
+  });
+
   it('D17: shows ONE save button when both the username and the password are forced', () => {
     const fixture = create(profile({ forceUsernameChange: true, forcePasswordChange: true }));
     const el: HTMLElement = fixture.nativeElement;
