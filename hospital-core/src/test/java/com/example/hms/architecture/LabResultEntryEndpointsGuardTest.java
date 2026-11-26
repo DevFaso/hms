@@ -107,7 +107,12 @@ class LabResultEntryEndpointsGuardTest {
         Map.entry("TransfusionController#startAdministration", Kind.NOT_A_RESULT),
         Map.entry("TransfusionController#completeAdministration", Kind.NOT_A_RESULT),
         Map.entry("TransfusionController#stopAdministration", Kind.NOT_A_RESULT),
-        Map.entry("TransfusionController#recordReaction", Kind.NOT_A_RESULT)));
+        Map.entry("TransfusionController#recordReaction", Kind.NOT_A_RESULT),
+        // V380: the O positive authority rule writes a decision's signature, review and follow-up, and a setting.
+        Map.entry("TransfusionController#countersignPositiveRelease", Kind.NOT_A_RESULT),
+        Map.entry("TransfusionController#reviewPositiveRelease", Kind.NOT_A_RESULT),
+        Map.entry("TransfusionController#recordPositiveFollowUp", Kind.NOT_A_RESULT),
+        Map.entry("TransfusionController#setPositiveProtocol", Kind.NOT_A_RESULT)));
 
     private final DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
 

@@ -52,7 +52,9 @@ public enum ClinicalRuleSetKey {
     TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
     CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB),
     /** QA D3940 (r77): the product dispensed is the prescribed one, or a substitute of the same ingredient and strength. */
-    DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING);
+    DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING),
+    /** Owner decision 2026-11-25 (V380): who decides an emergency O RhD positive release, by patient tier. */
+    EMERGENCY_O_POSITIVE_AUTHORITY(ClinicalRuleArea.LAB);
 
     private final ClinicalRuleArea area;
 

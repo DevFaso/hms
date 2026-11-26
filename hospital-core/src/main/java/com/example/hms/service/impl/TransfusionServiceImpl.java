@@ -167,6 +167,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         this.antibodyScreen = antibodyScreen;
     }
 
+    /**
+     * Owner decision 2026-11-25 (V380): the one decision service for O RhD positive red cells in an emergency
+     * (rule set EMERGENCY_O_POSITIVE_AUTHORITY). Setter injection, required: every release below goes through it.
+     */
+    private com.example.hms.service.transfusion.OPositiveReleaseAuthorityService positiveAuthority;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setPositiveAuthority(com.example.hms.service.transfusion.OPositiveReleaseAuthorityService positiveAuthority) {
+        this.positiveAuthority = positiveAuthority;
+    }
+
     @Override
     public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO recordAntibodyWorkup(
             com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request) {
@@ -187,6 +198,14 @@ public class TransfusionServiceImpl implements TransfusionService {
     private PatientBloodGroupResponseDTO withAntibodyFlag(PatientBloodGroupResponseDTO dto, UUID patientId, UUID hospitalId) {
         if (dto != null && antibodyScreen != null) {
             dto.setAlloImmunised(antibodyScreen.alloImmunisedShownAt(patientId, hospitalId));
+        }
+        if (dto != null) {
+            com.example.hms.model.OPositiveReleaseDecision exposure = positiveAuthority.newestExposureShownAt(patientId, hospitalId);
+            if (exposure != null) {
+                dto.setRhdPositiveExposed(true);
+                dto.setRhdPositiveExposedAt(exposure.getIssuedAt());
+                dto.setRhdPositiveExposedHospitalName(exposure.getHospital().getName());
+            }
         }
         return dto;
     }
@@ -251,6 +270,10 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         PatientBloodGroup saved = bloodGroupRepository.save(group);
         moveOpenRequestsOnto(saved);
+        if (saved.getAntibodyScreen() != null) {
+            // V380: the antibody screen a clinician asked for after an RhD positive exposure is now on record.
+            positiveAuthority.noteAntibodyScreen(patient.getId(), now);
+        }
         if (antibodyScreen != null) {
             // QA D3351: a positive screen asks the biologist to identify the antibody or refer the sample.
             notifySafely(() -> antibodyScreen.askBiologistToIdentify(saved), saved.getId());
@@ -920,7 +943,9 @@ public class TransfusionServiceImpl implements TransfusionService {
      * against which request, of which type, ids only: the callback has no session.
      */
     private EmergencyBloodRelease recordRelease(TransfusionRequest request, BloodUnit unit, EmergencyReleaseType type,
-                                                String reason, UUID authoriserUserId, List<BloodUnit> negativeShown) {
+                                                String reason,
+                                                com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation,
+                                                UUID authoriserUserId, List<BloodUnit> negativeShown) {
         UUID actorUserId = roleValidator.getCurrentUserId();
         EmergencyBloodRelease saved = releaseRepository.save(EmergencyBloodRelease.builder()
             .request(request)
@@ -936,6 +961,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             .negativeUnitsShown(negativeShown.isEmpty() ? null
                 : negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")))
             .build());
+        // V380: O positive red cells keep their decision beside the release row, and what follows it is filed.
+        positiveAuthority.record(saved, authorisation, request, unit, negativeStatus(request, type, authorisation, negativeShown));
         UUID hospitalId = request.getHospital().getId();
         UUID requestId = request.getId();
         UUID unitId = unit.getId();
@@ -957,6 +984,20 @@ public class TransfusionServiceImpl implements TransfusionService {
             }
         });
         return saved;
+    }
+
+    /** Why O negative did not go out instead, for the decision row of an O positive release. */
+    private com.example.hms.enums.ONegativeStatus negativeStatus(TransfusionRequest request, EmergencyReleaseType type,
+            com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation,
+            List<BloodUnit> negativeShown) {
+        if (!negativeShown.isEmpty()) {
+            return com.example.hms.enums.ONegativeStatus.STATED_UNOBTAINABLE;
+        }
+        // The plain issue asks nothing: when O negative shows in stock, the protocol kept it for the others.
+        boolean keptByProtocol = authorisation.applies() && type == EmergencyReleaseType.UNCROSSMATCHED
+            && !negativeStock(request).isEmpty();
+        return keptByProtocol ? com.example.hms.enums.ONegativeStatus.PROTOCOL_FIRST_LINE
+            : com.example.hms.enums.ONegativeStatus.OUT_OF_STOCK;
     }
 
     /**
@@ -1018,9 +1059,12 @@ public class TransfusionServiceImpl implements TransfusionService {
             // haemorrhage the crossmatch takes longer than the patient has. Anything else must
             // be crossmatched first, and an incompatible bag only leaves by emergencyRelease.
             requireUncrossmatchedRelease(request, unit, crossmatch, refusal);
+            // V380: O positive leaves here only for the low-risk tier; any other is sent to the documented release.
+            com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
+                positiveAuthority.authorise(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, positiveAssessment(request));
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
-            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, null, List.of());
+            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, authorisation, null, List.of());
         }
         if (crossmatchAfterwards) {
             notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
@@ -1037,12 +1081,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (reason.length() > MAX_REASON_LENGTH) {
             throw new FieldBusinessException(FIELD_REASON, "transfusion.emergency.reasonTooLong", MAX_REASON_LENGTH);
         }
-        if (release.getAuthoriserUserId() == null) {
-            throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserRequired");
-        }
         if (release.getReleaseType() == EmergencyReleaseType.UNCROSSMATCHED) {
             throw new FieldBusinessException(FIELD_RELEASE_TYPE, "transfusion.emergency.typeNotDocumented");
         }
+        // V380: who a release names is checked below: an incompatible release by requireAnswerableAuthoriser (and at
+        // the edge, on the body), an O positive decision by the decision service, which may let it go with nobody named.
         if (roleValidator.getCurrentUserId() == null) {
             // A documented release names who issued it: an actor nobody can name cannot make one.
             throw new AccessDeniedException("A documented emergency release needs an identified caller.");
@@ -1077,9 +1120,13 @@ public class TransfusionServiceImpl implements TransfusionService {
                 unit.getUnitNumber(), negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")));
         }
         requireAnswerableAuthoriser(request, release);
+        // V380: whose authority an O positive bag goes out on. It refuses a false record, never a missing person.
+        com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
+            positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessment(request));
+        UUID answerable = authorisation.applies() ? authorisation.answerable() : release.getAuthoriserUserId();
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
-        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, release.getAuthoriserUserId(), negativeShown);
+        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, authorisation, answerable, negativeShown);
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
@@ -1164,8 +1211,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /**
-     * The release that takes no decision: O negative as it always was, or O positive for an adult
-     * male the record says nothing against. Everything else is refused, naming the next step.
+     * The release that takes no decision: O negative as it always was, or O positive, which the caller then
+     * puts to the O positive decision service. Everything else is refused, naming the next step.
      */
     private void requireUncrossmatchedRelease(TransfusionRequest request, BloodUnit unit,
                                               TransfusionCrossmatch crossmatch, BusinessException refusal) {
@@ -1182,9 +1229,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 || !AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())) {
             throw refusal;
         }
-        if (oPositiveStep(request) != EmergencyReleasePolicy.OPositiveStep.NONE) {
-            throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.decisionRequired", unit.getUnitNumber());
-        }
+        // O positive on an emergency request: who may let it go is the decision service's answer (issueUnit).
     }
 
     /**
@@ -1238,7 +1283,7 @@ public class TransfusionServiceImpl implements TransfusionService {
      */
     private List<BloodUnit> negativeStockAhead(TransfusionRequest request, BloodUnit unit) {
         if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())
-                || oPositiveStep(request) != EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST) {
+                || !positiveAssessment(request).oNegativeFirst()) {
             return List.of();
         }
         return negativeStock(request);
@@ -1249,29 +1294,33 @@ public class TransfusionServiceImpl implements TransfusionService {
             AboGroup.emergencyReleaseGroup(), AboGroup.emergencyReleaseRh(), LocalDate.now(clock));
     }
 
-    /** The named person holds a live role here; for an incompatible release, a doctor or lab director who is not the issuer. */
+    /**
+     * A serologically incompatible release names a doctor or lab director who is not the issuer and holds a live
+     * role here. Who answers for an O positive decision is the O positive decision service's rule (V380).
+     */
     private void requireAnswerableAuthoriser(TransfusionRequest request, EmergencyReleaseRequestDTO release) {
-        boolean incompatible = release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
-        if (incompatible && Objects.equals(release.getAuthoriserUserId(), roleValidator.getCurrentUserId())) {
+        if (release.getReleaseType() != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
+            return;
+        }
+        if (Objects.equals(release.getAuthoriserUserId(), roleValidator.getCurrentUserId())) {
             throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserNotIssuer");
         }
-        Set<String> roles = incompatible
-            ? EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES
-            : EmergencyReleasePolicy.O_POSITIVE_DECIDER_ROLE_CODES;
-        if (!assignmentRepository.existsActiveWitness(release.getAuthoriserUserId(), request.getHospital().getId(), roles)) {
+        if (!assignmentRepository.existsActiveWitness(release.getAuthoriserUserId(), request.getHospital().getId(),
+                EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES)) {
             throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserInvalid");
         }
     }
 
-    private EmergencyReleasePolicy.OPositiveStep oPositiveStep(TransfusionRequest request) {
-        Patient patient = request.getPatient();
+    /**
+     * What the O positive authority rule says for this request now: the laboratory's current RhD for the patient
+     * here, and an antibody known at this hospital or, through the antibody rule, at any other.
+     */
+    private com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Assessment positiveAssessment(TransfusionRequest request) {
         PatientBloodGroup screen = lookupScreen(request);
-        return EmergencyReleasePolicy.oPositiveStep(
-            patient != null ? patient.getGender() : null,
-            patient != null ? patient.getDateOfBirth() : null,
-            LocalDate.now(clock),
-            screen != null ? screen.getRhFactor() : null,
-            positiveScreenOnRecord(request) != null);
+        boolean antibodyKnown = positiveScreenOnRecord(request) != null
+            || (antibodyScreen != null && request.getPatient() != null
+                && antibodyScreen.alloImmunised(request.getPatient().getId()));
+        return positiveAuthority.assess(request, screen != null ? screen.getRhFactor() : null, antibodyKnown);
     }
 
     /**
@@ -1317,15 +1366,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         TransfusionRequest request = loadRequestScoped(requestId);
         UUID hospitalId = request.getHospital().getId();
         PatientBloodGroup positive = positiveScreenOnRecord(request);
-        EmergencyReleasePolicy.OPositiveStep step = oPositiveStep(request);
-        List<BloodUnit> shown = step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST ? negativeStock(request) : List.of();
+        com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Assessment assessment = positiveAssessment(request);
+        boolean decisionStep = !assessment.plainIssueAllowed();
+        List<BloodUnit> shown = assessment.oNegativeFirst() ? negativeStock(request) : List.of();
         return EmergencyReleaseOptionsDTO.builder()
             .antibodyWarning(positive != null)
             .antibodyDetail(positive != null ? positive.getAntibodyDetail() : null)
             .negativeStock(shown.stream().map(bag -> EmergencyReleaseOptionsDTO.Unit.builder()
                 .id(bag.getId()).unitNumber(bag.getUnitNumber())
                 .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor()).expiresOn(bag.getExpiresOn()).build()).toList())
-            .units(uncrossmatchedOptions(request, step, !shown.isEmpty()))
+            .units(uncrossmatchedOptions(request, decisionStep, !shown.isEmpty()))
+            .positiveRule(positiveAuthority.ruleFor(assessment, hospitalId))
             .incompatibleUnits(incompatibleOptions(request, !shown.isEmpty()))
             .deciders(candidates(hospitalId, EmergencyReleasePolicy.O_POSITIVE_DECIDER_ROLE_CODES, null))
             .authorisers(candidates(hospitalId, EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES,
@@ -1339,10 +1390,9 @@ public class TransfusionServiceImpl implements TransfusionService {
      * now needs one. Nothing found incompatible for this patient: that has its own action.
      */
     private List<EmergencyReleaseOptionsDTO.Unit> uncrossmatchedOptions(TransfusionRequest request,
-                                                                        EmergencyReleasePolicy.OPositiveStep step,
+                                                                        boolean decisionStep,
                                                                         boolean negativeShown) {
         LocalDate today = LocalDate.now(clock);
-        boolean decisionStep = step != EmergencyReleasePolicy.OPositiveStep.NONE;
         Map<UUID, BloodUnit> bags = new LinkedHashMap<>();
         unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId()).stream()
             .filter(bag -> !bag.isExpiredOn(today) && administrationRepository.findByBloodUnit_Id(bag.getId()).isEmpty())
@@ -1939,7 +1989,64 @@ public class TransfusionServiceImpl implements TransfusionService {
             detail.setAlloImmunised(true);
             detail.setAntibodyWorkupServes(antibodyScreen.workupServes(request));
         }
+        withPositiveDecisions(detail, request);
         return detail;
+    }
+
+    /** V380: each O positive release with its decision, and the patient's permanent RhD exposure flag. */
+    private void withPositiveDecisions(TransfusionRequestResponseDTO detail, TransfusionRequest request) {
+        List<com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO> releases = detail.getEmergencyReleases();
+        if (releases != null && !releases.isEmpty()) {
+            Map<UUID, com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> decisions = positiveAuthority.byRelease(
+                releases.stream().map(com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO::getId).toList());
+            releases.forEach(release -> release.setPositiveDecision(decisions.get(release.getId())));
+        }
+        if (request.getPatient() == null || request.getHospital() == null) {
+            return;
+        }
+        com.example.hms.model.OPositiveReleaseDecision exposure = positiveAuthority.newestExposureShownAt(
+            request.getPatient().getId(), request.getHospital().getId());
+        if (exposure != null) {
+            detail.setRhdPositiveExposed(true);
+            detail.setRhdPositiveExposedAt(exposure.getIssuedAt());
+            detail.setRhdPositiveExposedHospitalName(exposure.getHospital().getName());
+        }
+    }
+
+    // ── The O positive authority rule (V380) ────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO getPositiveProtocol() {
+        return positiveAuthority.protocol(requireHospital());
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO setPositiveProtocol(
+            com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO update) {
+        return positiveAuthority.setProtocol(hospitalRef(requireHospital()), update);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> listPositiveReleases(boolean openOnly) {
+        return positiveAuthority.list(requireHospital(), openOnly);
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId) {
+        return positiveAuthority.countersign(decisionId, requireHospital());
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note) {
+        return positiveAuthority.review(decisionId, requireHospital(), note);
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO recordPositiveFollowUp(UUID decisionId,
+            com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO request) {
+        return positiveAuthority.recordFollowUp(decisionId, requireHospital(), request);
     }
 
     /** 404-not-403 — a request at another hospital is indistinguishable from a missing one. */

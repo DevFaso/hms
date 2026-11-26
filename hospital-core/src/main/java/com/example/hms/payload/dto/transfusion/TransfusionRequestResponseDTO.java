@@ -62,6 +62,15 @@ public class TransfusionRequestResponseDTO {
      * antibody is identified or this request has a referral decision, and the emergency declaration it carries.
      */
     private boolean alloImmunised;
+    /**
+     * The patient received O RhD positive red cells in an emergency while at risk (V380): a permanent flag that
+     * follows the patient to every hospital, as the antibody flag does.
+     */
+    private boolean rhdPositiveExposed;
+    /** When the newest such exposure happened. */
+    private java.time.LocalDateTime rhdPositiveExposedAt;
+    /** The hospital that recorded it. */
+    private String rhdPositiveExposedHospitalName;
     private boolean antibodyWorkupServes;
     private com.example.hms.enums.VitalUrgencyLevel vitalUrgencyLevel;
     private String vitalUrgencyReason;

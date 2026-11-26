@@ -79,7 +79,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class,
     com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, com.example.hms.security.EncryptionKeyHolder.class,
     TransfusionEmergencyReleasePostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -121,6 +121,7 @@ class TransfusionEmergencyReleasePostgresIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @PersistenceContext private EntityManager entityManager;
 
+    @Autowired private com.example.hms.service.transfusion.OPositiveReleaseAuthorityService positiveAuthority;
     @MockitoBean private RoleValidator roleValidator;
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
@@ -424,9 +425,14 @@ class TransfusionEmergencyReleasePostgresIT {
 
         assertThat(status(positive)).isEqualTo("ISSUED");
         assertThat(status(shown.getId())).isEqualTo("AVAILABLE");
+        // Two rows since V380: the release, and the O positive decision behind it.
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventDescription()).contains("stated not obtainable in time").contains(shown.getId().toString());
+        verify(auditEventLogService, times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(AuditEventRequestDTO::getEventType).containsExactlyInAnyOrder(
+            com.example.hms.enums.AuditEventType.EMERGENCY_BLOOD_RELEASED, com.example.hms.enums.AuditEventType.O_POSITIVE_RELEASE_DECIDED);
+        assertThat(audit.getAllValues()).filteredOn(row -> row.getEventType() == com.example.hms.enums.AuditEventType.EMERGENCY_BLOOD_RELEASED)
+            .singleElement().satisfies(row -> assertThat(row.getEventDescription())
+                .contains("stated not obtainable in time").contains(shown.getId().toString()));
         hang(requestId, positive);
         assertThat(service.getRequest(requestId).getEmergencyReleases()).singleElement().satisfies(row -> {
             assertThat(row.isNegativeUnobtainableStated()).isTrue();
@@ -629,5 +635,177 @@ class TransfusionEmergencyReleasePostgresIT {
         verify(inBasketService).createItemInNewTransaction(items.capture());
         assertThat(items.getValue().getRecipientUserId()).isEqualTo(directorUser);
         assertThat(List.of(status(bagId))).containsExactly("RETURNED");
+    }
+
+    // ── V380: the O positive authority rule, on the tables and constraints Liquibase built ──
+
+    private List<CreateInBasketItemRequest> filed() {
+        ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService, org.mockito.Mockito.atLeast(0)).createItemInNewTransaction(items.capture());
+        return items.getAllValues();
+    }
+
+    private void sql(String statement, UUID id) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery(statement).setParameter("id", id).executeUpdate());
+    }
+
+    @Test
+    @DisplayName("V380: a woman's O positive is refused to the issuer alone, goes out on a physician's order, is countersigned, reviewed, followed up, and flags her for good")
+    void oPositiveAuthorityWalk() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+
+        // This hospital wrote no protocol: every patient is the high-risk row.
+        EmergencyReleaseOptionsDTO options = service.emergencyReleaseOptions(requestId);
+        assertThat(options.getPositiveRule().getRiskTier()).isEqualTo(com.example.hms.enums.OPositiveRiskTier.HIGH_RISK);
+        assertThat(options.getPositiveRule().getTierReason()).isEqualTo(com.example.hms.enums.OPositiveTierReason.NO_ACTIVE_PROTOCOL);
+        assertThat(options.getPositiveRule().getPhysicians())
+            .extracting(com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO::userId)
+            .containsExactlyInAnyOrder(doctorUser, directorUser);
+
+        EmergencyReleaseRequestDTO alone = documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION);
+        alone.setAuthoriserUserId(techUser);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, alone)).hasMessageContaining("not the person issuing");
+        assertThat(status(bagId)).isEqualTo("AVAILABLE");
+
+        clearInvocations(inBasketService, auditEventLogService);
+        service.emergencyRelease(requestId, documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION));
+        assertThat(status(bagId)).isEqualTo("ISSUED");
+        assertThat(filed()).extracting(CreateInBasketItemRequest::getReferenceType, CreateInBasketItemRequest::getRecipientUserId)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("TRANSFUSION_O_POSITIVE_REVIEW", directorUser),
+                org.assertj.core.groups.Tuple.tuple("TRANSFUSION_O_POSITIVE_COUNTERSIGN", doctorUser),
+                org.assertj.core.groups.Tuple.tuple("TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP", doctorUser));
+
+        TransfusionRequestResponseDTO detail = service.getRequest(requestId);
+        com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO decision =
+            detail.getEmergencyReleases().get(0).getPositiveDecision();
+        assertThat(decision).isNotNull();
+        assertThat(decision.getRiskTier()).isEqualTo(com.example.hms.enums.OPositiveRiskTier.HIGH_RISK);
+        assertThat(decision.getDecisionBasis()).isEqualTo(com.example.hms.enums.OPositiveDecisionBasis.PHYSICIAN_ORDER);
+        assertThat(decision.getDecidedByName()).contains("ROLE_DOCTOR");
+        assertThat(decision.getIssuedByName()).contains("ROLE_LAB_TECHNICIAN");
+        assertThat(decision.isVerbalOrder()).isTrue();
+        assertThat(decision.getPatientSex()).isEqualTo("FEMALE");
+        assertThat(decision.getPatientAgeYears()).isEqualTo(java.time.Period.between(LocalDate.of(1990, 6, 15), LocalDate.now()).getYears());
+        assertThat(decision.getNegativeStatus()).isEqualTo(com.example.hms.enums.ONegativeStatus.OUT_OF_STOCK);
+        assertThat(decision.getCountersignDueAt()).isEqualTo(decision.getIssuedAt().plusHours(24));
+        assertThat(decision.isRhdExposure()).isTrue();
+        assertThat(detail.isRhdPositiveExposed()).isTrue();
+        assertThat(detail.getRhdPositiveExposedHospitalName()).startsWith("Hopital R34E");
+        UUID decisionId = decision.getId();
+        assertThat(service.listPositiveReleases(true))
+            .extracting(com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO::getId).containsExactly(decisionId);
+
+        // The issuer never countersigns; a physician does; the biologist reviews; a physician follows up.
+        assertThatThrownBy(() -> service.countersignPositiveRelease(decisionId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        actingAs(doctorUser);
+        assertThat(service.countersignPositiveRelease(decisionId).getCountersignedByName()).contains("ROLE_DOCTOR");
+        assertThatThrownBy(() -> service.reviewPositiveRelease(decisionId, "seen"))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        actingAs(directorUser);
+        assertThat(service.reviewPositiveRelease(decisionId, "Anti-D discussed with the obstetrician").getReviewedByName())
+            .contains("ROLE_LAB_DIRECTOR");
+        Object rawNote = entityManager.createNativeQuery(
+            "SELECT review_note FROM clinical.o_positive_release_decisions WHERE id = :id").setParameter("id", decisionId).getSingleResult();
+        assertThat((String) rawNote).as("the biologist's words are encrypted at rest").doesNotContain("Anti-D discussed");
+        actingAs(doctorUser);
+        com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO followed = service.recordPositiveFollowUp(decisionId,
+            com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder()
+                .antiDDecision(com.example.hms.enums.AntiDDecision.ANTI_D_IMMUNOGLOBULIN).patientInformed(Boolean.TRUE).build());
+        assertThat(followed.getAntiDDecision()).isEqualTo(com.example.hms.enums.AntiDDecision.ANTI_D_IMMUNOGLOBULIN);
+        assertThat(followed.getPatientInformedAt()).isNotNull();
+        assertThat(followed.getAntibodyScreenDueFrom()).isEqualTo(decision.getIssuedAt().toLocalDate().plusMonths(3));
+
+        // An antibody screen the next week is too early for the follow-up; the flag stays whatever is done.
+        actingAs(techUser);
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
+        TransfusionRequestResponseDTO after = service.getRequest(requestId);
+        assertThat(after.getEmergencyReleases().get(0).getPositiveDecision().getAntibodyScreenDoneAt()).isNull();
+        assertThat(after.isRhdPositiveExposed()).isTrue();
+        assertThat(service.getCurrentBloodGroup(patient).isRhdPositiveExposed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("V380: the biologist sets the protocol; with no physician reachable the bag still goes out, and the overdue countersignature reaches the director once")
+    void protocolAndNoPhysicianReachable() {
+        actingAs(techUser);
+        assertThatThrownBy(() -> service.setPositiveProtocol(
+            new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(null, true, 50, false, 12)))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        actingAs(directorUser);
+        service.setPositiveProtocol(new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(null, true, 50, false, 12));
+        assertThat(service.getPositiveProtocol())
+            .isEqualTo(new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(hospital, true, 50, false, 12));
+        // Set again: the one row of the hospital is changed, not duplicated.
+        service.setPositiveProtocol(new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(null, true, 50, false, 12));
+
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        assertThat(service.emergencyReleaseOptions(requestId).getPositiveRule().getTierReason())
+            .isEqualTo(com.example.hms.enums.OPositiveTierReason.FEMALE_AT_OR_BELOW_CUTOFF);
+
+        clearInvocations(inBasketService);
+        service.emergencyRelease(requestId, EmergencyReleaseRequestDTO.builder().bloodUnitId(bagId)
+            .releaseType(EmergencyReleaseType.O_POSITIVE_DECISION).reason(REASON).physicianUnreachable(Boolean.TRUE).build());
+        assertThat(status(bagId)).as("never blocks: the technician alone released it").isEqualTo("ISSUED");
+
+        com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO decision =
+            service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision();
+        assertThat(decision.getDecisionBasis()).isEqualTo(com.example.hms.enums.OPositiveDecisionBasis.AUTHORITY_PENDING);
+        assertThat(decision.getDecidedByName()).isNull();
+        assertThat(decision.getCountersignDueAt()).isEqualTo(decision.getIssuedAt().plusHours(12));
+        assertThat(filed()).anySatisfy(item -> {
+            assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_REVIEW");
+            assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
+            assertThat(item.getBodyKey()).isEqualTo(
+                com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.REVIEW_PENDING_BODY_KEY);
+        });
+
+        assertThat(positiveAuthority.escalateOverdueCountersigns()).as("not yet overdue").isZero();
+        sql("UPDATE clinical.o_positive_release_decisions SET countersign_due_at = now() - interval '1 hour' WHERE id = :id",
+            decision.getId());
+        clearInvocations(inBasketService);
+        assertThat(positiveAuthority.escalateOverdueCountersigns()).isEqualTo(1);
+        assertThat(filed()).singleElement().satisfies(item -> {
+            assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_COUNTERSIGN_OVERDUE");
+            assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
+            assertThat(item.getTitle()).doesNotContain("{");
+        });
+        assertThat(positiveAuthority.escalateOverdueCountersigns()).as("told once").isZero();
+        assertThat(service.listPositiveReleases(true).get(0).isCountersignOverdue()).isTrue();
+    }
+
+    @Test
+    @DisplayName("V380: under the protocol an adult man's O positive leaves on the plain issue, with its routine review and no flag")
+    void lowRiskUnderTheProtocol() {
+        actingAs(directorUser);
+        service.setPositiveProtocol(new com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO(null, true, 50, false, 24));
+        sql("UPDATE clinical.patients SET gender = 'MALE' WHERE id = :id", patient);
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID bagId = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+
+        clearInvocations(inBasketService);
+        service.issueUnit(request.getId(), bagId);
+
+        assertThat(status(bagId)).isEqualTo("ISSUED");
+        TransfusionRequestResponseDTO detail = service.getRequest(request.getId());
+        com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO decision =
+            detail.getEmergencyReleases().get(0).getPositiveDecision();
+        assertThat(decision.getRiskTier()).isEqualTo(com.example.hms.enums.OPositiveRiskTier.LOW_RISK);
+        assertThat(decision.getDecisionBasis()).isEqualTo(com.example.hms.enums.OPositiveDecisionBasis.PROTOCOL);
+        assertThat(decision.getDecidedByName()).contains("ROLE_LAB_TECHNICIAN");
+        assertThat(decision.getCountersignDueAt()).isNull();
+        assertThat(decision.getReviewPriority()).isEqualTo(com.example.hms.enums.OPositiveReviewPriority.ROUTINE);
+        assertThat(detail.isRhdPositiveExposed()).isFalse();
+        assertThat(filed()).singleElement().satisfies(item -> {
+            assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_REVIEW");
+            assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
+            assertThat(item.getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.NORMAL);
+        });
     }
 }

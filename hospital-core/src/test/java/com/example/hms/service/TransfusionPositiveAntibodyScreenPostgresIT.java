@@ -78,7 +78,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, PositiveAntibodyScreenService.class, TransfusionMapper.class,
     com.example.hms.security.EncryptionKeyHolder.class, TransfusionPositiveAntibodyScreenPostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @DisplayName("positive antibody screen, on PostgreSQL")

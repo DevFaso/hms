@@ -37,6 +37,14 @@
       <button class="tab-btn" [class.active]="tab() === 'units'" (click)="setTab('units')">
         {{ 'TRANSFUSION.UNITS_TAB' | translate }}
       </button>
+      <button
+        class="tab-btn"
+        data-testid="tab-o-positive"
+        [class.active]="tab() === 'opositive'"
+        (click)="setTab('opositive')"
+      >
+        {{ 'TRANSFUSION.OPOS.TAB' | translate }}
+      </button>
     </div>
     <div class="results-filters">
       @if (tab() === 'requests') {
@@ -183,6 +191,11 @@
     }
   }
 
+  <!-- ══ Emergency O positive releases (V380) ══ -->
+  @if (tab() === 'opositive') {
+    <app-o-positive-releases />
+  }
+
   <!-- ══ Units ══ -->
   @if (!loading() && tab() === 'units') {
     @if (units().length === 0) {
@@ -272,6 +285,20 @@
           </button>
         </div>
         <div class="detail-body">
+          <!-- V380: the permanent flag of an emergency RhD positive exposure; it follows the patient. -->
+          @if (req.rhdPositiveExposed) {
+            <div class="warn-banner" role="alert" data-testid="rhd-exposed">
+              <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>
+              {{
+                'TRANSFUSION.OPOS.EXPOSED_BANNER'
+                  | translate
+                    : {
+                        date: (req.rhdPositiveExposedAt | serverTime | date: 'mediumDate') ?? '',
+                        hospital: req.rhdPositiveExposedHospitalName ?? '',
+                      }
+              }}
+            </div>
+          }
           <!-- QA D3351: the permanent flag, what the biologist recorded, and what red cells still wait for. -->
           @if (req.alloImmunised) {
             <div class="emergency-banner antibody-banner" role="alert" data-testid="allo-immunised">
@@ -442,6 +469,18 @@
                               'TRANSFUSION.RELEASE_NEGATIVE_STATEMENT'
                                 | translate: { units: r.negativeUnitsShown }
                             }}
+                          </div>
+                        }
+                        @if (r.positiveDecision; as d) {
+                          <div class="warn-inline" data-testid="release-opos-decision">
+                            {{ 'TRANSFUSION.OPOS.TIER_' + d.riskTier | translate }} ·
+                            {{ 'TRANSFUSION.OPOS.BASIS_' + d.decisionBasis | translate }}
+                            @if (d.countersignDueAt && !d.countersignedAt) {
+                              · {{ 'TRANSFUSION.OPOS.COUNTERSIGN_OWED' | translate }}
+                            }
+                            @if (!d.reviewedAt) {
+                              · {{ 'TRANSFUSION.OPOS.REVIEW_OWED' | translate }}
+                            }
                           </div>
                         }
                       </td>
@@ -807,6 +846,11 @@
                 @if (g.alloImmunised) {
                   <span class="warn-inline" role="alert" data-testid="request-allo-immunised">{{
                     'TRANSFUSION.ALLO_IMMUNISED_REQUEST' | translate
+                  }}</span>
+                }
+                @if (g.rhdPositiveExposed) {
+                  <span class="warn-inline" role="alert" data-testid="request-rhd-exposed">{{
+                    'TRANSFUSION.OPOS.EXPOSED_SHORT' | translate
                   }}</span>
                 }
                 @if (g.correctionReason) {
@@ -1484,15 +1528,73 @@
             <p class="modal-hint warn" data-testid="decision-required">
               {{ 'TRANSFUSION.O_POSITIVE_DECISION_HINT' | translate }}
             </p>
+            @if (positiveRule(); as rule) {
+              <p class="modal-hint warn" role="status" data-testid="opos-form-tier">
+                {{
+                  'TRANSFUSION.OPOS.FORM_TIER_' + rule.riskTier
+                    | translate: { hours: rule.reviewDeadlineHours }
+                }}
+                @if (!rule.protocolActive) {
+                  {{ 'TRANSFUSION.OPOS.NO_PROTOCOL_HINT' | translate }}
+                }
+              </p>
+            }
             <div class="field">
-              <label for="em-decider">{{ 'TRANSFUSION.DECIDER' | translate }} *</label>
-              <select required id="em-decider" [(ngModel)]="emergencyAuthoriserId">
+              <label for="em-decider">
+                {{
+                  (emergencyPhysicianTier() ? 'TRANSFUSION.OPOS.PHYSICIAN' : 'TRANSFUSION.DECIDER')
+                    | translate
+                }}
+                @if (!emergencyUnreachable) {
+                  *
+                }
+              </label>
+              <select
+                id="em-decider"
+                [required]="!emergencyUnreachable"
+                [disabled]="emergencyUnreachable"
+                [(ngModel)]="emergencyAuthoriserId"
+              >
                 <option value="">{{ 'COMMON.SELECT' | translate }}</option>
-                @for (c of emergencyOptions()?.deciders ?? []; track c.userId) {
+                @for (c of emergencyDeciders(); track c.userId) {
                   <option [value]="c.userId">{{ c.displayName }}</option>
                 }
               </select>
             </div>
+            @if (emergencyPhysicianTier()) {
+              <label class="checkbox-field">
+                <input
+                  type="checkbox"
+                  id="em-unreachable"
+                  data-testid="physician-unreachable"
+                  [(ngModel)]="emergencyUnreachable"
+                  (ngModelChange)="onEmergencyUnreachableChanged()"
+                />
+                {{ 'TRANSFUSION.OPOS.UNREACHABLE' | translate }}
+              </label>
+              @if (!emergencyUnreachable) {
+                <label class="checkbox-field">
+                  <input
+                    type="checkbox"
+                    id="em-verbal"
+                    data-testid="verbal-order"
+                    [(ngModel)]="emergencyVerbalOrder"
+                  />
+                  {{ 'TRANSFUSION.OPOS.VERBAL_ORDER_CHECK' | translate }}
+                </label>
+              }
+              @if (positiveRule()?.riskTier === 'KNOWN_ANTIBODY') {
+                <div class="field">
+                  <label for="em-biologist">{{ 'TRANSFUSION.OPOS.BIOLOGIST' | translate }}</label>
+                  <select id="em-biologist" [(ngModel)]="emergencyBiologistId">
+                    <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                    @for (c of positiveRule()?.biologists ?? []; track c.userId) {
+                      <option [value]="c.userId">{{ c.displayName }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            }
             <div class="field">
               <label for="em-reason">{{ 'TRANSFUSION.RELEASE_REASON' | translate }} *</label>
               <textarea
@@ -1526,12 +1628,7 @@
             data-testid="submit-emergency-release"
             (click)="submitEmergencyRelease()"
             [disabled]="emergencySubmitting()"
-            [appSubmitGuard]="
-              !emergencyUnitId ||
-              (emergencyDecisionRequired() &&
-                (!emergencyAuthoriserId || !emergencyReason.trim())) ||
-              (emergencyStatementRequired() && !emergencyNegativeStated)
-            "
+            [appSubmitGuard]="emergencyFormIncomplete()"
             [submitGuardFields]="['em-unit', 'em-decider', 'em-reason', 'em-statement']"
           >
             {{ 'TRANSFUSION.ISSUE' | translate }}

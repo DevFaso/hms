@@ -26,6 +26,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -273,6 +274,69 @@ public class TransfusionController {
         @Valid @RequestBody EmergencyReleaseRequestDTO release
     ) {
         return ResponseEntity.ok(transfusionService.emergencyRelease(requestId, release));
+    }
+
+    // ── The O positive authority rule (V380) ────────────────────────────
+
+    /** Who may countersign or review an O positive release; the service checks the role at the acting hospital. */
+    private static final String PHYSICIAN_OR_BIOLOGIST =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','LAB_DIRECTOR')";
+
+    @GetMapping("/o-positive-protocol")
+    @PreAuthorize(READER)
+    @Operation(summary = "The hospital's emergency O RhD positive protocol",
+        description = "Whether a written protocol is active, the age cut-off for women, whether boys are in the "
+            + "low-risk tier, and the review deadline. With no active protocol every release is handled as high-risk.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO> getPositiveProtocol() {
+        return ResponseEntity.ok(transfusionService.getPositiveProtocol());
+    }
+
+    @PutMapping("/o-positive-protocol")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_DIRECTOR')")
+    @com.example.hms.security.audit.WriteAudited(skip = true, reason = "service emits CONFIGURATION_CHANGED with the new values")
+    @Operation(summary = "Set the hospital's emergency O RhD positive protocol",
+        description = "The hospital's biologist only; a super-admin alone is refused.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO> setPositiveProtocol(
+        @RequestBody com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO update) {
+        return ResponseEntity.ok(transfusionService.setPositiveProtocol(update));
+    }
+
+    @GetMapping("/o-positive-releases")
+    @PreAuthorize(READER)
+    @Operation(summary = "The hospital's emergency O RhD positive releases",
+        description = "Each with its tier, who decided, and what is still owed: countersignature, review, follow-up.")
+    public ResponseEntity<List<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO>> listPositiveReleases(
+        @RequestParam(defaultValue = "true") boolean openOnly) {
+        return ResponseEntity.ok(transfusionService.listPositiveReleases(openOnly));
+    }
+
+    @PostMapping("/o-positive-releases/{decisionId}/countersign")
+    @PreAuthorize(PHYSICIAN_OR_BIOLOGIST)
+    @Operation(summary = "Countersign the order an O positive bag went out on",
+        description = "A physician of the hospital who did not issue the bag; the laboratory director too outside "
+            + "the known-antibody tier.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> countersignPositiveRelease(
+        @PathVariable UUID decisionId) {
+        return ResponseEntity.ok(transfusionService.countersignPositiveRelease(decisionId));
+    }
+
+    @PostMapping("/o-positive-releases/{decisionId}/review")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_DIRECTOR')")
+    @Operation(summary = "The biologist's review of an O positive release")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> reviewPositiveRelease(
+        @PathVariable UUID decisionId,
+        @RequestBody(required = false) com.example.hms.payload.dto.transfusion.OPositiveReviewRequestDTO review) {
+        return ResponseEntity.ok(transfusionService.reviewPositiveRelease(decisionId, review == null ? null : review.getNote()));
+    }
+
+    @PostMapping("/o-positive-releases/{decisionId}/follow-up")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON')")
+    @Operation(summary = "Record the follow-up of an RhD positive exposure",
+        description = "The anti-D or exchange decision of a clinician, and that the patient was told.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> recordPositiveFollowUp(
+        @PathVariable UUID decisionId,
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO request) {
+        return ResponseEntity.ok(transfusionService.recordPositiveFollowUp(decisionId, request));
     }
 
     // ── Bedside ─────────────────────────────────────────────────────────

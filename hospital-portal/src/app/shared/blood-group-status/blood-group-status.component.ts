@@ -47,4 +47,8 @@ export class BloodGroupStatusComponent {
   protected readonly alloImmunised = computed(
     () => this.showAntibodies() && this.status()?.alloImmunised === true,
   );
+  /** V380: the permanent RhD positive exposure flag, shown where the antibody flag is. */
+  protected readonly rhdExposed = computed(
+    () => this.showAntibodies() && this.status()?.rhdPositiveExposed === true,
+  );
 }

@@ -58,4 +58,13 @@ public class BloodGroupStatusDTO {
 
     /** The antibody identified (« anti-E »); null while a positive screen is not yet identified. */
     private String antibodySpecificities;
+
+    /**
+     * V380: the patient received O RhD positive red cells in an emergency while at risk, at any hospital. A
+     * permanent flag. Null when this read did not look (list reads).
+     */
+    private Boolean rhdPositiveExposed;
+
+    /** When the newest such exposure happened. */
+    private java.time.LocalDateTime rhdPositiveExposedAt;
 }

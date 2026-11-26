@@ -142,6 +142,9 @@ class TransfusionServiceImplTest {
         second.setId(UUID.randomUUID());
         second.setHospital(hospital);
 
+        // V380: the O positive decision service, real, with the hospital protocol active (the defaults).
+        service.setPositiveAuthority(new com.example.hms.service.transfusion.OPositiveAuthorityFixture(
+            assignmentRepository, userRepository, roleValidator, clock).activeProtocol().service);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
         when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(caller));

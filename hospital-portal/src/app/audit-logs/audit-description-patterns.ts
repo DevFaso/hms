@@ -619,6 +619,42 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital allo-immunisation flag read \(transfusion safety, shown whatever the sharing choice\)$/,
   },
   {
+    // V380 (owner decision 2026-11-25): the RhD positive exposure flag follows the patient across hospitals.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_RHD_EXPOSURE_FLAG',
+    re: /^Cross-hospital RhD positive exposure flag read \(transfusion safety, shown whatever the sharing choice\)$/,
+  },
+  {
+    // V380: the decision behind an emergency O positive release; the tier and the basis are in the details.
+    key: 'AUDIT.DESC.O_POSITIVE_RELEASE_DECIDED',
+    re: /^Emergency O positive release decision recorded for blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.O_POSITIVE_RELEASE_COUNTERSIGNED',
+    re: /^Emergency O positive release countersigned by a physician: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.O_POSITIVE_RELEASE_REVIEWED',
+    re: /^Emergency O positive release reviewed by the biologist: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.O_POSITIVE_FOLLOW_UP_RECORDED',
+    re: /^RhD positive exposure follow-up recorded: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.O_POSITIVE_COUNTERSIGN_OVERDUE',
+    re: /^Emergency O positive release countersignature overdue, escalated to the laboratory director: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    // V380: a hospital's emergency O positive protocol changed (the values are in the details).
+    key: 'AUDIT.DESC.O_POSITIVE_PROTOCOL_CHANGED',
+    re: /^Emergency O positive release protocol changed$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],

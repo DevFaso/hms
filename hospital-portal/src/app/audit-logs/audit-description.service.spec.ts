@@ -435,6 +435,18 @@ describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
         'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
       ],
       [
+        'Emergency O positive release decision recorded for blood unit u against transfusion request r',
+        'AUDIT.DESC.O_POSITIVE_RELEASE_DECIDED',
+      ],
+      [
+        'Emergency O positive release countersigned by a physician: decision d',
+        'AUDIT.DESC.O_POSITIVE_RELEASE_COUNTERSIGNED',
+      ],
+      [
+        'Emergency O positive release countersignature overdue, escalated to the laboratory director: decision d',
+        'AUDIT.DESC.O_POSITIVE_COUNTERSIGN_OVERDUE',
+      ],
+      [
         'Emergency release on a documented O positive decision of blood unit u against transfusion request r',
         'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE',
       ],

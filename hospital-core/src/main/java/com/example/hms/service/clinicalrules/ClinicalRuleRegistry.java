@@ -58,7 +58,8 @@ public final class ClinicalRuleRegistry {
     private static final String DATE_2026_11_22_REVIEWED = "2026-11-22.2";
 
     private static final List<ClinicalRuleSet> ALL = List.of(
-        rule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE, DATE_2026_11_07,
+        // 2026-11-25 (.1): who may receive O positive moved to EMERGENCY_O_POSITIVE_AUTHORITY; the role sets stay.
+        rule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE, "2026-11-25.1",
             "service.support.EmergencyReleasePolicy"),
         rule(ClinicalRuleSetKey.NEWBORN_VITALS, DATE_2026_11_07,
             "service.maternity.NewbornAlertRules"),
@@ -158,7 +159,11 @@ public final class ClinicalRuleRegistry {
             "service.lab.CriticalResultEscalationSettingsService"),
         // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
         rule(ClinicalRuleSetKey.DISPENSED_PRODUCT_SUBSTITUTION, "2026-11-25.1",
-            "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"));
+            "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"),
+        // Owner decision 2026-11-25, research report « Emergency O positive release authority »: who decides, by tier.
+        rule(ClinicalRuleSetKey.EMERGENCY_O_POSITIVE_AUTHORITY, "2026-11-25.1",
+            "service.support.OPositiveReleaseAuthority", "service.transfusion.OPositiveReleaseAuthorityService",
+            "service.scheduled.OPositiveCountersignEscalationScheduler"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

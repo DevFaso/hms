@@ -29,4 +29,6 @@ public class EmergencyBloodReleaseResponseDTO {
     private boolean negativeUnobtainableStated;
     /** The O negative bags shown then, by the number on the bag. */
     private String negativeUnitsShown;
+    /** O positive red cells: the tier, who decided, and what is still owed (V380). Null for any other bag. */
+    private OPositiveReleaseDecisionDTO positiveDecision;
 }

@@ -15,6 +15,9 @@ export interface BloodGroupStatus {
   alloImmunised?: boolean | null;
   /** The antibody identified (« anti-E »); null while a positive screen is not yet identified. */
   antibodySpecificities?: string | null;
+  /** V380: received O RhD positive red cells in an emergency while at risk, at any hospital. Permanent. */
+  rhdPositiveExposed?: boolean | null;
+  rhdPositiveExposedAt?: string | null;
 }
 
 /** What a screen shows: the confirmed group when there is one, else the declared one (labelled so). */

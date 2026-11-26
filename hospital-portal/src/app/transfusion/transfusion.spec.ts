@@ -15,6 +15,8 @@ import {
   TransfusionRequestResponse,
   TransfusionService,
   EmergencyReleaseOptions,
+  OPositiveReleaseDecision,
+  OPositiveRule,
   RhFactor,
 } from '../services/transfusion.service';
 import { PatientResponse } from '../services/patient.service';
@@ -913,6 +915,160 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     const stubOptions = (over: Partial<EmergencyReleaseOptions> = {}) => {
       txSpy.emergencyReleaseOptions = jasmine.createSpy().and.returnValue(of(options(over)));
     };
+
+    describe('V380: the O positive authority rule', () => {
+      const rule = (over: Partial<OPositiveRule> = {}): OPositiveRule => ({
+        riskTier: 'HIGH_RISK',
+        tierReason: 'FEMALE_AT_OR_BELOW_CUTOFF',
+        protocolActive: true,
+        femaleAgeCutoff: 50,
+        boysLowRisk: false,
+        reviewDeadlineHours: 24,
+        issuerMayDecide: false,
+        plainIssueAllowed: false,
+        physicians: [{ userId: 'phys', displayName: 'Dr Physician' }],
+        biologists: [],
+        ...over,
+      });
+      const openWith = async (positiveRule: OPositiveRule) => {
+        await open(['ROLE_LAB_TECHNICIAN']);
+        stubOptions({ units: [unitOption('opos', true)], positiveRule });
+        txSpy.emergencyRelease = jasmine
+          .createSpy()
+          .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+        component.openEmergencyRelease(emergency);
+        component.emergencyUnitId = 'opos';
+        fixture.detectChanges();
+      };
+
+      it('a patient at risk: the form says who decides, offers physicians only, and sends the verbal order', async () => {
+        await openWith(rule());
+        expect(el('opos-form-tier')).not.toBeNull();
+        expect(component.emergencyDeciders().map((c) => c.userId)).toEqual(['phys']);
+        expect(el('physician-unreachable')).not.toBeNull();
+        expect(el('verbal-order')).not.toBeNull();
+
+        component.emergencyReason = 'O négatif épuisé';
+        expect(component.emergencyFormIncomplete()).toBeTrue();
+        component.emergencyAuthoriserId = 'phys';
+        expect(component.emergencyFormIncomplete()).toBeFalse();
+        component.submitEmergencyRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'O_POSITIVE_DECISION',
+          reason: 'O négatif épuisé',
+          authoriserUserId: 'phys',
+          verbalOrder: true,
+        });
+      });
+
+      it('never blocks: with no physician reachable the issuer submits alone, and says so', async () => {
+        await openWith(rule());
+        component.emergencyReason = 'O négatif épuisé';
+        component.emergencyAuthoriserId = 'phys';
+        component.emergencyUnreachable = true;
+        component.onEmergencyUnreachableChanged();
+        fixture.detectChanges();
+        expect(component.emergencyAuthoriserId).toBe('');
+        expect(component.emergencyFormIncomplete()).toBeFalse();
+        expect(el('verbal-order')).toBeNull();
+
+        component.submitEmergencyRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'O_POSITIVE_DECISION',
+          reason: 'O négatif épuisé',
+          physicianUnreachable: true,
+        });
+      });
+
+      it('a known antibody: the biologist named goes with the physician', async () => {
+        await openWith(
+          rule({
+            riskTier: 'KNOWN_ANTIBODY',
+            tierReason: 'KNOWN_ANTIBODY',
+            biologists: [{ userId: 'bio', displayName: 'Dr Bio' }],
+          }),
+        );
+        expect(document.getElementById('em-biologist')).not.toBeNull();
+        component.emergencyReason = 'Hémorragie';
+        component.emergencyAuthoriserId = 'phys';
+        component.emergencyBiologistId = 'bio';
+        component.emergencyVerbalOrder = false;
+        component.submitEmergencyRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'O_POSITIVE_DECISION',
+          reason: 'Hémorragie',
+          authoriserUserId: 'phys',
+          verbalOrder: false,
+          biologistUserId: 'bio',
+        });
+      });
+
+      it('the low-risk tier keeps the form as it was: the issuer may be named, nothing more is sent', async () => {
+        await openWith(
+          rule({
+            riskTier: 'LOW_RISK',
+            tierReason: 'ADULT_MALE',
+            issuerMayDecide: true,
+            physicians: [],
+          }),
+        );
+        expect(component.emergencyPhysicianTier()).toBeFalse();
+        expect(el('physician-unreachable')).toBeNull();
+        expect(component.emergencyDeciders().map((c) => c.userId)).toEqual(['doc']);
+        component.emergencyReason = 'Hémorragie';
+        component.emergencyAuthoriserId = 'doc';
+        component.submitEmergencyRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'O_POSITIVE_DECISION',
+          reason: 'Hémorragie',
+          authoriserUserId: 'doc',
+        });
+      });
+
+      it('the request shows the permanent RhD exposure flag and what is owed on each O positive release', async () => {
+        await start(['ROLE_DOCTOR']);
+        const exposed = mockRequest({
+          id: 'req-1',
+          urgency: 'EMERGENCY',
+          status: 'ISSUED',
+          rhdPositiveExposed: true,
+          rhdPositiveExposedAt: '2026-11-25T22:00:00',
+          rhdPositiveExposedHospitalName: 'Clinique A',
+          emergencyReleases: [
+            {
+              id: 'rel-1',
+              bloodUnitId: 'opos',
+              unitNumber: 'U-OPOS',
+              releaseType: 'O_POSITIVE_DECISION',
+              reason: 'Hémorragie',
+              authoriserName: 'Dr Physician',
+              issuedByName: 'Tech',
+              issuedAt: '2026-11-25T22:00:00',
+              antibodyWarning: false,
+              positiveDecision: {
+                riskTier: 'HIGH_RISK',
+                decisionBasis: 'PHYSICIAN_ORDER',
+                countersignDueAt: '2026-11-26T22:00:00',
+                countersignedAt: null,
+                reviewedAt: null,
+              } as OPositiveReleaseDecision,
+            },
+          ],
+        });
+        txSpy.getRequest.and.returnValue(of(exposed));
+        component.openRequest(exposed);
+        fixture.detectChanges();
+        expect(el('rhd-exposed')).not.toBeNull();
+        const line = el('release-opos-decision')!.textContent ?? '';
+        expect(line).toContain('TRANSFUSION.OPOS.TIER_HIGH_RISK');
+        expect(line).toContain('TRANSFUSION.OPOS.COUNTERSIGN_OWED');
+        expect(line).toContain('TRANSFUSION.OPOS.REVIEW_OWED');
+      });
+    });
 
     it('the lab can release from an emergency request with no bag on it, on what the server lists', async () => {
       await open(['ROLE_LAB_TECHNICIAN']);

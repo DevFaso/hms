@@ -1,0 +1,399 @@
+<section class="opos" data-testid="o-positive-releases">
+  <!-- ══ The hospital's protocol ══ -->
+  @if (protocol(); as p) {
+    <div class="opos-protocol" [class.inactive]="!p.active" data-testid="opos-protocol">
+      <div class="opos-protocol-head">
+        <h3>{{ 'TRANSFUSION.OPOS.PROTOCOL_TITLE' | translate }}</h3>
+        <span class="opos-chip" [class.chip-warn]="!p.active" [class.chip-ok]="p.active">
+          {{
+            (p.active ? 'TRANSFUSION.OPOS.PROTOCOL_ACTIVE' : 'TRANSFUSION.OPOS.PROTOCOL_INACTIVE')
+              | translate
+          }}
+        </span>
+      </div>
+      @if (!p.active) {
+        <p class="opos-note warn" role="status" data-testid="opos-no-protocol">
+          {{ 'TRANSFUSION.OPOS.NO_PROTOCOL_HINT' | translate }}
+        </p>
+      }
+      @if (!editingProtocol()) {
+        <ul class="opos-facts">
+          <li>
+            {{ 'TRANSFUSION.OPOS.CUTOFF_VALUE' | translate: { age: p.femaleAgeCutoff } }}
+          </li>
+          <li>
+            {{
+              (p.boysLowRisk ? 'TRANSFUSION.OPOS.BOYS_LOW' : 'TRANSFUSION.OPOS.BOYS_HIGH')
+                | translate
+            }}
+          </li>
+          <li>
+            {{ 'TRANSFUSION.OPOS.DEADLINE_VALUE' | translate: { hours: p.reviewDeadlineHours } }}
+          </li>
+        </ul>
+        <p class="opos-note">{{ 'TRANSFUSION.OPOS.PROVISIONAL_NOTE' | translate }}</p>
+        @if (canSetProtocol) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="opos-edit-protocol"
+            (click)="editProtocol()"
+          >
+            {{ 'TRANSFUSION.OPOS.EDIT_PROTOCOL' | translate }}
+          </button>
+        }
+      } @else {
+        <div class="opos-form">
+          <label class="checkbox-field">
+            <input type="checkbox" id="opos-active" [(ngModel)]="draft.active" />
+            {{ 'TRANSFUSION.OPOS.FIELD_ACTIVE' | translate }}
+          </label>
+          <div class="field">
+            <label for="opos-cutoff">{{ 'TRANSFUSION.OPOS.FIELD_CUTOFF' | translate }}</label>
+            <input
+              appFormControl
+              id="opos-cutoff"
+              type="number"
+              min="40"
+              max="60"
+              [(ngModel)]="draft.femaleAgeCutoff"
+            />
+          </div>
+          <label class="checkbox-field">
+            <input type="checkbox" id="opos-boys" [(ngModel)]="draft.boysLowRisk" />
+            {{ 'TRANSFUSION.OPOS.FIELD_BOYS' | translate }}
+          </label>
+          <div class="field">
+            <label for="opos-deadline">{{ 'TRANSFUSION.OPOS.FIELD_DEADLINE' | translate }}</label>
+            <input
+              appFormControl
+              id="opos-deadline"
+              type="number"
+              min="1"
+              max="72"
+              [(ngModel)]="draft.reviewDeadlineHours"
+            />
+          </div>
+          <div class="opos-actions">
+            <button type="button" class="btn-secondary" (click)="cancelProtocol()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="opos-save-protocol"
+              [disabled]="savingProtocol()"
+              (click)="saveProtocol()"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ══ The releases ══ -->
+  <div class="opos-list-head">
+    <h3>{{ 'TRANSFUSION.OPOS.LIST_TITLE' | translate }}</h3>
+    <div
+      class="opos-toggle"
+      role="group"
+      [attr.aria-label]="'TRANSFUSION.OPOS.LIST_TITLE' | translate"
+    >
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="openOnly()"
+        [attr.aria-pressed]="openOnly()"
+        (click)="setOpenOnly(true)"
+      >
+        {{ 'TRANSFUSION.OPOS.FILTER_OPEN' | translate }}
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="!openOnly()"
+        [attr.aria-pressed]="!openOnly()"
+        (click)="setOpenOnly(false)"
+      >
+        {{ 'TRANSFUSION.OPOS.FILTER_ALL' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (!loading() && !loadFailed() && releases().length === 0) {
+    <div class="empty-state" data-testid="opos-empty">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">task_alt</span>
+      <h3>{{ 'TRANSFUSION.OPOS.EMPTY' | translate }}</h3>
+      <p>{{ 'TRANSFUSION.OPOS.EMPTY_HINT' | translate }}</p>
+    </div>
+  }
+
+  @for (r of releases(); track r.id) {
+    <article
+      class="opos-card"
+      [class.tier-high]="r.riskTier !== 'LOW_RISK'"
+      data-testid="opos-card"
+    >
+      <header class="opos-card-head">
+        <div>
+          <strong class="mono">{{ r.unitNumber || '—' }}</strong>
+          <span class="opos-patient">{{ r.patientName || '—' }}</span>
+        </div>
+        <span
+          class="opos-chip"
+          [class.chip-ok]="r.riskTier === 'LOW_RISK'"
+          [class.chip-warn]="r.riskTier === 'HIGH_RISK'"
+          [class.chip-danger]="r.riskTier === 'KNOWN_ANTIBODY'"
+          data-testid="opos-tier"
+        >
+          {{ 'TRANSFUSION.OPOS.TIER_' + r.riskTier | translate }}
+        </span>
+      </header>
+
+      <dl class="opos-grid">
+        <div>
+          <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_AT' | translate }}</dt>
+          <dd>{{ r.issuedAt | serverTime | date: 'short' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.OPOS.PATIENT_AT_RELEASE' | translate }}</dt>
+          <dd>
+            {{ 'TRANSFUSION.OPOS.SEX_' + r.patientSex | translate }},
+            {{
+              r.patientAgeYears === null
+                ? ('TRANSFUSION.OPOS.AGE_UNKNOWN' | translate)
+                : ('TRANSFUSION.OPOS.AGE_YEARS' | translate: { age: r.patientAgeYears })
+            }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.OPOS.WHY_TIER' | translate }}</dt>
+          <dd>{{ 'TRANSFUSION.OPOS.REASON_' + r.tierReason | translate }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.OPOS.O_NEGATIVE' | translate }}</dt>
+          <dd>{{ 'TRANSFUSION.OPOS.NEG_' + r.negativeStatus | translate }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.OPOS.DECIDED_BY' | translate }}</dt>
+          <dd data-testid="opos-basis">
+            {{ 'TRANSFUSION.OPOS.BASIS_' + r.decisionBasis | translate }}
+            @if (r.decidedByName) {
+              — {{ r.decidedByName }}
+            }
+            @if (r.biologistName) {
+              ({{ 'TRANSFUSION.OPOS.BIOLOGIST' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.biologistName }})
+            }
+            @if (r.verbalOrder) {
+              <span class="warn-inline">{{ 'TRANSFUSION.OPOS.VERBAL_ORDER' | translate }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_BY' | translate }}</dt>
+          <dd>{{ r.issuedByName || '—' }}</dd>
+        </div>
+      </dl>
+
+      <!-- Countersignature -->
+      @if (r.countersignDueAt) {
+        <div
+          class="opos-step"
+          [class.done]="r.countersignedAt"
+          [class.overdue]="r.countersignOverdue"
+        >
+          <span class="opos-step-label">{{ 'TRANSFUSION.OPOS.COUNTERSIGN' | translate }}</span>
+          @if (r.countersignedAt) {
+            <span data-testid="opos-countersigned">
+              {{
+                'TRANSFUSION.OPOS.DONE_BY'
+                  | translate
+                    : {
+                        name: r.countersignedByName || '—',
+                        at: (r.countersignedAt | serverTime | date: 'short'),
+                      }
+              }}
+            </span>
+          } @else {
+            <span data-testid="opos-countersign-due">
+              {{
+                (r.countersignOverdue
+                  ? 'TRANSFUSION.OPOS.OVERDUE_SINCE'
+                  : 'TRANSFUSION.OPOS.DUE_BY'
+                ) | translate: { at: (r.countersignDueAt | serverTime | date: 'short') }
+              }}
+            </span>
+            @if (canCountersign) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                data-testid="opos-countersign"
+                [disabled]="busyId() === r.id"
+                (click)="countersign(r)"
+              >
+                {{ 'TRANSFUSION.OPOS.COUNTERSIGN_ACTION' | translate }}
+              </button>
+            }
+          }
+        </div>
+      }
+
+      <!-- Review by the biologist -->
+      <div class="opos-step" [class.done]="r.reviewedAt">
+        <span class="opos-step-label">
+          {{ 'TRANSFUSION.OPOS.REVIEW' | translate }} ·
+          {{ 'TRANSFUSION.OPOS.PRIORITY_' + r.reviewPriority | translate }}
+        </span>
+        @if (r.reviewedAt) {
+          <span data-testid="opos-reviewed">
+            {{
+              'TRANSFUSION.OPOS.DONE_BY'
+                | translate
+                  : {
+                      name: r.reviewedByName || '—',
+                      at: (r.reviewedAt | serverTime | date: 'short'),
+                    }
+            }}
+            @if (r.reviewNote) {
+              — {{ r.reviewNote }}
+            }
+          </span>
+        } @else {
+          <span>
+            {{
+              'TRANSFUSION.OPOS.DUE_BY'
+                | translate: { at: (r.reviewDueAt | serverTime | date: 'short') }
+            }}
+          </span>
+          @if (canReview) {
+            <div class="opos-inline-form">
+              <textarea
+                appFormControl
+                rows="2"
+                maxlength="2000"
+                [id]="'opos-review-' + r.id"
+                [attr.aria-label]="'TRANSFUSION.OPOS.REVIEW_NOTE' | translate"
+                [placeholder]="'TRANSFUSION.OPOS.REVIEW_NOTE' | translate"
+                [(ngModel)]="reviewNotes[r.id]"
+              ></textarea>
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                data-testid="opos-review"
+                [disabled]="busyId() === r.id"
+                (click)="review(r)"
+              >
+                {{ 'TRANSFUSION.OPOS.REVIEW_ACTION' | translate }}
+              </button>
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Follow-up of the exposure -->
+      @if (r.followUpRequired) {
+        <div class="opos-step" [class.done]="!followUpOwed(r)" data-testid="opos-follow-up">
+          <span class="opos-step-label">{{ 'TRANSFUSION.OPOS.FOLLOW_UP' | translate }}</span>
+          <ul class="opos-facts">
+            <li>
+              {{ 'TRANSFUSION.OPOS.ANTI_D' | translate }}{{ 'COMMON.COLON' | translate }}
+              @if (r.antiDDecision) {
+                {{ 'TRANSFUSION.OPOS.ANTI_D_' + r.antiDDecision | translate }}
+                ({{ r.antiDDecidedByName || '—' }})
+              } @else {
+                {{ 'TRANSFUSION.OPOS.PENDING' | translate }}
+              }
+            </li>
+            <li>
+              {{ 'TRANSFUSION.OPOS.PATIENT_INFORMED' | translate }}{{ 'COMMON.COLON' | translate }}
+              @if (r.patientInformedAt) {
+                {{ r.patientInformedAt | serverTime | date: 'short' }}
+                ({{ r.patientInformedByName || '—' }})
+              } @else {
+                {{ 'TRANSFUSION.OPOS.PENDING' | translate }}
+              }
+            </li>
+            <li>
+              {{ 'TRANSFUSION.OPOS.ANTIBODY_SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
+              @if (r.antibodyScreenDoneAt) {
+                {{ r.antibodyScreenDoneAt | serverTime | date: 'shortDate' }}
+              } @else {
+                {{
+                  'TRANSFUSION.OPOS.SCREEN_WINDOW'
+                    | translate
+                      : {
+                          from: (r.antibodyScreenDueFrom | serverTime | date: 'shortDate'),
+                          to: (r.antibodyScreenDueBy | serverTime | date: 'shortDate'),
+                        }
+                }}
+              }
+            </li>
+          </ul>
+          @if (r.followUpNote) {
+            <p class="opos-note">{{ r.followUpNote }}</p>
+          }
+          @if (canFollowUp && followUpOwed(r)) {
+            <div class="opos-inline-form">
+              <textarea
+                appFormControl
+                rows="2"
+                maxlength="2000"
+                [id]="'opos-fu-note-' + r.id"
+                [attr.aria-label]="'TRANSFUSION.OPOS.FOLLOW_UP_NOTE' | translate"
+                [placeholder]="'TRANSFUSION.OPOS.FOLLOW_UP_NOTE' | translate"
+                [(ngModel)]="followUpNotes[r.id]"
+              ></textarea>
+              @if (!r.antiDDecision) {
+                <form class="opos-inline-form" (ngSubmit)="recordAntiD(r)">
+                  <div class="field">
+                    <label [for]="'opos-antid-' + r.id">
+                      {{ 'TRANSFUSION.OPOS.ANTI_D' | translate }} *
+                    </label>
+                    <select
+                      appFormControl
+                      required
+                      name="antiDDecision"
+                      [id]="'opos-antid-' + r.id"
+                      [(ngModel)]="followUpDecision[r.id]"
+                    >
+                      <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                      @for (d of antiDDecisions; track d) {
+                        <option [value]="d">
+                          {{ 'TRANSFUSION.OPOS.ANTI_D_' + d | translate }}
+                        </option>
+                      }
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    class="btn-primary btn-sm"
+                    data-testid="opos-anti-d-save"
+                    [disabled]="busyId() === r.id"
+                    [appSubmitGuard]="!followUpDecision[r.id]"
+                    [submitGuardFields]="['opos-antid-' + r.id]"
+                  >
+                    {{ 'TRANSFUSION.OPOS.ANTI_D_ACTION' | translate }}
+                  </button>
+                </form>
+              }
+              @if (!r.patientInformedAt) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  data-testid="opos-informed-save"
+                  [disabled]="busyId() === r.id"
+                  (click)="recordInformed(r)"
+                >
+                  {{ 'TRANSFUSION.OPOS.PATIENT_INFORMED_CHECK' | translate }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </article>
+  }
+</section>

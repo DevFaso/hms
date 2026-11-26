@@ -345,6 +345,11 @@ final class ComputedKeys {
             new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
             new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // V380: the notices of an O positive release; the keys are the literals set on the item (setTitleKey / setBodyKey).
+        r.put("com/example/hms/service/transfusion/OPositiveReleaseAuthorityService.java|titleKey",
+            new Open("read back from the item: the REVIEW, COUNTERSIGN, FOLLOW_UP and OVERDUE title keys, all literal constants"));
+        r.put("com/example/hms/service/transfusion/OPositiveReleaseAuthorityService.java|bodyKey",
+            new Open("read back from the item: the REVIEW (four), COUNTERSIGN, FOLLOW_UP and OVERDUE body keys, all literal constants"));
         // QA D3351: what a routine issue to an allo-immunised patient still lacks (PositiveAntibodyScreenPolicy.Missing).
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|lack.messageKey()",
             values("transfusion.antibody.", List.of("workupRequired", "antiglobulinRequired", "antigenNegativeRequired",

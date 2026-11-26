@@ -117,6 +117,28 @@ public interface TransfusionService {
     /** What the emergency rules say for this request, for the form that asks. */
     EmergencyReleaseOptionsDTO emergencyReleaseOptions(UUID requestId);
 
+    // ── The O positive authority rule (V380) ────────────────────────────
+
+    /** The emergency O RhD positive protocol of the acting hospital; the defaults, inactive, when it wrote none. */
+    com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO getPositiveProtocol();
+
+    /** The biologist of the acting hospital turns the protocol on and sets it. */
+    com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO setPositiveProtocol(
+        com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO update);
+
+    /** The O positive releases of the acting hospital: all, or those with something still owed. */
+    java.util.List<com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> listPositiveReleases(boolean openOnly);
+
+    /** A physician who did not issue the bag signs the order it went out on. */
+    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO countersignPositiveRelease(UUID decisionId);
+
+    /** The review of the biologist. */
+    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO reviewPositiveRelease(UUID decisionId, String note);
+
+    /** The anti-D or exchange decision of a clinician, and that the patient was told. */
+    com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO recordPositiveFollowUp(UUID decisionId,
+        com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO request);
+
     // ── Bedside ─────────────────────────────────────────────────────────
 
     TransfusionAdministrationResponseDTO startAdministration(TransfusionAdministrationRequestDTO request);

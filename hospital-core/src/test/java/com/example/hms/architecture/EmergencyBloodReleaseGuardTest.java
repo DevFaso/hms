@@ -127,11 +127,14 @@ class EmergencyBloodReleaseGuardTest {
     }
 
     @Test
-    @DisplayName("who may receive O positive is decided in EmergencyReleasePolicy and AboGroup, read by the service only")
+    @DisplayName("who may receive O positive is decided by the O positive decision service (V380) and AboGroup, read by the two services only")
     void theRulesLiveInOnePlace() throws IOException {
-        assertThat(filesContaining("EmergencyReleasePolicy.oPositiveStep(")).containsExactly("service/impl/TransfusionServiceImpl.java");
+        // Since V380 the tier of a patient is OPositiveReleaseAuthority's: EmergencyOPositiveAuthorityGuardTest holds it.
+        assertThat(filesContaining("EmergencyReleasePolicy.oPositiveStep(")).isEmpty();
+        assertThat(filesContaining("positiveAuthority.assess(")).containsExactly("service/impl/TransfusionServiceImpl.java");
         assertThat(filesContaining("AboGroup.documentedReleaseAllows(")).containsExactly("service/impl/TransfusionServiceImpl.java");
-        assertThat(filesContaining("AboGroup.isEmergencyOPositive(")).containsExactly("service/impl/TransfusionServiceImpl.java");
+        assertThat(filesContaining("AboGroup.isEmergencyOPositive(")).containsExactlyInAnyOrder(
+            "service/impl/TransfusionServiceImpl.java", "service/transfusion/OPositiveReleaseAuthorityService.java");
         assertThat(filesContaining("AboGroup.emergencyReleaseRh()")).containsExactly("service/impl/TransfusionServiceImpl.java");
         assertThat(filesContaining("EXEMPT_FROM_AGE")).as("the platelet protocol's age is no emergency release age")
             .containsExactly("enums/ChildbearingPotential.java");
