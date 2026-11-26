@@ -142,6 +142,32 @@ public class InvoiceItem extends BaseEntity {
     private BigDecimal payerShareAmount = BigDecimal.ZERO;
 
     /**
+     * Insurer claims plan PR 1 (V383): the clinical order this line was posted for at checkout (an imaging order, a
+     * procedure order), so a pre-authorisation number recorded on the order later reaches the line. Both null for a
+     * line typed at the till, or posted before V383. The type is a {@code BillableOrderType} name (the V383 CHECK
+     * lists them), kept as text so the model does not depend on the billing service's registry.
+     */
+    @Column(name = "source_order_type", length = 30, updatable = false)
+    private String sourceOrderType;
+
+    @Column(name = "source_order_id", updatable = false)
+    private UUID sourceOrderId;
+
+    /**
+     * Insurer claims plan PR 1 (V383, QA D3984): the insurer's pre-authorisation number for this act, copied from its
+     * order or recorded on the line by the desk or billing; printed on the invoice and on the insurer-share list.
+     */
+    @Column(name = "pre_authorisation_number", length = 120)
+    private String preAuthorisationNumber;
+
+    /** Who recorded {@link #preAuthorisationNumber}; null when it was copied from the order at checkout. */
+    @Column(name = "pre_authorisation_recorded_by")
+    private UUID preAuthorisationRecordedBy;
+
+    @Column(name = "pre_authorisation_recorded_at")
+    private java.time.LocalDateTime preAuthorisationRecordedAt;
+
+    /**
      * QA D72: this ran on update only, so a NEW line reached the insert with
      * no total and bean validation refused it ("totalPrice must not be null").
      */

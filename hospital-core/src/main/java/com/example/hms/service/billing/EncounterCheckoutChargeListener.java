@@ -231,6 +231,13 @@ public class EncounterCheckoutChargeListener {
             .priceListPriceId(tariff != null ? tariff.priceId() : null)
             // QA D3603 (r71): the category a plan rule sees, whatever the price source turns out to be.
             .coverageCategory(charge.coverageCategory() != null ? charge.coverageCategory() : type.coverageCategory())
+            // Insurer claims plan PR 1 (V383, QA D3984): the order the line bills, and the insurer's
+            // pre-authorisation number already recorded on it (a copy: no one typed it on the line).
+            .sourceOrderType(charge.sourceOrderId() != null ? type.name() : null)
+            .sourceOrderId(charge.sourceOrderId())
+            .preAuthorisationNumber(charge.preAuthorisationNumber())
+            .preAuthorisationRecordedAt(charge.preAuthorisationNumber() != null
+                ? java.time.LocalDateTime.now(ZoneId.systemDefault()) : null)
             .build();
     }
 

@@ -35,6 +35,92 @@
     </button>
   </div>
 
+  <!-- Insurer claims PR 1 (G2): payer, plan and service period. -->
+  <div
+    class="share-filters"
+    role="search"
+    data-testid="payer-shares-filters"
+    [attr.aria-label]="'INSURER_CLAIMS.SHARES.FILTERS' | translate"
+  >
+    <div class="share-filter">
+      <label for="payer-shares-payer">{{ 'INSURER_CLAIMS.SHARES.PAYER' | translate }}</label>
+      <select
+        appFormControl
+        id="payer-shares-payer"
+        name="payerId"
+        data-testid="payer-shares-payer"
+        [ngModel]="payerId()"
+        (ngModelChange)="setPayer($event)"
+      >
+        <option value="">{{ 'INSURER_CLAIMS.SHARES.ALL_PAYERS' | translate }}</option>
+        @for (payer of payers(); track payer.id) {
+          <option [value]="payer.id">{{ payer.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="share-filter">
+      <label for="payer-shares-plan">{{ 'R70_MONEY.SHARES.PLAN' | translate }}</label>
+      <select
+        appFormControl
+        id="payer-shares-plan"
+        name="planId"
+        data-testid="payer-shares-plan"
+        [disabled]="!payerId()"
+        [ngModel]="planId()"
+        (ngModelChange)="planId.set($event ?? '')"
+      >
+        <option value="">{{ 'INSURER_CLAIMS.SHARES.ALL_PLANS' | translate }}</option>
+        @for (plan of plans(); track plan.id) {
+          <option [value]="plan.id">{{ plan.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="share-filter">
+      <label for="payer-shares-from">{{ 'INSURER_CLAIMS.SHARES.FROM' | translate }}</label>
+      <input
+        appFormControl
+        type="date"
+        id="payer-shares-from"
+        name="fromDate"
+        data-testid="payer-shares-from"
+        [ngModel]="fromDate()"
+        (ngModelChange)="fromDate.set($event ?? '')"
+      />
+    </div>
+    <div class="share-filter">
+      <label for="payer-shares-to">{{ 'INSURER_CLAIMS.SHARES.TO' | translate }}</label>
+      <input
+        appFormControl
+        type="date"
+        id="payer-shares-to"
+        name="toDate"
+        data-testid="payer-shares-to"
+        [attr.aria-invalid]="periodReversed() || null"
+        [ngModel]="toDate()"
+        (ngModelChange)="toDate.set($event ?? '')"
+      />
+    </div>
+    <div class="share-filter-actions">
+      <button
+        type="button"
+        class="btn-primary btn-sm"
+        data-testid="payer-shares-apply"
+        [disabled]="loading()"
+        (click)="applyFilters()"
+      >
+        {{ 'INSURER_CLAIMS.SHARES.APPLY' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-secondary btn-sm"
+        [disabled]="loading()"
+        (click)="clearFilters()"
+      >
+        {{ 'INSURER_CLAIMS.SHARES.CLEAR' | translate }}
+      </button>
+    </div>
+  </div>
+
   @if (loading()) {
     <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
   } @else if (failed()) {
@@ -47,16 +133,18 @@
     </p>
   } @else {
     <p class="share-total" data-testid="payer-shares-total">
-      {{
-        'R70_MONEY.SHARES.TOTAL'
-          | translate: { count: rows().length, amount: (total() | cfa: 'XOF') }
-      }}
+      {{ 'R70_MONEY.SHARES.TOTAL' | translate: { count: count(), amount: (total() | cfa: 'XOF') } }}
     </p>
     <ul class="share-list" data-testid="payer-shares-list">
       @for (row of rows(); track row.id) {
         <li class="share-card" [attr.data-testid]="'payer-share-' + row.id">
           <div class="share-main">
-            <strong>{{ row.payerName || '—' }}</strong>
+            <strong>
+              {{ row.payerName || '—' }}
+              @if (row.payerType) {
+                <span class="muted">· {{ row.payerType | enumLabel: 'payerType' }}</span>
+              }
+            </strong>
             <span class="share-status" [attr.data-status]="row.status">{{
               row.status | keyLabel: 'R70_MONEY.SHARES.STATUS.'
             }}</span>
@@ -85,10 +173,82 @@
               </dd>
             </div>
             <div>
+              <dt>{{ 'INSURER_CLAIMS.SHARES.POLICY' | translate }}</dt>
+              <dd [attr.data-testid]="'payer-share-policy-' + row.id">
+                {{ row.policyNumber || '—' }}
+              </dd>
+            </div>
+            @if (row.subscriberName) {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.SHARES.SUBSCRIBER' | translate }}</dt>
+                <dd>
+                  {{ row.subscriberName }}
+                  @if (row.subscriberRelationship) {
+                    <span class="muted">({{ row.subscriberRelationship }})</span>
+                  }
+                </dd>
+              </div>
+            }
+            <div>
               <dt>{{ 'R70_MONEY.SHARES.AMOUNT' | translate }}</dt>
               <dd class="share-amount">{{ row.amount | cfa: 'XOF' }}</dd>
             </div>
           </dl>
+          @if (!row.coverageVerifiedAt) {
+            <p class="share-warning" [attr.data-testid]="'payer-share-unverified-' + row.id">
+              {{ 'INSURER_CLAIMS.SHARES.UNVERIFIED' | translate }}
+            </p>
+          }
+          @if (row.lines?.length) {
+            <div class="share-acts-wrap">
+              <table class="share-acts" [attr.data-testid]="'payer-share-acts-' + row.id">
+                <caption class="sr-only">
+                  {{
+                    'INSURER_CLAIMS.SHARES.ACTS' | translate
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'INSURER_CLAIMS.SHARES.ACT' | translate }}</th>
+                    <th scope="col">{{ 'INSURER_CLAIMS.SHARES.PRE_AUTH' | translate }}</th>
+                    <th scope="col" class="amount">
+                      {{ 'INSURER_CLAIMS.SHARES.PAYER_PART' | translate }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (act of row.lines; track act.itemId) {
+                    <tr>
+                      <td>
+                        @if (act.actCode) {
+                          <span class="act-code">{{ act.actCode }}</span>
+                        }
+                        {{ act.description || '—' }}
+                        @if (act.quantity && act.quantity > 1) {
+                          <span class="muted">× {{ act.quantity }}</span>
+                        }
+                        @if (act.category) {
+                          <div class="muted">
+                            {{ act.category | enumLabel: 'priceListCategory' }}
+                          </div>
+                        }
+                      </td>
+                      <td>
+                        @if (act.preAuthorisationNumber) {
+                          {{ act.preAuthorisationNumber }}
+                        } @else {
+                          <span class="muted">{{
+                            'INSURER_CLAIMS.SHARES.NO_PRE_AUTH' | translate
+                          }}</span>
+                        }
+                      </td>
+                      <td class="amount">{{ act.payerShare | cfa: 'XOF' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
           @if (canSettle(row)) {
             <div class="share-actions">
               @if (canClaim(row)) {
@@ -154,5 +314,30 @@
         </li>
       }
     </ul>
+    @if (pages() > 1) {
+      <nav class="share-pager" [attr.aria-label]="'INSURER_CLAIMS.SHARES.PAGES' | translate">
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          data-testid="payer-shares-prev"
+          [disabled]="loading() || page() === 0"
+          (click)="goTo(page() - 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.PREVIOUS' | translate }}
+        </button>
+        <span data-testid="payer-shares-page">
+          {{ 'INSURER_CLAIMS.SHARES.PAGE' | translate: { page: page() + 1, pages: pages() } }}
+        </span>
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          data-testid="payer-shares-next"
+          [disabled]="loading() || page() + 1 >= pages()"
+          (click)="goTo(page() + 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.NEXT' | translate }}
+        </button>
+      </nav>
+    }
   }
 </div>

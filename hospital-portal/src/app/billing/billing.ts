@@ -58,6 +58,7 @@ import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-add
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { LinePreAuthorisationComponent } from './line-pre-authorisation/line-pre-authorisation.component';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { amountStillDue, pendingDeclared } from '../shared/payment-prefill';
 import { refusalReason } from '../shared/refusal-reason';
@@ -132,6 +133,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     InvoicePayerSharesComponent,
     RefundQueueComponent,
     RouterLink,
+    LinePreAuthorisationComponent,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -1033,6 +1035,11 @@ export class BillingComponent implements OnInit {
   }
 
   /* ── Invoice lines ── */
+
+  /** Insurer claims PR 1 (QA D3984): a line's pre-authorisation number was recorded; its lines are read again. */
+  preAuthorisationSaved(invoiceId: string): void {
+    this.loadItems(invoiceId);
+  }
 
   private loadItems(invoiceId: string, focusLineId?: string): void {
     this.itemsLoading.set(true);

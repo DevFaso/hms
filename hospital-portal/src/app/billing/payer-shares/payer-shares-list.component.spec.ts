@@ -3,7 +3,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { PayerSharesListComponent } from './payer-shares-list.component';
-import { BillingService, OpenPayerShare } from '../../services/billing.service';
+import { BillingService, OpenPayerShare, PayerSharePage } from '../../services/billing.service';
+import { PayerCatalogueService } from '../../services/payer-catalogue.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
@@ -25,19 +26,58 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     planName: 'Formule Test Essentielle',
     amount: 8500,
     status: 'OPEN',
+    payerType: 'MUTUELLE',
+    policyNumber: 'MTA-0042',
+    subscriberName: 'Awa Sawadogo',
+    coverageVerifiedAt: null,
+    lines: [
+      {
+        itemId: 'line-1',
+        description: 'Radio thorax',
+        actCode: 'IMG-RTX',
+        category: 'IMAGING',
+        quantity: 1,
+        grossAmount: 10000,
+        payerShare: 8000,
+        patientShare: 2000,
+        preAuthorisationNumber: 'BON-117',
+      },
+    ],
   };
 
-  function render(roles: string[], rows: OpenPayerShare[] = [open]): void {
+  const pageOf = (rows: OpenPayerShare[], totalPages = 1): PayerSharePage => ({
+    content: rows,
+    page: 0,
+    size: 25,
+    totalElements: rows.length,
+    totalPages,
+    totalAmount: rows.reduce((sum, r) => sum + r.amount, 0),
+  });
+
+  function render(roles: string[], rows: OpenPayerShare[] = [open], totalPages = 1): void {
     billing = jasmine.createSpyObj<BillingService>('BillingService', [
-      'listHospitalPayerShares',
+      'searchHospitalPayerShares',
       'decidePayerShare',
     ]);
-    billing.listHospitalPayerShares.and.returnValue(of(rows));
+    billing.searchHospitalPayerShares.and.returnValue(of(pageOf(rows, totalPages)));
     billing.decidePayerShare.and.returnValue(of([]));
     TestBed.configureTestingModule({
       imports: [PayerSharesListComponent, TranslateModule.forRoot()],
       providers: [
         { provide: BillingService, useValue: billing },
+        {
+          provide: PayerCatalogueService,
+          useValue: {
+            list: () =>
+              of([
+                {
+                  id: 'payer-1',
+                  name: 'Mutuelle Test A',
+                  plans: [{ id: 'plan-1', name: 'Formule Test Essentielle' }],
+                },
+              ]),
+          },
+        },
         {
           provide: RoleContextService,
           useValue: {
@@ -62,11 +102,67 @@ describe('PayerSharesListComponent (QA D2706)', () => {
   it('lists the open and claimed shares with their invoice, patient and payer', () => {
     render(['ROLE_CLAIMS_REVIEWER']);
 
-    expect(billing.listHospitalPayerShares).toHaveBeenCalledWith(['OPEN', 'CLAIMED']);
+    expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
+      jasmine.objectContaining({ statuses: ['OPEN', 'CLAIMED'], page: 0, size: 25 }),
+    );
     const card = host().querySelector('[data-testid="payer-share-share-1"]')?.textContent ?? '';
     expect(card).toContain('Mutuelle Test A');
     expect(card).toContain('TWP-2026-000007');
     expect(card).toContain('TWP8739');
+  });
+
+  it('claims PR 1 (G1): each share shows its policy, subscriber and the acts claimed with their « bon »', () => {
+    render(['ROLE_CLAIMS_REVIEWER']);
+
+    expect(
+      host().querySelector('[data-testid="payer-share-policy-share-1"]')?.textContent,
+    ).toContain('MTA-0042');
+    const acts =
+      host().querySelector('[data-testid="payer-share-acts-share-1"]')?.textContent ?? '';
+    expect(acts).toContain('IMG-RTX');
+    expect(acts).toContain('Radio thorax');
+    expect(acts).toContain('BON-117');
+    expect(host().querySelector('[data-testid="payer-share-unverified-share-1"]')).not.toBeNull();
+  });
+
+  it('claims PR 1 (G2): the payer, plan and period filters reach the server from the first page', () => {
+    render(['ROLE_ACCOUNTANT']);
+    const component = fixture.componentInstance;
+    component.setPayer('payer-1');
+    component.planId.set('plan-1');
+    component.fromDate.set('2026-11-01');
+    component.toDate.set('2026-11-30');
+    component.applyFilters();
+
+    expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        payerId: 'payer-1',
+        planId: 'plan-1',
+        fromDate: '2026-11-01',
+        toDate: '2026-11-30',
+        page: 0,
+      }),
+    );
+  });
+
+  it('claims PR 1 (G2): a period ending before it starts is refused and nothing is sent', () => {
+    render(['ROLE_ACCOUNTANT']);
+    billing.searchHospitalPayerShares.calls.reset();
+    const component = fixture.componentInstance;
+    component.fromDate.set('2026-11-30');
+    component.toDate.set('2026-11-01');
+    component.applyFilters();
+
+    expect(billing.searchHospitalPayerShares).not.toHaveBeenCalled();
+  });
+
+  it('claims PR 1 (G2): the pager asks the server for the next page', () => {
+    render(['ROLE_ACCOUNTANT'], [open], 3);
+    host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-next"]')!.click();
+
+    expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
+      jasmine.objectContaining({ page: 1 }),
+    );
   });
 
   it('the claims reviewer marks a share claimed and paid', () => {
@@ -97,6 +193,8 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     render(['ROLE_ACCOUNTANT']);
     host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-view-closed"]')!.click();
 
-    expect(billing.listHospitalPayerShares).toHaveBeenCalledWith(['PAID', 'REJECTED']);
+    expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
+      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED'] }),
+    );
   });
 });

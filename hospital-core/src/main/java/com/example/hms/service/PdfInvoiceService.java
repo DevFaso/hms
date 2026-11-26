@@ -132,6 +132,7 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.invoice.status", statusLabel(t, invoice)));
             w.qr(buildQrPng("hms://invoice/" + invoice.getId()));
             w.down(80);
+            coverageBlock(w, t, payerShares, mailed);
             cancellationBlock(w, t, invoice, mailed);
 
             w.rule();
@@ -148,11 +149,12 @@ public class PdfInvoiceService {
                 w.down(16);
                 w.row(BODY,
                     mailed ? mailedDesignation(t, it) : designation(t, it),
-                    categoryLabel(t, it.getItemCategory()),
+                    lineCategoryLabel(t, it),
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice(), t.locale()),
                     money(lineTotal(it), t.locale()));
                 lineShares(w, t, invoice, it);
+                linePreAuthorisation(w, t, it);
             }
 
             for (var adjustment : adjustments) {
@@ -258,6 +260,113 @@ public class PdfInvoiceService {
     }
 
     /**
+     * Insurer claims plan PR 1 (QA D3984): the insurer's pre-authorisation number of the act, under its line, so the
+     * claim can be matched to the insurer's « bon ». Printed on the mailed copy too: a number names no condition.
+     */
+    private static void linePreAuthorisation(Writer w, PdfLabels t, InvoiceItem item) throws IOException {
+        String number = item.getPreAuthorisationNumber();
+        if (number == null || number.isBlank()) {
+            return;
+        }
+        w.ensureRoom(16);
+        w.down(13);
+        w.paragraph(BODY, 9, MARGIN + 12, t.get("pdf.invoice.linePreAuthorisation", number.strip()));
+    }
+
+    /**
+     * Insurer claims plan PR 1 (QA D2712): who covers the bill, under which plan and policy, under the patient. One
+     * line per share standing (not rejected, not cancelled): « Prise en charge : payer, plan · N° de police : … ·
+     * Assuré principal : … ». The mailed copy (K4) leaves out a payer or plan name that reveals a protected category
+     * (a programme named after a condition) and the subscriber, and prints the policy number's last four characters.
+     */
+    private static void coverageBlock(Writer w, PdfLabels t,
+                                      List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares,
+                                      boolean mailed) throws IOException {
+        if (shares == null || shares.isEmpty()) {
+            return;
+        }
+        boolean printed = false;
+        for (var share : shares) {
+            String text = coverageText(t, share, mailed);
+            if (text == null) {
+                continue;
+            }
+            w.paragraph(BODY, 11, MARGIN, text);
+            w.down(15);
+            printed = true;
+        }
+        if (printed) {
+            w.down(4);
+        }
+    }
+
+    /** One share's coverage line, or null for a share that is not standing or names nothing printable. */
+    static String coverageText(PdfLabels t, com.example.hms.payload.dto.billing.InvoicePayerShareDTO share,
+                               boolean mailed) {
+        if (share == null || !standing(share.getStatus())) {
+            return null;
+        }
+        List<String> who = new java.util.ArrayList<>();
+        for (String name : new String[] {share.getPayerName(), share.getPlanName()}) {
+            if (name != null && !name.isBlank()
+                    && !(mailed && com.example.hms.service.notification.SensitiveWording.reveals(name))) {
+                who.add(name.strip());
+            }
+        }
+        List<String> parts = new java.util.ArrayList<>();
+        if (!who.isEmpty()) {
+            parts.add(t.get("pdf.invoice.coverage", String.join(", ", who)));
+        }
+        String policy = share.getPolicyNumber();
+        if (policy != null && !policy.isBlank()) {
+            parts.add(t.get("pdf.invoice.policyNumber", mailed ? maskedPolicy(policy) : policy.strip()));
+        }
+        String subscriber = share.getSubscriberName();
+        if (!mailed && subscriber != null && !subscriber.isBlank()) {
+            parts.add(t.get("pdf.invoice.subscriber", subscriber.strip()));
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
+    }
+
+    /** A share still standing: open, claimed or paid (a rejected or cancelled one covers nothing). */
+    private static boolean standing(String status) {
+        if (status == null) {
+            return false;
+        }
+        try {
+            return com.example.hms.enums.PayerShareStatus.valueOf(status).isLive();
+        } catch (IllegalArgumentException unknown) {
+            return false;
+        }
+    }
+
+    /** K4: a policy number on the mailed copy, its last four characters only (« ****1234 »). */
+    static String maskedPolicy(String policy) {
+        String clean = policy.strip();
+        return clean.length() <= 4 ? "****" : "****" + clean.substring(clean.length() - 4);
+    }
+
+    /**
+     * QA D2712: the category column. A line posted for an order prints what it bills (« Imagerie », « Acte /
+     * procédure »: the category a plan rule reads), not the generic « Service » every order line was posted as.
+     */
+    static String lineCategoryLabel(PdfLabels t, InvoiceItem it) {
+        if (it.getCoverageCategory() == null) {
+            return categoryLabel(t, it.getItemCategory());
+        }
+        return switch (it.getCoverageCategory()) {
+            case CONSULTATION -> t.get("pdf.invoice.coverageCategory.CONSULTATION");
+            case LAB_TEST -> t.get("pdf.invoice.coverageCategory.LAB_TEST");
+            case IMAGING -> t.get("pdf.invoice.coverageCategory.IMAGING");
+            case PROCEDURE -> t.get("pdf.invoice.coverageCategory.PROCEDURE");
+            case BED_DAY -> t.get("pdf.invoice.coverageCategory.BED_DAY");
+            case TRANSFUSION -> t.get("pdf.invoice.coverageCategory.TRANSFUSION");
+            case DELIVERY -> t.get("pdf.invoice.coverageCategory.DELIVERY");
+            case OTHER_SERVICE -> t.get("pdf.invoice.coverageCategory.OTHER_SERVICE");
+        };
+    }
+
+    /**
      * QA D1104: a cancelled invoice says why it was cancelled, and a check-in
      * copay folded onto a visit invoice says which invoice the money went to.
      * The PDF said "Annulée" and then "Reste à payer" the full amount, with no
@@ -357,6 +466,20 @@ public class PdfInvoiceService {
                                      BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
                                      boolean carriedOver, String receivedByName, List<InvoiceItem> paidFor,
                                      Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, totalOverride, payerShareThen,
+            carriedOver, receivedByName, paidFor, List.of(), locale);
+    }
+
+    /**
+     * Insurer claims plan PR 1 (QA D2712): {@code sharesThen} are the payers' shares standing when the money was
+     * received; the receipt names their payer, plan and policy under the patient.
+     */
+    @SuppressWarnings("java:S107")
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
+                                     boolean carriedOver, String receivedByName, List<InvoiceItem> paidFor,
+                                     List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> sharesThen,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -372,6 +495,7 @@ public class PdfInvoiceService {
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
             w.down(15);
+            coverageBlock(w, t, sharesThen, false);
             receiptMoment(w, t, payment, receivedByName);
             boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
             if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {

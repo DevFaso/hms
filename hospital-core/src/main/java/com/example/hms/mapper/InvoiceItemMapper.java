@@ -84,6 +84,10 @@ public class InvoiceItemMapper {
         dto.setOverrideReason(item.getOverrideReason());
         // QA D2434: each line's split, as stored when the coverage was applied at issue.
         withShares(dto, item.getPayerShareAmount(), false);
+        // Insurer claims plan PR 1 (QA D3984): the insurer's pre-authorisation number and the order the line bills.
+        dto.setPreAuthorisationNumber(item.getPreAuthorisationNumber());
+        dto.setPreAuthorisationRecordedAt(item.getPreAuthorisationRecordedAt());
+        dto.setSourceOrderType(item.getSourceOrderType());
 
         dto.setCreatedAt(item.getCreatedAt());
         dto.setUpdatedAt(item.getUpdatedAt());

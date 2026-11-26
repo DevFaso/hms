@@ -29,4 +29,20 @@ public class InvoicePayerShareDTO {
     private String rejectionReason;
     private LocalDateTime decidedAt;
     private LocalDateTime createdAt;
+    /**
+     * Insurer claims plan PR 1 (QA D2712): the policy (or AMU registration) number of the coverage the share was
+     * computed under, and its subscriber, so the invoice and its paper name who pays and under which policy.
+     */
+    private String policyNumber;
+    private String subscriberName;
+    private String subscriberRelationship;
+
+    /** A share named without its coverage's policy (a test, or a coverage no longer readable at the hospital). */
+    @SuppressWarnings("java:S107") // the share's own fields, in the order of the list's columns
+    public InvoicePayerShareDTO(UUID id, String payerName, String planName, BigDecimal amount, int coverageYear,
+                                String status, String rejectionReason, LocalDateTime decidedAt,
+                                LocalDateTime createdAt) {
+        this(id, payerName, planName, amount, coverageYear, status, rejectionReason, decidedAt, createdAt, null, null,
+            null);
+    }
 }

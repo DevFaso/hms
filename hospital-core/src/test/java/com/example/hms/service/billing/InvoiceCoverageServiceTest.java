@@ -253,37 +253,116 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("QA D2706 (r70): « Parts assureurs » lists the hospital's open shares with invoice, patient and payer")
+    @DisplayName("QA D2706, claims PR 1 (G1): « Parts assureurs » rows carry the payer, policy and claimed acts")
     void d2706_theHospitalWideListOfInsurerShares() {
         InvoicePayerShare open = InvoicePayerShare.builder().invoiceId(invoice.getId()).hospitalId(HOSPITAL_A)
-            .payerPlanId(plan.getId()).amount(new BigDecimal("8500")).status(PayerShareStatus.OPEN).build();
+            .patientInsuranceId(coverage.getId()).payerPlanId(plan.getId()).amount(new BigDecimal("5600"))
+            .status(PayerShareStatus.OPEN).build();
         open.setId(UUID.randomUUID());
         BillingInvoice elsewhere = invoice(HOSPITAL_B);
         InvoicePayerShare stray = InvoicePayerShare.builder().invoiceId(elsewhere.getId()).hospitalId(HOSPITAL_A)
             .payerPlanId(plan.getId()).amount(BigDecimal.TEN).status(PayerShareStatus.OPEN).build();
         stray.setId(UUID.randomUUID());
-        when(shares.findByHospitalIdAndStatusInOrderByCreatedAtAsc(eq(HOSPITAL_A), any()))
-            .thenReturn(List.of(open, stray));
+        coverage.setSubscriberName("Awa Ouédraogo");
+        coverage.setSubscriberRelationship("SPOUSE");
+        // The covered lines as fixed at issue: the consultation (1 600) and the X-ray (4 000), with its « bon ».
+        consultation.setPayerShareAmount(new BigDecimal("1600"));
+        xray.setPayerShareAmount(new BigDecimal("4000"));
+        xray.setPreAuthorisationNumber("BON-2026-117");
+        consultation.setBillingInvoice(invoice);
+        tdr.setBillingInvoice(invoice);
+        xray.setBillingInvoice(invoice);
+        when(items.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(any(), eq(HOSPITAL_A))).thenReturn(lines);
+        when(shares.searchAtHospital(eq(HOSPITAL_A), any(), any(), any(), eq(true), any(), eq(true), any(), eq(true),
+                any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(open, stray),
+                org.springframework.data.domain.PageRequest.of(0, 25), 2));
+        when(shares.sumSearchAtHospital(eq(HOSPITAL_A), any(), any(), any(), eq(true), any(), eq(true), any(),
+                eq(true), any())).thenReturn(new BigDecimal("5610"));
 
-        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> rows = service.listAtHospital(null);
+        com.example.hms.payload.dto.billing.PayerSharePageDTO page = service.searchAtHospital(null);
 
-        assertThat(rows).singleElement().satisfies(row -> {
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getTotalAmount()).isEqualByComparingTo("5610");
+        assertThat(page.getSize()).isEqualTo(25);
+        // The share whose invoice is of another hospital is never shown.
+        assertThat(page.getContent()).singleElement().satisfies(row -> {
             assertThat(row.getInvoiceNumber()).isEqualTo("CHWF-2026-000042");
             assertThat(row.getPayerName()).isEqualTo("RAMU");
             assertThat(row.getPlanName()).isEqualTo("Formule Base");
-            assertThat(row.getAmount()).isEqualByComparingTo("8500");
+            assertThat(row.getPolicyNumber()).isEqualTo("BC2-001");
+            assertThat(row.getSubscriberName()).isEqualTo("Awa Ouédraogo");
+            assertThat(row.getSubscriberRelationship()).isEqualTo("SPOUSE");
+            assertThat(row.getAmount()).isEqualByComparingTo("5600");
             assertThat(row.getStatus()).isEqualTo("OPEN");
+            // The acts the payer pays part of: the lab test it excludes is not claimed.
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getItemId)
+                .containsExactly(consultation.getId(), xray.getId());
+            assertThat(row.getLines().get(1).getCategory()).isEqualTo("IMAGING");
+            assertThat(row.getLines().get(1).getPreAuthorisationNumber()).isEqualTo("BON-2026-117");
+            assertThat(row.getLines().get(1).getPayerShare()).isEqualByComparingTo("4000");
+            assertThat(row.getLines().get(1).getPatientShare()).isEqualByComparingTo("1000");
         });
+    }
+
+    @Test
+    @DisplayName("claims PR 1 (G2): the filters reach the query, the page is capped, defaults are OPEN and CLAIMED")
+    void searchPassesItsFiltersAndCapsThePage() {
+        UUID payerId = UUID.randomUUID();
+        when(shares.searchAtHospital(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(),
+                any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+        LocalDate from = LocalDate.of(2026, 11, 1);
+        LocalDate to = LocalDate.of(2026, 11, 30);
+
+        service.searchAtHospital(new InvoiceCoverageService.ShareFilter(null, payerId, null, null, from, to, 2,
+            500));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<PayerShareStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
+        ArgumentCaptor<org.springframework.data.domain.Pageable> paging =
+            ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(shares).searchAtHospital(eq(HOSPITAL_A), statuses.capture(), eq(from), eq(to), eq(false), eq(payerId),
+            eq(true), any(), eq(true), any(), paging.capture());
+        assertThat(statuses.getValue()).containsExactlyInAnyOrder(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED);
+        assertThat(paging.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(paging.getValue().getPageSize()).isEqualTo(InvoiceCoverageService.SHARE_PAGE_MAX);
+    }
+
+    @Test
+    @DisplayName("claims PR 1 (G2): a period ending before it starts is refused")
+    void aReversedPeriodIsRefused() {
+        InvoiceCoverageService.ShareFilter reversed = new InvoiceCoverageService.ShareFilter(null, null, null, null,
+            LocalDate.of(2026, 11, 30), LocalDate.of(2026, 11, 1), null, null);
+
+        assertThatThrownBy(() -> service.searchAtHospital(reversed)).isInstanceOf(FieldBusinessException.class);
     }
 
     @Test
     @DisplayName("QA D2706 (r70): a role that decides no share reads no list")
     void d2706_onlyTheDecidersReadTheList() {
         when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_A)).thenReturn(false);
-        List<PayerShareStatus> paid = List.of(PayerShareStatus.PAID);
+        InvoiceCoverageService.ShareFilter paid = new InvoiceCoverageService.ShareFilter(
+            List.of(PayerShareStatus.PAID), null, null, null, null, null, null, null);
 
-        assertThatThrownBy(() -> service.listAtHospital(paid))
+        assertThatThrownBy(() -> service.searchAtHospital(paid))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("claims PR 1 (QA D2712): the invoice's shares name the policy and subscriber of their coverage")
+    void sharesNameTheirPolicy() {
+        service.applyAtIssue(invoice, BILLING_A);
+
+        assertThat(service.sharesOf(invoice)).singleElement().satisfies(share -> {
+            assertThat(share.getPolicyNumber()).isEqualTo("BC2-001");
+            assertThat(share.getPayerName()).isEqualTo("RAMU");
+        });
+        // The receipt of money received after issue names the same share.
+        assertThat(service.sharesStandingAt(invoice, LocalDateTime.now(clock).plusHours(1))).hasSize(1);
+        // Money received before the share existed names none.
+        assertThat(service.sharesStandingAt(invoice, LocalDateTime.now(clock).minusDays(1))).isEmpty();
     }
 
     @Test

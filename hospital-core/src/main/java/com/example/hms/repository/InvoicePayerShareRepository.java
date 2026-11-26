@@ -23,9 +23,52 @@ public interface InvoicePayerShareRepository extends JpaRepository<InvoicePayerS
     /** Every share of one invoice at one hospital, oldest first: the history, rejected and cancelled ones included. */
     List<InvoicePayerShare> findByInvoiceIdAndHospitalIdOrderByCreatedAtAsc(UUID invoiceId, UUID hospitalId);
 
-    /** QA D2706 (r70): the shares of one hospital in these statuses, oldest first (the « Parts assureurs » list). */
-    List<InvoicePayerShare> findByHospitalIdAndStatusInOrderByCreatedAtAsc(UUID hospitalId,
-                                                                          java.util.Collection<PayerShareStatus> statuses);
+    /**
+     * Insurer claims plan PR 1 (G2; was QA D2706's unpaged list): one page of the « Parts assureurs » list of one
+     * hospital: the shares in {@code statuses} whose invoice, of the same hospital, is dated in [{@code from},
+     * {@code to}] (the service date, D-4), oldest service date first. Each other filter applies only when its
+     * {@code any…} flag is false: the payer (through its plans at this hospital), the plan, the patient. The flags
+     * keep every parameter non-null, so no bind needs its type guessed.
+     */
+    @Query(value = "SELECT s " + SEARCH_FROM + " ORDER BY i.invoiceDate ASC, s.createdAt ASC, s.id ASC",
+           countQuery = "SELECT COUNT(s) " + SEARCH_FROM)
+    @SuppressWarnings("java:S107") // one parameter per filter of the list; a parameter object is not bindable
+    org.springframework.data.domain.Page<InvoicePayerShare> searchAtHospital(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("statuses") Collection<PayerShareStatus> statuses,
+        @Param("from") java.time.LocalDate from,
+        @Param("to") java.time.LocalDate to,
+        @Param("anyPayer") boolean anyPayer, @Param("payerId") UUID payerId,
+        @Param("anyPlan") boolean anyPlan, @Param("planId") UUID planId,
+        @Param("anyPatient") boolean anyPatient, @Param("patientId") UUID patientId,
+        org.springframework.data.domain.Pageable page);
+
+    /** The amount of every share {@link #searchAtHospital} finds with the same filters, all pages together. */
+    @Query("SELECT COALESCE(SUM(s.amount), 0) " + SEARCH_FROM)
+    @SuppressWarnings("java:S107")
+    BigDecimal sumSearchAtHospital(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("statuses") Collection<PayerShareStatus> statuses,
+        @Param("from") java.time.LocalDate from,
+        @Param("to") java.time.LocalDate to,
+        @Param("anyPayer") boolean anyPayer, @Param("payerId") UUID payerId,
+        @Param("anyPlan") boolean anyPlan, @Param("planId") UUID planId,
+        @Param("anyPatient") boolean anyPatient, @Param("patientId") UUID patientId);
+
+    /** The shares and invoices {@link #searchAtHospital} reads: both of the named hospital, always. */
+    String SEARCH_FROM = """
+          FROM InvoicePayerShare s, BillingInvoice i
+         WHERE i.id = s.invoiceId
+           AND s.hospitalId = :hospitalId
+           AND i.hospital.id = :hospitalId
+           AND s.status IN :statuses
+           AND i.invoiceDate >= :from
+           AND i.invoiceDate <= :to
+           AND (:anyPayer = true OR s.payerPlanId IN (SELECT p.id FROM PayerPlan p
+                                                        WHERE p.payerId = :payerId AND p.hospitalId = :hospitalId))
+           AND (:anyPlan = true OR s.payerPlanId = :planId)
+           AND (:anyPatient = true OR i.patient.id = :patientId)
+        """;
 
     /** The shares of one invoice at one hospital in the given statuses. */
     List<InvoicePayerShare> findByInvoiceIdAndHospitalIdAndStatusIn(UUID invoiceId, UUID hospitalId,

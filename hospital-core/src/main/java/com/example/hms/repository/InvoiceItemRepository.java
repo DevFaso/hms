@@ -44,4 +44,46 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> 
         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
         @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
         @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end);
+
+    /* ---------------------------------------------- insurer claims plan PR 1 (V383) */
+
+    /** One line of one invoice at one hospital (another hospital's line answers as a missing one). */
+    java.util.Optional<InvoiceItem> findByIdAndBillingInvoice_IdAndBillingInvoice_Hospital_Id(UUID id, UUID invoiceId,
+                                                                                            UUID hospitalId);
+
+    /** The lines of these invoices at one hospital (the « Parts assureurs » page reads its invoices' acts at once). */
+    List<InvoiceItem> findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(java.util.Collection<UUID> invoiceIds,
+                                                                             UUID hospitalId);
+
+    /** The lines one order was billed on at one hospital, on invoices not cancelled. */
+    @Query("""
+           SELECT i.id FROM InvoiceItem i
+            WHERE i.sourceOrderType = :type
+              AND i.sourceOrderId = :orderId
+              AND i.billingInvoice.hospital.id = :hospitalId
+              AND i.billingInvoice.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+           """)
+    List<UUID> findLiveLineIdsOfOrder(@org.springframework.data.repository.query.Param("type") String type,
+                                      @org.springframework.data.repository.query.Param("orderId") UUID orderId,
+                                      @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId);
+
+    /**
+     * Records the insurer's pre-authorisation number on these lines of one hospital, with who and when. A plain
+     * UPDATE: the line's amounts and its lifecycle checks are not touched. Returns the number of lines written.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("""
+           UPDATE InvoiceItem i
+              SET i.preAuthorisationNumber = :number,
+                  i.preAuthorisationRecordedBy = :recordedBy,
+                  i.preAuthorisationRecordedAt = :recordedAt
+            WHERE i.id IN :ids
+              AND i.billingInvoice.id IN (SELECT b.id FROM BillingInvoice b WHERE b.hospital.id = :hospitalId)
+           """)
+    int recordPreAuthorisation(@org.springframework.data.repository.query.Param("ids") java.util.Collection<UUID> ids,
+                               @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                               @org.springframework.data.repository.query.Param("number") String number,
+                               @org.springframework.data.repository.query.Param("recordedBy") UUID recordedBy,
+                               @org.springframework.data.repository.query.Param("recordedAt")
+                               java.time.LocalDateTime recordedAt);
 }

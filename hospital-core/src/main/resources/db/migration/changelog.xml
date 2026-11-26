@@ -4068,4 +4068,11 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V383 (insurer claims plan PR 1, QA r77 D3984): the pre-authorisation number on an invoice line, and the
+         order the line bills. -->
+    <changeSet id="V383-invoice-line-pre-authorisation" author="hms-team" runOnChange="false">
+        <sqlFile path="V383__invoice_line_pre_authorisation.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

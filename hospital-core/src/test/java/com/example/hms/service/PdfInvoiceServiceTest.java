@@ -568,6 +568,54 @@ class PdfInvoiceServiceTest {
             .contains("Dépistage VIH");
     }
 
+    /**
+     * Insurer claims plan PR 1 (QA D2712, D3984), in FR, EN and ES: the invoice names the payer, the plan, the policy
+     * and the subscriber; an imaging line prints « Imagerie », not « Service »; its pre-authorisation number is under
+     * it. A rejected share names no coverage.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "fr|Prise en charge : RAMU, Formule Base|N° de police : BC2-001|Assuré principal : Awa O.|Imagerie|N° de préautorisation : BON-117",
+        "en|Covered by: RAMU, Formule Base|Policy no.: BC2-001|Main insured: Awa O.|Imaging|Pre-authorisation no. BON-117",
+        "es|Cobertura: RAMU, Formule Base|N.º de póliza: BC2-001|Asegurado principal: Awa O.|Imagen|N.º de autorización previa: BON-117"})
+    void theInvoiceNamesTheCoverageAndTheActs_claimsPr1(String lang, String coverage, String policy,
+                                                        String subscriber, String imaging, String preAuth)
+            throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        invoice.setTotalAmount(new BigDecimal("5000.00"));
+        invoice.setPayerShareTotal(new BigDecimal("4000.00"));
+        InvoiceItem xray = priced("Radio thorax", ItemCategory.SERVICE, 1, "5000.00", "5000.00", "4000.00");
+        xray.setCoverageCategory(com.example.hms.enums.PriceListCategory.IMAGING);
+        xray.setPreAuthorisationNumber("BON-117");
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares = List.of(
+            new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "RAMU", "Formule Base",
+                new BigDecimal("4000"), 2026, "OPEN", null, null, null, "BC2-001", "Awa O.", "SPOUSE"),
+            new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "MUTEX", "Ancienne",
+                new BigDecimal("100"), 2026, "CANCELLED", null, null, null, "OLD-9", null, null));
+
+        String text = textOf(real.generateInvoicePdf(invoice, List.of(xray), List.of(), List.of(), shares,
+            Locale.forLanguageTag(lang)));
+
+        assertThat(text).contains(coverage, policy, subscriber, imaging, preAuth).doesNotContain("OLD-9", "MUTEX");
+    }
+
+    /** Claims PR 1, K4: the mailed copy masks the policy number and leaves out the subscriber; the « bon » stays. */
+    @Test
+    void theMailedCopyMasksThePolicy_claimsPr1() throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        InvoiceItem xray = priced("Radio thorax", ItemCategory.SERVICE, 1, "5000.00", "5000.00", "4000.00");
+        xray.setPreAuthorisationNumber("BON-117");
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares = List.of(
+            new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "RAMU", "Programme VIH",
+                new BigDecimal("4000"), 2026, "OPEN", null, null, null, "BC2-0012345", "Awa O.", "SPOUSE"));
+
+        String mailed = textOf(real.generateMailedInvoicePdf(invoice, List.of(xray), List.of(), shares,
+            Locale.FRENCH));
+
+        assertThat(mailed).contains("RAMU", "****2345", "BON-117")
+            .doesNotContain("BC2-0012345", "Awa O.", "VIH");
+    }
+
     private static List<String> amounts(java.util.regex.Pattern money, String text) {
         List<String> found = new java.util.ArrayList<>();
         java.util.regex.Matcher m = money.matcher(text);

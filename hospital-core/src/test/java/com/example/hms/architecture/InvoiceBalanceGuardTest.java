@@ -119,9 +119,11 @@ class InvoiceBalanceGuardTest {
                     // Billing-money plan PR 7: and the payers' share of that moment (eight arguments).
                     // QA D2523 (r65): and who received the money (nine: the full form names the cashier).
                     // Review of #1276: and the lines that stood then (ten: what the money was for, of its moment).
-                    if (topLevelCommas(args) != 9) {
-                        offenders.add(rel + ": a receipt rendered without the total, payer share, cashier and lines"
-                            + " of its own moment: " + args.trim());
+                    // Insurer claims plan PR 1 (QA D2712): and the payers' shares standing then (eleven: who covered
+                    // the bill, under which plan and policy, at its moment).
+                    if (topLevelCommas(args) != 10) {
+                        offenders.add(rel + ": a receipt rendered without the total, payer share, cashier, lines"
+                            + " and payer shares of its own moment: " + args.trim());
                     }
                     String method = AppointmentSlotRulesGuardTest.enclosingMethod(src, m.start());
                     if (method.contains("invoice.getTotalAmount()") || method.contains("invoice.getAmountPaid()")) {

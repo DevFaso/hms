@@ -2143,6 +2143,8 @@
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
+      "PRE_AUTHORISATION_ON_LINE": "Pre-authorisation number recorded on line {{line}} of invoice {{invoice}}",
+      "PRE_AUTHORISATION_COPIED": "Pre-authorisation number copied from order {{order}} to {{count}} invoice line(s)",
       "PACS_SETTINGS_CHANGED": "PACS connection settings changed",
       "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)",
       "MFA_RESET_BY_ADMIN": "Two-step verification reset by an administrator: {{reason}}",
@@ -7817,6 +7819,7 @@
         "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
         "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
         "PAYER_SHARE_CANCELLED": "Insurer share cancelled",
+        "PRE_AUTHORISATION_RECORDED": "Pre-authorisation number recorded",
         "MFA_RESET": "Two-step verification reset",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Patient SMS / e-mail choices changed",
         "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
@@ -16336,6 +16339,44 @@
     "RESENT": "Activation sent again.",
     "RESENT_NOWHERE": "The activation was not delivered: show the code and give it in person.",
     "RESEND_FAILED": "The activation could not be sent again."
+  },
+  "INSURER_CLAIMS": {
+    "SHARES": {
+      "FILTERS": "Filter the insurer shares",
+      "PAYER": "Payer",
+      "ALL_PAYERS": "All payers",
+      "ALL_PLANS": "All plans",
+      "FROM": "Service from",
+      "TO": "Service to",
+      "APPLY": "Apply",
+      "CLEAR": "Clear",
+      "PERIOD_REVERSED": "The end of the period is before its start.",
+      "POLICY": "Policy no.",
+      "POLICY_VALUE": "Policy no. {{number}}",
+      "SUBSCRIBER": "Main insured",
+      "SUBSCRIBER_VALUE": "Main insured: {{name}}",
+      "UNVERIFIED": "Coverage never checked at the desk: check the patient's rights before claiming.",
+      "ACTS": "Acts claimed",
+      "ACT": "Act",
+      "PRE_AUTH": "Pre-authorisation",
+      "NO_PRE_AUTH": "None",
+      "PAYER_PART": "Insurer part",
+      "PAGES": "Pages of the insurer shares",
+      "PAGE": "Page {{page}} of {{pages}}",
+      "PREVIOUS": "Previous",
+      "NEXT": "Next"
+    },
+    "LINE": {
+      "VALUE": "Pre-authorisation no. {{number}}",
+      "RECORD": "Record the pre-authorisation no.",
+      "CORRECT": "Correct the pre-authorisation no.",
+      "LABEL": "Pre-authorisation number (insurer)",
+      "REQUIRED": "Enter the pre-authorisation number given by the insurer.",
+      "CHARACTERS": "Use letters, digits, spaces and . / _ # : - only (120 characters at most).",
+      "SAVED": "Pre-authorisation number recorded.",
+      "SAVED_WITH_ORDER": "Pre-authorisation number recorded on the act and its imaging order.",
+      "FAILED": "The pre-authorisation number could not be recorded."
+    }
   },
   "R70_MONEY": {
     "DEFERRAL": {

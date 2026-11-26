@@ -47,6 +47,26 @@
                 · {{ share.planName }}
               }
             </span>
+            @if (share.policyNumber || share.subscriberName) {
+              <!-- Insurer claims PR 1 (QA D2712): the policy and subscriber the share was computed under. -->
+              <span
+                class="payer-shares-policy"
+                [attr.data-testid]="'payer-share-policy-' + share.id"
+              >
+                @if (share.policyNumber) {
+                  {{
+                    'INSURER_CLAIMS.SHARES.POLICY_VALUE' | translate: { number: share.policyNumber }
+                  }}
+                }
+                @if (share.subscriberName) {
+                  ·
+                  {{
+                    'INSURER_CLAIMS.SHARES.SUBSCRIBER_VALUE'
+                      | translate: { name: share.subscriberName }
+                  }}
+                }
+              </span>
+            }
             <span class="payer-shares-amount">{{ share.amount | cfa }}</span>
             <span class="payer-shares-status" [attr.data-status]="share.status">{{
               share.status | keyLabel: 'BILLING.PAYER_SHARES.STATUSES.'
