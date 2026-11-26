@@ -133,7 +133,7 @@ export class GoodsReceiptComponent implements OnInit {
   /** The unit the quantity field counts in, shown next to it. */
   quantityUnit(): string {
     const item = this.selectedItem();
-    if (!item) return '';
+    if (!item || (this.hasPackSize() && !this.receivedIn)) return '';
     if (this.hasPackSize() && this.receivedIn === 'PACKS') return item.packUnit ?? '';
     return item.unit && item.unit !== 'UNIT' ? item.unit : '';
   }

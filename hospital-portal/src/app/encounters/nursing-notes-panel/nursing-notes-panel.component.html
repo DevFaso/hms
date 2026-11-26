@@ -4,10 +4,42 @@
   aria-labelledby="nursing-notes-title"
 >
   <h3 id="nursing-notes-title">{{ 'NURSING_NOTES.TITLE' | translate }}</h3>
-  @if (loading()) {
+  @if (needsLocalHospital()) {
+    <div class="nursing-notes__scope">
+      <p>{{ 'NURSING_NOTES.HOSPITAL_CONTEXT' | translate }}</p>
+      @if (!addendumFor() && !addendumSaving()) {
+        <button
+          type="button"
+          class="btn-secondary"
+          (click)="choosingHospital.set(!choosingHospital())"
+          [attr.aria-expanded]="choosingHospital()"
+        >
+          {{ localHospital()?.name || ('NURSING_NOTES.CHOOSE_HOSPITAL' | translate) }}
+        </button>
+        @if (choosingHospital()) {
+          <app-hospital-typeahead
+            [hideAllOption]="true"
+            [autoFocus]="false"
+            (selectHospital)="selectLocalHospital($event)"
+            (dismiss)="choosingHospital.set(false)"
+          />
+        }
+      }
+    </div>
+  }
+  @if (needsLocalHospital() && !localHospital()) {
+    <p class="nursing-notes__state" role="status">
+      {{ 'NURSING_NOTES.CHOOSE_HOSPITAL' | translate }}
+    </p>
+  } @else if (loading()) {
     <p class="nursing-notes__state">{{ 'NURSING_NOTES.LOADING' | translate }}</p>
   } @else if (failed()) {
-    <p class="nursing-notes__state">{{ 'NURSING_NOTES.LOAD_FAILED' | translate }}</p>
+    <div class="nursing-notes__state" role="alert">
+      <p>{{ 'NURSING_NOTES.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="ngOnChanges()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
   } @else if (notes().length === 0) {
     <p class="nursing-notes__state">{{ emptyKey | translate }}</p>
   } @else {

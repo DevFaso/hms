@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Integration message log",
-    "SUBTITLE": "Bridges-style per-message search, dead-letter queue, and replay for partner-protocol traffic.",
-    "DLQ_BADGE": "{{ count }} failed messages awaiting replay",
-    "SHOW_DLQ_ONLY": "Show DLQ only",
+    "SUBTITLE": "Review partner messages and failures. This page records an event in the log; it does not resend the message to the partner.",
+    "DLQ_BADGE": "{{ count }} failed messages",
+    "SHOW_DLQ_ONLY": "Show failed messages",
     "SEARCH": "Search",
     "SEARCHING": "Searching…",
     "RESET": "Reset",
     "RETRY": "Retry",
     "LOAD_ERROR": "Could not load the message log. Try again.",
     "EMPTY": "No messages match the current filters.",
-    "REPLAY": "Replay",
-    "REPLAYING": "Replaying…",
+    "REPLAY": "Record in log",
+    "REPLAYING": "Recording…",
     "PAGER": "Page {{ current }} of {{ total }}",
     "CONTENT_PURGED": "Content purged (retention policy)",
     "CONTENT_PURGED_TITLE": "Message content erased on {{ date }} under the retention policy; the event record is kept.",
@@ -902,7 +902,7 @@
       "SENT": "Sent",
       "RECEIVED": "Received",
       "FAILED": "Failed",
-      "REPLAYED": "Replayed"
+      "REPLAYED": "Event recorded"
     },
     "COL": {
       "RECEIVED_AT": "Received",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Replay failed. Try again."
+      "REPLAY_FAILED": "Could not record the event. Try again."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -13429,6 +13429,7 @@
     "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "These fields contain the saved text, which may be in a different language from the text shown in the list. Changes replace this text for all hospitals.",
     "ACTIONS": "Actions",
     "ACTIVE": "Active",
     "ADD": "Add interaction",
@@ -14862,6 +14863,8 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Choose the hospital context for reading notes. This choice does not change the rest of the chart.",
+    "CHOOSE_HOSPITAL": "Choose a hospital",
     "ACTION": "Action:",
     "ASSESSMENT": "Assessment:",
     "DATA": "Data:",
@@ -16324,6 +16327,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "The hospital has changed. Close this form and reopen it in the correct hospital.",
     "TITLE": "Clinical rules and sign-off",
     "SUBTITLE": "Every rule the platform applies, its source, who approves it, and whether this hospital has signed it off.",
     "BEHAVIOUR_NOTE": "A rule applies the same way whether it is signed off or not: the sign-off records the approver’s decision and changes the « provisional » label only.",

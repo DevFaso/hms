@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Registro de mensajes de integración",
-    "SUBTITLE": "Búsqueda de mensajes estilo Bridges, cola de mensajes fallidos y reenvío para el tráfico de protocolos de socios.",
-    "DLQ_BADGE": "{{ count }} mensajes fallidos esperando reenvío",
-    "SHOW_DLQ_ONLY": "Mostrar solo DLQ",
+    "SUBTITLE": "Consulte los mensajes de los socios y los errores. Esta página registra un evento; no reenvía el mensaje al socio.",
+    "DLQ_BADGE": "{{ count }} mensajes fallidos",
+    "SHOW_DLQ_ONLY": "Mostrar mensajes fallidos",
     "SEARCH": "Buscar",
     "SEARCHING": "Buscando…",
     "RESET": "Restablecer",
     "RETRY": "Reintentar",
     "LOAD_ERROR": "No se pudo cargar el registro de mensajes. Reintente.",
     "EMPTY": "Ningún mensaje coincide con los filtros actuales.",
-    "REPLAY": "Reenviar",
-    "REPLAYING": "Reenviando…",
+    "REPLAY": "Registrar en el historial",
+    "REPLAYING": "Registrando…",
     "PAGER": "Página {{ current }} de {{ total }}",
     "CONTENT_PURGED": "Contenido eliminado (política de conservación)",
     "CONTENT_PURGED_TITLE": "Contenido del mensaje eliminado el {{ date }} según la política de conservación; el registro del evento se conserva.",
@@ -902,7 +902,7 @@
       "SENT": "Enviado",
       "RECEIVED": "Recibido",
       "FAILED": "Fallido",
-      "REPLAYED": "Reenviado"
+      "REPLAYED": "Evento registrado"
     },
     "COL": {
       "RECEIVED_AT": "Recibido",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Error al reenviar. Reintente."
+      "REPLAY_FAILED": "No se pudo registrar el evento. Inténtelo de nuevo."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -13429,6 +13429,7 @@
     "BANNER_DEFAULT": "El sistema está en mantenimiento. La consulta funciona; los cambios están temporalmente deshabilitados."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "Estos campos contienen el texto guardado, que puede estar en un idioma distinto del mostrado en la lista. Los cambios sustituyen este texto para todos los hospitales.",
     "ACTIONS": "Acciones",
     "ACTIVE": "Activa",
     "ADD": "Añadir interacción",
@@ -14862,6 +14863,8 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Elija el contexto hospitalario para leer las notas. Esta selección no cambia el resto de la historia.",
+    "CHOOSE_HOSPITAL": "Elegir hospital",
     "ACTION": "Acción:",
     "ASSESSMENT": "Valoración:",
     "DATA": "Datos:",
@@ -16324,6 +16327,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "El hospital ha cambiado. Cierre este formulario y vuelva a abrirlo en el hospital correcto.",
     "TITLE": "Reglas clínicas y validación",
     "SUBTITLE": "Cada regla que aplica la plataforma, su fuente, quién la aprueba y si este establecimiento la ha validado.",
     "BEHAVIOUR_NOTE": "Una regla se aplica igual, validada o no: la validación registra la decisión del aprobador y solo cambia la mención « provisional ».",

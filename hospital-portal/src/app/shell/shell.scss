@@ -266,8 +266,9 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
 }
 
 .nav-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 // Keep the complete plain-language label readable in the narrow admin drawer.
