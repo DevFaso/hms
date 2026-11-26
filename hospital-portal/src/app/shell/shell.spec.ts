@@ -143,6 +143,27 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  it('keeps global stock routing readable and rebuilds it on hospital scope changes', () => {
+    const found: Route[] = [];
+    function visit(entries: Route[]): void {
+      for (const route of entries) {
+        if (
+          route.path === 'pharmacy/stock-routing' ||
+          route.path === 'pharmacy/stock-routing/:prescriptionId'
+        ) {
+          found.push(route);
+        }
+        if (route.children) visit(route.children);
+      }
+    }
+    visit(routes);
+    expect(found.length).toBe(2);
+    for (const route of found) {
+      expect(route.data?.['requiresHospitalScope']).toBeTrue();
+      expect(route.data?.['supportsGlobalHospitalView']).toBeTrue();
+    }
+  });
+
   it('names every facility-only network workspace, including routes absent from navigation', () => {
     const { items, component } = createComponent({
       activeRole: 'ROLE_SUPER_ADMIN',
