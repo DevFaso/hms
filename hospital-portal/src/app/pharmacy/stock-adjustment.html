@@ -386,26 +386,31 @@
                 }
               </select>
               @if (!form.inventoryItemId) {
-                <small id="return-transfer-hint" class="field-hint">{{
+                {{ ' '
+                }}<small id="return-transfer-hint" class="field-hint">{{
                   'PHARMACY.RETURN_TRANSFER_CHOOSE_ITEM' | translate
                 }}</small>
               } @else if (returnableLoading()) {
-                <small id="return-transfer-hint" class="field-hint">{{
+                {{ ' '
+                }}<small id="return-transfer-hint" class="field-hint">{{
                   'COMMON.LOADING' | translate
                 }}</small>
               } @else if (returnableFailed()) {
-                <small id="return-transfer-hint" role="alert" class="field-hint">{{
+                {{ ' '
+                }}<small id="return-transfer-hint" role="alert" class="field-hint">{{
                   'PHARMACY.RETURN_SOURCES_FAILED' | translate
                 }}</small>
-                <button type="button" class="btn btn-secondary" (click)="loadReturnableDispenses()">
+                <button type="button" class="btn-secondary" (click)="loadReturnableDispenses()">
                   {{ 'COMMON.RETRY' | translate }}
                 </button>
               } @else if (!returnableLoading() && !returnableTransfers().length) {
-                <small id="return-transfer-hint" class="field-hint">{{
+                {{ ' '
+                }}<small id="return-transfer-hint" class="field-hint">{{
                   'PHARMACY.RETURN_TRANSFER_EMPTY' | translate
                 }}</small>
               } @else {
-                <small id="return-transfer-hint" class="field-hint">{{
+                {{ ' '
+                }}<small id="return-transfer-hint" class="field-hint">{{
                   'PHARMACY.RETURN_TRANSFER_HINT' | translate
                 }}</small>
               }
