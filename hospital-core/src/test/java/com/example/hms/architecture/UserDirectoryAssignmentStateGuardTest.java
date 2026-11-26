@@ -24,7 +24,10 @@ class UserDirectoryAssignmentStateGuardTest {
             "retired.size() == 1", "dto.setReactivationOptions(retired)");
         String service = Files.readString(root.resolve("service/UserServiceImpl.java"));
         assertThat(service).contains("findDirectoryAssignments(ids, scope.everyone(), directoryHospitals(scope))",
-            "new DirectoryScope(false, one, scope.seesPatientContacts())", "dto.setReactivationAssignmentId(null)", "dto.setReactivationOptions(null)");
+            "new DirectoryScope(false, one, scope.seesPatientContacts())", "accountAccess.assignmentScope()", "filter(recoveryScope::mayChange)", "findLiveChatRecipients(", "findPrivilegedDirectoryIds(", "findDirectoryProfiles(");
+        int begin = mapper.indexOf("private UserSummaryDTO accountSummary");
+        int end = mapper.indexOf("private String deriveProfileType", begin);
+        assertThat(mapper.substring(begin, end)).doesNotContain("toSummaryDTO(user)", "safeRolesFromUserRoles(", "deriveProfileType(");
         String repository = Files.readString(root.resolve("repository/UserRoleHospitalAssignmentRepository.java"));
         assertThat(repository).contains("a.user.id IN :userIds", ":allHospitals = true OR h.id IN :hospitalIds");
     }

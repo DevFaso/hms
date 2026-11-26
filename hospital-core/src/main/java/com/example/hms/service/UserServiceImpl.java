@@ -1638,9 +1638,10 @@ public class UserServiceImpl implements UserService {
         }
         int bounded = Math.clamp(size, 1, MAX_CHAT_RECIPIENTS);
         Pageable pageable = PageRequest.of(0, bounded, Sort.by("lastName", "firstName"));
-        List<User> colleagues = userRepository.findStaffDirectoryPaged(
+        List<User> colleagues = userRepository.findLiveChatRecipients(
                 !scope.everyone(), directoryHospitals(scope), false, false, pageable).getContent();
         Map<UUID, List<UserRoleHospitalAssignment>> assignments = directoryAssignments(colleagues, scope);
+        Map<UUID, String> profiles = directoryProfiles(colleagues);
         return colleagues.stream()
             .filter(User::isActive)
             .map(u -> {
@@ -1650,7 +1651,7 @@ public class UserServiceImpl implements UserService {
                     .firstName(u.getFirstName())
                     .lastName(u.getLastName())
                     .roleName(row != null ? row.getRoleName() : null)
-                    .profileType(row != null ? row.getProfileType() : null)
+                    .profileType(profiles.get(u.getId()))
                     .build();
             })
             .toList();
@@ -1665,8 +1666,36 @@ public class UserServiceImpl implements UserService {
      */
     private Page<UserSummaryDTO> directoryPage(Page<User> users, DirectoryScope scope, Set<UUID> manageable) {
         Map<UUID, List<UserRoleHospitalAssignment>> assignments = directoryAssignments(users.getContent(), scope);
-        return users.map(user -> directoryRow(user, scope, manageable,
-            assignments.getOrDefault(user.getId(), List.of())));
+        Set<UUID> privileged = users.isEmpty() ? Set.of() : userRepository.findPrivilegedDirectoryIds(
+            users.getContent().stream().map(User::getId).toList());
+        Map<UUID, String> profiles = directoryProfiles(users.getContent());
+        UserAccountAccess.AssignmentScope recoveryScope = accountAccess.assignmentScope();
+        return users.map(user -> {
+            UserSummaryDTO row = directoryRow(user, scope, manageable, assignments.getOrDefault(user.getId(), List.of()));
+            if (row != null) {
+                row.setProfileType(profiles.get(user.getId()));
+                row.setImpersonationEligible(user.isActive() && !user.isDeleted() && !privileged.contains(user.getId()));
+                var options = row.getReactivationOptions();
+                if (options != null) {
+                    Set<UUID> changeable = recoveryScope == null ? Set.of() : assignments.getOrDefault(user.getId(), List.of())
+                        .stream().filter(recoveryScope::mayChange).map(UserRoleHospitalAssignment::getId)
+                        .collect(java.util.stream.Collectors.toSet());
+                    options = options.stream().filter(option -> changeable.contains(option.assignmentId())).toList();
+                    row.setReactivationOptions(options);
+                    row.setReactivationAssignmentId(options.size() == 1 ? options.getFirst().assignmentId() : null);
+                }
+            }
+            return row;
+        });
+    }
+
+    private Map<UUID, String> directoryProfiles(List<User> users) {
+        Map<UUID, String> profiles = new java.util.HashMap<>();
+        if (!users.isEmpty()) {
+            userRepository.findDirectoryProfiles(users.stream().map(User::getId).toList())
+                .forEach(profile -> profiles.put(profile.getId(), profile.getProfileType()));
+        }
+        return profiles;
     }
 
     private Map<UUID, List<UserRoleHospitalAssignment>> directoryAssignments(List<User> users, DirectoryScope scope) {
@@ -1687,8 +1716,6 @@ public class UserServiceImpl implements UserService {
         if (!scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
-            dto.setReactivationAssignmentId(null);
-            dto.setReactivationOptions(null);
         }
         // QA D914: the list offered edit and delete on accounts a hospital admin
         // may not administer, and the save came back "user not found". Decided

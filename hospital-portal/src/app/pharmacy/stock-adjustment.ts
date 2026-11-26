@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
 import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { allRows } from '../shared/all-pages';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
@@ -15,7 +16,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Observable, map } from 'rxjs';
+import { Observable, combineLatest, map } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { earlierLotWithStock, fefoFirstLot } from './fefo-lots';
 import { ToastService } from '../core/toast.service';
@@ -28,6 +29,7 @@ import {
   StockTransactionResponse,
   StockWitnessCandidate,
   ReturnableDispense,
+  ReturnableTransfer,
   RETURNED_STOCK_CONDITIONS,
   ReturnedStockCondition,
   QuarantineLine,
@@ -96,6 +98,8 @@ const TX_FIELD_IDS = [
   'adjReason',
   'adjNotes',
   'retDispense',
+  'retTransfer',
+  'returnTransferFefo',
   'retRef',
 ];
 
@@ -108,6 +112,8 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   'PHARMACY.TRANSFER_DESTINATION_REQUIRED': 'trDest',
   'PHARMACY.FEFO_REASON_REQUIRED': 'trFefo',
   'PHARMACY.RETURN_DISPENSE_REQUIRED': 'retDispense',
+  'PHARMACY.RETURN_SOURCE_REQUIRED': 'retTransfer',
+  'PHARMACY.RETURN_EXCEEDS_TRANSFER': 'txQty',
   'PHARMACY.RETURN_REFERENCE_REQUIRED': 'retRef',
   'PHARMACY.RETURN_EXCEEDS_DISPENSE': 'txQty',
   'PHARMACY.RECEIPT_LOT_REQUIRED': 'rxLot',
@@ -121,6 +127,7 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     CountUnitPipe,
     FocusOnRenderDirective,
     DateTimePipe,
@@ -200,6 +207,7 @@ export class StockAdjustmentComponent implements OnInit {
    * dispensed stock ("doit indiquer sa délivrance"), morphine included.
    */
   returnDispenseId = '';
+  returnTransferId = '';
   /**
    * QA D3415 (r70): the state of the returned units, said every time. Only « intact » goes back on
    * sale; a controlled drug that comes back is quarantined whatever its state.
@@ -207,6 +215,8 @@ export class StockAdjustmentComponent implements OnInit {
   returnCondition: ReturnedStockCondition | null = null;
   readonly returnedStockConditions = RETURNED_STOCK_CONDITIONS;
   readonly returnableDispenses = signal<ReturnableDispense[]>([]);
+  readonly returnableTransfers = signal<ReturnableTransfer[]>([]);
+  readonly returnableFailed = signal(false);
   readonly returnableLoading = signal(false);
   private returnableSeq = 0;
 
@@ -414,17 +424,24 @@ export class StockAdjustmentComponent implements OnInit {
     this.returnReference = '';
     this.fefoReason = '';
     this.returnDispenseId = '';
+    this.returnTransferId = '';
     this.returnCondition = null;
     this.returnableDispenses.set([]);
+    this.returnableTransfers.set([]);
+    this.returnableFailed.set(false);
   }
 
   onItemChange(itemId: string): void {
+    ++this.returnableSeq;
     this.form.inventoryItemId = itemId;
     this.form.stockLotId = undefined;
     this.itemLots.set([]);
     // QA D932: another item's fills are not this return's; choose again.
     this.returnDispenseId = '';
+    this.returnTransferId = '';
     this.returnableDispenses.set([]);
+    this.returnableTransfers.set([]);
+    this.returnableFailed.set(false);
     if (!itemId) return;
     // QA D1347: every lot of the item (all pages), not the first 100.
     allRows((page, size) =>
@@ -441,10 +458,23 @@ export class StockAdjustmentComponent implements OnInit {
 
   /** QA D3409: choosing a fill first takes its lot, so the stock goes back where it came from. */
   onReturnDispenseChange(): void {
+    if (this.returnDispenseId) this.returnTransferId = '';
     const fill = this.selectedReturnDispense();
     if (fill?.stockLotId && this.form.stockLotId !== fill.stockLotId) {
       this.form.stockLotId = fill.stockLotId;
     }
+  }
+
+  onReturnTransferChange(): void {
+    if (this.returnTransferId) this.returnDispenseId = '';
+    const transfer = this.selectedReturnTransfer();
+    if (transfer?.stockLotId) this.form.stockLotId = transfer.stockLotId;
+  }
+
+  selectedReturnTransfer(): ReturnableTransfer | undefined {
+    return this.returnableTransfers().find(
+      (transfer) => transfer.transferId === this.returnTransferId,
+    );
   }
 
   /** QA D3415: units that come back go to quarantine (not intact, or a controlled drug). */
@@ -458,6 +488,7 @@ export class StockAdjustmentComponent implements OnInit {
   /** QA D932: a new lot names other fills; the return's dispense is chosen again. */
   onLotChange(): void {
     this.returnDispenseId = '';
+    this.returnTransferId = '';
     this.loadReturnableDispenses();
   }
 
@@ -469,6 +500,8 @@ export class StockAdjustmentComponent implements OnInit {
   loadReturnableDispenses(): void {
     const seq = ++this.returnableSeq;
     this.returnableDispenses.set([]);
+    this.returnableTransfers.set([]);
+    this.returnableFailed.set(false);
     const itemId = this.form.inventoryItemId;
     const lotId = this.form.stockLotId;
     // QA D3409 (r70): the item's fills are listed before a lot is chosen; choosing one takes its lot.
@@ -477,14 +510,19 @@ export class StockAdjustmentComponent implements OnInit {
       return;
     }
     this.returnableLoading.set(true);
-    this.svc.listReturnableDispenses(itemId, lotId || undefined).subscribe({
+    combineLatest({
+      dispenses: this.svc.listReturnableDispenses(itemId, lotId || undefined),
+      transfers: this.svc.listReturnableTransfers(itemId, lotId || undefined),
+    }).subscribe({
       next: (res) => {
         if (seq !== this.returnableSeq) return;
-        this.returnableDispenses.set(res?.data ?? []);
+        this.returnableDispenses.set(res.dispenses?.data ?? []);
+        this.returnableTransfers.set(res.transfers?.data ?? []);
         this.returnableLoading.set(false);
       },
       error: () => {
         if (seq !== this.returnableSeq) return;
+        this.returnableFailed.set(true);
         this.returnableLoading.set(false);
       },
     });
@@ -557,7 +595,11 @@ export class StockAdjustmentComponent implements OnInit {
 
   /** Pharmacies available as transfer destinations (excludes the source). */
   transferDestinationOptions(): PharmacyResponse[] {
-    return this.pharmacies().filter((p) => p.id !== this.selectedPharmacyId);
+    const source = this.pharmacies().find((p) => p.id === this.selectedPharmacyId);
+    if (!source) return [];
+    return this.pharmacies().filter(
+      (p) => p.id !== source.id && p.hospitalId === source.hospitalId && p.active,
+    );
   }
 
   /**
@@ -625,7 +667,8 @@ export class StockAdjustmentComponent implements OnInit {
           witnessedBy: this.form.witnessedBy,
         })
       : this.svc.recordTransaction(this.form);
-    const returnedRef = this.isReturn() ? this.form.referenceId : undefined;
+    const returnedRef =
+      this.isReturn() && !this.returnTransferId ? this.form.referenceId : undefined;
     request$.subscribe({
       next: (res) => {
         this.toast.success(this.translate.instant('PHARMACY.TX_RECORDED'));
@@ -708,7 +751,21 @@ export class StockAdjustmentComponent implements OnInit {
     }
     // QA D932: a return of dispensed stock names its dispense; without one it
     // can only give back a transfer, identified by its reference.
-    if (this.isReturn() && !this.returnDispenseId && !this.returnReference?.trim()) {
+    if (this.isReturn() && this.returnableFailed()) return 'PHARMACY.RETURN_SOURCES_FAILED';
+    if (
+      this.isReturn() &&
+      !this.returnDispenseId &&
+      !this.returnTransferId &&
+      this.returnableTransfers().length > 0
+    ) {
+      return 'PHARMACY.RETURN_SOURCE_REQUIRED';
+    }
+    if (
+      this.isReturn() &&
+      !this.returnDispenseId &&
+      !this.returnTransferId &&
+      !this.returnReference?.trim()
+    ) {
       return this.returnableDispenses().length > 0
         ? 'PHARMACY.RETURN_DISPENSE_REQUIRED'
         : 'PHARMACY.RETURN_REFERENCE_REQUIRED';
@@ -716,6 +773,9 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.isReturn() && !this.returnCondition) {
       return 'PHARMACY.RETURN_CONDITION_REQUIRED';
     }
+    const transfer = this.isReturn() ? this.selectedReturnTransfer() : undefined;
+    if (transfer && Number(this.form.quantity) > transfer.returnableQuantity)
+      return 'PHARMACY.RETURN_EXCEEDS_TRANSFER';
     const returnDispense = this.isReturn() ? this.selectedReturnDispense() : undefined;
     if (returnDispense && Number(this.form.quantity) > returnDispense.returnableQuantity) {
       return 'PHARMACY.RETURN_EXCEEDS_DISPENSE';
@@ -753,7 +813,10 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.expiryDate = undefined;
     this.form.unitCost = undefined;
     this.form.referenceId = undefined;
-    this.form.fefoOverrideReason = this.earlierTransferLot() ? this.fefoReason.trim() : undefined;
+    this.form.fefoOverrideReason =
+      this.earlierTransferLot() || (this.isReturn() && this.returnTransferId)
+        ? this.fefoReason.trim() || undefined
+        : undefined;
     if (!this.needsWitness()) {
       this.form.witnessedBy = undefined;
     }
@@ -777,8 +840,11 @@ export class StockAdjustmentComponent implements OnInit {
       // it and caps it at what that fill delivered and did not get back. The
       // ledger reason carries the typed reference, else the fill's lot and
       // time (never the patient's name, never a slice of the id: QA D992).
-      this.form.referenceId = this.returnDispenseId || undefined;
-      const ref = this.returnReference.trim() || this.returnFillReference();
+      this.form.referenceId = this.returnDispenseId || this.returnTransferId || undefined;
+      const transfer = this.selectedReturnTransfer();
+      const ref =
+        this.returnReference.trim() ||
+        (transfer ? transfer.destinationName : this.returnFillReference());
       this.form.reason = `RETURN ref ${ref}`;
       this.form.stockCondition = this.returnCondition ?? undefined;
     } else {

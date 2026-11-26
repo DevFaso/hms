@@ -69,6 +69,7 @@ class StockTransactionServiceImplTest {
 
     /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
     @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
+    @Mock private StockTransferBooking transferBooking;
     @InjectMocks
     private StockTransactionServiceImpl service;
 

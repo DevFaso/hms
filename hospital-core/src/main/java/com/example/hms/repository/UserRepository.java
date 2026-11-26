@@ -270,6 +270,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** The hospital set an unscoped directory call passes: a sentinel no hospital has. */
     java.util.Set<UUID> DIRECTORY_UNSCOPED = java.util.Set.of(new UUID(0L, 0L));
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"staffProfile", "patientProfile"})
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS)
     Page<User> searchUsers(@Param("name") String name,
@@ -293,6 +294,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * {@link #DIRECTORY_VISIBLE} says; a scoped caller never sees the
      * deleted view.
      */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"staffProfile", "patientProfile"})
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE)
     Page<User> findAllPaged(@Param("includeDeleted") boolean includeDeleted,
@@ -316,7 +318,30 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            WHERE sa.user = u AND UPPER(sr.code) <> 'ROLE_PATIENT') )
         """;
 
+    interface DirectoryProfile { UUID getId(); String getProfileType(); }
+
+    @Query("SELECT u.id AS id, CASE WHEN EXISTS (SELECT 1 FROM Staff s WHERE s.user = u) THEN 'STAFF' "
+        + "WHEN EXISTS (SELECT 1 FROM Patient p WHERE p.user = u) THEN 'PATIENT' ELSE null END AS profileType "
+        + "FROM User u WHERE u.id IN :ids")
+    java.util.List<DirectoryProfile> findDirectoryProfiles(@Param("ids") Collection<UUID> ids);
+
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND (EXISTS "
+        + "(SELECT 1 FROM UserRoleHospitalAssignment a WHERE a.user = u AND a.active = true "
+        + "AND UPPER(a.role.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN')) OR EXISTS "
+        + "(SELECT 1 FROM UserRole ur WHERE ur.id.userId = u.id "
+        + "AND UPPER(ur.role.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN')))")
+    java.util.Set<UUID> findPrivilegedDirectoryIds(@Param("ids") Collection<UUID> ids);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"staffProfile", "patientProfile"})
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY
+        + " AND u.isActive = true AND EXISTS (SELECT 1 FROM UserRoleHospitalAssignment live "
+        + "WHERE live.user = u AND live.active = true AND UPPER(live.role.code) NOT IN ('PATIENT','ROLE_PATIENT') AND (:scoped = false OR live.hospital.id IN :hospitalIds))")
+    Page<User> findLiveChatRecipients(@Param("scoped") boolean scoped,
+        @Param("hospitalIds") Collection<UUID> hospitalIds, @Param("includeDeleted") boolean includeDeleted,
+        @Param("onlyDeleted") boolean onlyDeleted, Pageable pageable);
+
     /** {@link #findAllPaged} for a non-administrator: staff accounts only (QA D430). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"staffProfile", "patientProfile"})
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY)
     Page<User> findStaffDirectoryPaged(@Param("scoped") boolean scoped,
@@ -326,6 +351,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                                        Pageable pageable);
 
     /** {@link #searchUsers} for a non-administrator: staff accounts only (QA D430). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"staffProfile", "patientProfile"})
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY)
     @SuppressWarnings("java:S107") // JPQL search: one bind parameter per filter, mirrors searchUsers
