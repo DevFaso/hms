@@ -335,3 +335,62 @@ describe('RegistrationsComponent dashboard', () => {
     expect(service.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('RegistrationsComponent global super-admin view', () => {
+  function page() {
+    TestBed.configureTestingModule({
+      imports: [RegistrationsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: true,
+            hospitalId: null,
+            roles: ['ROLE_SUPER_ADMIN'],
+          }),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(RegistrationsComponent);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/hospitals').flush([
+      { id: 'h1', name: 'First' },
+      { id: 'h2', name: 'Second' },
+    ]);
+    return { fixture, http };
+  }
+
+  it('lists registrations for both hospitals with context and no clinical write controls', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([{ id: 'r1', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([{ id: 'r2', hospitalId: 'h2', hospitalName: 'Second', active: true }]);
+    fixture.detectChanges();
+    const hospitals = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="registration-hospital"]'),
+    ).map((cell: any) => cell.textContent.trim());
+    expect(hospitals).toEqual(['First', 'Second']);
+    expect(fixture.componentInstance.canManage).toBeFalse();
+    expect(fixture.componentInstance.loadError()).toBeFalse();
+  });
+
+  it('reports a failed hospital instead of displaying incomplete network totals', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([{ id: 'r1', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush('failed', { status: 500, statusText: 'Error' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.loadError()).toBeTrue();
+    expect(fixture.componentInstance.registrations()).toEqual([]);
+  });
+});

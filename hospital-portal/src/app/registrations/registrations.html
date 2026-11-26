@@ -192,6 +192,9 @@
         <table>
           <thead>
             <tr>
+              @if (globalScope()) {
+                <th scope="col">{{ 'REGISTRATIONS.HOSPITAL' | translate }}</th>
+              }
               <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
               <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
               <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
@@ -206,6 +209,9 @@
           <tbody>
             @for (r of pagedRows(); track r.id) {
               <tr class="data-row">
+                @if (globalScope()) {
+                  <td data-testid="registration-hospital">{{ r.hospitalName || '—' }}</td>
+                }
                 <td>
                   <span class="patient-name">{{
                     r.patientFullName || r.patientUsername || '—'

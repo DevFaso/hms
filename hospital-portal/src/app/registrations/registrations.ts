@@ -13,6 +13,8 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { serverInstant } from '../shared/date-utils';
 import { FormsModule } from '@angular/forms';
+import { concatMap, from, reduce, Subscription, switchMap } from 'rxjs';
+import { HospitalService } from '../services/hospital.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -62,6 +64,7 @@ const DEACTIVATION_REASON_FIELD = 'reg-deactivation-reason';
 })
 export class RegistrationsComponent implements OnInit {
   private readonly registrationService = inject(RegistrationService);
+  private readonly hospitalService = inject(HospitalService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -69,8 +72,10 @@ export class RegistrationsComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
+  readonly globalScope = this.roleContext.globalView;
   private readonly destroyRef = inject(DestroyRef);
   private listRequest = 0;
+  private listSubscription?: Subscription;
   readonly searchTerm = signal('');
   readonly stayFilter = signal<PatientStayStatus | ''>('');
   readonly sortOrder = signal<'name' | 'newest'>('name');
@@ -177,10 +182,9 @@ export class RegistrationsComponent implements OnInit {
   /** RCPT-CLIN: the desk neither reads the discharge note nor writes it; the server keeps the stored one. */
   readonly frontDeskOnly = isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
 
-  readonly canManage = this.roleContext.hasAnyActiveRole([
-    'ROLE_RECEPTIONIST',
-    'ROLE_HOSPITAL_ADMIN',
-  ]);
+  readonly canManage =
+    !this.globalScope() &&
+    this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN']);
   /** Cross-tenant summary — backend excludes RECEPTIONIST. */
   readonly canSeeMultiHospital = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
@@ -232,33 +236,46 @@ export class RegistrationsComponent implements OnInit {
 
   load(): void {
     const request = ++this.listRequest;
+    this.listSubscription?.unsubscribe();
     this.loading.set(true);
     this.loadError.set(false);
     const filter = this.activeFilter();
-    // QA D1347: every registration of the desk (all pages), not the first 200.
-    allRowsOfArrays((page, size) =>
-      this.registrationService.list({
-        hospitalId: this.hospitalId ?? undefined,
-        active: filter === 'all' ? undefined : filter === 'active',
-        page,
-        size,
-      }),
-    )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (registrations) => {
-          if (request !== this.listRequest) return;
-          this.registrations.set(registrations ?? []);
-          this.loading.set(false);
-        },
-        error: () => {
-          if (request !== this.listRequest) return;
-          this.registrations.set([]);
-          this.loadError.set(true);
-          this.loading.set(false);
-          this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
-        },
-      });
+    // Keep each request on the existing masked, hospital-scoped endpoint. A
+    // failed hospital fails the whole load, so the counts never imply a
+    // complete network when one of the desks was unavailable.
+    const readHospital = (hospitalId: string | undefined) =>
+      allRowsOfArrays((page, size) =>
+        this.registrationService.list({
+          hospitalId,
+          active: filter === 'all' ? undefined : filter === 'active',
+          page,
+          size,
+        }),
+      );
+    const rows = this.globalScope()
+      ? this.hospitalService.list().pipe(
+          switchMap((hospitals) =>
+            from(hospitals).pipe(
+              concatMap((hospital) => readHospital(hospital.id)),
+              reduce((all, next) => all.concat(next), [] as HospitalRegistration[]),
+            ),
+          ),
+        )
+      : readHospital(this.hospitalId ?? undefined);
+    this.listSubscription = rows.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (registrations) => {
+        if (request !== this.listRequest) return;
+        this.registrations.set(registrations ?? []);
+        this.loading.set(false);
+      },
+      error: () => {
+        if (request !== this.listRequest) return;
+        this.registrations.set([]);
+        this.loadError.set(true);
+        this.loading.set(false);
+        this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
+      },
+    });
   }
 
   toggleMultiHospital(): void {
