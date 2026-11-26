@@ -130,6 +130,7 @@ function devResources() {
   const backendUploads = volume("hms-backend-dev-volume-7sW6", VOLUME_50_GB);
   const keycloakDbVolume = volume("postgres-volume-RAIL", VOLUME_50_GB);
   const detachedRedisVolume = volume("redis-volume-GW5t", VOLUME_50_GB);
+  const detachedBackendVolume = volume("hms-backend-dev-volume", VOLUME_50_GB);
   const appDbVolume = volume("hms-postgres-dev-volume-z_rr", VOLUME_50_GB);
   const cacheVolume = volume("redis-volume-7j0a", VOLUME_50_GB);
 
@@ -171,6 +172,7 @@ function devResources() {
     backendUploads,
     keycloakDbVolume,
     detachedRedisVolume,
+    detachedBackendVolume,
     appDbVolume,
     cacheVolume,
   ];
