@@ -218,6 +218,10 @@ export class ClinicalRulesComponent {
           if (generation === this.scopeGeneration && this.hospitalId() === hospitalId) {
             this.replace(status);
             this.toast.success(this.translate.instant('CLINICAL_RULES.SIGN.DONE'));
+          } else if (this.hospitalId() === hospitalId) {
+            // We returned to the same hospital after another scope. Refresh:
+            // the newer overview may have been read before this write landed.
+            this.load(hospitalId);
           }
           this.signing.set(null);
         },
@@ -255,6 +259,8 @@ export class ClinicalRulesComponent {
         if (generation === this.scopeGeneration && this.hospitalId() === hospitalId) {
           this.replace(status);
           this.toast.success(this.translate.instant('CLINICAL_RULES.REVOKE.DONE'));
+        } else if (this.hospitalId() === hospitalId) {
+          this.load(hospitalId);
         }
         this.revoking.set(null);
       },

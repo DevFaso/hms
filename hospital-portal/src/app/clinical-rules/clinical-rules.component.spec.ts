@@ -196,6 +196,26 @@ describe('ClinicalRulesComponent (V356)', () => {
     expect(q('clinical-rules-progress')!.textContent).toContain('0 / 1');
   });
 
+  it('refreshes when a sign-off finishes after returning to its hospital', async () => {
+    load(overview(true, [rule('RULE')]));
+    q<HTMLButtonElement>('rule-sign')!.click();
+    fixture.detectChanges();
+    await type('rule-signer-name', 'Dr Awa');
+    q<HTMLButtonElement>('rule-sign-confirm')!.click();
+    const sign = httpMock.expectOne(`${URL}/RULE/signoffs`);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    const b = httpMock.expectOne('/hospitals/h-2/clinical-rules');
+    roleContext.activeHospitalId = 'h-1';
+    fixture.detectChanges();
+    httpMock.expectOne(URL).flush(overview(true, [rule('RULE')]));
+    b.flush({ ...overview(true, []), hospitalId: 'h-2' });
+    sign.flush(rule('RULE', 'SIGNED'));
+    httpMock.expectOne(URL).flush(overview(true, [rule('RULE', 'SIGNED')]));
+    fixture.detectChanges();
+    expect(q('clinical-rules-progress')!.textContent).toContain('1 / 1');
+  });
+
   it('does not download a previous hospital pack after the scope changes', () => {
     load(overview(true, [rule('RULE')]));
     const createUrl = spyOn(globalThis.URL, 'createObjectURL').and.returnValue('blob:test');
