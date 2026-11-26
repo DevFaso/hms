@@ -826,4 +826,13 @@ class HospitalAdminDashboardServiceImplTest {
 
         assertThat(result.getWardOccupancy()).isEmpty();
     }
+
+    /** QA D3981 (r77) class: an open balance never counts a refunded franc as still paid. */
+    @Test
+    void stillOwedIsTheTotalLessTheMoneyKept_D3981() {
+        com.example.hms.model.BillingInvoice invoice = com.example.hms.model.BillingInvoice.builder()
+            .totalAmount(new BigDecimal("5000")).amountPaid(new BigDecimal("4000"))
+            .amountRefunded(new BigDecimal("1000")).build();
+        assertThat(HospitalAdminDashboardServiceImpl.stillOwed(invoice)).isEqualByComparingTo("2000");
+    }
 }

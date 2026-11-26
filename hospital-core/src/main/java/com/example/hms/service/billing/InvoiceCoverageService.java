@@ -2,7 +2,6 @@ package com.example.hms.service.billing;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import com.example.hms.enums.ItemCategory;
 import com.example.hms.enums.PayerShareStatus;
 import com.example.hms.enums.PriceListCategory;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
@@ -662,9 +661,11 @@ public class InvoiceCoverageService {
                                               Coverage coverage, LocalDate day) {
         Map<UUID, PriceListCategory> categories = categoriesOf(lines, hospitalId);
         List<CoverageCalculator.Line> input = lines.stream()
-            .map(line -> new CoverageCalculator.Line(line.getId(), netOf(line),
-                line.getQuantity() != null ? line.getQuantity() : 1,
-                categoryOf(line, categories), line.getPriceListItemId()))
+            .map(line -> {
+                PriceListCategory category = categoryOf(line, categories);
+                return new CoverageCalculator.Line(line.getId(), coveredNet(category, netOf(line)),
+                    line.getQuantity() != null ? line.getQuantity() : 1, category, line.getPriceListItemId());
+            })
             .toList();
         BigDecimal used = nonNull(shareRepository.sumUsedInYear(coverage.insurance().getId(), hospitalId,
             day.getYear(), invoice.getId()))
@@ -714,10 +715,12 @@ public class InvoiceCoverageService {
     }
 
     /**
-     * The line's price-list category: its item's when it was priced from the price list; otherwise what the line
-     * was posted for (QA D3603, r71: an imaging order priced by hand is still IMAGING, whatever its price source);
-     * a lab line otherwise counts as a lab test (a rule on LAB_TEST covers it however it was priced); any other
-     * line has none and takes the plan's default rate unless an item rule names it.
+     * The line's price-list category: its item's when it was priced from (or, QA D3980, picked from) the hospital's
+     * price list; otherwise what the line was posted for (QA D3603, r71: an imaging order priced by hand is still
+     * IMAGING, whatever its price source). Null for a line that bills no act of the price list and was posted for
+     * nothing a plan names: a line typed at the till with no item, whatever its label or item category (QA D3980,
+     * r77: « Sérodiagnostic de Widal » typed by hand as a LAB_TEST line escaped the plan's exclusion of that act and
+     * was claimed at the default rate). Such a line is never covered ({@link #coveredNet}).
      */
     static PriceListCategory categoryOf(InvoiceItem line, Map<UUID, PriceListCategory> categories) {
         PriceListCategory fromItem = line.getPriceListItemId() != null ? categories.get(line.getPriceListItemId())
@@ -725,10 +728,17 @@ public class InvoiceCoverageService {
         if (fromItem != null) {
             return fromItem;
         }
-        if (line.getCoverageCategory() != null) {
-            return line.getCoverageCategory();
-        }
-        return line.getItemCategory() == ItemCategory.LAB_TEST ? PriceListCategory.LAB_TEST : null;
+        return line.getCoverageCategory();
+    }
+
+    /**
+     * QA D3980 (r77): fail closed. What a plan may cover of a line: its net when the line resolves to a category
+     * ({@link #categoryOf}), nothing otherwise. A line no plan rule can read (no act, no category) took the plan's
+     * default rate, so an act the plan excludes, typed at the till, was claimed from the insurer; it is now the
+     * patient's to pay, and the cashier bills an act by picking it from the price list.
+     */
+    static BigDecimal coveredNet(PriceListCategory category, BigDecimal net) {
+        return category == null ? BigDecimal.ZERO : net;
     }
 
     private static void applyToLines(List<InvoiceItem> lines, CoverageCalculator.Result result) {

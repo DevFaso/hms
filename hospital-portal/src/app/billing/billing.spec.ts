@@ -19,6 +19,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { PriceListService } from '../services/price-list.service';
 import frenchCatalog from '../../assets/i18n/fr.json';
 
 function mockInvoice(overrides: Partial<BillingInvoiceResponse> = {}): BillingInvoiceResponse {
@@ -119,6 +120,95 @@ describe('BillingComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('QA D3980 (r77): a line typed at the till bills an act of the price list', () => {
+    const widal = {
+      id: 'act-widal',
+      hospitalId: 'h-1',
+      code: 'LAB-WIDAL',
+      label: 'Sérodiagnostic de Widal',
+      category: 'LAB_TEST',
+      active: true,
+      currentPrice: { id: 'p-1', unitPrice: 3500, effectiveFrom: '2026-01-01', status: 'IN_FORCE' },
+    };
+
+    beforeEach(() => {
+      spyOn(TestBed.inject(PriceListService), 'list').and.returnValue(of([widal as any]));
+      billingSpy.createInvoiceItem.and.returnValue(of({} as any));
+      billingSpy.getInvoice.and.returnValue(of(mockInvoice({ status: 'DRAFT' })));
+    });
+
+    it('picking an act fills the line from the grid and sends the act', () => {
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      expect(component.priceListItems().length).toBe(1);
+
+      component.pickPriceListItem('act-widal');
+      expect(component.newItemDescription()).toBe('Sérodiagnostic de Widal');
+      expect(component.newItemCategory()).toBe('LAB_TEST');
+      expect(component.newItemUnitPrice()).toBe(3500);
+      expect(component.newItemOverridesGrid()).toBeFalse();
+      component.addItem();
+
+      expect(billingSpy.createInvoiceItem).toHaveBeenCalledWith(
+        jasmine.objectContaining({ priceListItemId: 'act-widal', unitPrice: 3500 }),
+      );
+    });
+
+    it('without an act the form says the line is not covered, and sends none', () => {
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      const hint = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="line-add-act-hint"]',
+      );
+      expect(hint?.textContent).toContain('BILLING.LINE_NOT_COVERED_HINT');
+
+      component.newItemDescription.set('Seringue 5 mL');
+      component.newItemUnitPrice.set(100);
+      component.addItem();
+      const sent = billingSpy.createInvoiceItem.calls.mostRecent().args[0];
+      expect(sent.priceListItemId).toBeUndefined();
+    });
+
+    it('a picked act at another price asks why before sending', () => {
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      component.pickPriceListItem('act-widal');
+      component.newItemUnitPrice.set(3000);
+      expect(component.newItemOverridesGrid()).toBeTrue();
+      fixture.detectChanges();
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+
+      component.newItemReason.set('Tarif convenu');
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).toHaveBeenCalledWith(
+        jasmine.objectContaining({ priceListItemId: 'act-widal', overrideReason: 'Tarif convenu' }),
+      );
+    });
+  });
+
+  it('QA D3981 (r77): the revenue tile is net, and says what it nets', () => {
+    billingSpy.getSummary.and.returnValue(
+      of({
+        total: 2,
+        paid: 2,
+        outstanding: 0,
+        overdue: 0,
+        totalRevenue: 4000,
+        balance: 0,
+        grossReceived: 7000,
+        refunded: 3000,
+      }),
+    );
+    fixture.detectChanges();
+    expect(component.stats().totalRevenue).toBe(4000);
+    expect(component.stats().refunded).toBe(3000);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="billing-revenue-breakdown"]',
+    );
+    expect(hint).not.toBeNull();
   });
 
   it('loads invoices on init via server-side search', () => {

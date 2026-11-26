@@ -823,6 +823,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .itemDescription("Consultation fee")
             .quantity(1)
             .itemCategory(ItemCategory.SERVICE)
+            // QA D3980: a line a plan can read (a line with no category is never covered).
+            .coverageCategory(com.example.hms.enums.PriceListCategory.CONSULTATION)
             .unitPrice(new BigDecimal("25000.00"))
             .totalPrice(new BigDecimal("25000.00"))
             .assignment(staffBundle.doctor().getAssignment())
@@ -832,6 +834,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .itemDescription("Laboratory analysis")
             .quantity(1)
             .itemCategory(ItemCategory.LAB_TEST)
+            .coverageCategory(com.example.hms.enums.PriceListCategory.LAB_TEST)
             .unitPrice(PRICE_LAB_ANALYSIS)
             .totalPrice(PRICE_LAB_ANALYSIS)
             .assignment(staffBundle.labScientist().getAssignment())

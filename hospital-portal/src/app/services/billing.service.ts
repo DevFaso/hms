@@ -154,6 +154,12 @@ export interface InvoiceItemRequest {
    * (QA D2703): also required to add a line by hand to a visit's invoice.
    */
   overrideReason?: string;
+  /**
+   * QA D3980 (r77), create only: the price-list item (act) the line bills. The server names the line after it,
+   * prices it at the grid and lets the patient's plan apply its rules; a line without one is never claimed from
+   * the insurer.
+   */
+  priceListItemId?: string;
 }
 
 /**
@@ -287,8 +293,12 @@ export interface BillingSummary {
   paid: number;
   outstanding: number;
   overdue: number;
+  /** QA D3981 (r77): net revenue: received less the refunds paid out. */
   totalRevenue: number;
   balance: number;
+  /** QA D3981: received before refunds, and the refunds paid out. */
+  grossReceived?: number | null;
+  refunded?: number | null;
 }
 
 /** Billing-money plan PR 8: money received at the till (IN) or handed back on a refund (OUT). */

@@ -189,6 +189,58 @@ describe('CashSessionComponent (billing plan PR 10)', () => {
     expect(el.textContent).toContain('Billet manquant');
   });
 
+  const reopened = (mine: boolean) =>
+    session({
+      id: 'r',
+      mine,
+      status: 'OPEN',
+      closeRound: 1,
+      countedRound: 0,
+      cashDifference: null,
+      differenceLines: 0,
+      reopenedAt: '2026-11-20T18:30:00',
+      counts: [
+        {
+          closeRound: 1,
+          method: 'CASH',
+          operator: null,
+          expected: 7600,
+          counted: 7500,
+          difference: -100,
+          explanation: 'Billet de 100 manquant',
+        },
+      ],
+      history: [
+        {
+          closeRound: 1,
+          closedAt: '2026-11-20T18:00:00',
+          cashExpected: 7600,
+          cashCounted: 7500,
+          cashDifference: -100,
+          totalDifference: -100,
+          differenceLines: 1,
+        },
+      ],
+    });
+
+  it('QA D3982 (r77): a reopened till shows no last count; the earlier close is listed apart', () => {
+    const { fixture } = render([reopened(false)]);
+    const c = fixture.componentInstance;
+    const s = reopened(false);
+    expect(c.lastCount(s, s.methods[0])).toBeNull();
+    expect(c.earlierCounts(s).map((x) => x.closeRound)).toEqual([1]);
+    // Closed again: round 2 is current, round 1 stays history.
+    const again = session({
+      ...s,
+      status: 'CLOSED',
+      closeRound: 2,
+      countedRound: 2,
+      counts: [...s.counts, { ...s.counts[0], closeRound: 2, counted: 7600, difference: 0 }],
+    });
+    expect(c.lastCount(again, again.methods[0])?.counted).toBe(7600);
+    expect(c.earlierCounts(again).map((x) => x.closeRound)).toEqual([1]);
+  });
+
   it('shows only the PHARMACY till on the pharmacy page', () => {
     const { fixture } = render([session(), session({ id: 's2', till: 'PHARMACY' })]);
     fixture.componentRef.setInput('till', 'PHARMACY');
@@ -306,6 +358,53 @@ describe('CashSupervisorComponent (billing plan PR 10, QA D2326)', () => {
   it('no removed line, no section', () => {
     const { el } = render([session({ id: 'a', mine: false, status: 'OPEN' })]);
     expect(el.querySelector('[data-testid="cash-removed-lines"]')).toBeNull();
+  });
+
+  const reopened = (mine: boolean) =>
+    session({
+      id: 'r',
+      mine,
+      status: 'OPEN',
+      closeRound: 1,
+      countedRound: 0,
+      cashDifference: null,
+      differenceLines: 0,
+      reopenedAt: '2026-11-20T18:30:00',
+      counts: [
+        {
+          closeRound: 1,
+          method: 'CASH',
+          operator: null,
+          expected: 7600,
+          counted: 7500,
+          difference: -100,
+          explanation: 'Billet de 100 manquant',
+        },
+      ],
+      history: [
+        {
+          closeRound: 1,
+          closedAt: '2026-11-20T18:00:00',
+          cashExpected: 7600,
+          cashCounted: 7500,
+          cashDifference: -100,
+          totalDifference: -100,
+          differenceLines: 1,
+        },
+      ],
+    });
+
+  it('QA D3982 (r77): a reopened till shows no old count or variance; its earlier close is history', () => {
+    const { el, fixture } = render([reopened(false)]);
+    const c = fixture.componentInstance;
+    const s = c.sessions()[0];
+    expect(c.countedOf(s, s.methods[0])).toBeNull();
+    expect(c.explanationsOf(s)).toEqual([]);
+    expect(el.querySelector('[data-testid="cash-difference-r"]')).toBeNull();
+    expect(el.querySelector('[data-testid="cash-difference-flag-r"]')).toBeNull();
+    c.toggle(s);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="cash-history-round-1"]')).not.toBeNull();
   });
 
   it('reopening needs a reason', () => {

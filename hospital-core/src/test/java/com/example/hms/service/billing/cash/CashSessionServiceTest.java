@@ -446,6 +446,45 @@ class CashSessionServiceTest {
     }
 
     @Test
+    @DisplayName("QA D3982 (r77): a reopened till shows no old count; re-closed, the new one; earlier closes as history")
+    void d3982_aReopenedTillShowsItsCurrentStateAndTheEarlierCloseAsHistory() {
+        // Closed at a 100 F cash shortage: expected 800, counted 700.
+        actAs(CASHIER);
+        service.close(session.getId(), counted("700", "850", "Billet de 100 manquant"));
+        savedCounts.forEach(c -> c.setCreatedAt(LocalDateTime.of(2026, 11, 20, 17, 0)));
+        UUID id = session.getId();
+
+        actAs(ACCOUNTANT);
+        CashSessionDTO reopened = service.reopen(id, "Paiement oublié");
+        assertThat(reopened.getStatus()).isEqualTo("OPEN");
+        assertThat(reopened.getCountedRound()).as("nothing counted since the reopen").isZero();
+        assertThat(reopened.getCashDifference()).as("the old -100 is not the open till's").isNull();
+        assertThat(reopened.getTotalDifference()).isNull();
+        assertThat(reopened.getDifferenceLines()).isZero();
+        assertThat(reopened.getHistory()).singleElement().satisfies(h -> {
+            assertThat(h.getCloseRound()).isEqualTo(1);
+            assertThat(h.getCashExpected()).isEqualByComparingTo("800");
+            assertThat(h.getCashCounted()).isEqualByComparingTo("700");
+            assertThat(h.getCashDifference()).isEqualByComparingTo("-100");
+            assertThat(h.getDifferenceLines()).isEqualTo(1);
+            assertThat(h.getClosedAt()).isEqualTo(LocalDateTime.of(2026, 11, 20, 17, 0));
+        });
+        // The supervisor list reads the same.
+        when(sessionRepo.findByHospitalIdAndBusinessDateOrderByTillAscOpenedAtAsc(HOSPITAL, DAY))
+            .thenReturn(List.of(session));
+        assertThat(service.list(DAY, null)).singleElement()
+            .satisfies(row -> assertThat(row.getCashDifference()).isNull());
+
+        // Closed again, counted right: the new count is current, the first close stays history.
+        actAs(CASHIER);
+        CashSessionDTO again = service.close(id, counted("800", "850", null));
+        assertThat(again.getCountedRound()).isEqualTo(2);
+        assertThat(again.getCashDifference()).isEqualByComparingTo("0");
+        assertThat(again.getDifferenceLines()).isZero();
+        assertThat(again.getHistory()).extracting(CashSessionDTO.CloseRound::getCloseRound).containsExactly(1);
+    }
+
+    @Test
     @DisplayName("PR 10 review: a till never closed has no difference to show")
     void anOpenTillHasNoDifference() {
         actAs(CASHIER);

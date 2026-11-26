@@ -130,6 +130,28 @@ class BillingInvoiceSummarizePostgresIT {
     }
 
     @Test
+    void revenueIsNetOfTheRefundsPaidOut_D3981() {
+        UUID hospitalC = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            // QA r77: 000015 paid 5 000, 3 000 handed back on a refund; another invoice paid 2 000, nothing back.
+            insert(hospitalC, InvoiceStatus.PAID, "2000", "5000", "3000", TODAY);
+            insert(hospitalC, InvoiceStatus.PAID, "2000", "2000", "0", TODAY);
+            // A part-paid invoice owes the bill less the money kept.
+            insert(hospitalC, InvoiceStatus.PARTIALLY_PAID, "1000", "400", "0", TODAY.plusDays(3));
+        });
+
+        Object[] row = repository.summarize(hospitalC, TODAY).get(0);
+
+        assertThat(new BigDecimal(row[4].toString())).as("net revenue").isEqualByComparingTo("4400");
+        assertThat(new BigDecimal(row[5].toString())).as("balance").isEqualByComparingTo("600");
+        assertThat(new BigDecimal(row[6].toString())).as("received").isEqualByComparingTo("7400");
+        assertThat(new BigDecimal(row[7].toString())).as("refunded").isEqualByComparingTo("3000");
+        Object[] between = repository.summarizeBetween(hospitalC, TODAY, TODAY.minusDays(30), TODAY).get(0);
+        assertThat(new BigDecimal(between[4].toString())).isEqualByComparingTo("4400");
+    }
+
+    @Test
     void anEmptyScopeIsOneRowOfNulls() {
         List<Object[]> rows = repository.summarize(UUID.randomUUID(), TODAY);
 
@@ -224,7 +246,13 @@ class BillingInvoiceSummarizePostgresIT {
     }
 
     private void insert(UUID hospitalId, InvoiceStatus status, String total, String paid, LocalDate due) {
+        insert(hospitalId, status, total, paid, "0", due);
+    }
+
+    private void insert(UUID hospitalId, InvoiceStatus status, String total, String paid, String refunded,
+                        LocalDate due) {
         BillingInvoice invoice = new BillingInvoice();
+        invoice.setAmountRefunded(new BigDecimal(refunded));
         invoice.setHospital(entityManager.getReference(Hospital.class, hospitalId));
         invoice.setPatient(entityManager.getReference(Patient.class, UUID.randomUUID()));
         invoice.setInvoiceNumber("IT-" + UUID.randomUUID().toString().substring(0, 12));

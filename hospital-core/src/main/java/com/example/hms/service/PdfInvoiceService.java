@@ -835,7 +835,8 @@ public class PdfInvoiceService {
         }
         cashRow(w, BOLD, t.get("pdf.cash.method"), t.get("pdf.cash.in"), t.get("pdf.cash.out"),
             t.get("pdf.cash.expected"), t.get("pdf.cash.counted"), t.get("pdf.cash.difference"));
-        int round = s.getCloseRound();
+        // QA D3982 (r77): the counts of the CURRENT close only; a reopened till shows none until it is closed again.
+        int round = cashCurrentRound(s);
         for (var line : s.getMethods()) {
             var count = s.getCounts().stream()
                 .filter(c -> c.getCloseRound() == round && java.util.Objects.equals(c.getMethod(), line.getMethod())
@@ -861,7 +862,39 @@ public class PdfInvoiceService {
                 w.down(13);
             }
         }
+        cashHistory(w, t, s);
         w.down(6);
+    }
+
+    /** QA D3982: the round whose counts are the till's current figures: none while it is open, else the latest. */
+    static int cashCurrentRound(com.example.hms.payload.dto.billing.CashSessionDTO s) {
+        if ("OPEN".equals(s.getStatus())) {
+            return 0;
+        }
+        return s.getCountedRound() > 0 ? s.getCountedRound() : s.getCloseRound();
+    }
+
+    /**
+     * QA D3982 (r77): the earlier closes of a reopened till, printed apart as history (« Clôture 1 du … : espèces
+     * attendues 7 600, comptées 7 500, écart -100 »), never mixed into the current figures above.
+     */
+    private static void cashHistory(Writer w, PdfLabels t,
+                                    com.example.hms.payload.dto.billing.CashSessionDTO s) throws IOException {
+        if (s.getHistory() == null || s.getHistory().isEmpty()) {
+            return;
+        }
+        w.text(BOLD, 9, MARGIN, t.get("pdf.cash.historyTitle"));
+        w.down(13);
+        for (var h : s.getHistory()) {
+            String when = h.getClosedAt() != null ? t.fmt(h.getClosedAt()) : "-";
+            w.paragraph(BODY, 9, MARGIN, h.getCashCounted() == null
+                ? t.get("pdf.cash.historyRoundNoCash", h.getCloseRound(), when,
+                    money(cashAmount(h.getTotalDifference()), t.locale()), h.getDifferenceLines())
+                : t.get("pdf.cash.historyRound", h.getCloseRound(), when, money(h.getCashExpected(), t.locale()),
+                    money(h.getCashCounted(), t.locale()), money(cashAmount(h.getCashDifference()), t.locale()),
+                    h.getDifferenceLines()));
+            w.down(13);
+        }
     }
 
     /**
@@ -877,7 +910,7 @@ public class PdfInvoiceService {
         if (s.getDifferenceLines() <= 0) {
             return;
         }
-        int round = s.getCloseRound();
+        int round = cashCurrentRound(s);
         String differing = s.getCounts().stream()
             .filter(c -> c.getCloseRound() == round && c.getDifference() != null && c.getDifference().signum() != 0)
             .map(c -> cashMethodLabel(t, c.getMethod(), c.getOperator()) + " " + money(c.getDifference(), t.locale()))

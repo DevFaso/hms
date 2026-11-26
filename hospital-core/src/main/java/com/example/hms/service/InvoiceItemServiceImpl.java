@@ -77,6 +77,17 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         this.lineRemovalRepository = repository;
     }
 
+    /** QA D3980: the price list a line typed at the till is picked from. Optional like the above (hand-built tests). */
+    private com.example.hms.repository.PriceListItemRepository priceListItemRepository;
+    private com.example.hms.service.billing.TariffResolver tariffResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPriceList(com.example.hms.repository.PriceListItemRepository priceListItemRepository,
+                      com.example.hms.service.billing.TariffResolver tariffResolver) {
+        this.priceListItemRepository = priceListItemRepository;
+        this.tariffResolver = tariffResolver;
+    }
+
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
@@ -92,9 +103,17 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
         String reason = handAddedLineReason(invoice, dto.getOverrideReason());
         item.setOverrideReason(reason);
+        // QA D3980 (r77): a line typed at the till bills the price-list act the cashier picked, or no act at all
+        // (never claimed from an insurer: InvoiceCoverageService reads a line with no category as not covered).
+        PriceChange linked = dto.getPriceListItemId() == null ? PriceChange.NONE
+            : linkToPriceList(item, dto.getPriceListItemId(), dto.getOverrideReason(), invoice);
 
         InvoiceItem saved = invoiceItemRepository.save(item);
-        if (reason != null) {
+        if (linked == PriceChange.OVERRIDDEN) {
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, "Tariff price version "
+                + saved.getPriceListPriceId() + " overridden on added line " + saved.getId() + " of invoice "
+                + invoice.getId(), saved.getId(), invoice, saved.getOverrideReason());
+        } else if (reason != null) {
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
                 pricedByHand(saved.getId(), invoice.getId()), saved.getId(), invoice, reason);
         }
@@ -104,6 +123,61 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
 
         return invoiceItemMapper.toInvoiceItemResponseDTO(saved);
     }
+
+    /**
+     * QA D3980 (r77): a line typed at the till that bills an item of the hospital's price list. The line names the
+     * item (its act: an item rule of the patient's plan, an exclusion included, applies to it) and the item's
+     * category, and is worded with the item's label as the hospital typed it. Priced at the version in force on the
+     * invoice's service date it is a TARIFF line; at another price it is an override, as on a posted line (D-2): a
+     * reason, and a billing specialist or a hospital admin of the hospital. An item with no price that day keeps the
+     * price typed (MANUAL) and still bills its act. Another hospital's item, or a withdrawn one, is refused.
+     */
+    private PriceChange linkToPriceList(InvoiceItem item, UUID priceListItemId, String rawReason,
+                                        BillingInvoice invoice) {
+        UUID hospitalId = invoice.getHospital().getId();
+        com.example.hms.model.PriceListItem picked = priceListItemRepository == null ? null
+            : priceListItemRepository.findActiveByIdForCharge(priceListItemId, hospitalId)
+                .filter(found -> hospitalId.equals(found.getHospitalId()))
+                .orElse(null);
+        if (picked == null) {
+            throw new FieldBusinessException(FIELD_PRICE_LIST_ITEM, "billing.item.priceListItemUnknown");
+        }
+        item.setPriceListItemId(picked.getId());
+        item.setCoverageCategory(picked.getCategory());
+        String label = picked.getLabel() == null ? "" : picked.getLabel().strip();
+        if (!label.isEmpty()) {
+            item.setItemDescription(label.length() > 255 ? label.substring(0, 255) : label);
+            item.setTextCode(null);
+            item.setTextArgs(null);
+        }
+        item.setItemCategory(picked.getCategory() == com.example.hms.enums.PriceListCategory.LAB_TEST
+            ? com.example.hms.enums.ItemCategory.LAB_TEST : com.example.hms.enums.ItemCategory.SERVICE);
+        java.time.LocalDate day = invoice.getInvoiceDate() != null ? invoice.getInvoiceDate()
+            : tariffResolver != null ? tariffResolver.today() : null;
+        java.util.Optional<com.example.hms.service.billing.TariffResolver.Tariff> tariff = tariffResolver == null
+            ? java.util.Optional.empty() : tariffResolver.resolveItem(hospitalId, picked.getId(), day);
+        if (tariff.isEmpty()) {
+            item.setPriceSource(InvoiceLinePriceSource.MANUAL);
+            return PriceChange.NONE;
+        }
+        java.math.BigDecimal gridPrice = tariff.get().unitPrice();
+        item.setPriceListPriceId(tariff.get().priceId());
+        if (item.getUnitPrice() != null && gridPrice != null && item.getUnitPrice().compareTo(gridPrice) == 0) {
+            item.setPriceSource(InvoiceLinePriceSource.TARIFF);
+            return PriceChange.NONE;
+        }
+        String reason = requireOverrideReason(rawReason);
+        if (!isTariffWriter(invoice)) {
+            throw new ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolve("billing.item.overrideNotAllowed"));
+        }
+        item.setPriceSource(InvoiceLinePriceSource.MANUAL);
+        item.setTariffUnitPrice(gridPrice);
+        item.setOverrideReason(reason);
+        return PriceChange.OVERRIDDEN;
+    }
+
+    private static final String FIELD_PRICE_LIST_ITEM = "priceListItemId";
 
     /**
      * PR 10 review (QA D2703): the checkout prices a visit's charges; a line typed beside them on the visit's
@@ -202,8 +276,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         }
         // QA D3603 / review of #1301 (L2): the category a plan rule sees is what the line was posted for, kept through
         // a price edit (the till echoes the label and category). A line rewritten as something else - its label or
-        // its item category changed - is the cashier's own line: no posted category, the plan reads it like any typed
-        // line (a lab category still counts as a lab test).
+        // its item category changed - is the cashier's own line: no posted category. QA D3980: like any typed line it
+        // is then covered only through its price-list item (the act it bills), and with none it is not claimed.
         if (rewritten || dto.getItemCategory() != item.getItemCategory()) {
             item.setCoverageCategory(null);
         }

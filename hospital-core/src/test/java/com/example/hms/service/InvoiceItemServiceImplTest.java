@@ -295,4 +295,107 @@ class InvoiceItemServiceImplTest {
             .itemCategory(ItemCategory.SERVICE).build(), Locale.FRENCH);
         assertThat(lab.getCoverageCategory()).isNull();
     }
+
+    /* ── QA D3980 (r77): a line typed at the till bills the act picked from the price list ── */
+
+    private com.example.hms.model.PriceListItem widal() {
+        com.example.hms.model.PriceListItem item = com.example.hms.model.PriceListItem.builder()
+            .hospitalId(HOSPITAL_ID).code("LAB-WIDAL").label("Sérodiagnostic de Widal")
+            .category(com.example.hms.enums.PriceListCategory.LAB_TEST).build();
+        item.setId(UUID.randomUUID());
+        return item;
+    }
+
+    private final com.example.hms.repository.PriceListItemRepository priceItems =
+        mock(com.example.hms.repository.PriceListItemRepository.class);
+    private final com.example.hms.service.billing.TariffResolver tariffs =
+        mock(com.example.hms.service.billing.TariffResolver.class);
+
+    private InvoiceItemRequestDTO typed(UUID itemId, String price) {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        service.setPriceList(priceItems, tariffs);
+        invoice.setInvoiceDate(java.time.LocalDate.of(2026, 11, 25));
+        return InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId()).itemDescription("widal")
+            .quantity(1).unitPrice(new BigDecimal(price)).itemCategory(ItemCategory.GENERAL)
+            .priceListItemId(itemId).build();
+    }
+
+    @Test
+    void aTypedLineWithAPickedActIsATariffLineOfThatAct_D3980() {
+        var widal = widal();
+        UUID priceId = UUID.randomUUID();
+        when(priceItems.findActiveByIdForCharge(widal.getId(), HOSPITAL_ID)).thenReturn(Optional.of(widal));
+        when(tariffs.resolveItem(HOSPITAL_ID, widal.getId(), java.time.LocalDate.of(2026, 11, 25))).thenReturn(
+            Optional.of(new com.example.hms.service.billing.TariffResolver.Tariff(widal.getId(), priceId,
+                widal.getLabel(), new BigDecimal("3500"))));
+        org.mockito.ArgumentCaptor<InvoiceItem> saved = org.mockito.ArgumentCaptor.forClass(InvoiceItem.class);
+
+        service.createInvoiceItem(typed(widal.getId(), "3500"), Locale.FRENCH);
+
+        verify(itemRepository).save(saved.capture());
+        InvoiceItem line = saved.getValue();
+        assertThat(line.getPriceListItemId()).isEqualTo(widal.getId());
+        assertThat(line.getPriceListPriceId()).isEqualTo(priceId);
+        assertThat(line.getCoverageCategory()).isEqualTo(com.example.hms.enums.PriceListCategory.LAB_TEST);
+        assertThat(line.getItemCategory()).isEqualTo(ItemCategory.LAB_TEST);
+        assertThat(line.getItemDescription()).isEqualTo("Sérodiagnostic de Widal");
+        assertThat(line.getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.TARIFF);
+        assertThat(line.getOverrideReason()).isNull();
+    }
+
+    @Test
+    void aPickedActAtAnotherPriceIsAnOverride_D3980() {
+        var widal = widal();
+        when(priceItems.findActiveByIdForCharge(widal.getId(), HOSPITAL_ID)).thenReturn(Optional.of(widal));
+        when(tariffs.resolveItem(any(), any(), any())).thenReturn(Optional.of(
+            new com.example.hms.service.billing.TariffResolver.Tariff(widal.getId(), UUID.randomUUID(),
+                widal.getLabel(), new BigDecimal("3500"))));
+
+        InvoiceItemRequestDTO noReason = typed(widal.getId(), "3000");
+        assertThatThrownBy(() -> service.createInvoiceItem(noReason, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.overrideReasonRequired");
+
+        InvoiceItemRequestDTO withReason = typed(widal.getId(), "3000");
+        withReason.setOverrideReason("Tarif convenu");
+        when(roleValidator.canOverrideTariff(callerId, HOSPITAL_ID)).thenReturn(false);
+        assertThatThrownBy(() -> service.createInvoiceItem(withReason, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(itemRepository, never()).save(any(InvoiceItem.class));
+
+        when(roleValidator.canOverrideTariff(callerId, HOSPITAL_ID)).thenReturn(true);
+        org.mockito.ArgumentCaptor<InvoiceItem> saved = org.mockito.ArgumentCaptor.forClass(InvoiceItem.class);
+        service.createInvoiceItem(withReason, Locale.FRENCH);
+        verify(itemRepository).save(saved.capture());
+        assertThat(saved.getValue().getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.MANUAL);
+        assertThat(saved.getValue().getTariffUnitPrice()).isEqualByComparingTo("3500");
+        assertThat(saved.getValue().getOverrideReason()).isEqualTo("Tarif convenu");
+        assertThat(saved.getValue().getPriceListItemId()).isEqualTo(widal.getId());
+    }
+
+    @Test
+    void anActOfAnotherHospitalOrWithdrawnIsRefused_D3980() {
+        UUID elsewhere = UUID.randomUUID();
+        when(priceItems.findActiveByIdForCharge(elsewhere, HOSPITAL_ID)).thenReturn(Optional.empty());
+
+        InvoiceItemRequestDTO request = typed(elsewhere, "3500");
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.priceListItemUnknown");
+        verify(itemRepository, never()).save(any(InvoiceItem.class));
+    }
+
+    @Test
+    void aTypedLineWithNoActBillsNoCategory_D3980() {
+        org.mockito.ArgumentCaptor<InvoiceItem> saved = org.mockito.ArgumentCaptor.forClass(InvoiceItem.class);
+        InvoiceItemRequestDTO typedLab = line();
+        typedLab.setItemCategory(ItemCategory.LAB_TEST);
+
+        service.createInvoiceItem(typedLab, Locale.FRENCH);
+
+        verify(itemRepository).save(saved.capture());
+        assertThat(saved.getValue().getPriceListItemId()).isNull();
+        assertThat(saved.getValue().getCoverageCategory()).as("never claimed from the insurer").isNull();
+        assertThat(saved.getValue().getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.MANUAL);
+    }
 }

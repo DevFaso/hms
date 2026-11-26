@@ -108,9 +108,20 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon revenue">payments</span>
       <div class="card-info">
-        <span class="card-value">{{
+        <span class="card-value" data-testid="billing-net-revenue">{{
           statsUnknown() ? '—' : formatCurrency(stats().totalRevenue)
         }}</span><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
+        <!-- QA D3981 (r77): the net revenue says what it nets, as the till's day report does. -->
+        @if (!statsUnknown() && (stats().refunded ?? 0) > 0) {
+          <span class="card-hint" data-testid="billing-revenue-breakdown">{{
+            'BILLING.REVENUE_BREAKDOWN'
+              | translate
+                : {
+                    received: formatCurrency(stats().grossReceived ?? 0),
+                    refunded: formatCurrency(stats().refunded ?? 0),
+                  }
+          }}</span>
+        }
       </div>
     </div>
     <div class="summary-card">
@@ -807,6 +818,44 @@
 
             @if (canEditLines(inv)) {
               <div class="line-form">
+                <!-- QA D3980 (r77): the act of the price list the line bills; without one it is never claimed. -->
+                @if (priceListItems().length > 0) {
+                  <div class="field line-act">
+                    <label for="line-act">{{ 'BILLING.LINE_PRICE_LIST_ITEM' | translate }}</label>
+                    <select
+                      id="line-act"
+                      data-server-field="priceListItemId"
+                      data-testid="line-add-act"
+                      [attr.aria-describedby]="'line-act-hint'"
+                      [ngModel]="newItemPriceListItemId()"
+                      (ngModelChange)="pickPriceListItem($event)"
+                    >
+                      <option value="">
+                        {{ 'BILLING.LINE_PRICE_LIST_ITEM_NONE' | translate }}
+                      </option>
+                      @for (act of priceListItems(); track act.id) {
+                        <option [value]="act.id">
+                          {{ act.code }} — {{ act.label }}
+                          @if (act.currentPrice) {
+                            ({{ formatCurrency(act.currentPrice.unitPrice) }})
+                          }
+                        </option>
+                      }
+                    </select>
+                    <p class="field-hint" id="line-act-hint" data-testid="line-add-act-hint">
+                      {{
+                        (pickedPriceListItem()
+                          ? 'BILLING.LINE_PRICE_LIST_ITEM_HINT'
+                          : 'BILLING.LINE_NOT_COVERED_HINT'
+                        ) | translate
+                      }}
+                    </p>
+                  </div>
+                } @else {
+                  <p class="field-hint line-act" data-testid="line-add-act-hint">
+                    {{ 'BILLING.LINE_NOT_COVERED_HINT' | translate }}
+                  </p>
+                }
                 <div class="field">
                   <label for="line-desc">{{ 'BILLING.LINE_DESCRIPTION' | translate }} *</label>
                   <input
@@ -814,6 +863,7 @@
                     id="line-desc"
                     type="text"
                     maxlength="255"
+                    [readonly]="!!pickedPriceListItem()"
                     [ngModel]="newItemDescription()"
                     (ngModelChange)="newItemDescription.set($event)"
                   />
@@ -856,9 +906,17 @@
                   />
                 </div>
                 <!-- PR 10 review (QA D2703): a line typed on a visit's invoice says why; the day report lists it. -->
-                @if (addedLineNeedsReason(inv)) {
+                @if (addedLineNeedsReason(inv) || newItemOverridesGrid()) {
                   <div class="field">
-                    <label for="line-reason">{{ 'BILLING.ADDED_LINE_REASON' | translate }} *</label>
+                    <label for="line-reason"
+                      >{{
+                        (addedLineNeedsReason(inv)
+                          ? 'BILLING.ADDED_LINE_REASON'
+                          : 'BILLING.OVERRIDE_REASON'
+                        ) | translate
+                      }}
+                      *</label
+                    >
                     <input
                       required
                       id="line-reason"
