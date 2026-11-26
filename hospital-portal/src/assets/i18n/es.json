@@ -11870,6 +11870,7 @@
     "NETWORK_HELP": "Elija un hospital para consultar sus solicitudes, consentimientos y programaciones."
   },
   "REGISTRATIONS": {
+    "HOSPITAL_REQUIRED": "Seleccione el hospital para esta inscripción.",
     "DEACTIVATE_TITLE": "¿Desactivar este registro?",
     "DEACTIVATE_BODY": "El paciente sale de la lista activa de este hospital. Podrá reactivar el registro más adelante.",
     "DEACTIVATE_REASON": "Motivo de la desactivación",
