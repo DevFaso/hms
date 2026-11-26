@@ -5,6 +5,7 @@ import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { roleContextStub } from '../../testing/role-context.stub';
+import { HospitalService } from '../../services/hospital.service';
 import {
   expectEmptySubmitRefusal,
   expectFieldsMarked,
@@ -58,12 +59,15 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
       roles: ['ROLE_SUPER_ADMIN'],
     });
     const previous = new Subject<NursingNote[]>();
+    const hospitals = jasmine.createSpyObj('HospitalService', ['searchHospitals']);
+    hospitals.searchHospitals.and.returnValue(of([{ id: 'h1', name: 'First' }]));
     service.listRecent.and.returnValues(previous, of([dar]));
     TestBed.configureTestingModule({
       imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
       providers: [
         { provide: NursingNoteService, useValue: service },
         { provide: RoleContextService, useValue: role },
+        { provide: HospitalService, useValue: hospitals },
       ],
     });
     const fixture = TestBed.createComponent(NursingNotesPanelComponent);
@@ -72,7 +76,16 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     panel.ngOnChanges();
     fixture.detectChanges();
     expect(service.listRecent).not.toHaveBeenCalled();
-    panel.selectLocalHospital({ id: 'h1', name: 'First' } as never);
+    (
+      fixture.nativeElement.querySelector('.nursing-notes__scope button') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="hospital-typeahead-option-h1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
     panel.selectLocalHospital({ id: 'h2', name: 'Second' } as never);
     previous.next([older]);
     expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1');
