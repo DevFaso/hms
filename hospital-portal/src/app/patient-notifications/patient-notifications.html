@@ -69,7 +69,12 @@
       <p>{{ 'PATIENT_NOTIFICATIONS.EMPTY' | translate }}</p>
     </div>
   } @else {
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'PATIENT_NOTIFICATIONS.TITLE' | translate"
+    >
       <table class="pn-table">
         <thead>
           <tr>
