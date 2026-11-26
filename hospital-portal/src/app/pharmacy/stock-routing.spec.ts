@@ -4,7 +4,7 @@ import { registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
@@ -25,8 +25,12 @@ describe('StockRoutingComponent', () => {
   const hasHospitalScope = signal(true);
   /** QA D2120: the routing actions are the pharmacy's; a writable signal so a test can flip it. */
   const canAct = signal(true);
+  const isSuperAdmin = signal(false);
   const roleContextStub = {
     hasHospitalScope,
+    isSuperAdmin,
+    globalView: () => true,
+    selectedHospitalId: () => null,
     hasAnyActiveRole: () => canAct(),
   } as unknown as RoleContextService;
 
@@ -123,6 +127,7 @@ describe('StockRoutingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
         { provide: PrintLabelService, useValue: printSvc },
@@ -139,9 +144,38 @@ describe('StockRoutingComponent', () => {
 
     hasHospitalScope.set(true);
     canAct.set(true);
+    isSuperAdmin.set(false);
     fixture = TestBed.createComponent(StockRoutingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('prevents a previous stock read from landing after a hospital change', () => {
+    const previous = new Subject<any>();
+    pharmacySvc.checkStock.and.returnValue(previous);
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    component.onScopeChange();
+    previous.next(stockCheckResponse);
+    previous.complete();
+    expect(component.stockResult()).toBeNull();
+    expect(component.prescriptionId).toBe('');
+    expect(component.checking()).toBeFalse();
+    expect(component.scopeChanged()).toBeTrue();
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers hospital switching only after an in-flight action finishes', () => {
+    isSuperAdmin.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).not.toBeNull();
+    component.saving.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PHARMACY_WORKSPACE.SCOPE_LOCKED');
+    component.saving.set(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).not.toBeNull();
   });
 
   it('P-05: should auto-check stock when navigated with :prescriptionId param', async () => {

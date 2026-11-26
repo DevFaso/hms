@@ -10,10 +10,31 @@
     </div>
   </div>
 
+  @if (isSuperAdmin() && canChooseHospital) {
+    @if (!showPartnerForm() && !showBackOrderForm() && !saving() && !allergyHold()) {
+      <app-hospital-scope-chip
+        [preserveScope]="true"
+        [disableUrlSync]="true"
+        (scopeChange)="onScopeChange()"
+      />
+    } @else {
+      <p class="scope-switch-note" role="status">
+        {{ 'PHARMACY_WORKSPACE.SCOPE_LOCKED' | translate }}
+      </p>
+    }
+    @if (scopeChanged()) {
+      <p class="scope-switch-note" role="status">
+        {{ 'PHARMACY_WORKSPACE.SCOPE_CHANGED' | translate }}
+      </p>
+    }
+  }
+
   <!-- The reads on this page answer in global view; the writes behind them
        still require a hospital, so the hint says which and the controls are
        disabled rather than offered and refused. -->
-  <app-hospital-scope-hint />
+  @if (canAct) {
+    <app-hospital-scope-hint />
+  }
 
   <ol class="workspace-steps" [attr.aria-label]="'PHARMACY.STOCK_ROUTING' | translate">
     <li

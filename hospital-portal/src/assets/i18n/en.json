@@ -15222,6 +15222,8 @@
     "CONFIG_NOTE": "Test versions, specimen types and reference ranges in one place."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Complete or cancel the current action before changing hospitals.",
+    "SCOPE_CHANGED": "Hospital changed. Choose a prescription from the queue again.",
     "LABEL": "Pharmacy workspace",
     "CLAIMS_SUBTITLE": "Track claims, decisions and reimbursements.",
     "LOADED_CLAIMS": "claims loaded",

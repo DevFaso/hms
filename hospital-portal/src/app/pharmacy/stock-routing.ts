@@ -25,6 +25,7 @@ import {
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../services/print-label.service';
 
@@ -49,6 +50,7 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
     TranslateModule,
     EnumLabelPipe,
     HospitalScopeHintComponent,
+    HospitalScopeChipComponent,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
   ],
@@ -89,6 +91,30 @@ export class StockRoutingComponent implements OnInit {
     'ROLE_PHARMACY_VERIFIER',
     'ROLE_HOSPITAL_ADMIN',
   ]);
+
+  /** A deep link names an order in its original context and keeps that context. */
+  readonly canChooseHospital = !this.route.snapshot.paramMap.has('prescriptionId');
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  readonly scopeChanged = signal(false);
+
+  /** A hospital switch invalidates order-specific reads and reloads the queue. */
+  onScopeChange(): void {
+    this.checkSeq++;
+    this.checking.set(false);
+    this.prescriptionId = '';
+    this.selected.set(null);
+    this.stockResult.set(null);
+    this.decisionRequests.next(false);
+    this.decisions.set([]);
+    this.decisionsPage = 0;
+    this.decisionsTotalPages = 0;
+    this.decisionsLoading.set(false);
+    this.decisionsError.set(false);
+    this.queue.set([]);
+    this.queueTotal.set(0);
+    this.scopeChanged.set(true);
+    this.loadQueue();
+  }
 
   // Prescription lookup
   prescriptionId = '';
@@ -133,6 +159,7 @@ export class StockRoutingComponent implements OnInit {
   /** True once the window reached the server's ceiling: nothing older can be read. */
   readonly queueAtLimit = signal(false);
   private queueSeq = 0;
+  private checkSeq = 0;
   readonly rxSearch = signal('');
   readonly selected = signal<WorkQueuePrescription | null>(null);
   /** At most this many matches are listed; typing more narrows them. */
@@ -383,6 +410,8 @@ export class StockRoutingComponent implements OnInit {
 
   checkStock(): void {
     if (!this.prescriptionId.trim()) return;
+    const seq = ++this.checkSeq;
+    this.scopeChanged.set(false);
     // Reset pagination whenever a new prescription is checked
     this.decisionsPage = 0;
     this.checking.set(true);
@@ -399,11 +428,13 @@ export class StockRoutingComponent implements OnInit {
     this.decisionsError.set(false);
     this.svc.checkStock(this.prescriptionId).subscribe({
       next: (res) => {
+        if (seq !== this.checkSeq) return;
         this.stockResult.set(res.data);
         this.checking.set(false);
         this.loadDecisions();
       },
       error: (err) => {
+        if (seq !== this.checkSeq) return;
         this.toast.error(this.errorMessage(err, 'PHARMACY.STOCK_CHECK_FAILED'));
         this.checking.set(false);
       },
