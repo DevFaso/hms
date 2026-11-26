@@ -113,7 +113,10 @@ class OrganisationAdminServiceTest {
         when(admissionRepository.countAdmissionsByHospitalAndDateRange(eq(hospitalA.getId()), any(), any()))
             .thenReturn(9L);
         when(totals.sumInvoiced(eq(hospitalA.getId()), any(), any())).thenReturn(new BigDecimal("250000"));
-        when(totals.sumCollected(eq(hospitalA.getId()), any(), any())).thenReturn(new BigDecimal("180000"));
+        when(totals.sumCollected(eq(hospitalA.getId()), any(), any())).thenReturn(new BigDecimal("183000"));
+        // QA D3981 (r77) class: the 3 000 F handed back on a refund that month is not money collected.
+        when(totals.sumRefundedOut(hospitalA.getId(), LocalDate.of(2026, 11, 1).atStartOfDay(),
+            TODAY.plusDays(1).atStartOfDay())).thenReturn(new BigDecimal("3000"));
 
         OrganisationSummaryDTO summary = service.summary(THIS_MONTH);
 

@@ -52,6 +52,28 @@ export interface CashMovement {
 }
 
 /** Billing-money plan PR 10 (QA D2325, D2714, D2672): one cashier's till for one day (CashSessionDTO). */
+/** QA D3982 (r77): one earlier close of a till, shown as history. */
+export interface CashCloseRound {
+  closeRound: number;
+  closedAt?: string | null;
+  cashExpected?: number | null;
+  cashCounted?: number | null;
+  cashDifference?: number | null;
+  totalDifference?: number | null;
+  differenceLines: number;
+}
+
+/**
+ * QA D3982 (r77): the round whose counts are a till's current figures. An older server sends no countedRound: an
+ * open till then has none, a closed one its latest.
+ */
+export function countedRoundOf(
+  s: Pick<CashSession, 'countedRound' | 'status' | 'closeRound'>,
+): number {
+  if (s.countedRound !== undefined && s.countedRound !== null) return s.countedRound;
+  return s.status === 'OPEN' ? 0 : s.closeRound;
+}
+
 export interface CashSession {
   id: string;
   till: CashTill;
@@ -83,6 +105,13 @@ export interface CashSession {
   cashDifference?: number | null;
   /** PR 10 review: how many lines of the latest close differ, whatever their sum. */
   differenceLines?: number;
+  /**
+   * QA D3982 (r77): the close round whose counts are current: the latest while closed, 0 while open (a
+   * reopened till included). The differences above belong to it only.
+   */
+  countedRound?: number;
+  /** QA D3982: the earlier closes, as history (never the current figures). */
+  history?: CashCloseRound[];
   counts: CashCount[];
   movements: CashMovement[];
 }

@@ -141,6 +141,31 @@ public class TariffResolver {
             .map(version -> new Tariff(item.getId(), version.getId(), item.getLabel(), version.getUnitPrice()));
     }
 
+    /**
+     * Review of #1338: {@link #resolveItem} for a read that charges nothing (the till's act picker shows the price a
+     * typed line would take on its invoice's service date): the same item rules (this hospital's, active) and the
+     * same version in force that day, without the share lock a charge takes.
+     */
+    public Optional<Tariff> peekItem(UUID hospitalId, UUID itemId, LocalDate day) {
+        if (hospitalId == null || itemId == null || day == null) {
+            return Optional.empty();
+        }
+        PriceListItem item = itemRepository.findByIdAndHospitalId(itemId, hospitalId)
+            .filter(found -> found.isActive() && hospitalId.equals(found.getHospitalId()))
+            .orElse(null);
+        if (item == null) {
+            return Optional.empty();
+        }
+        List<PriceListPrice> versions = priceRepository.findInForce(item.getId(), hospitalId, day);
+        if (versions == null) {
+            return Optional.empty();
+        }
+        return versions.stream()
+            .filter(version -> hospitalId.equals(version.getHospitalId()) && version.coversDay(day))
+            .findFirst()
+            .map(version -> new Tariff(item.getId(), version.getId(), item.getLabel(), version.getUnitPrice()));
+    }
+
     /** The business day of a server timestamp (written in the server's zone), or today when there is none. */
     public LocalDate businessDayOf(LocalDateTime serverTime) {
         if (serverTime == null) {

@@ -117,6 +117,26 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     List<String> findActiveUsernamesByHospitalAndRole(@Param("hospitalId") UUID hospitalId,
                                                       @Param("roleCode") String roleCode);
 
+    /**
+     * QA D3862: the same, within one department of the hospital: the care team of a patient's ward, who an urgent
+     * early-warning alert of that patient reaches before anybody else at the hospital.
+     */
+    @Query("""
+        SELECT u.username FROM Staff s
+        JOIN s.user u
+        JOIN s.assignment a
+        JOIN a.role r
+        WHERE s.hospital.id = :hospitalId
+          AND s.department.id = :departmentId
+          AND s.active = true
+          AND u.isDeleted = false
+          AND u.isActive = true
+          AND UPPER(r.code) = UPPER(CAST(:roleCode AS string))
+    """)
+    List<String> findActiveUsernamesByHospitalDepartmentAndRole(@Param("hospitalId") UUID hospitalId,
+                                                                @Param("departmentId") UUID departmentId,
+                                                                @Param("roleCode") String roleCode);
+
     @Query("""
         SELECT s FROM Staff s
         JOIN FETCH s.user u

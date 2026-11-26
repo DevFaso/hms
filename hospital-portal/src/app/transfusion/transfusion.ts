@@ -24,6 +24,7 @@ import {
   BloodUnitResponse,
   BloodUnitStatus,
   EmergencyReleaseOptions,
+  OPositiveRule,
   PatientBloodGroupResponse,
   RhFactor,
   TransfusionAdministrationResponse,
@@ -54,7 +55,8 @@ import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.com
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
-type Tab = 'requests' | 'units';
+import { OPositiveReleasesComponent } from './o-positive-releases/o-positive-releases.component';
+type Tab = 'requests' | 'units' | 'opositive';
 
 /**
  * Blood bank workbench (Tier 2 item 28) — the first and only caller of every
@@ -81,6 +83,7 @@ type Tab = 'requests' | 'units';
     TranslateModule,
     EnumLabelPipe,
     PatientPickerComponent,
+    OPositiveReleasesComponent,
   ],
   templateUrl: './transfusion.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -879,6 +882,65 @@ export class TransfusionComponent implements OnInit {
   emergencyReason = '';
   emergencyAuthoriserId = '';
   emergencyNegativeStated = false;
+  /** V380: no physician can be reached: the bag still goes out, the laboratory director is alerted. */
+  emergencyUnreachable = false;
+  /** V380: the physician's order was verbal (the default): it is countersigned. */
+  emergencyVerbalOrder = true;
+  /** V380: the biologist deciding with the physician, for a patient with a known antibody. */
+  emergencyBiologistId = '';
+  /** Incompatible O positive release: the physician who ordered O positive, when not the authoriser. */
+  emergencyOrderingId = '';
+
+  /** V380: what the O positive authority rule says for the open request; the server still decides. */
+  positiveRule() {
+    return this.emergencyOptions()?.positiveRule ?? null;
+  }
+
+  /** The O positive decision belongs to a named physician who is not the person issuing. */
+  emergencyPhysicianTier(): boolean {
+    const rule = this.positiveRule();
+    return this.emergencyDecisionRequired() && !!rule && !rule.issuerMayDecide;
+  }
+
+  /** Who the form offers as deciding: physicians only outside the low-risk tier, never the caller. */
+  emergencyDeciders(): VerifierCandidate[] {
+    const options = this.emergencyOptions();
+    if (!options) return [];
+    const rule = options.positiveRule;
+    return rule && !rule.issuerMayDecide ? rule.physicians : options.deciders;
+  }
+
+  /** A name is needed unless no physician can be reached: that statement releases the bag too. */
+  emergencyNameMissing(): boolean {
+    if (this.emergencyPhysicianTier() && this.emergencyUnreachable) return false;
+    return !this.emergencyAuthoriserId;
+  }
+
+  /** What the submit button waits for. Nothing here waits for a person who cannot be reached. */
+  emergencyFormIncomplete(): boolean {
+    return (
+      !this.emergencyUnitId ||
+      (this.emergencyDecisionRequired() &&
+        (this.emergencyNameMissing() || !this.emergencyReason.trim())) ||
+      (this.emergencyStatementRequired() && !this.emergencyNegativeStated)
+    );
+  }
+
+  /**
+   * V380: the bag picked on the incompatible form is O positive and the patient is outside the low-risk tier:
+   * the form also asks how the order was given and, for a known antibody, the biologist. Null otherwise.
+   */
+  incompatiblePositiveTier(): OPositiveRule | null {
+    const options = this.emergencyOptions();
+    const rule = options?.positiveRule;
+    const bag = options?.incompatibleUnits.find((u) => u.id === this.emergencyUnitId);
+    const positive = bag?.aboGroup === 'O' && bag.rhFactor === 'POSITIVE';
+    return positive && rule && !rule.issuerMayDecide ? rule : null;
+  }
+
+  onEmergencyUnreachableChanged(): void {
+    if (this.emergencyUnreachable) this.emergencyAuthoriserId = '';
+  }
 
   /** The server's uncrossmatched release had no way in: a bag only reached the row by a crossmatch. */
   canReleaseInEmergency(request: TransfusionRequestResponse): boolean {
@@ -940,6 +1002,10 @@ export class TransfusionComponent implements OnInit {
     this.emergencyUnitId = '';
     this.emergencyReason = '';
     this.emergencyAuthoriserId = '';
+    this.emergencyUnreachable = false;
+    this.emergencyVerbalOrder = true;
+    this.emergencyBiologistId = '';
+    this.emergencyOrderingId = '';
     this.emergencyOptions.set(null);
     this.transfusion.emergencyReleaseOptions(request.id).subscribe({
       // A late answer for a request the panel has left is dropped.
@@ -963,17 +1029,26 @@ export class TransfusionComponent implements OnInit {
     const request = this.selectedRequest();
     if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
     const documented = this.emergencyDecisionRequired();
-    if (documented && (!this.emergencyReason.trim() || !this.emergencyAuthoriserId)) return;
+    if (documented && (!this.emergencyReason.trim() || this.emergencyNameMissing())) return;
     const stating = this.emergencyStatementRequired();
     if (stating && !this.emergencyNegativeStated) return;
+    const physicianTier = this.emergencyPhysicianTier();
     this.emergencySubmitting.set(true);
     const release = documented
       ? this.transfusion.emergencyRelease(request.id, {
           bloodUnitId: this.emergencyUnitId,
           releaseType: 'O_POSITIVE_DECISION',
           reason: this.emergencyReason.trim(),
-          authoriserUserId: this.emergencyAuthoriserId,
+          ...(this.emergencyAuthoriserId ? { authoriserUserId: this.emergencyAuthoriserId } : {}),
           ...(stating ? { negativeUnobtainable: true } : {}),
+          // V380: outside the low-risk tier the order is a physician's, or nobody could be reached.
+          ...(physicianTier && !this.emergencyAuthoriserId ? { physicianUnreachable: true } : {}),
+          ...(physicianTier && this.emergencyAuthoriserId
+            ? { verbalOrder: this.emergencyVerbalOrder }
+            : {}),
+          ...(physicianTier && this.emergencyBiologistId
+            ? { biologistUserId: this.emergencyBiologistId }
+            : {}),
         })
       : this.transfusion.issueUnit(request.id, this.emergencyUnitId);
     release.subscribe({
@@ -1026,6 +1101,7 @@ export class TransfusionComponent implements OnInit {
     }
     const stating = this.emergencyStatementRequired();
     if (stating && !this.emergencyNegativeStated) return;
+    const positiveTier = this.incompatiblePositiveTier();
     this.incompatibleSubmitting.set(true);
     this.transfusion
       .emergencyRelease(request.id, {
@@ -1034,6 +1110,17 @@ export class TransfusionComponent implements OnInit {
         reason: this.emergencyReason.trim(),
         authoriserUserId: this.emergencyAuthoriserId,
         ...(stating ? { negativeUnobtainable: true } : {}),
+        // V380: an O positive bag for a patient at risk records how the order was given, and the biologist.
+        ...(positiveTier ? { verbalOrder: this.emergencyVerbalOrder } : {}),
+        ...(positiveTier && this.emergencyBiologistId
+          ? { biologistUserId: this.emergencyBiologistId }
+          : {}),
+        // Who authorises the incompatible release and who ordered O positive are two names, each kept.
+        ...(positiveTier &&
+        this.emergencyOrderingId &&
+        this.emergencyOrderingId !== this.emergencyAuthoriserId
+          ? { orderingPhysicianUserId: this.emergencyOrderingId }
+          : {}),
       })
       .subscribe({
         next: () => {

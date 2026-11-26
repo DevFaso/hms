@@ -54,6 +54,11 @@ public enum ChildbearingPotential {
         return gender != null && MALE.contains(gender.trim().toLowerCase(Locale.ROOT));
     }
 
+    /** The record says female. Anything else, a blank included, is not known to be. */
+    public static boolean isRecordedFemale(String gender) {
+        return gender != null && FEMALE.contains(gender.trim().toLowerCase(Locale.ROOT));
+    }
+
     /** Whether the Rh restriction must be enforced for this recipient. */
     public boolean requiresRhProtection() {
         return this != NO;

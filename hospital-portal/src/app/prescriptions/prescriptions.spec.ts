@@ -221,6 +221,63 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     expect(component.patientEncounters().map((e) => e.id)).toEqual(['e-open']);
   });
 
+  // QA D3867 (r77): after picking a patient with a severe penicillin allergy and a recorded weight, the dialog
+  // showed neither before « Créer »; the doctor learned of the allergy only from the refusal after submitting.
+  it('shows the allergies with their severity and the dated latest weight once a patient is picked (QA D3867)', () => {
+    component.openCreate();
+    component.selectPatient({
+      id: 'p-1',
+      firstName: 'Ousmane',
+      lastName: 'Test',
+    } as PatientResponse);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne((r) => r.url === '/patients/p-1/storyboard')
+      .flush({
+        patient: {
+          id: 'p-1',
+          fullName: 'Ousmane Test',
+          ageYears: 45,
+          latestWeightKg: 72,
+          latestWeightRecordedAt: '2026-11-25T08:30:00',
+        },
+        allergies: [
+          { id: 'a-1', allergenDisplay: 'Pénicilline', severity: 'SEVERE' },
+          { id: 'a-2', allergenDisplay: 'Arachide', severity: 'MILD' },
+        ],
+        problems: [],
+        hasHighSeverityAllergy: true,
+        hasChronicProblem: false,
+      });
+    fixture.detectChanges();
+
+    const header = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-form-fields"] [data-testid="patient-safety-header"]',
+    );
+    expect(header).withContext('the safety header inside the prescription form').not.toBeNull();
+    const allergies = header!.querySelector('[data-testid="patient-safety-allergies"]')!;
+    expect(allergies.textContent).toContain('Pénicilline');
+    expect(allergies.querySelector('.psh-allergy-severe')?.textContent).toContain('Pénicilline');
+    expect(allergies.textContent).toContain('Arachide');
+    const weight = header!.querySelector('[data-testid="patient-safety-weight"]')!;
+    expect(weight.textContent).toContain('PATIENT_SAFETY.WEIGHT_KG');
+    expect(weight.querySelector('.psh-muted')?.textContent).toContain('PATIENT_SAFETY.WEIGHED_ON');
+    // The name is already on the patient chip.
+    expect(header!.querySelector('[data-testid="patient-safety-name"]')).toBeNull();
+  });
+
+  it('shows no safety header before a patient is picked (QA D3867)', () => {
+    component.openCreate();
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="rx-form-fields"] [data-testid="patient-safety-header"]',
+      ),
+    ).toBeNull();
+  });
+
   it('opens a new prescription with the caller as the prescriber (QA D123)', () => {
     const auth = TestBed.inject(AuthService);
     spyOn(auth, 'getUserProfile').and.returnValue({ id: 'u-me' } as LoginUserProfile);

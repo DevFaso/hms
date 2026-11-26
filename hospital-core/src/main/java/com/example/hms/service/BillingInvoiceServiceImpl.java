@@ -1780,7 +1780,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D209: the KPIs cover the whole scope; global view reads every hospital.
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         List<Object[]> rows = invoiceRepository.summarize(hospitalId, LocalDate.now(java.time.ZoneId.systemDefault()));
-        Object[] row = rows.isEmpty() ? new Object[6] : rows.get(0);
+        return summaryOf(rows);
+    }
+
+    /**
+     * The KPI row of {@code summarize}/{@code summarizeBetween}. QA D3981 (r77): « Revenus » is net of the refunds
+     * paid out (it counted the 3 000 F handed back on an invoice as revenue); the gross received and the refunds are
+     * given beside it so the tile can say how it is made.
+     */
+    private static com.example.hms.payload.dto.BillingSummaryDTO summaryOf(List<Object[]> rows) {
+        Object[] row = rows.isEmpty() || rows.get(0) == null ? new Object[8] : java.util.Arrays.copyOf(rows.get(0), 8);
         return com.example.hms.payload.dto.BillingSummaryDTO.builder()
             .total(asLong(row[0]))
             .paid(asLong(row[1]))
@@ -1788,6 +1797,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .overdue(asLong(row[3]))
             .totalRevenue(asAmount(row[4]))
             .balance(asAmount(row[5]))
+            .grossReceived(asAmount(row[6]))
+            .refunded(asAmount(row[7]))
             .build();
     }
 
@@ -1811,15 +1822,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         List<Object[]> rows = invoiceRepository.summarizeBetween(hospitalId,
             LocalDate.now(java.time.ZoneId.systemDefault()),
             fromDate != null ? fromDate : OPEN_FROM, toDate != null ? toDate : OPEN_TO);
-        Object[] row = rows.isEmpty() ? new Object[6] : rows.get(0);
-        return com.example.hms.payload.dto.BillingSummaryDTO.builder()
-            .total(asLong(row[0]))
-            .paid(asLong(row[1]))
-            .outstanding(asLong(row[2]))
-            .overdue(asLong(row[3]))
-            .totalRevenue(asAmount(row[4]))
-            .balance(asAmount(row[5]))
-            .build();
+        return summaryOf(rows);
     }
 
     /** Billing plan PR 10 (V309): every money movement names the cash session it was taken in. */

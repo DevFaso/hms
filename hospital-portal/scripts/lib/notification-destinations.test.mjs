@@ -58,6 +58,10 @@ const NO_DESTINATION = {
     'staff only (r54 adult severe blood pressure with a sign of organ damage); the staff bell expands the message',
   OBSTETRIC_ALERT: 'staff only (maternity team); the staff bell expands the message',
   OBSTETRIC_ALERT_ESCALATION: 'staff only (escalation chain); the staff bell expands the message',
+  // QA D3862: an adult HIGH NEWS2 filed for acknowledgement; the CRITICAL in-basket item is the action.
+  EARLY_WARNING_ALERT: 'staff only (ward escalation); the staff bell expands the message',
+  EARLY_WARNING_ALERT_ESCALATION:
+    'staff only (escalation chain); the staff bell expands the message',
   POSITIVE_CULTURE_RESULT: 'staff only (ordering clinician); the staff bell expands the message',
   CORRECTED_CULTURE_RESULT: 'staff only (ordering clinician); the staff bell expands the message',
   PRO_CRITICAL_ITEM: 'staff only (care team); the staff bell expands the message',

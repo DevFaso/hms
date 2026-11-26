@@ -269,13 +269,56 @@ public class VitalSignJudgement {
             // QA D665: each reader gets the notice in her own language.
             Object[] args = {NotificationLocalizer.key(TYPE_PREFIX + finding.type().name()), patientArg,
                 ObstetricAlertEscalationWorker.alertMessageArg(ALERT_MSG_PREFIX + finding.code(), null, "")};
+            Set<String> rang = new java.util.LinkedHashSet<>();
             for (String recipient : recipients) {
                 try {
                     notificationService.createNotification(NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+                    rang.add(recipient);
                 } catch (RuntimeException ex) {
                     log.warn("Newborn vitals notice not created: {}", ex.getClass().getSimpleName());
                 }
             }
+            fileNewbornFindingForAcknowledgement(saved, finding, patientId, hospitalId, fullName, rang);
+        }
+    }
+
+    /** QA D3862: the urgent-alert escalation (setter-injected; absent, a newborn finding stays a bell notice). */
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
+                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts = urgentAlerts;
+    }
+
+    /**
+     * QA D3862 (the class of D3304): an URGENT newborn finding on a vital set is an urgent alert to acknowledge, as
+     * the same finding recorded in the newborn assessment is: a CRITICAL in-basket item for the obstetric team and a
+     * physician, reminders until acknowledged. Filed after the commit, never failing the set; one per baby and
+     * finding type while it is still reminding.
+     */
+    private void fileNewbornFindingForAcknowledgement(PatientVitalSign saved, NewbornAlertRules.Finding finding,
+                                                      UUID patientId, UUID hospitalId, String fullName,
+                                                      Set<String> rang) {
+        if (urgentAlerts == null || saved == null || saved.getId() == null || messageSource == null) {
+            return;
+        }
+        try {
+            java.util.Locale staff = com.example.hms.service.i18n.NotificationLocales.STAFF;
+            String patientName = fullName == null || fullName.isBlank()
+                ? messageSource.getMessage("patient.fallback.generic", null, staff) : fullName;
+            String messageKey = ALERT_MSG_PREFIX + finding.code();
+            String typeLabel = messageSource.getMessage(TYPE_PREFIX + finding.type().name(), null, staff);
+            String message = messageSource.getMessage(messageKey, null, finding.code(), staff);
+            String title = messageSource.getMessage(NOTICE_KEY, new Object[]{typeLabel, patientName, message}, staff);
+            com.example.hms.model.Staff recorder = saved.getRecordedByStaff();
+            UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
+            urgentAlerts.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                hospitalId, patientId, patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN, saved.getId(),
+                finding.type().name(), typeLabel, message, recorderUserId, title, messageKey, null, rang));
+        } catch (RuntimeException ex) {
+            log.error("Newborn vitals alert not filed for acknowledgement: {}", ex.getClass().getSimpleName());
         }
     }
 

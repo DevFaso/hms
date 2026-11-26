@@ -96,8 +96,17 @@ public class OrganisationAdminService {
             totals.countAppointments(id, first, last),
             admissions != null ? admissions : 0L,
             totals.sumInvoiced(id, first, last),
-            totals.sumCollected(id, first, last),
+            // QA D3981 (r77) class: collected net of the refunds paid out in the period.
+            collectedNet(id, first, last),
             SmallCounts.of(totals.countDeaths(id, first.atStartOfDay(), last.plusDays(1).atStartOfDay())));
+    }
+
+    private java.math.BigDecimal collectedNet(UUID hospitalId, LocalDate first, LocalDate last) {
+        java.math.BigDecimal collected = totals.sumCollected(hospitalId, first, last);
+        java.math.BigDecimal refunded = totals.sumRefundedOut(hospitalId, first.atStartOfDay(),
+            last.plusDays(1).atStartOfDay());
+        return (collected != null ? collected : java.math.BigDecimal.ZERO)
+            .subtract(refunded != null ? refunded : java.math.BigDecimal.ZERO);
     }
 
     /** The caller's organisation hospitals, or a refusal for a caller who administers no organisation. */

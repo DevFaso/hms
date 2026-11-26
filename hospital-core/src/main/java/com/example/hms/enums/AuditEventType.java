@@ -297,6 +297,13 @@ public enum AuditEventType {
     // who released it, the unit id and the request id only.
     EMERGENCY_BLOOD_RELEASED,
 
+    // Emergency O RhD positive release authority (V380). Past tense; each row carries ids only.
+    O_POSITIVE_RELEASE_DECIDED,
+    O_POSITIVE_RELEASE_COUNTERSIGNED,
+    O_POSITIVE_RELEASE_REVIEWED,
+    O_POSITIVE_FOLLOW_UP_RECORDED,
+    O_POSITIVE_COUNTERSIGN_OVERDUE,
+
     // QA D1538 (round 40): an obstetric order or referral placed as an emergency for a patient the
     // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
     // the recorded sex and age at the time; the order itself is flagged for review.

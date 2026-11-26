@@ -159,9 +159,12 @@ class InvoiceCoverageServiceTest {
             .build();
         tdrItem.setId(UUID.randomUUID());
         when(priceItems.findAllById(any())).thenReturn(List.of(tdrItem));
+        // QA D3980: the checkout stamps what each line bills (a line with no category is never covered).
         consultation = line("2000", ItemCategory.SERVICE, null, 1);
+        consultation.setCoverageCategory(PriceListCategory.CONSULTATION);
         tdr = line("1500", ItemCategory.GENERAL, tdrItem.getId(), 2);
         xray = line("5000", ItemCategory.SERVICE, null, 3);
+        xray.setCoverageCategory(PriceListCategory.IMAGING);
         lines = new ArrayList<>(List.of(consultation, tdr, xray));
         when(items.findByBillingInvoiceId(invoice.getId())).thenAnswer(call -> lines);
         invoice.setTotalAmount(new BigDecimal("8500"));
@@ -536,12 +539,70 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("a lab line that was not priced from the price list still falls under a lab rule")
-    void aLabLineIsALabTestHoweverPriced() {
+    @DisplayName("QA D3980: a line typed at the till with no act has no category, whatever its label or item category")
+    void aTypedLineWithNoActHasNoCategory() {
         assertThat(InvoiceCoverageService.categoryOf(
-            InvoiceItem.builder().itemCategory(ItemCategory.LAB_TEST).build(), Map.of()))
-            .isEqualTo(PriceListCategory.LAB_TEST);
+            InvoiceItem.builder().itemCategory(ItemCategory.LAB_TEST).build(), Map.of())).isNull();
         assertThat(InvoiceCoverageService.categoryOf(
             InvoiceItem.builder().itemCategory(ItemCategory.SERVICE).build(), Map.of())).isNull();
+        assertThat(InvoiceCoverageService.coveredNet(null, new BigDecimal("3500"))).isEqualByComparingTo("0");
+        assertThat(InvoiceCoverageService.coveredNet(PriceListCategory.LAB_TEST, new BigDecimal("3500")))
+            .isEqualByComparingTo("3500");
+    }
+
+    @Test
+    @DisplayName("QA D3980 (r77, invoice 000016): typed lines with no act are the patient's; a picked act takes its rules")
+    void d3980_typedLinesAreNeverClaimedAndPickedActsTakeTheirRules() {
+        // MUT-TEST-A 75 %: the Widal act excluded by an item rule, the other services excluded as a category.
+        PayerPlanTerms mut = PayerPlanTerms.builder().hospitalId(HOSPITAL_A).planId(plan.getId())
+            .defaultCoveragePercent(75).effectiveFrom(LocalDate.of(2026, 1, 1)).build();
+        PriceListItem widal = PriceListItem.builder().hospitalId(HOSPITAL_A).code("LAB-WIDAL")
+            .category(PriceListCategory.LAB_TEST).build();
+        widal.setId(UUID.randomUUID());
+        PriceListItem nfs = PriceListItem.builder().hospitalId(HOSPITAL_A).code("LAB-NFS")
+            .category(PriceListCategory.LAB_TEST).build();
+        nfs.setId(UUID.randomUUID());
+        PayerPlanRule widalExcluded = PayerPlanRule.builder().hospitalId(HOSPITAL_A).planId(plan.getId())
+            .priceListItemId(widal.getId()).excluded(true).effectiveFrom(LocalDate.of(2026, 1, 1)).build();
+        PayerPlanRule otherExcluded = PayerPlanRule.builder().hospitalId(HOSPITAL_A).planId(plan.getId())
+            .category(PriceListCategory.OTHER_SERVICE).excluded(true).effectiveFrom(LocalDate.of(2026, 1, 1))
+            .build();
+        when(terms.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL_A))
+            .thenReturn(List.of(mut));
+        when(rules.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL_A))
+            .thenReturn(List.of(widalExcluded, otherExcluded));
+        when(priceItems.findAllById(any())).thenReturn(List.of(widal, nfs));
+
+        // CS 2 000 + Widal 3 500, health booklet 500, syringes 2 x 100, all typed by hand (no act).
+        InvoiceItem cs = line("2000", ItemCategory.SERVICE, null, 1);
+        cs.setCoverageCategory(PriceListCategory.CONSULTATION);
+        InvoiceItem typedWidal = line("3500", ItemCategory.LAB_TEST, null, 2);
+        InvoiceItem booklet = line("500", ItemCategory.GENERAL, null, 3);
+        InvoiceItem syringes = line("200", ItemCategory.MEDICATION, null, 4);
+        syringes.setQuantity(2);
+        syringes.setUnitPrice(new BigDecimal("100"));
+        lines = new ArrayList<>(List.of(cs, typedWidal, booklet, syringes));
+        invoice.setTotalAmount(new BigDecimal("6200"));
+
+        // The insurer pays 75 % of the consultation only: 1 500, not 4 650 (3 150 F overstated before).
+        assertThat(service.applyAtIssue(invoice, BILLING_A)).isEqualByComparingTo("1500");
+        assertThat(typedWidal.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(booklet.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(syringes.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(InvoiceBalance.dueOf(invoice)).isEqualByComparingTo("4700");
+
+        // Picked from the price list instead: the Widal act stays excluded, a covered act takes the default 75 %.
+        ledger.clear();
+        invoice.setPayerShareTotal(BigDecimal.ZERO);
+        typedWidal.setPriceListItemId(widal.getId());
+        typedWidal.setCoverageCategory(PriceListCategory.LAB_TEST);
+        InvoiceItem pickedNfs = line("4000", ItemCategory.LAB_TEST, nfs.getId(), 5);
+        pickedNfs.setCoverageCategory(PriceListCategory.LAB_TEST);
+        lines.add(pickedNfs);
+        invoice.setTotalAmount(new BigDecimal("10200"));
+
+        assertThat(service.applyAtIssue(invoice, BILLING_A)).isEqualByComparingTo("4500");
+        assertThat(typedWidal.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(pickedNfs.getPayerShareAmount()).isEqualByComparingTo("3000");
     }
 }

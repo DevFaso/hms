@@ -24,7 +24,8 @@ public record OrganisationSummaryDTO(LocalDate from, LocalDate to, int smallCoun
      * @param appointments   appointments dated in the period
      * @param admissions     admissions that began in the period
      * @param invoicedTotal  issued invoices of the period, whole units of the currency
-     * @param collectedTotal confirmed payments of the period, whole units of the currency
+     * @param collectedTotal confirmed payments of the period less the refunds paid out in it (QA D3981), whole units
+     *                       of the currency
      * @param deaths         deaths recorded in the period: a sensitive count
      */
     public record HospitalTotals(UUID hospitalId, String hospitalName, String currencyCode,

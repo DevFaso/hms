@@ -41,6 +41,10 @@ public interface DispenseBillingDeferralRepository extends JpaRepository<Dispens
         findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
             UUID hospitalId, UUID prescriptionId, DispenseBillingDeferralKind kind, UUID requestedBy);
 
+    /** QA D3985 (r77): a patient's deferrals in one state at a hospital (the desk's balance reads the executed ones). */
+    List<DispenseBillingDeferral> findByHospitalIdAndPatientIdAndStatus(UUID hospitalId, UUID patientId,
+                                                                         DispenseBillingDeferralStatus status);
+
     /** These deferrals, at the acting hospital (the reconciliation of a day). */
     List<DispenseBillingDeferral> findByHospitalIdAndIdIn(UUID hospitalId, Collection<UUID> ids);
 
