@@ -575,6 +575,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.FieldBusinessException("authorizationNumber",
                 "imaging.order.authorizationNumberBlank");
         }
+        // Insurer claims PR 1 (D-15): the number reaches invoice lines and the paper; never a payment-card number.
+        com.example.hms.utility.CardNumbers.requireNone(number, "authorizationNumber");
         ImagingOrder saved = applyAuthorization(order, number);
         // Insurer claims plan PR 1 (QA D3984): the number reaches the invoice lines the order was billed on.
         copyToInvoiceLines(saved, number, com.example.hms.security.CallerIdentity.currentUserId());

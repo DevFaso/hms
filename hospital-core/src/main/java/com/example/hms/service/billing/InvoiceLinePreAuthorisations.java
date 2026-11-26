@@ -21,7 +21,8 @@ import java.util.regex.Pattern;
  *
  * <ul>
  *   <li>{@link #normalise} is the one rule for a typed number (the line, the imaging order's desk and clinician
- *       paths): trimmed, not blank, 120 characters at most, letters, digits, spaces and {@code . / _ # : -}.</li>
+ *       paths): trimmed, not blank, 120 characters at most, letters, digits, spaces and {@code . / _ # : -}, and
+ *       never a payment-card number.</li>
  *   <li>{@link #copyFromOrder} copies a number recorded on an order onto every line that order was billed on at its
  *       hospital, on invoices not cancelled, whether the invoice is a draft or already issued.</li>
  * </ul>
@@ -66,6 +67,9 @@ public class InvoiceLinePreAuthorisations {
         if (!ALLOWED.matcher(number).matches()) {
             throw new FieldBusinessException(field, "billing.preAuthorisation.characters");
         }
+        // D-15: digits, spaces and dashes are allowed, so a payment-card number would pass the pattern; it is refused
+        // here, never stored, never printed (the mailed invoice included).
+        com.example.hms.utility.CardNumbers.requireNone(number, field);
         return number;
     }
 

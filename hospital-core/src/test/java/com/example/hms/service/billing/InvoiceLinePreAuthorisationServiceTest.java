@@ -149,5 +149,8 @@ class InvoiceLinePreAuthorisationServiceTest {
         assertThatThrownBy(() -> InvoiceLinePreAuthorisations.normalise("<script>", "number"))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(InvoiceLinePreAuthorisations.normalise("PEC-2026/0042#3", "number")).isEqualTo("PEC-2026/0042#3");
+        // Review of #1353 (D-15): a payment-card number passes the character rule, never the card rule.
+        assertThatThrownBy(() -> InvoiceLinePreAuthorisations.normalise("4111 1111 1111 1111", "number"))
+            .isInstanceOf(FieldBusinessException.class);
     }
 }

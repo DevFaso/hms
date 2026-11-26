@@ -68,6 +68,31 @@ class InsurerClaimDataGuardTest {
         assertThat(offenders).as("queries that do not name the hospital").isEmpty();
     }
 
+    /**
+     * Review of #1353 (D-15): every request field that carries a pre-authorisation number refuses a payment-card
+     * number, and so does the one rule every service applies to the number.
+     */
+    @Test
+    @DisplayName("every pre-authorisation request field refuses a card number")
+    void preAuthorisationFieldsRefuseCardNumbers() throws Exception {
+        List<Class<?>> requests = List.of(
+            com.example.hms.payload.dto.billing.PreAuthorisationRequestDTO.class,
+            com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.class,
+            com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO.class,
+            com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO.class);
+        for (Class<?> request : requests) {
+            assertThat(request.getDeclaredField("authorizationNumber")
+                .isAnnotationPresent(com.example.hms.validation.NoCardNumber.class))
+                .as(request.getSimpleName() + ".authorizationNumber").isTrue();
+        }
+        String rule = java.nio.file.Files.readString(java.nio.file.Path.of(
+            "src/main/java/com/example/hms/service/billing/InvoiceLinePreAuthorisations.java"));
+        assertThat(rule).contains("CardNumbers.requireNone(number, field)");
+        String imaging = java.nio.file.Files.readString(java.nio.file.Path.of(
+            "src/main/java/com/example/hms/service/impl/ImagingOrderServiceImpl.java"));
+        assertThat(imaging).contains("CardNumbers.requireNone(number, \"authorizationNumber\")");
+    }
+
     private static boolean namesHospital(Method method) {
         if (method.getName().contains("HospitalId") || method.getName().contains("Hospital_Id")) {
             return true;

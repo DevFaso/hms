@@ -9,8 +9,8 @@ import lombok.Setter;
 
 /**
  * Insurer claims plan PR 1 (QA D3984): the insurer's pre-authorisation number (« bon / accord préalable ») the desk or
- * billing records on an invoice line or on an imaging order. Letters, digits, spaces and {@code . / _ # : -} only;
- * the service checks it again.
+ * billing records on an invoice line or on an imaging order. Letters, digits, spaces and {@code . / _ # : -} only,
+ * never a payment-card number (D-15); the service checks both again.
  */
 @Getter
 @Setter
@@ -20,5 +20,6 @@ public class PreAuthorisationRequestDTO {
 
     @NotBlank
     @Size(max = 120)
+    @com.example.hms.validation.NoCardNumber
     private String authorizationNumber;
 }

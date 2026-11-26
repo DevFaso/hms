@@ -130,7 +130,8 @@ export class PayerSharesListComponent {
   setView(view: 'open' | 'closed'): void {
     if (this.view() === view) return;
     this.view.set(view);
-    this.load();
+    // Review of #1353: another tab starts from its first page.
+    this.load(0);
   }
 
   setPayer(payerId: string): void {
@@ -181,6 +182,13 @@ export class PayerSharesListComponent {
       .subscribe({
         next: (result) => {
           if (seq !== this.request) return;
+          const pages = result?.totalPages ?? 0;
+          // Review of #1353: the list shrank under this page (the last row of the final page was settled, or
+          // another desk settled shares): read the last page that still exists.
+          if (!result?.content?.length && page > 0 && pages > 0 && page >= pages) {
+            this.load(pages - 1);
+            return;
+          }
           this.rows.set(result?.content ?? []);
           this.count.set(result?.totalElements ?? 0);
           this.total.set(result?.totalAmount ?? 0);

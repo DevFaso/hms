@@ -132,7 +132,7 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.invoice.status", statusLabel(t, invoice)));
             w.qr(buildQrPng("hms://invoice/" + invoice.getId()));
             w.down(80);
-            coverageBlock(w, t, payerShares, mailed);
+            coverageBlock(w, t, payerShares, mailed, true);
             cancellationBlock(w, t, invoice, mailed);
 
             w.rule();
@@ -149,12 +149,12 @@ public class PdfInvoiceService {
                 w.down(16);
                 w.row(BODY,
                     mailed ? mailedDesignation(t, it) : designation(t, it),
-                    lineCategoryLabel(t, it),
+                    mailed ? mailedCategoryLabel(t, it) : lineCategoryLabel(t, it),
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice(), t.locale()),
                     money(lineTotal(it), t.locale()));
                 lineShares(w, t, invoice, it);
-                linePreAuthorisation(w, t, it);
+                linePreAuthorisation(w, t, it, mailed);
             }
 
             for (var adjustment : adjustments) {
@@ -261,11 +261,13 @@ public class PdfInvoiceService {
 
     /**
      * Insurer claims plan PR 1 (QA D3984): the insurer's pre-authorisation number of the act, under its line, so the
-     * claim can be matched to the insurer's « bon ». Printed on the mailed copy too: a number names no condition.
+     * claim can be matched to the insurer's « bon ». Printed on the mailed copy unless its words reveal a protected
+     * category (a « CPN-… » antenatal-care number).
      */
-    private static void linePreAuthorisation(Writer w, PdfLabels t, InvoiceItem item) throws IOException {
+    private static void linePreAuthorisation(Writer w, PdfLabels t, InvoiceItem item, boolean mailed)
+            throws IOException {
         String number = item.getPreAuthorisationNumber();
-        if (number == null || number.isBlank()) {
+        if (number == null || number.isBlank() || (mailed && revealing(number))) {
             return;
         }
         w.ensureRoom(16);
@@ -281,13 +283,13 @@ public class PdfInvoiceService {
      */
     private static void coverageBlock(Writer w, PdfLabels t,
                                       List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares,
-                                      boolean mailed) throws IOException {
+                                      boolean mailed, boolean standingOnly) throws IOException {
         if (shares == null || shares.isEmpty()) {
             return;
         }
         boolean printed = false;
         for (var share : shares) {
-            String text = coverageText(t, share, mailed);
+            String text = coverageText(t, share, mailed, standingOnly);
             if (text == null) {
                 continue;
             }
@@ -300,16 +302,20 @@ public class PdfInvoiceService {
         }
     }
 
-    /** One share's coverage line, or null for a share that is not standing or names nothing printable. */
+    /**
+     * One share's coverage line, or null for a share that names nothing printable. {@code standingOnly}: the invoice
+     * prints the shares standing today (not rejected, not cancelled); a receipt is handed the shares that stood when
+     * its money was received (review of #1353: a share rejected since still covered that payment) and prints them
+     * whatever their status now.
+     */
     static String coverageText(PdfLabels t, com.example.hms.payload.dto.billing.InvoicePayerShareDTO share,
-                               boolean mailed) {
-        if (share == null || !standing(share.getStatus())) {
+                               boolean mailed, boolean standingOnly) {
+        if (share == null || (standingOnly && !standing(share.getStatus()))) {
             return null;
         }
         List<String> who = new java.util.ArrayList<>();
         for (String name : new String[] {share.getPayerName(), share.getPlanName()}) {
-            if (name != null && !name.isBlank()
-                    && !(mailed && com.example.hms.service.notification.SensitiveWording.reveals(name))) {
+            if (name != null && !name.isBlank() && !(mailed && revealing(name))) {
                 who.add(name.strip());
             }
         }
@@ -318,7 +324,7 @@ public class PdfInvoiceService {
             parts.add(t.get("pdf.invoice.coverage", String.join(", ", who)));
         }
         String policy = share.getPolicyNumber();
-        if (policy != null && !policy.isBlank()) {
+        if (policy != null && !policy.isBlank() && !(mailed && revealing(policy))) {
             parts.add(t.get("pdf.invoice.policyNumber", mailed ? maskedPolicy(policy) : policy.strip()));
         }
         String subscriber = share.getSubscriberName();
@@ -338,6 +344,26 @@ public class PdfInvoiceService {
         } catch (IllegalArgumentException unknown) {
             return false;
         }
+    }
+
+    /** K4: whether the mailed copy withholds {@code text} (its words reveal a protected category). */
+    static boolean revealing(String text) {
+        return com.example.hms.service.notification.SensitiveWording.reveals(text);
+    }
+
+    /**
+     * Review of #1353 (K4): the category column of the mailed copy. What an order line bills can itself reveal a
+     * protected category (« Accouchement » for a delivery); such a label prints the line's generic category instead,
+     * as a revealing designation does.
+     */
+    static String mailedCategoryLabel(PdfLabels t, InvoiceItem it) {
+        // A delivery is withheld by its category, whatever the words of the label in the reader's language
+        // (« Delivery », « Parto » name no stem of the word list).
+        if (it.getCoverageCategory() == com.example.hms.enums.PriceListCategory.DELIVERY) {
+            return categoryLabel(t, it.getItemCategory());
+        }
+        String label = lineCategoryLabel(t, it);
+        return revealing(label) ? categoryLabel(t, it.getItemCategory()) : label;
     }
 
     /** K4: a policy number on the mailed copy, its last four characters only (« ****1234 »). */
@@ -495,7 +521,7 @@ public class PdfInvoiceService {
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
             w.down(15);
-            coverageBlock(w, t, sharesThen, false);
+            coverageBlock(w, t, sharesThen, false, false);
             receiptMoment(w, t, payment, receivedByName);
             boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
             if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {

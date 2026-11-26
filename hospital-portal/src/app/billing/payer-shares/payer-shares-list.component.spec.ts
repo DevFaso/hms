@@ -189,6 +189,30 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     expect(host().querySelector('[data-testid="payer-share-paid-share-1"]')).toBeNull();
   });
 
+  it('review of #1353: another tab starts from its first page', () => {
+    render(['ROLE_ACCOUNTANT'], [open], 3);
+    host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-next"]')!.click();
+    host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-view-closed"]')!.click();
+
+    expect(billing.searchHospitalPayerShares.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED'], page: 0 }),
+    );
+  });
+
+  it('review of #1353: when the list shrinks under the page, the last page that exists is read', () => {
+    render(['ROLE_ACCOUNTANT'], [open], 3);
+    billing.searchHospitalPayerShares.and.returnValues(
+      of({ content: [], page: 2, size: 25, totalElements: 26, totalPages: 2, totalAmount: 0 }),
+      of(pageOf([open], 2)),
+    );
+    fixture.componentInstance.goTo(2);
+
+    expect(billing.searchHospitalPayerShares.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ page: 1 }),
+    );
+    expect(fixture.componentInstance.rows().length).toBe(1);
+  });
+
   it('shows the paid and refused shares on demand', () => {
     render(['ROLE_ACCOUNTANT']);
     host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-view-closed"]')!.click();
