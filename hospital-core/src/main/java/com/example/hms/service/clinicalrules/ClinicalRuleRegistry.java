@@ -161,7 +161,7 @@ public final class ClinicalRuleRegistry {
             "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"),
         // QA D3862 (r77): a HIGH NEWS2 is an urgent alert to acknowledge (the D3304 path), not a bell alone.
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-25.1",
-            "service.vitals.News2EscalationService"));
+            "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

@@ -4,7 +4,6 @@ import com.example.hms.enums.InBasketPriority;
 import com.example.hms.model.User;
 import com.example.hms.model.labor.ObstetricAlertEscalation;
 import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
-import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.InBasketItemRepository;
 import com.example.hms.repository.ObstetricAlertEscalationRepository;
 import com.example.hms.repository.OnCallScheduleRepository;
@@ -67,7 +66,7 @@ class EarlyWarningEscalationCircleTest {
     @Mock private MessageSource messageSource;
     @Mock private ObstetricAlertCurrency currency;
     @Mock private CriticalResultRecipients clinicalRecipients;
-    @Mock private AdmissionRepository admissionRepository;
+    @Mock private com.example.hms.service.vitals.News2CareTeam careTeam;
 
     private ObstetricAlertEscalationWorker worker;
 
@@ -78,7 +77,7 @@ class EarlyWarningEscalationCircleTest {
             onCallScheduleRepository, staffRepository, userRepository, patientRepository,
             notificationService, inBasketService, messageSource, clock, currency);
         worker.setClinicalRecipients(clinicalRecipients);
-        worker.setAdmissionRepository(admissionRepository);
+        worker.setCareTeam(careTeam);
         when(userRepository.findById(RECORDER)).thenReturn(Optional.of(user("nurse_a", RECORDER)));
         when(staffRepository.findActiveUsernamesByHospitalAndRole(HOSPITAL, "ROLE_DOCTOR"))
             .thenReturn(List.of("dr_a", "dr_b"));
@@ -86,7 +85,9 @@ class EarlyWarningEscalationCircleTest {
             .thenReturn(List.of("mw_a"));
         when(staffRepository.findActiveUsernamesByHospitalAndRole(HOSPITAL, "ROLE_NURSE"))
             .thenReturn(List.of("nurse_a", "nurse_b"));
-        when(clinicalRecipients.nursesInCharge(HOSPITAL, true)).thenReturn(Set.of("nurse_b"));
+        when(careTeam.wardNurses(HOSPITAL, PATIENT)).thenReturn(Set.of("nurse_b"));
+        when(careTeam.reminderCircle(HOSPITAL, PATIENT)).thenReturn(Set.of("dr_a", "nurse_b"));
+        when(clinicalRecipients.nursesInCharge(HOSPITAL, true)).thenReturn(Set.of("nurse_a", "nurse_b"));
         when(clinicalRecipients.cover(eq(HOSPITAL), any())).thenReturn(Set.of("dr_b"));
         when(onCallScheduleRepository.findByHospitalAndWindow(eq(HOSPITAL), any(), any())).thenReturn(List.of());
         when(escalationRepository.save(any())).thenAnswer(call -> {
@@ -144,15 +145,22 @@ class EarlyWarningEscalationCircleTest {
     }
 
     @Test
+    void aWardThatNamesNoNurseFallsBackToTheNurseInCharge() {
+        when(careTeam.wardNurses(HOSPITAL, PATIENT)).thenReturn(Set.of());
+        assertThat(worker.firstCircle(news2(Set.of("dr_a")))).containsExactlyInAnyOrder("dr_a", "nurse_a", "nurse_b");
+    }
+
+    @Test
     void withNoDoctorInTheCircleTheCoveringDoctorIsAdded() {
         assertThat(worker.firstCircle(news2(Set.of("nurse_a")))).contains("nurse_b", "dr_b").doesNotContain("mw_a");
         assertThat(worker.firstCircle(news2(Set.of("nurse_a", "dr_a")))).containsExactlyInAnyOrder("nurse_a", "dr_a", "nurse_b");
     }
 
     @Test
-    void remindersReachTheDoctorsAndNursesNeverTheMidwives() {
+    void remindersReachThePatientsCareTeamNotTheWholeHospital() {
+        // Review of #1339: the care team (News2CareTeam), never every doctor and nurse of the hospital.
         assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_NEWS2, HOSPITAL, PATIENT))
-            .contains("dr_a", "dr_b", "nurse_a", "nurse_b").doesNotContain("mw_a");
+            .containsExactlyInAnyOrder("dr_a", "nurse_b");
         // Every other source keeps the obstetric circle.
         assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, HOSPITAL, PATIENT))
             .contains("mw_a");

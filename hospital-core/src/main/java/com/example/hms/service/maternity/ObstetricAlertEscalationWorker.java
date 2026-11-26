@@ -105,11 +105,12 @@ public class ObstetricAlertEscalationWorker {
     private short maxRounds = 3;
 
     /**
-     * QA D3862: who stands for a patient's adult early warning (setter-injected; absent, every doctor and nurse of
-     * the hospital stands in). The nurse in charge and the covering doctor are the critical-result ladder's.
+     * QA D3862: who stands for a patient's adult early warning (setter-injected; absent, the hospital's doctors and
+     * nurses stand in). The patient's care team ({@code News2CareTeam}: the ward's nurses, the responsible and on-call
+     * doctors), and the critical-result ladder's covering doctor and nurse in charge when the ward names nobody.
      */
     private com.example.hms.service.lab.CriticalResultRecipients clinicalRecipients;
-    private com.example.hms.repository.AdmissionRepository admissionRepository;
+    private com.example.hms.service.vitals.News2CareTeam careTeam;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setClinicalRecipients(com.example.hms.service.lab.CriticalResultRecipients clinicalRecipients) {
@@ -117,8 +118,8 @@ public class ObstetricAlertEscalationWorker {
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setAdmissionRepository(com.example.hms.repository.AdmissionRepository admissionRepository) {
-        this.admissionRepository = admissionRepository;
+    void setCareTeam(com.example.hms.service.vitals.News2CareTeam careTeam) {
+        this.careTeam = careTeam;
     }
 
     /** First notice of one URGENT alert: the row, the team's notifications and in-basket items. */
@@ -276,8 +277,9 @@ public class ObstetricAlertEscalationWorker {
      * Who takes the first notice of an alert.
      * <ul>
      *   <li>An adult NEWS2 (QA D3862): the people the vital set's page rang (the recorder, the stay's responsible
-     *       doctor, the visit's clinician), the nurse in charge, and the covering doctor whenever no other doctor
-     *       is among them. Never the obstetric team: an adult's NEWS2 is not a midwife's alert.</li>
+     *       doctor, the visit's clinician), the nurses of the patient's ward (the hospital's nurse in charge when
+     *       the ward names none), and the covering doctor whenever no other doctor is among them. Never the
+     *       obstetric team: an adult's NEWS2 is not a midwife's alert.</li>
      *   <li>A newborn finding, from the assessment or from a vital set: the obstetric circle, always with a
      *       physician (policy rule 2); a vital set's also keeps the people its page rang.</li>
      *   <li>Every other source: the obstetric circle.</li>
@@ -288,7 +290,7 @@ public class ObstetricAlertEscalationWorker {
         String documenter = usernameOf(alert.documentedByUserId());
         if (ObstetricAlertEscalationService.SOURCE_NEWS2.equals(alert.sourceType())) {
             Set<String> circle = new LinkedHashSet<>(alert.alreadyNotified());
-            circle.addAll(nursesInCharge(hospitalId));
+            circle.addAll(nursesInCharge(hospitalId, alert.patientId()));
             return withADoctor(circle, hospitalId, documenter);
         }
         Set<String> recipients = firstNoticeRecipients(hospitalId, documenter);
@@ -305,26 +307,32 @@ public class ObstetricAlertEscalationWorker {
     }
 
     /**
-     * Who each reminder goes to. An adult NEWS2 (QA D3862): the stay's responsible doctor, the covering doctor,
-     * and every doctor and nurse of the hospital, never its midwives. Every other source: the obstetric circle
-     * widened to the hospital's doctors, midwives and nurses.
+     * Who each reminder goes to. An adult NEWS2 (QA D3862, review of #1339): the patient's care team (the responsible
+     * doctor, the doctors on call, the ward's doctors and nurses on shift), never the midwives, and the hospital's
+     * doctors and nurses only when that team holds nobody ({@code News2CareTeam}). Every other source: the obstetric
+     * circle widened to the hospital's doctors, midwives and nurses.
      */
     Set<String> reminderCircle(String sourceType, UUID hospitalId, UUID patientId) {
         if (!ObstetricAlertEscalationService.SOURCE_NEWS2.equals(sourceType)) {
             return reminderRecipients(hospitalId);
         }
-        Set<String> recipients = new LinkedHashSet<>();
-        responsibleDoctor(patientId, hospitalId).ifPresent(recipients::add);
-        if (clinicalRecipients != null) {
-            recipients.addAll(clinicalRecipients.cover(hospitalId, null));
+        if (careTeam != null) {
+            return careTeam.reminderCircle(hospitalId, patientId);
         }
-        recipients.addAll(doctors(hospitalId));
+        Set<String> recipients = new LinkedHashSet<>(doctors(hospitalId));
         recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));
         return recipients;
     }
 
-    /** The nurse in charge (the critical-result ladder's: on duty now, else every nurse); every nurse without it. */
-    private Set<String> nursesInCharge(UUID hospitalId) {
+    /**
+     * The nurses of the patient's ward ({@code News2CareTeam}); when it names none, the critical-result ladder's nurse
+     * in charge (on duty now, else every nurse); every nurse without either.
+     */
+    private Set<String> nursesInCharge(UUID hospitalId, UUID patientId) {
+        Set<String> ward = careTeam == null ? Set.of() : careTeam.wardNurses(hospitalId, patientId);
+        if (!ward.isEmpty()) {
+            return ward;
+        }
         if (clinicalRecipients != null) {
             return clinicalRecipients.nursesInCharge(hospitalId, true);
         }
@@ -356,15 +364,6 @@ public class ObstetricAlertEscalationWorker {
         Set<String> widened = new LinkedHashSet<>(circle);
         widened.addAll(clinicalRecipients != null ? clinicalRecipients.cover(hospitalId, documenter) : doctors(hospitalId));
         return widened;
-    }
-
-    /** The attending (else the admitting provider) of the patient's open stay at this hospital, when one is named. */
-    private Optional<String> responsibleDoctor(UUID patientId, UUID hospitalId) {
-        if (admissionRepository == null || patientId == null || hospitalId == null) {
-            return Optional.empty();
-        }
-        return com.example.hms.service.vitals.News2EscalationService.responsiblePhysicianUsername(
-            admissionRepository, patientId, hospitalId);
     }
 
     /**

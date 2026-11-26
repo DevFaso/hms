@@ -92,8 +92,14 @@ public class ObstetricAlertCurrency {
 
     /**
      * QA D3862: a HIGH NEWS2 no longer stands once a later vital set of the patient at the same hospital measured
-     * every NEWS2 parameter (a complete score: D658, a set that left one out says nothing) and scored below HIGH.
-     * The newest complete later set decides.
+     * every NEWS2 parameter (a complete score: D658, a set that left one out says nothing) and scored below HIGH,
+     * and no reading since then scored HIGH.
+     *
+     * <p>Review of #1339 (Rex P1): HIGH, then a complete LOW, then an incomplete HIGH (its repeat alert held back by
+     * the open one) closed the alert on the LOW and deleted its tasks although the newest reading was HIGH. Walking
+     * from the newest reading back: any HIGH, complete or not (a partial total already at 7 is HIGH whatever the
+     * missing values), keeps the alert standing; the first complete reading below HIGH closes it; a partial reading
+     * below HIGH says nothing and is passed over.
      */
     private boolean news2Resolved(ObstetricAlertEscalation row) {
         if (vitalSignRepository == null) {
@@ -104,16 +110,29 @@ public class ObstetricAlertCurrency {
             return false;
         }
         com.example.hms.model.PatientVitalSign source = found.get();
-        return vitalSignRepository.findWithinRange(row.getPatientId(), row.getHospitalId(), source.getRecordedAt(), null,
-                org.springframework.data.domain.PageRequest.of(0, 50))
+        List<com.example.hms.model.PatientVitalSign> newestFirst = vitalSignRepository.findWithinRange(row.getPatientId(),
+                row.getHospitalId(), source.getRecordedAt(), null, org.springframework.data.domain.PageRequest.of(0, 50))
             .stream()
             .filter(later -> !Objects.equals(later.getId(), source.getId()))
             .filter(later -> later.getRecordedAt() != null && later.getRecordedAt().isAfter(source.getRecordedAt()))
-            .map(com.example.hms.utility.NewsScoreCalculator::score)
-            .filter(com.example.hms.utility.NewsScoreCalculator.NewsScoreResult::complete)
-            .findFirst()
-            .map(score -> score.riskBand() != com.example.hms.utility.NewsScoreCalculator.RiskBand.HIGH)
-            .orElse(false);
+            .sorted(java.util.Comparator.comparing(com.example.hms.model.PatientVitalSign::getRecordedAt).reversed())
+            .toList();
+        return newerThanEveryHighReading(newestFirst);
+    }
+
+    /** The newest readings first: a HIGH (complete or not) before any complete reading below HIGH keeps it standing. */
+    static boolean newerThanEveryHighReading(List<com.example.hms.model.PatientVitalSign> newestFirst) {
+        for (com.example.hms.model.PatientVitalSign reading : newestFirst) {
+            com.example.hms.utility.NewsScoreCalculator.NewsScoreResult score =
+                com.example.hms.utility.NewsScoreCalculator.score(reading);
+            if (score.riskBand() == com.example.hms.utility.NewsScoreCalculator.RiskBand.HIGH) {
+                return false;
+            }
+            if (score.complete()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean partographResolved(ObstetricAlertEscalation row) {

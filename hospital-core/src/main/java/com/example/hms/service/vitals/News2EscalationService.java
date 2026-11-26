@@ -201,12 +201,9 @@ public class News2EscalationService {
         return responsiblePhysicianUsername(admissionRepository, patientId, hospitalId);
     }
 
-    /**
-     * The attending physician (else the admitting provider) of the patient's open stay at this hospital. Also read by
-     * the urgent-alert reminders of a HIGH NEWS2 (QA D3862), so both name the same doctor.
-     */
-    public static Optional<String> responsiblePhysicianUsername(AdmissionRepository admissionRepository,
-                                                               UUID patientId, UUID hospitalId) {
+    /** The attending physician (else the admitting provider) of the patient's open stay at this hospital. */
+    private static Optional<String> responsiblePhysicianUsername(AdmissionRepository admissionRepository,
+                                                                UUID patientId, UUID hospitalId) {
         // QA D1065 class (round 18): this hospital's open stay, not the
         // patient's latest admission anywhere filtered afterwards.
         return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
