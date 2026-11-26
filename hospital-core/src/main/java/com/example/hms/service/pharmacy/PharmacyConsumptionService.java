@@ -40,11 +40,12 @@ public class PharmacyConsumptionService {
         pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacyId));
         LocalDate last = to == null ? LocalDate.now(clock) : to;
-        LocalDate first = from == null ? last.minusDays(29) : from;
-        long days = ChronoUnit.DAYS.between(first, last);
-        if (days < 0 || days > 365) throw new FieldBusinessException("from", "stockReport.periodInvalid");
+        LocalDate first;
         List<Object[]> rows;
         try {
+            first = from == null ? last.minusDays(29) : from;
+            long days = ChronoUnit.DAYS.between(first, last);
+            if (days < 0 || days > 365) throw new FieldBusinessException("from", "stockReport.periodInvalid");
             rows = movements.consumptionByRecordedUnit(pharmacyId, first.atStartOfDay(), last.plusDays(1).atStartOfDay(),
                 Set.of(StockTransactionType.DISPENSE, StockTransactionType.SALE),
                 StockTransactionType.RETURN, StockTransactionType.TRANSFER);

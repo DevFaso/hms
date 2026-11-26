@@ -1,7 +1,6 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -21,7 +20,7 @@ public class LowStockAlertScheduler {
     public void sendAlerts() {
         for (var itemId : items.findLowStockIdsAcrossActiveFacilities()) {
             try {
-                delivery.deliver(itemId, Locale.FRENCH);
+                delivery.deliver(itemId);
             } catch (RuntimeException failure) {
                 log.warn("Low-stock alert delivery failed for inventory item {}", itemId, failure);
             }

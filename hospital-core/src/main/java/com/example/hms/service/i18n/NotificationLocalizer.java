@@ -109,8 +109,20 @@ public class NotificationLocalizer {
         return null;
     }
 
+    /** Catalogue names stay structured until the actual recipient reads the notification. */
+    public static Map<String, String> drugName(com.example.hms.model.medication.MedicationCatalogItem item) {
+        String english = com.example.hms.utility.DrugDisplayNames.forReader(item, Locale.ENGLISH);
+        String display = com.example.hms.utility.DrugDisplayNames.forReader(item, Locale.FRENCH);
+        if (english == null && display == null) return key("inventory.lowStock.unknown");
+        return Map.of("drugNameEn", english == null ? "" : english, "drugNameDisplay", display == null ? "" : display);
+    }
+
     /** {@code arg} as a reader in {@code locale} sees it: a lab value or a day written their way, else itself. */
     static Object renderValue(Object arg, Locale locale) {
+        if (arg instanceof Map<?, ?> map && map.get("drugNameEn") instanceof String english
+            && map.get("drugNameDisplay") instanceof String display) {
+            return locale != null && "en".equals(locale.getLanguage()) ? english : display;
+        }
         String labValue = renderLabValue(arg, locale);
         if (labValue != null) {
             return labValue;
@@ -140,6 +152,10 @@ public class NotificationLocalizer {
         }
         if (arg instanceof LocalDate day) {
             return date(day);
+        }
+        if (arg instanceof Map<?, ?> map && map.get("drugNameEn") instanceof String english
+            && map.get("drugNameDisplay") instanceof String display) {
+            return Map.of("drugNameEn", english, "drugNameDisplay", display);
         }
         if (arg instanceof Map<?, ?> map && map.get(DATE) instanceof String iso) {
             return Map.of(DATE, iso);

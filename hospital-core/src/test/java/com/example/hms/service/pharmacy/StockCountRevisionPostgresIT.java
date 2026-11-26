@@ -211,16 +211,79 @@ class StockCountRevisionPostgresIT {
             independent.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             independent.executeWithoutResult(ignored -> jdbc.update("UPDATE clinical.inventory_items SET quantity_on_hand = 50 WHERE id = ?", itemId));
             assertThat(stale.getQuantityOnHand()).isEqualByComparingTo("1");
-            assertThat(delivery.deliver(itemId, Locale.ENGLISH)).isZero();
+            assertThat(delivery.deliver(itemId)).isZero();
         });
         assertThat(jdbc.queryForObject("SELECT count(*) FROM clinical.low_stock_alert_receipts WHERE inventory_item_id = ?", Integer.class, itemId)).isZero();
         verifyNoInteractions(notifications);
         jdbc.update("UPDATE clinical.inventory_items SET quantity_on_hand = 3 WHERE id = ?", itemId);
-        assertThat(delivery.deliver(itemId, Locale.ENGLISH)).isEqualTo(1);
-        assertThat(delivery.deliver(itemId, Locale.ENGLISH)).isZero();
+        assertThat(delivery.deliver(itemId)).isEqualTo(1);
+        assertThat(delivery.deliver(itemId)).isZero();
         var args = org.mockito.ArgumentCaptor.forClass(Object[].class);
         verify(notifications).createNotification(eq("inventory.lowStock.notification"), args.capture(),
             eq("synthetic-recipient"), eq("REORDER_ALERT"), eq(itemId));
-        assertThat(args.getValue()).containsExactly("Synthetic medicine", "Synthetic store", new BigDecimal("3.00"), new BigDecimal("10.00"));
+        assertThat(args.getValue()).containsExactly(java.util.Map.of("drugNameEn", "Synthetic medicine", "drugNameDisplay", "Synthetic medicine"), "Synthetic store", new BigDecimal("3.00"), new BigDecimal("10.00"));
+    }
+    @Test
+    void consumptionQueryExcludesTransferReturnsFromQuantitiesAndSourceMovementCount() {
+        UUID origin = UUID.randomUUID();
+        transaction.executeWithoutResult(status -> {
+            jdbc.update("INSERT INTO clinical.stock_transactions (id, inventory_item_id, transaction_type, quantity, performed_by, unit_snapshot, created_at, updated_at) VALUES (?, ?, 'TRANSFER', 3, ?, 'tablet', now(), now())", origin, itemId, actorId);
+            jdbc.update("INSERT INTO clinical.stock_transactions (id, inventory_item_id, transaction_type, quantity, performed_by, unit_snapshot, created_at, updated_at) VALUES (?, ?, 'SALE', 2, ?, 'tablet', now(), now())", UUID.randomUUID(), itemId, actorId);
+            jdbc.update("INSERT INTO clinical.stock_transactions (id, inventory_item_id, transaction_type, quantity, performed_by, unit_snapshot, reference_id, created_at, updated_at) VALUES (?, ?, 'RETURN', 1, ?, 'tablet', ?, now(), now())", UUID.randomUUID(), itemId, actorId, origin);
+            jdbc.update("INSERT INTO clinical.stock_transactions (id, inventory_item_id, transaction_type, quantity, performed_by, unit_snapshot, created_at, updated_at) VALUES (?, ?, 'RETURN', 4, ?, 'tablet', now(), now())", UUID.randomUUID(), itemId, actorId);
+        });
+        UUID pharmacy = transaction.execute(status -> items.findById(itemId).orElseThrow().getPharmacy().getId());
+        var rows = ledger.consumptionByRecordedUnit(pharmacy, LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(1),
+            Set.of(com.example.hms.enums.StockTransactionType.SALE, com.example.hms.enums.StockTransactionType.DISPENSE),
+            com.example.hms.enums.StockTransactionType.RETURN, com.example.hms.enums.StockTransactionType.TRANSFER);
+        assertThat(rows).hasSize(1);
+        assertThat(new BigDecimal(rows.getFirst()[3].toString())).isEqualByComparingTo("2");
+        assertThat(new BigDecimal(rows.getFirst()[4].toString())).isZero();
+        assertThat(((Number) rows.getFirst()[5]).longValue()).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentConfirmationsPersistOneAdjustmentAndOneAppliedVariance() throws Exception {
+        var recorded = counts.record(start(null));
+        var go = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<StockCountResponseDTO> confirm = () -> {
+                if (!go.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
+                return counts.confirm(recorded.getId(), new StockCountConfirmationDTO(true, null));
+            };
+            var first = pool.submit(confirm); var second = pool.submit(confirm); go.countDown();
+            assertThat(first.get(30, java.util.concurrent.TimeUnit.SECONDS).getAdjustmentId())
+                .isEqualTo(second.get(30, java.util.concurrent.TimeUnit.SECONDS).getAdjustmentId());
+        }
+        assertThat(items.findById(itemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("18");
+        assertThat(ledger.findByInventoryItemId(itemId, org.springframework.data.domain.Pageable.unpaged()).getTotalElements()).isEqualTo(1);
+        var persisted = observations.findById(recorded.getId()).orElseThrow();
+        assertThat(persisted.getAppliedAt()).isNotNull();
+        assertThat(persisted.getVariance()).isEqualByComparingTo("-2");
+    }
+
+    @Test
+    void concurrentRecordRetriesPersistOneObservationWithoutAnyLedgerMovement() throws Exception {
+        var request = start(null);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<UUID> record = () -> {
+                if (!go.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
+                try { return counts.record(request).getId(); }
+                catch (com.example.hms.exception.BusinessException busy) {
+                    if (!"stockCount.stockBusy".equals(busy.getMessageKey())) throw busy;
+                    return null; // NOWAIT refuses a simultaneous lock; an explicit retry follows both transactions.
+                }
+            };
+            var first = pool.submit(record); var second = pool.submit(record); go.countDown();
+            UUID one = first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            UUID two = second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            UUID retry = counts.record(request).getId();
+            assertThat(one != null ? one : two).isEqualTo(retry);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM clinical.pharmacy_stock_counts WHERE hospital_id = ? AND client_request_id = ?", Integer.class,
+            hospitalId, request.clientRequestId())).isEqualTo(1);
+        assertThat(items.findById(itemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
+        assertThat(ledger.findByInventoryItemId(itemId, org.springframework.data.domain.Pageable.unpaged()).getTotalElements()).isZero();
     }
 }

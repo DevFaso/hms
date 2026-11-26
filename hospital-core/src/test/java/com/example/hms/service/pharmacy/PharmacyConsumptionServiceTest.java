@@ -81,4 +81,13 @@ class PharmacyConsumptionServiceTest {
             .isInstanceOf(FieldBusinessException.class);
         verifyNoInteractions(movements, catalogue);
     }
+    @Test
+    void defaultStartUnderflowAndExclusiveEndOverflowUseTheLocalizedPeriodRefusal() {
+        when(pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(new Pharmacy()));
+        assertThatThrownBy(() -> service.report(pharmacyId, null, LocalDate.MIN))
+            .hasFieldOrPropertyWithValue("messageKey", "stockReport.periodInvalid");
+        assertThatThrownBy(() -> service.report(pharmacyId, LocalDate.MAX.minusDays(1), LocalDate.MAX))
+            .hasFieldOrPropertyWithValue("messageKey", "stockReport.periodInvalid");
+        verifyNoInteractions(movements, catalogue);
+    }
 }

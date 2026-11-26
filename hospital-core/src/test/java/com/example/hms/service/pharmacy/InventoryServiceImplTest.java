@@ -1240,7 +1240,7 @@ class InventoryServiceImplTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             service.triggerReorderAlerts();
 
-            verify(lowStockAlertDelivery).deliver(eq(inventoryItem.getId()), any());
+            verify(lowStockAlertDelivery).deliver(eq(inventoryItem.getId()));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
 
@@ -1275,7 +1275,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(lowStockAlertDelivery, never()).deliver(any(), any());
+            verify(lowStockAlertDelivery, never()).deliver(any());
         }
 
         @Test
@@ -1294,7 +1294,7 @@ class InventoryServiceImplTest {
             when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
                     .thenReturn(List.of(inventoryItem, secondItem));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(lowStockAlertDelivery.deliver(any(), any()))
+            when(lowStockAlertDelivery.deliver(any()))
                     .thenThrow(new RuntimeException("Notification service down"))
                     .thenReturn(1);
 
@@ -1302,7 +1302,7 @@ class InventoryServiceImplTest {
 
             // Audit is still logged for both items despite notification failure
             verify(auditEventLogService, times(2)).logEvent(any(AuditEventRequestDTO.class));
-            verify(lowStockAlertDelivery, times(2)).deliver(any(), any());
+            verify(lowStockAlertDelivery, times(2)).deliver(any());
         }
     }
 

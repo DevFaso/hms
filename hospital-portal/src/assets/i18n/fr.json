@@ -11013,6 +11013,7 @@
     "DATE": "Date",
     "DAYS_AHEAD": "Jours à venir",
     "DAYS_REMAINING": "Jours restants",
+    "DAY_REMAINING_VALUE": "{{days}} jour",
     "DAYS_REMAINING_VALUE": "{{days}} jours",
     "DECIDED_AT": "Décidé le",
     "DELETE_MEDICATION_CONFIRM": "Voulez-vous vraiment supprimer",

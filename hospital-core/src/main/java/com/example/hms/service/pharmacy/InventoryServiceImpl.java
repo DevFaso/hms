@@ -711,7 +711,7 @@ public class InventoryServiceImpl implements InventoryService {
     /** One item's failed delivery must not stop the remaining items. */
     private void pushReorderAlert(InventoryItem item, Locale locale) {
         try {
-            lowStockAlertDelivery.deliver(item.getId(), locale);
+            lowStockAlertDelivery.deliver(item.getId());
         } catch (Exception e) {
             log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
         }

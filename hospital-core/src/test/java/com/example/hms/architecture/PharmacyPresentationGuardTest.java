@@ -11,14 +11,14 @@ class PharmacyPresentationGuardTest {
     void manualAndScheduledAlertsUseTheSameRecipientScopedTransactionalClaim() throws Exception {
         Path services = Path.of("src/main/java/com/example/hms/service");
         String delivery = Files.readString(services.resolve("pharmacy/LowStockAlertDelivery.java"));
-        assertThat(delivery).contains("Propagation.REQUIRES_NEW", "findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES)",
-            "ON CONFLICT DO NOTHING", "if (claimed == 1)", "items.findForAlertDelivery(itemId)");
+        assertThat(delivery).contains("TransactionDefinition.PROPAGATION_REQUIRES_NEW", "findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES)",
+            "ON CONFLICT DO NOTHING", "if (claimed == 0) return 0", "transaction.execute(status -> deliverOne(itemId, recipient))", "catch (RuntimeException failure)", "NotificationLocalizer.drugName(", "items.findForAlertDelivery(itemId)");
         assertThat(delivery.indexOf("INSERT INTO clinical.low_stock_alert_receipts"))
             .isLessThan(delivery.indexOf("notifications.createNotification("));
         assertThat(Files.readString(services.resolve("pharmacy/InventoryServiceImpl.java")))
-            .contains("lowStockAlertDelivery.deliver(item.getId(), locale)");
+            .contains("lowStockAlertDelivery.deliver(item.getId())");
         String scheduler = Files.readString(services.resolve("pharmacy/LowStockAlertScheduler.java"));
-        assertThat(scheduler).contains("@SchedulerLock(", "delivery.deliver(itemId, Locale.FRENCH)", "findLowStockIdsAcrossActiveFacilities()");
+        assertThat(scheduler).contains("@SchedulerLock(", "delivery.deliver(itemId)", "findLowStockIdsAcrossActiveFacilities()");
         try (var paths = Files.walk(services)) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(path));
@@ -60,6 +60,10 @@ class PharmacyPresentationGuardTest {
     @Test
     void pharmacyTemplatesNeverAppendAnEnglishDaysLabelToAValue() throws Exception {
         Path pharmacy = Path.of("../hospital-portal/src/app/pharmacy");
+        assertThat(Files.readString(pharmacy.resolve("inventory-dashboard.html")))
+            .contains("expiryDaysLabelKey(getDaysUntilExpiry(lot.expiryDate))");
+        assertThat(Files.readString(pharmacy.resolve("inventory-dashboard.ts")))
+            .contains("days === 1 ? 'PHARMACY.DAY_REMAINING_VALUE' : 'PHARMACY.DAYS_REMAINING_VALUE'");
         try (var paths = Files.walk(pharmacy)) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".html")).toList()) {
                 assertThat(Files.readString(path)).as(path.toString())

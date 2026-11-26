@@ -579,7 +579,7 @@
                       [class.urgent]="getDaysUntilExpiry(lot.expiryDate) <= 30"
                     >
                       {{
-                        'PHARMACY.DAYS_REMAINING_VALUE'
+                        expiryDaysLabelKey(getDaysUntilExpiry(lot.expiryDate))
                           | translate: { days: getDaysUntilExpiry(lot.expiryDate) }
                       }}
                     </span>

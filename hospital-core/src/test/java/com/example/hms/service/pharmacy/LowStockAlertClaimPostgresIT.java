@@ -29,7 +29,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -43,6 +42,8 @@ class LowStockAlertClaimPostgresIT {
     private static JdbcTemplate jdbc;
     private static TransactionTemplate transaction;
     private static DataSourceTransactionManager transactionManager;
+    private UserRoleHospitalAssignmentRepository assignments;
+    private User pharmacist;
     private NotificationService notifications;
     private LowStockAlertDelivery delivery;
     private InventoryItem item;
@@ -71,22 +72,18 @@ class LowStockAlertClaimPostgresIT {
             .reorderThreshold(BigDecimal.TEN).active(true).build();
         item.setId(UUID.randomUUID());
         when(items.findForAlertDelivery(item.getId())).thenReturn(java.util.Optional.of(item));
-        User pharmacist = new User();
+        pharmacist = new User();
         pharmacist.setId(UUID.randomUUID());
         pharmacist.setUsername("synthetic-pharmacist");
         jdbc.update("INSERT INTO clinical.inventory_items VALUES (?)", item.getId());
         jdbc.update("INSERT INTO security.users VALUES (?)", pharmacist.getId());
-        var assignments = mock(UserRoleHospitalAssignmentRepository.class);
+        assignments = mock(UserRoleHospitalAssignmentRepository.class);
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), LowStockAlertDelivery.RECIPIENT_ROLES))
             .thenReturn(List.of(pharmacist));
         notifications = mock(NotificationService.class);
         var target = new LowStockAlertDelivery(assignments, notifications, jdbc,
-            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), items);
-        var proxy = new org.springframework.aop.framework.ProxyFactory(target);
-        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
-            (org.springframework.transaction.TransactionManager) transactionManager,
-            new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
-        delivery = (LowStockAlertDelivery) proxy.getProxy();
+            Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), items, transactionManager);
+        delivery = target;
     }
 
     @Test
@@ -95,11 +92,11 @@ class LowStockAlertClaimPostgresIT {
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
+                return transaction.execute(status -> delivery.deliver(item.getId()));
             });
             var second = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
+                return transaction.execute(status -> delivery.deliver(item.getId()));
             });
             start.countDown();
             assertThat(first.get(20, TimeUnit.SECONDS) + second.get(20, TimeUnit.SECONDS)).isEqualTo(1);
@@ -113,8 +110,8 @@ class LowStockAlertClaimPostgresIT {
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
         transaction.executeWithoutResult(status -> {
-            assertThatThrownBy(() -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH)).isInstanceOf(IllegalStateException.class);
-            assertThat(delivery.deliver(item.getId(), java.util.Locale.ENGLISH)).isEqualTo(1);
+            assertThat(delivery.deliver(item.getId())).isZero();
+            assertThat(delivery.deliver(item.getId())).isEqualTo(1);
         });
         assertThat(claimCount()).isEqualTo(1);
         verify(notifications, times(2)).createNotification(anyString(), any(), anyString(), anyString(), eq(item.getId()));
@@ -124,15 +121,31 @@ class LowStockAlertClaimPostgresIT {
     void aFailedNotificationRollsBackTheClaimAndASuccessfulRetryCannotSendTwice() {
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
-        assertThatThrownBy(() -> transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH)))
-            .isInstanceOf(IllegalStateException.class);
+        Integer failed = transaction.execute(status -> delivery.deliver(item.getId()));
+        assertThat(failed).isZero();
         assertThat(claimCount()).isZero();
-        Integer delivered = transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
-        Integer repeated = transaction.execute(status -> delivery.deliver(item.getId(), java.util.Locale.ENGLISH));
+        Integer delivered = transaction.execute(status -> delivery.deliver(item.getId()));
+        Integer repeated = transaction.execute(status -> delivery.deliver(item.getId()));
         assertThat(delivered).isEqualTo(1);
         assertThat(repeated).isZero();
         assertThat(claimCount()).isEqualTo(1);
         verify(notifications, times(2)).createNotification(anyString(), any(), anyString(), anyString(), eq(item.getId()));
+    }
+
+    @Test
+    void oneFailingRecipientCannotSuppressAnotherAndOnlyTheFailedClaimRetries() {
+        User other = new User(); other.setId(UUID.randomUUID()); other.setUsername("synthetic-second");
+        jdbc.update("INSERT INTO security.users VALUES (?)", other.getId());
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(pharmacist, other));
+        when(notifications.createNotification(anyString(), any(), eq(pharmacist.getUsername()), anyString(), any()))
+            .thenThrow(new IllegalStateException("Synthetic recipient failure")).thenReturn(new Notification());
+        assertThat(delivery.deliver(item.getId())).isEqualTo(1);
+        assertThat(claimCount()).isEqualTo(1);
+        assertThat(delivery.deliver(item.getId())).isEqualTo(1);
+        assertThat(delivery.deliver(item.getId())).isZero();
+        assertThat(claimCount()).isEqualTo(2);
+        verify(notifications, times(2)).createNotification(anyString(), any(), eq(pharmacist.getUsername()), anyString(), any());
+        verify(notifications, times(1)).createNotification(anyString(), any(), eq(other.getUsername()), anyString(), any());
     }
 
     private int claimCount() {
