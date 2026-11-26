@@ -1815,6 +1815,9 @@
          immediately before     <changeSet id="V401-stock-count-confirmation-provenance" author="codex" runOnChange="false">
         <sqlFile path="V401__stock_count_confirmation_provenance.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
     </changeSet>
+    <changeSet id="V402-stock-balance-reconciliation-evidence" author="codex" runOnChange="false">
+        <sqlFile path="V402__stock_balance_reconciliation_evidence.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
 </databaseChangeLog>, so any two branches that
          add one collide on the same lines; resolving that collision by
          taking develop drops the branch's own migration while leaving its
@@ -4090,5 +4093,8 @@
 
     <changeSet id="V401-stock-count-confirmation-provenance" author="codex" runOnChange="false">
         <sqlFile path="V401__stock_count_confirmation_provenance.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V402-stock-balance-reconciliation-evidence" author="codex" runOnChange="false">
+        <sqlFile path="V402__stock_balance_reconciliation_evidence.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
     </changeSet>
 </databaseChangeLog>

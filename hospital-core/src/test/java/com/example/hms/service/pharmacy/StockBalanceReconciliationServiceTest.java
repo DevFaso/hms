@@ -34,11 +34,12 @@ class StockBalanceReconciliationServiceTest {
     @Mock RoleValidator roles;
     @Mock ControlledStockWitness witness;
     @Mock EntityManager entityManager;
+    @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
     StockBalanceReconciliationService service;
     UUID hospitalId = UUID.randomUUID(), itemId = UUID.randomUUID(), userId = UUID.randomUUID(), lotId = UUID.randomUUID();
     InventoryItem item;
     @BeforeEach void setup() {
-        service = new StockBalanceReconciliationService(items, lots, ledger, users, roles, witness, entityManager);
+        service = new StockBalanceReconciliationService(items, lots, ledger, users, roles, witness, entityManager, jdbc);
         var hospital = new Hospital(); hospital.setId(hospitalId);
         var pharmacy = Pharmacy.builder().hospital(hospital).build();
         item = InventoryItem.builder().pharmacy(pharmacy).unit("tablet").quantityOnHand(new BigDecimal("20")).build();
@@ -62,13 +63,14 @@ class StockBalanceReconciliationServiceTest {
         stock(); var actor = new User(); actor.setId(userId);
         when(users.findById(userId)).thenReturn(Optional.of(actor));
         when(items.setOnHand(eq(itemId), eq(new BigDecimal("15")), any())).thenReturn(1);
-        when(ledger.save(any())).thenAnswer(call -> { StockTransaction entry = call.getArgument(0); entry.setId(UUID.randomUUID()); return entry; });
+        when(ledger.saveAndFlush(any())).thenAnswer(call -> { StockTransaction entry = call.getArgument(0); entry.setId(UUID.randomUUID()); return entry; });
         assertThat(service.reconcile(itemId, request(true))).isNotNull();
         var entry = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
-        verify(ledger).save(entry.capture());
+        verify(ledger).saveAndFlush(entry.capture());
         assertThat(entry.getValue().getQuantity()).isEqualByComparingTo("-5");
         assertThat(entry.getValue().getStockLot()).isNull();
         assertThat(entry.getValue().getReason()).contains("Counted all batches");
+        verify(jdbc).update(contains("INSERT INTO clinical.stock_balance_reconciliation_lot_counts"), eq(entry.getValue().getId()), eq(lotId), eq(new BigDecimal("15")));
         verifyNoMoreInteractions(lots);
     }
     @Test void withoutConfirmationNoStockOrLedgerIsTouched() {

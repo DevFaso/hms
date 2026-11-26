@@ -262,6 +262,7 @@ class StockCountRevisionPostgresIT {
         assertThat(movement.getQuantity()).isEqualByComparingTo("-5");
         assertThat(movement.getStockLot()).isNull();
         assertThat(movement.getReason()).contains("Physical count verified");
+        assertThat(jdbc.queryForObject("SELECT counted_quantity FROM clinical.stock_balance_reconciliation_lot_counts WHERE movement_id = ? AND stock_lot_id = ?", BigDecimal.class, movementId, lotId)).isEqualByComparingTo("15");
         assertThatThrownBy(() -> reconciliation.reconcile(itemId, request))
             .hasFieldOrPropertyWithValue("messageKey", "stockCount.changedSinceCount");
         assertThat(ledger.findByInventoryItemId(itemId, org.springframework.data.domain.Pageable.unpaged()).getTotalElements()).isEqualTo(1);

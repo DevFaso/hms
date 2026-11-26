@@ -30,6 +30,7 @@ public class StockBalanceReconciliationService {
     private final RoleValidator roles;
     private final ControlledStockWitness witness;
     private final EntityManager entityManager;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Transactional
     public UUID reconcile(UUID itemId, StockBalanceReconciliationRequest request) {
@@ -85,9 +86,13 @@ public class StockBalanceReconciliationService {
         WholeUnitQuantity.require(item, total);
         var actor = users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("user.notFound"));
         var actualWitness = witness.resolve(request.witnessedBy(), item, actor);
-        var movement = ledger.save(StockTransaction.builder().inventoryItem(item).transactionType(StockTransactionType.ADJUSTMENT)
+        var movement = ledger.saveAndFlush(StockTransaction.builder().inventoryItem(item).transactionType(StockTransactionType.ADJUSTMENT)
             .quantity(difference).reason(com.example.hms.utility.MessageUtil.resolve("stockCount.balanceAdjustmentReason", request.reason().trim()))
             .performedByUser(actor).witnessedByUser(actualWitness).build());
+        for (var entry : recorded.entrySet()) {
+            jdbc.update("INSERT INTO clinical.stock_balance_reconciliation_lot_counts (movement_id, stock_lot_id, counted_quantity) VALUES (?, ?, ?)",
+                movement.getId(), entry.getKey(), entry.getValue());
+        }
         if (items.setOnHand(itemId, total, LocalDateTime.now()) != 1) throw new BusinessException("stockCount.changedSinceCount");
         return movement.getId();
     }
