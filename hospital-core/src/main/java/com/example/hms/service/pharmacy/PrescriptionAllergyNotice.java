@@ -1,6 +1,7 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AllergyReviewDecision;
+import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.Prescription;
@@ -77,7 +78,8 @@ public class PrescriptionAllergyNotice {
         if (allergen == null) {
             return null;
         }
-        if (allergy.getSeverity() == null) {
+        if (allergy.getSeverity() == null || allergy.getSeverity() == AllergySeverity.UNKNOWN) {
+            // An unrecorded severity is left out: « Pénicilline (inconnue) » would read as an unknown allergen.
             return allergen.trim();
         }
         String severity = MessageUtil.resolveOrNull(locale, KEY_SEVERITY_PREFIX + allergy.getSeverity().name());

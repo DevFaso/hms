@@ -202,6 +202,13 @@ class PrescriptionRenderAllergyGuardTest {
     }
 
     @Test
+    void anUnrecordedSeverityIsLeftOut() {
+        PatientAllergy unknown = PatientAllergy.builder().allergenDisplay("Sulfamides")
+            .severity(AllergySeverity.UNKNOWN).active(true).build();
+        assertThat(PrescriptionAllergyNotice.label(unknown, Locale.FRENCH)).isEqualTo("Sulfamides");
+    }
+
+    @Test
     void aCriticalDecisionSupportOverrideIsNotAnAllergyOverride() {
         // A dose or interaction override keeps its reason in the same column, without the allergy review flag.
         rx.setAllergiesReviewed(false);
