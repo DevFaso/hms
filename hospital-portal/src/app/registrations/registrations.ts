@@ -444,9 +444,16 @@ export class RegistrationsComponent implements OnInit {
         );
         this.formSaving.set(false);
         this.closeFormModal();
-        this.registrations.update((list) =>
-          editing ? list.map((r) => (r.id === saved.id ? saved : r)) : [saved, ...list],
-        );
+        this.registrations.update((list) => {
+          const filter = this.activeFilter();
+          const matches = filter === 'all' || saved.active === (filter === 'active');
+          if (editing) {
+            return matches
+              ? list.map((r) => (r.id === saved.id ? saved : r))
+              : list.filter((r) => r.id !== saved.id);
+          }
+          return matches ? [saved, ...list] : list;
+        });
       },
       error: (err: { status?: number }) => {
         this.toast.error(
