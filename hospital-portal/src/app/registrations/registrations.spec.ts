@@ -364,6 +364,21 @@ describe('RegistrationsComponent global super-admin view', () => {
     return { fixture, http };
   }
 
+  it('explains loading while allowing the registration form to open', () => {
+    const { fixture, http } = page();
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="registration-open-create"]',
+    ) as HTMLButtonElement;
+    button.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#reg-hospital')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain(
+      'COMMON.LOADING',
+    );
+    http.expectNone((request) => request.method === 'POST' && request.url === '/registrations');
+  });
+
   it('lists registrations for both hospitals with context and no clinical write controls', () => {
     const { fixture, http } = page();
     http

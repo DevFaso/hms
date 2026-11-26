@@ -20,12 +20,8 @@
         <button
           type="button"
           class="btn-primary"
+          data-testid="registration-open-create"
           (click)="openCreate()"
-          [appSubmitGuard]="
-            globalScope() && (loading() || loadError())
-              ? ((loading() ? 'COMMON.LOADING' : 'REGISTRATIONS.LOAD_ERROR') | translate)
-              : null
-          "
         >
           <span class="material-symbols-outlined">add</span>
           {{ 'REGISTRATIONS.NEW' | translate }}
@@ -387,6 +383,11 @@
           @if (globalScope()) {
             <div class="field">
               <label for="reg-hospital">{{ 'REGISTRATIONS.HOSPITAL' | translate }} *</label>
+              @if (loading() || loadError()) {
+                <p role="status">
+                  {{ (loading() ? 'COMMON.LOADING' : 'REGISTRATIONS.LOAD_ERROR') | translate }}
+                </p>
+              }
               <select
                 id="reg-hospital"
                 required
