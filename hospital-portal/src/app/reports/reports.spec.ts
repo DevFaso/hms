@@ -88,6 +88,8 @@ describe('ReportsComponent', () => {
     expect(component.periodLabel('202613', 'MONTHLY')).toBe('202613');
     expect(component.periodLabel('2026-02-30', 'DAILY')).toBe('2026-02-30');
     expect(component.periodLabel('2026-W00', 'WEEKLY')).toBe('2026-W00');
+    expect(component.periodLabel('2025-W53', 'WEEKLY')).toBe('2025-W53');
+    expect(component.periodLabel('2026-W53', 'WEEKLY')).toBe('Semaine 53, 2026');
     component.toggleRuns(definition());
     fixture.detectChanges();
     const cell = fixture.nativeElement.querySelector('.runs-table tbody tr td') as HTMLElement;

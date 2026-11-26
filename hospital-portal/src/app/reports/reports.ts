@@ -116,8 +116,14 @@ export class ReportsComponent implements OnInit {
     }
     if (period === 'WEEKLY') {
       const week = /^(\d{4})-W(\d{2})$/.exec(token);
-      if (!week || Number(week[2]) < 1 || Number(week[2]) > 53) return token;
-      return this.translate.instant('REPORTS.WEEK_LABEL', { week: Number(week[2]), year: week[1] });
+      if (!week) return token;
+      const year = Number(week[1]);
+      const number = Number(week[2]);
+      if (year < 100 || number < 1 || number > 53) return token;
+      const firstDay = new Date(Date.UTC(year, 0, 1)).getUTCDay();
+      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      if (number === 53 && firstDay !== 4 && !(firstDay === 3 && leap)) return token;
+      return this.translate.instant('REPORTS.WEEK_LABEL', { week: number, year: week[1] });
     }
     return token;
   }
