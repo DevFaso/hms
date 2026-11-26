@@ -240,16 +240,27 @@ describe('StockRoutingComponent', () => {
     f.detectChanges();
     expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
     const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    const replace = spyOn(TestBed.inject(Location), 'replaceState');
     c.onScopeChange();
     expect(c.prescriptionId).toBe('');
     expect(navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing'], {
       queryParams: { scopeChanged: '1' },
     });
-    const replace = spyOn(TestBed.inject(Location), 'replaceState');
     navigate.and.resolveTo(false);
     c.onScopeChange();
     await Promise.resolve();
     expect(replace).toHaveBeenCalledWith('/pharmacy/stock-routing', 'scopeChanged=1');
+
+    let finishNavigation!: (value: boolean) => void;
+    navigate.and.returnValue(new Promise<boolean>((resolve) => (finishNavigation = resolve)));
+    c.onScopeChange();
+    const callsBeforeDestroy = replace.calls.count();
+    const queueCallsBeforeDestroy = pharmacySvc.getDispenseWorkQueue.calls.count();
+    f.destroy();
+    finishNavigation(false);
+    await Promise.resolve();
+    expect(replace.calls.count()).toBe(callsBeforeDestroy);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(queueCallsBeforeDestroy);
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {

@@ -1,6 +1,7 @@
 import { personName } from '../shared/pipes/person-name.pipe';
 import {
   Component,
+  DestroyRef,
   computed,
   inject,
   OnInit,
@@ -64,6 +65,7 @@ export class StockRoutingComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly location = inject(Location);
   private readonly roleContext = inject(RoleContextService);
   /** QA D966: opens the printed copy for printing. */
@@ -119,8 +121,9 @@ export class StockRoutingComponent implements OnInit {
     if (this.route.snapshot.paramMap.has('prescriptionId')) {
       // The URL named an order in the old scope. Remove it before a reload
       // could silently re-open that order under the new hospital.
+      this.location.replaceState('/pharmacy/stock-routing', 'scopeChanged=1');
       const recover = () => {
-        this.location.replaceState('/pharmacy/stock-routing', 'scopeChanged=1');
+        if (this.destroyRef.destroyed || this.router.currentNavigation()) return;
         this.loadQueue();
       };
       void this.router
