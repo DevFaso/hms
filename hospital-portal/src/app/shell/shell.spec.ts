@@ -1842,7 +1842,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
     });
   }
 
-  it('flags exactly the one-facility pages, so a super-admin in global view is asked to pick first', () => {
+  it('flags the pages that participate in hospital scope handling', () => {
     // The mapping behind this list is the "Hospital scope is applied page by
     // page" entry of tasklist.md: pages that read the hospital from the
     // session and send it as a param, path variable or body, or whose backend
@@ -1865,6 +1865,8 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'on-call',
         'panels',
         'pharmacy/mtm',
+        'pharmacy/stock-routing',
+        'pharmacy/stock-routing/:prescriptionId',
         'registries',
         'roi',
         'slot-admin',
