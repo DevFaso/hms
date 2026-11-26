@@ -1237,6 +1237,12 @@
         </div>
         <div class="detail-body">
           <div class="detail-grid">
+            <div class="detail-field" data-testid="imaging-order-hospital">
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
+              <span class="field-value">{{
+                hospitalNameOf(ord.hospitalId, ord.hospitalName)
+              }}</span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
                 class="field-value"
