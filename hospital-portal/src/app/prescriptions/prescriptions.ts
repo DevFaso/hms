@@ -77,6 +77,7 @@ import {
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { AllergyReviewDialogComponent } from '../shared/allergy-acknowledgement/allergy-review-dialog.component';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -233,6 +234,7 @@ const RX_FREQUENCY_IDS = ['rx-frequency'];
   imports: [
     AllergyHoldDialogComponent,
     AllergyReviewDialogComponent,
+    PatientSafetyHeaderComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,

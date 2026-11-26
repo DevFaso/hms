@@ -71,6 +71,12 @@ export interface AntibodyStatusResponse {
   /** The other hospitals this safety information comes from; empty when it is all on record here. */
   otherHospitalNames?: string[];
   workups: AntibodyWorkup[];
+  /** V380: O RhD positive red cells were released in an emergency for this patient while at risk, anywhere. */
+  rhdPositiveExposed?: boolean;
+  rhdPositiveExposedAt?: string | null;
+  rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
 }
 
 export interface AntibodyWorkupRequest {
@@ -86,6 +92,12 @@ export interface AntibodyWorkupRequest {
 export interface PatientBloodGroupResponse {
   /** QA D3351: a positive antibody screen is on record here, this one or an earlier one: never cleared. */
   alloImmunised?: boolean;
+  /** V380: the patient received O RhD positive red cells in an emergency while at risk. Permanent, any hospital. */
+  rhdPositiveExposed?: boolean;
+  rhdPositiveExposedAt?: string | null;
+  rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
   id: string;
   patientId: string;
   patientName: string;
@@ -242,6 +254,120 @@ export interface VerifierCandidate {
 export type EmergencyReleaseType =
   'UNCROSSMATCHED' | 'O_POSITIVE_DECISION' | 'SEROLOGICALLY_INCOMPATIBLE';
 
+/* ── Emergency O RhD positive release authority (V380, owner decision 2026-11-25) ── */
+
+export type OPositiveRiskTier = 'LOW_RISK' | 'HIGH_RISK' | 'KNOWN_ANTIBODY';
+export type OPositiveTierReason =
+  | 'ADULT_MALE'
+  | 'FEMALE_ABOVE_CUTOFF'
+  | 'BOY_LOW_RISK_BY_PROTOCOL'
+  | 'FEMALE_AT_OR_BELOW_CUTOFF'
+  | 'MALE_UNDER_18'
+  | 'UNKNOWN_SEX'
+  | 'UNKNOWN_AGE'
+  | 'NO_ACTIVE_PROTOCOL'
+  | 'KNOWN_ANTIBODY';
+export type OPositiveDecisionBasis =
+  | 'PROTOCOL'
+  | 'PHYSICIAN_ORDER'
+  | 'BIOLOGIST_AUTHORITY'
+  | 'PHYSICIAN_AND_BIOLOGIST'
+  | 'AUTHORITY_PENDING';
+/** What became of the bag: hung, out with no administration on record, or back unused (nobody exposed). */
+export type OPositiveExposureState = 'CONFIRMED' | 'UNCONFIRMED' | 'NOT_GIVEN';
+export type OPositiveReviewPriority = 'ROUTINE' | 'URGENT' | 'IMMEDIATE';
+export type ONegativeStatus = 'OUT_OF_STOCK' | 'STATED_UNOBTAINABLE' | 'PROTOCOL_FIRST_LINE';
+export type AntiDDecision = 'ANTI_D_IMMUNOGLOBULIN' | 'RED_CELL_EXCHANGE' | 'NOT_INDICATED';
+
+/** The hospital's emergency O RhD positive protocol. Inactive means every release is handled as high-risk. */
+export interface OPositiveProtocol {
+  hospitalId?: string | null;
+  active: boolean;
+  femaleAgeCutoff: number;
+  boysLowRisk: boolean;
+  reviewDeadlineHours: number;
+}
+
+/** What the O positive authority rule says for one request: the form asks for what the server will require. */
+export interface OPositiveRule {
+  riskTier: OPositiveRiskTier;
+  tierReason: OPositiveTierReason;
+  protocolActive: boolean;
+  femaleAgeCutoff: number;
+  boysLowRisk: boolean;
+  reviewDeadlineHours: number;
+  /** The low-risk tier: the issuer may be named as deciding. */
+  issuerMayDecide: boolean;
+  plainIssueAllowed: boolean;
+  /** Who can be named as the physician ordering it: never the caller. */
+  physicians: VerifierCandidate[];
+  /** Who can be named as the biologist, for a patient with a known antibody. */
+  biologists: VerifierCandidate[];
+}
+
+/** The decision behind one emergency O RhD positive release, and what is still owed on it. */
+export interface OPositiveReleaseDecision {
+  id: string;
+  releaseId: string | null;
+  requestId: string;
+  bloodUnitId: string;
+  unitNumber: string | null;
+  patientId: string;
+  patientName: string | null;
+  riskTier: OPositiveRiskTier;
+  tierReason: OPositiveTierReason;
+  protocolActive: boolean;
+  femaleAgeCutoff: number;
+  boysLowRisk: boolean;
+  reviewDeadlineHours: number;
+  patientSex: 'MALE' | 'FEMALE' | 'UNKNOWN';
+  patientAgeYears: number | null;
+  negativeStatus: ONegativeStatus;
+  decisionBasis: OPositiveDecisionBasis;
+  issuedByName: string | null;
+  decidedByName: string | null;
+  biologistName: string | null;
+  verbalOrder: boolean;
+  issuedAt: string;
+  countersignDueAt: string | null;
+  countersignedByName: string | null;
+  /** Signed by another physician than the one named as giving the order. */
+  countersignCovering?: boolean;
+  countersignedAt: string | null;
+  countersignOverdue: boolean;
+  countersignEscalatedAt: string | null;
+  reviewPriority: OPositiveReviewPriority;
+  reviewDueAt: string;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  rhdExposure: boolean;
+  /** Null when the release flags no exposure. */
+  exposureState?: OPositiveExposureState | null;
+  /** What became of the bag of THIS release, once written; a bag released again is a new release. */
+  disposition?: 'ADMINISTERED' | 'RETURNED_UNUSED' | 'SUPERSEDED' | null;
+  /** Known antibody: one person took two of its steps, stating that nobody else could be reached. */
+  fourEyesWaived?: boolean;
+  followUpRequired: boolean;
+  antibodyScreenDueFrom: string | null;
+  antibodyScreenDueBy: string | null;
+  antibodyScreenDoneAt: string | null;
+  antiDDecision: AntiDDecision | null;
+  antiDDecidedByName: string | null;
+  antiDDecidedAt: string | null;
+  patientInformedByName: string | null;
+  patientInformedAt: string | null;
+  followUpNote: string | null;
+}
+
+export interface OPositiveFollowUpRequest {
+  antiDDecision?: AntiDDecision;
+  patientInformed?: boolean;
+  /** Closes the follow-up of a bag that came back unused; the server decides whether it did. */
+  bagNotGiven?: boolean;
+  note?: string;
+}
+
 /** One bag's emergency release, as the request detail shows it. */
 export interface EmergencyBloodRelease {
   id: string;
@@ -257,6 +383,8 @@ export interface EmergencyBloodRelease {
   negativeUnobtainableStated?: boolean;
   /** The O negative bags shown then, by the number on the bag. */
   negativeUnitsShown?: string | null;
+  /** O positive red cells: the tier, who decided and what is still owed (V380). */
+  positiveDecision?: OPositiveReleaseDecision | null;
 }
 
 export interface EmergencyReleaseUnitOption {
@@ -293,15 +421,26 @@ export interface EmergencyReleaseOptions {
   incompatibleUnits: IncompatibleUnitOption[];
   deciders: VerifierCandidate[];
   authorisers: VerifierCandidate[];
+  /** What the O positive authority rule says for this patient (V380). */
+  positiveRule?: OPositiveRule | null;
 }
 
 export interface EmergencyReleaseRequest {
   bloodUnitId: string;
   releaseType: EmergencyReleaseType;
   reason: string;
-  authoriserUserId: string;
+  /** Absent only for O positive with {@link physicianUnreachable}. */
+  authoriserUserId?: string;
   /** The statement that the O negative shown cannot be obtained in time. */
   negativeUnobtainable?: boolean;
+  /** O positive outside the low-risk tier: no physician can be reached. The bag goes out, the director is alerted. */
+  physicianUnreachable?: boolean;
+  /** The physician's order was verbal (the default): it is countersigned. */
+  verbalOrder?: boolean;
+  /** A known antibody: the biologist deciding with the physician, when named. */
+  biologistUserId?: string;
+  /** An incompatible O positive release: the physician who ordered O positive, when not its authoriser. */
+  orderingPhysicianUserId?: string;
 }
 
 export interface TransfusionAdministrationRequest {
@@ -351,6 +490,12 @@ export interface TransfusionRequestResponse {
   crossmatches: CrossmatchResponse[];
   /** Every emergency release on this request, one per bag; absent on a list row. */
   emergencyReleases?: EmergencyBloodRelease[];
+  /** V380: the patient received O RhD positive red cells in an emergency while at risk. Permanent, any hospital. */
+  rhdPositiveExposed?: boolean;
+  rhdPositiveExposedAt?: string | null;
+  rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
 }
 
 export interface TransfusionRequestRequest {
@@ -506,6 +651,55 @@ export class TransfusionService {
     return this.http.post<BloodUnitResponse>(
       `${this.baseUrl}/requests/${requestId}/emergency-release`,
       release,
+    );
+  }
+
+  /* ── Emergency O RhD positive release authority (V380) ── */
+
+  getPositiveProtocol(): Observable<OPositiveProtocol> {
+    return this.http.get<OPositiveProtocol>(`${this.baseUrl}/o-positive-protocol`);
+  }
+
+  setPositiveProtocol(protocol: OPositiveProtocol): Observable<OPositiveProtocol> {
+    return this.http.put<OPositiveProtocol>(`${this.baseUrl}/o-positive-protocol`, protocol);
+  }
+
+  listPositiveReleases(openOnly: boolean): Observable<OPositiveReleaseDecision[]> {
+    const params = new HttpParams().set('openOnly', String(openOnly));
+    return this.http.get<OPositiveReleaseDecision[]>(`${this.baseUrl}/o-positive-releases`, {
+      params,
+    });
+  }
+
+  /** `noOtherPersonReachable`: a known antibody's second step taken by the person who took the first. */
+  countersignPositiveRelease(
+    decisionId: string,
+    noOtherPersonReachable = false,
+  ): Observable<OPositiveReleaseDecision> {
+    return this.http.post<OPositiveReleaseDecision>(
+      `${this.baseUrl}/o-positive-releases/${decisionId}/countersign`,
+      noOtherPersonReachable ? { noOtherPersonReachable: true } : null,
+    );
+  }
+
+  reviewPositiveRelease(
+    decisionId: string,
+    note: string,
+    noOtherPersonReachable = false,
+  ): Observable<OPositiveReleaseDecision> {
+    return this.http.post<OPositiveReleaseDecision>(
+      `${this.baseUrl}/o-positive-releases/${decisionId}/review`,
+      { note, ...(noOtherPersonReachable ? { noOtherPersonReachable: true } : {}) },
+    );
+  }
+
+  recordPositiveFollowUp(
+    decisionId: string,
+    followUp: OPositiveFollowUpRequest,
+  ): Observable<OPositiveReleaseDecision> {
+    return this.http.post<OPositiveReleaseDecision>(
+      `${this.baseUrl}/o-positive-releases/${decisionId}/follow-up`,
+      followUp,
     );
   }
 

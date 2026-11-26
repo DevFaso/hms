@@ -69,6 +69,14 @@
               'RECEPTION.OUTSTANDING_BALANCE' | translate
             }}</span>
           }
+          <!-- QA D3985 (r77): a pharmacy credit « à facturer » still due is named at the desk. -->
+          @if (s.alerts.pharmacyCreditDue) {
+            {{ ' '
+            }}<span class="alert-chip warn" data-testid="snapshot-pharmacy-credit-chip">{{
+              'RECEPTION.PHARMACY_CREDIT_DUE_CHIP'
+                | translate: { amount: (s.billing.pharmacyCreditDue ?? 0 | cfa) }
+            }}</span>
+          }
         </div>
       }
 
@@ -205,6 +213,19 @@
             {{ s.billing.totalBalanceDue | cfa }}
           </span>
         </div>
+        <!-- QA D3985 (r77): what the balance is made of when a pharmacy credit is still due. -->
+        @if ((s.billing.pharmacyCreditCount ?? 0) > 0) {
+          <div class="snap-field" data-testid="snapshot-pharmacy-credit">
+            <span class="field-label">{{ 'RECEPTION.INVOICE_BALANCE_DUE' | translate }}</span>
+            <span class="field-val">{{ s.billing.invoiceBalanceDue ?? 0 | cfa }}</span>
+          </div>
+          <div class="snap-field">
+            <span class="field-label">{{
+              'RECEPTION.PHARMACY_CREDIT_DUE' | translate: { count: s.billing.pharmacyCreditCount }
+            }}</span>
+            <span class="field-val balance-due">{{ s.billing.pharmacyCreditDue ?? 0 | cfa }}</span>
+          </div>
+        }
       </div>
     }
   </div>

@@ -81,7 +81,12 @@ export interface InsuranceSummary {
 
 export interface BillingSummary {
   openInvoiceCount: number;
+  /** QA D3985 (r77): the open invoices plus the pharmacy fills still due. */
   totalBalanceDue: number;
+  invoiceBalanceDue?: number | null;
+  /** QA D3985: pharmacy fills that left « à facturer » and are still due. */
+  pharmacyCreditCount?: number;
+  pharmacyCreditDue?: number | null;
 }
 
 export interface AlertFlags {
@@ -90,6 +95,8 @@ export interface AlertFlags {
   expiredInsurance: boolean;
   noPrimaryInsurance: boolean;
   outstandingBalance: boolean;
+  /** QA D3985: a pharmacy fill left « à facturer » and is not settled. */
+  pharmacyCreditDue?: boolean;
 }
 
 export interface FrontDeskPatientSnapshot {

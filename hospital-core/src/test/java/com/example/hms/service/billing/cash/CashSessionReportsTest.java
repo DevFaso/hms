@@ -187,6 +187,42 @@ class CashSessionReportsTest {
     }
 
     @Test
+    @DisplayName("QA D3982 (r77): a reopened till's sheet prints no old count beside the new expected amount; the "
+        + "earlier close is history")
+    void d3982_aReopenedTillSheetPrintsTheEarlierCloseAsHistory() throws java.io.IOException {
+        // Closed at expected 7 600, counted 7 500; reopened; a 1 000 F payment brings the expected cash to 8 600.
+        CashSessionDTO reopened = session("BILLING", "OPEN", List.of(
+            movement("PAYMENT", "IN", "CASH", "8600", "TWP-2026-000050")));
+        reopened.setCloseRound(1);
+        reopened.setCountedRound(0);
+        reopened.setReopenedAt(LocalDateTime.of(2026, 11, 20, 18, 30));
+        reopened.setReopenedByName("Test Admin A");
+        reopened.setCounts(List.of(CashSessionDTO.Count.builder().closeRound(1).method("CASH")
+            .expected(new BigDecimal("7600")).counted(new BigDecimal("7500")).difference(new BigDecimal("-100"))
+            .explanation("Billet de 100 manquant").build()));
+        reopened.setHistory(List.of(CashSessionDTO.CloseRound.builder().closeRound(1)
+            .closedAt(LocalDateTime.of(2026, 11, 20, 18, 0)).cashExpected(new BigDecimal("7600"))
+            .cashCounted(new BigDecimal("7500")).cashDifference(new BigDecimal("-100")).totalDifference(
+                new BigDecimal("-100")).differenceLines(1).build()));
+        when(sessions.get(reopened.getId())).thenReturn(reopened);
+
+        String text;
+        try (var doc = org.apache.pdfbox.pdmodel.PDDocument.load(reports.sessionPdf(reopened.getId(), Locale.FRENCH))) {
+            text = new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+        }
+
+        String current = text.substring(0, text.indexOf("Clôtures précédentes"));
+        String digits = current.replaceAll("[\\s\u00a0\u202f]", "");
+        assertThat(current).as("the current figures: expected 8 600, nothing counted yet")
+            .contains("Pas encore clôturée")
+            .doesNotContain("Écart espèces").doesNotContain("Billet de 100 manquant");
+        assertThat(com.example.hms.testsupport.RandomIds.withoutRandomIds(digits))
+            .contains("8600").doesNotContain("7500").doesNotContain("-100");
+        assertThat(text.substring(text.indexOf("Clôtures précédentes")))
+            .contains("Clôture 1 du").contains("comptées").contains("écart");
+    }
+
+    @Test
     @DisplayName("PR 10 review (QA D2703): the supervisor reads the day's removed lines, with who and why")
     void removedLinesAreReadableByTheSupervisor() {
         UUID cashier = UUID.randomUUID();

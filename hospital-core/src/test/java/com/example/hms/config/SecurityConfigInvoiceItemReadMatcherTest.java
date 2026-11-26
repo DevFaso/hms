@@ -40,18 +40,32 @@ class SecurityConfigInvoiceItemReadMatcherTest {
         }
     }
 
+    /**
+     * Review of #1338: {@code GET /invoice-items/grid-price} is not a read of the lines but the till's step before it
+     * writes one (the price a typed line would take). It admits the line's writers only, never the front desk.
+     */
+    private static final String WRITE_HELPER_GET = "@GetMapping(\"/grid-price\")";
+
     @Test
     void bothGetEndpointsAdmitTheReceptionist() throws IOException {
         String controller = Files.readString(CONTROLLER, StandardCharsets.UTF_8);
         int from = 0;
         int gets = 0;
+        int helpers = 0;
         while ((from = controller.indexOf("@GetMapping", from)) >= 0) {
             int pre = controller.indexOf("@PreAuthorize(", from);
             String annotation = controller.substring(pre, controller.indexOf("\")", pre));
-            assertThat(annotation).contains("ROLE_RECEPTIONIST");
-            gets++;
+            if (controller.startsWith(WRITE_HELPER_GET, from)) {
+                assertThat(annotation).as("the grid price is for the line's writers").doesNotContain("ROLE_RECEPTIONIST")
+                    .doesNotContain("ROLE_ACCOUNTANT");
+                helpers++;
+            } else {
+                assertThat(annotation).contains("ROLE_RECEPTIONIST");
+                gets++;
+            }
             from = pre;
         }
         assertThat(gets).isEqualTo(2);
+        assertThat(helpers).isEqualTo(1);
     }
 }

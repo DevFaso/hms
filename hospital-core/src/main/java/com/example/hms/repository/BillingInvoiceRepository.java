@@ -177,7 +177,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
 
     /**
      * QA D209: the billing KPIs over every invoice in scope, not one page.
-     * Returns one row: {total, paid, outstanding, overdue, revenue, balance}.
+     * Returns one row: {total, paid, outstanding, overdue, revenue, balance, received, refunded}.
+     * QA D3981 (r77): revenue is the money kept, net of the refunds paid out ({@code InvoiceBalance.keptOf}): what
+     * came in less what was handed back, as the till's day report nets them; reversed payments already left the
+     * amount paid. The gross received and the refunds are returned beside it.
      * Billing-money plan PR 7: the balance is what patients owe; the payers'
      * shares are claimed from them (the bordereau, PR 12), not owed here.
      */
@@ -190,11 +193,15 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
                             AND bi.dueDate < :today THEN 1 ELSE 0 END),
                   SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
-                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                           THEN COALESCE(bi.amountPaid, 0) - COALESCE(bi.amountRefunded, 0) ELSE 0 END),
                   SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
                            THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.payerShareTotal, 0)
-                                - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+                                - (COALESCE(bi.amountPaid, 0) - COALESCE(bi.amountRefunded, 0)) ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountRefunded, 0) ELSE 0 END)
              FROM BillingInvoice bi
             WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
            """)
@@ -215,11 +222,15 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
                             AND bi.dueDate < :today THEN 1 ELSE 0 END),
                   SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
-                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                           THEN COALESCE(bi.amountPaid, 0) - COALESCE(bi.amountRefunded, 0) ELSE 0 END),
                   SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
                            THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.payerShareTotal, 0)
-                                - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+                                - (COALESCE(bi.amountPaid, 0) - COALESCE(bi.amountRefunded, 0)) ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountRefunded, 0) ELSE 0 END)
              FROM BillingInvoice bi
             WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
               AND bi.invoiceDate >= :fromDate AND bi.invoiceDate <= :toDate

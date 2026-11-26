@@ -50,7 +50,29 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
                                         String medicationSummary) {
         String initials = patientInitials(prescription != null ? prescription.getPatient() : null);
         return templates.prescriptionOffer(
-                buildRefToken(decision), safeMedication(medicationSummary), initials);
+                buildRefToken(decision), withAllergyClause(safeMedication(medicationSummary), prescription), initials);
+    }
+
+    /**
+     * QA D3865: the patient's known allergies, and a line prescribed despite one (with the prescriber's reason), on
+     * every offer a partner pharmacy dispenses from. Set by Spring; a hand-built channel in a unit test may leave it
+     * out.
+     */
+    private com.example.hms.service.pharmacy.PrescriptionAllergyNotice allergyNotice;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyNotice(com.example.hms.service.pharmacy.PrescriptionAllergyNotice allergyNotice) {
+        this.allergyNotice = allergyNotice;
+    }
+
+    /** The medicine, then the allergy clause in the partner's language when there is one. */
+    String withAllergyClause(String medication, Prescription prescription) {
+        if (allergyNotice == null || prescription == null) {
+            return medication;
+        }
+        String clause = allergyNotice.smsClause(prescription,
+                com.example.hms.service.i18n.NotificationLocales.PARTNER_PHARMACY);
+        return clause == null || clause.isBlank() ? medication : medication + ". " + clause;
     }
 
     @Override
@@ -63,7 +85,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         }
         String initials = patientInitials(prescription.getPatient());
         String ref = buildRefToken(decision);
-        String medication = safeMedication(prescription.getMedicationName());
+        String medication = withAllergyClause(safeMedication(prescription.getMedicationName()), prescription);
         // A partially filled order offers its remainder, and the partner is
         // told the number: the offer used to name the full prescribed amount
         // whatever had already been handed over (gap G3, round 3).

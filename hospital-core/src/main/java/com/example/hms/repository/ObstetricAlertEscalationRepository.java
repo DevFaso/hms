@@ -45,6 +45,20 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
     int claimRound(@Param("id") UUID id, @Param("current") short current,
                    @Param("next") short next, @Param("now") LocalDateTime now);
 
+    /**
+     * QA D3862: an alert of this patient, source and type that nobody has acknowledged or closed and that still
+     * has rounds left: a vital set's early warning repeated within it is not filed a second time.
+     */
+    @Query("""
+        SELECT COUNT(e) > 0 FROM ObstetricAlertEscalation e
+        WHERE e.hospitalId = :hospitalId AND e.patientId = :patientId AND e.sourceType = :sourceType
+          AND COALESCE(e.alertType, '') = :alertType
+          AND e.acknowledgedAt IS NULL AND e.escalationLevel < :maxRounds
+        """)
+    boolean existsOpenForPatient(@Param("hospitalId") UUID hospitalId, @Param("patientId") UUID patientId,
+                                 @Param("sourceType") String sourceType, @Param("alertType") String alertType,
+                                 @Param("maxRounds") short maxRounds);
+
     /** Whether this alert of this record was ever escalated, open or closed (a correction never replays it). */
     boolean existsBySourceTypeAndSourceIdAndAlertMessageKey(String sourceType, UUID sourceId, String alertMessageKey);
 

@@ -43,6 +43,17 @@ public class PatientBloodGroupStatusService {
     /** Lazy: the antibody service reaches the in-basket and the users; the mappers that call this must not. */
     private final ObjectProvider<PositiveAntibodyScreenService> antibodyScreen;
 
+    /**
+     * V380: the permanent RhD positive exposure flag, read for the patient at every hospital like the antibody
+     * flag. Lazy for the same reason; set by the container, absent in a test that builds this by hand.
+     */
+    private ObjectProvider<OPositiveReleaseAuthorityService> positiveAuthority;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setPositiveAuthority(ObjectProvider<OPositiveReleaseAuthorityService> positiveAuthority) {
+        this.positiveAuthority = positiveAuthority;
+    }
+
     /** Declared and confirmed, for a read at {@code hospitalId}. No hospital (an unscoped read): declared only. */
     public BloodGroupStatusDTO of(Patient patient, UUID hospitalId) {
         if (patient == null) {
@@ -83,6 +94,7 @@ public class PatientBloodGroupStatusService {
         if (status == null || patient.getId() == null) {
             return status;
         }
+        withExposure(status, patient.getId(), hospitalId);
         PositiveAntibodyScreenService screens = antibodyScreen.getIfAvailable();
         if (screens == null) {
             return status;
@@ -93,6 +105,17 @@ public class PatientBloodGroupStatusService {
             status.setAntibodySpecificities(antibodies.getAntibodySpecificities());
         }
         return status;
+    }
+
+    private void withExposure(BloodGroupStatusDTO status, UUID patientId, UUID hospitalId) {
+        OPositiveReleaseAuthorityService exposures = positiveAuthority == null ? null : positiveAuthority.getIfAvailable();
+        if (exposures == null) {
+            return;
+        }
+        OPositiveReleaseAuthorityService.RhdExposure exposure = exposures.exposureShownAt(patientId, hospitalId);
+        status.setRhdPositiveExposed(exposure != null);
+        status.setRhdPositiveExposedAt(exposure == null ? null : exposure.issuedAt());
+        status.setRhdPositiveExposureConfirmed(exposure == null ? null : exposure.confirmed());
     }
 
     /**

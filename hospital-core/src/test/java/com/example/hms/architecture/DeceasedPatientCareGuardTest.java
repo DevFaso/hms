@@ -211,6 +211,8 @@ class DeceasedPatientCareGuardTest {
         Transfusion#recordAntibodyWorkup | the biologist's finding on a sample collected before the death (QA D3351); it gives no care
         HospitalCriticalResultEscalation#set | a hospital's escalation settings, no patient
         Transfusion#receiveUnit,discardUnit | blood bank stock, no patient
+        Transfusion#countersignPositiveRelease,reviewPositiveRelease,recordPositiveFollowUp | V380: the signature, the review and the follow-up record of an O positive bag that already went out; none gives care, and a death does not end the duty to sign or review
+        Transfusion#setPositiveProtocol | V380: a hospital's emergency O positive protocol, no patient
         TreatmentConsent#revoke | closes a consent
         TreatmentPlan#update,addFollowUp,updateFollowUp,addReview | an existing plan, late documentation
         Ultrasound#updateOrder,cancelOrder,createOrUpdateReport,markReportReviewed,markPatientNotified | closes or reports an order made before the death

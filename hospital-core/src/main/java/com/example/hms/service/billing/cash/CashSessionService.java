@@ -659,12 +659,55 @@ public class CashSessionService {
         }
     }
 
+    /** QA D3982: the round whose counts are current: the latest while the till is closed, none while it is open. */
+    static int countedRoundOf(CashSessionStatus status, int round) {
+        return status == CashSessionStatus.OPEN ? 0 : round;
+    }
+
+    /** QA D3982: every close but the current one, oldest first, each with its own drawer and line differences. */
+    static List<CashSessionDTO.CloseRound> historyOf(List<CashSessionCount> counts, int round, int countedRound) {
+        List<CashSessionDTO.CloseRound> history = new ArrayList<>();
+        for (int r = 1; r <= round; r++) {
+            if (r == countedRound) {
+                continue;
+            }
+            int each = r;
+            List<CashSessionCount> rows = counts.stream()
+                .filter(c -> c.getCloseRound() != null && c.getCloseRound() == each).toList();
+            if (rows.isEmpty()) {
+                continue;
+            }
+            Differences differences = Differences.of(counts, each);
+            List<CashSessionCount> cash = rows.stream().filter(c -> "CASH".equals(c.getMethod())).toList();
+            history.add(CashSessionDTO.CloseRound.builder()
+                .closeRound(each)
+                .closedAt(rows.stream().map(CashSessionCount::getCreatedAt).filter(Objects::nonNull)
+                    .max(java.util.Comparator.naturalOrder()).orElse(null))
+                .cashExpected(cash.isEmpty() ? null : sum(cash, CashSessionCount::getExpectedAmount))
+                .cashCounted(cash.isEmpty() ? null : sum(cash, CashSessionCount::getCountedAmount))
+                .cashDifference(cash.isEmpty() ? null : differences.cash())
+                .totalDifference(differences.total())
+                .differenceLines(differences.lines())
+                .build());
+        }
+        return history;
+    }
+
+    private static BigDecimal sum(List<CashSessionCount> rows,
+                                  java.util.function.Function<CashSessionCount, BigDecimal> amount) {
+        return rows.stream().map(amount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     private CashSessionDTO toDto(CashSession s, UUID me, Map<UUID, String> names, boolean withMovements) {
         Figures figures = figures(s);
         List<CashSessionCount> stored = countRepository.findBySessionIdOrderByCloseRoundAscMethodAsc(s.getId());
         List<CashSessionCount> counts = stored != null ? stored : List.of();
         int round = s.getCloseRound() != null ? s.getCloseRound() : 0;
-        Differences differences = Differences.of(counts, round);
+        // QA D3982 (r77): a reopened till is open again: its last count no longer stands against what it now expects
+        // (expected 8 600, counted 7 500, difference -100 did not add up). Its figures are uncounted until the next
+        // close; every earlier close is history.
+        int countedRound = countedRoundOf(s.getStatus(), round);
+        Differences differences = Differences.of(counts, countedRound);
         return CashSessionDTO.builder()
             .id(s.getId())
             .till(s.getTill() != null ? s.getTill().name() : null)
@@ -691,6 +734,8 @@ public class CashSessionService {
             .totalDifference(differences.total())
             .cashDifference(differences.cash())
             .differenceLines(differences.lines())
+            .countedRound(countedRound)
+            .history(historyOf(counts, round, countedRound))
             .counts(counts.stream().map(c -> CashSessionDTO.Count.builder()
                 .closeRound(c.getCloseRound() != null ? c.getCloseRound() : 0)
                 .method(c.getMethod())

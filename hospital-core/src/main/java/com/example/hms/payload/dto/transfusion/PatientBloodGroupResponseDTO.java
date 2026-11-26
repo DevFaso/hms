@@ -34,6 +34,17 @@ public class PatientBloodGroupResponseDTO {
     private Boolean screenCurrent;
     /** QA D3351: a positive antibody screen is on record here, this one or an earlier one: never cleared. */
     private boolean alloImmunised;
+    /**
+     * The patient received O RhD positive red cells in an emergency while at risk (V380): a permanent flag that
+     * follows the patient to every hospital, as the antibody flag does.
+     */
+    private boolean rhdPositiveExposed;
+    /** When the newest such exposure happened. */
+    private java.time.LocalDateTime rhdPositiveExposedAt;
+    /** The hospital that recorded it. */
+    private String rhdPositiveExposedHospitalName;
+    /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
+    private Boolean rhdPositiveExposureConfirmed;
     private String notes;
     /** Why this result disagrees with the one before it (QA CX-011). */
     private String correctionReason;

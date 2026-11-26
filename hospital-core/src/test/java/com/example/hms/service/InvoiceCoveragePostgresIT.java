@@ -227,19 +227,21 @@ class InvoiceCoveragePostgresIT {
             VALUES (?, ?, ?, ?, ?, ?, ?, 8500, 0, 'DRAFT', false, now(), now())
             """, invoice, patient, hospitalA, encounter, "CV-" + invoice.toString().substring(0, 8), SERVICE_DAY,
             SERVICE_DAY.plusDays(30));
-        line(invoice, "Consultation", "SERVICE", "2000", 1);
-        line(invoice, "TDR paludisme", "LAB_TEST", "1500", 2);
-        line(invoice, "Radio thorax", "SERVICE", "5000", 3);
+        // QA D3980: what each line bills, as the checkout stamps it (a line with no category is never covered).
+        line(invoice, "Consultation", "SERVICE", "CONSULTATION", "2000", 1);
+        line(invoice, "TDR paludisme", "LAB_TEST", "LAB_TEST", "1500", 2);
+        line(invoice, "Radio thorax", "SERVICE", "IMAGING", "5000", 3);
         return invoice;
     }
 
-    private void line(UUID invoice, String description, String category, String price, int minute) {
+    private void line(UUID invoice, String description, String category, String coverage, String price,
+                      int minute) {
         jdbc.update("""
             INSERT INTO billing.invoice_items (id, billing_invoice_id, item_description, quantity, item_category,
-                unit_price, total_price, assignment_id, price_source, created_at, updated_at)
-            VALUES (gen_random_uuid(), ?, ?, 1, ?, ?, ?, ?, 'MANUAL', TIMESTAMP '2026-11-17 09:00' + make_interval(mins => ?),
-                now())
-            """, invoice, description, category, new BigDecimal(price), new BigDecimal(price), desk, minute);
+                unit_price, total_price, assignment_id, price_source, coverage_category, created_at, updated_at)
+            VALUES (gen_random_uuid(), ?, ?, 1, ?, ?, ?, ?, 'MANUAL', ?,
+                TIMESTAMP '2026-11-17 09:00' + make_interval(mins => ?), now())
+            """, invoice, description, category, new BigDecimal(price), new BigDecimal(price), desk, coverage, minute);
     }
 
     /** What updateInvoice does when a draft is issued: SENT, the payer share, the status, then the copay fold. */
