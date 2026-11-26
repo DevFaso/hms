@@ -1578,3 +1578,35 @@ test.describe('card mode: sortable lists keep their sort (#1247)', () => {
     }
   });
 });
+
+test.describe('D3850: public login links have distinct phone-sized click targets', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  for (const language of ['en', 'fr', 'es']) {
+    test(`login help targets at 390px in ${language}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width: 390, height: 1000 });
+      await page.addInitScript((lang) => localStorage.setItem('lang', lang), language);
+      await installLocalIconFonts(page);
+      await page.goto('/login');
+      const links = page.locator('.forgot-links .forgot-link');
+      await expect(links).toHaveCount(4);
+      await expect(links.first()).toBeVisible();
+      const boxes = await links.evaluateAll((elements) =>
+        elements.map((element) => {
+          const r = element.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, height: r.height, width: r.width };
+        }),
+      );
+      for (let index = 1; index < boxes.length; index++) {
+        expect(boxes[index].top).toBeGreaterThanOrEqual(boxes[index - 1].bottom);
+      }
+      for (const box of boxes) {
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(44);
+      }
+      await testInfo.attach(`login-help-${language}-390`, {
+        body: await page.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+    });
+  }
+});
