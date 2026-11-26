@@ -177,6 +177,55 @@ class StockTransferPostgresIT {
     }
 
     @Test
+    void introducingALotIntoExistingLotlessDestinationStockIsRefusedAtomically() {
+        UUID receiver = new TransactionTemplate(transactionManager).execute(status -> {
+            InventoryItem item = InventoryItem.builder()
+                .pharmacy(entityManager.find(Pharmacy.class, destinationId))
+                .medicationCatalogItem(entityManager.find(MedicationCatalogItem.class, medicationId))
+                .unit("comprim?").quantityOnHand(new BigDecimal("20")).build();
+            entityManager.persist(item);
+            return item.getId();
+        });
+        long before = ledger.count();
+        assertThatThrownBy(() -> service.recordTransaction(transfer("5")))
+            .hasFieldOrPropertyWithValue("messageKey", "pharmacy.inventory.lot.balanceUnreconciled");
+        assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("30");
+        assertThat(items.findById(receiver).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
+        assertThat(lots.sumRemainingForItem(receiver)).isEqualByComparingTo("0");
+        assertThat(ledger.count()).isEqualTo(before);
+    }
+
+    @Test
+    void anOldLotlessTransferCannotDebitTheBalanceOfANewLot() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> lots.deleteById(sourceLotId));
+        sourceLotId = null;
+        StockTransactionResponseDTO moved = service.recordTransaction(transfer("10"));
+        StockTransaction receipt = ledger.findByReferenceIdAndTransactionType(moved.getId(), StockTransactionType.RECEIPT).orElseThrow();
+        UUID receiver = receipt.getInventoryItem().getId();
+        UUID laterLot = new TransactionTemplate(transactionManager).execute(status -> {
+            var now = java.time.LocalDateTime.now();
+            assertThat(items.decrementOnHand(receiver, BigDecimal.TEN, now)).isEqualTo(1);
+            StockLot lot = StockLot.builder().inventoryItem(entityManager.find(InventoryItem.class, receiver))
+                .lotNumber("LATER-" + UUID.randomUUID()).expiryDate(LocalDate.now().plusYears(1))
+                .initialQuantity(BigDecimal.TEN).remainingQuantity(BigDecimal.TEN).unitCost(BigDecimal.ONE)
+                .receivedDate(LocalDate.now()).receivedByUser(entityManager.find(User.class, actorId)).build();
+            entityManager.persist(lot);
+            assertThat(items.incrementOnHand(receiver, BigDecimal.TEN, now)).isEqualTo(1);
+            return lot.getId();
+        });
+        long before = ledger.count();
+        var returned = StockTransactionRequestDTO.builder().inventoryItemId(sourceItemId)
+            .transactionType(StockTransactionType.RETURN).quantity(new BigDecimal("5")).referenceId(moved.getId())
+            .reason("Synthetic return after lot tracking changed").stockCondition(ReturnedStockCondition.INTACT).build();
+        assertThatThrownBy(() -> service.recordTransaction(returned))
+            .hasFieldOrPropertyWithValue("messageKey", "pharmacy.inventory.lot.trackingChanged");
+        assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
+        assertThat(items.findById(receiver).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("10");
+        assertThat(lots.findById(laterLot).orElseThrow().getRemainingQuantity()).isEqualByComparingTo("10");
+        assertThat(ledger.count()).isEqualTo(before);
+    }
+
+    @Test
     void anUnreferencedReturnCannotDuplicateAPairedTransfer() {
         service.recordTransaction(transfer("10"));
         assertThat(ledger.hasPairedTransfer(sourceItemId, false, null)).isTrue();

@@ -33,6 +33,8 @@ class StockTransferBookingGuardTest {
             "takeBack(route.originalReceipt(), movement, route.fefoOverrideReason())");
         assertThat(counterpart).contains("lockItem(source.getId())", "lockLot(request.getStockLotId())",
             "StockRowLocks.isContention(failure)", "stockTransaction.transfer.stockBusy");
+        assertThat(counterpart).contains("StockLotBalance.requireReconciled(item, lots.sumRemainingForItem(item.getId()))",
+            "StockLotBalance.requireLotlessReturn(lots.existsByInventoryItemId(item.getId()))");
         assertThat(Files.readString(root.resolve("com/example/hms/service/pharmacy/StockRowLocks.java")))
             .contains("PessimisticLockingFailureException", "\"55P03\"");
         for (String repository : java.util.List.of("InventoryItemRepository.java", "StockLotRepository.java")) {

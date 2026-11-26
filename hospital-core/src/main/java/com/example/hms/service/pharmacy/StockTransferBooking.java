@@ -174,6 +174,7 @@ public class StockTransferBooking {
         if (original.getExpiryDate() == null || !original.getExpiryDate().isAfter(LocalDate.now())) {
             throw refused("stockTransaction.transfer.expiredLot");
         }
+        StockLotBalance.requireReconciled(item, lots.sumRemainingForItem(item.getId()));
         if (lots.existsOtherExpiryForLot(item.getId(), original.getLotNumber(), original.getExpiryDate())) {
             throw refused("stockTransaction.transfer.lotDiffers");
         }
@@ -213,6 +214,9 @@ public class StockTransferBooking {
             throw refused("stockTransaction.transfer.unitsDiffer");
         }
         WholeUnitQuantity.require(item, quantity, WholeUnitQuantity.DEFAULT_KEY);
+        if (lot == null) {
+            StockLotBalance.requireLotlessReturn(lots.existsByInventoryItemId(item.getId()));
+        }
         String override = lot == null ? null : fefoLotPolicy.requireFefoOrReason(lot, fefoOverrideReason);
         if (lot != null && lots.decrementRemaining(lot.getId(), quantity, now) != 1) {
             throw refused("stockTransaction.transfer.destinationInsufficient");

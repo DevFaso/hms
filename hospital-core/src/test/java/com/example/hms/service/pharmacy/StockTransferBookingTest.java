@@ -171,6 +171,30 @@ class StockTransferBookingTest {
     }
 
     @Test
+    void aFirstDestinationLotCannotAbsorbAnExistingLotlessBalance() {
+        destinationItem.setQuantityOnHand(new BigDecimal("20"));
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(destinationItem));
+        when(lots.sumRemainingForItem(destinationItem.getId())).thenReturn(BigDecimal.ZERO);
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing))
+            .extracting("messageKey").isEqualTo("pharmacy.inventory.lot.balanceUnreconciled");
+        verify(lots, never()).saveAndFlush(any());
+        verify(items, never()).incrementOnHand(any(), any(), any());
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
+    void aLotlessReturnIsRefusedAfterTheReceiverStartsTrackingLots() {
+        when(lots.existsByInventoryItemId(destinationItem.getId())).thenReturn(true);
+        var receipt = StockTransaction.builder().inventoryItem(destinationItem).build();
+        var returned = StockTransaction.builder().inventoryItem(sourceItem).transactionType(StockTransactionType.RETURN)
+            .quantity(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> booking.bookCounterpart(new StockTransferBooking.Route(destination, receipt), returned))
+            .extracting("messageKey").isEqualTo("pharmacy.inventory.lot.trackingChanged");
+        verify(items, never()).decrementOnHand(any(), any(), any());
+        verifyNoInteractions(transactions);
+    }
+
+    @Test
     void countedDestinationUnitsCannotReceiveAFraction() {
         outgoing.setQuantity(new BigDecimal("1.5"));
         when(items.findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(destinationItem));

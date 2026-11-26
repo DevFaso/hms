@@ -50,6 +50,10 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
     int addReceipt(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                    @Param("now") LocalDateTime now);
 
+    /** All lots, including expired ones: the book balance is not just stock currently available for dispensing. */
+    @Query("SELECT COALESCE(SUM(l.remainingQuantity), 0) FROM StockLot l WHERE l.inventoryItem.id = :itemId")
+    BigDecimal sumRemainingForItem(@Param("itemId") UUID itemId);
+
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
 
