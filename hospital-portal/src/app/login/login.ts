@@ -28,7 +28,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
-import { readRememberedUsername, rememberUsername } from '../core/browser-storage';
+import { clearIdleLock, readRememberedUsername, rememberUsername } from '../core/browser-storage';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
@@ -410,6 +410,8 @@ export class Login implements OnInit, AfterViewInit {
           }
 
           this.auth.setToken(token);
+          // A fresh sign-in never lands on a previous lock screen.
+          clearIdleLock();
 
           // The refresh token travels as an HttpOnly cookie; this call only
           // purges a legacy stored copy.

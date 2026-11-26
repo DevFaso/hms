@@ -11,6 +11,7 @@ import {
   SESSION_SCOPED_KEYS,
   TAB_SESSION_KEY,
   readPatientNote,
+  tabBindingFor,
   writePatientNote,
 } from '../core/browser-storage';
 
@@ -249,22 +250,47 @@ describe('AuthService — where the session is kept', () => {
     return values.join('|');
   }
 
-  it('keeps the token in memory only, and marks the tab as signed in with a bare flag', () => {
+  /** Lets the digest of the tab binding settle. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it('keeps the token in memory only, and binds the tab with an opaque digest', async () => {
     service = create();
-    service.setToken('a.jwt');
-    expect(service.getToken()).toBe('a.jwt');
-    expect(storedValues()).not.toContain('a.jwt');
+    const token = jwt({ uid: 'user-123', sub: 'dr' });
+    service.setToken(token);
+    await settle();
+    expect(service.getToken()).toBe(token);
+    expect(storedValues()).not.toContain(token);
+    expect(storedValues()).not.toContain('user-123');
     expect(localStorage.getItem(KEY)).toBeNull();
     expect(sessionStorage.getItem(KEY)).toBeNull();
-    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe('1');
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe(await tabBindingFor('user-123'));
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toMatch(/^[0-9a-f]{64}$/);
     expect(service.hasTabSession()).toBeTrue();
   });
 
-  it('a reload starts without a token (the start-up restore asks the refresh cookie)', () => {
-    sessionStorage.setItem(TAB_SESSION_KEY, '1');
+  it('a reload starts without a token (the start-up restore asks the refresh cookie)', async () => {
+    sessionStorage.setItem(TAB_SESSION_KEY, await tabBindingFor('user-123'));
     service = create();
     expect(service.getToken()).toBeNull();
     expect(service.hasTabSession()).toBeTrue();
+  });
+
+  it('after a reload, accepts a token for the bound account only', async () => {
+    sessionStorage.setItem(TAB_SESSION_KEY, await tabBindingFor('user-a'));
+    service = create();
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-a' }))).toBeTrue();
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-b' }))).toBeFalse();
+    sessionStorage.removeItem(TAB_SESSION_KEY);
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-a' }))).toBeFalse();
+  });
+
+  it('a new token never clears the idle lock (only a fresh sign-in does)', () => {
+    sessionStorage.setItem('hms_idle_locked', 'true');
+    sessionStorage.setItem('hms_lock_ts', '1');
+    service = create();
+    service.setToken(jwt({ uid: 'user-a' }));
+    expect(sessionStorage.getItem('hms_idle_locked')).toBe('true');
+    expect(sessionStorage.getItem('hms_lock_ts')).toBe('1');
   });
 
   it('keeps the profile in memory only', () => {
@@ -276,10 +302,12 @@ describe('AuthService — where the session is kept', () => {
     expect(localStorage.getItem('user_profile')).toBeNull();
   });
 
-  it('clearing the token drops the tab flag', () => {
+  it('clearing the token drops the tab binding', async () => {
     service = create();
-    service.setToken('a.jwt');
+    service.setToken(jwt({ uid: 'user-a' }));
+    await settle();
     service.clearToken();
+    await settle();
     expect(service.getToken()).toBeNull();
     expect(service.hasTabSession()).toBeFalse();
   });

@@ -152,7 +152,7 @@ test.describe('Authentication', () => {
       await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
     });
 
-    test('keeps no token or profile in web storage after login, only the tab flag', async ({
+    test('keeps no token or profile in web storage after login, only the opaque tab binding', async ({
       page,
     }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
@@ -171,7 +171,7 @@ test.describe('Authentication', () => {
         }
         return all;
       });
-      expect(stored['hms.session.tab']).toBe('1');
+      expect(stored['hms.session.tab']).toMatch(/^[0-9a-f]{64}$/);
       for (const key of ['auth_token', 'auth_refresh_token', 'user_profile']) {
         expect(stored[key]).toBeUndefined();
       }

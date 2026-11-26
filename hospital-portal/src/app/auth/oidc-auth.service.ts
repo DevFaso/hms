@@ -152,7 +152,8 @@ export class OidcAuthService {
     const accessToken = this.oauth.getAccessToken();
     if (!accessToken) return;
 
-    // The token lives in memory and this tab's sessionStorage, never localStorage.
+    // The token lives in memory only. This also runs on a reload, so the idle
+    // lock is left as it is.
     this.auth.setToken(accessToken);
 
     const claims = this.oauth.getIdentityClaims() as Record<string, unknown> | null;

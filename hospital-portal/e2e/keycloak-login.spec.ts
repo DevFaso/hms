@@ -146,7 +146,7 @@ test.describe('KC-2b — Keycloak Auth-Code+PKCE happy path (live Keycloak)', ()
       fromLocal: window.localStorage.getItem('auth_token'),
       tab: window.sessionStorage.getItem('hms.session.tab'),
     }));
-    expect(stored.tab).toBe('1');
+    expect(stored.tab).toMatch(/^[0-9a-f]{64}$/);
     expect(stored.fromSession).toBeNull();
     expect(stored.fromLocal).toBeNull();
   });

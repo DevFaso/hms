@@ -11,7 +11,7 @@
  *   the sign-in page to remember).
  * - `sessionStorage` lives with the tab: it holds UI state of the signed-in
  *   user (the idle lock, the roles the account holds, a reload guard) and the
- *   flag saying this tab has a session to restore. Every key of it the portal
+ *   opaque binding saying which account this tab may restore. Every key of it the portal
  *   writes is listed below, and {@link clearSessionScopedStorage} removes them
  *   all at sign-out, at the end of the session and when another account takes
  *   over the tab.
@@ -34,7 +34,7 @@ export const LOCAL_STORAGE_ALLOWLIST: readonly string[] = [
 /** The username the sign-in page fills in, when its owner ticked « remember my username ». */
 export const REMEMBERED_USERNAME_KEY = 'hms.login.rememberedUsername';
 
-/** This tab signed in: after a reload it asks the refresh cookie for its session. Holds `'1'`. */
+/** This tab signed in: after a reload it asks the refresh cookie for its session (see bindTab). */
 export const TAB_SESSION_KEY = 'hms.session.tab';
 
 /** Every `sessionStorage` key the portal writes; all belong to the signed-in user. */
@@ -98,26 +98,54 @@ export function clearSessionScopedStorage(): void {
   purgeLegacyBrowserStorage();
 }
 
-/** Marks this tab as signed in (a flag, no credential), so a reload restores the session. */
-export function markTabSession(): void {
+/**
+ * Binds this tab to the account that signed in, so a reload restores that
+ * account and no other: the value is an opaque SHA-256 digest of the account's
+ * subject (never a credential, never the subject itself). The refresh cookie is
+ * shared by every tab of the browser; a reload whose refreshed token names
+ * another account ends the tab instead of adopting it.
+ */
+export function bindTab(binding: string): void {
   try {
-    sessionStorage.setItem(TAB_SESSION_KEY, '1');
+    sessionStorage.setItem(TAB_SESSION_KEY, binding);
   } catch {
     /* storage not available: a reload signs in again */
   }
 }
 
-export function hasTabSession(): boolean {
+/** The binding of this tab, or null when it has no session to restore. */
+export function tabBinding(): string | null {
   try {
-    return sessionStorage.getItem(TAB_SESSION_KEY) === '1';
+    return sessionStorage.getItem(TAB_SESSION_KEY) || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 export function clearTabSession(): void {
   try {
     sessionStorage.removeItem(TAB_SESSION_KEY);
+  } catch {
+    /* storage not available */
+  }
+}
+
+/** The opaque binding of an account subject (hex SHA-256). */
+export async function tabBindingFor(subject: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`hms-tab:${subject}`) as BufferSource,
+  );
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The idle-lock keys: cleared on a fresh sign-in, kept across a reload. */
+const IDLE_LOCK_KEYS = ['hms_idle_locked', 'hms_lock_ts'] as const;
+
+/** A fresh sign-in (password, MFA, SSO) never lands on a previous lock screen. */
+export function clearIdleLock(): void {
+  try {
+    for (const key of IDLE_LOCK_KEYS) sessionStorage.removeItem(key);
   } catch {
     /* storage not available */
   }

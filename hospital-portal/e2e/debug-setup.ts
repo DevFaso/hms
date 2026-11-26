@@ -63,7 +63,7 @@ setup('debug login', async ({ page }) => {
   console.log('After 3s wait, URL:', page.url());
   
   const tabSession = await page.evaluate(() => sessionStorage.getItem('hms.session.tab'));
-  console.log('Tab signed in:', tabSession === '1');
+  console.log('Tab signed in:', tabSession !== null);
   
   const errMsg = await page.locator('[role="alert"]').textContent().catch(() => null);
   console.log('Error message:', errMsg);

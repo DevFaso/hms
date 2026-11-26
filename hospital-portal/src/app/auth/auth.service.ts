@@ -8,12 +8,13 @@ import { expandRoleEquivalents } from '../core/role-equivalence';
 import { ApiTimeoutService } from '../core/api-timeout.service';
 import { SESSION_RESTORE_HEADER, SESSION_RESTORE_REQUEST } from './session-lifetime';
 import {
+  bindTab,
   clearSessionScopedStorage,
   clearTabSession,
   clearUserDrafts,
-  hasTabSession,
-  markTabSession,
   purgeLegacyBrowserStorage,
+  tabBinding,
+  tabBindingFor,
 } from '../core/browser-storage';
 
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -142,15 +143,16 @@ export class AuthService {
   setToken(token: string): void {
     if (!this.isBrowser) return;
     this.accessToken = token;
-    markTabSession();
-    try {
-      // Clear any stale idle-lock flag from a prior session so the new
-      // login does not land on the lock screen instead of the dashboard.
-      sessionStorage.removeItem('hms_idle_locked');
-      sessionStorage.removeItem('hms_lock_ts');
-    } catch {
-      // Storage not available
-    }
+    // Bind the tab to this account for a reload (an opaque digest, no credential).
+    // The idle lock is left alone: a refresh while the screen is locked, or the
+    // restore after a reload, must not unlock it (see clearIdleLock for sign-in).
+    const subject = this.tokenSubject(token);
+    if (!subject) return;
+    void tabBindingFor(subject)
+      .then((binding) => {
+        if (this.accessToken === token) bindTab(binding);
+      })
+      .catch(() => undefined);
   }
 
   clearToken(): void {
@@ -161,7 +163,25 @@ export class AuthService {
 
   /** This tab signed in and has not signed out: a reload asks the refresh cookie. */
   hasTabSession(): boolean {
-    return this.isBrowser && hasTabSession();
+    return this.isBrowser && tabBinding() !== null;
+  }
+
+  /**
+   * Whether a token minted after a reload is for the account this tab signed in
+   * as (the binding set by setToken). False when the tab has no binding.
+   */
+  async isTokenForThisTab(token: string): Promise<boolean> {
+    const bound = tabBinding();
+    const subject = this.tokenSubject(token);
+    if (!bound || !subject) return false;
+    return (await tabBindingFor(subject)) === bound;
+  }
+
+  /** The account a token names: `uid`, else `id`, else `sub`. */
+  private tokenSubject(token: string): string | null {
+    const p = this.decodePayload(token);
+    const subject = (p?.uid as string) ?? (p?.id as string) ?? p?.sub ?? null;
+    return typeof subject === 'string' && subject ? subject : null;
   }
 
   /**

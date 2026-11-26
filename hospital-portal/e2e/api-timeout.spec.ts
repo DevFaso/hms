@@ -252,7 +252,7 @@ test('a stalled refresh retains the open patient view, its input and the existin
     await expect(search).toHaveValue('Keep this input');
     await expect(page.getByTestId('api-timeout-banner')).toBeVisible();
     await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
-    expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).toBe('1');
+    expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
     expect(logoutCalls).toBe(0);
     expect(refreshCalls).toBe(1);
   } finally {
@@ -357,7 +357,7 @@ test('a business failure after a successful refresh keeps the user on the patien
   );
   await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
   await expect(page.locator('.filter-toolbar .search-bar input')).toBeVisible();
-  expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).toBe('1');
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
   expect(logoutCalls).toBe(0);
 });
 
@@ -492,7 +492,7 @@ for (const resourceConflict of [false, true]) {
       await expect(confirmation).toHaveCount(0);
       expect(writes).toBe(1);
       await expect(page).toHaveURL(/\/billing(?:[?#]|$)/);
-      expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).toBe('1');
+      expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
     }
   });
 }
