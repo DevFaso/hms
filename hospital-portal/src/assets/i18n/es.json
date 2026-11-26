@@ -7956,6 +7956,8 @@
         "NEWS2_ESCALATION": "Escalamiento NEWS2",
         "OBSTETRIC_ALERT": "Alerta obstétrica urgente",
         "OBSTETRIC_ALERT_ESCALATION": "Escalamiento de alerta obstétrica urgente",
+        "EARLY_WARNING_ALERT": "Puntuación de alerta temprana: alerta urgente",
+        "EARLY_WARNING_ALERT_ESCALATION": "Puntuación de alerta temprana: recordatorio de alerta urgente",
         "PHARMACY_EVENT": "Aviso de farmacia",
         "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
         "CORRECTED_CULTURE_RESULT": "Cultivo corregido",

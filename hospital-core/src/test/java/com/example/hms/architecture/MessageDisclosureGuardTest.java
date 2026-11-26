@@ -68,6 +68,10 @@ class MessageDisclosureGuardTest {
         Map.entry("sms.appointment.confirmation", 2),
         Map.entry("sms.appointment.reminder", 2),
         Map.entry("sms.message.required", -1),
+        // QA D3865: the patient's known allergies, and an override of one with the prescriber's reason (cut to
+        // 120 characters), to the partner pharmacy that dispenses the order: it must know what it is dispensing over.
+        Map.entry("sms.partner.allergies", 0),
+        Map.entry("sms.partner.allergyOverride", 1),
         Map.entry("sms.partner.autoRejected", 0),
         Map.entry("sms.partner.heldForReview", 0),
         Map.entry("sms.partner.medicationFallback", -1),
