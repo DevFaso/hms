@@ -98,6 +98,13 @@ class AuditTrailAppendOnlyGuardTest {
         assertThat(v382).as("the six-year floor in the purge function")
             .containsPattern("retention_years\\s*<\\s*6")
             .containsPattern("now\\(\\)\\s*-\\s*interval\\s*'6 years'");
+        assertThat(v382).as("the purge exception holds only inside the function, which runs as its owner")
+            .containsPattern("p\\.proowner\\s+INTO\\s+purge_owner")
+            .containsPattern("rolname\\s*=\\s*current_user")
+            .containsPattern("SECURITY\\s+DEFINER");
+        assertThat(v382).as("UPDATE/DELETE/TRUNCATE revoked in the migration itself").containsPattern(Pattern.compile(
+            "REVOKE\\s+UPDATE,\\s*DELETE,\\s*TRUNCATE\\s+ON\\s+support\\.audit_event_logs[^;]*FROM\\s+PUBLIC",
+            Pattern.CASE_INSENSITIVE));
 
         String changelog = Files.readString(MIGRATIONS.resolve("changelog.xml"), StandardCharsets.UTF_8);
         assertThat(changelog).as("V382 registered as one statement (dollar-quoted bodies)").containsPattern(

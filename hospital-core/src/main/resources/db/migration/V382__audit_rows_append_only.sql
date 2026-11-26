@@ -7,8 +7,11 @@
 --
 -- A row trigger refuses every UPDATE and DELETE, and a statement trigger refuses TRUNCATE, whoever the caller.
 -- The single exception is support.purge_expired_audit_rows(retention_years, batch_limit): it removes rows past
--- the retention period (never less than six years), records what it removed in support.audit_event_logs, and
--- the trigger lets its DELETE through only for a row older than six years.
+-- the retention period (never less than six years) and records what it removed in support.audit_event_logs.
+-- The trigger lets a DELETE through only while that SECURITY DEFINER function runs (the statement executes as
+-- the function's owner, with the function's own transaction flag set), and only for a row older than six years.
+-- Any other role is refused, whatever it sets in its session. UPDATE, DELETE and TRUNCATE are also revoked from
+-- PUBLIC and, where it exists, the application role hms_app, which keeps EXECUTE on the purge function.
 --
 -- A later migration that has to correct audit rows disables and re-enables the trigger in the same changeSet,
 -- and says why; AuditTrailAppendOnlyGuardTest makes that a reviewed decision.
@@ -19,14 +22,27 @@
 CREATE OR REPLACE FUNCTION support.audit_row_is_append_only()
     RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
     recorded_at timestamptz;
+    purge_owner oid;
 BEGIN
     -- TG_ARGV[0], when given, names the column holding the time the row was recorded: only such a table can be
-    -- purged, only by support.purge_expired_audit_rows (which flags its own transaction), and only past six years.
+    -- purged, only from inside support.purge_expired_audit_rows (the statement runs as the function's owner and
+    -- the function flags its own transaction), and only past six years.
     IF TG_OP = 'DELETE' AND TG_NARGS > 0
        AND current_setting('hms.audit_retention_purge', true) = 'on' THEN
+        SELECT p.proowner INTO purge_owner
+          FROM pg_catalog.pg_proc p
+         WHERE p.oid = pg_catalog.to_regprocedure('support.purge_expired_audit_rows(integer,integer)');
+        IF purge_owner IS NULL
+           OR purge_owner IS DISTINCT FROM (SELECT r.oid FROM pg_catalog.pg_roles r WHERE r.rolname = current_user) THEN
+            RAISE EXCEPTION 'audit rows are append-only: % on %.% is not allowed', TG_OP, TG_TABLE_SCHEMA,
+                TG_TABLE_NAME
+                USING ERRCODE = 'insufficient_privilege',
+                      HINT = 'Rows past the retention period are removed by support.purge_expired_audit_rows().';
+        END IF;
         recorded_at := (to_jsonb(OLD) ->> TG_ARGV[0])::timestamptz;
         IF recorded_at IS NOT NULL AND recorded_at < now() - interval '6 years' THEN
             RETURN OLD;
@@ -161,3 +177,17 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION support.purge_expired_audit_rows(integer, integer) FROM PUBLIC;
+
+REVOKE UPDATE, DELETE, TRUNCATE ON support.audit_event_logs, support.frontend_audit_events,
+    public.permission_matrix_audit_events, clinical.digital_signature_audit_log FROM PUBLIC;
+
+-- The application role, on the databases that have it (dev and test databases do not).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'hms_app') THEN
+        REVOKE UPDATE, DELETE, TRUNCATE ON support.audit_event_logs, support.frontend_audit_events,
+            public.permission_matrix_audit_events, clinical.digital_signature_audit_log FROM hms_app;
+        GRANT EXECUTE ON FUNCTION support.purge_expired_audit_rows(integer, integer) TO hms_app;
+    END IF;
+END
+$$;

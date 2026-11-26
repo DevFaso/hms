@@ -21,6 +21,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +53,11 @@ class AuditTrailAppendOnlyPostgresIT {
 
     @DynamicPropertySource
     static void realDatabase(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        // Read before Liquibase runs: the application role exists first, as on prod.
+        registry.add("spring.datasource.url", () -> {
+            createApplicationRole();
+            return POSTGRES.getJdbcUrl();
+        });
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
@@ -60,6 +68,24 @@ class AuditTrailAppendOnlyPostgresIT {
     }
 
     private static final String APPEND_ONLY = "audit rows are append-only";
+    /** A role that is not the owner of the purge function but holds DELETE on the audit table. */
+    private static final String DELETER = "s4m18_it_deleter";
+
+    /**
+     * hms_app as prod sets it up (R__prod_role_grants.sql): every table the migrations create grants it
+     * SELECT/INSERT/UPDATE/DELETE by default. V382 must take UPDATE/DELETE/TRUNCATE away on the audit tables.
+     */
+    private static void createApplicationRole() {
+        try (Connection conn = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                POSTGRES.getPassword()); Statement stmt = conn.createStatement()) {
+            stmt.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hms_app') THEN "
+                + "CREATE ROLE hms_app NOLOGIN; END IF; END $$");
+            stmt.execute("ALTER DEFAULT PRIVILEGES FOR ROLE " + POSTGRES.getUsername()
+                + " GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hms_app");
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private TransactionTemplate transactions;
@@ -124,6 +150,50 @@ class AuditTrailAppendOnlyPostgresIT {
             jdbc.update("DELETE FROM support.audit_event_logs WHERE id = ?", id);
         })).isInstanceOf(DataAccessException.class).hasStackTraceContaining(APPEND_ONLY);
         assertThat(count("support.audit_event_logs", id)).isOne();
+    }
+
+    @Test
+    void theApplicationRoleKeepsInsertLosesUpdateDeleteTruncateAndMayRunThePurge() {
+        for (String table : List.of("support.audit_event_logs", "support.frontend_audit_events",
+                "public.permission_matrix_audit_events", "clinical.digital_signature_audit_log")) {
+            assertThat(privilege(table, "INSERT")).as("INSERT on " + table).isTrue();
+            assertThat(privilege(table, "UPDATE")).as("UPDATE on " + table).isFalse();
+            assertThat(privilege(table, "DELETE")).as("DELETE on " + table).isFalse();
+            assertThat(privilege(table, "TRUNCATE")).as("TRUNCATE on " + table).isFalse();
+        }
+        assertThat(jdbc.queryForObject("SELECT has_function_privilege('hms_app', "
+            + "'support.purge_expired_audit_rows(integer,integer)', 'EXECUTE')", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT has_function_privilege('public', "
+            + "'support.purge_expired_audit_rows(integer,integer)', 'EXECUTE')", Boolean.class)).isFalse();
+    }
+
+    @Test
+    void anotherRoleCannotDeleteAnOldRowDirectlyEvenWithThePurgeFlagSet() {
+        grantDeleterDirectDelete();
+        UUID old = plantBackendRow(LocalDateTime.now().minusYears(7));
+
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL ROLE " + DELETER);
+            jdbc.execute("SELECT set_config('hms.audit_retention_purge', 'on', true)");
+            jdbc.update("DELETE FROM support.audit_event_logs WHERE id = ?", old);
+        })).isInstanceOf(DataAccessException.class).hasStackTraceContaining(APPEND_ONLY);
+        assertThat(count("support.audit_event_logs", old)).isOne();
+    }
+
+    @Test
+    void theApplicationRolePurgesThroughTheFunction() {
+        jdbc.execute("GRANT USAGE ON SCHEMA support TO hms_app");
+        UUID old = plantBackendRow(LocalDateTime.now().minusYears(7));
+        UUID young = plantBackendRow(LocalDateTime.now().minusYears(1));
+
+        Long removed = transactions.execute(status -> {
+            jdbc.execute("SET LOCAL ROLE hms_app");
+            return jdbc.queryForObject("SELECT support.purge_expired_audit_rows(6, 1000)", Long.class);
+        });
+
+        assertThat(removed).isPositive();
+        assertThat(count("support.audit_event_logs", old)).isZero();
+        assertThat(count("support.audit_event_logs", young)).isOne();
     }
 
     // ------------------------------------------------------------------ the retention function
@@ -288,6 +358,18 @@ class AuditTrailAppendOnlyPostgresIT {
     private long purgeRuns() {
         return jdbc.queryForObject("SELECT count(*) FROM support.audit_event_logs "
             + "WHERE event_type = 'AUDIT_RETENTION_PURGED'", Long.class);
+    }
+
+    private boolean privilege(String table, String privilege) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT has_table_privilege('hms_app', ?, ?)",
+            Boolean.class, table, privilege));
+    }
+
+    private void grantDeleterDirectDelete() {
+        jdbc.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '" + DELETER + "') THEN "
+            + "CREATE ROLE " + DELETER + " NOLOGIN; END IF; END $$");
+        jdbc.execute("GRANT USAGE ON SCHEMA support TO " + DELETER);
+        jdbc.execute("GRANT SELECT, DELETE ON support.audit_event_logs TO " + DELETER);
     }
 
     private long oldBackendRows() {
