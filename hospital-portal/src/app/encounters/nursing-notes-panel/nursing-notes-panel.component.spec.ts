@@ -1,4 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
+import { roleContextStub } from '../../testing/role-context.stub';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
@@ -48,6 +52,36 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
 
   beforeEach(() => {
     service = jasmine.createSpyObj('NursingNoteService', ['listRecent']);
+  });
+
+  it('asks a global super-admin for a hospital before loading notes', () => {
+    TestBed.configureTestingModule({
+      imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: NursingNoteService, useValue: service },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: true,
+            hospitalId: null,
+            roles: ['ROLE_SUPER_ADMIN'],
+          }),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(NursingNotesPanelComponent);
+    fixture.componentInstance.patientId = 'p1';
+    fixture.componentInstance.ngOnChanges();
+    fixture.detectChanges();
+    expect(service.listRecent).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('HOSPITAL_SCOPE.PICK_TO_CONTINUE');
+    service.listRecent.and.returnValue(of([]));
+    fixture.componentInstance.hospitalId = 'h1';
+    fixture.componentInstance.ngOnChanges();
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1');
   });
 
   it('QA D1076 class: names the note template instead of printing its code', () => {

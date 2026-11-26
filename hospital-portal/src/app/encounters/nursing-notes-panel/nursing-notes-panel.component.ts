@@ -26,6 +26,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -43,6 +44,7 @@ export interface NursingNotePart {
   standalone: true,
   imports: [
     FormControlStyleDirective,
+    HospitalScopeChipComponent,
     NoteAddendaComponent,
     CommonModule,
     FormsModule,
@@ -94,7 +96,18 @@ export class NursingNotesPanelComponent implements OnChanges {
 
   private request?: Subscription;
 
+  needsHospitalScope(): boolean {
+    return !this.hospitalId && this.roleContext.isSuperAdmin();
+  }
+
   ngOnChanges(): void {
+    if (this.needsHospitalScope()) {
+      this.request?.unsubscribe();
+      this.notes.set([]);
+      this.loading.set(false);
+      this.failed.set(false);
+      return;
+    }
     if (!this.patientId) return;
     // Review of #971: the panel is reused when another visit is opened; the
     // previous patient's request is dropped so its late answer cannot put
