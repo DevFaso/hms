@@ -1,2 +1,3 @@
 org.springframework.boot.EnvironmentPostProcessor=\
-com.example.hms.bootstrap.StartupProfileGuard
+com.example.hms.bootstrap.StartupProfileGuard,\
+com.example.hms.bootstrap.SessionStoreStartupGuard
