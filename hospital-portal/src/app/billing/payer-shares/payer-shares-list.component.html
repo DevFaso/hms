@@ -95,6 +95,7 @@
         id="payer-shares-to"
         name="toDate"
         data-testid="payer-shares-to"
+        [attr.min]="fromDate() || null"
         [attr.aria-invalid]="periodReversed() || null"
         [ngModel]="toDate()"
         (ngModelChange)="toDate.set($event ?? '')"
@@ -314,7 +315,7 @@
         </li>
       }
     </ul>
-    @if (pages() > 1) {
+    @if (totalPages() > 1) {
       <nav class="share-pager" [attr.aria-label]="'INSURER_CLAIMS.SHARES.PAGES' | translate">
         <button
           type="button"
@@ -326,13 +327,13 @@
           {{ 'INSURER_CLAIMS.SHARES.PREVIOUS' | translate }}
         </button>
         <span data-testid="payer-shares-page">
-          {{ 'INSURER_CLAIMS.SHARES.PAGE' | translate: { page: page() + 1, pages: pages() } }}
+          {{ 'INSURER_CLAIMS.SHARES.PAGE' | translate: { page: page() + 1, pages: totalPages() } }}
         </span>
         <button
           type="button"
           class="btn-secondary btn-sm"
           data-testid="payer-shares-next"
-          [disabled]="loading() || page() + 1 >= pages()"
+          [disabled]="loading() || page() + 1 >= totalPages()"
           (click)="goTo(page() + 1)"
         >
           {{ 'INSURER_CLAIMS.SHARES.NEXT' | translate }}

@@ -177,6 +177,7 @@ public class InvoiceCoverageService {
         }
         InvoicePayerShare share = writeShare(invoice, hospitalId, applied.insurance().getId(), applied.plan().getId(),
             result.total(), day, actorId);
+        writeShareLines(share, result);
         applyToLines(lines, result);
         invoice.setPayerShareTotal(result.total());
         audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, share.getId(), "Payer share applied");
@@ -249,6 +250,7 @@ public class InvoiceCoverageService {
         if (result.total().signum() > 0) {
             InvoicePayerShare replacement = writeShare(invoice, hospitalId, current.getPatientInsuranceId(),
                 current.getPayerPlanId(), result.total(), day, actorId);
+            writeShareLines(replacement, result);
             audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, replacement.getId(),
                 "Payer share applied after a credit note");
         }
@@ -479,9 +481,20 @@ public class InvoiceCoverageService {
         private final Map<UUID, Optional<PatientInsurance>> coverages = new HashMap<>();
         private final Map<UUID, List<InvoiceItem>> linesByInvoice;
         private final Map<UUID, String> actCodes;
+        /** Per share, what it claimed of each line (V383); empty for a share written before V383. */
+        private final Map<UUID, Map<UUID, BigDecimal>> claimedByShare;
 
         ShareNames(UUID hospitalId, List<InvoicePayerShare> shares) {
             this.hospitalId = hospitalId;
+            Set<UUID> shareIds = shares.stream().map(InvoicePayerShare::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+            List<com.example.hms.model.InvoicePayerShareLine> claimed = shareLineRepository == null || shareIds.isEmpty()
+                ? List.of() : shareLineRepository.findByShareIdInAndHospitalId(shareIds, hospitalId);
+            this.claimedByShare = (claimed == null ? List.<com.example.hms.model.InvoicePayerShareLine>of() : claimed)
+                .stream()
+                .collect(Collectors.groupingBy(com.example.hms.model.InvoicePayerShareLine::getShareId,
+                    Collectors.toMap(com.example.hms.model.InvoicePayerShareLine::getInvoiceItemId,
+                        com.example.hms.model.InvoicePayerShareLine::getAmount, (a, b) -> a)));
             Set<UUID> invoiceIds = shares.stream().map(InvoicePayerShare::getInvoiceId).collect(Collectors.toSet());
             List<InvoiceItem> lines = invoiceIds.isEmpty() ? List.of()
                 : itemRepository.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(invoiceIds, hospitalId);
@@ -514,20 +527,31 @@ public class InvoiceCoverageService {
                 key -> insuranceRepository.findByIdAndAssignment_Hospital_Id(key, hospitalId));
         }
 
-        /** The invoice's lines the payer pays part of, in posting order. */
-        List<com.example.hms.payload.dto.billing.PayerShareLineDTO> claimedLines(UUID invoiceId) {
-            return linesByInvoice.getOrDefault(invoiceId, List.of()).stream()
-                .filter(line -> line.getPayerShareAmount() != null && line.getPayerShareAmount().signum() > 0)
+        /**
+         * The lines the share claimed, in posting order, each with what this share claimed of it. Review of #1353:
+         * read from the share's own rows (V383), so a share rejected or cancelled since (its lines' live amounts
+         * cleared) still lists its acts; a share written before V383 has none and falls back to the live split.
+         */
+        List<com.example.hms.payload.dto.billing.PayerShareLineDTO> claimedLines(InvoicePayerShare share) {
+            Map<UUID, BigDecimal> own = claimedByShare.get(share.getId());
+            return linesByInvoice.getOrDefault(share.getInvoiceId(), List.of()).stream()
+                .filter(line -> claimedOf(line, own).signum() > 0)
                 .sorted(Comparator.comparing(InvoiceItem::getCreatedAt,
                         Comparator.nullsFirst(Comparator.naturalOrder()))
                     .thenComparing(line -> String.valueOf(line.getId())))
-                .map(this::claimedLine)
+                .map(line -> claimedLine(line, claimedOf(line, own)))
                 .toList();
         }
 
-        private com.example.hms.payload.dto.billing.PayerShareLineDTO claimedLine(InvoiceItem line) {
+        private static BigDecimal claimedOf(InvoiceItem line, Map<UUID, BigDecimal> own) {
+            if (own != null) {
+                return own.getOrDefault(line.getId(), BigDecimal.ZERO);
+            }
+            return line.getPayerShareAmount() != null ? line.getPayerShareAmount() : BigDecimal.ZERO;
+        }
+
+        private com.example.hms.payload.dto.billing.PayerShareLineDTO claimedLine(InvoiceItem line, BigDecimal payer) {
             BigDecimal gross = line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO;
-            BigDecimal payer = line.getPayerShareAmount();
             String category;
             if (line.getCoverageCategory() != null) {
                 category = line.getCoverageCategory().name();
@@ -575,7 +599,7 @@ public class InvoiceCoverageService {
             .amount(share.getAmount())
             .status(share.getStatus().name())
             .createdAt(share.getCreatedAt())
-            .lines(names.claimedLines(invoice.getId()))
+            .lines(names.claimedLines(share))
             .build();
     }
 
@@ -814,6 +838,36 @@ public class InvoiceCoverageService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setPharmacyCoverUsage(com.example.hms.service.pharmacy.PharmacyCoverUsage pharmacyCoverUsage) {
         this.pharmacyCoverUsage = pharmacyCoverUsage;
+    }
+
+    /**
+     * Insurer claims PR 1 (review of #1353): what each share claimed of each line, kept with the share. Setter
+     * injected; a service built by hand in a unit test keeps none (the list then reads the live split).
+     */
+    private com.example.hms.repository.InvoicePayerShareLineRepository shareLineRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setShareLineRepository(com.example.hms.repository.InvoicePayerShareLineRepository shareLineRepository) {
+        this.shareLineRepository = shareLineRepository;
+    }
+
+    /** The share's own per-line rows, from the computation that wrote it (whole francs, more than 0 only). */
+    private void writeShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+        if (shareLineRepository == null || share.getId() == null) {
+            return;
+        }
+        List<com.example.hms.model.InvoicePayerShareLine> rows = result.lines().stream()
+            .filter(line -> line.id() != null && line.share() != null && line.share().signum() > 0)
+            .map(line -> com.example.hms.model.InvoicePayerShareLine.builder()
+                .hospitalId(share.getHospitalId())
+                .shareId(share.getId())
+                .invoiceItemId(line.id())
+                .amount(line.share())
+                .build())
+            .toList();
+        if (!rows.isEmpty()) {
+            shareLineRepository.saveAll(rows);
+        }
     }
 
     private BigDecimal pharmacyUsed(UUID patientId, UUID hospitalId, int year, UUID excludedPrescriptionId) {

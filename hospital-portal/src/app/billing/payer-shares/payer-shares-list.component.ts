@@ -98,7 +98,7 @@ export class PayerSharesListComponent {
   readonly count = signal(0);
   readonly total = signal(0);
   readonly page = signal(0);
-  readonly pages = signal(0);
+  readonly totalPages = signal(0);
 
   /* Filters (insurer claims PR 1, G2). */
   readonly payers = signal<Payer[]>([]);
@@ -158,7 +158,7 @@ export class PayerSharesListComponent {
   }
 
   goTo(page: number): void {
-    if (page < 0 || page >= this.pages() || page === this.page()) return;
+    if (page < 0 || page >= this.totalPages() || page === this.page()) return;
     this.load(page);
   }
 
@@ -193,7 +193,7 @@ export class PayerSharesListComponent {
           this.count.set(result?.totalElements ?? 0);
           this.total.set(result?.totalAmount ?? 0);
           this.page.set(result?.page ?? 0);
-          this.pages.set(result?.totalPages ?? 0);
+          this.totalPages.set(result?.totalPages ?? 0);
           this.loading.set(false);
         },
         error: () => {

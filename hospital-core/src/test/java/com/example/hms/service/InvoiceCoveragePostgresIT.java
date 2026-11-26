@@ -111,6 +111,7 @@ class InvoiceCoveragePostgresIT {
     @Autowired private BillingInvoiceRepository invoices;
     @Autowired private InvoiceItemRepository items;
     @Autowired private InvoicePayerShareRepository shares;
+    @Autowired private com.example.hms.repository.InvoicePayerShareLineRepository shareLines;
     @Autowired private InvoiceAdjustmentRepository adjustments;
     @Autowired private PatientInsuranceRepository insurances;
     @Autowired private PayerRepository payers;
@@ -164,6 +165,7 @@ class InvoiceCoveragePostgresIT {
             Clock.fixed(Instant.parse("2026-11-17T10:00:00Z"), ZoneOffset.UTC));
         BillingInvoiceMapper mapper = mock(BillingInvoiceMapper.class);
         when(mapper.toBillingInvoiceResponseDTO(any())).thenReturn(new BillingInvoiceResponseDTO());
+        coverage.setShareLineRepository(shareLines);
         billing = new BillingInvoiceServiceImpl(invoices, mock(PatientRepository.class), mock(HospitalRepository.class),
             mock(EncounterRepository.class), items, mock(PdfInvoiceService.class), mapper, roles, payments, scope,
             mock(PatientHospitalRegistrationRepository.class), mock(InvoiceNumberAllocator.class), transactions,
@@ -390,15 +392,7 @@ class InvoiceCoveragePostgresIT {
     @Test
     @DisplayName("claims PR 1 (G1, G2): « Parts assureurs » filters by payer, period and status, pages, and names the policy")
     void theShareListFiltersPagesAndNamesThePolicy() {
-        // The list names the patient: BC2 is a real row here (its foreign keys are not this test's subject).
-        tx.executeWithoutResult(status -> {
-            jdbc.execute("SET LOCAL session_replication_role = replica");
-            jdbc.update("""
-                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
-                    is_active, chart_restricted, created_at, updated_at)
-                VALUES (?, ?, 'Awa', 'Ouedraogo', DATE '1990-06-15', '+226 70 28 43 17', true, false, now(), now())
-                """, patient, UUID.randomUUID());
-        });
+        seedPatient();
         UUID visit = draftBc2(UUID.randomUUID());
         assertThat(issue(visit)).isEqualByComparingTo("5600");
         // Another hospital's invoice, share and payer: never on hospital A's list, whatever the filters.
@@ -484,5 +478,48 @@ class InvoiceCoveragePostgresIT {
         jdbc.update("UPDATE billing.billing_invoices SET status = 'CANCELLED' WHERE id = ?", visit);
         assertThat(inTx(() -> copier.copyFromOrder(com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER,
             order, hospitalA, "BON-118", cashier))).isZero();
+    }
+    /** The list names the patient: BC2 is a real row here (its foreign keys are not this test's subject). */
+    private void seedPatient() {
+        tx.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = replica");
+            jdbc.update("""
+                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
+                    is_active, chart_restricted, created_at, updated_at)
+                VALUES (?, ?, 'Awa', 'Ouedraogo', DATE '1990-06-15', '+226 70 28 43 17', true, false, now(), now())
+                """, patient, UUID.randomUUID());
+        });
+    }
+
+    @Test
+    @DisplayName("review of #1353: a share the payer rejected still lists the acts it claimed, with their amounts")
+    void aRejectedShareKeepsTheActsItClaimed() {
+        seedPatient();
+        UUID visit = draftBc2(UUID.randomUUID());
+        assertThat(issue(visit)).isEqualByComparingTo("5600");
+        UUID share = jdbc.queryForObject("SELECT id FROM billing.invoice_payer_shares WHERE invoice_id = ?",
+            UUID.class, visit);
+        assertThat(jdbc.queryForList("""
+            SELECT amount FROM billing.invoice_payer_share_lines WHERE share_id = ? ORDER BY amount
+            """, BigDecimal.class, share)).usingElementComparator(BigDecimal::compareTo)
+            .containsExactly(new BigDecimal("1600"), new BigDecimal("4000"));
+
+        inTx(() -> coverage.reject(visit, share, "Hors délai"));
+        // The live split is cleared with the share...
+        assertThat(column("payer_share_total", visit)).isEqualByComparingTo("0");
+
+        // ...but the closed list still shows what was claimed.
+        com.example.hms.payload.dto.billing.PayerSharePageDTO rejected = inTx(() -> coverage.searchAtHospital(
+            new InvoiceCoverageService.ShareFilter(List.of(com.example.hms.enums.PayerShareStatus.REJECTED), null,
+                null, null, null, null, null, null)));
+        assertThat(rejected.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getAmount()).isEqualByComparingTo("5600");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getCategory)
+                .containsExactly("CONSULTATION", "IMAGING");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getPayerShare)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("1600"), new BigDecimal("4000"));
+        });
+        refusedBy("UPDATE billing.invoice_payer_share_lines SET amount = 10.5 WHERE share_id = ?", share);
     }
 }

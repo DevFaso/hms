@@ -306,6 +306,53 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1353: a share keeps what it claimed of each line, so a rejected one still lists its acts")
+    void aRejectedShareStillListsItsActs() {
+        com.example.hms.repository.InvoicePayerShareLineRepository shareLines =
+            mock(com.example.hms.repository.InvoicePayerShareLineRepository.class);
+        service.setShareLineRepository(shareLines);
+        List<com.example.hms.model.InvoicePayerShareLine> written = new ArrayList<>();
+        when(shareLines.saveAll(any())).thenAnswer(call -> {
+            call.<Iterable<com.example.hms.model.InvoicePayerShareLine>>getArgument(0).forEach(written::add);
+            return written;
+        });
+        when(shareLines.findByShareIdInAndHospitalId(any(), eq(HOSPITAL_A))).thenAnswer(call -> written);
+
+        service.applyAtIssue(invoice, BILLING_A);
+        InvoicePayerShare share = onlyShare();
+        // The consultation (1 600) and the X-ray (4 000); the excluded lab test is not a row.
+        assertThat(written).extracting(com.example.hms.model.InvoicePayerShareLine::getInvoiceItemId)
+            .containsExactlyInAnyOrder(consultation.getId(), xray.getId());
+        assertThat(written).allSatisfy(row -> {
+            assertThat(row.getShareId()).isEqualTo(share.getId());
+            assertThat(row.getHospitalId()).isEqualTo(HOSPITAL_A);
+        });
+
+        service.reject(invoice.getId(), share.getId(), "Hors délai");
+        assertThat(consultation.getPayerShareAmount()).isEqualByComparingTo("0");
+        consultation.setBillingInvoice(invoice);
+        tdr.setBillingInvoice(invoice);
+        xray.setBillingInvoice(invoice);
+        when(items.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(any(), eq(HOSPITAL_A))).thenReturn(lines);
+        when(shares.searchAtHospital(eq(HOSPITAL_A), any(), any(), any(), eq(true), any(), eq(true), any(), eq(true),
+                any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(share),
+                org.springframework.data.domain.PageRequest.of(0, 25), 1));
+
+        com.example.hms.payload.dto.billing.PayerSharePageDTO page = service.searchAtHospital(
+            new InvoiceCoverageService.ShareFilter(List.of(PayerShareStatus.REJECTED), null, null, null, null, null,
+                null, null));
+
+        assertThat(page.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo("REJECTED");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getItemId)
+                .containsExactly(consultation.getId(), xray.getId());
+            assertThat(row.getLines().get(0).getPayerShare()).isEqualByComparingTo("1600");
+            assertThat(row.getLines().get(1).getPayerShare()).isEqualByComparingTo("4000");
+        });
+    }
+
+    @Test
     @DisplayName("claims PR 1 (G2): the filters reach the query, the page is capped, defaults are OPEN and CLAIMED")
     void searchPassesItsFiltersAndCapsThePage() {
         UUID payerId = UUID.randomUUID();

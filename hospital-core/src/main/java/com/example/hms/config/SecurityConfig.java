@@ -1018,6 +1018,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
+                // Insurer claims PR 1 (QA D3984): the insurer's pre-authorisation number of an act, recorded by the
+                // desk and billing (InvoicePayerShareController.PRE_AUTHORISATION_RECORDERS; never the super-admin).
+                .requestMatchers(HttpMethod.PUT, API_BILLING_INVOICES + "/*/items/*/pre-authorisation",
+                    API_BILLING_INVOICES + "/imaging-orders/*/pre-authorisation")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER,
+                    ROLE_RECEPTIONIST)
+
                 .requestMatchers(HttpMethod.PUT, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 

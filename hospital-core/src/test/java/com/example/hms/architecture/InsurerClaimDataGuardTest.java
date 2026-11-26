@@ -52,6 +52,11 @@ class InsurerClaimDataGuardTest {
                 offenders.add("InvoicePayerShareRepository#" + method.getName());
             }
         }
+        for (Method method : com.example.hms.repository.InvoicePayerShareLineRepository.class.getDeclaredMethods()) {
+            if (!method.isSynthetic() && !Modifier.isStatic(method.getModifiers()) && !namesHospital(method)) {
+                offenders.add("InvoicePayerShareLineRepository#" + method.getName());
+            }
+        }
         Set<String> prOne = Set.of("findByIdAndBillingInvoice_IdAndBillingInvoice_Hospital_Id",
             "findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id", "findLiveLineIdsOfOrder",
             "recordPreAuthorisation");
