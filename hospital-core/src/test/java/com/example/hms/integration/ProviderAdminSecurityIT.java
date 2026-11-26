@@ -44,6 +44,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -505,17 +506,15 @@ class ProviderAdminSecurityIT extends BaseIT {
         User superAdmin = accounts.userAt("sadmin", null, "SUPER_ADMIN");
         UUID registrationBySuperAdmin = registrationRow(superAdmin, pharmacistSeat);
         // A row naming the PATIENT role, with no patient id: excluded all the same.
+        // Audit rows are insert-only (V382): each row is written with its final values.
         AuditEventLog patientRole = auditEventLogRepository.findById(
-            auditRow(pharmacist, pharmacyId, "USER_ROLE_ASSIGNMENT", null)).orElseThrow();
-        patientRole.setRoleName("ROLE_PATIENT");
-        auditEventLogRepository.save(patientRole);
+            auditRow(pharmacist, pharmacyId, "USER_ROLE_ASSIGNMENT", null, row -> row.roleName("ROLE_PATIENT")))
+            .orElseThrow();
         // Platform support acting as the pharmacist: the row says so.
         UUID supportId = UUID.randomUUID();
         AuditEventLog impersonated = auditEventLogRepository.findById(
-            auditRow(pharmacist, pharmacyId, "PROVIDER_FACILITY", null)).orElseThrow();
-        impersonated.setImpersonatorUserId(supportId);
-        impersonated.setImpersonatorUsername("support-agent");
-        auditEventLogRepository.save(impersonated);
+            auditRow(pharmacist, pharmacyId, "PROVIDER_FACILITY", null,
+                row -> row.impersonatorUserId(supportId).impersonatorUsername("support-agent"))).orElseThrow();
 
         JsonNode page = json(as(adminToken, get("/provider/audit")));
 
@@ -720,7 +719,13 @@ class ProviderAdminSecurityIT extends BaseIT {
 
     /** One audit row written by the user acting at the facility, as a provider service would write it. */
     private UUID auditRow(User user, UUID facilityId, String entityType, UUID patientId) {
-        return auditEventLogRepository.save(AuditEventLog.builder()
+        return auditRow(user, facilityId, entityType, patientId, UnaryOperator.identity());
+    }
+
+    /** {@code shape} sets the row's remaining fields before it is written (audit rows are insert-only). */
+    private UUID auditRow(User user, UUID facilityId, String entityType, UUID patientId,
+                          UnaryOperator<AuditEventLog.AuditEventLogBuilder> shape) {
+        return auditEventLogRepository.save(shape.apply(AuditEventLog.builder()
             .user(user)
             .assignment(rowOf(user, facilityId))
             // Set here so the entity's snapshot does not read the lazy hospital outside a session.
@@ -731,8 +736,7 @@ class ProviderAdminSecurityIT extends BaseIT {
             .status(AuditStatus.SUCCESS)
             .entityType(entityType)
             .resourceId(UUID.randomUUID().toString())
-            .patientId(patientId)
-            .build()).getId();
+            .patientId(patientId)).build()).getId();
     }
 
     /** A role-assignment row as recordAssignmentAudit writes it: no assignment link, the target as resource. */
