@@ -469,6 +469,15 @@ class ObstetricAlertEscalationWorkerTest {
         // The alert names the patient: an orderer who no longer holds a role at this hospital is not told.
         assertThat(worker.firstCircle(general(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
             "POSITIVE_CULTURE", List.of("drGone")))).containsExactly("drOnCall");
+        // Nor at a later step, whether the module named them or rang them at the start.
+        ObstetricAlertEscalation later = row((short) 0);
+        later.setSourceType(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE);
+        later.setNamedRecipients(List.of("drGone", "drA"));
+        later.setAlreadyRang(List.of("drGone", "drA"));
+        when(ladder.seniors(HOSPITAL, com.example.hms.service.lab.CriticalResultEscalationLadder.Step.COVER, "documenter"))
+            .thenReturn(new java.util.LinkedHashSet<>(List.of("drOnCall")));
+        assertThat(worker.stepCircle(later, com.example.hms.service.lab.CriticalResultEscalationLadder.Step.COVER,
+            "documenter")).containsExactly("drA", "drOnCall");
         // The person who reported it cannot be its only reader.
         assertThat(worker.firstCircle(general(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
             "POSITIVE_CULTURE", List.of("documenter")))).containsExactly("documenter", "drOnCall");

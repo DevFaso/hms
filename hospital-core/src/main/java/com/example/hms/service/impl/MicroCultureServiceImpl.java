@@ -541,9 +541,9 @@ public class MicroCultureServiceImpl implements MicroCultureService {
 
     /**
      * Scorecard K4: a positive culture is an urgent alert to acknowledge. Its row is written here, with the
-     * report: a CRITICAL item for the
-     * clinician who ordered the culture (the covering clinician when the order names nobody who can be reached),
-     * then the one ladder until somebody other than the person who reported it acknowledges. The ordering provider
+     * report: a CRITICAL item for the clinician who ordered the culture (the covering clinician when the order
+     * names nobody who can be reached), then the one ladder until somebody other than the person who reported it
+     * acknowledges. The ordering provider
      * has had the bell above, so the first notice is the item only. A report corrected to no growth closes its
      * alert ({@code ObstetricAlertCurrency}). Not caught: see
      * {@code ObstetricAlertEscalationService#raiseAfterCommit}.

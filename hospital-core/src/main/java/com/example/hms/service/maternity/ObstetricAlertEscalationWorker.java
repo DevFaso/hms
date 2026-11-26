@@ -520,8 +520,9 @@ public class ObstetricAlertEscalationWorker {
     Set<String> stepCircle(ObstetricAlertEscalation row, CriticalResultEscalationLadder.Step step, String documenter) {
         String source = row.getSourceType();
         Set<String> circle = stillHere(row.getNamedRecipients(), row.getHospitalId());
-        if (among(ObstetricAlertEscalationService.GENERAL_SOURCES, source) && row.getAlreadyRang() != null) {
-            circle.addAll(row.getAlreadyRang());
+        if (among(ObstetricAlertEscalationService.GENERAL_SOURCES, source)) {
+            // The people the module rang at the start, while they still hold a clinical role here.
+            circle.addAll(stillHere(row.getAlreadyRang(), row.getHospitalId()));
         }
         if (!among(NAMED_CIRCLE_SOURCES, source)) {
             circle.addAll(reminderCircle(source, row.getHospitalId(), row.getPatientId(), documenter));
