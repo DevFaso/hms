@@ -86,6 +86,9 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryItemResponseDTO createInventoryItem(InventoryItemRequestDTO dto) {
         Pharmacy pharmacy = resolvePharmacy(dto.getPharmacyId());
         enforceHospitalScope(pharmacy);
+        // D3943: transfer-created items and manually created items share this store lock.
+        pharmacyRepository.findLockedByIdAndHospitalId(pharmacy.getId(), pharmacy.getHospital().getId())
+            .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacy.getId()));
 
         MedicationCatalogItem medication = resolveMedication(dto.getMedicationCatalogItemId());
 
@@ -199,7 +202,7 @@ public class InventoryServiceImpl implements InventoryService {
      * QA D208: molecule + strength + form, accent- and case-insensitive, or
      * null when the catalogue row does not name its molecule.
      */
-    private static String sameDrugKey(MedicationCatalogItem medication) {
+    static String sameDrugKey(MedicationCatalogItem medication) {
         if (medication == null) {
             return null;
         }

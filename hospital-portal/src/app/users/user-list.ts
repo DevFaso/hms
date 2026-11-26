@@ -588,8 +588,8 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.editing.set(user);
     // Pre-populate with summary data; phoneNumber comes from full detail fetch.
     this.createForm = {
-      username: user.username,
-      email: user.email,
+      username: user.username ?? undefined,
+      email: user.email ?? undefined,
       password: '',
       firstName: user.firstName,
       lastName: user.lastName,
@@ -972,8 +972,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
     if (user.deleted || !this.isDirectoryActive(user)) return false;
-    const role = (user.roleName ?? '').toUpperCase();
-    if (role === 'SUPER_ADMIN' || role === 'ROLE_SUPER_ADMIN') return false;
+    if (user.impersonationEligible !== true) return false;
     if (this.impersonation.active()?.impersonating) return false;
     return true;
   }

@@ -4068,6 +4068,15 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
+        <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
+        <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
+    </changeSet>
+
     <!-- V383 (insurer claims plan PR 1, QA r77 D3984): the pre-authorisation number on an invoice line, and the
          order the line bills. -->
     <changeSet id="V383-invoice-line-pre-authorisation" author="hms-team" runOnChange="false">
