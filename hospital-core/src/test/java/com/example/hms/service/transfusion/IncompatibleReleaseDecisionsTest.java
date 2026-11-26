@@ -283,6 +283,53 @@ class IncompatibleReleaseDecisionsTest {
     }
 
     @Test
+    @DisplayName("NEVER BLOCKS (review of #1347): optional data left empty never fails a release: a past positive screen with "
+        + "no detail written, a crossmatch with no finding, an untyped patient, a bag with nothing recorded")
+    void optionalDataNeverFailsARelease() {
+        fixture.incompatibleFallback(true);
+        // The current screen is negative; the newest positive screen before it carries no detail, an older one does.
+        typed(AboGroup.A, RhFactor.POSITIVE);
+        PatientBloodGroup positiveNoDetail = PatientBloodGroup.builder().patient(patient).hospital(hospital)
+            .aboGroup(AboGroup.A).rhFactor(RhFactor.POSITIVE).antibodyScreen(AntibodyScreenResult.POSITIVE)
+            .performedAt(NOW.minusDays(30)).superseded(Boolean.TRUE).build();
+        PatientBloodGroup olderWithDetail = PatientBloodGroup.builder().patient(patient).hospital(hospital)
+            .aboGroup(AboGroup.A).rhFactor(RhFactor.POSITIVE).antibodyScreen(AntibodyScreenResult.POSITIVE)
+            .antibodyDetail("anti-E").performedAt(NOW.minusDays(90)).superseded(Boolean.TRUE).build();
+        when(bloodGroupRepository.findByPatient_IdAndHospital_IdOrderByPerformedAtDesc(patient.getId(), hospitalId))
+            .thenReturn(List.of(positiveNoDetail, olderWithDetail));
+        when(fixture.antibodyScreen.alloImmunised(patient.getId())).thenReturn(true);
+        TransfusionRequest request = request();
+        BloodUnit unit = incompatibleBag(request, "A-1", AboGroup.A, RhFactor.POSITIVE, null, null);
+        results.get(request.getId()).get(0).setIncompatibilityReason(null);
+
+        for (EmergencyReleaseRequestDTO input : List.of(naming(doctor), nobodyReachable())) {
+            unit.setStatus(BloodUnitStatus.CROSSMATCHED);
+            IncompatibleReleaseDecision decision = release(request, unit, input);
+            assertThat(decision.getAntibodyStatus()).isEqualTo(IncompatibleAntibodyStatus.ANTIBODY_ON_RECORD);
+            assertThat(decision.getAntibodyDetail()).as("the newest positive screen wrote none: none is kept, nothing is invented").isNull();
+            assertThat(decision.getCrossmatchFinding()).isNull();
+            assertThat(decision.getRhKellMatched()).isNull();
+            assertThat(decision.getAntigenNegative()).isNull();
+        }
+
+        // An untyped patient with no request-level group, a group O bag, a requester with no user account.
+        when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patient.getId(), hospitalId))
+            .thenReturn(Optional.empty());
+        when(bloodGroupRepository.findByPatient_IdAndHospital_IdOrderByPerformedAtDesc(patient.getId(), hospitalId))
+            .thenReturn(List.of());
+        TransfusionRequest bare = request();
+        bare.setRequestedBy(null);
+        bare.setEncounter(null);
+        BloodUnit oNegative = incompatibleBag(bare, "O-NEG", AboGroup.O, RhFactor.NEGATIVE, null, null);
+        IncompatibleReleaseDecision untyped = release(bare, oNegative, nobodyReachable());
+        assertThat(untyped.getRecipientAbo()).isNull();
+        assertThat(untyped.getRecipientRh()).isNull();
+        assertThat(untyped.isAboCompatible()).isTrue();
+        assertThat(untyped.getDecisionBasis()).isEqualTo(IncompatibleReleaseBasis.AUTHORITY_PENDING);
+        assertThat(service.listIncompatible(hospitalId, false)).hasSize(3);
+    }
+
+    @Test
     @DisplayName("normal path: the issuer cannot name themselves, nor somebody who is neither a physician nor the laboratory director")
     void theAuthoriserIsAnswerable() {
         typed(AboGroup.A, RhFactor.POSITIVE);

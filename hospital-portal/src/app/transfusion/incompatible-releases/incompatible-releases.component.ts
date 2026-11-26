@@ -24,6 +24,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 /**
  * Releases despite an incompatible crossmatch (V381, owner decision 2026-11-26, option B): the hospital's
@@ -37,7 +38,14 @@ import { FormControlStyleDirective } from '../../shared/forms/form-control-style
 @Component({
   selector: 'app-incompatible-releases',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, FormControlStyleDirective],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ServerTimePipe,
+    FormControlStyleDirective,
+    SubmitGuardDirective,
+  ],
   templateUrl: './incompatible-releases.component.html',
   // The same cards and steps as the O positive releases beside it.
   styleUrl: '../o-positive-releases/o-positive-releases.component.scss',
@@ -214,13 +222,10 @@ export class IncompatibleReleasesComponent implements OnInit {
 
   saveChecks(row: IncompatibleReleaseDecision): void {
     const checksDone = this.newChecks(row);
-    if (checksDone.length === 0 && !this.noteOf(row).note) return;
+    if (checksDone.length === 0) return;
     this.act(
       row,
-      this.transfusion.recordIncompatibleMonitoring(row.id, {
-        ...(checksDone.length > 0 ? { checksDone } : {}),
-        ...this.noteOf(row),
-      }),
+      this.transfusion.recordIncompatibleMonitoring(row.id, { checksDone, ...this.noteOf(row) }),
       'CHECKS_SAVED',
       { note: 'incompat-note-' + row.id },
     );

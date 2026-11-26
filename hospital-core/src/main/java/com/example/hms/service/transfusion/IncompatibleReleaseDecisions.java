@@ -435,7 +435,8 @@ public class IncompatibleReleaseDecisions {
         return bloodGroupRepository
             .findByPatient_IdAndHospital_IdOrderByPerformedAtDesc(request.getPatient().getId(), request.getHospital().getId())
             .stream().filter(group -> group.getAntibodyScreen() == AntibodyScreenResult.POSITIVE)
-            .map(PatientBloodGroup::getAntibodyDetail).findFirst().orElse(null);
+            // The screen first, then its detail: the detail is optional, and a stream cannot carry a null to findFirst.
+            .findFirst().map(PatientBloodGroup::getAntibodyDetail).orElse(null);
     }
 
     /** After the commit. A failure leaves the row owed: the sweep delivers its notices at its next pass. */

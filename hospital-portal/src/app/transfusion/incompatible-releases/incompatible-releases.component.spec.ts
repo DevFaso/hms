@@ -11,6 +11,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { roleContextStub } from '../../testing/role-context.stub';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 function decision(over: Partial<IncompatibleReleaseDecision> = {}): IncompatibleReleaseDecision {
   return {
@@ -152,7 +153,10 @@ describe('IncompatibleReleasesComponent (V381)', () => {
     component.draftEnabled = true;
     for (const role of Object.keys(component.draftRoles)) component.draftRoles[role] = false;
     fixture.detectChanges();
-    expect((el('incompat-save-setting') as HTMLButtonElement).disabled).toBeTrue();
+    // Not silently disabled: the button stays live and says it is blocked (QA D1124).
+    expect((el('incompat-save-setting') as HTMLButtonElement).disabled).toBeFalse();
+    expect(el('incompat-save-setting')!.getAttribute('data-submit-blocked')).toBe('true');
+    el('incompat-save-setting')!.click();
     component.saveProtocol();
     expect(tx.setIncompatibleProtocol).not.toHaveBeenCalled();
 
@@ -271,6 +275,50 @@ describe('IncompatibleReleasesComponent (V381)', () => {
       'TRANSFUSION.INCOMPAT.OUTCOME_NO_REACTION',
     );
     expect(el('incompat-record-outcome')).toBeNull();
+  });
+
+  it('each action is refused empty on its field, never by a silently disabled button (QA D1124)', async () => {
+    await start(['ROLE_NURSE']);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      expect(
+        expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="incompat-record-outcome"]',
+          sent: tx.recordIncompatibleMonitoring,
+        }),
+      ).toEqual(['incompat-outcome-d1']);
+      expect(
+        expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="incompat-save-checks"]',
+          alsoMarked: ['incompat-checks-d1'],
+          sent: tx.recordIncompatibleMonitoring,
+        }),
+      ).toEqual(['incompat-checks-d1']);
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('the setting is refused with no role ticked, on the group of roles', async () => {
+    await start(['ROLE_LAB_DIRECTOR']);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      el('incompat-edit-setting')!.click();
+      fixture.detectChanges();
+      for (const role of Object.keys(component.draftRoles)) component.draftRoles[role] = false;
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(
+        expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="incompat-save-setting"]',
+          alsoMarked: ['incompat-roles'],
+          sent: tx.setIncompatibleProtocol,
+        }),
+      ).toContain('incompat-roles');
+    } finally {
+      fixture.nativeElement.remove();
+    }
   });
 
   it('shows « all » on demand, the empty state, and a failed load', async () => {

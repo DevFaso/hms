@@ -47,7 +47,7 @@
           </button>
         }
       } @else {
-        <div class="opos-form">
+        <div class="opos-form" data-submit-scope>
           <label class="checkbox-field">
             <input
               type="checkbox"
@@ -57,7 +57,7 @@
             />
             {{ 'TRANSFUSION.INCOMPAT.FIELD_ENABLED' | translate }}
           </label>
-          <fieldset class="field">
+          <fieldset class="field" id="incompat-roles" aria-required="true">
             <legend>{{ 'TRANSFUSION.INCOMPAT.SETTING_ROLES' | translate }}</legend>
             @for (role of p.allowedDeclarerRoles ?? []; track role) {
               <label class="checkbox-field" [for]="'incompat-role-' + role">
@@ -78,7 +78,9 @@
               type="button"
               class="btn-primary"
               data-testid="incompat-save-setting"
-              [disabled]="savingProtocol() || draftRoleList().length === 0"
+              [disabled]="savingProtocol()"
+              [appSubmitGuard]="draftRoleList().length === 0"
+              [submitGuardFields]="['incompat-roles']"
               (click)="saveProtocol()"
             >
               {{ 'COMMON.SAVE' | translate }}
@@ -329,54 +331,67 @@
           </span>
         }
         <p class="opos-note">{{ 'TRANSFUSION.INCOMPAT.MONITORING_HINT' | translate }}</p>
-        <ul class="opos-facts" data-testid="incompat-checklist">
-          @for (check of r.monitoringChecklist; track check) {
-            <li>
-              <label class="checkbox-field" [for]="'incompat-check-' + r.id + '-' + check">
-                <input
-                  type="checkbox"
-                  [id]="'incompat-check-' + r.id + '-' + check"
-                  [checked]="isChecked(r, check)"
-                  [disabled]="
-                    !canMonitor || r.monitoringChecksDone.includes(check) || !monitoringOwed(r)
-                  "
-                  (change)="setChecked(r, check, $any($event.target).checked)"
-                />
-                {{ 'TRANSFUSION.INCOMPAT.CHECK_' + check | translate }}
-              </label>
-            </li>
+        <div data-submit-scope>
+          <fieldset
+            class="field"
+            [id]="'incompat-checks-' + r.id"
+            aria-required="true"
+            [attr.aria-label]="'TRANSFUSION.INCOMPAT.MONITORING' | translate"
+            data-testid="incompat-checklist"
+          >
+            @for (check of r.monitoringChecklist; track check) {
+              <div>
+                <label class="checkbox-field" [for]="'incompat-check-' + r.id + '-' + check">
+                  <input
+                    type="checkbox"
+                    [id]="'incompat-check-' + r.id + '-' + check"
+                    [checked]="isChecked(r, check)"
+                    [disabled]="
+                      !canMonitor || r.monitoringChecksDone.includes(check) || !monitoringOwed(r)
+                    "
+                    (change)="setChecked(r, check, $any($event.target).checked)"
+                  />
+                  {{ 'TRANSFUSION.INCOMPAT.CHECK_' + check | translate }}
+                </label>
+              </div>
+            }
+          </fieldset>
+          @if (r.monitoringNote) {
+            <p class="opos-note" data-testid="incompat-note-kept">{{ r.monitoringNote }}</p>
           }
-        </ul>
-        @if (r.monitoringNote) {
-          <p class="opos-note" data-testid="incompat-note-kept">{{ r.monitoringNote }}</p>
-        }
+          @if (monitoringOwed(r) && canMonitor) {
+            <div class="opos-inline-form">
+              <textarea
+                appFormControl
+                rows="2"
+                maxlength="2000"
+                [id]="'incompat-note-' + r.id"
+                [attr.aria-label]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
+                [placeholder]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
+                [(ngModel)]="notes[r.id]"
+              ></textarea>
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="incompat-save-checks"
+                [disabled]="busyId() === r.id"
+                [appSubmitGuard]="!hasNewChecks(r)"
+                [submitGuardFields]="['incompat-checks-' + r.id]"
+                (click)="saveChecks(r)"
+              >
+                {{ 'TRANSFUSION.INCOMPAT.SAVE_CHECKS' | translate }}
+              </button>
+            </div>
+          }
+        </div>
         @if (monitoringOwed(r) && canMonitor) {
-          <div class="opos-inline-form">
-            <textarea
-              appFormControl
-              rows="2"
-              maxlength="2000"
-              [id]="'incompat-note-' + r.id"
-              [attr.aria-label]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
-              [placeholder]="'TRANSFUSION.INCOMPAT.NOTE' | translate"
-              [(ngModel)]="notes[r.id]"
-            ></textarea>
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              data-testid="incompat-save-checks"
-              [disabled]="busyId() === r.id || (!hasNewChecks(r) && !(notes[r.id] || '').trim())"
-              (click)="saveChecks(r)"
-            >
-              {{ 'TRANSFUSION.INCOMPAT.SAVE_CHECKS' | translate }}
-            </button>
-          </div>
-          <div class="opos-inline-form">
+          <div class="opos-inline-form" data-submit-scope>
             <div class="field">
-              <label [for]="'incompat-outcome-' + r.id">{{
-                'TRANSFUSION.INCOMPAT.OUTCOME' | translate
-              }}</label>
+              <label [for]="'incompat-outcome-' + r.id"
+                >{{ 'TRANSFUSION.INCOMPAT.OUTCOME' | translate }} *</label
+              >
               <select
+                required
                 appFormControl
                 [id]="'incompat-outcome-' + r.id"
                 data-testid="incompat-outcome"
@@ -392,7 +407,9 @@
               type="button"
               class="btn-primary btn-sm"
               data-testid="incompat-record-outcome"
-              [disabled]="busyId() === r.id || !outcome[r.id]"
+              [disabled]="busyId() === r.id"
+              [appSubmitGuard]="!outcome[r.id]"
+              [submitGuardFields]="['incompat-outcome-' + r.id]"
               (click)="recordOutcome(r)"
             >
               {{ 'TRANSFUSION.INCOMPAT.OUTCOME_ACTION' | translate }}
