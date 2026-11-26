@@ -373,9 +373,11 @@ describe('RegistrationsComponent global super-admin view', () => {
     button.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#reg-hospital')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain(
-      'COMMON.LOADING',
-    );
+    expect(
+      fixture.nativeElement
+        .querySelector('#reg-hospital')
+        ?.parentElement?.querySelector('[role="status"]')?.textContent,
+    ).toContain('COMMON.LOADING');
     http.expectNone((request) => request.method === 'POST' && request.url === '/registrations');
   });
 
