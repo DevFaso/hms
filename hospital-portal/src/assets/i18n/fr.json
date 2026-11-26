@@ -16181,6 +16181,7 @@
           "TODO": "Ajoutez les mutuelles et les assurances si l’établissement reçoit des patients assurés."
         },
         "CLINICAL_RULES": {
+          "SCOPE_CHANGED": "L’hôpital a changé. Fermez ce formulaire et ouvrez-le de nouveau dans le bon établissement.",
           "TITLE": "Règles cliniques validées",
           "DONE": "Règles cliniques validées : {{count}} / {{total}}",
           "TODO": "Règles cliniques validées : {{count}} / {{total}}. Imprimez le dossier de signature pour le médecin-chef, puis enregistrez chaque signature."

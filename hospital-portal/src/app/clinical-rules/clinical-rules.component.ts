@@ -176,6 +176,9 @@ export class ClinicalRulesComponent {
     const d = this.draft;
     // QA D1256: every reason at once — the blank fields by name, and a date in the future.
     return joinReasons([
+      this.hospitalId() !== this.signHospitalId
+        ? this.translate.instant('CLINICAL_RULES.SCOPE_CHANGED')
+        : null,
       missingRequiredMessage(this.translate, [
         { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_NAME', value: d.signerName.trim() },
         { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_TITLE', value: d.signerTitle.trim() },
@@ -239,7 +242,11 @@ export class ClinicalRulesComponent {
 
   protected revoke(rule: ClinicalRuleStatus, reason: string): void {
     const hospitalId = this.hospitalId();
-    if (!hospitalId || hospitalId !== this.revokeHospitalId || this.busy()) return;
+    if (this.busy()) return;
+    if (!hospitalId || hospitalId !== this.revokeHospitalId) {
+      this.toast.error(this.translate.instant('CLINICAL_RULES.SCOPE_CHANGED'));
+      return;
+    }
     const generation = this.scopeGeneration;
     this.busy.set(true);
     this.rulesService.revoke(hospitalId, rule.key, reason).subscribe({

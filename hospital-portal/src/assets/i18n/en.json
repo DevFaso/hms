@@ -16181,6 +16181,7 @@
           "TODO": "Add the mutual and insurance payers if the hospital sees insured patients."
         },
         "CLINICAL_RULES": {
+          "SCOPE_CHANGED": "The hospital has changed. Close this form and reopen it in the correct hospital.",
           "TITLE": "Clinical rules signed off",
           "DONE": "Clinical rules signed off: {{count}} / {{total}}",
           "TODO": "Clinical rules signed off: {{count}} / {{total}}. Print the sign-off pack for the chief medical officer, then record each signature."
