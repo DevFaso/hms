@@ -27,22 +27,27 @@ public class PatientConsentServiceImpl implements PatientConsentService {
     private final PatientConsentMapper consentMapper;
     private final PatientMapper patientMapper;
     private final HospitalMapper hospitalMapper;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getAllConsents(Pageable pageable) {
-        return mapPage(consentRepository.findAll(pageable));
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return mapPage(scope == null ? consentRepository.findAll(pageable)
+            : consentRepository.findVisibleInHospital(scope, null, pageable), scope);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByPatient(UUID patientId, Pageable pageable) {
-        return mapPage(consentRepository.findAllByPatientId(patientId, pageable));
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return mapPage(scope == null ? consentRepository.findAllByPatientId(patientId, pageable)
+            : consentRepository.findVisibleInHospital(scope, patientId, pageable), scope);
     }
 
-    private Page<PatientConsentResponseDTO> mapPage(Page<PatientConsent> page) {
+    private Page<PatientConsentResponseDTO> mapPage(Page<PatientConsent> page, UUID scope) {
         java.util.Map<UUID, java.util.List<PatientConsent>> byHospital = page.getContent().stream()
-            .collect(java.util.stream.Collectors.groupingBy(consent -> consent.getFromHospital().getId()));
+            .collect(java.util.stream.Collectors.groupingBy(consent -> scope != null ? scope : consent.getFromHospital().getId()));
         java.util.Map<PatientConsent, PatientResponseDTO> patients = new java.util.IdentityHashMap<>();
         byHospital.forEach((hospitalId, consents) -> {
             java.util.List<PatientResponseDTO> mapped = patientMapper.toPatientDTOs(

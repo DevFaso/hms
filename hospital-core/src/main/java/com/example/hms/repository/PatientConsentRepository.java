@@ -29,6 +29,14 @@ public interface PatientConsentRepository extends JpaRepository<PatientConsent, 
     @EntityGraph(attributePaths = {"patient", "fromHospital", "toHospital"})
     Page<PatientConsent> findAllByToHospitalId(UUID toHospitalId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"patient", "fromHospital", "toHospital"})
+    @org.springframework.data.jpa.repository.Query("SELECT c FROM PatientConsent c "
+        + "WHERE (c.fromHospital.id = :hospitalId OR c.toHospital.id = :hospitalId) "
+        + "AND (:patientId IS NULL OR c.patient.id = :patientId)")
+    Page<PatientConsent> findVisibleInHospital(
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId, Pageable pageable);
+
     @Override
     @EntityGraph(attributePaths = {"patient", "fromHospital", "toHospital"})
     Page<PatientConsent> findAll(Pageable pageable);
