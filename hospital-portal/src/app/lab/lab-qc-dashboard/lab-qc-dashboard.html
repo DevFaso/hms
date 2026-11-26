@@ -310,13 +310,13 @@
         <div class="summary-card">
           <div
             class="icon-box"
-            [class.bg-green]="overallPassRate() >= 90"
-            [class.bg-amber]="overallPassRate() < 90"
+            [class.bg-green]="totalValidationStudies() > 0 && overallPassRate() >= 90"
+            [class.bg-amber]="totalValidationStudies() > 0 && overallPassRate() < 90"
           >
             <span class="material-symbols-outlined">verified</span>
           </div>
           <div>
-            <div class="value">{{ overallPassRate() | measure: '%' }}</div>
+            <div class="value">{{ totalValidationStudies() > 0 ? (overallPassRate() | measure: '%') : '—' }}</div>
             <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
           </div>
         </div>

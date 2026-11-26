@@ -183,6 +183,17 @@ table {
 }
 
 /* The complete request in the decision dialog — full text, no ellipsis. */
+.field.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  input[type='checkbox'] {
+    width: auto;
+    margin: 0;
+  }
+}
+
 .decision-details {
   margin: 0.875rem 0 0;
   padding: 0.75rem 0.875rem;
