@@ -327,6 +327,9 @@ identifier columns (P0 — see remediation backlog item 10).
 exported to Splunk HEC and Grafana via OpenTelemetry. Cross-tenant
 read attempts are explicitly audited
 ([`hospital-core/src/main/java/com/example/hms/security/audit/CrossTenantReadAudit.java`](../../hospital-core/src/main/java/com/example/hms/security/audit/CrossTenantReadAudit.java)).
+Audit rows are append-only in the database (V382), and log events the
+asynchronous Splunk shipper drops under load are counted (metric
+`hms.logging.async.dropped`, console WARN with the count).
 
 ### §164.312(c) — Integrity
 
@@ -399,11 +402,15 @@ policies.
 
 ### §164.316(b)(2)(i) — Time Limit (6-year retention)
 
-`Gap`. Audit log retention is not configured to satisfy a 6-year
-window; current Splunk index retention is unconfigured.
+`Partial`. The database audit tables are append-only (V382: triggers
+refuse UPDATE, DELETE and TRUNCATE). The only delete is
+`support.purge_expired_audit_rows`, run by `AuditRetentionPurgeJob`,
+which never removes a row younger than 6 years, records each run as an
+`AUDIT_RETENTION_PURGED` event, and is off by default
+(`hms.audit-retention.*`). Splunk index retention is still unconfigured.
 
-**Action:** set Splunk index retention on `hms_prod` to ≥ 6 years; set
-DB audit log retention policy with archival to cold storage (P0).
+**Action:** set Splunk index retention on `hms_prod` to ≥ 6 years;
+decide archival to cold storage before enabling the DB purge (P0).
 
 ### §164.316(b)(2)(ii) — Availability
 

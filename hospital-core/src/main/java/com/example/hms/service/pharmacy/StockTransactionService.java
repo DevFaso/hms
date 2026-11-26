@@ -27,6 +27,9 @@ public interface StockTransactionService {
     List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> listReturnableDispenses(
             UUID inventoryItemId, UUID stockLotId);
 
+    List<com.example.hms.payload.dto.pharmacy.ReturnableTransferDTO> listReturnableTransfers(
+            UUID inventoryItemId, UUID stockLotId);
+
     Page<StockTransactionResponseDTO> listByInventoryItem(UUID inventoryItemId, Pageable pageable);
 
     Page<StockTransactionResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);

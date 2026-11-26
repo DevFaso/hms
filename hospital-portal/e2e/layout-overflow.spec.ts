@@ -1613,3 +1613,178 @@ test.describe('D3850: public login links have distinct phone-sized click targets
     });
   }
 });
+
+// D3943: a paired return is an explicit stock action on the original transfer, never a patient refund.
+test.describe('D3943 paired transfer return form', () => {
+  const ITEM = '00000000-0000-0000-0000-000000001343';
+  const LOT = '00000000-0000-0000-0000-000000002343';
+  const TRANSFER = '00000000-0000-0000-0000-000000003343';
+  const empty = { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20, last: true };
+  for (const width of [390, 1440]) {
+    test(`original transfer and explicit save at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await signInAs(page, 'ROLE_SUPER_ADMIN', testInfo.project.use.baseURL as string);
+      await installLocalIconFonts(page);
+      await page.route(/\/api\/pharmacy-registry(?:\?.*)?$/, (route) =>
+        route.fulfill({
+          json: {
+            ...empty,
+            content: [
+              {
+                id: TEST_ID,
+                hospitalId: TEST_ID,
+                name: 'Pharmacie centrale de test',
+                active: true,
+              },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+          },
+        }),
+      );
+      await page.route(/\/api\/pharmacy\/inventory\/items\/pharmacy\//, (route) =>
+        route.fulfill({
+          json: {
+            data: {
+              ...empty,
+              content: [
+                {
+                  id: ITEM,
+                  pharmacyId: TEST_ID,
+                  medicationCatalogItemId: ITEM,
+                  medicationName: 'Amoxicilline de test',
+                  unit: 'gélule',
+                  quantityOnHand: 20,
+                  active: true,
+                  reorderThreshold: 5,
+                  reorderQuantity: 20,
+                  controlled: false,
+                },
+              ],
+              totalElements: 1,
+              totalPages: 1,
+            },
+          },
+        }),
+      );
+      await page.route(/\/api\/pharmacy\/inventory\/lots\/item\//, (route) =>
+        route.fulfill({
+          json: {
+            data: {
+              ...empty,
+              content: [
+                {
+                  id: LOT,
+                  inventoryItemId: ITEM,
+                  lotNumber: 'SYNTHETIC-TRANSFER-77',
+                  expiryDate: '2030-01-01',
+                  remainingQuantity: 20,
+                  initialQuantity: 30,
+                },
+              ],
+              totalElements: 1,
+              totalPages: 1,
+            },
+          },
+        }),
+      );
+      await page.route(
+        /\/api\/pharmacy\/stock-transactions\/returnable-dispenses(?:\?.*)?$/,
+        (route) => route.fulfill({ json: { data: [] } }),
+      );
+      await page.route(
+        /\/api\/pharmacy\/stock-transactions\/returnable-transfers(?:\?.*)?$/,
+        (route) =>
+          route.fulfill({
+            json: {
+              data: [
+                {
+                  transferId: TRANSFER,
+                  stockLotId: LOT,
+                  destinationName: 'Dépôt de maternité de test',
+                  transferredAt: '2026-11-25T08:00:00',
+                  returnableQuantity: 6,
+                },
+              ],
+            },
+          }),
+      );
+      const recorded: Record<string, unknown>[] = [];
+      await page.route(/\/api\/pharmacy\/stock-transactions$/, async (route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        recorded.push(route.request().postDataJSON());
+        return route.fulfill({
+          json: { data: { id: LOT, transactionType: 'RETURN', quantity: 2 } },
+        });
+      });
+      await page.goto('/pharmacy/stock-adjustment');
+      await page.locator('.page-header .btn-primary').click();
+      await page.locator('#txType').selectOption('RETURN');
+      await page.locator('#txItem').selectOption(ITEM);
+      await expect(page.locator('#retTransfer option[value="' + TRANSFER + '"]')).toBeAttached();
+      await page.locator('#txQty').fill('2');
+      const intactValue = await page
+        .locator('#retCondition option')
+        .evaluateAll((options) =>
+          options
+            .map((option) => (option as HTMLOptionElement).value)
+            .find((value) => value.endsWith('INTACT')),
+        );
+      expect(intactValue).toBeTruthy();
+      await page.locator('#retCondition').selectOption(intactValue!);
+      const lotValue = await page
+        .locator('#txLot option')
+        .evaluateAll((options) =>
+          options
+            .map((option) => (option as HTMLOptionElement).value)
+            .find((value) => value.endsWith('00000000-0000-0000-0000-000000002343')),
+        );
+      expect(lotValue).toBeTruthy();
+      await page.locator('#txLot').selectOption(lotValue!);
+      await page.locator('#retRef').fill('reference de test');
+      const save = page
+        .locator('form')
+        .filter({ has: page.locator('#txType') })
+        .locator('button[type="submit"]');
+      await save.click();
+      await expect(page.locator('#retTransfer')).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.locator('#retTransfer')).toBeFocused();
+      expect(recorded).toHaveLength(0);
+      await page.locator('#retTransfer').selectOption(TRANSFER);
+      await expect(page.locator('[data-testid="return-transfer-available"]')).toBeVisible();
+      await expect(page.locator('[data-testid="return-transfer-available"]')).toContainText('6');
+      await expect(page.locator('.toast-close')).toHaveCount(0, { timeout: 10000 });
+      await expect(page.locator('#txLot option:checked')).toContainText('SYNTHETIC-TRANSFER-77');
+      await page.locator('#retRef').fill('');
+      await page
+        .locator('#returnTransferFefo')
+        .fill('Retour du stock inutilisé au magasin central');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width + 1,
+      );
+      await page.locator('#txType').scrollIntoViewIfNeeded();
+      await testInfo.attach(`paired-stock-return-top-${width}`, {
+        body: await page.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+      await page.locator('#returnTransferFefo').scrollIntoViewIfNeeded();
+      await testInfo.attach(`paired-stock-return-${width}`, {
+        body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
+        contentType: 'image/png',
+      });
+      expect(recorded).toHaveLength(0);
+      await save.click();
+      await expect.poll(() => recorded.length).toBe(1);
+      expect(recorded[0]).toMatchObject({
+        inventoryItemId: ITEM,
+        stockLotId: LOT,
+        referenceId: TRANSFER,
+        transactionType: 'RETURN',
+        quantity: 2,
+        stockCondition: 'INTACT',
+      });
+      expect(recorded[0]).not.toHaveProperty('transferOriginId');
+      await expect(page.locator('[data-testid="refund-prompt"]')).toHaveCount(0);
+    });
+  }
+});

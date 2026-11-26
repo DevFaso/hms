@@ -194,8 +194,13 @@ public class User extends BaseEntity {
     @NotFound(action = NotFoundAction.IGNORE)
     private Staff staffProfile;
 
+    /**
+     * Read-only view of the user's audit rows (V382: append-only). No orphan removal and no persist/merge
+     * cascade, so saving or merging a user can never rewrite or drop them; REMOVE only follows a hard delete
+     * of the user, which no application code performs (AuditTrailAppendOnlyGuardTest).
+     */
     @Builder.Default
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     private Set<AuditEventLog> auditEvents = new HashSet<>();
 
     @Builder.Default

@@ -2477,7 +2477,7 @@ class UserServiceImplTest {
             User pending = new User();
             pending.setId(UUID.randomUUID());
             pending.setActive(false);
-            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+            when(userRepository.findLiveChatRecipients(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(live, pending)));
             when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(live), org.mockito.ArgumentMatchers.anyCollection())).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
                     .id(live.getId()).roleName("ROLE_NURSE").profileType("STAFF").email("awa@example.org").build());
@@ -2491,7 +2491,7 @@ class UserServiceImplTest {
             });
             org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
                     org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), page.capture());
+            verify(userRepository).findLiveChatRecipients(eq(true), eq(hospitals), eq(false), eq(false), page.capture());
             assertThat(page.getValue().getPageSize()).isEqualTo(500);
             verify(accountAccess, never()).requireDirectoryAccess();
         }
@@ -2581,6 +2581,45 @@ class UserServiceImplTest {
             assertThat(UserServiceImpl.phoneDigits("awa@example.org")).isNull();
             assertThat(UserServiceImpl.phoneDigits("12")).isNull();
             assertThat(UserServiceImpl.phoneDigits(null)).isNull();
+        }
+
+        @Test
+        void recoveryFollowsAssignmentRightsEvenWhenTheSharedAccountCannotBeManaged() {
+            UUID hospital = UUID.randomUUID();
+            User account = new User();
+            account.setId(UUID.randomUUID());
+            account.setActive(true);
+            var localHospital = new Hospital(); localHospital.setId(hospital);
+            var localRole = new Role(); localRole.setCode("ROLE_NURSE");
+            var grant = new UserRoleHospitalAssignment();
+            grant.setId(UUID.randomUUID()); grant.setUser(account); grant.setHospital(localHospital);
+            grant.setRole(localRole); grant.setActive(false);
+            when(accountAccess.requireDirectoryAccess()).thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(hospital), false));
+            when(accountAccess.assignmentScope()).thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(hospital)));
+            when(accountAccess.manageableAmong(any())).thenReturn(Set.of());
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(account)));
+            when(assignmentRepository.findDirectoryAssignments(any(), anyBoolean(), any())).thenReturn(List.of(grant));
+            when(userMapper.toSummaryDTO(eq(account), org.mockito.ArgumentMatchers.anyCollection())).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
+                .id(account.getId()).reactivationOptions(List.of(new com.example.hms.payload.dto.UserSummaryDTO.ReactivationOption(
+                    grant.getId(), "Synthetic hospital", "ROLE_NURSE"))).build());
+            var row = userService.getAllUsers(0, 10, false, false).getContent().getFirst();
+            assertThat(row.getManageable()).isFalse();
+            assertThat(row.getReactivationAssignmentId()).isEqualTo(grant.getId());
+            assertThat(row.getEmail()).isNull();
+        }
+
+        @Test
+        void globalPrivilegeDisablesSupportSessionsRegardlessOfDisplayedRole() {
+            User account = new User(); account.setId(UUID.randomUUID()); account.setActive(true);
+            when(accountAccess.requireDirectoryAccess()).thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of(), true));
+            when(accountAccess.manageableAmong(any())).thenReturn(Set.of());
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(account)));
+            when(userRepository.findPrivilegedDirectoryIds(any())).thenReturn(Set.of(account.getId()));
+            when(userMapper.toSummaryDTO(eq(account), org.mockito.ArgumentMatchers.anyCollection())).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
+                .id(account.getId()).active(true).accessActive(true).roleName("ROLE_NURSE").build());
+            assertThat(userService.getAllUsers(0, 10, false, false).getContent().getFirst().getImpersonationEligible()).isFalse();
         }
 
         @Test

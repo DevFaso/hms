@@ -38,6 +38,7 @@ class UserRepositoryDirectoryScopeTest {
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Autowired private UserRoleRepository userRoleRepository;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     private Hospital a;
     private Hospital b;
@@ -74,6 +75,49 @@ class UserRepositoryDirectoryScopeTest {
     @AfterEach
     void clear() {
         HospitalContextHolder.clear();
+    }
+
+    @Test
+    void directoryPageSqlCountDoesNotGrowWithRoleMappingRows() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        Role nurse = roleRepository.findAll().getFirst();
+        for (int index = 0; index < 28; index++) assign(user("batch-colleague-" + index), nurse, a, true);
+        entityManager.flush();
+        var statistics = entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        try {
+            long small = readDirectoryPageStatements(2, statistics);
+            long larger = readDirectoryPageStatements(20, statistics);
+            assertThat(larger).as("page query, count, assignments, profile projection and privilege projection stay bounded")
+                .isEqualTo(small);
+        } finally { statistics.setStatisticsEnabled(wasEnabled); }
+    }
+
+    private long readDirectoryPageStatements(int size, org.hibernate.stat.Statistics statistics) {
+        entityManager.clear();
+        statistics.clear();
+        var page = userRepository.findAllPaged(false, false, true, Set.of(a.getId()), PageRequest.of(0, size));
+        Set<UUID> ids = page.stream().map(User::getId).collect(java.util.stream.Collectors.toSet());
+        var assignments = assignmentRepository.findDirectoryAssignments(ids, false, Set.of(a.getId())).stream()
+            .collect(java.util.stream.Collectors.groupingBy(row -> row.getUser().getId()));
+        userRepository.findDirectoryProfiles(ids);
+        userRepository.findPrivilegedDirectoryIds(ids);
+        var mapper = new com.example.hms.mapper.UserMapper();
+        page.forEach(user -> mapper.toSummaryDTO(user, assignments.getOrDefault(user.getId(), List.of())));
+        assertThat(page.getContent()).hasSize(size);
+        assertThat(statistics.getCollectionFetchCount()).as("no historical global-role collection is loaded").isZero();
+        return statistics.getPrepareStatementCount();
+    }
+
+    @Test
+    void chatQueryRequiresLiveStaffAccessInScopeBeforeApplyingTheLimit() {
+        var aRows = userRepository.findLiveChatRecipients(true, Set.of(a.getId()), false, false,
+            PageRequest.of(0, 1));
+        assertThat(aRows.getTotalElements()).isEqualTo(1);
+        assertThat(aRows).extracting(User::getId).containsExactly(activeAtA);
+        assertThat(userRepository.findLiveChatRecipients(true, Set.of(b.getId()), false, false,
+            PageRequest.of(0, 10))).extracting(User::getId).containsExactlyInAnyOrder(moved, activeAtA);
     }
 
     @Test
@@ -141,6 +185,10 @@ class UserRepositoryDirectoryScopeTest {
         global.setRole(superAdmin);
         userRoleRepository.save(global);
         assign(owner, nurse, a, true);
+        assertThat(new com.example.hms.mapper.UserMapper().toSummaryDTO(owner,
+            assignmentRepository.findDirectoryAssignments(Set.of(owner.getId()), false, Set.of(a.getId()))).getRoleName())
+            .isEqualTo("ROLE_NURSE_DIR_TEST");
+        assertThat(userRepository.findPrivilegedDirectoryIds(Set.of(owner.getId(), activeAtA))).containsExactly(owner.getId());
         Set<UUID> atA = Set.of(a.getId());
         PageRequest page = PageRequest.of(0, 50);
 

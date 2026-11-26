@@ -132,3 +132,13 @@ END $$;
 
 -- hms_app cannot DROP or CREATE tables
 -- (No GRANT ALL ON SCHEMA, only USAGE — so CREATE TABLE will fail)
+
+-- ===================== AUDIT TABLES: APPEND-ONLY (V382) =====================
+-- hms_app writes and reads audit rows; it never changes or removes them. The
+-- V382 triggers refuse UPDATE/DELETE/TRUNCATE for every role; this takes the
+-- privilege away as well (run after V382 has been applied). The retention
+-- purge runs as the function's owner (SECURITY DEFINER), so hms_app only
+-- needs EXECUTE on it.
+REVOKE UPDATE, DELETE, TRUNCATE ON support.audit_event_logs, support.frontend_audit_events,
+    public.permission_matrix_audit_events, clinical.digital_signature_audit_log FROM hms_app;
+GRANT EXECUTE ON FUNCTION support.purge_expired_audit_rows(integer, integer) TO hms_app;

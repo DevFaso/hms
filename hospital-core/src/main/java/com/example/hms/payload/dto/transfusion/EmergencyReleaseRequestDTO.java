@@ -34,10 +34,21 @@ public class EmergencyReleaseRequestDTO {
     private UUID authoriserUserId;
 
     /**
-     * O positive outside the low-risk tier: the issuer states that no physician can be reached. The bag goes out
-     * with the authority recorded as owed and the laboratory director is alerted at once. Ignored otherwise.
+     * The issuer states that no physician can be reached. O positive outside the low-risk tier: the bag goes out
+     * with the authority recorded as owed and the laboratory director is alerted at once. A serologically
+     * incompatible release (V381): accepted only where the hospital switched the fallback on, with
+     * {@link #unreachableReason}; the least incompatible bag goes out and a physician countersigns.
      */
     private Boolean physicianUnreachable;
+
+    /** V381, the fallback of an incompatible release: who was called and when. Required then. */
+    private String unreachableReason;
+
+    /** V381, every incompatible release: why this bag was chosen. */
+    private String unitChoiceReason;
+
+    /** V381, every incompatible release: whether the patient or the family was told of the risk. */
+    private com.example.hms.enums.PatientInformedStatus patientInformation;
 
     /**
      * O positive on the order of a physician: the order was given verbally (the default) or is written on the
@@ -62,14 +73,33 @@ public class EmergencyReleaseRequestDTO {
     private Boolean negativeUnobtainable;
 
     /**
-     * A serologically incompatible release always names who authorises it. An O positive decision may not (V380:
-     * the issuer under the protocol, or no physician reachable): the O positive decision service says what it needs.
+     * A serologically incompatible release names who authorises it, or states that no physician can be reached
+     * (V381: the decision service then says whether the hospital allows it). An O positive decision may name
+     * nobody (V380: the issuer under the protocol, or no physician reachable).
      */
     @jakarta.validation.constraints.AssertTrue(message = "{transfusion.emergency.authoriserRequired}")
     @com.example.hms.validation.ReportedOn("authoriserUserId")
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isAuthoriserNamedWhenIncompatible() {
-        return releaseType != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE || authoriserUserId != null;
+        return releaseType != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE || authoriserUserId != null
+            || Boolean.TRUE.equals(physicianUnreachable);
+    }
+
+    /** V381: an incompatible release says why this bag: named at the edge with the other fields. */
+    @jakarta.validation.constraints.AssertTrue(message = "{transfusion.incompatible.unitChoiceReasonRequired}")
+    @com.example.hms.validation.ReportedOn("unitChoiceReason")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isUnitChoiceReasonGivenWhenIncompatible() {
+        return releaseType != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE
+            || (unitChoiceReason != null && !unitChoiceReason.isBlank());
+    }
+
+    /** V381: an incompatible release says whether the patient was told: named at the edge with the other fields. */
+    @jakarta.validation.constraints.AssertTrue(message = "{transfusion.incompatible.patientInformedRequired}")
+    @com.example.hms.validation.ReportedOn("patientInformation")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isPatientInformationStatedWhenIncompatible() {
+        return releaseType != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE || patientInformation != null;
     }
 
     /** An uncrossmatched release documents nothing: named at the edge with the other fields. */

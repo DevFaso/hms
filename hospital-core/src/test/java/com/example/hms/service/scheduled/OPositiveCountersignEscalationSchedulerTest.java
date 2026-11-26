@@ -16,7 +16,29 @@ import static org.mockito.Mockito.when;
 class OPositiveCountersignEscalationSchedulerTest {
 
     private final OPositiveReleaseNotices authority = mock(OPositiveReleaseNotices.class);
-    private final OPositiveCountersignEscalationScheduler scheduler = new OPositiveCountersignEscalationScheduler(authority);
+    private final com.example.hms.service.transfusion.IncompatibleReleaseNotices incompatible =
+        mock(com.example.hms.service.transfusion.IncompatibleReleaseNotices.class);
+    private final OPositiveCountersignEscalationScheduler scheduler =
+        new OPositiveCountersignEscalationScheduler(authority, incompatible);
+
+    @Test
+    @DisplayName("V381: an incompatible release is swept the same way, and a failure of one rule never holds the other")
+    void incompatibleReleasesAreSweptToo() {
+        UUID owed = UUID.randomUUID();
+        UUID overdue = UUID.randomUUID();
+        UUID failing = UUID.randomUUID();
+        when(authority.pendingIds()).thenThrow(new IllegalStateException("O positive rows unreadable"));
+        when(incompatible.pendingIds()).thenReturn(List.of(failing, owed));
+        when(incompatible.deliver(failing)).thenThrow(new IllegalStateException("in-basket down"));
+        when(incompatible.deliver(owed)).thenReturn(3);
+        when(incompatible.overdueCountersignIds()).thenReturn(List.of(overdue));
+
+        assertThatCode(scheduler::runSweep).doesNotThrowAnyException();
+
+        verify(incompatible).deliver(failing);
+        verify(incompatible).deliver(owed);
+        verify(incompatible).escalateOverdueCountersign(overdue);
+    }
 
     @Test
     @DisplayName("a row whose alert cannot be delivered waits for the next sweep and holds no other row back")

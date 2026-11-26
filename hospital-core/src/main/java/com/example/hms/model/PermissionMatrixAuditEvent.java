@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import org.hibernate.annotations.Immutable;
 import com.example.hms.enums.PermissionMatrixAuditAction;
 import com.example.hms.enums.PermissionMatrixEnvironment;
 import jakarta.persistence.Column;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Immutable
 @Table(name = "permission_matrix_audit_events")
 @Getter
 @Setter

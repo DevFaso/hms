@@ -443,6 +443,23 @@ describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
         'AUDIT.DESC.O_POSITIVE_RELEASE_COUNTERSIGNED',
       ],
       [
+        'Incompatible release decision recorded for blood unit u against transfusion request r',
+        'AUDIT.DESC.INCOMPATIBLE_RELEASE_DECIDED',
+      ],
+      [
+        'Incompatible release countersigned: decision d',
+        'AUDIT.DESC.INCOMPATIBLE_RELEASE_COUNTERSIGNED',
+      ],
+      [
+        'Incompatible release monitoring recorded: decision d',
+        'AUDIT.DESC.INCOMPATIBLE_RELEASE_MONITORING_RECORDED',
+      ],
+      [
+        'Incompatible release countersignature overdue, escalated to the laboratory director: decision d',
+        'AUDIT.DESC.INCOMPATIBLE_COUNTERSIGN_OVERDUE',
+      ],
+      ['Incompatible release fallback setting changed', 'AUDIT.DESC.INCOMPATIBLE_PROTOCOL_CHANGED'],
+      [
         'Emergency O positive release countersignature overdue, escalated to the laboratory director: decision d',
         'AUDIT.DESC.O_POSITIVE_COUNTERSIGN_OVERDUE',
       ],

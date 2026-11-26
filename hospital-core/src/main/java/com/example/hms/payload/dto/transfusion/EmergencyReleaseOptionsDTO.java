@@ -45,6 +45,21 @@ public class EmergencyReleaseOptionsDTO {
     /** What the O positive authority rule says for this patient (V380). */
     private OPositiveRule positiveRule;
 
+    /** What the incompatible release rule says at this hospital for the caller (V381). */
+    private IncompatibleRule incompatibleRule;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IncompatibleRule {
+        /** The hospital switched on « Libération incompatible sans médecin joignable ». */
+        private boolean fallbackEnabled;
+        /** The caller holds a role the hospital allows to declare that no physician can be reached. */
+        private boolean callerMayDeclare;
+        private int countersignDeadlineHours;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -93,6 +108,13 @@ public class EmergencyReleaseOptionsDTO {
         private String incompatibilityReason;
         /** False when the patient's group excludes this bag, or it is held for another request: refused either way. */
         private boolean releasable;
+        /** V381: the RhD of the bag suits the patient. */
+        private boolean rhdMatched;
+        /** V381: what the laboratory recorded with the crossmatch; null when it recorded nothing. */
+        private Boolean rhKellMatched;
+        private Boolean antigenNegative;
+        /** V381: no releasable bag ranks better; the fallback releases only such a bag. */
+        private boolean leastIncompatible;
         /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
         private boolean statementRequired;
     }

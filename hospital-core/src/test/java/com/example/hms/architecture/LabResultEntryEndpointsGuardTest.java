@@ -112,7 +112,11 @@ class LabResultEntryEndpointsGuardTest {
         Map.entry("TransfusionController#countersignPositiveRelease", Kind.NOT_A_RESULT),
         Map.entry("TransfusionController#reviewPositiveRelease", Kind.NOT_A_RESULT),
         Map.entry("TransfusionController#recordPositiveFollowUp", Kind.NOT_A_RESULT),
-        Map.entry("TransfusionController#setPositiveProtocol", Kind.NOT_A_RESULT)));
+        Map.entry("TransfusionController#setPositiveProtocol", Kind.NOT_A_RESULT),
+        // V381: the incompatible release rule writes a countersignature, a monitoring record and a setting.
+        Map.entry("TransfusionController#countersignIncompatibleRelease", Kind.NOT_A_RESULT),
+        Map.entry("TransfusionController#recordIncompatibleMonitoring", Kind.NOT_A_RESULT),
+        Map.entry("TransfusionController#setIncompatibleProtocol", Kind.NOT_A_RESULT)));
 
     private final DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
 
