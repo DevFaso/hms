@@ -38,10 +38,10 @@ class PharmacyPresentationGuardTest {
         int open = service.indexOf('{', start);
         String receipt = service.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(service, open));
         assertThat(receipt.indexOf("inventoryItemRepository.lockById(item.getId())"))
-            .isGreaterThanOrEqualTo(0).isLessThan(receipt.indexOf("stockLotRepository.existsLotNumberForItem("));
+            .isGreaterThanOrEqualTo(0).isLessThan(receipt.indexOf("stockLotRepository.findSameLot("));
         assertThat(receipt.indexOf("pharmacy.inventory.lot.duplicate"))
             .isGreaterThanOrEqualTo(0).isLessThan(receipt.indexOf("stockLotMapper.toEntity("));
-        assertThat(receipt).doesNotContain("stockLotRepository.addReceipt(");
+        assertThat(receipt).contains("matching.size() > 1", "stockLotRepository.addReceipt(", "requireConsistentLotExpiry(item, dto)");
         assertThat(receipt).contains("StockLotBalance.requireReconciled(item, stockLotRepository.sumRemainingForItem(item.getId()))");
         String repository = Files.readString(root.resolve("repository/pharmacy/StockLotRepository.java"));
         assertThat(repository).contains("UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string)))");

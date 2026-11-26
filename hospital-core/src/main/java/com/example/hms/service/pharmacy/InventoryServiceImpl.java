@@ -541,7 +541,8 @@ public class InventoryServiceImpl implements InventoryService {
             dto.setLotNumber(dto.getLotNumber().trim());
         }
         requireConsistentLotExpiry(item, dto);
-        if (stockLotRepository.existsLotNumberForItem(item.getId(), dto.getLotNumber())) {
+        List<StockLot> matching = stockLotRepository.findSameLot(item.getId(), dto.getLotNumber(), dto.getExpiryDate());
+        if (matching.size() > 1) {
             throw new com.example.hms.exception.FieldBusinessException("lotNumber", "pharmacy.inventory.lot.duplicate");
         }
 
@@ -559,12 +560,19 @@ public class InventoryServiceImpl implements InventoryService {
         User witness = ControlledStockWitness.isControlled(item)
             ? controlledStockWitness.resolve(dto.getWitnessedBy(), item, receivedByUser) : null;
 
-        // D3946 supersedes D733's implicit top-up: external receipt of an already recorded lot is refused.
-        // Transfers may still credit an existing lot through their paired movement, without creating a duplicate.
-        BigDecimal received = dto.getRemainingQuantity() != null
+        // A further delivery of the same unambiguous batch tops up its existing row (D733).
+        BigDecimal received = matching.isEmpty() && dto.getRemainingQuantity() != null
             ? dto.getRemainingQuantity() : dto.getInitialQuantity();
-        StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
-        StockLot savedLot = stockLotRepository.save(lot);
+        StockLot savedLot;
+        if (matching.isEmpty()) {
+            savedLot = stockLotRepository.save(stockLotMapper.toEntity(dto, item, receivedByUser));
+        } else {
+            savedLot = matching.getFirst();
+            if (stockLotRepository.addReceipt(savedLot.getId(), received, LocalDateTime.now(ZoneId.systemDefault())) != 1) {
+                throw new com.example.hms.exception.FieldBusinessException("lotNumber", "pharmacy.inventory.lot.duplicate");
+            }
+            refreshIfManaged(savedLot);
+        }
 
         // Update quantity on hand: atomically, so a fill or a return of the
         // same item at the same moment is not overwritten (#825 round 5).

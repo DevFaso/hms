@@ -719,20 +719,33 @@ class InventoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("D3946: an external receipt of an existing lot is refused without adding stock")
-        void sameLotTwiceIsRefused() {
+        @DisplayName("QA D733: the same lot received twice adds to the one row")
+        void sameLotTwiceAddsToTheRow() {
+            StockLotRequestDTO dto = buildLotRequest();
+            StockLot existing = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate())).thenReturn(List.of(existing));
+            when(stockLotRepository.addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any())).thenReturn(1);
+            service.receiveStock(dto);
+            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+        }
+
+        @Test
+        void ambiguousSameLotIsRefusedWithoutAddingStock() {
             StockLotRequestDTO dto = buildLotRequest();
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
-            when(stockLotRepository.existsLotNumberForItem(inventoryItemId, dto.getLotNumber().trim()))
-                    .thenReturn(true);
-
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate()))
+                .thenReturn(List.of(buildStockLot(), buildStockLot()));
             assertThatThrownBy(() -> service.receiveStock(dto))
                 .extracting("field", "messageKey").containsExactly("lotNumber", "pharmacy.inventory.lot.duplicate");
-
-            verify(stockLotRepository, never()).save(any());
             verify(stockLotRepository, never()).addReceipt(any(), any(), any());
-            verify(inventoryItemRepository).lockById(inventoryItemId);
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
