@@ -5084,6 +5084,8 @@
     "CONFIRM_DEACTIVATE": "¿Está seguro de que desea desactivar este instrumento?"
   },
   "LAB_OUTBOX": {
+    "ORDERING_HOSPITAL": "Hospital solicitante",
+    "HOSPITAL_REQUIRED": "Este mensaje no tiene un hospital solicitante; no se puede realizar esta acción.",
     "TITLE": "Bandeja de salida de instrumentos",
     "SUBTITLE": "Mensajes HL7 salientes hacia la interfaz de los analizadores",
     "PENDING_COUNT": "{{count}} pendientes",

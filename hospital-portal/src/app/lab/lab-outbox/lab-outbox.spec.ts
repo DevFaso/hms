@@ -13,6 +13,8 @@ import {
 } from '../../services/instrument-outbox.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { roleContextStub } from '../../testing/role-context.stub';
 
 /**
  * The instrument outbox monitor (P2 #17).
@@ -83,6 +85,14 @@ describe('LabOutboxComponent', () => {
         { provide: InstrumentOutboxService, useValue: outboxService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: roles.includes('ROLE_SUPER_ADMIN'),
+            hospitalId: roles.includes('ROLE_SUPER_ADMIN') ? null : 'h1',
+            roles,
+          }),
+        },
       ],
     });
 
@@ -100,6 +110,32 @@ describe('LabOutboxComponent', () => {
     expect(outboxService.search).toHaveBeenCalledWith('', 0, 25);
     expect(fixture.nativeElement.querySelector('[data-testid="outbox-row-m-1"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="outbox-row-m-2"]')).not.toBeNull();
+  });
+
+  it('opens a global row using its ordering hospital and refuses rows with no hospital', () => {
+    const row = message({ orderingHospitalId: 'h2', orderingHospitalName: 'Hospital B' });
+    setup(['ROLE_SUPER_ADMIN'], pageOf([row]));
+    outboxService.getMessage.and.returnValue(of(row));
+    outboxService.getMessagesForOrder.and.returnValue(of([]));
+    component.openDetail(row);
+    expect(outboxService.getMessage).toHaveBeenCalledWith(row.id, 'h2');
+    expect(outboxService.getMessagesForOrder).toHaveBeenCalledWith(row.labOrderId!, 'h2');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="outbox-row-m-1"]').textContent,
+    ).toContain('Hospital B');
+    component.closeDetail();
+    outboxService.getMessage.calls.reset();
+    component.openDetail(message({ orderingHospitalId: null }));
+    expect(outboxService.getMessage).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('LAB_OUTBOX.HOSPITAL_REQUIRED');
+  });
+
+  it('retries a global row with its own hospital', () => {
+    const row = message({ status: 'ERROR', orderingHospitalId: 'h2' });
+    setup(['ROLE_SUPER_ADMIN'], pageOf([row]));
+    outboxService.retry.and.returnValue(of(row));
+    component.retry(row);
+    expect(outboxService.retry).toHaveBeenCalledWith(row.id, 'h2');
   });
 
   it('shows the transport-off banner so an empty wire is diagnosable', () => {

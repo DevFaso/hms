@@ -14,6 +14,9 @@ public class InstrumentOutboxResponseDTO {
 
     private UUID id;
     private UUID labOrderId;
+    /** Ordering hospital: the tenant context for an unscoped administrator opening a row. */
+    private UUID orderingHospitalId;
+    private String orderingHospitalName;
     private String messageType;
     /** Full HL7 payload. Elided on list rows — PHI-bearing and up to TEXT-sized. */
     private String payload;

@@ -335,6 +335,10 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         return InstrumentOutboxResponseDTO.builder()
             .id(msg.getId())
             .labOrderId(msg.getLabOrder() != null ? msg.getLabOrder().getId() : null)
+            .orderingHospitalId(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
+                ? msg.getLabOrder().getHospital().getId() : null)
+            .orderingHospitalName(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
+                ? msg.getLabOrder().getHospital().getName() : null)
             .messageType(msg.getMessageType())
             // OBX-11 (F / P / C) so a preliminary + final pair does not read as a duplicate.
             .resultStatus(Hl7v2MessageBuilder.observationStatusOf(msg.getPayload()))

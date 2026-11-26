@@ -70,6 +70,7 @@ class InstrumentOutboxServiceImplTest {
         hospitalId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
+        hospital.setName("Ordering hospital");
         labOrder = LabOrder.builder().build();
         labOrder.setId(labOrderId);
         labOrder.setHospital(hospital);
@@ -260,6 +261,8 @@ class InstrumentOutboxServiceImplTest {
         assertThat(page.getContent()).hasSize(1);
         // A list row must not ship the HL7 payload — PHI-bearing and TEXT-sized.
         assertThat(page.getContent().get(0).getPayload()).isNull();
+        assertThat(page.getContent().get(0).getOrderingHospitalId()).isEqualTo(hospitalId);
+        assertThat(page.getContent().get(0).getOrderingHospitalName()).isEqualTo("Ordering hospital");
         assertThat(page.getContent().get(0).getLastError()).contains("SocketTimeoutException");
         assertThat(page.getPendingCount()).isEqualTo(3);
         assertThat(page.getErrorCount()).isEqualTo(2);

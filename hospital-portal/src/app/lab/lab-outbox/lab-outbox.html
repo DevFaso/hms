@@ -87,6 +87,7 @@
       <table class="outbox-table">
         <thead>
           <tr>
+            <th>{{ 'LAB_OUTBOX.ORDERING_HOSPITAL' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_TYPE' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_STATUS' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_ATTEMPTS' | translate }}</th>
@@ -99,6 +100,7 @@
         <tbody>
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'outbox-row-' + row.id">
+              <td>{{ row.orderingHospitalName || '?' }}</td>
               <td class="type-cell">
                 <span class="mono">{{ row.messageType }}</span>
                 @if (resultStatusKey(row.resultStatus); as rsKey) {
