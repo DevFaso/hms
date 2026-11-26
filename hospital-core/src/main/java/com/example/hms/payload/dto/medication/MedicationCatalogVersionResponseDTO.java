@@ -58,6 +58,8 @@ public class MedicationCatalogVersionResponseDTO {
     private String decidedByName;
     private LocalDateTime decidedAt;
     private String decisionReason;
+    /** On what authority it was approved or refused; MEDICAL_LEAD_NO_PHARMACIST is the no-pharmacist fallback. */
+    private com.example.hms.enums.MedicationCatalogDecisionBasis decisionBasis;
 
     /** Whether the caller may approve it: the right role here, and not their own proposal. */
     private boolean callerMayApprove;

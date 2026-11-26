@@ -93,6 +93,14 @@
                 </dd>
               </div>
             }
+            @if (version.decisionBasis; as basis) {
+              <div>
+                <dt>{{ 'PHARMACY.CATALOG_APPROVAL.DECISION_BASIS_LABEL' | translate }}</dt>
+                <dd data-test="approval-decision-basis">
+                  {{ basis | keyLabel: 'PHARMACY.CATALOG_APPROVAL.DECISION_BASIS.' }}
+                </dd>
+              </div>
+            }
             @if (version.decisionReason) {
               <div>
                 <dt>{{ 'PHARMACY.CATALOG_APPROVAL.DECISION_REASON' | translate }}</dt>
@@ -152,83 +160,59 @@
               </p>
             }
 
-            @if (refusing() === version.id) {
-              <form class="refusal" (ngSubmit)="confirmRefusal(version)">
-                <label for="catalogRefusalReason"
-                  >{{ 'PHARMACY.CATALOG_APPROVAL.REFUSE_REASON' | translate }} *</label
+            <div class="version-actions">
+              @if (version.ownProposal) {
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  [disabled]="!!acting()"
+                  data-test="approval-withdraw"
+                  (click)="withdraw(version)"
                 >
-                <textarea
-                  id="catalogRefusalReason"
-                  name="catalogRefusalReason"
-                  rows="2"
-                  maxlength="1000"
-                  required
-                  [(ngModel)]="refusalText"
-                  [attr.aria-invalid]="refusalMissing() ? 'true' : null"
-                  [attr.aria-describedby]="refusalMissing() ? 'catalogRefusalReason-error' : null"
-                  data-test="approval-refusal-reason"
-                ></textarea>
-                @if (refusalMissing()) {
-                  <small class="field-error" id="catalogRefusalReason-error" role="alert">{{
-                    'PHARMACY.CATALOG_APPROVAL.REFUSE_REASON_REQUIRED' | translate
-                  }}</small>
-                }
-                <div class="version-actions">
-                  <button type="button" class="btn-secondary" (click)="cancelRefusal()">
-                    {{ 'COMMON.CANCEL' | translate }}
-                  </button>
-                  <button
-                    appSubmitGuard
-                    submitGuardRequired
-                    type="submit"
-                    class="btn-danger"
-                    [disabled]="!!acting()"
-                    data-test="approval-refuse-confirm"
-                  >
-                    {{ 'PHARMACY.CATALOG_APPROVAL.REFUSE_CONFIRM' | translate }}
-                  </button>
-                </div>
-              </form>
-            } @else {
-              <div class="version-actions">
-                @if (version.ownProposal) {
-                  <button
-                    type="button"
-                    class="btn-secondary"
-                    [disabled]="!!acting()"
-                    data-test="approval-withdraw"
-                    (click)="withdraw(version)"
-                  >
-                    {{ 'PHARMACY.CATALOG_APPROVAL.WITHDRAW' | translate }}
-                  </button>
-                }
-                @if (version.callerMayReject) {
-                  <button
-                    type="button"
-                    class="btn-secondary"
-                    [disabled]="!!acting()"
-                    data-test="approval-refuse"
-                    (click)="startRefusal(version)"
-                  >
-                    {{ 'PHARMACY.CATALOG_APPROVAL.REFUSE' | translate }}
-                  </button>
-                }
-                @if (version.callerMayApprove) {
-                  <button
-                    type="button"
-                    class="btn-primary"
-                    [disabled]="!!acting()"
-                    data-test="approval-approve"
-                    (click)="approve(version)"
-                  >
-                    {{ 'PHARMACY.CATALOG_APPROVAL.APPROVE' | translate }}
-                  </button>
-                }
-              </div>
-            }
+                  {{ 'PHARMACY.CATALOG_APPROVAL.WITHDRAW' | translate }}
+                </button>
+              }
+              @if (version.callerMayReject) {
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  [disabled]="!!acting()"
+                  data-test="approval-refuse"
+                  (click)="startRefusal(version)"
+                >
+                  {{ 'PHARMACY.CATALOG_APPROVAL.REFUSE' | translate }}
+                </button>
+              }
+              @if (version.callerMayApprove) {
+                <button
+                  type="button"
+                  class="btn-primary"
+                  [disabled]="!!acting()"
+                  data-test="approval-approve"
+                  (click)="approve(version)"
+                >
+                  {{ 'PHARMACY.CATALOG_APPROVAL.APPROVE' | translate }}
+                </button>
+              }
+            </div>
           }
         </li>
       }
     </ul>
+  }
+
+  <!-- A refusal states why: the shared reason dialog (required, focus in and back). -->
+  @if (refusing(); as refused) {
+    <app-reason-dialog
+      titleKey="PHARMACY.CATALOG_APPROVAL.REFUSE_TITLE"
+      labelKey="PHARMACY.CATALOG_APPROVAL.REFUSE_REASON"
+      confirmKey="PHARMACY.CATALOG_APPROVAL.REFUSE_CONFIRM"
+      dismissKey="COMMON.BACK"
+      [busy]="!!acting()"
+      (confirmed)="confirmRefusal(refused, $event)"
+      (cancelled)="cancelRefusal()"
+    >
+      <p>{{ refused.itemLabel }}</p>
+    </app-reason-dialog>
   }
 </section>

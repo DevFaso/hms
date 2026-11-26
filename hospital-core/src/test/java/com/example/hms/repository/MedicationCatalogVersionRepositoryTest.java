@@ -72,6 +72,7 @@ class MedicationCatalogVersionRepositoryTest {
             .itemLabel("Paracétamol 500 mg").payload("{}").changeReason("Revue")
             .proposedBy(UUID.randomUUID()).proposedAt(LocalDateTime.now().minusHours(hoursAgo))
             .decidedBy(decided ? UUID.randomUUID() : null).decidedAt(decided ? LocalDateTime.now() : null)
+            .decisionBasis(decided ? com.example.hms.enums.MedicationCatalogDecisionBasis.PHARMACIST : null)
             .build());
     }
 

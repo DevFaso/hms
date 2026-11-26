@@ -11473,22 +11473,30 @@
         "PENDING_APPROVAL": "Decision"
       },
       "DECISION_REASON": "Reason for the decision",
+      "DECISION_BASIS_LABEL": "Acting as",
+      "DECISION_BASIS": {
+        "PHARMACIST": "Pharmacist of the hospital",
+        "MEDICAL_LEAD": "Chief physician",
+        "MEDICAL_LEAD_NO_PHARMACIST": "Chief physician, as the hospital had no active pharmacist",
+        "PLATFORM_ADMIN": "Platform administrator"
+      },
       "RATIFY_NOTE": "No value changes: the values already in force are submitted to receive their first approval.",
       "COL_FIELD": "Item",
       "COL_BEFORE": "In force",
       "COL_PROPOSED": "Proposed",
       "CHANGED": "changed",
-      "BAND": "{{min}} to {{max}} kg: {{dose}} {{unit}}, {{perDay}} doses/day",
+      "BAND": "{{min}} to {{max}} kg: {{dose}}, {{perDay}} doses/day",
       "OWN_PROPOSAL_NOTE": "You proposed this version: another person must approve it.",
       "ROLE_NOTE": {
-        "FORMULARY": "Only a pharmacist of the hospital, other than the author, approves or refuses a formulary entry.",
+        "FORMULARY": "Only a pharmacist of the hospital, other than the author, approves or refuses a formulary entry (the chief physician only where the hospital has no active pharmacist).",
         "DOSE_LIMIT": "Only a pharmacist of the hospital or its chief physician, other than the author, approves or refuses dose limits."
       },
       "APPROVE": "Approve",
       "REFUSE": "Refuse",
       "WITHDRAW": "Withdraw my proposal",
       "REFUSE_REASON": "Reason for the refusal",
-      "REFUSE_REASON_REQUIRED": "State the reason for the refusal.",
+      "REFUSE_TITLE": "Refuse this version?",
+      "WITHDRAW_CONFIRM": "Withdraw your proposal? Nothing changes in the catalogue.",
       "REFUSE_CONFIRM": "Confirm the refusal",
       "APPROVED_TOAST": "Version approved: it is in force",
       "REFUSED_TOAST": "Version refused: nothing changes in the catalogue",

@@ -11473,22 +11473,30 @@
         "PENDING_APPROVAL": "Decisión"
       },
       "DECISION_REASON": "Motivo de la decisión",
+      "DECISION_BASIS_LABEL": "En calidad de",
+      "DECISION_BASIS": {
+        "PHARMACIST": "Farmacéutico del establecimiento",
+        "MEDICAL_LEAD": "Médico jefe",
+        "MEDICAL_LEAD_NO_PHARMACIST": "Médico jefe, por no haber ningún farmacéutico activo en el establecimiento",
+        "PLATFORM_ADMIN": "Administrador de la plataforma"
+      },
       "RATIFY_NOTE": "Ningún valor cambia: los valores ya vigentes se envían para recibir su primera aprobación.",
       "COL_FIELD": "Elemento",
       "COL_BEFORE": "Vigente",
       "COL_PROPOSED": "Propuesto",
       "CHANGED": "modificado",
-      "BAND": "{{min}} a {{max}} kg: {{dose}} {{unit}}, {{perDay}} tomas/día",
+      "BAND": "{{min}} a {{max}} kg: {{dose}}, {{perDay}} tomas/día",
       "OWN_PROPOSAL_NOTE": "Usted propuso esta versión: otra persona debe aprobarla.",
       "ROLE_NOTE": {
-        "FORMULARY": "Solo un farmacéutico del establecimiento, distinto del autor, aprueba o rechaza un artículo del formulario.",
+        "FORMULARY": "Solo un farmacéutico del establecimiento, distinto del autor, aprueba o rechaza un artículo del formulario (el médico jefe solo si el establecimiento no tiene ningún farmacéutico activo).",
         "DOSE_LIMIT": "Solo un farmacéutico del establecimiento o su médico jefe, distinto del autor, aprueba o rechaza los límites de dosis."
       },
       "APPROVE": "Aprobar",
       "REFUSE": "Rechazar",
       "WITHDRAW": "Retirar mi propuesta",
       "REFUSE_REASON": "Motivo del rechazo",
-      "REFUSE_REASON_REQUIRED": "Indique el motivo del rechazo.",
+      "REFUSE_TITLE": "¿Rechazar esta versión?",
+      "WITHDRAW_CONFIRM": "¿Retirar su propuesta? Nada cambia en el catálogo.",
       "REFUSE_CONFIRM": "Confirmar el rechazo",
       "APPROVED_TOAST": "Versión aprobada: está vigente",
       "REFUSED_TOAST": "Versión rechazada: nada cambia en el catálogo",

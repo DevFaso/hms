@@ -55,7 +55,6 @@ import { DrugInteractionsComponent } from '../pharmacy/drug-interactions';
 import { GoodsReceiptComponent } from '../pharmacy/goods-receipt';
 import { InventoryDashboardComponent } from '../pharmacy/inventory-dashboard';
 import { MedicationCatalogComponent } from '../pharmacy/medication-catalog';
-import { MedicationCatalogApprovalsComponent } from '../pharmacy/medication-catalog-approvals';
 import { MtmReviewComponent } from '../pharmacy/mtm-review';
 import { PharmacyCheckoutComponent } from '../pharmacy/pharmacy-checkout';
 import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
@@ -323,11 +322,6 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'MedicationCatalogComponent',
     file: 'pharmacy/medication-catalog',
     type: MedicationCatalogComponent,
-  },
-  {
-    name: 'MedicationCatalogApprovalsComponent',
-    file: 'pharmacy/medication-catalog-approvals',
-    type: MedicationCatalogApprovalsComponent,
   },
   { name: 'MtmReviewComponent', file: 'pharmacy/mtm-review', type: MtmReviewComponent },
   {

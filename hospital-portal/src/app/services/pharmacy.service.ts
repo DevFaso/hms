@@ -167,6 +167,9 @@ export interface MedicationCatalogVersion {
   decidedByName?: string | null;
   decidedAt?: string | null;
   decisionReason?: string | null;
+  /** On what authority it was decided; MEDICAL_LEAD_NO_PHARMACIST is the no-pharmacist fallback. */
+  decisionBasis?:
+    'PHARMACIST' | 'MEDICAL_LEAD' | 'MEDICAL_LEAD_NO_PHARMACIST' | 'PLATFORM_ADMIN' | null;
   /** Whether the signed-in user may approve it: the right role here, and not their own proposal. */
   callerMayApprove: boolean;
   callerMayReject: boolean;

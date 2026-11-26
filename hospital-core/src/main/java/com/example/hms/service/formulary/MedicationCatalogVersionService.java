@@ -3,6 +3,7 @@ package com.example.hms.service.formulary;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.MedicationCatalogChangeType;
+import com.example.hms.enums.MedicationCatalogDecisionBasis;
 import com.example.hms.enums.MedicationCatalogVersionKind;
 import com.example.hms.enums.MedicationCatalogVersionStatus;
 import com.example.hms.exception.BusinessException;
@@ -170,7 +171,7 @@ public class MedicationCatalogVersionService {
     public MedicationCatalogVersionResponseDTO approve(UUID versionId, String note) {
         MedicationCatalogVersion version = pendingInScope(versionId);
         UUID approver = roleValidator.getCurrentUserId();
-        policy.requireMayApprove(version, approver);
+        MedicationCatalogDecisionBasis basis = policy.requireMayApprove(version, approver);
 
         LocalDateTime at = now();
         MedicationCatalogItem item = version.getChangeType() == MedicationCatalogChangeType.CREATE
@@ -193,6 +194,7 @@ public class MedicationCatalogVersionService {
         version.setStatus(MedicationCatalogVersionStatus.APPROVED);
         version.setDecidedBy(approver);
         version.setDecidedAt(at);
+        version.setDecisionBasis(basis);
         version.setDecisionReason(FormularySnapshot.text(note));
         MedicationCatalogVersion decided = versionRepository.save(version);
         audit(decided, "APPROVED", approver);
@@ -217,11 +219,12 @@ public class MedicationCatalogVersionService {
     public MedicationCatalogVersionResponseDTO reject(UUID versionId, String reason) {
         MedicationCatalogVersion version = pendingInScope(versionId);
         UUID decider = roleValidator.getCurrentUserId();
-        policy.requireDecidingRole(version, decider);
+        MedicationCatalogDecisionBasis basis = policy.requireDecidingRole(version, decider);
         String why = FormularySnapshot.text(reason);
         if (why == null) {
             throw new FieldBusinessException("reason", "medication.catalog.version.rejectionReasonRequired");
         }
+        version.setDecisionBasis(basis);
         return close(version, MedicationCatalogVersionStatus.REJECTED, decider, why, "REJECTED");
     }
 
@@ -356,6 +359,7 @@ public class MedicationCatalogVersionService {
             .decidedByName(version.getDecidedBy() == null ? null : names.get(version.getDecidedBy()))
             .decidedAt(version.getDecidedAt())
             .decisionReason(version.getDecisionReason())
+            .decisionBasis(version.getDecisionBasis())
             // The hint the queue offers its buttons on: the server refuses the same way (QA D722's lesson).
             .callerMayApprove(pending && policy.mayApprove(version, caller))
             .callerMayReject(pending && policy.holdsDecidingRole(version, caller))

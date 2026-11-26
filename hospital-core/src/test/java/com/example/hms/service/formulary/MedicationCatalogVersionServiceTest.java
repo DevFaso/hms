@@ -2,6 +2,7 @@ package com.example.hms.service.formulary;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.MedicationCatalogChangeType;
+import com.example.hms.enums.MedicationCatalogDecisionBasis;
 import com.example.hms.enums.MedicationCatalogVersionStatus;
 import com.example.hms.enums.PediatricDoseLimitStatus;
 import com.example.hms.exception.BusinessException;
@@ -118,6 +119,7 @@ class MedicationCatalogVersionServiceTest {
             .filter(v -> v.getKind() == call.getArgument(1))
             .mapToInt(MedicationCatalogVersion::getVersionNumber).max().orElse(0));
 
+        when(assignments.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_PHARMACIST")).thenReturn(2L);
         holdsAt(pharmacist, "ROLE_PHARMACIST");
         holdsAt(otherPharmacist, "ROLE_PHARMACIST");
         holdsAt(chiefPhysician, "ROLE_DOCTOR");
@@ -404,6 +406,83 @@ class MedicationCatalogVersionServiceTest {
         actingAs(pharmacist);
         assertThat(service.approve(version.getId(), null).getChangedFields()).containsExactly("active");
         assertThat(item.isActive()).isTrue();
+    }
+
+    // ── the hospital with no pharmacist ──
+
+    /** No active user holds the pharmacist role at the hospital. */
+    private void theHospitalHasNoPharmacist() {
+        when(assignments.existsActiveByUserAndHospitalAndAnyRoleCode(eq(pharmacist), eq(hospitalId), anySet()))
+            .thenReturn(false);
+        when(assignments.existsActiveByUserAndHospitalAndAnyRoleCode(eq(otherPharmacist), eq(hospitalId), anySet()))
+            .thenReturn(false);
+        when(assignments.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_PHARMACIST")).thenReturn(0L);
+    }
+
+    @Test
+    void whereTheHospitalHasNoPharmacist_itsChiefPhysicianApprovesAFormularyVersion_andTheHistorySaysSo() {
+        MedicationCatalogVersion version = proposedStrengthChange();
+        theHospitalHasNoPharmacist();
+
+        // Another doctor is still nobody's approver, fallback or not.
+        actingAs(doctor);
+        assertThatThrownBy(() -> service.approve(version.getId(), null)).isInstanceOf(AccessDeniedException.class);
+
+        actingAs(chiefPhysician);
+        assertThat(service.toDto(version).isCallerMayApprove()).isTrue();
+        MedicationCatalogVersionResponseDTO approved = service.approve(version.getId(), null);
+
+        assertThat(approved.getStatus()).isEqualTo(MedicationCatalogVersionStatus.APPROVED);
+        assertThat(approved.getDecisionBasis())
+            .isEqualTo(MedicationCatalogDecisionBasis.MEDICAL_LEAD_NO_PHARMACIST);
+        assertThat(version.getDecisionBasis()).isEqualTo(MedicationCatalogDecisionBasis.MEDICAL_LEAD_NO_PHARMACIST);
+        assertThat(item.getStrength()).isEqualTo("1000");
+    }
+
+    @Test
+    void theFallbackNeverLetsTheChiefPhysicianApproveTheirOwnProposal() {
+        theHospitalHasNoPharmacist();
+        actingAs(chiefPhysician);
+        MedicationCatalogVersion version = service.proposeFormulary(item, liveWith("1000", false), "Nouveau dosage");
+
+        assertThatThrownBy(() -> service.approve(version.getId(), null))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("medication.catalog.version.fourEyes");
+        assertThat(item.getStrength()).isEqualTo("500");
+        assertThat(service.toDto(version).isCallerMayApprove()).isFalse();
+    }
+
+    @Test
+    void asSoonAsTheHospitalHasAPharmacist_theFormularyIsThePharmacistsAlone() {
+        MedicationCatalogVersion version = proposedStrengthChange();
+        when(assignments.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_PHARMACIST")).thenReturn(1L);
+
+        actingAs(chiefPhysician);
+        assertThatThrownBy(() -> service.approve(version.getId(), null)).isInstanceOf(AccessDeniedException.class);
+        assertThat(item.getStrength()).isEqualTo("500");
+
+        actingAs(pharmacist);
+        assertThat(service.approve(version.getId(), null).getDecisionBasis())
+            .isEqualTo(MedicationCatalogDecisionBasis.PHARMACIST);
+    }
+
+    @Test
+    void theHistoryRecordsOnWhatAuthorityAVersionWasDecided() {
+        actingAs(pharmacist);
+        MedicationCatalogVersion limits = service.proposeDoseLimits(item, paracetamolLimits(), "Limites OMS");
+        actingAs(chiefPhysician);
+        assertThat(service.approve(limits.getId(), null).getDecisionBasis())
+            .isEqualTo(MedicationCatalogDecisionBasis.MEDICAL_LEAD);
+
+        MedicationCatalogVersion refused = proposedStrengthChange();
+        actingAs(pharmacist);
+        assertThat(service.reject(refused.getId(), "Non référencé").getDecisionBasis())
+            .isEqualTo(MedicationCatalogDecisionBasis.PHARMACIST);
+
+        // A version its author took back was decided on nobody's authority.
+        MedicationCatalogVersion withdrawn = proposedStrengthChange();
+        actingAs(admin);
+        assertThat(service.withdraw(withdrawn.getId()).getDecisionBasis()).isNull();
     }
 
     // ── dose limits ──

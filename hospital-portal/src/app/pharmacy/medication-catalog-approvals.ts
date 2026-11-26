@@ -8,7 +8,6 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
@@ -21,7 +20,9 @@ import {
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { allRows } from '../shared/all-pages';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { refusalReason } from '../shared/refusal-reason';
 
 /** One line of a version: a field, what was in force and what is proposed. */
@@ -78,14 +79,7 @@ const DOSE_FIELDS: readonly (keyof DoseLimitSnapshot)[] = [
 @Component({
   selector: 'app-medication-catalog-approvals',
   standalone: true,
-  imports: [
-    DateTimePipe,
-    FormsModule,
-    KeyLabelPipe,
-    TranslateModule,
-    ServerTimePipe,
-    SubmitGuardDirective,
-  ],
+  imports: [DateTimePipe, KeyLabelPipe, TranslateModule, ServerTimePipe, ReasonDialogComponent],
   templateUrl: './medication-catalog-approvals.html',
   styleUrl: './medication-catalog-approvals.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -94,6 +88,7 @@ export class MedicationCatalogApprovalsComponent {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
 
   /** The entry whose history is shown; none for the hospital's queue. */
   readonly entry = input<MedicationCatalogItemResponse | null>(null);
@@ -111,10 +106,8 @@ export class MedicationCatalogApprovalsComponent {
   readonly acting = signal<string | null>(null);
   private readVersion = 0;
 
-  /** The version being refused, and the reason typed so far. */
-  readonly refusing = signal<string | null>(null);
-  refusalText = '';
-  readonly refusalMissing = signal(false);
+  /** The version being refused: the shared reason dialog is open on it. */
+  readonly refusing = signal<MedicationCatalogVersion | null>(null);
 
   readonly forOneEntry = computed(() => !!this.entry());
 
@@ -163,13 +156,16 @@ export class MedicationCatalogApprovalsComponent {
       });
       return;
     }
-    this.svc.listCatalogVersions(pending ? 'PENDING_APPROVAL' : null).subscribe({
-      next: (page) => {
+    // Every page: a queue cut at one page would hide a version that waits (QA D1347).
+    allRows((page, size) =>
+      this.svc.listCatalogVersions(pending ? 'PENDING_APPROVAL' : null, page, size),
+    ).subscribe({
+      next: (rows) => {
         if (version !== this.readVersion) return;
-        this.versions.set(page?.content ?? []);
+        this.versions.set(rows);
         this.loading.set(false);
         if (pending) {
-          this.pendingCount.emit(page?.totalElements ?? 0);
+          this.pendingCount.emit(rows.length);
         }
       },
       error: failed,
@@ -222,8 +218,8 @@ export class MedicationCatalogApprovalsComponent {
           this.translate.instant('PHARMACY.CATALOG_APPROVAL.BAND', {
             min: band.minWeightKg ?? '0',
             max: band.maxWeightKg ?? '∞',
-            dose: band.dosePerAdministration ?? '—',
-            unit: band.doseUnit ?? '',
+            // The dose and its unit as one value, as the pharmacy wrote them ("1 cp").
+            dose: `${band.dosePerAdministration ?? '—'} ${band.doseUnit ?? ''}`.trim(),
             perDay: band.maxDosesPerDay ?? '—',
           }),
         )
@@ -237,29 +233,27 @@ export class MedicationCatalogApprovalsComponent {
     this.act(version, this.svc.approveCatalogVersion(version.id), 'APPROVED_TOAST');
   }
 
-  withdraw(version: MedicationCatalogVersion): void {
+  /** The author takes their waiting proposal back, after being asked once. */
+  async withdraw(version: MedicationCatalogVersion): Promise<void> {
+    const sure = await this.confirm.ask({
+      titleKey: 'PHARMACY.CATALOG_APPROVAL.WITHDRAW_CONFIRM',
+      confirmKey: 'PHARMACY.CATALOG_APPROVAL.WITHDRAW',
+      dismissKey: 'COMMON.BACK',
+    });
+    if (!sure) return;
     this.act(version, this.svc.withdrawCatalogVersion(version.id), 'WITHDRAWN_TOAST');
   }
 
   startRefusal(version: MedicationCatalogVersion): void {
-    this.refusalText = '';
-    this.refusalMissing.set(false);
-    this.refusing.set(version.id);
+    this.refusing.set(version);
   }
 
   cancelRefusal(): void {
     this.refusing.set(null);
-    this.refusalMissing.set(false);
   }
 
-  confirmRefusal(version: MedicationCatalogVersion): void {
-    const reason = this.refusalText.trim();
-    if (!reason) {
-      this.refusalMissing.set(true);
-      this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.REFUSE_REASON_REQUIRED'));
-      return;
-    }
-    this.refusalMissing.set(false);
+  /** The refusal, with the reason the shared dialog asked for (never blank). */
+  confirmRefusal(version: MedicationCatalogVersion, reason: string): void {
     this.act(version, this.svc.rejectCatalogVersion(version.id, reason), 'REFUSED_TOAST');
   }
 

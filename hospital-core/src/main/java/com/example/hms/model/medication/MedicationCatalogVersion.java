@@ -103,6 +103,14 @@ public class MedicationCatalogVersion extends BaseEntity {
     @Column(name = "decided_at")
     private LocalDateTime decidedAt;
 
+    /**
+     * On what authority it was approved or refused: a pharmacist, the médecin-chef, or the médecin-chef because
+     * the hospital had no pharmacist. Null while it waits, and on a version its author withdrew.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "decision_basis", length = 40)
+    private com.example.hms.enums.MedicationCatalogDecisionBasis decisionBasis;
+
     /** The reason of a refusal (required), or a note on an approval. */
     @Column(name = "decision_reason", length = 1000)
     private String decisionReason;

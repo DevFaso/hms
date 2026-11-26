@@ -10,6 +10,7 @@ import { MedicationCatalogComponent } from './medication-catalog';
 import { PharmacyService, MedicationCatalogItemResponse } from '../services/pharmacy.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
 const item = {
   id: 'm-1',
@@ -28,7 +29,7 @@ describe('MedicationCatalogComponent (QA D50)', () => {
       'listCatalogVersions',
     ]);
     svc.listCatalogVersions.and.returnValue(
-      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+      of({ content: [], totalElements: 0, totalPages: 0, size: 200, number: 0, last: true }),
     );
     svc.listMedications.and.returnValue(
       of({ content: [item], totalElements: 1, totalPages: 1, size: 20, number: 0 }),
@@ -178,13 +179,21 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     el = fixture.nativeElement as HTMLElement;
   }
 
-  /** Go-live D2 (V385): the page reads how many versions await approval (one row, for the total). */
+  /** Go-live D2 (V385): the page reads the versions that await approval, every page, and counts them. */
   function flushPendingCount(waiting: number): void {
     const count = http.expectOne(
       (r) => r.method === 'GET' && r.url === '/medication-catalog/versions',
     );
     expect(count.request.params.get('status')).toBe('PENDING_APPROVAL');
-    count.flush({ content: [], totalElements: waiting, totalPages: 1, size: 1, number: 0 });
+    const content = Array.from({ length: waiting }, (_, i) => ({ id: `waiting-${i}` }));
+    count.flush({
+      content,
+      totalElements: waiting,
+      totalPages: 1,
+      size: 200,
+      number: 0,
+      last: true,
+    });
   }
 
   afterEach(() => http.verify());
@@ -334,11 +343,18 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     component.openDosing(waiting);
     fixture.detectChanges();
     expect(el.querySelector('[data-test="dosing-pending-note"]')).not.toBeNull();
-    // The button stays usable and says why nothing is sent (never a silent disabled control).
+    // The button stays usable; a second proposal is the server's to refuse, and its reason is shown.
     component.dosingForm.changeReason = 'Autres limites';
     component.saveDosing();
-    http.expectNone((r) => r.method === 'PUT');
-    expect(toast.error).toHaveBeenCalledWith('PHARMACY.CATALOG_APPROVAL.DOSING_PENDING_NOTE');
+    http
+      .expectOne((r) => r.method === 'PUT')
+      .flush(
+        { message: 'Une version de cet article est déjà en attente de validation.' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    expect(toast.error).toHaveBeenCalledWith(
+      'Une version de cet article est déjà en attente de validation.',
+    );
   });
 
   it('shows an approved entry its version, and limits one person set as provisional', () => {
@@ -364,7 +380,6 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
 
   it('submits an entry nobody approved yet as it stands, from its history, with a reason', () => {
     render(['ROLE_HOSPITAL_ADMIN'], [zidovudine]);
-    const component = fixture.componentInstance;
     el.querySelector<HTMLButtonElement>('[data-test="catalog-history"]')!.click();
     fixture.detectChanges();
     http
@@ -374,11 +389,12 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     expect(el.querySelector('[data-test="history-provisional-note"]')).not.toBeNull();
     expect(el.querySelector('[data-test="approvals-empty"]')).not.toBeNull();
 
-    component.submitAsIs();
+    // The reason is asked by the shared dialog: nothing is sent until it is given.
+    el.querySelector<HTMLButtonElement>('[data-test="history-submit-as-is"]')!.click();
+    fixture.detectChanges();
+    expect(reasonDialog(fixture)).not.toBeNull();
     http.expectNone((r) => r.method === 'POST');
-
-    component.asIsReason = 'Revue du formulaire à la mise en service';
-    component.submitAsIs();
+    answerReasonDialog(fixture, 'Revue du formulaire à la mise en service');
     const post = http.expectOne((r) => r.method === 'POST');
     expect(post.request.url).toBe('/medication-catalog/m-azt/approval-request');
     expect(post.request.body).toEqual({ reason: 'Revue du formulaire à la mise en service' });
@@ -452,7 +468,7 @@ describe('MedicationCatalogComponent — the category column is labelled (QA D52
       'listCatalogVersions',
     ]);
     svc.listCatalogVersions.and.returnValue(
-      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+      of({ content: [], totalElements: 0, totalPages: 0, size: 200, number: 0, last: true }),
     );
     svc.listMedications.and.returnValue(
       of({
@@ -532,7 +548,7 @@ describe('Medication catalogue search ordering', () => {
       'listCatalogVersions',
     ]);
     svc.listCatalogVersions.and.returnValue(
-      of({ content: [], totalElements: 0, totalPages: 0, size: 1, number: 0 }),
+      of({ content: [], totalElements: 0, totalPages: 0, size: 200, number: 0, last: true }),
     );
     svc.searchMedications.and.returnValues(old, latest);
     TestBed.configureTestingModule({

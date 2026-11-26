@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS clinical.medication_catalog_versions (
     decided_by       UUID,
     decided_at       TIMESTAMP,
     decision_reason  VARCHAR(1000),
+    decision_basis   VARCHAR(40),
     CONSTRAINT pk_med_catalog_versions PRIMARY KEY (id),
     CONSTRAINT fk_med_catalog_version_hospital FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
     CONSTRAINT fk_med_catalog_version_item FOREIGN KEY (catalog_item_id)
@@ -49,6 +50,16 @@ CREATE TABLE IF NOT EXISTS clinical.medication_catalog_versions (
         OR (status <> 'PENDING_APPROVAL' AND decided_by IS NOT NULL AND decided_at IS NOT NULL)),
     CONSTRAINT ck_med_catalog_version_refusal CHECK (
         status <> 'REJECTED' OR length(trim(coalesce(decision_reason, ''))) > 0),
+    -- An approval or a refusal says on what authority it was made (a pharmacist, the medecin-chef, the
+    -- medecin-chef because the hospital had no pharmacist, a platform administrator).
+    CONSTRAINT ck_med_catalog_version_basis CHECK (
+        decision_basis IS NULL
+        OR decision_basis IN ('PHARMACIST', 'MEDICAL_LEAD', 'MEDICAL_LEAD_NO_PHARMACIST', 'PLATFORM_ADMIN')),
+    CONSTRAINT ck_med_catalog_version_basis_decided CHECK (
+        status NOT IN ('APPROVED', 'SUPERSEDED', 'REJECTED') OR decision_basis IS NOT NULL),
+    -- The fallback is for the formulary only: dose limits are the medecin-chef's in their own right.
+    CONSTRAINT ck_med_catalog_version_basis_fallback CHECK (
+        decision_basis IS DISTINCT FROM 'MEDICAL_LEAD_NO_PHARMACIST' OR kind = 'FORMULARY'),
     -- Four eyes, in the table too: the approver is never the author.
     CONSTRAINT ck_med_catalog_version_four_eyes CHECK (
         status NOT IN ('APPROVED', 'SUPERSEDED') OR decided_by <> proposed_by)

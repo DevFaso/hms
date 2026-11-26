@@ -11473,22 +11473,30 @@
         "PENDING_APPROVAL": "Décision"
       },
       "DECISION_REASON": "Motif de la décision",
+      "DECISION_BASIS_LABEL": "En qualité de",
+      "DECISION_BASIS": {
+        "PHARMACIST": "Pharmacien de l’établissement",
+        "MEDICAL_LEAD": "Médecin-chef",
+        "MEDICAL_LEAD_NO_PHARMACIST": "Médecin-chef, faute de pharmacien actif dans l’établissement",
+        "PLATFORM_ADMIN": "Administrateur de la plateforme"
+      },
       "RATIFY_NOTE": "Aucune valeur ne change : les valeurs déjà en vigueur sont soumises pour recevoir leur première validation.",
       "COL_FIELD": "Élément",
       "COL_BEFORE": "En vigueur",
       "COL_PROPOSED": "Proposé",
       "CHANGED": "modifié",
-      "BAND": "{{min}} à {{max}} kg : {{dose}} {{unit}}, {{perDay}} prises/jour",
+      "BAND": "{{min}} à {{max}} kg : {{dose}}, {{perDay}} prises/jour",
       "OWN_PROPOSAL_NOTE": "Vous avez proposé cette version : une autre personne doit la valider.",
       "ROLE_NOTE": {
-        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du formulaire.",
+        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du formulaire (le médecin-chef seulement si l’établissement n’a aucun pharmacien actif).",
         "DOSE_LIMIT": "Seul un pharmacien de l’établissement ou son médecin-chef, autre que l’auteur, valide ou refuse des limites de dose."
       },
       "APPROVE": "Valider",
       "REFUSE": "Refuser",
       "WITHDRAW": "Retirer ma proposition",
       "REFUSE_REASON": "Motif du refus",
-      "REFUSE_REASON_REQUIRED": "Indiquez le motif du refus.",
+      "REFUSE_TITLE": "Refuser cette version ?",
+      "WITHDRAW_CONFIRM": "Retirer votre proposition ? Rien ne change dans le catalogue.",
       "REFUSE_CONFIRM": "Confirmer le refus",
       "APPROVED_TOAST": "Version validée : elle est en vigueur",
       "REFUSED_TOAST": "Version refusée : rien ne change dans le catalogue",

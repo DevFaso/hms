@@ -28,7 +28,9 @@ import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/in
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
+import { allRows } from '../shared/all-pages';
 import { MedicationCatalogApprovalsComponent } from './medication-catalog-approvals';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import {
   SensitivityCategory,
   sensitivityLabelKey,
@@ -58,6 +60,7 @@ const APPROVED_FIELDS = [
   standalone: true,
   imports: [
     MedicationCatalogApprovalsComponent,
+    ReasonDialogComponent,
     SensitivitySelectComponent,
     DashPipe,
     SubmitGuardDirective,
@@ -136,10 +139,13 @@ export class MedicationCatalogComponent implements OnInit {
   /** How many versions await approval at this hospital (the panel's label). */
   refreshPendingApprovals(): void {
     if (!this.canSeeApprovals()) return;
-    this.svc.listCatalogVersions('PENDING_APPROVAL', 0, 1).subscribe({
-      next: (page) => this.pendingApprovals.set(page?.totalElements ?? 0),
-      error: () => this.pendingApprovals.set(null),
-    });
+    // Every page of the queue, counted: never one page taken for the whole (QA D1347).
+    allRows((page, size) => this.svc.listCatalogVersions('PENDING_APPROVAL', page, size)).subscribe(
+      {
+        next: (waiting) => this.pendingApprovals.set(waiting.length),
+        error: () => this.pendingApprovals.set(null),
+      },
+    );
   }
 
   /** A version was approved, refused or withdrawn: the entries and the count may have moved. */
@@ -151,16 +157,18 @@ export class MedicationCatalogComponent implements OnInit {
   // The history of one entry (go-live D2)
   historyItem = signal<MedicationCatalogItemResponse | null>(null);
   submittingAsIs = signal(false);
-  asIsReason = '';
+  /** The shared reason dialog is open to submit the entry as it stands. */
+  askingAsIsReason = signal(false);
   /** Bumped to make the history dialog read its versions again. */
   historyRead = signal(0);
 
   openHistory(item: MedicationCatalogItemResponse): void {
-    this.asIsReason = '';
+    this.askingAsIsReason.set(false);
     this.historyItem.set(item);
   }
 
   closeHistory(): void {
+    this.askingAsIsReason.set(false);
     this.historyItem.set(null);
   }
 
@@ -176,21 +184,16 @@ export class MedicationCatalogComponent implements OnInit {
     );
   }
 
-  submitAsIs(): void {
+  /** Submits the entry as it stands, with the reason the shared dialog asked for (never blank). */
+  submitAsIs(reason: string): void {
     const item = this.historyItem();
     if (!item) return;
-    const reason = this.asIsReason.trim();
-    if (!reason) {
-      focusFirstInvalid(this.host.nativeElement, ['asIsReason']);
-      this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED'));
-      return;
-    }
     this.submittingAsIs.set(true);
     this.svc.requestCatalogApproval(item.id, reason).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('PHARMACY.CATALOG_APPROVAL.SUBMITTED_TOAST'));
         this.submittingAsIs.set(false);
-        this.asIsReason = '';
+        this.askingAsIsReason.set(false);
         this.historyItem.set({ ...item, ...updated });
         this.historyRead.update((n) => n + 1);
         this.onVersionDecided();
@@ -587,11 +590,6 @@ export class MedicationCatalogComponent implements OnInit {
   saveDosing(): void {
     const item = this.dosingItem();
     if (!item) return;
-    if (item.pendingDoseLimitVersionId) {
-      // One version in progress at a time: the server refuses a second, and the dialog says so first.
-      this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.DOSING_PENDING_NOTE'));
-      return;
-    }
     if (!this.dosingForm.changeReason.trim()) {
       focusFirstInvalid(this.host.nativeElement, ['dose-reason']);
       this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED'));

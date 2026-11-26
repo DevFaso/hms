@@ -184,25 +184,3 @@ output.loading-state {
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
-
-.refusal {
-  margin-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-
-  label {
-    font-size: 0.8125rem;
-    font-weight: 600;
-  }
-
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-  }
-}
-
-.field-error {
-  color: #b91c1c;
-  font-size: 0.8125rem;
-}

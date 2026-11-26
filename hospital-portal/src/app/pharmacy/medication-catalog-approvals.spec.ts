@@ -9,6 +9,8 @@ import {
   PharmacyService,
 } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
 const strengthChange: MedicationCatalogVersion = {
   id: 'v-1',
@@ -53,6 +55,7 @@ const page = (content: MedicationCatalogVersion[]) => ({
 describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
   let svc: jasmine.SpyObj<PharmacyService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let confirm: jasmine.SpyObj<ConfirmService>;
   let fixture: ComponentFixture<MedicationCatalogApprovalsComponent>;
   let el: HTMLElement;
 
@@ -70,11 +73,13 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     svc.listCatalogVersions.and.returnValue(of(page(versions)));
     svc.catalogVersionHistory.and.returnValue(of(versions));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['ask']);
     TestBed.configureTestingModule({
       imports: [MedicationCatalogApprovalsComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PharmacyService, useValue: svc },
         { provide: ToastService, useValue: toast },
+        { provide: ConfirmService, useValue: confirm },
       ],
     });
     fixture = TestBed.createComponent(MedicationCatalogApprovalsComponent);
@@ -88,7 +93,7 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
   it('reads the queue of versions awaiting approval, and shows the change, its author and its reason', () => {
     render([strengthChange]);
 
-    expect(svc.listCatalogVersions).toHaveBeenCalledOnceWith('PENDING_APPROVAL');
+    expect(svc.listCatalogVersions).toHaveBeenCalledOnceWith('PENDING_APPROVAL', 0, 200);
     expect(text('.version-title')).toBe('Paracétamol 1000 mg (TABLET)');
     expect(text('[data-test="approval-status"]')).toBe('PENDING_APPROVAL');
     expect(text('.version-who')).toContain('Awa Traoré');
@@ -135,25 +140,36 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(text('[data-test="approval-role-note"]')).toBe('FORMULARY');
   });
 
-  it('refuses a version only with a reason, sent as typed', () => {
+  it('refuses a version only with a reason, asked by the shared dialog', () => {
     render([strengthChange]);
     svc.rejectCatalogVersion.and.returnValue(of({ ...strengthChange, status: 'REJECTED' }));
     el.querySelector<HTMLButtonElement>('[data-test="approval-refuse"]')!.click();
-    fixture.detectChanges();
-    const component = fixture.componentInstance;
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog.textContent).toContain('Paracétamol 1000 mg (TABLET)');
 
-    component.confirmRefusal(strengthChange);
+    // A blank reason sends nothing.
+    dialog.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
     fixture.detectChanges();
     expect(svc.rejectCatalogVersion).not.toHaveBeenCalled();
-    expect(
-      el.querySelector('[data-test="approval-refusal-reason"]')!.getAttribute('aria-invalid'),
-    ).toBe('true');
-    expect(el.querySelector('.refusal [role="alert"]')).not.toBeNull();
 
-    component.refusalText = '  Dosage non référencé  ';
-    component.confirmRefusal(strengthChange);
+    answerReasonDialog(fixture, '  Dosage non référencé  ');
     expect(svc.rejectCatalogVersion).toHaveBeenCalledOnceWith('v-1', 'Dosage non référencé');
     expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.CATALOG_APPROVAL.REFUSED_TOAST');
+    expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  it('withdraws the author’s own proposal only after the confirmation', async () => {
+    render([{ ...strengthChange, ownProposal: true, callerMayApprove: false }]);
+    svc.withdrawCatalogVersion.and.returnValue(of({ ...strengthChange, status: 'WITHDRAWN' }));
+
+    confirm.ask.and.resolveTo(false);
+    await fixture.componentInstance.withdraw(strengthChange);
+    expect(svc.withdrawCatalogVersion).not.toHaveBeenCalled();
+
+    confirm.ask.and.resolveTo(true);
+    await fixture.componentInstance.withdraw(strengthChange);
+    expect(svc.withdrawCatalogVersion).toHaveBeenCalledOnceWith('v-1');
+    expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.CATALOG_APPROVAL.WITHDRAWN_TOAST');
   });
 
   it("says the server's reason when an approval is refused, and keeps the version in the queue", () => {
@@ -192,7 +208,7 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     el.querySelector<HTMLButtonElement>('[data-test="approvals-view-history"]')!.click();
     fixture.detectChanges();
 
-    expect(svc.listCatalogVersions).toHaveBeenCalledWith(null);
+    expect(svc.listCatalogVersions).toHaveBeenCalledWith(null, 0, 200);
     expect(text('[data-test="approval-status"]')).toBe('REJECTED');
     expect(text('.version-who')).toContain('Issa Sawadogo');
     expect(text('[data-test="approval-decision-reason"]')).toBe('Dosage non référencé');
