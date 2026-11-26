@@ -24,7 +24,7 @@ public class LowStockAlertDelivery {
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public int deliver(InventoryItem item, Object[] arguments) {
         if (item == null || !item.isActive() || item.getPharmacy() == null || !item.getPharmacy().isActive()
                 || item.getPharmacy().getHospital() == null || !item.getPharmacy().getHospital().isActive()

@@ -42,6 +42,7 @@ class LowStockAlertClaimPostgresIT {
         .withDatabaseName("hms_low_stock_claims").withUsername("hms_test_user").withPassword("hms_test_pass");
     private static JdbcTemplate jdbc;
     private static TransactionTemplate transaction;
+    private static DataSourceTransactionManager transactionManager;
     private NotificationService notifications;
     private LowStockAlertDelivery delivery;
     private InventoryItem item;
@@ -50,7 +51,8 @@ class LowStockAlertClaimPostgresIT {
     static void schema() throws Exception {
         var source = new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         jdbc = new JdbcTemplate(source);
-        transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
+        transactionManager = new DataSourceTransactionManager(source);
+        transaction = new TransactionTemplate(transactionManager);
         jdbc.execute("CREATE SCHEMA clinical; CREATE SCHEMA security");
         jdbc.execute("CREATE TABLE clinical.inventory_items (id uuid PRIMARY KEY)");
         jdbc.execute("CREATE TABLE security.users (id uuid PRIMARY KEY)");
@@ -75,8 +77,13 @@ class LowStockAlertClaimPostgresIT {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), LowStockAlertDelivery.RECIPIENT_ROLES))
             .thenReturn(List.of(pharmacist));
         notifications = mock(NotificationService.class);
-        delivery = new LowStockAlertDelivery(assignments, notifications, jdbc,
+        var target = new LowStockAlertDelivery(assignments, notifications, jdbc,
             Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC));
+        var proxy = new org.springframework.aop.framework.ProxyFactory(target);
+        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
+            (org.springframework.transaction.TransactionManager) transactionManager,
+            new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        delivery = (LowStockAlertDelivery) proxy.getProxy();
     }
 
     @Test
@@ -99,14 +106,28 @@ class LowStockAlertClaimPostgresIT {
     }
 
     @Test
+    void aFailedItemDoesNotRollBackAnotherItemsSuccessfulAlert() {
+        when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
+            .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
+        transaction.executeWithoutResult(status -> {
+            assertThatThrownBy(() -> delivery.deliver(item, new Object[0])).isInstanceOf(IllegalStateException.class);
+            assertThat(delivery.deliver(item, new Object[0])).isEqualTo(1);
+        });
+        assertThat(claimCount()).isEqualTo(1);
+        verify(notifications, times(2)).createNotification(anyString(), any(), anyString(), anyString(), eq(item.getId()));
+    }
+
+    @Test
     void aFailedNotificationRollsBackTheClaimAndASuccessfulRetryCannotSendTwice() {
         when(notifications.createNotification(anyString(), any(), anyString(), anyString(), any()))
             .thenThrow(new IllegalStateException("Synthetic notification failure")).thenReturn(new Notification());
         assertThatThrownBy(() -> transaction.execute(status -> delivery.deliver(item, new Object[0])))
             .isInstanceOf(IllegalStateException.class);
         assertThat(claimCount()).isZero();
-        assertThat(transaction.execute(status -> delivery.deliver(item, new Object[0]))).isEqualTo(1);
-        assertThat(transaction.execute(status -> delivery.deliver(item, new Object[0]))).isZero();
+        Integer delivered = transaction.execute(status -> delivery.deliver(item, new Object[0]));
+        Integer repeated = transaction.execute(status -> delivery.deliver(item, new Object[0]));
+        assertThat(delivered).isEqualTo(1);
+        assertThat(repeated).isZero();
         assertThat(claimCount()).isEqualTo(1);
         verify(notifications, times(2)).createNotification(anyString(), any(), anyString(), anyString(), eq(item.getId()));
     }

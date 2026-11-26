@@ -20,7 +20,10 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     @Query("""
         SELECT i.id, i.medicationCatalogItem.id, t.unitSnapshot,
             SUM(CASE WHEN t.transactionType IN :outTypes THEN t.quantity ELSE 0 END),
-            SUM(CASE WHEN t.transactionType = :returnType AND NOT EXISTS
+            SUM(CASE WHEN t.transactionType = :returnType
+                AND (t.referenceId IS NOT NULL OR t.reason LIKE 'Dispense cancelled%stock returned for prescription %'
+                     OR t.reason LIKE 'Prepared fill cancelled%stock returned for prescription %')
+                AND NOT EXISTS
                 (SELECT origin.id FROM StockTransaction origin
                  WHERE origin.id = t.referenceId AND origin.transactionType = :transferType)
                 THEN t.quantity ELSE 0 END), COUNT(t.id)

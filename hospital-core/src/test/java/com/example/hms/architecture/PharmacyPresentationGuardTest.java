@@ -11,7 +11,7 @@ class PharmacyPresentationGuardTest {
     void manualAndScheduledAlertsUseTheSameRecipientScopedTransactionalClaim() throws Exception {
         Path services = Path.of("src/main/java/com/example/hms/service");
         String delivery = Files.readString(services.resolve("pharmacy/LowStockAlertDelivery.java"));
-        assertThat(delivery).contains("@Transactional", "findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES)",
+        assertThat(delivery).contains("Propagation.REQUIRES_NEW", "findLiveUsersAtHospitalWithRoleCodes(hospitalId, RECIPIENT_ROLES)",
             "ON CONFLICT DO NOTHING", "if (claimed == 1)");
         assertThat(delivery.indexOf("INSERT INTO clinical.low_stock_alert_receipts"))
             .isLessThan(delivery.indexOf("notifications.createNotification("));

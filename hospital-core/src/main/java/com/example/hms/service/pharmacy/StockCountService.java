@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -158,7 +158,8 @@ public class StockCountService {
                 entityManager.refresh(lot);
             }
             entityManager.refresh(item);
-        } catch (PessimisticLockingFailureException busy) {
+        } catch (DataAccessException busy) {
+            if (!StockRowLocks.isContention(busy)) throw busy;
             FieldBusinessException refusal = new FieldBusinessException("countedQuantity", "stockCount.stockBusy");
             refusal.initCause(busy);
             throw refusal;
@@ -191,7 +192,7 @@ public class StockCountService {
         try {
             WholeUnitQuantity.require(item, quantity);
         } catch (BusinessException invalid) {
-            FieldBusinessException refusal = new FieldBusinessException("countedQuantity", invalid.getMessageKey(), invalid.getArgs());
+            FieldBusinessException refusal = new FieldBusinessException("countedQuantity", WholeUnitQuantity.DEFAULT_KEY);
             refusal.initCause(invalid);
             throw refusal;
         }

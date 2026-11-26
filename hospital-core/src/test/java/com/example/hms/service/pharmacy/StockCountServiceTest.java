@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, com.example.hms.i18n.EnglishMessageBundles.class})
 class StockCountServiceTest {
     @Mock private StockCountRepository counts;
     @Mock private InventoryItemRepository items;
@@ -59,7 +59,8 @@ class StockCountServiceTest {
         count.setId(UUID.randomUUID());
         when(roles.requireActiveHospitalId()).thenReturn(hospital.getId());
         when(roles.getCurrentUserId()).thenReturn(actor.getId());
-        when(roles.hasRole(actor.getId(), hospital.getId(), "PHARMACIST")).thenReturn(true);
+        when(roles.hasRole(eq(actor.getId()), eq(hospital.getId()), anyString()))
+            .thenAnswer(call -> "PHARMACIST".equals(call.getArgument(2)));
     }
 
     private StockCountRequestDTO request() {
