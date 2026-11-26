@@ -383,7 +383,7 @@ describe('RegistrationsComponent global super-admin view', () => {
     expect(fixture.componentInstance.loadError()).toBeFalse();
   });
 
-  it('includes later pages for each hospital in the network count', () => {
+  it('uses the latest complete prefix for each hospital in the network count', () => {
     const { fixture, http } = page();
     const firstPage = Array.from({ length: ALL_PAGES_SIZE }, (_, index) => ({
       id: `r-${index}`,
@@ -404,9 +404,13 @@ describe('RegistrationsComponent global super-admin view', () => {
         (r) =>
           r.url === '/registrations' &&
           r.params.get('hospitalId') === 'h1' &&
-          r.params.get('page') === '1',
+          r.params.get('page') === '0' &&
+          r.params.get('size') === '400',
       )
-      .flush([{ id: 'r-last', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+      .flush([
+        { id: 'r-last', hospitalId: 'h1', hospitalName: 'First', active: true },
+        ...firstPage,
+      ]);
     http
       .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
       .flush([{ id: 'r-other', hospitalId: 'h2', hospitalName: 'Second', active: true }]);
