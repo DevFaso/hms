@@ -1029,6 +1029,91 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         });
       });
 
+      it('an incompatible O positive bag for a patient at risk records how the order was given, and the biologist', async () => {
+        await open(['ROLE_LAB_TECHNICIAN']);
+        stubOptions({
+          incompatibleUnits: [
+            {
+              id: 'opos',
+              unitNumber: 'OPOS',
+              aboGroup: 'O',
+              rhFactor: 'POSITIVE',
+              incompatibilityReason: 'Anti-K',
+              releasable: true,
+            },
+            {
+              id: 'apos',
+              unitNumber: 'APOS',
+              aboGroup: 'A',
+              rhFactor: 'POSITIVE',
+              incompatibilityReason: 'Anti-K',
+              releasable: true,
+            },
+          ],
+          positiveRule: rule({
+            riskTier: 'KNOWN_ANTIBODY',
+            tierReason: 'KNOWN_ANTIBODY',
+            biologists: [{ userId: 'bio', displayName: 'Dr Bio' }],
+          }),
+        });
+        txSpy.emergencyRelease = jasmine
+          .createSpy()
+          .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+        component.openIncompatibleRelease(emergency);
+
+        // A bag of another group is not an O positive release: nothing more is asked.
+        component.emergencyUnitId = 'apos';
+        fixture.detectChanges();
+        expect(component.incompatiblePositiveTier()).toBeNull();
+        expect(el('si-opos-tier')).toBeNull();
+
+        component.emergencyUnitId = 'opos';
+        fixture.detectChanges();
+        expect(el('si-opos-tier')).not.toBeNull();
+        expect(el('si-verbal-order')).not.toBeNull();
+        expect(document.getElementById('si-biologist')).not.toBeNull();
+
+        component.emergencyAuthoriserId = 'dir';
+        component.emergencyReason = 'Rien à temps';
+        component.emergencyVerbalOrder = false;
+        component.emergencyBiologistId = 'bio';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'opos',
+          releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+          reason: 'Rien à temps',
+          authoriserUserId: 'dir',
+          verbalOrder: false,
+          biologistUserId: 'bio',
+        });
+      });
+
+      it('a bag still out is shown as issued, administration not confirmed; once given, as an exposure', async () => {
+        await start(['ROLE_DOCTOR']);
+        const out = mockRequest({
+          id: 'req-1',
+          urgency: 'EMERGENCY',
+          status: 'ISSUED',
+          rhdPositiveExposed: true,
+          rhdPositiveExposureConfirmed: false,
+          rhdPositiveExposedAt: '2026-11-25T22:00:00',
+          rhdPositiveExposedHospitalName: 'Clinique A',
+        });
+        txSpy.getRequest.and.returnValue(of(out));
+        component.openRequest(out);
+        fixture.detectChanges();
+        expect(el('rhd-exposed')!.textContent).toContain(
+          'TRANSFUSION.OPOS.EXPOSED_BANNER_UNCONFIRMED',
+        );
+
+        const given = { ...out, rhdPositiveExposureConfirmed: true };
+        txSpy.getRequest.and.returnValue(of(given));
+        component.openRequest(given);
+        fixture.detectChanges();
+        expect(el('rhd-exposed')!.textContent).toContain('TRANSFUSION.OPOS.EXPOSED_BANNER');
+        expect(el('rhd-exposed')!.textContent).not.toContain('UNCONFIRMED');
+      });
+
       it('the request shows the permanent RhD exposure flag and what is owed on each O positive release', async () => {
         await start(['ROLE_DOCTOR']);
         const exposed = mockRequest({
@@ -1036,6 +1121,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           urgency: 'EMERGENCY',
           status: 'ISSUED',
           rhdPositiveExposed: true,
+          rhdPositiveExposureConfirmed: true,
           rhdPositiveExposedAt: '2026-11-25T22:00:00',
           rhdPositiveExposedHospitalName: 'Clinique A',
           emergencyReleases: [

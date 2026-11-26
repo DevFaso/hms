@@ -165,7 +165,17 @@ public class OPositiveReleaseDecision extends BaseEntity {
     @Column(name = "review_note", columnDefinition = "TEXT")
     private String reviewNote;
 
-    /** The permanent flag: this release exposed a patient at risk to RhD positive red cells. Never cleared. */
+    /**
+     * The notices of this release (review, countersignature, follow-up) were filed. Null while they are owed:
+     * the release never waits for them, and the sweep delivers what a failure left behind.
+     */
+    @Column(name = "notices_filed_at")
+    private LocalDateTime noticesFiledAt;
+
+    /**
+     * This release put O RhD positive red cells out for a patient at risk: the permanent flag rests on it, once
+     * the bag is given or while it is still out. A bag that came back unused exposed nobody. Never cleared.
+     */
     @Column(name = "rhd_exposure", nullable = false)
     private boolean rhdExposure;
 

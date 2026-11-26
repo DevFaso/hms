@@ -46,7 +46,10 @@
   @if (rhdExposed()) {
     <span class="bgs-antibody" data-testid="blood-group-rhd-exposed">
       <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>
-      {{ 'BLOOD_GROUP.RHD_EXPOSED' | translate }}
+      {{
+        (rhdExposureConfirmed() ? 'BLOOD_GROUP.RHD_EXPOSED' : 'BLOOD_GROUP.RHD_EXPOSED_UNCONFIRMED')
+          | translate
+      }}
     </span>
   }
 </span>

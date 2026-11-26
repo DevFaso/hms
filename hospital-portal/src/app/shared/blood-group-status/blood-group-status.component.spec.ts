@@ -86,8 +86,11 @@ describe('BloodGroupStatusComponent', () => {
   });
 
   it('V380: shows the permanent RhD positive exposure flag, with or without a group on file', () => {
-    let el = show({ rhdPositiveExposed: true });
+    let el = show({ rhdPositiveExposed: true, rhdPositiveExposureConfirmed: true });
     expect(text(el, 'blood-group-rhd-exposed')).toMatch(/BLOOD_GROUP\.RHD_EXPOSED$/);
+    // Issued and never recorded as given: said to be unconfirmed, not stated as an exposure.
+    el = show({ rhdPositiveExposed: true, rhdPositiveExposureConfirmed: false });
+    expect(text(el, 'blood-group-rhd-exposed')).toMatch(/BLOOD_GROUP\.RHD_EXPOSED_UNCONFIRMED$/);
     el = show({ confirmed: 'O-', rhdPositiveExposed: false });
     expect(byId(el, 'blood-group-rhd-exposed')).toBeNull();
     el = show({ confirmed: 'O-', rhdPositiveExposed: true }, null, { showAntibodies: false });

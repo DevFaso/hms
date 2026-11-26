@@ -568,6 +568,8 @@ class TransfusionEmergencyReleaseTest {
         service.emergencyRelease(request.getId(), decision(unit));
         assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
         assertThat(rows).singleElement().satisfies(row -> assertThat(row.getNegativeUnobtainableStated()).isFalse());
+        // V380: no statement was asked, and the stock holds O negative: never recorded as « out of stock ».
+        assertThat(positive.last().getNegativeStatus()).isEqualTo(com.example.hms.enums.ONegativeStatus.PROTOCOL_FIRST_LINE);
     }
 
     @Test
@@ -1317,7 +1319,7 @@ class TransfusionEmergencyReleaseTest {
             assertThat(decision.getNegativeStatus()).isEqualTo(com.example.hms.enums.ONegativeStatus.STATED_UNOBTAINABLE);
         });
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(positive.inBasket, org.mockito.Mockito.atLeastOnce()).createItemInNewTransaction(items.capture());
+        verify(positive.inBasket, org.mockito.Mockito.atLeastOnce()).createItem(items.capture());
         assertThat(items.getAllValues()).anySatisfy(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.URGENT);
@@ -1439,5 +1441,20 @@ class TransfusionEmergencyReleaseTest {
             assertThat(decision.getDecidedByUserId()).isNull();
             assertThat(decision.getBiologistUserId()).isEqualTo(director);
         });
+    }
+
+    @Test
+    @DisplayName("V380: an O negative release reads nothing of the O positive rule: neither the protocol nor a decision row")
+    void anONegativeReleaseReadsNothingOfTheRule() {
+        TransfusionRequest request = emergency();
+        BloodUnit negative = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
+        org.mockito.Mockito.clearInvocations(positive.protocolRepository);
+
+        service.issueUnit(request.getId(), negative.getId());
+
+        assertThat(negative.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        verify(positive.protocolRepository, never()).findByHospital_Id(any());
+        verify(positive.decisionRepository, never()).save(any());
+        assertThat(positive.decisions).isEmpty();
     }
 }

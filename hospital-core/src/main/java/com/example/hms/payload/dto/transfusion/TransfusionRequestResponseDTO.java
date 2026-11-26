@@ -71,6 +71,8 @@ public class TransfusionRequestResponseDTO {
     private java.time.LocalDateTime rhdPositiveExposedAt;
     /** The hospital that recorded it. */
     private String rhdPositiveExposedHospitalName;
+    /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
+    private Boolean rhdPositiveExposureConfirmed;
     private boolean antibodyWorkupServes;
     private com.example.hms.enums.VitalUrgencyLevel vitalUrgencyLevel;
     private String vitalUrgencyReason;

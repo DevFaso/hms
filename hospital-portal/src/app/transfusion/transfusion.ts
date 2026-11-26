@@ -24,6 +24,7 @@ import {
   BloodUnitResponse,
   BloodUnitStatus,
   EmergencyReleaseOptions,
+  OPositiveRule,
   PatientBloodGroupResponse,
   RhFactor,
   TransfusionAdministrationResponse,
@@ -923,6 +924,18 @@ export class TransfusionComponent implements OnInit {
     );
   }
 
+  /**
+   * V380: the bag picked on the incompatible form is O positive and the patient is outside the low-risk tier:
+   * the form also asks how the order was given and, for a known antibody, the biologist. Null otherwise.
+   */
+  incompatiblePositiveTier(): OPositiveRule | null {
+    const options = this.emergencyOptions();
+    const rule = options?.positiveRule;
+    const bag = options?.incompatibleUnits.find((u) => u.id === this.emergencyUnitId);
+    const positive = bag?.aboGroup === 'O' && bag.rhFactor === 'POSITIVE';
+    return positive && rule && !rule.issuerMayDecide ? rule : null;
+  }
+
   onEmergencyUnreachableChanged(): void {
     if (this.emergencyUnreachable) this.emergencyAuthoriserId = '';
   }
@@ -1085,6 +1098,7 @@ export class TransfusionComponent implements OnInit {
     }
     const stating = this.emergencyStatementRequired();
     if (stating && !this.emergencyNegativeStated) return;
+    const positiveTier = this.incompatiblePositiveTier();
     this.incompatibleSubmitting.set(true);
     this.transfusion
       .emergencyRelease(request.id, {
@@ -1093,6 +1107,11 @@ export class TransfusionComponent implements OnInit {
         reason: this.emergencyReason.trim(),
         authoriserUserId: this.emergencyAuthoriserId,
         ...(stating ? { negativeUnobtainable: true } : {}),
+        // V380: an O positive bag for a patient at risk records how the order was given, and the biologist.
+        ...(positiveTier ? { verbalOrder: this.emergencyVerbalOrder } : {}),
+        ...(positiveTier && this.emergencyBiologistId
+          ? { biologistUserId: this.emergencyBiologistId }
+          : {}),
       })
       .subscribe({
         next: () => {

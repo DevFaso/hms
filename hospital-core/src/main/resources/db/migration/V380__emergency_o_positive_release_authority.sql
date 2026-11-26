@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS clinical.o_positive_release_decisions (
     reviewed_by_user_id         UUID,
     reviewed_at                 TIMESTAMP,
     review_note                 TEXT,
+    notices_filed_at            TIMESTAMP,
     rhd_exposure                BOOLEAN      NOT NULL DEFAULT FALSE,
     follow_up_required          BOOLEAN      NOT NULL DEFAULT FALSE,
     antibody_screen_due_from    DATE,
@@ -91,15 +92,15 @@ CREATE TABLE IF NOT EXISTS clinical.o_positive_release_decisions (
     CONSTRAINT fk_o_positive_decision_anti_d       FOREIGN KEY (anti_d_decided_by_user_id)   REFERENCES security.users(id) ON DELETE NO ACTION,
     CONSTRAINT fk_o_positive_decision_informer     FOREIGN KEY (patient_informed_by_user_id) REFERENCES security.users(id) ON DELETE NO ACTION,
     CONSTRAINT ck_o_positive_decision_tier         CHECK (risk_tier IN ('LOW_RISK', 'HIGH_RISK', 'KNOWN_ANTIBODY')),
-    CONSTRAINT ck_o_positive_decision_basis        CHECK (decision_basis IN ('PROTOCOL', 'PHYSICIAN_ORDER', 'PHYSICIAN_AND_BIOLOGIST', 'AUTHORITY_PENDING')),
+    CONSTRAINT ck_o_positive_decision_basis        CHECK (decision_basis IN ('PROTOCOL', 'PHYSICIAN_ORDER', 'BIOLOGIST_AUTHORITY', 'PHYSICIAN_AND_BIOLOGIST', 'AUTHORITY_PENDING')),
     CONSTRAINT ck_o_positive_decision_priority     CHECK (review_priority IN ('ROUTINE', 'URGENT', 'IMMEDIATE')),
     CONSTRAINT ck_o_positive_decision_sex          CHECK (patient_sex IN ('MALE', 'FEMALE', 'UNKNOWN')),
     CONSTRAINT ck_o_positive_decision_o_negative   CHECK (o_negative_status IN ('OUT_OF_STOCK', 'STATED_UNOBTAINABLE', 'PROTOCOL_FIRST_LINE')),
     -- The issuer alone decides only in the low-risk tier, under the active protocol of the hospital.
     CONSTRAINT ck_o_positive_decision_issuer_alone CHECK (decision_basis <> 'PROTOCOL'
         OR (risk_tier = 'LOW_RISK' AND protocol_active = TRUE)),
-    -- An order by a physician names the physician, who is never the person issuing.
-    CONSTRAINT ck_o_positive_decision_physician    CHECK (decision_basis NOT IN ('PHYSICIAN_ORDER', 'PHYSICIAN_AND_BIOLOGIST')
+    -- An order by a physician, or the authority of the biologist, names that person, who is never the person issuing.
+    CONSTRAINT ck_o_positive_decision_physician    CHECK (decision_basis NOT IN ('PHYSICIAN_ORDER', 'BIOLOGIST_AUTHORITY', 'PHYSICIAN_AND_BIOLOGIST')
         OR (decided_by_user_id IS NOT NULL AND decided_by_user_id IS DISTINCT FROM issued_by_user_id)),
     CONSTRAINT ck_o_positive_decision_biologist    CHECK (decision_basis <> 'PHYSICIAN_AND_BIOLOGIST' OR biologist_user_id IS NOT NULL),
     -- Outside the low-risk tier a countersignature is always owed.
@@ -110,6 +111,10 @@ CREATE INDEX IF NOT EXISTS idx_o_positive_decision_hospital
     ON clinical.o_positive_release_decisions (hospital_id, issued_at);
 CREATE INDEX IF NOT EXISTS idx_o_positive_decision_patient
     ON clinical.o_positive_release_decisions (patient_id, rhd_exposure);
+-- The notices of a release are owed until notices_filed_at is set: the sweep reads the rows still owed.
+CREATE INDEX IF NOT EXISTS idx_o_positive_decision_notices_owed
+    ON clinical.o_positive_release_decisions (issued_at)
+    WHERE notices_filed_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_o_positive_decision_countersign_due
     ON clinical.o_positive_release_decisions (countersign_due_at)
     WHERE countersigned_at IS NULL AND countersign_escalated_at IS NULL;

@@ -4,8 +4,6 @@ import com.example.hms.enums.AboGroup;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EmergencyReleaseType;
-import com.example.hms.enums.InBasketItemType;
-import com.example.hms.enums.InBasketPriority;
 import com.example.hms.enums.ONegativeStatus;
 import com.example.hms.enums.OPositiveDecisionBasis;
 import com.example.hms.enums.OPositiveReviewPriority;
@@ -21,11 +19,9 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.OPositiveReleaseDecision;
 import com.example.hms.model.OPositiveReleaseProtocol;
 import com.example.hms.model.Patient;
-import com.example.hms.model.Staff;
 import com.example.hms.model.TransfusionRequest;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
-import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
 import com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO;
 import com.example.hms.payload.dto.transfusion.EmergencyReleaseOptionsDTO;
 import com.example.hms.payload.dto.transfusion.EmergencyReleaseRequestDTO;
@@ -34,20 +30,18 @@ import com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO;
 import com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO;
 import com.example.hms.repository.OPositiveReleaseDecisionRepository;
 import com.example.hms.repository.OPositiveReleaseProtocolRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.InBasketService;
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
-import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.support.EmergencyReleasePolicy;
 import com.example.hms.service.support.OPositiveReleaseAuthority;
+import com.example.hms.service.support.OPositiveReleaseAuthority.ExposureState;
 import com.example.hms.service.support.OPositiveReleaseAuthority.Settings;
 import com.example.hms.service.support.OPositiveReleaseAuthority.Subject;
 import com.example.hms.service.support.OPositiveReleaseAuthority.Tier;
-import com.example.hms.utility.DisplayDates;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.utility.TransactionCallbacks;
@@ -92,21 +86,6 @@ import java.util.UUID;
 @ProvisionalRule(ClinicalRuleSetKey.EMERGENCY_O_POSITIVE_AUTHORITY)
 public class OPositiveReleaseAuthorityService {
 
-    public static final String REVIEW_TITLE_KEY = "transfusion.oPositive.review.inBasketTitle";
-    public static final String REVIEW_ROUTINE_BODY_KEY = "transfusion.oPositive.review.routine.inBasketBody";
-    public static final String REVIEW_URGENT_BODY_KEY = "transfusion.oPositive.review.urgent.inBasketBody";
-    public static final String REVIEW_IMMEDIATE_BODY_KEY = "transfusion.oPositive.review.immediate.inBasketBody";
-    public static final String REVIEW_PENDING_BODY_KEY = "transfusion.oPositive.review.pending.inBasketBody";
-    public static final String COUNTERSIGN_TITLE_KEY = "transfusion.oPositive.countersign.inBasketTitle";
-    public static final String COUNTERSIGN_BODY_KEY = "transfusion.oPositive.countersign.inBasketBody";
-    public static final String FOLLOW_UP_TITLE_KEY = "transfusion.oPositive.followUp.inBasketTitle";
-    public static final String FOLLOW_UP_BODY_KEY = "transfusion.oPositive.followUp.inBasketBody";
-    public static final String OVERDUE_TITLE_KEY = "transfusion.oPositive.overdue.inBasketTitle";
-    public static final String OVERDUE_BODY_KEY = "transfusion.oPositive.overdue.inBasketBody";
-    static final String REVIEW_REFERENCE_TYPE = "TRANSFUSION_O_POSITIVE_REVIEW";
-    static final String COUNTERSIGN_REFERENCE_TYPE = "TRANSFUSION_O_POSITIVE_COUNTERSIGN";
-    static final String FOLLOW_UP_REFERENCE_TYPE = "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP";
-    static final String OVERDUE_REFERENCE_TYPE = "TRANSFUSION_O_POSITIVE_COUNTERSIGN_OVERDUE";
     private static final String DECISION_ENTITY_TYPE = "O_POSITIVE_RELEASE_DECISION";
     private static final String PROTOCOL_ENTITY_TYPE = "HOSPITAL_O_POSITIVE_PROTOCOL";
     private static final String FIELD_AUTHORISER = "authoriserUserId";
@@ -122,10 +101,10 @@ public class OPositiveReleaseAuthorityService {
     private final OPositiveReleaseDecisionRepository decisionRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
-    private final PatientRepository patientRepository;
     private final RoleValidator roleValidator;
     private final InBasketService inBasketService;
     private final AuditEventLogService auditEventLogService;
+    private final OPositiveReleaseNotices notices;
     private final Clock clock;
 
     /** The account of cross-hospital reads. Optional for the sliced test contexts only. */
@@ -261,10 +240,17 @@ public class OPositiveReleaseAuthorityService {
                 yield new Authorisation(assessment, OPositiveDecisionBasis.PROTOCOL, decider, null, false, issuer);
             }
             case HIGH_RISK -> {
-                UUID physician = physician(input, issuer, hospitalId, OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES);
-                yield physician == null
-                    ? new Authorisation(assessment, OPositiveDecisionBasis.AUTHORITY_PENDING, null, null, false, issuer)
-                    : new Authorisation(assessment, OPositiveDecisionBasis.PHYSICIAN_ORDER, physician, null, verbal, issuer);
+                UUID decider = physician(input, issuer, hospitalId, OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES);
+                if (decider == null) {
+                    yield new Authorisation(assessment, OPositiveDecisionBasis.AUTHORITY_PENDING, null, null, false, issuer);
+                }
+                // « The requesting physician is enough; the biologist or laboratory director if reachable »: the
+                // director's authority is recorded as the director's, never as a physician's order.
+                boolean byPhysician = assignmentRepository.existsActiveWitness(decider, hospitalId,
+                    OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES);
+                yield new Authorisation(assessment,
+                    byPhysician ? OPositiveDecisionBasis.PHYSICIAN_ORDER : OPositiveDecisionBasis.BIOLOGIST_AUTHORITY,
+                    decider, null, verbal, issuer);
             }
             case KNOWN_ANTIBODY -> {
                 // The physician's seat is a physician's, whatever the release. An incompatible release may be
@@ -336,9 +322,9 @@ public class OPositiveReleaseAuthorityService {
     }
 
     /**
-     * Keeps the decision beside its release row and files what follows it. A bag that is not O positive red
-     * cells writes nothing. The notices are composed here, in the transaction, and filed after the commit: a
-     * notice that cannot be filed never undoes the release.
+     * Keeps the decision beside its release row. A bag that is not O positive red cells writes nothing. The
+     * notices are owed by the row and delivered after the commit ({@link OPositiveReleaseNotices}): a notice
+     * never holds or undoes a release, and one that cannot be delivered now is delivered by the sweep.
      *
      * @return the decision row, or null when the rule does not apply to the bag
      */
@@ -385,7 +371,10 @@ public class OPositiveReleaseAuthorityService {
             .antibodyScreenDueFrom(exposure ? issuedOn.plusMonths(OPositiveReleaseAuthority.ANTIBODY_SCREEN_FROM_MONTHS) : null)
             .antibodyScreenDueBy(exposure ? issuedOn.plusMonths(OPositiveReleaseAuthority.ANTIBODY_SCREEN_BY_MONTHS) : null)
             .build());
-        notifySafely(() -> fileNotices(saved, request, unit), saved.getId());
+        // The row is the obligation: its notices are resolved and filed after the commit, in a transaction of
+        // their own. Nothing about a reader is read here, so nothing about a reader can fail this release.
+        UUID decisionId = saved.getId();
+        TransactionCallbacks.afterCommit(() -> deliverNotices(decisionId));
         auditAfterCommit(AuditEventType.O_POSITIVE_RELEASE_DECIDED, saved, authorisation.issuer,
             "Emergency O positive release decision recorded for blood unit " + saved.getBloodUnitId()
                 + " against transfusion request " + saved.getRequestId());
@@ -400,173 +389,12 @@ public class OPositiveReleaseAuthorityService {
         };
     }
 
-    // ── What follows a release ──────────────────────────────────────────
-
-    /**
-     * The review item of every biologist; the countersignature task of the physician named; the follow-up task
-     * of the exposure for the clinicians of the request. With no biologist at the hospital the review goes to
-     * the clinicians instead of nowhere.
-     */
-    private void fileNotices(OPositiveReleaseDecision decision, TransfusionRequest request, BloodUnit unit) {
-        UUID hospitalId = request.getHospital().getId();
-        Patient patient = request.getPatient();
-        String patientName = patient != null ? patient.getFullName() : null;
-        UUID issuer = decision.getIssuedByUserId();
-        Set<UUID> clinicians = new LinkedHashSet<>();
-        if (decision.getDecidedByUserId() != null && !Objects.equals(decision.getDecidedByUserId(), issuer)) {
-            clinicians.add(decision.getDecidedByUserId());
-        }
-        Staff requester = request.getRequestedBy();
-        if (requester != null && requester.getUser() != null && !Objects.equals(requester.getUser().getId(), issuer)) {
-            clinicians.add(requester.getUser().getId());
-        }
-        List<UUID> biologists = biologists(hospitalId);
-        Collection<UUID> reviewers = biologists;
-        if (biologists.isEmpty()) {
-            log.warn("O positive release decision {} has no biologist to review it at hospital {}: its clinicians are told",
-                decision.getId(), hospitalId);
-            reviewers = clinicians;
-        }
-        UUID encounterId = request.getEncounter() != null ? request.getEncounter().getId() : null;
-        List<CreateInBasketItemRequest> items = new ArrayList<>();
-        String decider = decision.getDecidedByUserId() == null ? ""
-            : userRepository.findById(decision.getDecidedByUserId()).map(TransfusionMapper::userName).orElse("");
-        Object[] unitArg = {unit.getUnitNumber()};
-
-        CreateInBasketItemRequest review = notice(decision, patient, encounterId, REVIEW_REFERENCE_TYPE, priorityOf(decision));
-        review.setTitleKey(REVIEW_TITLE_KEY);
-        if (decision.getDecisionBasis() == OPositiveDecisionBasis.AUTHORITY_PENDING) {
-            review.setBodyKey(REVIEW_PENDING_BODY_KEY);
-        } else if (decision.getReviewPriority() == OPositiveReviewPriority.IMMEDIATE) {
-            review.setBodyKey(REVIEW_IMMEDIATE_BODY_KEY);
-        } else if (decision.getReviewPriority() == OPositiveReviewPriority.URGENT) {
-            review.setBodyKey(REVIEW_URGENT_BODY_KEY);
-        } else {
-            review.setBodyKey(REVIEW_ROUTINE_BODY_KEY);
-        }
-        Object[] reviewArgs = {unit.getUnitNumber(), patientName, decider, decision.getReviewDeadlineHours()};
-        reviewers.forEach(reviewer -> items.add(copyFor(reviewer, review, unitArg, reviewArgs)));
-
-        if (decision.countersignOwed()) {
-            CreateInBasketItemRequest countersign = notice(decision, patient, encounterId, COUNTERSIGN_REFERENCE_TYPE,
-                InBasketPriority.URGENT);
-            countersign.setTitleKey(COUNTERSIGN_TITLE_KEY);
-            countersign.setBodyKey(COUNTERSIGN_BODY_KEY);
-            Object[] args = {unit.getUnitNumber(), patientName, decision.getReviewDeadlineHours()};
-            // With nobody named, the clinician who asked for the blood is the one asked to sign; a signature
-            // only a physician can give is asked of physicians, the hospital's when the request names none.
-            Set<String> signers = decision.getRiskTier() == OPositiveRiskTier.KNOWN_ANTIBODY
-                ? OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES : OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES;
-            whoCanAct(clinicians, hospitalId, signers, issuer)
-                .forEach(physician -> items.add(copyFor(physician, countersign, unitArg, args)));
-        }
-        if (decision.isFollowUpRequired()) {
-            CreateInBasketItemRequest followUp = notice(decision, patient, encounterId, FOLLOW_UP_REFERENCE_TYPE,
-                InBasketPriority.URGENT);
-            followUp.setTitleKey(FOLLOW_UP_TITLE_KEY);
-            followUp.setBodyKey(FOLLOW_UP_BODY_KEY);
-            Object[] titleArgs = {patientName};
-            Object[] args = {patientName, unit.getUnitNumber(), DisplayDates.date(decision.getAntibodyScreenDueFrom()),
-                DisplayDates.date(decision.getAntibodyScreenDueBy())};
-            whoCanAct(clinicians, hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES, issuer)
-                .forEach(clinician -> items.add(copyFor(clinician, followUp, titleArgs, args)));
-        }
-        fileAfterCommit(items, decision.getId());
-    }
-
-    /**
-     * Those of the request's clinicians who hold a role that lets them do the task; when none does (a midwife's
-     * request, nobody named), every physician of the hospital, so the task is never filed for nobody. The issuer
-     * is never asked to sign their own release.
-     */
-    private Collection<UUID> whoCanAct(Set<UUID> clinicians, UUID hospitalId, Set<String> roles, UUID issuer) {
-        List<UUID> able = clinicians.stream()
-            .filter(clinician -> assignmentRepository.existsActiveWitness(clinician, hospitalId, roles)).toList();
-        if (!able.isEmpty()) {
-            return able;
-        }
-        return assignmentRepository
-            .findLiveUsersAtHospitalWithRoleCodes(hospitalId, OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES)
-            .stream().map(User::getId).filter(id -> !Objects.equals(id, issuer)).distinct().toList();
-    }
-
-    /** A release with its authority still owed is urgent whatever its tier; a known antibody is critical. */
-    private static InBasketPriority priorityOf(OPositiveReleaseDecision decision) {
-        if (decision.getReviewPriority() == OPositiveReviewPriority.IMMEDIATE) {
-            return InBasketPriority.CRITICAL;
-        }
-        boolean urgent = decision.getReviewPriority() == OPositiveReviewPriority.URGENT
-            || decision.getDecisionBasis() == OPositiveDecisionBasis.AUTHORITY_PENDING;
-        return urgent ? InBasketPriority.URGENT : InBasketPriority.NORMAL;
-    }
-
-    private List<UUID> biologists(UUID hospitalId) {
-        return assignmentRepository
-            .findLiveUsersAtHospitalWithRoleCodes(hospitalId, OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES)
-            .stream().map(User::getId).distinct().toList();
-    }
-
-    /** One notice before its keys and its reader: a task about this decision, for this patient. */
-    private static CreateInBasketItemRequest notice(OPositiveReleaseDecision decision, Patient patient, UUID encounterId,
-                                                    String referenceType, InBasketPriority priority) {
-        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
-        item.setHospitalId(decision.getHospital().getId());
-        item.setItemType(InBasketItemType.TASK);
-        item.setPriority(priority);
-        item.setReferenceId(decision.getId());
-        item.setReferenceType(referenceType);
-        item.setEncounterId(encounterId);
-        item.setPatientId(patient != null ? patient.getId() : decision.getPatientId());
-        item.setPatientName(patient != null ? patient.getFullName() : null);
-        return item;
-    }
-
-    /**
-     * One reader's copy of a notice. {@code template} carries the title and body keys: the reader's copy is
-     * rendered from them in their language, and the stored text is the staff-language copy.
-     */
-    private static CreateInBasketItemRequest copyFor(UUID recipient, CreateInBasketItemRequest template,
-                                                     Object[] titleArgs, Object[] bodyArgs) {
-        String titleKey = template.getTitleKey();
-        String bodyKey = template.getBodyKey();
-        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
-        item.setRecipientUserId(recipient);
-        item.setHospitalId(template.getHospitalId());
-        item.setItemType(template.getItemType());
-        item.setPriority(template.getPriority());
-        item.setReferenceId(template.getReferenceId());
-        item.setReferenceType(template.getReferenceType());
-        item.setEncounterId(template.getEncounterId());
-        item.setPatientId(template.getPatientId());
-        item.setPatientName(template.getPatientName());
-        item.setTitleKey(titleKey);
-        item.setTitleArgs(titleArgs);
-        item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, titleKey, titleArgs));
-        item.setBodyKey(bodyKey);
-        item.setBodyArgs(bodyArgs);
-        item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, bodyKey, bodyArgs));
-        return item;
-    }
-
-    private void fileAfterCommit(List<CreateInBasketItemRequest> items, UUID decisionId) {
-        TransactionCallbacks.afterCommit(() -> {
-            for (CreateInBasketItemRequest item : items) {
-                try {
-                    inBasketService.createItemInNewTransaction(item);
-                } catch (RuntimeException ex) {
-                    log.warn("In-basket item not filed for {} {}: {}", item.getReferenceType(), decisionId,
-                        ex.getClass().getSimpleName());
-                }
-            }
-        });
-    }
-
-    /** A notice that will not compose must not undo the release it reports. */
-    private static void notifySafely(Runnable compose, UUID referenceId) {
+    /** After the commit. A failure leaves the row owed: the sweep delivers its notices at its next pass. */
+    private void deliverNotices(UUID decisionId) {
         try {
-            compose.run();
+            notices.deliver(decisionId);
         } catch (RuntimeException ex) {
-            log.error("Notification not composed for O positive release decision {}: {}", referenceId,
+            log.warn("Notices of O positive release decision {} not delivered now, left to the sweep: {}", decisionId,
                 ex.getClass().getSimpleName());
         }
     }
@@ -625,7 +453,8 @@ public class OPositiveReleaseAuthorityService {
         decision.setCountersignedByUserId(caller);
         decision.setCountersignedAt(LocalDateTime.now(clock));
         decisionRepository.save(decision);
-        resolveItems(decision.getId(), COUNTERSIGN_REFERENCE_TYPE, OVERDUE_REFERENCE_TYPE);
+        resolveItems(decision.getId(), OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE,
+            OPositiveReleaseNotices.OVERDUE_REFERENCE_TYPE);
         auditAfterCommit(AuditEventType.O_POSITIVE_RELEASE_COUNTERSIGNED, decision, caller,
             "Emergency O positive release countersigned by a physician: decision " + decision.getId());
         return toDto(List.of(decision)).get(0);
@@ -646,7 +475,7 @@ public class OPositiveReleaseAuthorityService {
         decision.setReviewedAt(LocalDateTime.now(clock));
         decision.setReviewNote(bounded(note, "note"));
         decisionRepository.save(decision);
-        resolveItems(decision.getId(), REVIEW_REFERENCE_TYPE);
+        resolveItems(decision.getId(), OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE);
         auditAfterCommit(AuditEventType.O_POSITIVE_RELEASE_REVIEWED, decision, caller,
             "Emergency O positive release reviewed by the biologist: decision " + decision.getId());
         return toDto(List.of(decision)).get(0);
@@ -690,7 +519,7 @@ public class OPositiveReleaseAuthorityService {
         }
         decisionRepository.save(decision);
         if (!decision.followUpOwed()) {
-            resolveItems(decision.getId(), FOLLOW_UP_REFERENCE_TYPE);
+            resolveItems(decision.getId(), OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
         }
         auditAfterCommit(AuditEventType.O_POSITIVE_FOLLOW_UP_RECORDED, decision, caller,
             "RhD positive exposure follow-up recorded: decision " + decision.getId());
@@ -701,12 +530,13 @@ public class OPositiveReleaseAuthorityService {
      * An antibody screen was recorded for the patient: the follow-ups whose window has opened have their screen.
      * A screen before the window (the antibody takes about three months to form) leaves them waiting.
      */
-    public void noteAntibodyScreen(UUID patientId, LocalDateTime performedAt) {
-        if (patientId == null || performedAt == null) {
+    public void noteAntibodyScreen(UUID patientId, UUID hospitalId, LocalDateTime performedAt) {
+        if (patientId == null || hospitalId == null || performedAt == null) {
             return;
         }
-        // One statement on that column alone: the row may be countersigned or reviewed at the same moment.
-        decisionRepository.markAntibodyScreenDone(patientId, performedAt, performedAt.toLocalDate());
+        // One statement on that column alone, at the hospital that recorded the screen: the row may be
+        // countersigned or reviewed at the same moment, and another hospital's follow-up is its own.
+        decisionRepository.markAntibodyScreenDone(patientId, hospitalId, performedAt, performedAt.toLocalDate());
     }
 
     private static String bounded(String text, String field) {
@@ -731,70 +561,23 @@ public class OPositiveReleaseAuthorityService {
     }
 
     private OPositiveReleaseDecision lockScoped(UUID decisionId, UUID hospitalId) {
-        return decisionRepository.lockById(decisionId)
-            .filter(decision -> Objects.equals(decision.getHospital().getId(), hospitalId))
+        return decisionRepository.lockByIdAndHospital(decisionId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DECISION_NOT_FOUND, decisionId));
-    }
-
-    // ── The overdue countersignature ────────────────────────────────────
-
-    /** The countersignatures past their deadline that nobody was told about yet, the oldest first. */
-    public List<UUID> overdueCountersignIds() {
-        return decisionRepository.findOverdueCountersignIds(LocalDateTime.now(clock));
-    }
-
-    /**
-     * One countersignature past its deadline is escalated to the laboratory director, once. The alert is filed
-     * in the transaction that marks the row as escalated: if it cannot be delivered the mark is not kept, and
-     * the next sweep tries again. With no laboratory director the row is left to the next sweep, loudly: marking
-     * it escalated would say somebody was told.
-     *
-     * @return the number of items filed
-     */
-    @org.springframework.transaction.annotation.Transactional
-    public int escalateOverdueCountersign(UUID decisionId) {
-        OPositiveReleaseDecision decision = decisionRepository.lockById(decisionId)
-            .filter(row -> row.countersignOwed() && row.getCountersignEscalatedAt() == null).orElse(null);
-        if (decision == null) {
-            return 0;
-        }
-        UUID hospitalId = decision.getHospital().getId();
-        List<UUID> directors = biologists(hospitalId);
-        if (directors.isEmpty()) {
-            log.error("Overdue countersignature of O positive release decision {} has no laboratory director to go to",
-                decision.getId());
-            return 0;
-        }
-        Patient patient = patientRepository.findByIdUnscoped(decision.getPatientId()).orElse(null);
-        String unitNumber = decision.getRelease().getBloodUnit().getUnitNumber();
-        Object[] titleArgs = {unitNumber};
-        Object[] bodyArgs = {unitNumber, patient != null ? patient.getFullName() : null,
-            decision.getReviewDeadlineHours()};
-        CreateInBasketItemRequest overdue = notice(decision, patient, null, OVERDUE_REFERENCE_TYPE, InBasketPriority.URGENT);
-        overdue.setTitleKey(OVERDUE_TITLE_KEY);
-        overdue.setBodyKey(OVERDUE_BODY_KEY);
-        decision.setCountersignEscalatedAt(LocalDateTime.now(clock));
-        decisionRepository.save(decision);
-        for (UUID director : directors) {
-            // In this transaction, not after it: a failure here undoes the mark above.
-            inBasketService.createItem(copyFor(director, overdue, titleArgs, bodyArgs));
-        }
-        auditAfterCommit(AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE, decision, null,
-            "Emergency O positive release countersignature overdue, escalated to the laboratory director: decision "
-                + decision.getId());
-        return directors.size();
     }
 
     // ── Reading ─────────────────────────────────────────────────────────
 
     /** The releases of one hospital for its review queue, the newest first; only what is still owed when asked. */
     public List<OPositiveReleaseDecisionDTO> list(UUID hospitalId, boolean openOnly) {
-        List<OPositiveReleaseDecision> rows = decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId);
-        if (openOnly) {
-            rows = rows.stream().filter(row -> row.reviewOwed() || row.countersignOwed() || row.followUpOwed()
-                || (row.isFollowUpRequired() && row.getAntibodyScreenDoneAt() == null)).toList();
-        }
-        return toDto(rows);
+        List<OPositiveReleaseDecisionDTO> rows = toDto(decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId));
+        return openOnly ? rows.stream().filter(OPositiveReleaseAuthorityService::owesSomething).toList() : rows;
+    }
+
+    /** A countersignature, a review, or the follow-up of a bag that was not returned unused. */
+    private static boolean owesSomething(OPositiveReleaseDecisionDTO row) {
+        boolean followUp = row.isFollowUpRequired() && !ExposureState.NOT_GIVEN.name().equals(row.getExposureState())
+            && (row.getAntiDDecision() == null || row.getPatientInformedAt() == null || row.getAntibodyScreenDoneAt() == null);
+        return row.getReviewedAt() == null || (row.getCountersignDueAt() != null && row.getCountersignedAt() == null) || followUp;
     }
 
     /** The decisions of these release rows, by release id, for the request detail. */
@@ -866,6 +649,9 @@ public class OPositiveReleaseAuthorityService {
                 .reviewedAt(row.getReviewedAt())
                 .reviewNote(row.getReviewNote())
                 .rhdExposure(row.isRhdExposure())
+                .exposureState(row.isRhdExposure() ? exposureStateOf(row, unit).name() : null)
+                .countersignCovering(row.getCountersignedByUserId() != null && row.getDecidedByUserId() != null
+                    && !Objects.equals(row.getCountersignedByUserId(), row.getDecidedByUserId()))
                 .followUpRequired(row.isFollowUpRequired())
                 .antibodyScreenDueFrom(row.getAntibodyScreenDueFrom())
                 .antibodyScreenDueBy(row.getAntibodyScreenDueBy())
@@ -919,29 +705,48 @@ public class OPositiveReleaseAuthorityService {
 
     // ── The permanent flag ──────────────────────────────────────────────
 
-    /** The newest exposure of the patient, at any hospital, or null: the flag follows the patient. */
-    public OPositiveReleaseDecision newestExposure(UUID patientId) {
-        if (patientId == null) {
-            return null;
-        }
-        return decisionRepository.findByPatientIdAndRhdExposureTrueOrderByIssuedAtDesc(patientId).stream()
-            .findFirst().orElse(null);
+    /**
+     * What the flag says: when, where, and whether the bag was given ({@code confirmed}) or is out with no
+     * administration on record.
+     */
+    public record RhdExposure(LocalDateTime issuedAt, UUID hospitalId, String hospitalName, boolean confirmed) {
+    }
+
+    private ExposureState exposureStateOf(OPositiveReleaseDecision decision, BloodUnit unit) {
+        boolean administered = decisionRepository.countAdministrations(decision.getBloodUnitId()) > 0;
+        return OPositiveReleaseAuthority.exposureState(administered, unit != null ? unit.getStatus() : null);
     }
 
     /**
-     * {@link #newestExposure} as it is SHOWN to somebody acting at a hospital: when the flag rests on the record
-     * of another hospital, the read is accounted as a cross-hospital one. The account never fails the read.
+     * The exposure of the patient as it is SHOWN to somebody acting at a hospital, read at EVERY hospital: the
+     * flag follows the patient. The newest release whose bag was given; failing that the newest still out
+     * (« administration not confirmed »); a bag that came back unused exposed nobody and shows nothing. When the
+     * flag rests on the record of another hospital, the read is accounted as a cross-hospital one; the account
+     * never fails the read. Null when there is nothing to show.
      */
-    public OPositiveReleaseDecision newestExposureShownAt(UUID patientId, UUID actingHospitalId) {
+    public RhdExposure exposureShownAt(UUID patientId, UUID actingHospitalId) {
         if (patientId == null) {
             return null;
         }
-        List<OPositiveReleaseDecision> exposures =
-            decisionRepository.findByPatientIdAndRhdExposureTrueOrderByIssuedAtDesc(patientId);
-        if (reachRecorder != null && actingHospitalId != null && !exposures.isEmpty()) {
+        RhdExposure confirmed = null;
+        RhdExposure unconfirmed = null;
+        List<UUID> sources = new ArrayList<>();
+        for (OPositiveReleaseDecisionRepository.ExposureRow row : decisionRepository.findExposures(patientId)) {
+            ExposureState state = OPositiveReleaseAuthority.exposureState(row.getAdministrations() > 0, row.getUnitStatus());
+            if (state == ExposureState.NOT_GIVEN) {
+                continue;
+            }
+            sources.add(row.getHospitalId());
+            RhdExposure exposure = new RhdExposure(row.getIssuedAt(), row.getHospitalId(), row.getHospitalName(),
+                state == ExposureState.CONFIRMED);
+            if (state == ExposureState.CONFIRMED && confirmed == null) {
+                confirmed = exposure;
+            } else if (state == ExposureState.UNCONFIRMED && unconfirmed == null) {
+                unconfirmed = exposure;
+            }
+        }
+        if (reachRecorder != null && actingHospitalId != null && !sources.isEmpty()) {
             try {
-                List<UUID> sources = exposures.stream().map(row -> com.example.hms.service.recordaccess
-                    .CrossHospitalReachRecorder.hospitalIdOf(row.getHospital())).toList();
                 reachRecorder.recordReach(patientId, actingHospitalId, roleValidator.getCurrentUserId(), null,
                     com.example.hms.service.recordaccess.CrossHospitalReachRecorder.reachOf(sources, actingHospitalId),
                     REACH_DESCRIPTION);
@@ -950,7 +755,7 @@ public class OPositiveReleaseAuthorityService {
                     patientId, actingHospitalId, ex.getClass().getSimpleName());
             }
         }
-        return exposures.stream().findFirst().orElse(null);
+        return confirmed != null ? confirmed : unconfirmed;
     }
 
     // ── The protocol of the hospital ────────────────────────────────────

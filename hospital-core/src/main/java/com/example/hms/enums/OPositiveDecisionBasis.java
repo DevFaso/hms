@@ -6,6 +6,11 @@ public enum OPositiveDecisionBasis {
     PROTOCOL,
     /** A named physician who is not the issuer. */
     PHYSICIAN_ORDER,
+    /**
+     * The hospital's biologist (laboratory director), named and not the issuer, where the table accepts « the
+     * biologist or laboratory director if reachable ». Never recorded as a physician's order.
+     */
+    BIOLOGIST_AUTHORITY,
     /** A named physician and a biologist together: a patient with a known antibody. */
     PHYSICIAN_AND_BIOLOGIST,
     /**

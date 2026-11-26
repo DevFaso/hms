@@ -49,6 +49,8 @@ public class OPositiveReleaseDecisionDTO {
     /** Null in the low-risk tier, where no countersignature is owed. */
     private LocalDateTime countersignDueAt;
     private String countersignedByName;
+    /** Signed by another physician than the one named as giving the order: a covering signature, shown as one. */
+    private boolean countersignCovering;
     private LocalDateTime countersignedAt;
     private boolean countersignOverdue;
     private LocalDateTime countersignEscalatedAt;
@@ -59,6 +61,11 @@ public class OPositiveReleaseDecisionDTO {
     private String reviewNote;
     /** The permanent flag of the patient rests on this release. */
     private boolean rhdExposure;
+    /**
+     * What became of the bag: CONFIRMED (hung), UNCONFIRMED (out, no administration on record) or NOT_GIVEN
+     * (came back unused: nobody was exposed). Null when the release flags no exposure.
+     */
+    private String exposureState;
     private boolean followUpRequired;
     private LocalDate antibodyScreenDueFrom;
     private LocalDate antibodyScreenDueBy;

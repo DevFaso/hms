@@ -127,6 +127,38 @@ describe('OPositiveReleasesComponent (V380)', () => {
     expect(el('opos-edit-protocol')).toBeNull();
   });
 
+  it('says what became of the bag, hides the follow-up form for one that came back unused, and marks a covering signature', async () => {
+    await start(
+      ['ROLE_DOCTOR'],
+      [
+        decision({ id: 'out', exposureState: 'UNCONFIRMED' }),
+        decision({
+          id: 'back',
+          exposureState: 'NOT_GIVEN',
+          decisionBasis: 'BIOLOGIST_AUTHORITY',
+          countersignedAt: '2026-11-26T08:00:00',
+          countersignedByName: 'Dr Autre',
+          countersignCovering: true,
+        }),
+      ],
+    );
+    const cards = fixture.nativeElement.querySelectorAll(
+      '[data-testid="opos-card"]',
+    ) as NodeListOf<HTMLElement>;
+    expect(cards[0].querySelector('[data-testid="opos-exposure-state"]')!.textContent).toContain(
+      'TRANSFUSION.OPOS.EXPOSURE_UNCONFIRMED',
+    );
+    expect(cards[0].querySelector('[data-testid="opos-anti-d-save"]')).not.toBeNull();
+    expect(cards[1].querySelector('[data-testid="opos-exposure-state"]')!.textContent).toContain(
+      'TRANSFUSION.OPOS.EXPOSURE_NOT_GIVEN',
+    );
+    expect(cards[1].querySelector('[data-testid="opos-anti-d-save"]')).toBeNull();
+    expect(cards[1].querySelector('[data-testid="opos-covering"]')).not.toBeNull();
+    expect(cards[1].querySelector('[data-testid="opos-basis"]')!.textContent).toContain(
+      'TRANSFUSION.OPOS.BASIS_BIOLOGIST_AUTHORITY',
+    );
+  });
+
   it('an empty queue says so', async () => {
     await start(['ROLE_LAB_DIRECTOR'], []);
     expect(el('opos-empty')).not.toBeNull();

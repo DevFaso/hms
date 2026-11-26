@@ -51,4 +51,8 @@ export class BloodGroupStatusComponent {
   protected readonly rhdExposed = computed(
     () => this.showAntibodies() && this.status()?.rhdPositiveExposed === true,
   );
+  /** The bag was hung: an issued bag nobody recorded giving is shown as unconfirmed. */
+  protected readonly rhdExposureConfirmed = computed(
+    () => this.status()?.rhdPositiveExposureConfirmed === true,
+  );
 }

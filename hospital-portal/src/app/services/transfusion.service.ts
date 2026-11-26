@@ -71,6 +71,12 @@ export interface AntibodyStatusResponse {
   /** The other hospitals this safety information comes from; empty when it is all on record here. */
   otherHospitalNames?: string[];
   workups: AntibodyWorkup[];
+  /** V380: O RhD positive red cells were released in an emergency for this patient while at risk, anywhere. */
+  rhdPositiveExposed?: boolean;
+  rhdPositiveExposedAt?: string | null;
+  rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
 }
 
 export interface AntibodyWorkupRequest {
@@ -90,6 +96,8 @@ export interface PatientBloodGroupResponse {
   rhdPositiveExposed?: boolean;
   rhdPositiveExposedAt?: string | null;
   rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
   id: string;
   patientId: string;
   patientName: string;
@@ -260,7 +268,13 @@ export type OPositiveTierReason =
   | 'NO_ACTIVE_PROTOCOL'
   | 'KNOWN_ANTIBODY';
 export type OPositiveDecisionBasis =
-  'PROTOCOL' | 'PHYSICIAN_ORDER' | 'PHYSICIAN_AND_BIOLOGIST' | 'AUTHORITY_PENDING';
+  | 'PROTOCOL'
+  | 'PHYSICIAN_ORDER'
+  | 'BIOLOGIST_AUTHORITY'
+  | 'PHYSICIAN_AND_BIOLOGIST'
+  | 'AUTHORITY_PENDING';
+/** What became of the bag: hung, out with no administration on record, or back unused (nobody exposed). */
+export type OPositiveExposureState = 'CONFIRMED' | 'UNCONFIRMED' | 'NOT_GIVEN';
 export type OPositiveReviewPriority = 'ROUTINE' | 'URGENT' | 'IMMEDIATE';
 export type ONegativeStatus = 'OUT_OF_STOCK' | 'STATED_UNOBTAINABLE' | 'PROTOCOL_FIRST_LINE';
 export type AntiDDecision = 'ANTI_D_IMMUNOGLOBULIN' | 'RED_CELL_EXCHANGE' | 'NOT_INDICATED';
@@ -317,6 +331,8 @@ export interface OPositiveReleaseDecision {
   issuedAt: string;
   countersignDueAt: string | null;
   countersignedByName: string | null;
+  /** Signed by another physician than the one named as giving the order. */
+  countersignCovering?: boolean;
   countersignedAt: string | null;
   countersignOverdue: boolean;
   countersignEscalatedAt: string | null;
@@ -326,6 +342,8 @@ export interface OPositiveReleaseDecision {
   reviewedAt: string | null;
   reviewNote: string | null;
   rhdExposure: boolean;
+  /** Null when the release flags no exposure. */
+  exposureState?: OPositiveExposureState | null;
   followUpRequired: boolean;
   antibodyScreenDueFrom: string | null;
   antibodyScreenDueBy: string | null;
@@ -468,6 +486,8 @@ export interface TransfusionRequestResponse {
   rhdPositiveExposed?: boolean;
   rhdPositiveExposedAt?: string | null;
   rhdPositiveExposedHospitalName?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
 }
 
 export interface TransfusionRequestRequest {

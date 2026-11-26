@@ -133,8 +133,6 @@ class OPositiveReleaseAuthorityServiceTest {
         });
         fixture = new OPositiveAuthorityFixture(assignmentRepository, userRepository, roleValidator, clock).activeProtocol();
         service = fixture.service;
-        when(fixture.decisionRepository.lockById(any())).thenAnswer(call -> fixture.decisions.stream()
-            .filter(row -> row.getId().equals(call.getArgument(0))).findFirst());
     }
 
     private static User user(UUID id) {
@@ -201,7 +199,7 @@ class OPositiveReleaseAuthorityServiceTest {
 
     private List<CreateInBasketItemRequest> items() {
         ArgumentCaptor<CreateInBasketItemRequest> captor = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(fixture.inBasket, atLeastOnce()).createItemInNewTransaction(captor.capture());
+        verify(fixture.inBasket, atLeastOnce()).createItem(captor.capture());
         return captor.getAllValues();
     }
 
@@ -236,8 +234,8 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(items()).singleElement().satisfies(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.NORMAL);
-            assertThat(item.getReferenceType()).isEqualTo(OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE);
-            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseAuthorityService.REVIEW_ROUTINE_BODY_KEY);
+            assertThat(item.getReferenceType()).isEqualTo(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE);
+            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseNotices.REVIEW_ROUTINE_BODY_KEY);
         });
     }
 
@@ -288,14 +286,14 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(decision.getPatientSex()).isEqualTo("FEMALE");
         assertThat(decision.getPatientAgeYears()).isEqualTo(30);
 
-        assertThat(items(OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.URGENT);
-            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseAuthorityService.REVIEW_URGENT_BODY_KEY);
+            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseNotices.REVIEW_URGENT_BODY_KEY);
         });
-        assertThat(items(OPositiveReleaseAuthorityService.COUNTERSIGN_REFERENCE_TYPE))
+        assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, requester);
-        assertThat(items(OPositiveReleaseAuthorityService.FOLLOW_UP_REFERENCE_TYPE))
+        assertThat(items(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, requester);
         assertThat(items()).allSatisfy(item -> assertThat(item.getBody()).doesNotContain("{"));
     }
@@ -312,8 +310,12 @@ class OPositiveReleaseAuthorityServiceTest {
             .isInstanceOf(FieldBusinessException.class).hasMessageContaining("no physician can be reached");
         assertThat(fixture.decisions).isEmpty();
 
-        assertThat(release(request, naming(director), null, false).getDecisionBasis())
-            .isEqualTo(OPositiveDecisionBasis.PHYSICIAN_ORDER);
+        // « The biologist or laboratory director if reachable »: accepted, and recorded as the director's
+        // authority, never as a physician's order.
+        OPositiveReleaseDecision byTheDirector = release(request, naming(director), null, false);
+        assertThat(byTheDirector.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.BIOLOGIST_AUTHORITY);
+        assertThat(byTheDirector.getDecidedByUserId()).isEqualTo(director);
+        assertThat(byTheDirector.getCountersignDueAt()).isNotNull();
     }
 
     @Test
@@ -405,12 +407,39 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
-    @DisplayName("NEVER BLOCKS: a notice that cannot be filed, or an audit that cannot be written, does not undo the release")
-    void aFailedNoticeDoesNotUndoTheRelease() {
-        when(fixture.inBasket.createItemInNewTransaction(any())).thenThrow(new IllegalStateException("in-basket down"));
+    @DisplayName("NEVER BLOCKS: a reader that cannot be read, an item that cannot be filed, an audit that cannot be written: the release stands, and the notices stay owed until delivered once")
+    void aFailedNoticeDoesNotUndoTheReleaseAndIsDeliveredLater() {
+        when(fixture.inBasket.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
         org.mockito.Mockito.doThrow(new IllegalStateException("audit down")).when(fixture.audit).logEvent(any());
         assertThatCode(() -> release(request(), naming(doctor), null, false)).doesNotThrowAnyException();
         assertThat(fixture.decisions).hasSize(1);
+        OPositiveReleaseDecision decision = fixture.last();
+        assertThat(decision.getNoticesFiledAt()).as("nothing was delivered: the row still owes its notices").isNull();
+
+        // The recipients cannot be read either (the database hiccups): the release still stands.
+        org.mockito.Mockito.reset(fixture.inBasket);
+        when(assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(eq(hospitalId), anySet()))
+            .thenThrow(new IllegalStateException("recipients unreadable"));
+        assertThatCode(() -> release(request(), naming(doctor), null, false)).doesNotThrowAnyException();
+        assertThat(fixture.decisions).hasSize(2);
+        assertThat(fixture.last().getNoticesFiledAt()).isNull();
+        UUID second = fixture.last().getId();
+        assertThatThrownBy(() -> fixture.notices.deliver(second)).as("the sweep's own attempt fails loudly, and retries")
+            .isInstanceOf(IllegalStateException.class);
+
+        // The sweep delivers what is owed, once.
+        org.mockito.Mockito.doAnswer(call -> {
+            Set<String> asked = call.getArgument(1);
+            return roles.entrySet().stream().filter(entry -> asked.contains(entry.getValue()))
+                .map(entry -> user(entry.getKey())).toList();
+        }).when(assignmentRepository).findLiveUsersAtHospitalWithRoleCodes(eq(hospitalId), anySet());
+        when(fixture.decisionRepository.findPendingNoticeIds()).thenReturn(List.of(decision.getId(), second));
+        assertThat(fixture.notices.pendingIds()).containsExactly(decision.getId(), second);
+        assertThat(fixture.notices.deliver(decision.getId())).isEqualTo(5);
+        assertThat(decision.getNoticesFiledAt()).isEqualTo(NOW);
+        assertThat(fixture.notices.deliver(decision.getId())).as("filed once").isZero();
+        verify(fixture.inBasket, times(5)).createItem(any());
+        verify(fixture.inBasket, never()).createItemInNewTransaction(any());
     }
 
     @Test
@@ -418,12 +447,12 @@ class OPositiveReleaseAuthorityServiceTest {
     void pendingAuthorityIsEscalatedAtOnce() {
         OPositiveReleaseDecision decision = release(request(), nobodyReachable(), null, false);
         assertThat(decision.getDecisionBasis()).isEqualTo(OPositiveDecisionBasis.AUTHORITY_PENDING);
-        assertThat(items(OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.URGENT);
-            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseAuthorityService.REVIEW_PENDING_BODY_KEY);
+            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseNotices.REVIEW_PENDING_BODY_KEY);
         });
-        assertThat(items(OPositiveReleaseAuthorityService.COUNTERSIGN_REFERENCE_TYPE)).singleElement()
+        assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE)).singleElement()
             .satisfies(item -> assertThat(item.getRecipientUserId()).isEqualTo(requester));
     }
 
@@ -452,9 +481,9 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(decision.getReviewPriority()).isEqualTo(OPositiveReviewPriority.IMMEDIATE);
         assertThat(decision.getReviewDueAt()).isEqualTo(NOW);
         assertThat(decision.getCountersignDueAt()).isEqualTo(NOW.plusHours(24));
-        assertThat(items(OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE)).singleElement().satisfies(item -> {
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.CRITICAL);
-            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseAuthorityService.REVIEW_IMMEDIATE_BODY_KEY);
+            assertThat(item.getBodyKey()).isEqualTo(OPositiveReleaseNotices.REVIEW_IMMEDIATE_BODY_KEY);
         });
     }
 
@@ -585,7 +614,7 @@ class OPositiveReleaseAuthorityServiceTest {
     void noBiologistTellsTheClinicians() {
         roles.remove(director);
         release(request(), naming(doctor), null, false);
-        assertThat(items(OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE))
+        assertThat(items(OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, requester);
     }
 
@@ -594,9 +623,9 @@ class OPositiveReleaseAuthorityServiceTest {
     void theTasksAlwaysHaveSomebodyWhoCanDoThem() {
         roles.put(requester, SecurityConstants.ROLE_MIDWIFE);
         release(request(), nobodyReachable(), null, false);
-        assertThat(items(OPositiveReleaseAuthorityService.COUNTERSIGN_REFERENCE_TYPE))
+        assertThat(items(OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, otherDoctor);
-        assertThat(items(OPositiveReleaseAuthorityService.FOLLOW_UP_REFERENCE_TYPE))
+        assertThat(items(OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE))
             .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(doctor, otherDoctor);
     }
 
@@ -621,7 +650,7 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(service.countersign(id, hospitalId).getCountersignedAt()).isEqualTo(NOW);
         assertThat(decision.getCountersignedByUserId()).isEqualTo(otherDoctor);
         assertThat(decision.getDecidedByUserId()).as("what was decided at release is not rewritten").isEqualTo(doctor);
-        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseAuthorityService.COUNTERSIGN_REFERENCE_TYPE);
+        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseNotices.COUNTERSIGN_REFERENCE_TYPE);
 
         assertThatThrownBy(() -> service.countersign(id, hospitalId))
             .isInstanceOf(FieldBusinessException.class).hasMessageContaining("No countersignature is owed");
@@ -658,7 +687,7 @@ class OPositiveReleaseAuthorityServiceTest {
             .isEqualTo("Anti-D immunoglobulin discussed with Dr X");
         assertThat(fixture.last().getReviewedByUserId()).isEqualTo(director);
         assertThat(fixture.last().getReviewedAt()).isEqualTo(NOW);
-        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseAuthorityService.REVIEW_REFERENCE_TYPE);
+        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseNotices.REVIEW_REFERENCE_TYPE);
         assertThatThrownBy(() -> service.review(id, hospitalId, null)).hasMessageContaining("already been reviewed");
     }
 
@@ -681,14 +710,14 @@ class OPositiveReleaseAuthorityServiceTest {
         service.recordFollowUp(id, hospitalId, decides);
         assertThat(decision.getAntiDDecision()).isEqualTo(AntiDDecision.ANTI_D_IMMUNOGLOBULIN);
         assertThat(decision.followUpOwed()).isTrue();
-        verify(fixture.inBasket, never()).removeOpenItemsForReference(id, OPositiveReleaseAuthorityService.FOLLOW_UP_REFERENCE_TYPE);
+        verify(fixture.inBasket, never()).removeOpenItemsForReference(id, OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
         assertThatThrownBy(() -> service.recordFollowUp(id, hospitalId, decides)).hasMessageContaining("already recorded");
 
         service.recordFollowUp(id, hospitalId, informs);
         assertThat(decision.getPatientInformedByUserId()).isEqualTo(doctor);
         assertThat(decision.getFollowUpNote()).isEqualTo("Told with her husband");
         assertThat(decision.followUpOwed()).isFalse();
-        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseAuthorityService.FOLLOW_UP_REFERENCE_TYPE);
+        verify(fixture.inBasket).removeOpenItemsForReference(id, OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
         assertThat(decision.isRhdExposure()).as("the flag is permanent: closing the follow-up clears nothing").isTrue();
     }
 
@@ -703,29 +732,88 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
-    @DisplayName("an antibody screen is marked in one statement on its own column: no row is loaded and written back")
+    @DisplayName("an antibody screen is marked in one statement on its own column, at the hospital that recorded it")
     void theAntibodyScreenIsMarkedAtomically() {
         release(request(), naming(doctor), null, false);
         org.mockito.Mockito.clearInvocations(fixture.decisionRepository);
-        service.noteAntibodyScreen(patient.getId(), NOW.plusMonths(4));
-        verify(fixture.decisionRepository).markAntibodyScreenDone(patient.getId(), NOW.plusMonths(4),
+        service.noteAntibodyScreen(patient.getId(), hospitalId, NOW.plusMonths(4));
+        verify(fixture.decisionRepository).markAntibodyScreenDone(patient.getId(), hospitalId, NOW.plusMonths(4),
             NOW.plusMonths(4).toLocalDate());
         verify(fixture.decisionRepository, never()).save(any());
-        service.noteAntibodyScreen(null, NOW);
-        service.noteAntibodyScreen(patient.getId(), null);
+        service.noteAntibodyScreen(null, hospitalId, NOW);
+        service.noteAntibodyScreen(patient.getId(), null, NOW);
+        service.noteAntibodyScreen(patient.getId(), hospitalId, null);
         org.mockito.Mockito.verifyNoMoreInteractions(fixture.decisionRepository);
     }
 
+    private static com.example.hms.repository.OPositiveReleaseDecisionRepository.ExposureRow exposure(
+            LocalDateTime issuedAt, UUID hospital, String name, com.example.hms.enums.BloodUnitStatus status, long hung) {
+        var row = org.mockito.Mockito.mock(com.example.hms.repository.OPositiveReleaseDecisionRepository.ExposureRow.class);
+        when(row.getIssuedAt()).thenReturn(issuedAt);
+        when(row.getHospitalId()).thenReturn(hospital);
+        when(row.getHospitalName()).thenReturn(name);
+        when(row.getUnitStatus()).thenReturn(status);
+        when(row.getAdministrations()).thenReturn(hung);
+        return row;
+    }
+
     @Test
-    @DisplayName("the flag is read for the patient at every hospital, never narrowed to the acting one")
-    void theFlagFollowsThePatient() {
-        OPositiveReleaseDecision elsewhere = release(request(), naming(doctor), null, false);
-        when(fixture.decisionRepository.findByPatientIdAndRhdExposureTrueOrderByIssuedAtDesc(patient.getId()))
-            .thenReturn(List.of(elsewhere));
-        UUID anotherHospital = UUID.randomUUID();
-        assertThat(service.newestExposureShownAt(patient.getId(), anotherHospital)).isSameAs(elsewhere);
-        assertThat(service.newestExposure(patient.getId())).isSameAs(elsewhere);
-        assertThat(service.newestExposure(UUID.randomUUID())).isNull();
+    @DisplayName("the flag follows the patient to every hospital, and says what is true: given, out and unconfirmed, or nothing for a bag that came back")
+    void theFlagSaysWhatBecameOfTheBag() {
+        UUID elsewhere = UUID.randomUUID();
+        UUID acting = UUID.randomUUID();
+        var returned = exposure(NOW, elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.RETURNED, 0);
+        var stillOut = exposure(NOW.minusDays(1), elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.ISSUED, 0);
+        var given = exposure(NOW.minusDays(9), elsewhere, "Clinique A", com.example.hms.enums.BloodUnitStatus.DISCARDED, 1);
+
+        // A bag issued and returned unused exposed nobody: no lifelong statement rests on it.
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(returned));
+        assertThat(service.exposureShownAt(patient.getId(), acting)).isNull();
+
+        // Out, with no administration on record: shown, as unconfirmed.
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(returned, stillOut));
+        assertThat(service.exposureShownAt(patient.getId(), acting)).satisfies(shown -> {
+            assertThat(shown.confirmed()).isFalse();
+            assertThat(shown.issuedAt()).isEqualTo(NOW.minusDays(1));
+            assertThat(shown.hospitalName()).isEqualTo("Clinique A");
+        });
+
+        // Hung (whatever became of the bag afterwards): confirmed, and it outranks a newer unconfirmed one.
+        when(fixture.decisionRepository.findExposures(patient.getId())).thenReturn(List.of(returned, stillOut, given));
+        assertThat(service.exposureShownAt(patient.getId(), acting)).satisfies(shown -> {
+            assertThat(shown.confirmed()).isTrue();
+            assertThat(shown.issuedAt()).isEqualTo(NOW.minusDays(9));
+        });
+        assertThat(service.exposureShownAt(null, acting)).isNull();
+        assertThat(service.exposureShownAt(UUID.randomUUID(), acting)).isNull();
+    }
+
+    @Test
+    @DisplayName("the queue says what became of each bag, and a covering signature is shown as one")
+    void theQueueSaysWhatIsTrue() {
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        when(fixture.decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId)).thenReturn(List.of(decision));
+        assertThat(service.list(hospitalId, true)).singleElement().satisfies(row -> {
+            assertThat(row.getExposureState()).isEqualTo("UNCONFIRMED");
+            assertThat(row.isCountersignCovering()).isFalse();
+        });
+
+        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId())).thenReturn(1L);
+        when(roleValidator.getCurrentUserId()).thenReturn(otherDoctor);
+        assertThat(service.countersign(decision.getId(), hospitalId)).satisfies(row -> {
+            assertThat(row.getExposureState()).isEqualTo("CONFIRMED");
+            assertThat(row.isCountersignCovering()).as("signed by another physician than the one named").isTrue();
+        });
+
+        // Reviewed and countersigned; the bag came back unused: nothing is owed on it any more.
+        when(roleValidator.getCurrentUserId()).thenReturn(director);
+        service.review(decision.getId(), hospitalId, null);
+        when(fixture.decisionRepository.countAdministrations(decision.getBloodUnitId())).thenReturn(0L);
+        decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.RETURNED);
+        assertThat(service.list(hospitalId, false)).singleElement()
+            .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
+        assertThat(service.list(hospitalId, true)).isEmpty();
     }
 
     // ── The overdue countersignature ────────────────────────────────────
@@ -745,13 +833,13 @@ class OPositiveReleaseAuthorityServiceTest {
         when(fixture.patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         org.mockito.Mockito.clearInvocations(fixture.inBasket, fixture.audit);
 
-        assertThat(service.overdueCountersignIds()).containsExactly(decision.getId());
-        assertThat(service.escalateOverdueCountersign(decision.getId())).isEqualTo(1);
+        assertThat(fixture.notices.overdueCountersignIds()).containsExactly(decision.getId());
+        assertThat(fixture.notices.escalateOverdueCountersign(decision.getId())).isEqualTo(1);
         assertThat(decision.getCountersignEscalatedAt()).isEqualTo(NOW);
         assertThat(escalated()).singleElement().satisfies(item -> {
             assertThat(item.getRecipientUserId()).isEqualTo(director);
             assertThat(item.getPriority()).isEqualTo(InBasketPriority.URGENT);
-            assertThat(item.getReferenceType()).isEqualTo(OPositiveReleaseAuthorityService.OVERDUE_REFERENCE_TYPE);
+            assertThat(item.getReferenceType()).isEqualTo(OPositiveReleaseNotices.OVERDUE_REFERENCE_TYPE);
             assertThat(item.getTitle()).contains("U-OVERDUE");
         });
         // The alert is filed in the transaction of the mark, never after it.
@@ -761,7 +849,7 @@ class OPositiveReleaseAuthorityServiceTest {
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE);
 
         // The row is still listed by a stale read: it is not escalated twice.
-        assertThat(service.escalateOverdueCountersign(decision.getId())).isZero();
+        assertThat(fixture.notices.escalateOverdueCountersign(decision.getId())).isZero();
         verify(fixture.inBasket, times(1)).createItem(any());
     }
 
@@ -773,7 +861,7 @@ class OPositiveReleaseAuthorityServiceTest {
         when(fixture.inBasket.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
         UUID id = decision.getId();
         // The exception leaves the transactional method: Spring rolls the mark back (on PostgreSQL in the IT).
-        assertThatThrownBy(() -> service.escalateOverdueCountersign(id)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> fixture.notices.escalateOverdueCountersign(id)).isInstanceOf(IllegalStateException.class);
         verify(fixture.audit, never()).logEvent(org.mockito.ArgumentMatchers.argThat(
             event -> event.getEventType() == AuditEventType.O_POSITIVE_COUNTERSIGN_OVERDUE));
     }
@@ -788,11 +876,11 @@ class OPositiveReleaseAuthorityServiceTest {
         OPositiveReleaseDecision orphan = release(request(), naming(doctor), null, false);
         roles.remove(director);
 
-        assertThat(service.escalateOverdueCountersign(signed.getId())).isZero();
-        assertThat(service.escalateOverdueCountersign(orphan.getId())).isZero();
+        assertThat(fixture.notices.escalateOverdueCountersign(signed.getId())).isZero();
+        assertThat(fixture.notices.escalateOverdueCountersign(orphan.getId())).isZero();
         assertThat(signed.getCountersignEscalatedAt()).isNull();
         assertThat(orphan.getCountersignEscalatedAt()).as("nobody was told: it is not marked as told").isNull();
-        assertThat(service.escalateOverdueCountersign(UUID.randomUUID())).as("a row that is gone").isZero();
+        assertThat(fixture.notices.escalateOverdueCountersign(UUID.randomUUID())).as("a row that is gone").isZero();
     }
 
     // ── The protocol ────────────────────────────────────────────────────

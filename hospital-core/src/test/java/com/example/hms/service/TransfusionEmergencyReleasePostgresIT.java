@@ -79,7 +79,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class,
     com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, com.example.hms.security.EncryptionKeyHolder.class,
     TransfusionEmergencyReleasePostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -121,7 +121,7 @@ class TransfusionEmergencyReleasePostgresIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @PersistenceContext private EntityManager entityManager;
 
-    @Autowired private com.example.hms.service.transfusion.OPositiveReleaseAuthorityService positiveAuthority;
+    @Autowired private com.example.hms.service.transfusion.OPositiveReleaseNotices positiveNotices;
     @MockitoBean private RoleValidator roleValidator;
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
@@ -641,7 +641,7 @@ class TransfusionEmergencyReleasePostgresIT {
 
     private List<CreateInBasketItemRequest> filed() {
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService, org.mockito.Mockito.atLeast(0)).createItemInNewTransaction(items.capture());
+        verify(inBasketService, org.mockito.Mockito.atLeast(0)).createItem(items.capture());
         return items.getAllValues();
     }
 
@@ -771,30 +771,77 @@ class TransfusionEmergencyReleasePostgresIT {
             assertThat(item.getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_REVIEW");
             assertThat(item.getRecipientUserId()).isEqualTo(directorUser);
             assertThat(item.getBodyKey()).isEqualTo(
-                com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.REVIEW_PENDING_BODY_KEY);
+                com.example.hms.service.transfusion.OPositiveReleaseNotices.REVIEW_PENDING_BODY_KEY);
         });
 
-        assertThat(positiveAuthority.overdueCountersignIds()).as("not yet overdue").isEmpty();
+        // The notices were filed after the commit, in their own transaction, and the row says so.
+        assertThat(positiveNotices.pendingIds()).isEmpty();
+        // The bag is out and nobody recorded hanging it: the flag is shown, as unconfirmed, with or without a grouping.
+        TransfusionRequestResponseDTO out = service.getRequest(requestId);
+        assertThat(out.isRhdPositiveExposed()).isTrue();
+        assertThat(out.getRhdPositiveExposureConfirmed()).isFalse();
+        assertThat(out.getEmergencyReleases().get(0).getPositiveDecision().getExposureState()).isEqualTo("UNCONFIRMED");
+        assertThat(service.getAntibodyStatus(patient)).satisfies(status -> {
+            assertThat(status.isRhdPositiveExposed()).as("no grouping at this hospital: the flag still shows").isTrue();
+            assertThat(status.getRhdPositiveExposureConfirmed()).isFalse();
+        });
+
+        assertThat(positiveNotices.overdueCountersignIds()).as("not yet overdue").isEmpty();
         sql("UPDATE clinical.o_positive_release_decisions SET countersign_due_at = now() - interval '1 hour' WHERE id = :id",
             decision.getId());
-        assertThat(positiveAuthority.overdueCountersignIds()).containsExactly(decision.getId());
+        assertThat(positiveNotices.overdueCountersignIds()).containsExactly(decision.getId());
 
         // An alert that cannot be delivered rolls the mark back: the row is still due at the next sweep.
         when(inBasketService.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
         UUID decisionId = decision.getId();
-        assertThatThrownBy(() -> positiveAuthority.escalateOverdueCountersign(decisionId)).isInstanceOf(IllegalStateException.class);
-        assertThat(positiveAuthority.overdueCountersignIds()).as("nobody was told: not marked as told").containsExactly(decisionId);
+        assertThatThrownBy(() -> positiveNotices.escalateOverdueCountersign(decisionId)).isInstanceOf(IllegalStateException.class);
+        assertThat(positiveNotices.overdueCountersignIds()).as("nobody was told: not marked as told").containsExactly(decisionId);
 
         org.mockito.Mockito.reset(inBasketService);
-        assertThat(positiveAuthority.escalateOverdueCountersign(decisionId)).isEqualTo(1);
+        assertThat(positiveNotices.escalateOverdueCountersign(decisionId)).isEqualTo(1);
         ArgumentCaptor<CreateInBasketItemRequest> escalated = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
         verify(inBasketService).createItem(escalated.capture());
         assertThat(escalated.getValue().getReferenceType()).isEqualTo("TRANSFUSION_O_POSITIVE_COUNTERSIGN_OVERDUE");
         assertThat(escalated.getValue().getRecipientUserId()).isEqualTo(directorUser);
         assertThat(escalated.getValue().getTitle()).doesNotContain("{");
-        assertThat(positiveAuthority.overdueCountersignIds()).as("told once").isEmpty();
-        assertThat(positiveAuthority.escalateOverdueCountersign(decisionId)).isZero();
+        assertThat(positiveNotices.overdueCountersignIds()).as("told once").isEmpty();
+        assertThat(positiveNotices.escalateOverdueCountersign(decisionId)).isZero();
         assertThat(service.listPositiveReleases(true).get(0).isCountersignOverdue()).isTrue();
+
+        // Hung: the exposure is confirmed, whatever becomes of the bag afterwards.
+        hang(requestId, bagId);
+        assertThat(service.getRequest(requestId).getRhdPositiveExposureConfirmed()).isTrue();
+        assertThat(service.getAntibodyStatus(patient).getRhdPositiveExposureConfirmed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("V380: a bag issued and returned unused leaves no exposure on the patient; a delivery that failed is owed and delivered once")
+    void aReturnedBagExposedNobodyAndAnOwedNoticeIsDelivered() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        // The in-basket is down when the release commits: the release stands, its notices stay owed.
+        when(inBasketService.createItem(any())).thenThrow(new IllegalStateException("in-basket down"));
+        service.emergencyRelease(requestId, documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION));
+        assertThat(status(bagId)).isEqualTo("ISSUED");
+        UUID decisionId = service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision().getId();
+        assertThat(positiveNotices.pendingIds()).containsExactly(decisionId);
+        assertThatThrownBy(() -> positiveNotices.deliver(decisionId)).isInstanceOf(IllegalStateException.class);
+        assertThat(positiveNotices.pendingIds()).as("rolled back: still owed").containsExactly(decisionId);
+
+        org.mockito.Mockito.reset(inBasketService);
+        assertThat(positiveNotices.deliver(decisionId)).isEqualTo(3);
+        assertThat(positiveNotices.pendingIds()).isEmpty();
+        assertThat(positiveNotices.deliver(decisionId)).as("filed once").isZero();
+        verify(inBasketService, times(3)).createItem(any());
+
+        assertThat(service.getRequest(requestId).isRhdPositiveExposed()).isTrue();
+        // The bag comes back to the laboratory unused (never hung): nobody was exposed.
+        sql("UPDATE clinical.blood_units SET status = 'RETURNED', request_id = NULL WHERE id = :id", bagId);
+        assertThat(status(bagId)).isEqualTo("RETURNED");
+        assertThat(service.getAntibodyStatus(patient).isRhdPositiveExposed()).isFalse();
+        assertThat(service.listPositiveReleases(false)).singleElement()
+            .satisfies(row -> assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN"));
     }
 
     @Test

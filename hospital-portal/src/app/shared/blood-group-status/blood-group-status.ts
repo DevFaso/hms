@@ -18,6 +18,8 @@ export interface BloodGroupStatus {
   /** V380: received O RhD positive red cells in an emergency while at risk, at any hospital. Permanent. */
   rhdPositiveExposed?: boolean | null;
   rhdPositiveExposedAt?: string | null;
+  /** The bag was given (true), or is out with no administration on record (false). */
+  rhdPositiveExposureConfirmed?: boolean | null;
 }
 
 /** What a screen shows: the confirmed group when there is one, else the declared one (labelled so). */

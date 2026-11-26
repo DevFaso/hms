@@ -14,6 +14,7 @@ import com.example.hms.utility.RoleValidator;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,9 +23,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 /**
- * The real O positive decision service for a unit test of the transfusion service, over its own in-basket and
- * audit doubles: what the release paths file there is asserted in {@code OPositiveReleaseAuthorityServiceTest},
- * and the counts an older test makes on its own doubles stay about the rule that test is on.
+ * The real O positive decision service and its notices for a unit test of the transfusion service, over their
+ * own in-basket and audit doubles: what the release paths file there is asserted in
+ * {@code OPositiveReleaseAuthorityServiceTest}, and the counts an older test makes on its own doubles stay about
+ * the rule that test is on. With no transaction, what the service defers to « after the commit » runs at once.
  */
 public final class OPositiveAuthorityFixture {
 
@@ -35,6 +37,7 @@ public final class OPositiveAuthorityFixture {
     public final AuditEventLogService audit = mock(AuditEventLogService.class);
     /** Every decision row written, in order. */
     public final List<OPositiveReleaseDecision> decisions = new ArrayList<>();
+    public final OPositiveReleaseNotices notices;
     public final OPositiveReleaseAuthorityService service;
 
     public OPositiveAuthorityFixture(UserRoleHospitalAssignmentRepository assignmentRepository, UserRepository userRepository,
@@ -47,9 +50,17 @@ public final class OPositiveAuthorityFixture {
             }
             return row;
         });
+        lenient().when(decisionRepository.lockById(any())).thenAnswer(call -> decisions.stream()
+            .filter(row -> row.getId().equals(call.getArgument(0))).findFirst());
+        lenient().when(decisionRepository.lockByIdAndHospital(any(), any())).thenAnswer(call -> decisions.stream()
+            .filter(row -> row.getId().equals(call.getArgument(0)))
+            .filter(row -> row.getHospital() != null && Objects.equals(row.getHospital().getId(), call.getArgument(1)))
+            .findFirst());
         lenient().when(protocolRepository.findByHospital_Id(any())).thenReturn(Optional.empty());
+        notices = new OPositiveReleaseNotices(decisionRepository, assignmentRepository, userRepository, patientRepository,
+            inBasket, audit, clock);
         service = new OPositiveReleaseAuthorityService(protocolRepository, decisionRepository, assignmentRepository,
-            userRepository, patientRepository, roleValidator, inBasket, audit, clock);
+            userRepository, roleValidator, inBasket, audit, notices, clock);
     }
 
     /** The hospital wrote its protocol with the defaults: women of 50 or less and boys protected, 24 hours. */

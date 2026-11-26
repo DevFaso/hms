@@ -163,6 +163,7 @@ public final class ClinicalRuleRegistry {
         // Owner decision 2026-11-25, research report « Emergency O positive release authority »: who decides, by tier.
         rule(ClinicalRuleSetKey.EMERGENCY_O_POSITIVE_AUTHORITY, "2026-11-25.1",
             "service.support.OPositiveReleaseAuthority", "service.transfusion.OPositiveReleaseAuthorityService",
+            "service.transfusion.OPositiveReleaseNotices",
             "service.scheduled.OPositiveCountersignEscalationScheduler"),
         // QA D3862 (r77): a HIGH NEWS2 is an urgent alert to acknowledge (the D3304 path), not a bell alone.
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-25.1",

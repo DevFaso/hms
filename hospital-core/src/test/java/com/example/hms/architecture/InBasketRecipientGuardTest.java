@@ -65,7 +65,7 @@ class InBasketRecipientGuardTest {
         // V380: an emergency O positive release, for the hospital's biologists (the review, the overdue
         // countersignature), the physician named and the clinician who asked for the blood (the
         // countersignature, the follow-up of the exposure).
-        Map.entry("OPositiveReleaseAuthorityService.java", union(
+        Map.entry("OPositiveReleaseNotices.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             codes(com.example.hms.service.support.OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES),
             codes(com.example.hms.service.support.OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES))),

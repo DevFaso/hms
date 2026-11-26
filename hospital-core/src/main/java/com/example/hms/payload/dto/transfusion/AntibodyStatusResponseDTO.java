@@ -40,6 +40,17 @@ public class AntibodyStatusResponseDTO {
     private String antibodySpecificities;
     private List<Workup> workups;
 
+    /**
+     * V380: O RhD positive red cells were released in an emergency for this patient while at risk, at any
+     * hospital. Carried here so a screen with no grouping on file (the new-request form at a hospital that never
+     * typed the patient) still shows it.
+     */
+    private boolean rhdPositiveExposed;
+    private LocalDateTime rhdPositiveExposedAt;
+    private String rhdPositiveExposedHospitalName;
+    /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
+    private Boolean rhdPositiveExposureConfirmed;
+
     @Data
     @Builder
     @NoArgsConstructor

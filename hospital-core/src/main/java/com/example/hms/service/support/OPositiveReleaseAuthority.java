@@ -162,6 +162,27 @@ public final class OPositiveReleaseAuthority {
         };
     }
 
+    /** What became of an O positive bag released to a patient at risk. */
+    public enum ExposureState {
+        /** The bag was hung: the patient received RhD positive red cells. */
+        CONFIRMED,
+        /** The bag is out and no administration is recorded: the patient may have received it. */
+        UNCONFIRMED,
+        /** The bag came back or was discarded without being hung: nobody was exposed. */
+        NOT_GIVEN
+    }
+
+    /**
+     * An issued bag is not a transfused one: the flag says « exposed » once the bag is hung, « issued,
+     * administration not confirmed » while it is out, and nothing when it came back unused.
+     */
+    public static ExposureState exposureState(boolean administered, com.example.hms.enums.BloodUnitStatus unitStatus) {
+        if (administered || unitStatus == com.example.hms.enums.BloodUnitStatus.TRANSFUSED) {
+            return ExposureState.CONFIRMED;
+        }
+        return unitStatus == com.example.hms.enums.BloodUnitStatus.ISSUED ? ExposureState.UNCONFIRMED : ExposureState.NOT_GIVEN;
+    }
+
     /**
      * The exposure is flagged on the patient and followed up outside the low-risk tier, unless the laboratory
      * has typed the patient RhD positive: O positive is then no RhD exposure, and a flag would state one.

@@ -13617,6 +13617,12 @@
   },
   "TRANSFUSION": {
     "OPOS": {
+      "BASIS_BIOLOGIST_AUTHORITY": "On the laboratory director’s authority",
+      "COVERING": "covering signature: not the physician named",
+      "EXPOSURE_CONFIRMED": "Unit given: exposure confirmed",
+      "EXPOSURE_UNCONFIRMED": "Unit out: administration not confirmed",
+      "EXPOSURE_NOT_GIVEN": "Unit returned unused: nobody exposed",
+      "EXPOSED_BANNER_UNCONFIRMED": "O RhD positive red cells were issued in an emergency for this patient ({{date}}, {{hospital}}); no administration is on record. Check whether the unit was given before transfusing.",
       "TAB": "O positive in emergency",
       "PROTOCOL_TITLE": "Emergency O RhD positive protocol",
       "PROTOCOL_ACTIVE": "Protocol active",
@@ -13696,7 +13702,6 @@
       "REVIEWED": "Review recorded.",
       "FOLLOW_UP_SAVED": "Follow-up saved.",
       "EXPOSED_BANNER": "Exposed to RhD positive red cells in an emergency ({{date}}, {{hospital}}). Permanent flag: check the antibody screen and the follow-up before transfusing.",
-      "EXPOSED_SHORT": "Exposed to RhD positive",
       "COUNTERSIGN_OWED": "countersignature owed",
       "REVIEW_OWED": "review owed",
       "FORM_TIER_LOW_RISK": "Low-risk patient under the hospital’s protocol: you may take this decision yourself. The biologist reviews it afterwards.",
@@ -16299,6 +16304,7 @@
     "ALLO_IMMUNISED": "Allo-immunisation: {{antibody}}",
     "ALLO_IMMUNISED_UNIDENTIFIED": "Allo-immunisation: positive antibody screen, antibody not identified",
     "RHD_EXPOSED": "Exposed to RhD positive red cells in an emergency: antibody screen and follow-up to check",
+    "RHD_EXPOSED_UNCONFIRMED": "O RhD positive issued in an emergency, administration not confirmed: to check",
     "DECLARED_FIELD": "Declared blood group (not verified)",
     "DECLARED_FIELD_HINT": "What the patient or a card says. Only the laboratory's grouping confirms the group; this value never replaces it.",
     "CONFIRMED_ON_RECORD": "Confirmed by the laboratory: {{group}}"

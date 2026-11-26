@@ -290,7 +290,10 @@
             <div class="warn-banner" role="alert" data-testid="rhd-exposed">
               <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>
               {{
-                'TRANSFUSION.OPOS.EXPOSED_BANNER'
+                (req.rhdPositiveExposureConfirmed
+                  ? 'TRANSFUSION.OPOS.EXPOSED_BANNER'
+                  : 'TRANSFUSION.OPOS.EXPOSED_BANNER_UNCONFIRMED'
+                )
                   | translate
                     : {
                         date: (req.rhdPositiveExposedAt | serverTime | date: 'mediumDate') ?? '',
@@ -848,11 +851,6 @@
                     'TRANSFUSION.ALLO_IMMUNISED_REQUEST' | translate
                   }}</span>
                 }
-                @if (g.rhdPositiveExposed) {
-                  <span class="warn-inline" role="alert" data-testid="request-rhd-exposed">{{
-                    'TRANSFUSION.OPOS.EXPOSED_SHORT' | translate
-                  }}</span>
-                }
                 @if (g.correctionReason) {
                   {{ ' '
                   }}<span>{{
@@ -863,6 +861,24 @@
                 <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
               }
               @if (requestAntibody(); as known) {
+                <!-- V380: read with or without a grouping here: a patient this hospital never typed still shows it. -->
+                @if (known.rhdPositiveExposed) {
+                  <span class="warn-inline" role="alert" data-testid="request-rhd-exposed">
+                    {{
+                      (known.rhdPositiveExposureConfirmed
+                        ? 'TRANSFUSION.OPOS.EXPOSED_BANNER'
+                        : 'TRANSFUSION.OPOS.EXPOSED_BANNER_UNCONFIRMED'
+                      )
+                        | translate
+                          : {
+                              date:
+                                (known.rhdPositiveExposedAt | serverTime | date: 'mediumDate') ??
+                                '',
+                              hospital: known.rhdPositiveExposedHospitalName ?? '',
+                            }
+                    }}
+                  </span>
+                }
                 @if (known.alloImmunised) {
                   <span class="warn-inline" role="alert" data-testid="request-antibody-known">
                     @if (known.identified) {
@@ -1700,6 +1716,35 @@
               }
             </select>
           </div>
+          @if (incompatiblePositiveTier(); as rule) {
+            <!-- V380: an O positive bag for a patient at risk: how the order was given, and the biologist. -->
+            <p class="modal-hint warn" role="status" data-testid="si-opos-tier">
+              {{
+                'TRANSFUSION.OPOS.FORM_TIER_' + rule.riskTier
+                  | translate: { hours: rule.reviewDeadlineHours }
+              }}
+            </p>
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                id="si-verbal"
+                data-testid="si-verbal-order"
+                [(ngModel)]="emergencyVerbalOrder"
+              />
+              {{ 'TRANSFUSION.OPOS.VERBAL_ORDER_CHECK' | translate }}
+            </label>
+            @if (rule.riskTier === 'KNOWN_ANTIBODY') {
+              <div class="field">
+                <label for="si-biologist">{{ 'TRANSFUSION.OPOS.BIOLOGIST' | translate }}</label>
+                <select id="si-biologist" [(ngModel)]="emergencyBiologistId">
+                  <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                  @for (c of rule.biologists; track c.userId) {
+                    <option [value]="c.userId">{{ c.displayName }}</option>
+                  }
+                </select>
+              </div>
+            }
+          }
           <div class="field">
             <label for="si-reason">{{ 'TRANSFUSION.RELEASE_REASON' | translate }} *</label>
             <textarea

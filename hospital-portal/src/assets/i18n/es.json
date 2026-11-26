@@ -13617,6 +13617,12 @@
   },
   "TRANSFUSION": {
     "OPOS": {
+      "BASIS_BIOLOGIST_AUTHORITY": "Bajo la autoridad del director del laboratorio",
+      "COVERING": "firma de cobertura: otro médico que el designado",
+      "EXPOSURE_CONFIRMED": "Unidad transfundida: exposición confirmada",
+      "EXPOSURE_UNCONFIRMED": "Unidad entregada: administración no confirmada",
+      "EXPOSURE_NOT_GIVEN": "Unidad devuelta sin usar: sin exposición",
+      "EXPOSED_BANNER_UNCONFIRMED": "Se entregaron glóbulos rojos O RhD positivo de urgencia para este paciente ({{date}}, {{hospital}}); no hay ninguna administración registrada. Compruebe si la unidad se transfundió antes de transfundir.",
       "TAB": "O positivo de urgencia",
       "PROTOCOL_TITLE": "Protocolo O RhD positivo de urgencia",
       "PROTOCOL_ACTIVE": "Protocolo activo",
@@ -13696,7 +13702,6 @@
       "REVIEWED": "Revisión registrada.",
       "FOLLOW_UP_SAVED": "Seguimiento guardado.",
       "EXPOSED_BANNER": "Expuesto a glóbulos rojos RhD positivo de urgencia ({{date}}, {{hospital}}). Indicación permanente: compruebe el escrutinio de anticuerpos y el seguimiento antes de transfundir.",
-      "EXPOSED_SHORT": "Expuesto a RhD positivo",
       "COUNTERSIGN_OWED": "contrafirma pendiente",
       "REVIEW_OWED": "revisión pendiente",
       "FORM_TIER_LOW_RISK": "Paciente de bajo riesgo según el protocolo del establecimiento: puede tomar esta decisión usted mismo. El biólogo la revisa después.",
@@ -16299,6 +16304,7 @@
     "ALLO_IMMUNISED": "Aloinmunización: {{antibody}}",
     "ALLO_IMMUNISED_UNIDENTIFIED": "Aloinmunización: escrutinio de anticuerpos positivo, anticuerpo no identificado",
     "RHD_EXPOSED": "Expuesto a glóbulos rojos RhD positivo de urgencia: escrutinio de anticuerpos y seguimiento por comprobar",
+    "RHD_EXPOSED_UNCONFIRMED": "O RhD positivo entregado de urgencia, administración no confirmada: por comprobar",
     "DECLARED_FIELD": "Grupo sanguíneo declarado (no verificado)",
     "DECLARED_FIELD_HINT": "Lo que dice el paciente o una tarjeta. Solo el agrupamiento del laboratorio confirma el grupo; este valor nunca lo reemplaza.",
     "CONFIRMED_ON_RECORD": "Confirmado por el laboratorio: {{group}}"

@@ -13617,6 +13617,12 @@
   },
   "TRANSFUSION": {
     "OPOS": {
+      "BASIS_BIOLOGIST_AUTHORITY": "Sur l’autorité du directeur du laboratoire",
+      "COVERING": "signature de couverture : autre médecin que celui nommé",
+      "EXPOSURE_CONFIRMED": "Poche transfusée : exposition confirmée",
+      "EXPOSURE_UNCONFIRMED": "Poche sortie : administration non confirmée",
+      "EXPOSURE_NOT_GIVEN": "Poche revenue non utilisée : aucune exposition",
+      "EXPOSED_BANNER_UNCONFIRMED": "Des globules rouges O RhD positif ont été délivrés en urgence pour ce patient ({{date}}, {{hospital}}) ; aucune administration n’est enregistrée. Vérifiez si la poche a été transfusée avant de transfuser.",
       "TAB": "O positif en urgence",
       "PROTOCOL_TITLE": "Protocole O RhD positif en urgence",
       "PROTOCOL_ACTIVE": "Protocole actif",
@@ -13696,7 +13702,6 @@
       "REVIEWED": "Revue enregistrée.",
       "FOLLOW_UP_SAVED": "Suivi enregistré.",
       "EXPOSED_BANNER": "Exposé à des globules rouges RhD positif en urgence ({{date}}, {{hospital}}). Mention permanente : vérifiez la RAI et le suivi avant de transfuser.",
-      "EXPOSED_SHORT": "Exposé au RhD positif",
       "COUNTERSIGN_OWED": "contresignature attendue",
       "REVIEW_OWED": "revue attendue",
       "FORM_TIER_LOW_RISK": "Patient à faible risque selon le protocole de l’établissement : vous pouvez prendre cette décision vous-même. Le biologiste la revoit ensuite.",
@@ -16299,6 +16304,7 @@
     "ALLO_IMMUNISED": "Allo-immunisation : {{antibody}}",
     "ALLO_IMMUNISED_UNIDENTIFIED": "Allo-immunisation : RAI positive, anticorps non identifié",
     "RHD_EXPOSED": "Exposé à des globules rouges RhD positif en urgence : RAI et suivi à vérifier",
+    "RHD_EXPOSED_UNCONFIRMED": "O RhD positif délivré en urgence, administration non confirmée : à vérifier",
     "DECLARED_FIELD": "Groupe sanguin déclaré (non vérifié)",
     "DECLARED_FIELD_HINT": "Ce que dit le patient ou une carte. Seul le groupage du laboratoire confirme le groupe ; cette valeur ne le remplace jamais.",
     "CONFIRMED_ON_RECORD": "Confirmé par le laboratoire : {{group}}"

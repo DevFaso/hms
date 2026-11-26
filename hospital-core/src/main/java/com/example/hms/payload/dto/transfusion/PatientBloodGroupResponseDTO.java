@@ -43,6 +43,8 @@ public class PatientBloodGroupResponseDTO {
     private java.time.LocalDateTime rhdPositiveExposedAt;
     /** The hospital that recorded it. */
     private String rhdPositiveExposedHospitalName;
+    /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
+    private Boolean rhdPositiveExposureConfirmed;
     private String notes;
     /** Why this result disagrees with the one before it (QA CX-011). */
     private String correctionReason;

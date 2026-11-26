@@ -33,6 +33,7 @@ class EmergencyOPositiveAuthorityGuardTest {
     private static final String SERVICE_FILE = "service/impl/TransfusionServiceImpl.java";
     private static final String AUTHORITY_FILE = "service/transfusion/OPositiveReleaseAuthorityService.java";
     private static final String POLICY_FILE = "service/support/OPositiveReleaseAuthority.java";
+    private static final String NOTICES_FILE = "service/transfusion/OPositiveReleaseNotices.java";
     private static final Path MIGRATIONS = Paths.get("src/main/resources/db/migration");
 
     private static String read(Path file) throws IOException {
@@ -93,6 +94,9 @@ class EmergencyOPositiveAuthorityGuardTest {
         assertThat(record).contains("OPositiveReleaseAuthorityService.Authorisation authorisation")
             .contains("releaseRepository.save(EmergencyBloodRelease.builder()")
             .contains("positiveAuthority.record(saved, authorisation, request, unit,");
+        // An O negative release reads nothing of this rule: the assessment is made for O positive bags only.
+        assertThat(count(source, "positiveAssessmentFor(request, unit)")).as("the two ways out").isEqualTo(2);
+        assertThat(method(source, "Assessment positiveAssessmentFor(")).contains("AboGroup.isEmergencyOPositive(").contains(": null");
         assertThat(filesContaining("EmergencyBloodRelease.builder()")).containsExactly(SERVICE_FILE);
         assertThat(count(source, "EmergencyBloodRelease.builder()")).isEqualTo(1);
         assertThat(filesContaining("setStatus(BloodUnitStatus.ISSUED)")).containsExactly(SERVICE_FILE);
@@ -106,7 +110,8 @@ class EmergencyOPositiveAuthorityGuardTest {
         }
         assertThat(filesContaining("new Authorisation(")).containsExactly(AUTHORITY_FILE);
         assertThat(filesContaining("OPositiveReleaseDecision.builder()")).containsExactly(AUTHORITY_FILE);
-        assertThat(filesContaining("decisionRepository.save(")).containsExactly(AUTHORITY_FILE);
+        // The row is written by the decision service; its notices mark it filed, or escalated, and nothing else.
+        assertThat(filesContaining("decisionRepository.save(")).containsExactlyInAnyOrder(AUTHORITY_FILE, NOTICES_FILE);
 
         String source = read(MAIN.resolve(SERVICE_FILE));
         assertThat(source).as("the decision service is required: no path runs without it")
@@ -127,7 +132,7 @@ class EmergencyOPositiveAuthorityGuardTest {
     }
 
     @Test
-    @DisplayName("NEVER BLOCKS: no physician reachable is answered before anything is asked, and a failed notice cannot undo a release")
+    @DisplayName("NEVER BLOCKS: no physician reachable is answered before anything is asked; a notice cannot hold or undo a release, nor be lost")
     void neverHoldsBloodForWantOfAPerson() throws IOException {
         String authority = read(MAIN.resolve(AUTHORITY_FILE));
         String physician = method(authority, "private UUID physician(");
@@ -145,12 +150,24 @@ class EmergencyOPositiveAuthorityGuardTest {
         assertThat(authorise).contains("transfusion.emergency.decisionRequired");
 
         String record = method(authority, "public OPositiveReleaseDecision record(");
-        assertThat(record).as("the notices are composed safely and filed after the commit")
-            .contains("notifySafely(() -> fileNotices(").doesNotContain("throw new");
-        assertThat(method(authority, "private void fileAfterCommit(")).contains("TransactionCallbacks.afterCommit(")
+        assertThat(record).as("the release transaction writes its rows and reads nothing about a reader")
+            .contains("TransactionCallbacks.afterCommit(() -> deliverNotices(decisionId))")
+            .doesNotContain("throw new").doesNotContain("assignmentRepository").doesNotContain("userRepository")
+            .doesNotContain("inBasketService");
+        assertThat(method(authority, "private void deliverNotices(")).contains("notices.deliver(decisionId)")
             .contains("catch (RuntimeException");
         assertThat(method(authority, "private void auditAfterCommit(")).contains("TransactionCallbacks.afterCommit(")
             .contains("catch (RuntimeException");
+
+        // The notices: a transaction of their own, the items filed in it with the mark, so a failure is retried.
+        String notices = read(MAIN.resolve(NOTICES_FILE));
+        String deliver = method(notices, "public int deliver(");
+        assertThat(notices).contains("@Transactional(propagation = Propagation.REQUIRES_NEW)\n    public int deliver(");
+        assertThat(deliver.indexOf("items.forEach(inBasketService::createItem)")).as("filed before the row is marked")
+            .isNotNegative().isLessThan(deliver.indexOf("setNoticesFiledAt("));
+        assertThat(notices).as("never after the commit, where a failure would be lost")
+            .doesNotContain("createItemInNewTransaction");
+        assertThat(filesContaining("setNoticesFiledAt(")).containsExactly(NOTICES_FILE);
     }
 
     @Test
@@ -161,6 +178,7 @@ class EmergencyOPositiveAuthorityGuardTest {
             .contains("CONSTRAINT ck_o_positive_decision_issuer_alone CHECK (decision_basis <> 'PROTOCOL'")
             .contains("risk_tier = 'LOW_RISK' AND protocol_active = TRUE")
             .contains("decided_by_user_id IS DISTINCT FROM issued_by_user_id")
+            .contains("notices_filed_at            TIMESTAMP")
             .contains("CONSTRAINT ck_o_positive_decision_countersign  CHECK (risk_tier = 'LOW_RISK' OR countersign_due_at IS NOT NULL)");
         assertThat(read(MIGRATIONS.resolve("changelog.xml")))
             .contains("<sqlFile path=\"V380__emergency_o_positive_release_authority.sql\"");

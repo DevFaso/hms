@@ -40,7 +40,7 @@ class InBasketAcknowledgerGuardTest {
     private static final Map<String, Set<String>> CREATORS = new TreeMap<>(Map.of(
         // V380: the immediate review of an O positive release to a patient with a known antibody: the hospital's
         // biologists (BIOLOGIST_ROLE_CODES), or with none the physician named and the requester (PRESCRIBER).
-        "service/transfusion/OPositiveReleaseAuthorityService.java",
+        "service/transfusion/OPositiveReleaseNotices.java",
         Set.of("ROLE_LAB_DIRECTOR", "ROLE_DOCTOR", "ROLE_SURGEON", "ROLE_MIDWIFE"),
         // The ordering clinician: POST /lab-orders admits DOCTOR and NURSE; order sets and the super-admin
         // console name a doctor or midwife as the ordering staff.

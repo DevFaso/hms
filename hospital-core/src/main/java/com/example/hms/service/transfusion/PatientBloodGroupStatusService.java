@@ -112,9 +112,10 @@ public class PatientBloodGroupStatusService {
         if (exposures == null) {
             return;
         }
-        com.example.hms.model.OPositiveReleaseDecision exposure = exposures.newestExposureShownAt(patientId, hospitalId);
+        OPositiveReleaseAuthorityService.RhdExposure exposure = exposures.exposureShownAt(patientId, hospitalId);
         status.setRhdPositiveExposed(exposure != null);
-        status.setRhdPositiveExposedAt(exposure == null ? null : exposure.getIssuedAt());
+        status.setRhdPositiveExposedAt(exposure == null ? null : exposure.issuedAt());
+        status.setRhdPositiveExposureConfirmed(exposure == null ? null : exposure.confirmed());
     }
 
     /**

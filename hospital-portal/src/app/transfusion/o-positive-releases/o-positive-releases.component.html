@@ -216,6 +216,11 @@
                         at: (r.countersignedAt | serverTime | date: 'short'),
                       }
               }}
+              @if (r.countersignCovering) {
+                <span class="warn-inline" data-testid="opos-covering">{{
+                  'TRANSFUSION.OPOS.COVERING' | translate
+                }}</span>
+              }
             </span>
           } @else {
             <span data-testid="opos-countersign-due">
@@ -297,6 +302,17 @@
       @if (r.followUpRequired) {
         <div class="opos-step" [class.done]="!followUpOwed(r)" data-testid="opos-follow-up">
           <span class="opos-step-label">{{ 'TRANSFUSION.OPOS.FOLLOW_UP' | translate }}</span>
+          @if (r.exposureState) {
+            {{ ' ' }}
+            <span
+              class="opos-chip"
+              [class.chip-danger]="r.exposureState === 'CONFIRMED'"
+              [class.chip-warn]="r.exposureState === 'UNCONFIRMED'"
+              data-testid="opos-exposure-state"
+            >
+              {{ 'TRANSFUSION.OPOS.EXPOSURE_' + r.exposureState | translate }}
+            </span>
+          }
           <ul class="opos-facts">
             <li>
               {{ 'TRANSFUSION.OPOS.ANTI_D' | translate }}{{ 'COMMON.COLON' | translate }}
@@ -335,7 +351,7 @@
           @if (r.followUpNote) {
             <p class="opos-note">{{ r.followUpNote }}</p>
           }
-          @if (canFollowUp && followUpOwed(r)) {
+          @if (canFollowUp && followUpOwed(r) && r.exposureState !== 'NOT_GIVEN') {
             <div class="opos-inline-form">
               <textarea
                 appFormControl

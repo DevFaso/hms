@@ -191,7 +191,19 @@ public class TransfusionServiceImpl implements TransfusionService {
     public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO getAntibodyStatus(UUID patientId) {
         UUID hospitalId = requireHospital();
         Patient patient = patientChartAccess.require(patientId, hospitalId);
-        return antibodyScreen.status(patient.getId(), hospitalId, patient.getFullName());
+        com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO status =
+            antibodyScreen.status(patient.getId(), hospitalId, patient.getFullName());
+        // V380: the RhD positive exposure flag rides with the antibody status, which is read whether or not this
+        // hospital ever typed the patient (the new-request form before any grouping).
+        com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.RhdExposure exposure =
+            positiveAuthority.exposureShownAt(patient.getId(), hospitalId);
+        if (status != null && exposure != null) {
+            status.setRhdPositiveExposed(true);
+            status.setRhdPositiveExposedAt(exposure.issuedAt());
+            status.setRhdPositiveExposedHospitalName(exposure.hospitalName());
+            status.setRhdPositiveExposureConfirmed(exposure.confirmed());
+        }
+        return status;
     }
 
     /** The group as it is shown, with the permanent allo-immunisation flag of this hospital's record. */
@@ -200,11 +212,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             dto.setAlloImmunised(antibodyScreen.alloImmunisedShownAt(patientId, hospitalId));
         }
         if (dto != null) {
-            com.example.hms.model.OPositiveReleaseDecision exposure = positiveAuthority.newestExposureShownAt(patientId, hospitalId);
+            com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.RhdExposure exposure =
+                positiveAuthority.exposureShownAt(patientId, hospitalId);
             if (exposure != null) {
                 dto.setRhdPositiveExposed(true);
-                dto.setRhdPositiveExposedAt(exposure.getIssuedAt());
-                dto.setRhdPositiveExposedHospitalName(exposure.getHospital().getName());
+                dto.setRhdPositiveExposedAt(exposure.issuedAt());
+                dto.setRhdPositiveExposedHospitalName(exposure.hospitalName());
+                dto.setRhdPositiveExposureConfirmed(exposure.confirmed());
             }
         }
         return dto;
@@ -273,7 +287,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (saved.getAntibodyScreen() == AntibodyScreenResult.NEGATIVE || saved.getAntibodyScreen() == AntibodyScreenResult.POSITIVE) {
             // V380: the antibody screen a clinician asked for after an RhD positive exposure is now on record.
             // A grouping recorded with the screen not done is no screen.
-            positiveAuthority.noteAntibodyScreen(patient.getId(), now);
+            positiveAuthority.noteAntibodyScreen(patient.getId(), hospitalId, now);
         }
         if (antibodyScreen != null) {
             // QA D3351: a positive screen asks the biologist to identify the antibody or refer the sample.
@@ -994,10 +1008,10 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!negativeShown.isEmpty()) {
             return com.example.hms.enums.ONegativeStatus.STATED_UNOBTAINABLE;
         }
-        // The plain issue asks nothing: when O negative shows in stock, the protocol kept it for the others.
-        boolean keptByProtocol = authorisation.applies() && type == EmergencyReleaseType.UNCROSSMATCHED
-            && !negativeStock(request).isEmpty();
-        return keptByProtocol ? com.example.hms.enums.ONegativeStatus.PROTOCOL_FIRST_LINE
+        // No statement was asked (the plain issue, or a patient O positive goes to first): what the stock holds is
+        // read here, never inferred from an empty list on the form.
+        boolean inStock = authorisation.applies() && !negativeStock(request).isEmpty();
+        return inStock ? com.example.hms.enums.ONegativeStatus.PROTOCOL_FIRST_LINE
             : com.example.hms.enums.ONegativeStatus.OUT_OF_STOCK;
     }
 
@@ -1062,7 +1076,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             requireUncrossmatchedRelease(request, unit, crossmatch, refusal);
             // V380: O positive leaves here only for the low-risk tier; any other is sent to the documented release.
             com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
-                positiveAuthority.authorise(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, positiveAssessment(request));
+                positiveAuthority.authorise(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, positiveAssessmentFor(request, unit));
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
             recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, authorisation, null, List.of());
@@ -1123,7 +1137,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         requireAnswerableAuthoriser(request, release);
         // V380: whose authority an O positive bag goes out on. It refuses a false record, never a missing person.
         com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
-            positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessment(request));
+            positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessmentFor(request, unit));
         // An incompatible release names the authoriser its own rule validated above, whatever the O positive tier says.
         boolean ownAuthoriser = !authorisation.applies() || release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
         UUID answerable = ownAuthoriser ? release.getAuthoriserUserId() : authorisation.answerable();
@@ -1312,6 +1326,17 @@ public class TransfusionServiceImpl implements TransfusionService {
                 EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES)) {
             throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserInvalid");
         }
+    }
+
+    /**
+     * The assessment for the bag going out: read only for O positive red cells. An O negative release, or any
+     * other bag, reads neither the protocol nor the antibody history of a rule that does not apply to it, so
+     * nothing of that rule can fail it.
+     */
+    private com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Assessment positiveAssessmentFor(
+            TransfusionRequest request, BloodUnit unit) {
+        return AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())
+            ? positiveAssessment(request) : null;
     }
 
     /**
@@ -2007,12 +2032,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (request.getPatient() == null || request.getHospital() == null) {
             return;
         }
-        com.example.hms.model.OPositiveReleaseDecision exposure = positiveAuthority.newestExposureShownAt(
-            request.getPatient().getId(), request.getHospital().getId());
+        com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.RhdExposure exposure =
+            positiveAuthority.exposureShownAt(request.getPatient().getId(), request.getHospital().getId());
         if (exposure != null) {
             detail.setRhdPositiveExposed(true);
-            detail.setRhdPositiveExposedAt(exposure.getIssuedAt());
-            detail.setRhdPositiveExposedHospitalName(exposure.getHospital().getName());
+            detail.setRhdPositiveExposedAt(exposure.issuedAt());
+            detail.setRhdPositiveExposedHospitalName(exposure.hospitalName());
+            detail.setRhdPositiveExposureConfirmed(exposure.confirmed());
         }
     }
 
