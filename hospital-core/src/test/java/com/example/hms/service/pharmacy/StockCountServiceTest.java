@@ -147,6 +147,9 @@ class StockCountServiceTest {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(eq(hospital.getId()), any())).thenReturn(java.util.List.of(actor, other));
         assertThatThrownBy(() -> service.confirm(count.getId(), new StockCountConfirmationDTO(true, null)))
             .hasFieldOrPropertyWithValue("messageKey", "stockCount.otherConfirmerRequired");
+        verify(assignments).findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), java.util.Set.of(
+            "PHARMACIST", "ROLE_PHARMACIST", "INVENTORY_CLERK", "ROLE_INVENTORY_CLERK",
+            "STORE_MANAGER", "ROLE_STORE_MANAGER", "HOSPITAL_ADMIN", "ROLE_HOSPITAL_ADMIN"));
         verifyNoInteractions(movements);
         verify(counts, never()).save(any());
     }

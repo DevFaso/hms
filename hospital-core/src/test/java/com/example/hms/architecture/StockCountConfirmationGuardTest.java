@@ -46,6 +46,8 @@ class StockCountConfirmationGuardTest {
         }
         String service = Files.readString(root.resolve("service/pharmacy/StockCountService.java"));
         assertThat(service).contains("findLiveUsersAtHospitalWithRoleCodes(hospitalId,", "stockCount.otherConfirmerRequired", "count.setSamePersonConfirmation(samePerson)");
+        assertThat(service).contains("CONFIRMER_ROLE_CODES = WRITERS.stream()", "CONFIRMER_ROLE_CODES).stream()")
+            .doesNotContain("LowStockAlertDelivery.RECIPIENT_ROLES");
         assertThat(service.indexOf("stockCount.otherConfirmerRequired")).isLessThan(service.indexOf("movements.recordTransaction("));
     }
 }

@@ -38,6 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StockCountService {
     private static final Set<String> WRITERS = Set.of("PHARMACIST", "INVENTORY_CLERK", "STORE_MANAGER", "HOSPITAL_ADMIN");
+    private static final Set<String> CONFIRMER_ROLE_CODES = WRITERS.stream()
+        .flatMap(role -> java.util.stream.Stream.of(role, "ROLE_" + role))
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
     private final StockCountRepository counts;
     private final InventoryItemRepository items;
     private final StockLotRepository lots;
@@ -102,7 +105,7 @@ public class StockCountService {
         User actor = actor();
         boolean samePerson = count.getRecordedBy() != null && actor.getId().equals(count.getRecordedBy().getId());
         if (samePerson && assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId,
-                LowStockAlertDelivery.RECIPIENT_ROLES).stream().anyMatch(other -> other.getId() != null && !actor.getId().equals(other.getId()))) {
+                CONFIRMER_ROLE_CODES).stream().anyMatch(other -> other.getId() != null && !actor.getId().equals(other.getId()))) {
             throw new FieldBusinessException("confirmed", "stockCount.otherConfirmerRequired");
         }
         if (count.getVariance().signum() != 0) {
