@@ -94,20 +94,7 @@ export class NursingNotesPanelComponent implements OnChanges {
 
   private request?: Subscription;
 
-  needsHospitalScope(): boolean {
-    return (
-      !this.hospitalId && this.roleContext.isSuperAdmin() && !this.roleContext.hasHospitalScope()
-    );
-  }
-
   ngOnChanges(): void {
-    if (this.needsHospitalScope()) {
-      this.request?.unsubscribe();
-      this.notes.set([]);
-      this.loading.set(false);
-      this.failed.set(false);
-      return;
-    }
     if (!this.patientId) return;
     // Review of #971: the panel is reused when another visit is opened; the
     // previous patient's request is dropped so its late answer cannot put

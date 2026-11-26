@@ -318,7 +318,6 @@ export const routes: Routes = [
           },
           {
             path: ':id',
-            data: { requiresHospitalScope: true, supportsGlobalHospitalView: true },
             loadComponent: () =>
               import('./patients/patient-detail').then((m) => m.PatientDetailComponent),
           },
