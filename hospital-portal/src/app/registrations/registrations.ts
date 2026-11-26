@@ -13,7 +13,17 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { serverInstant } from '../shared/date-utils';
 import { FormsModule } from '@angular/forms';
-import { concatMap, from, reduce, Subscription, switchMap } from 'rxjs';
+import {
+  concatMap,
+  defer,
+  from,
+  Observable,
+  of,
+  reduce,
+  Subscription,
+  switchMap,
+  throwError,
+} from 'rxjs';
 import { HospitalService } from '../services/hospital.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -257,7 +267,7 @@ export class RegistrationsComponent implements OnInit {
       ? this.hospitalService.list().pipe(
           switchMap((hospitals) =>
             from(hospitals).pipe(
-              concatMap((hospital) => readHospital(hospital.id)),
+              concatMap((hospital) => this.readHospitalSnapshot(hospital.id, filter)),
               reduce((all, next) => all.concat(next), [] as HospitalRegistration[]),
             ),
           ),
@@ -277,6 +287,34 @@ export class RegistrationsComponent implements OnInit {
         this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
       },
     });
+  }
+
+  /**
+   * Re-read a growing prefix rather than appending offset pages. A registration
+   * can leave the desk between requests; appending offsets could silently skip
+   * the next row while still presenting the network count as complete. The
+   * last response is one hospital snapshot. The explicit ceiling fails closed.
+   */
+  private readHospitalSnapshot(
+    hospitalId: string,
+    filter: ActiveFilter,
+    size = 200,
+  ): Observable<HospitalRegistration[]> {
+    const ceiling = 40001;
+    return defer(() =>
+      this.registrationService.list({
+        hospitalId,
+        active: filter === 'all' ? undefined : filter === 'active',
+        page: 0,
+        size,
+      }),
+    ).pipe(
+      switchMap((rows) => {
+        if ((rows?.length ?? 0) < size) return of(rows ?? []);
+        if (size === ceiling) return throwError(() => new Error('Registration desk exceeds limit'));
+        return this.readHospitalSnapshot(hospitalId, filter, Math.min(size * 2, ceiling));
+      }),
+    );
   }
 
   toggleMultiHospital(): void {
