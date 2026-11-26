@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import org.hibernate.annotations.Immutable;
 import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -34,6 +35,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 @Entity
+@Immutable
 @Table(
     name = "audit_event_logs",
     schema = "support",

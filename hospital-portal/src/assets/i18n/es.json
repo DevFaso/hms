@@ -2197,6 +2197,7 @@
       "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "AUDIT_RETENTION_PURGED": "Registros de auditoría que superan el plazo de conservación eliminados",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
       "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
@@ -7853,7 +7854,8 @@
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
-        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada"
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada",
+        "AUDIT_RETENTION_PURGED": "Registros de auditoría eliminados tras el plazo de conservación"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",

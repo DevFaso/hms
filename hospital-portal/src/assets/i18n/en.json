@@ -2197,6 +2197,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
+      "AUDIT_RETENTION_PURGED": "Audit rows past the retention period removed",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
       "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk",
@@ -7853,7 +7854,8 @@
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set signed off",
-        "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked"
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked",
+        "AUDIT_RETENTION_PURGED": "Audit rows past retention removed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

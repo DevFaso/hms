@@ -2197,6 +2197,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
+      "AUDIT_RETENTION_PURGED": "Entrées d’audit au-delà de la durée de conservation supprimées",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
       "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil",
@@ -7819,7 +7820,8 @@
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
         "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques validé",
-        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de règle clinique révoquée"
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de règle clinique révoquée",
+        "AUDIT_RETENTION_PURGED": "Entrées d’audit supprimées après la durée de conservation"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
