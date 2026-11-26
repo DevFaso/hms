@@ -709,6 +709,53 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void aSevereReactionIsFiledAsAnUrgentAlertWithTheReactionAndAMildOneIsNot() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "urgentAlerts", urgentAlerts);
+        when(reactionRepository.save(any())).thenAnswer(i -> {
+            TransfusionReaction reaction = i.getArgument(0);
+            reaction.setId(UUID.randomUUID());
+            return reaction;
+        });
+        TransfusionAdministration admin = inProgress();
+
+        service.recordReaction(admin.getId(), TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.ACUTE_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.LIFE_THREATENING)
+            .onsetAt(LocalDateTime.now())
+            .build());
+
+        // Scorecard K4: a row on the escalation ladder, written with the reaction.
+        org.mockito.ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> filed =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(urgentAlerts).raiseAfterCommit(filed.capture());
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert alert = filed.getValue();
+        assertThat(alert.sourceType()).isEqualTo(com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_TRANSFUSION_REACTION);
+        assertThat(alert.alertType())
+            .isEqualTo(com.example.hms.service.escalation.UrgentAlerts.TYPE_SEVERE_TRANSFUSION_REACTION);
+        assertThat(alert.sourceId()).isNotNull();
+        assertThat(alert.patientId()).isEqualTo(admin.getPatient().getId());
+        assertThat(alert.hospitalId()).isEqualTo(admin.getHospital().getId());
+        assertThat(alert.alertMessageKey()).isEqualTo("urgentAlert.msg.SEVERE_TRANSFUSION_REACTION");
+        // The clinician who asked for the blood is named when the request has one.
+        com.example.hms.model.Staff requester = admin.getRequest().getRequestedBy();
+        if (requester != null && requester.getUser() != null && requester.getUser().getUsername() != null) {
+            assertThat(alert.namedRecipients()).containsExactly(requester.getUser().getUsername());
+        } else {
+            assertThat(alert.namedRecipients()).isEmpty();
+        }
+
+        org.mockito.Mockito.clearInvocations(urgentAlerts);
+        TransfusionAdministration second = inProgress();
+        service.recordReaction(second.getId(), TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.FEBRILE_NON_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(LocalDateTime.now())
+            .build());
+        verify(urgentAlerts, org.mockito.Mockito.never()).raiseAfterCommit(any());
+    }
+
+    @Test
     void completingATransfusionMarksTheUnitTransfused() {
         TransfusionAdministration admin = inProgress();
 

@@ -71,9 +71,15 @@ text is the app's own neutral « Nouveau message ».
 | `sms.staff.criticalImaging.escalation` | patient's initials | `ImagingCriticalNotificationService` | **Fixed (K4)**: same |
 | `sms.staff.questionnaire` | patient's initials | `ProScreeningEscalationService` | **Fixed (K4)**: named the instrument (a depression or suicide-risk screen) and the full name |
 | `sms.staff.questionnaire.escalation` | patient's initials | `ProScreeningEscalationService` | **Fixed (K4)**: same |
+| `sms.staff.urgentAlert` | patient's initials | `UrgentEscalationSupport` (the clinicians a step of the urgent-alert ladder adds: the covering clinician, the médecin-chef) | OK: names no alert, no study, no questionnaire and no value |
 
 The in-app alert behind the sign-in keeps the test, the value and the name; the SMS says only that
 something critical is waiting and for whom (initials).
+
+A hospital administrator is not a clinician: the in-app text an administrator receives about an
+unacknowledged alert (`lab.critical.unresolved.admin`, `urgent.alert.unresolved.admin`) says that an
+incident is open and for how many minutes, and carries no patient, no study, no questionnaire and no
+value. See `urgent-message-escalation.md`.
 
 ## SMS to a partner pharmacy
 

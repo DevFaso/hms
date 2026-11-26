@@ -408,7 +408,34 @@ public class VitalSignJudgement {
                 log.warn("Severe blood-pressure notice not created: {}", ex.getClass().getSimpleName());
             }
         }
+        if (scope == SevereHypertension.Scope.ADULT) {
+            fileUrgentHypertensionForAcknowledgement(saved, patientId, hospitalId, fullName, bloodPressure, reached);
+        }
         return reached;
+    }
+
+    /**
+     * Scorecard K4: an adult's severe hypertension at the URGENT level is an urgent alert to acknowledge (the
+     * obstetric one is filed through the maternal early warning). A CRITICAL item for
+     * the people the notice rang, the nurses of the ward and a doctor other than the recorder, then the one ladder
+     * until somebody other than the recorder acknowledges; one alert per patient while it is still escalating. The
+     * level and its threshold are {@link SevereHypertension}'s: nothing here decides what is urgent. Its row is
+     * written with the vital set; see {@code ObstetricAlertEscalationService#raiseAfterCommit}.
+     */
+    private void fileUrgentHypertensionForAcknowledgement(PatientVitalSign saved, UUID patientId, UUID hospitalId,
+                                                          String fullName, SevereHypertension.Verdict bloodPressure,
+                                                          Set<String> rang) {
+        if (urgentAlerts == null || saved == null || saved.getId() == null) {
+            return;
+        }
+        com.example.hms.model.Staff recorder = saved.getRecordedByStaff();
+        UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
+        urgentAlerts.raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.withSentence(
+                new com.example.hms.service.escalation.UrgentAlerts.Subject(hospitalId, patientId, fullName),
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION,
+                saved.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_URGENT_HYPERTENSION,
+                bloodPressure.messageKey(), null, recorderUserId)
+            .withAlreadyNotified(rang));
     }
 
     /**

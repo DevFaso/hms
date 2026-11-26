@@ -168,6 +168,9 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ObstetricAlertCurrency.postpartumResolved#findById", SYSTEM + " (re-reads the clinical record that raised the escalation row, by the id the row stored; read-only, inside the sweep)"),
         entry("ObstetricAlertEscalationWorker.escalateOne#findByIdUnscoped", SYSTEM + " (QA D659: the patient the escalation row was raised for, to name her in the reminder; the reminder goes only to that row's hospital staff)"),
         entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
+        entry("ObstetricAlertEscalationWorker.deliverFirstNotice#findById", SYSTEM + " (V386: the escalation row whose first notice is owed, by the id its own filing returned; it carries its own hospital)"),
+        entry("ObstetricAlertEscalationWorker.alertOf#findByIdUnscoped", SYSTEM + " (V386: the patient the escalation row was raised for, to name her in a first notice the sweep delivers; it goes only to that row's hospital staff)"),
+        entry("ProScreeningEscalationService.closeAnsweredIncidents#findById", SYSTEM + " (V386: the response an open incident names, re-read in the sweep to see whether it was acknowledged; nothing of it is returned)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
         entry("PatientPortalServiceImpl.verifyProxyAccess#findByIdUnscoped", "QA D1212 (round 23): the grantor's"
             + " record, read only after the caller's active, unexpired, in-scope proxy grant FROM that grantor is verified;"

@@ -115,7 +115,9 @@ class PartialUniqueReleaseFlushGuardTest {
         // V364 (QA r70, C5): one OPEN incident per critical result; closing it (a read-back, an amendment, a
         // result no longer critical) releases the slot with saveAndFlush, and the next incident is opened by a
         // later sweep, never in the closing method.
-        Map.entry("critical_result_incidents", "CriticalResultIncident"));
+        Map.entry("critical_result_incidents", "CriticalResultIncident"),
+        // V386: one open incident per unresolved urgent alert.
+        Map.entry("urgent_alert_incidents", "UrgentAlertIncident"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

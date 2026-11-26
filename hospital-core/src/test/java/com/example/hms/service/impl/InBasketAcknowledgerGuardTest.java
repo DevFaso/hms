@@ -53,8 +53,10 @@ class InBasketAcknowledgerGuardTest {
         // + NURSE), and the lab directors when an emergency request has no requester.
         "service/impl/TransfusionServiceImpl.java",
         Set.of("ROLE_DOCTOR", "ROLE_SURGEON", "ROLE_MIDWIFE", "ROLE_NURSE", "ROLE_LAB_DIRECTOR"),
-        // FIRST_NOTICE_ROLES and REMINDER_ROLES, read from the source below.
-        "service/maternity/ObstetricAlertEscalationWorker.java", Set.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE")));
+        // FIRST_NOTICE_ROLES, REMINDER_ROLES and LADDER_ROLES (the covering clinician, the médecin-chef, the
+        // laboratory director of a transfusion alert), read from the source below.
+        "service/maternity/ObstetricAlertEscalationWorker.java", Set.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE",
+            "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_LAB_DIRECTOR")));
 
     @Test
     @DisplayName("every creator of an urgent clinical item is listed, and its recipients can acknowledge")
@@ -85,7 +87,8 @@ class InBasketAcknowledgerGuardTest {
         String obstetric = Files.readString(MAIN.resolve("service/maternity/ObstetricAlertEscalationWorker.java"),
             StandardCharsets.UTF_8);
         Set<String> rota = new TreeSet<>();
-        Matcher list = Pattern.compile("(?:FIRST_NOTICE_ROLES|REMINDER_ROLES) = List\\.of\\(([^)]*)\\)").matcher(obstetric);
+        Matcher list = Pattern.compile("(?:FIRST_NOTICE_ROLES|REMINDER_ROLES|LADDER_ROLES)\\s*=\\s*List\\.of\\(([^)]*)\\)")
+            .matcher(obstetric);
         while (list.find()) {
             Matcher role = Pattern.compile("\"(ROLE_[A-Z_]+)\"|([A-Z_]+_ROLE)\\b").matcher(list.group(1));
             while (role.find()) {

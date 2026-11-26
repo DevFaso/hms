@@ -81,7 +81,9 @@ class InBasketRecipientGuardTest {
         // The obstetric team, then the ward.
         Map.entry("ObstetricAlertEscalationWorker.java", union(
             codes(setConstant(ObstetricAlertEscalationWorker.class, "FIRST_NOTICE_ROLES")),
-            codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES")))),
+            codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES")),
+            // K4: the covering clinician, the médecin-chef, the laboratory director of a transfusion alert.
+            codes(setConstant(ObstetricAlertEscalationWorker.class, "LADDER_ROLES")))),
         // The urgent dispute of a death: the administrators of both hospitals, who decide it.
         Map.entry("DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES"))),
         // The treating clinicians of a running treatment, who assess it.

@@ -171,8 +171,12 @@ public final class ClinicalRuleRegistry {
             "service.support.IncompatibleReleaseAuthority", "service.transfusion.IncompatibleReleaseDecisions",
             "service.transfusion.IncompatibleReleaseNotices"),
         // QA D3862 (r77): a HIGH NEWS2 is an urgent alert to acknowledge (the D3304 path), not a bell alone.
-        rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-25.1",
-            "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"));
+        // Scorecard K4: its reminders are now the steps of the urgent-alert ladder, with no cap (.2).
+        rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-26.2",
+            "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"),
+        // Scorecard K4 (V386): one ladder for every urgent clinical alert: cover, médecin-chef, incident, no cap.
+        rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-26.1",
+            "service.escalation.UrgentEscalationSupport"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

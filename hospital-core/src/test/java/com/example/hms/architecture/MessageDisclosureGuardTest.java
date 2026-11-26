@@ -110,6 +110,7 @@ class MessageDisclosureGuardTest {
         Map.entry("sms.staff.criticalLab.escalation", 0),
         Map.entry("sms.staff.questionnaire", 0),
         Map.entry("sms.staff.questionnaire.escalation", 0),
+        Map.entry("sms.staff.urgentAlert", 0),
         Map.entry("sms.username.reminder", 0),
         Map.entry("sms.waitlist.offer", 3),
         Map.entry("recipientVerification.code", 0)));
@@ -130,7 +131,8 @@ class MessageDisclosureGuardTest {
         new String[] {"CriticalValueNotificationService.java", "smsText"},
         new String[] {"ImagingCriticalNotificationService.java", "sendSmsBestEffort"},
         new String[] {"ImagingCriticalNotificationService.java", "smsInitials"},
-        new String[] {"pro/ProScreeningEscalationService.java", "smsText"});
+        new String[] {"pro/ProScreeningEscalationService.java", "smsText"},
+        new String[] {"escalation/UrgentEscalationSupport.java", "smsAfterCommit"});
 
     @Test
     @DisplayName("every outgoing message template is in the disclosure inventory, and every entry still exists")

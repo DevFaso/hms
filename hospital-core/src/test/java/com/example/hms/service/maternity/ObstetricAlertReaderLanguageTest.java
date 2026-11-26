@@ -121,6 +121,9 @@ class ObstetricAlertReaderLanguageTest {
             .typeLabel("hémorragie")
             .alertMessage("Pertes sanguines estimées 1200 ml : seuil d'hémorragie du post-partum atteint.")
             .alertMessageKey("labor.alert.msg.labor-pph").alertMessageArgs(List.of(1200))
+            // Its first notice went out long ago: the first step of the ladder is due.
+            .firstNoticeFiledAt(java.time.LocalDateTime.of(2000, 1, 1, 0, 0))
+            .lastEscalationAt(java.time.LocalDateTime.of(2000, 1, 1, 0, 0))
             .escalationLevel((short) 0).build();
         row.setId(UUID.randomUUID());
         when(escalationRepository.findById(row.getId())).thenReturn(Optional.of(row));

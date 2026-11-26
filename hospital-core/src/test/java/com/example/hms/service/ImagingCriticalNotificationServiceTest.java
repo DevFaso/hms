@@ -61,6 +61,9 @@ class ImagingCriticalNotificationServiceTest {
     private ImagingReportRepository imagingReportRepository;
     @Mock
     private StaffRepository staffRepository;
+    /** Scorecard K4: the one ladder; its steps are computed for real, from the default minutes (15, 30, 60). */
+    @Mock
+    private com.example.hms.service.escalation.UrgentEscalationSupport ladder;
     @Mock
     private UserRepository userRepository;
 
@@ -78,7 +81,13 @@ class ImagingCriticalNotificationServiceTest {
     void setUp() {
         // The body asserts it runs under the lock; unit tests have no proxy.
         LockAssert.TestHelper.makeAllAssertsPass(true);
-        ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
+        org.mockito.Mockito.lenient().when(ladder.due(org.mockito.ArgumentMatchers.anyInt(), any(), any(), any(), any()))
+            .thenAnswer(call -> com.example.hms.service.lab.CriticalResultEscalationLadder.due(call.getArgument(0),
+                call.getArgument(1), call.getArgument(2),
+                com.example.hms.service.lab.CriticalResultEscalationLadder.Minutes.DEFAULT, call.getArgument(4)));
+        org.mockito.Mockito.lenient().when(ladder.seniors(any(), any(), any())).thenReturn(new java.util.LinkedHashSet<>());
+        org.mockito.Mockito.lenient().when(ladder.addedAt(any(), any(), any())).thenReturn(java.util.Set.of());
+        org.mockito.Mockito.lenient().when(ladder.openIncidents(any())).thenReturn(List.of());
 
         hospitalId = UUID.randomUUID();
         orderingUserId = UUID.randomUUID();
@@ -272,58 +281,115 @@ class ImagingCriticalNotificationServiceTest {
     // ── Escalation ───────────────────────────────────────────────────────
 
     @Test
-    void escalationRoundOneNudgesOnlyTheOrderingProvider() {
+    void theFirstStepAddsTheCoveringClinicianToTheOrderingProvider() {
         ImagingReport report = flagged();
-        report.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
         when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
+        when(ladder.seniors(hospitalId, com.example.hms.service.lab.CriticalResultEscalationLadder.Step.COVER,
+            "dr.ordering")).thenReturn(new java.util.LinkedHashSet<>(List.of("dr.cover")));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
         verify(notificationService).created(
             anyString(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
+        verify(notificationService).created(
+            anyString(), eq("dr.cover"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 1);
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
     }
 
     @Test
-    void escalationWidensToHospitalAdminsFromRoundTwo() {
+    void aFindingWithNoStepDueIsLeftAlone() {
         ImagingReport report = flagged();
-        report.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
+        // Notified ten minutes ago: the covering clinician's step comes at fifteen.
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(10));
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+        verify(imagingReportRepository, never()).save(any());
+    }
+
+    @Test
+    void theSecondStepAddsTheMedecinChefAndNeverAnAdministrator() {
+        ImagingReport report = flagged();
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(35));
         report.setCriticalEscalationLevel((short) 1);
         when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(List.of("admin.one", "admin.two"));
+        when(ladder.seniors(hospitalId, com.example.hms.service.lab.CriticalResultEscalationLadder.Step.MEDICAL_LEAD,
+            "dr.ordering")).thenReturn(new java.util.LinkedHashSet<>(List.of("dr.cover", "dr.chef")));
 
         service.escalateOverdue();
 
-        // The ordering provider STAYS on the list — they remain the one who can
-        // act clinically; widening is not a hand-off.
-        verify(notificationService).created(
-            anyString(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        verify(notificationService).created(
-            anyString(), eq("admin.one"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        verify(notificationService).created(
-            anyString(), eq("admin.two"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
+        // The ordering provider STAYS on the list — they remain the one who knows
+        // the patient; widening is not a hand-off.
+        for (String clinician : List.of("dr.ordering", "dr.cover", "dr.chef")) {
+            verify(notificationService).created(
+                anyString(), eq(clinician), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
+        }
+        // Scorecard K4: the study, the patient's name and the impression never reach an administrator. The
+        // service does not even read who the administrators are.
+        verify(notificationService, times(3)).created(anyString(), anyString(), anyString());
+        verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
+        verify(ladder, never()).openIncident(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(),
+            org.mockito.ArgumentMatchers.anyInt());
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 2);
+    }
+
+    @Test
+    void theLastStepSaysUnresolvedAndOpensTheIncident() {
+        ImagingReport report = flagged();
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(61));
+        report.setCriticalEscalationLevel((short) 2);
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
+        when(ladder.seniors(any(), any(), any())).thenReturn(new java.util.LinkedHashSet<>(List.of("dr.chef")));
+
+        service.escalateOverdue();
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).created(message.capture(), eq("dr.chef"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
+        assertThat(message.getValue()).contains("NON RÉSOLU").contains("61");
+        verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT),
+            eq(report.getId()), eq(hospitalId), any(), eq(61L), eq(2));
+        assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 3);
     }
 
     @Test
     void escalationKeepsFiringWithNoRoundCap() {
         ImagingReport report = flagged();
-        report.setCriticalNotifiedAt(LocalDateTime.now().minusDays(1));
-        report.setCriticalEscalationLevel((short) 9);
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusDays(30));
+        report.setCriticalEscalatedAt(LocalDateTime.now().minusDays(1).minusMinutes(1));
+        report.setCriticalEscalationLevel((short) 40);
         when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(any(), anyString()))
-            .thenReturn(List.of("admin.one"));
+        when(ladder.seniors(any(), any(), any())).thenReturn(new java.util.LinkedHashSet<>(List.of("dr.chef")));
+        when(smsService.deliversRealSms()).thenReturn(true);
 
         service.escalateOverdue();
 
         // Going silent on an unacknowledged critical finding is the failure this
-        // whole loop exists to prevent, so round 10 fires like round 1.
-        assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 10);
+        // whole loop exists to prevent, so step 41 is taken like step 1; it is a daily reminder by now.
+        assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 41);
         verify(notificationService, times(2))
             .created(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
+        // A reminder texts nobody.
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void anAcknowledgedFindingClosesItsIncident() {
+        ImagingReport report = flagged();
+        LocalDateTime acknowledgedAt = LocalDateTime.now().minusMinutes(2);
+        report.setCriticalResultAcknowledgedAt(acknowledgedAt);
+        when(ladder.openIncidents(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT)).thenReturn(List.of(
+            com.example.hms.model.UrgentAlertIncident.builder().sourceId(report.getId()).build()));
+        when(imagingReportRepository.findById(report.getId())).thenReturn(Optional.of(report));
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of());
+
+        service.escalateOverdue();
+
+        verify(ladder).closeIncident(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT, report.getId(),
+            com.example.hms.model.UrgentAlertIncident.RESOLVED_ACKNOWLEDGED, null, acknowledgedAt);
     }
 
     @Test

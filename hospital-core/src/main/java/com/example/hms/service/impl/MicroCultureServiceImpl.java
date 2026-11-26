@@ -228,6 +228,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
 
         if (saved.getGrowthResult() == MicroGrowthResult.GROWTH) {
             notifyOrderingProviderBestEffort(saved);
+            filePositiveCultureForAcknowledgement(saved);
         }
         return toDto(saved);
     }
@@ -529,6 +530,43 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         }
     }
 
+    /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the report alone). */
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
+                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts = urgentAlerts;
+    }
+
+    /**
+     * Scorecard K4: a positive culture is an urgent alert to acknowledge. Its row is written here, with the
+     * report: a CRITICAL item for the
+     * clinician who ordered the culture (the covering clinician when the order names nobody who can be reached),
+     * then the one ladder until somebody other than the person who reported it acknowledges. The ordering provider
+     * has had the bell above, so the first notice is the item only. A report corrected to no growth closes its
+     * alert ({@code ObstetricAlertCurrency}). Not caught: see
+     * {@code ObstetricAlertEscalationService#raiseAfterCommit}.
+     */
+    private void filePositiveCultureForAcknowledgement(MicroCultureResult culture) {
+        if (urgentAlerts == null || culture.getId() == null || culture.getPatient() == null
+                || culture.getHospital() == null) {
+            return;
+        }
+        LabOrder order = culture.getLabOrder();
+        Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
+        User orderer = orderingStaff != null ? orderingStaff.getUser() : null;
+        List<String> named = orderer == null || orderer.getUsername() == null ? List.of() : List.of(orderer.getUsername());
+        // The item says a culture is positive and sends its reader to the report: the organisms are read there.
+        urgentAlerts.raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
+                new com.example.hms.service.escalation.UrgentAlerts.Subject(culture.getHospital().getId(),
+                    culture.getPatient().getId(), culture.getPatient().getFullName()),
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
+                culture.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_POSITIVE_CULTURE,
+                null, culture.getFinalizedByUserId())
+            .withNamedRecipients(named).withAlreadyNotified(named));
+    }
+
     /**
      * QA CX-009: finalize tells the ordering provider about a positive culture, and
      * a correction can create one or take one back after treatment has started. A
@@ -542,6 +580,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         }
         if (outcome == MicroGrowthResult.GROWTH) {
             notifyOrderingProviderBestEffort(culture);
+            filePositiveCultureForAcknowledgement(culture);
         } else if (outcomeBefore == MicroGrowthResult.GROWTH) {
             notifyPositiveWithdrawnBestEffort(culture);
         }

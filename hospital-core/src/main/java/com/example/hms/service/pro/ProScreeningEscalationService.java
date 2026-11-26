@@ -6,7 +6,10 @@ import com.example.hms.enums.PanelAssignmentStatus;
 import com.example.hms.enums.PanelRole;
 import com.example.hms.model.PanelAssignment;
 import com.example.hms.model.Staff;
+import com.example.hms.model.UrgentAlertIncident;
 import com.example.hms.model.User;
+import com.example.hms.service.escalation.UrgentEscalationSupport;
+import com.example.hms.service.lab.CriticalResultEscalationLadder;
 import com.example.hms.model.pro.ProResponse;
 import com.example.hms.repository.PanelAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
@@ -25,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
@@ -43,10 +47,15 @@ import com.example.hms.service.i18n.NotificationLocales;
  *       carries it from there.</li>
  *   <li><b>Critical-item-positive</b> (EPDS item 10, thoughts of
  *       self-harm): notified on write, then re-escalated by the sweep until
- *       someone acknowledges it. Round 1 goes to the people who own the
- *       patient; from round 2 the hospital's admins are added; no round
- *       cap, for the same reason the lab chain has none — going quiet on a
- *       self-harm disclosure is the failure this exists to prevent.</li>
+ *       someone acknowledges it. Scorecard K4: the steps are those of the
+ *       one escalation ladder ({@link UrgentEscalationSupport}): the people
+ *       who own the patient, then the covering clinician, then the
+ *       médecin-chef, then « non résolu » with an incident and reminders
+ *       that slow down; no round cap, for the same reason the lab chain has
+ *       none — going quiet on a self-harm disclosure is the failure this
+ *       exists to prevent. A hospital administrator reads none of it: the
+ *       administrators get the incident flag only, which names no
+ *       questionnaire and no patient.</li>
  * </ul>
  *
  * <p>Who owns the patient: the recorder (a clinician who administered it
@@ -66,8 +75,8 @@ public class ProScreeningEscalationService {
     public static final String CRITICAL_TYPE = "PRO_CRITICAL_ITEM";
     public static final String ESCALATION_TYPE = "PRO_CRITICAL_ITEM_ESCALATION";
 
-    private static final int TIER_TWO_ROUND = 2;
-    private static final String TIER_TWO_ROLE = "ROLE_HOSPITAL_ADMIN";
+    /** The notice of the last step of the ladder and of every reminder after it: {2} the minutes unacknowledged. */
+    static final String UNRESOLVED_KEY = "pro.screening.unresolved";
 
     private final NotificationService notificationService;
     private final SmsService smsService;
@@ -85,9 +94,8 @@ public class ProScreeningEscalationService {
      * the same zone {@code TimeConfig}'s bean uses.
      */
     private final Clock clock;
-
-    @Value("${hms.pro.critical-escalation.escalate-after-minutes:30}")
-    private long escalateAfterMinutes;
+    /** Scorecard K4: the one escalation ladder (when a step is due, who it adds, the incident). */
+    private final UrgentEscalationSupport ladder;
 
     /** Role notified when a critical response has no recorder and no panel owner. */
     @Value("${hms.pro.critical-escalation.fallback-role:ROLE_MIDWIFE}")
@@ -109,7 +117,7 @@ public class ProScreeningEscalationService {
         try {
             Set<String> recipients;
             if (response.isCriticalItemPositive()) {
-                recipients = recipients(response, 1);
+                recipients = recipients(response);
                 NotificationText text = buildMessage(response, true, false);
                 for (String recipient : recipients) {
                     notificationService.createNotification(text.key(), text.args(), recipient, CRITICAL_TYPE);
@@ -120,7 +128,7 @@ public class ProScreeningEscalationService {
                         response.getId(), response.getHospital().getId());
                 }
             } else if (response.isScreenPositive()) {
-                recipients = recipients(response, 1);
+                recipients = recipients(response);
                 NotificationText text = buildMessage(response, false, false);
                 for (String recipient : recipients) {
                     notificationService.createNotification(text.key(), text.args(), recipient, SCREEN_POSITIVE_TYPE);
@@ -139,7 +147,7 @@ public class ProScreeningEscalationService {
     }
 
     /**
-     * Re-escalate critical responses still unacknowledged past the delay.
+     * Takes the step of the ladder that is due for each critical response still unacknowledged.
      * Per-row failures are logged and skipped so one bad row never stalls
      * the sweep.
      *
@@ -147,13 +155,18 @@ public class ProScreeningEscalationService {
      */
     @Transactional
     public int escalateOverdue() {
-        LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime now = LocalDateTime.now(clock);
+        closeAnsweredIncidents();
+        // No step of the ladder is shorter than its minimum: a response notified or escalated more recently has
+        // nothing due. Which step is due is the ladder's to say, from the hospital's own minutes.
+        LocalDateTime cutoff = now.minus(Duration.ofMinutes(CriticalResultEscalationLadder.MIN_MINUTES));
         List<ProResponse> overdue = responseRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (ProResponse response : overdue) {
             try {
-                escalateOne(response);
-                escalated++;
+                if (escalateOne(response, now)) {
+                    escalated++;
+                }
             } catch (RuntimeException ex) {
                 log.warn("PRO screening escalation failed for response {}: {}",
                     response.getId(), ex.getMessage(), ex);
@@ -162,40 +175,80 @@ public class ProScreeningEscalationService {
         return escalated;
     }
 
-    private void escalateOne(ProResponse response) {
-        int round = response.getEscalationLevel() + 1;
+    /** The incident of a response a clinician has since acknowledged is closed, with that clinician on it. */
+    private void closeAnsweredIncidents() {
+        for (UrgentAlertIncident incident : ladder.openIncidents(UrgentAlertIncident.SOURCE_PRO_RESPONSE)) {
+            responseRepository.findById(incident.getSourceId())
+                .filter(response -> response.getAcknowledgedAt() != null)
+                .ifPresent(response -> ladder.closeIncident(UrgentAlertIncident.SOURCE_PRO_RESPONSE, response.getId(),
+                    UrgentAlertIncident.RESOLVED_ACKNOWLEDGED, response.getAcknowledgedByUserId(),
+                    response.getAcknowledgedAt()));
+        }
+    }
+
+    private boolean escalateOne(ProResponse response, LocalDateTime now) {
+        UUID hospitalId = response.getHospital() != null ? response.getHospital().getId() : null;
+        // A response whose write-time notice reached nobody still starts its ladder, from when it was recorded.
+        LocalDateTime since = response.getNotifiedAt() != null ? response.getNotifiedAt() : response.getCreatedAt();
+        Optional<CriticalResultEscalationLadder.Step> due = ladder.due(response.getEscalationLevel(), since,
+            response.getLastEscalationAt(), hospitalId, now);
+        if (due.isEmpty()) {
+            return false;
+        }
+        CriticalResultEscalationLadder.Step step = due.get();
+        boolean unresolved = UrgentEscalationSupport.unresolved(step);
+        long minutes = UrgentEscalationSupport.minutesSince(since, now);
         NotificationText text = buildMessage(response, true, true);
-        Set<String> recipients = recipients(response, round);
+        if (unresolved) {
+            Object[] args = java.util.Arrays.copyOf(text.args(), text.args().length + 1);
+            args[args.length - 1] = minutes;
+            text = NotificationText.of(UNRESOLVED_KEY, args);
+        }
+        String recorder = usernameOf(response.getRecordedByUserId());
+        Set<String> recipients = recipients(response);
+        recipients.addAll(ladder.seniors(hospitalId, step, recorder));
         for (String recipient : recipients) {
             notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
         }
-        // SMS once per round, not once per recipient (same reasoning as the lab chain).
-        sendSmsBestEffort(response, smsText(response, true));
+        if (step != CriticalResultEscalationLadder.Step.REMINDER) {
+            // One SMS to the recorder at each step that widens the circle, and one to the clinicians the step
+            // adds; a reminder texts nobody.
+            sendSmsBestEffort(response, smsText(response, true));
+            Set<String> added = new LinkedHashSet<>(ladder.addedAt(hospitalId, step, recorder));
+            added.removeIf(name -> name.equalsIgnoreCase(recorder));
+            ladder.smsAfterCommit(added, com.example.hms.utility.SmsPatientLabel.initials(response.getPatient()),
+                response.getId());
+        }
 
-        // Stamp the round even with no resolvable recipient so the interval
+        // Stamp the step even with no resolvable recipient so the ladder
         // advances and the sweep does not reconsider the row every pass —
         // but "somebody was told" only when somebody was.
-        LocalDateTime now = LocalDateTime.now(clock);
-        response.setEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
+        response.setEscalationLevel((short) Math.min(response.getEscalationLevel() + 1, Short.MAX_VALUE));
         response.setLastEscalationAt(now);
         if (response.getNotifiedAt() == null && !recipients.isEmpty()) {
             response.setNotifiedAt(now);
         }
         responseRepository.save(response);
 
-        if (round >= TIER_TWO_ROUND) {
-            log.warn("Critical PRO response {} still unacknowledged after {} escalation round(s)",
-                response.getId(), round);
+        if (unresolved) {
+            // On the register of incidents from the last step on; the administrators are flagged once, with
+            // no questionnaire and no patient.
+            ladder.openIncident(UrgentAlertIncident.SOURCE_PRO_RESPONSE, response.getId(), hospitalId, now, minutes,
+                recipients.size());
         }
+        if (recipients.isEmpty()) {
+            log.error("Critical PRO response {} reached the step {} with no clinician to tell", response.getId(), step);
+        }
+        return true;
     }
 
     /**
-     * Who hears about round {@code round}: recorder + panel owners; the
-     * fallback role when that set is empty; hospital admins added from
-     * round 2. Earlier recipients stay on the list — the point is to widen
-     * the net, not hand the problem off.
+     * Who owns the patient: recorder + panel owners; the fallback role when
+     * that set is empty. The ladder adds the covering clinician and the
+     * médecin-chef to them; earlier recipients stay on the list — the point
+     * is to widen the net, not hand the problem off. Never an administrator.
      */
-    Set<String> recipients(ProResponse response, int round) {
+    Set<String> recipients(ProResponse response) {
         Set<String> recipients = new LinkedHashSet<>();
         UUID hospitalId = response.getHospital() != null ? response.getHospital().getId() : null;
         UUID patientId = response.getPatient() != null ? response.getPatient().getId() : null;
@@ -215,9 +268,6 @@ public class ProScreeningEscalationService {
         }
         if (recipients.isEmpty() && hospitalId != null) {
             recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, fallbackRole));
-        }
-        if (round >= TIER_TWO_ROUND && hospitalId != null) {
-            recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, TIER_TWO_ROLE));
         }
         return recipients;
     }
