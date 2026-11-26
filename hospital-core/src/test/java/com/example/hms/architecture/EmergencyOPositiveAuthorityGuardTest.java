@@ -142,7 +142,10 @@ class EmergencyOPositiveAuthorityGuardTest {
             .isLessThan(physician.indexOf("throw new"));
         assertThat(physician).contains("input.getPhysicianUnreachable()");
 
-        String authorise = method(authority, "public Authorisation authorise(");
+        // V381: authorise first puts an incompatible release to its own rule, then asks the O positive rule here.
+        assertThat(method(authority, "public Authorisation authorise(")).contains("authorisePositive(request, unit, type, input, assessment)")
+            .doesNotContain("throw new");
+        String authorise = method(authority, "private Authorisation authorisePositive(");
         assertThat(authorise).as("the pending authority is a release, not a refusal")
             .contains("OPositiveDecisionBasis.AUTHORITY_PENDING");
         assertThat(count(authorise, "throw new")).as("the one refusal of authorise sends a plain issue to the documented release")
@@ -167,7 +170,9 @@ class EmergencyOPositiveAuthorityGuardTest {
             .isNotNegative().isLessThan(deliver.indexOf("setNoticesFiledAt("));
         assertThat(notices).as("never after the commit, where a failure would be lost")
             .doesNotContain("createItemInNewTransaction");
-        assertThat(filesContaining("setNoticesFiledAt(")).containsExactly(NOTICES_FILE);
+        // V381: the notices of an incompatible release mark their own rows the same way (IncompatibleReleaseAuthorityGuardTest).
+        assertThat(filesContaining("setNoticesFiledAt(")).containsExactlyInAnyOrder(NOTICES_FILE,
+            "service/transfusion/IncompatibleReleaseNotices.java");
     }
 
     @Test

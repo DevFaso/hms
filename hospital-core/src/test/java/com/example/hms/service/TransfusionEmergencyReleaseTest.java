@@ -123,7 +123,8 @@ class TransfusionEmergencyReleaseTest {
         patient.setDateOfBirth(LocalDate.now().minusYears(30));
         // V380: the O positive decision service, real, with the hospital protocol active (the defaults).
         positive = new com.example.hms.service.transfusion.OPositiveAuthorityFixture(
-            assignmentRepository, userRepository, roleValidator, clock).activeProtocol();
+            assignmentRepository, userRepository, roleValidator, clock, bloodGroupRepository, crossmatchRepository,
+            administrationRepository).activeProtocol();
         service.setPositiveAuthority(positive.service);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(issuer);
@@ -227,7 +228,11 @@ class TransfusionEmergencyReleaseTest {
     }
 
     private EmergencyReleaseRequestDTO incompatibleRelease(BloodUnit unit) {
-        return documented(unit, EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        EmergencyReleaseRequestDTO release = documented(unit, EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        // V381: every incompatible release says why this bag, and whether the patient was told.
+        release.setUnitChoiceReason("No compatible unit in stock; the only unit crossmatched");
+        release.setPatientInformation(com.example.hms.enums.PatientInformedStatus.NOT_POSSIBLE);
+        return release;
     }
 
     private EmergencyReleaseRequestDTO documented(BloodUnit unit, EmergencyReleaseType type) {

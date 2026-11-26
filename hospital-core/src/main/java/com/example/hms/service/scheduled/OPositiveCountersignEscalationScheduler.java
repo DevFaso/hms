@@ -22,6 +22,8 @@ import org.springframework.stereotype.Component;
 public class OPositiveCountersignEscalationScheduler {
 
     private final OPositiveReleaseNotices notices;
+    /** V381: a release despite an incompatible crossmatch owes its notices and its countersignature the same way. */
+    private final com.example.hms.service.transfusion.IncompatibleReleaseNotices incompatibleNotices;
 
     @SchedulerLock(name = "OPositiveCountersignEscalationScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${hms.transfusion.o-positive.countersign-escalation-cron:0 */15 * * * *}", zone = "UTC")
@@ -40,8 +42,19 @@ public class OPositiveCountersignEscalationScheduler {
         } catch (RuntimeException ex) {
             log.error("O positive release sweep failed: {}", ex.getMessage(), ex);
         }
+        try {
+            // V381: its own block, so neither rule's rows can hold the other's.
+            for (java.util.UUID id : incompatibleNotices.pendingIds()) {
+                delivered += deliverIncompatible(id);
+            }
+            for (java.util.UUID id : incompatibleNotices.overdueCountersignIds()) {
+                escalated += escalateIncompatible(id);
+            }
+        } catch (RuntimeException ex) {
+            log.error("Incompatible release sweep failed: {}", ex.getMessage(), ex);
+        }
         if (delivered > 0 || escalated > 0) {
-            log.warn("O positive release sweep filed {} owed notice(s) and {} overdue countersignature alert(s)",
+            log.warn("Emergency release sweep filed {} owed notice(s) and {} overdue countersignature alert(s)",
                 delivered, escalated);
         }
     }
@@ -52,6 +65,26 @@ public class OPositiveCountersignEscalationScheduler {
             return notices.deliver(decisionId);
         } catch (RuntimeException ex) {
             log.error("Notices of O positive release decision {} not delivered, left to the next sweep: {}",
+                decisionId, ex.getClass().getSimpleName());
+            return 0;
+        }
+    }
+
+    private int deliverIncompatible(java.util.UUID decisionId) {
+        try {
+            return incompatibleNotices.deliver(decisionId);
+        } catch (RuntimeException ex) {
+            log.error("Notices of incompatible release decision {} not delivered, left to the next sweep: {}",
+                decisionId, ex.getClass().getSimpleName());
+            return 0;
+        }
+    }
+
+    private int escalateIncompatible(java.util.UUID decisionId) {
+        try {
+            return incompatibleNotices.escalateOverdueCountersign(decisionId);
+        } catch (RuntimeException ex) {
+            log.error("Overdue countersignature of incompatible release decision {} not escalated, left to the next sweep: {}",
                 decisionId, ex.getClass().getSimpleName());
             return 0;
         }

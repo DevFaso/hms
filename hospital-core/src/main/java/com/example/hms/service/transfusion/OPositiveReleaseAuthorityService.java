@@ -71,6 +71,12 @@ import java.util.UUID;
  * or on an emergency decision passes {@link #authorise} and {@link #record}
  * ({@code EmergencyOPositiveAuthorityGuardTest}).
  *
+ * <p>Since V381 (owner decision 2026-11-26, rule set INCOMPATIBLE_RELEASE_AUTHORITY) it is also the one way in
+ * for a release despite an incompatible crossmatch: {@link #authorise} puts such a release to
+ * {@link IncompatibleReleaseDecisions} first (the ABO block, then a named physician or the fallback of the
+ * hospital), {@link #record} keeps that decision too, and {@link #requireAboCompatible} is asked wherever a bag
+ * is put out ({@code IncompatibleReleaseAuthorityGuardTest}).
+ *
  * <p><b>It never holds blood back for want of a person.</b> The low-risk tier leaves by the plain issue. Every
  * other tier leaves by the documented release, which the issuer can always complete alone: with the name of
  * the physician who gave the order, or stating that none can be reached. The bag then goes out with the
@@ -115,6 +121,17 @@ public class OPositiveReleaseAuthorityService {
         this.reachRecorder = reachRecorder;
     }
 
+    /**
+     * V381: the incompatible-release part of the decision (rule set INCOMPATIBLE_RELEASE_AUTHORITY). Setter
+     * injection, required: an incompatible release and the ABO block go through it, and nothing runs without it.
+     */
+    private IncompatibleReleaseDecisions incompatible;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setIncompatible(IncompatibleReleaseDecisions incompatible) {
+        this.incompatible = incompatible;
+    }
+
     // ── The table applied to one request ────────────────────────────────
 
     /** What the table says for one patient at one hospital, now. */
@@ -146,15 +163,41 @@ public class OPositiveReleaseAuthorityService {
         private final UUID biologist;
         private final boolean verbalOrder;
         private final UUID issuer;
+        /** V381: what a release despite an incompatible crossmatch was allowed on; null for any other release. */
+        private final IncompatibleReleaseDecisions.Grant incompatibleGrant;
 
         private Authorisation(Assessment assessment, OPositiveDecisionBasis basis, UUID decidedBy, UUID biologist,
                               boolean verbalOrder, UUID issuer) {
+            this(assessment, basis, decidedBy, biologist, verbalOrder, issuer, null);
+        }
+
+        private Authorisation(Assessment assessment, OPositiveDecisionBasis basis, UUID decidedBy, UUID biologist,
+                              boolean verbalOrder, UUID issuer, IncompatibleReleaseDecisions.Grant incompatibleGrant) {
             this.assessment = assessment;
             this.basis = basis;
             this.decidedBy = decidedBy;
             this.biologist = biologist;
             this.verbalOrder = verbalOrder;
             this.issuer = issuer;
+            this.incompatibleGrant = incompatibleGrant;
+        }
+
+        /** The same answer about O positive, with what the incompatible release rule allowed beside it. */
+        private Authorisation withIncompatible(IncompatibleReleaseDecisions.Grant grant) {
+            return new Authorisation(assessment, basis, decidedBy, biologist, verbalOrder, issuer, grant);
+        }
+
+        /** V381: this release goes out despite an incompatible crossmatch, and the rule for that allowed it. */
+        public boolean incompatibleAuthorised() {
+            return incompatibleGrant != null;
+        }
+
+        /**
+         * V381: who authorised the incompatible release before the bag left: the physician or laboratory director
+         * named. Null on the fallback of the hospital (the authority is owed, the issuer is never the authoriser).
+         */
+        public UUID incompatibleAuthoriser() {
+            return incompatibleGrant != null ? incompatibleGrant.authoriser() : null;
         }
 
         /** False for a bag that is not O RhD positive red cells: this rule has nothing to say about it. */
@@ -207,15 +250,30 @@ public class OPositiveReleaseAuthorityService {
     /**
      * Whose authority this release goes out on. Called by every release path before the bag is put out.
      *
-     * <p>A plain issue ({@code input} null) passes for the low-risk tier and is otherwise sent to the documented
-     * release. A documented release is refused only when what it names is wrong (the issuer as the physician,
-     * somebody who holds no such role here) and never because nobody can be named: stating that no physician
-     * can be reached releases the bag with the authority recorded as owed.
+     * <p>V381: a release despite an incompatible crossmatch is put to the incompatible release rule first, and
+     * that rule begins with the ABO block. What the O positive rule says of the same bag is then added to it:
+     * a bag can owe both.
      *
      * @param input the documented release as submitted, or null for a plain issue
      */
     public Authorisation authorise(TransfusionRequest request, BloodUnit unit, EmergencyReleaseType type,
                                    EmergencyReleaseRequestDTO input, Assessment assessment) {
+        IncompatibleReleaseDecisions.Grant grant = type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE
+            ? incompatible.authorise(request, unit, input) : null;
+        Authorisation positive = authorisePositive(request, unit, type, input, assessment);
+        return grant == null ? positive : positive.withIncompatible(grant);
+    }
+
+    /**
+     * What the O positive rule says of this release.
+     *
+     * <p>A plain issue ({@code input} null) passes for the low-risk tier and is otherwise sent to the documented
+     * release. A documented release is refused only when what it names is wrong (the issuer as the physician,
+     * somebody who holds no such role here) and never because nobody can be named: stating that no physician
+     * can be reached releases the bag with the authority recorded as owed.
+     */
+    private Authorisation authorisePositive(TransfusionRequest request, BloodUnit unit, EmergencyReleaseType type,
+                                            EmergencyReleaseRequestDTO input, Assessment assessment) {
         if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())) {
             return NOT_O_POSITIVE;
         }
@@ -341,6 +399,10 @@ public class OPositiveReleaseAuthorityService {
      */
     public OPositiveReleaseDecision record(EmergencyBloodRelease release, Authorisation authorisation,
                                            TransfusionRequest request, BloodUnit unit, ONegativeStatus negativeStatus) {
+        if (authorisation.incompatibleGrant != null) {
+            // V381: the decision of an incompatible release, beside the same release row.
+            incompatible.record(release, authorisation.incompatibleGrant, request, unit);
+        }
         if (!authorisation.applies()) {
             return null;
         }
@@ -796,6 +858,58 @@ public class OPositiveReleaseAuthorityService {
     /** The bag came back to the laboratory, or was discarded, without being hung. */
     public void noteBagBack(UUID bloodUnitId) {
         noteBagBack(bloodUnitId, com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
+        // V381: nothing is left to monitor on an incompatible release whose bag was never given.
+        incompatible.noteBagBack(bloodUnitId);
+    }
+
+    // ── Release despite an incompatible crossmatch (V381) ───────────────
+
+    /**
+     * THE NEVER EVENT, asked wherever a bag is put out, whatever the path: a red-cell bag whose ABO group the
+     * group of the patient excludes does not leave the laboratory. Group O suits everybody; an untyped patient
+     * receives group O only.
+     */
+    public void requireAboCompatible(AboGroup recipientAbo, BloodUnit unit) {
+        incompatible.requireAboCompatible(recipientAbo, unit);
+    }
+
+    /** What the incompatible release rule says at this hospital for the caller, for the release form. */
+    public EmergencyReleaseOptionsDTO.IncompatibleRule incompatibleRule(UUID hospitalId) {
+        return incompatible.ruleFor(hospitalId);
+    }
+
+    /** The bags with an incompatible result on this request that it could release, ranked. */
+    public IncompatibleReleaseDecisions.Ranking incompatibleRanking(TransfusionRequest request) {
+        return incompatible.ranking(request);
+    }
+
+    public Map<UUID, com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> incompatibleByRelease(
+            Collection<UUID> releaseIds) {
+        return incompatible.byRelease(releaseIds);
+    }
+
+    public List<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> listIncompatible(UUID hospitalId,
+                                                                                                        boolean openOnly) {
+        return incompatible.list(hospitalId, openOnly);
+    }
+
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO countersignIncompatible(UUID decisionId,
+                                                                                                         UUID hospitalId) {
+        return incompatible.countersign(decisionId, hospitalId);
+    }
+
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO recordIncompatibleMonitoring(
+            UUID decisionId, UUID hospitalId, com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO request) {
+        return incompatible.recordMonitoring(decisionId, hospitalId, request);
+    }
+
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO incompatibleProtocol(UUID hospitalId) {
+        return incompatible.protocol(hospitalId);
+    }
+
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO setIncompatibleProtocol(
+            Hospital hospital, com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO update) {
+        return incompatible.setProtocol(hospital, update);
     }
 
     /**

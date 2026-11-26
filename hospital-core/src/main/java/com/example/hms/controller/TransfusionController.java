@@ -346,6 +346,56 @@ public class TransfusionController {
         return ResponseEntity.ok(transfusionService.recordPositiveFollowUp(decisionId, request));
     }
 
+    // ── Release despite an incompatible crossmatch (V381) ───────────────
+
+    @GetMapping("/incompatible-release-protocol")
+    @PreAuthorize(READER)
+    @Operation(summary = "The hospital's fallback for an incompatible release with no physician reachable",
+        description = "Whether the laboratory director switched it on, and which roles may declare that no physician "
+            + "can be reached. Off by default: a named physician is then always required.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO> getIncompatibleProtocol() {
+        return ResponseEntity.ok(transfusionService.getIncompatibleProtocol());
+    }
+
+    @PutMapping("/incompatible-release-protocol")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_DIRECTOR')")
+    @com.example.hms.security.audit.WriteAudited(skip = true, reason = "service emits CONFIGURATION_CHANGED with the new values")
+    @Operation(summary = "Set the hospital's fallback for an incompatible release with no physician reachable",
+        description = "The hospital's laboratory director only; a super-admin alone is refused.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO> setIncompatibleProtocol(
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO update) {
+        return ResponseEntity.ok(transfusionService.setIncompatibleProtocol(update));
+    }
+
+    @GetMapping("/incompatible-releases")
+    @PreAuthorize(READER)
+    @Operation(summary = "The hospital's releases despite an incompatible crossmatch",
+        description = "Each with its authority, the bag chosen, and what is still owed: countersignature, monitoring.")
+    public ResponseEntity<List<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO>> listIncompatibleReleases(
+        @RequestParam(defaultValue = "true") boolean openOnly) {
+        return ResponseEntity.ok(transfusionService.listIncompatibleReleases(openOnly));
+    }
+
+    @PostMapping("/incompatible-releases/{decisionId}/countersign")
+    @PreAuthorize(PHYSICIAN_OR_BIOLOGIST)
+    @Operation(summary = "Countersign an incompatible release that went out with no physician reachable",
+        description = "A physician or the laboratory director of the hospital, who did not issue the bag.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> countersignIncompatibleRelease(
+        @PathVariable UUID decisionId) {
+        return ResponseEntity.ok(transfusionService.countersignIncompatibleRelease(decisionId));
+    }
+
+    @PostMapping("/incompatible-releases/{decisionId}/monitoring")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
+    @Operation(summary = "Record the monitoring after an incompatible release",
+        description = "The checks done, whether a reaction was seen (the haemovigilance prompt), and that the patient "
+            + "was told.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> recordIncompatibleMonitoring(
+        @PathVariable UUID decisionId,
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO request) {
+        return ResponseEntity.ok(transfusionService.recordIncompatibleMonitoring(decisionId, request));
+    }
+
     // ── Bedside ─────────────────────────────────────────────────────────
 
     @PostMapping("/administrations")

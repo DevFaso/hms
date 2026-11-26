@@ -38,6 +38,10 @@ class InBasketAcknowledgerGuardTest {
      * after checking a new creator's recipients.
      */
     private static final Map<String, Set<String>> CREATORS = new TreeMap<>(Map.of(
+        // V381: the critical alert of an incompatible release made with no physician reachable, and its overdue
+        // countersignature: whoever may countersign (AUTHORISER_ROLE_CODES) and the laboratory directors.
+        "service/transfusion/IncompatibleReleaseNotices.java",
+        Set.of("ROLE_LAB_DIRECTOR", "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON"),
         // V380: the immediate review of an O positive release to a patient with a known antibody: the hospital's
         // biologists (BIOLOGIST_ROLE_CODES), or with none the physician named and the requester (PRESCRIBER).
         "service/transfusion/OPositiveReleaseNotices.java",

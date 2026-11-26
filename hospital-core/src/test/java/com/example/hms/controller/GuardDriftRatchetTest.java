@@ -278,6 +278,9 @@ class GuardDriftRatchetTest {
         // V380: a physician countersigns the O positive order and decides on anti-D or exchange; never a nurse.
         listed.put("TransfusionController.countersignPositiveRelease",
             "The countersignature of an emergency O positive release is a physician's (or the laboratory director's)");
+        // V381: the countersignature of an incompatible release takes the decision a physician would have taken.
+        listed.put("TransfusionController.countersignIncompatibleRelease",
+            "The countersignature of an incompatible release is a physician's (or the laboratory director's)");
         listed.put("TransfusionController.recordPositiveFollowUp",
             "The anti-D or exchange decision after an RhD positive exposure is a physician act");
         listed.put("TreatmentController.createTreatment", TREATMENTCONTROLLER_REASON);
