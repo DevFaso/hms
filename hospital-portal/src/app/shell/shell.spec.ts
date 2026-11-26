@@ -143,27 +143,6 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  it('keeps global stock routing readable and rebuilds it on hospital scope changes', () => {
-    const found: Route[] = [];
-    function visit(entries: Route[]): void {
-      for (const route of entries) {
-        if (
-          route.path === 'pharmacy/stock-routing' ||
-          route.path === 'pharmacy/stock-routing/:prescriptionId'
-        ) {
-          found.push(route);
-        }
-        if (route.children) visit(route.children);
-      }
-    }
-    visit(routes);
-    expect(found.length).toBe(2);
-    for (const route of found) {
-      expect(route.data?.['requiresHospitalScope']).toBeTrue();
-      expect(route.data?.['supportsGlobalHospitalView']).toBeTrue();
-    }
-  });
-
   it('names every facility-only network workspace, including routes absent from navigation', () => {
     const { items, component } = createComponent({
       activeRole: 'ROLE_SUPER_ADMIN',
@@ -1842,7 +1821,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
     });
   }
 
-  it('flags the pages that participate in hospital scope handling', () => {
+  it('flags exactly the one-facility pages, so a super-admin in global view is asked to pick first', () => {
     // The mapping behind this list is the "Hospital scope is applied page by
     // page" entry of tasklist.md: pages that read the hospital from the
     // session and send it as a param, path variable or body, or whose backend
@@ -1865,8 +1844,6 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'on-call',
         'panels',
         'pharmacy/mtm',
-        'pharmacy/stock-routing',
-        'pharmacy/stock-routing/:prescriptionId',
         'registries',
         'roi',
         'slot-admin',

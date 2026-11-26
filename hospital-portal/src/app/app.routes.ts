@@ -1611,8 +1611,6 @@ export const routes: Routes = [
         path: 'pharmacy/stock-routing',
         canActivate: [RoleGuard],
         data: {
-          requiresHospitalScope: true,
-          supportsGlobalHospitalView: true,
           roles: [
             'ROLE_PHARMACIST',
             'ROLE_PHARMACY_VERIFIER',
@@ -1629,8 +1627,6 @@ export const routes: Routes = [
         path: 'pharmacy/stock-routing/:prescriptionId',
         canActivate: [RoleGuard],
         data: {
-          requiresHospitalScope: true,
-          supportsGlobalHospitalView: true,
           roles: [
             'ROLE_PHARMACIST',
             'ROLE_PHARMACY_VERIFIER',
