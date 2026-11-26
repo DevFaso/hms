@@ -106,11 +106,16 @@ export class ReportsComponent implements OnInit {
         month: 'long',
         year: 'numeric',
         timeZone: 'UTC',
-      }).format(new Date(Date.UTC(year, month - 1, 1)));
+      }).format(new Date(`${token.slice(0, 4)}-${token.slice(4)}-01T00:00:00Z`));
     }
     if (period === 'DAILY' && /^\d{4}-\d{2}-\d{2}$/.test(token)) {
       const date = new Date(`${token}T00:00:00Z`);
-      if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== token)
+      if (
+        !Number.isFinite(date.getTime()) ||
+        date.getUTCFullYear() !== Number(token.slice(0, 4)) ||
+        date.getUTCMonth() + 1 !== Number(token.slice(5, 7)) ||
+        date.getUTCDate() !== Number(token.slice(8, 10))
+      )
         return token;
       return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
     }
@@ -120,7 +125,7 @@ export class ReportsComponent implements OnInit {
       const year = Number(week[1]);
       const number = Number(week[2]);
       if (year < 100 || number < 1 || number > 53) return token;
-      const firstDay = new Date(Date.UTC(year, 0, 1)).getUTCDay();
+      const firstDay = new Date(`${week[1]}-01-01T00:00:00Z`).getUTCDay();
       const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
       if (number === 53 && firstDay !== 4 && !(firstDay === 3 && leap)) return token;
       return this.translate.instant('REPORTS.WEEK_LABEL', { week: number, year: week[1] });
