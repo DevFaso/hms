@@ -84,6 +84,20 @@ class PatientBloodGroupOnRecordPostgresIT {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.liquibase.enabled", () -> "true");
         registry.add("spring.sql.init.mode", () -> "never");
+        registry.add("spring.jpa.properties.hibernate.session_factory.statement_inspector",
+            BloodGroupStatements.class::getName);
+    }
+
+    /** Counts real JDBC preparations of the laboratory lookup, independently of other mapper reads. */
+    public static class BloodGroupStatements implements org.hibernate.resource.jdbc.spi.StatementInspector {
+        private static final ThreadLocal<Integer> COUNT = ThreadLocal.withInitial(() -> 0);
+        @Override
+        public String inspect(String sql) {
+            if (sql.toLowerCase(java.util.Locale.ROOT).contains("patient_blood_groups")) {
+                COUNT.set(COUNT.get() + 1);
+            }
+            return sql;
+        }
     }
 
     @TestConfiguration
@@ -248,4 +262,48 @@ class PatientBloodGroupOnRecordPostgresIT {
         assertThat(chart.getConfirmed()).isEqualTo("B+");
         assertThat(onTheRecord().getAlloImmunised()).as("a list read does not look").isNull();
     }
+    @Test
+    @DisplayName("C-PERF: two and forty patient rows each prepare one scoped laboratory query, never forty")
+    void patientCollectionsUseOneLaboratoryQuery() {
+        grouped(AboGroup.B, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE, null);
+        java.util.List<UUID> ids = new java.util.ArrayList<>();
+        ids.add(patient);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            for (int index = 1; index < 40; index++) {
+                UUID id = UUID.randomUUID();
+                ids.add(id);
+                entityManager.createNativeQuery("""
+                    INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth,
+                        gender, phone_number_primary, blood_type, is_active, created_at, updated_at)
+                    VALUES (:id, :u, 'Synthetic', 'Batch', DATE '1985-03-02', 'MALE', :phone,
+                        'A+', true, now(), now())
+                    """).setParameter("id", id).setParameter("u", UUID.randomUUID())
+                    .setParameter("phone", "+226" + id.toString().substring(0, 8)).executeUpdate();
+            }
+        });
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            java.util.List<Patient> patients = ids.stream().map(id -> entityManager.find(Patient.class, id)).toList();
+            for (int size : new int[] {2, 40}) {
+                BloodGroupStatements.COUNT.set(0);
+                java.util.List<PatientResponseDTO> rows = patientMapper.toPatientDTOs(patients.subList(0, size), hospital);
+                assertThat(BloodGroupStatements.COUNT.get()).as("laboratory queries for %s patients", size).isEqualTo(1);
+                assertThat(rows).hasSize(size);
+                assertThat(rows.getFirst().getBloodGroup().getConfirmed()).isEqualTo("B+");
+                assertThat(rows.getFirst().getBloodGroup().isDiscrepancy()).isTrue();
+                assertThat(rows.getLast().getBloodGroup().getConfirmed()).isNull();
+                assertThat(rows.getLast().getBloodGroup().getDeclared()).isEqualTo("A+");
+            }
+            BloodGroupStatements.COUNT.set(0);
+            assertThat(patientMapper.toPatientDTOs(patients, null))
+                .allSatisfy(row -> assertThat(row.getBloodGroup().getConfirmed()).isNull());
+            assertThat(BloodGroupStatements.COUNT.get()).isZero();
+            BloodGroupStatements.COUNT.set(0);
+            assertThat(patientMapper.toPatientDTOs(patients, UUID.randomUUID()))
+                .allSatisfy(row -> assertThat(row.getBloodGroup().getConfirmed()).isNull());
+            assertThat(BloodGroupStatements.COUNT.get()).isEqualTo(1);
+            BloodGroupStatements.COUNT.remove();
+        });
+    }
+
 }

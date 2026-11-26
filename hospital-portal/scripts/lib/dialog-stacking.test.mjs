@@ -127,6 +127,24 @@ const SPEC_SHAPES = 'src/app/shared/a11y/overlay-stack.spec.ts';
 
 /** Every dialog opened from inside another that stays open, and the spec that clicks its shape. */
 const NESTED_DIALOGS = new Map([
+  // D4021: the real mouse spec proves detail -> regeneration is a hand-off, with no automatic send.
+  // The conservative scan also pairs the other mutually exclusive modes of this one modal signal.
+  [
+    'src/app/admin-assignments/admin-assignments.html::div.modal[admin-assignments-dialog-3-title] => div.modal[admin-assignments-dialog-5-title]',
+    'src/app/admin-assignments/admin-assignments.spec.ts',
+  ],
+  [
+    'src/app/admin-assignments/admin-assignments.html::div.modal[admin-assignments-dialog-3-title] => div.modal[admin-assignments-dialog-4-title]',
+    'src/app/admin-assignments/admin-assignments.spec.ts',
+  ],
+  [
+    'src/app/admin-assignments/admin-assignments.html::div.modal[admin-assignments-dialog-3-title] => div.modal[admin-assignments-dialog-2-title]',
+    'src/app/admin-assignments/admin-assignments.spec.ts',
+  ],
+  [
+    'src/app/admin-assignments/admin-assignments.html::div.modal[admin-assignments-dialog-3-title] => div.modal[admin-assignments-dialog-1-title]',
+    'src/app/admin-assignments/admin-assignments.spec.ts',
+  ],
   [
     "src/app/bed-board/bed-board.html::div.modal['BED_BOARD.PRECAUTIONS' | translate] => app-reason-dialog[BED_BOARD.DISCONTINUE_PROMPT]",
     SPEC_BED_BOARD,

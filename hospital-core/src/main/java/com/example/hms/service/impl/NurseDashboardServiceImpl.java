@@ -38,13 +38,18 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         List<PatientHospitalRegistration> registrations =
             registrationRepository.findActiveForHospitalWithPatient(hospitalId);
 
-        return registrations.stream()
+        List<PatientHospitalRegistration> selected = registrations.stream()
             .filter(reg -> matchesAssignment(reg, nurseUserId))
             .filter(reg -> isInHouseOn(reg, inhouseDate))
             .sorted(Comparator.comparing(PatientHospitalRegistration::getRegistrationDate,
                 Comparator.nullsLast(Comparator.reverseOrder())))
-        .map(this::enrichRegistration)
             .toList();
+        List<PatientResponseDTO> mapped = patientMapper.toPatientDTOs(
+            selected.stream().map(PatientHospitalRegistration::getPatient).toList(), hospitalId);
+        for (int index = 0; index < selected.size(); index++) {
+            enrichRegistration(selected.get(index), mapped.get(index));
+        }
+        return mapped;
     }
 
     @Override
@@ -100,10 +105,9 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         return !registrationDate.isAfter(inhouseDate);
     }
 
-    private PatientResponseDTO enrichRegistration(PatientHospitalRegistration registration) {
+    private PatientResponseDTO enrichRegistration(PatientHospitalRegistration registration, PatientResponseDTO dto) {
         Patient patient = registration.getPatient();
-    UUID hospitalId = registration.getHospital() != null ? registration.getHospital().getId() : null;
-    PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
+        UUID hospitalId = registration.getHospital() != null ? registration.getHospital().getId() : null;
         // QA D110: an opted-out patient's allergy summary narrows to this hospital's rows.
         // QA D504 (round 2): and the row carries the flag so the dashboard can say so.
         if (patient != null && patient.getId() != null && hospitalId != null
