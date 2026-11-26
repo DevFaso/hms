@@ -43,8 +43,8 @@ public class AsyncLogDropMonitor {
         if (registry != null) {
             // The monitor is the counter's state object (Micrometer holds it weakly): a singleton bean, so it lives
             // as long as the registry does.
+            // Log events the asynchronous log shipper dropped because its queue was full.
             FunctionCounter.builder(METRIC, this, monitor -> monitor.droppedSinceStart.getAsLong())
-                .description("Log events the asynchronous log shipper dropped because its queue was full")
                 .baseUnit("events")
                 .register(registry);
         }

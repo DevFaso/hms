@@ -32,6 +32,8 @@ public class AuditRetentionPurgeJob {
     /** The floor the database function enforces too (HIPAA documentation retention). */
     static final int MINIMUM_RETENTION_YEARS = 6;
     static final int MAX_BATCH_SIZE = 10_000;
+    /** Startup refusal code (an operator setting, never shown to a user; the detail is in the ERROR log). */
+    static final String RETENTION_BELOW_MINIMUM = "audit.retention.years.below-minimum";
 
     private final JdbcTemplate jdbc;
     private final boolean enabled;
@@ -47,8 +49,9 @@ public class AuditRetentionPurgeJob {
         @Value("${hms.audit-retention.max-batches:100}") int maxBatches
     ) {
         if (retentionYears < MINIMUM_RETENTION_YEARS) {
-            throw new IllegalStateException("hms.audit-retention.years must be at least "
-                + MINIMUM_RETENTION_YEARS + " (got " + retentionYears + ")");
+            log.error("[AUDIT-RETENTION] hms.audit-retention.years must be at least {} (got {}); refusing to start",
+                MINIMUM_RETENTION_YEARS, retentionYears);
+            throw new IllegalStateException(RETENTION_BELOW_MINIMUM);
         }
         this.jdbc = jdbc;
         this.enabled = enabled;

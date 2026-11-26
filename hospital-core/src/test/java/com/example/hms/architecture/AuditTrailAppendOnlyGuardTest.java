@@ -2,11 +2,17 @@ package com.example.hms.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.FrontendAuditEvent;
+import com.example.hms.model.PermissionMatrixAuditEvent;
+import com.example.hms.model.User;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.FrontendAuditEventRepository;
 import com.example.hms.repository.PermissionMatrixAuditEventRepository;
 import com.example.hms.testsupport.SourceScan;
 import java.io.IOException;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.OneToMany;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,6 +26,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.hibernate.annotations.Immutable;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.Modifying;
 
@@ -78,6 +85,7 @@ class AuditTrailAppendOnlyGuardTest {
         "(?i:\\b(?:DELETE(?:\\s+FROM)?|UPDATE))\\s+" + ENTITY_NAMES + "\\b");
     private static final Pattern AUDIT_REPOSITORY_VARIABLE = Pattern.compile(
         "\\b(?:AuditEventLogRepository|FrontendAuditEventRepository|PermissionMatrixAuditEventRepository)\\s+(\\w+)");
+    private static final Pattern USER_REPOSITORY_VARIABLE = Pattern.compile("\\bUserRepository\\s+(\\w+)");
     private static final Pattern USER_AUDIT_COLLECTION = Pattern.compile("\\b(?:get|set)AuditEvents\\s*\\(");
     private static final Pattern SIGNATURE_TRAIL_REWRITE = Pattern.compile(
         "\\bsetAuditLog\\s*\\(|\\bgetAuditLog\\s*\\(\\s*\\)\\s*\\.\\s*(?:remove\\w*|clear|set|replaceAll|sort|retainAll)"
@@ -156,6 +164,19 @@ class AuditTrailAppendOnlyGuardTest {
     }
 
     @Test
+    void theAuditEntitiesAreImmutableAndNoParentRewritesThem() throws NoSuchFieldException {
+        for (Class<?> entity : List.of(AuditEventLog.class, FrontendAuditEvent.class,
+                PermissionMatrixAuditEvent.class)) {
+            assertThat(entity.isAnnotationPresent(Immutable.class)).as(entity.getSimpleName() + " is @Immutable")
+                .isTrue();
+        }
+        OneToMany userAuditEvents = User.class.getDeclaredField("auditEvents").getAnnotation(OneToMany.class);
+        assertThat(userAuditEvents.orphanRemoval()).as("User.auditEvents orphan removal").isFalse();
+        assertThat(userAuditEvents.cascade()).as("User.auditEvents cascades")
+            .doesNotContain(CascadeType.ALL, CascadeType.MERGE, CascadeType.PERSIST);
+    }
+
+    @Test
     void noApplicationCodeChangesOrRemovesAuditRows() throws IOException {
         List<String> sites = new ArrayList<>();
         Set<String> purgeCallers = new LinkedHashSet<>();
@@ -182,6 +203,16 @@ class AuditTrailAppendOnlyGuardTest {
                 for (String v : variables) {
                     addSites(sites, name, Pattern.compile("\\b" + Pattern.quote(v)
                         + "\\s*\\.\\s*(?:delete|remove|update)\\w*\\s*\\(").matcher(src));
+                }
+                // A hard delete of a user would cascade to its audit rows.
+                Matcher userRepository = USER_REPOSITORY_VARIABLE.matcher(src);
+                Set<String> userVariables = new LinkedHashSet<>();
+                while (userRepository.find()) {
+                    userVariables.add(userRepository.group(1));
+                }
+                for (String v : userVariables) {
+                    addSites(sites, name, Pattern.compile("\\b" + Pattern.quote(v)
+                        + "\\s*\\.\\s*delete\\w*\\s*\\(").matcher(src));
                 }
                 if (src.contains("purge_expired_audit_rows")) {
                     purgeCallers.add(name);

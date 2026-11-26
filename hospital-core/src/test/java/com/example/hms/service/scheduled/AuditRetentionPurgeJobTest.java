@@ -24,7 +24,7 @@ class AuditRetentionPurgeJobTest {
     void aRetentionUnderSixYearsStopsTheApplication() {
         assertThatThrownBy(() -> new AuditRetentionPurgeJob(jdbc, false, 5, 1000, 100))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("at least 6");
+            .hasMessage(AuditRetentionPurgeJob.RETENTION_BELOW_MINIMUM);
     }
 
     @Test

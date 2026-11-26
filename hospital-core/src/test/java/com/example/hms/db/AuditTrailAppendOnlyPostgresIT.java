@@ -274,11 +274,14 @@ class AuditTrailAppendOnlyPostgresIT {
             .build()).getId());
         assertThat(count("support.audit_event_logs", id)).isOne();
 
-        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
+        // @Immutable: a changed instance is never written back.
+        transactions.executeWithoutResult(status -> {
             AuditEventLog row = entityManager.find(AuditEventLog.class, id);
             row.setDetails("changed");
             entityManager.flush();
-        })).hasStackTraceContaining(APPEND_ONLY);
+        });
+        assertThat(jdbc.queryForObject("SELECT details FROM support.audit_event_logs WHERE id = ?", String.class, id))
+            .isNull();
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             entityManager.remove(entityManager.find(AuditEventLog.class, id));
             entityManager.flush();
