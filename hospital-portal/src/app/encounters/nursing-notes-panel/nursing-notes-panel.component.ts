@@ -97,7 +97,9 @@ export class NursingNotesPanelComponent implements OnChanges {
   private request?: Subscription;
 
   needsHospitalScope(): boolean {
-    return !this.hospitalId && this.roleContext.isSuperAdmin();
+    return (
+      !this.hospitalId && this.roleContext.isSuperAdmin() && !this.roleContext.hasHospitalScope()
+    );
   }
 
   ngOnChanges(): void {
