@@ -220,6 +220,8 @@ describe('GoodsReceiptComponent', () => {
 
     fillForm('inv-pack');
     component.receivedIn = 'UNITS';
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="gr-qty-unit"]')?.textContent).toContain('comprim?');
     component.submitForm();
     expect(svc.receiveStock.calls.mostRecent().args[0].inPacks).toBeFalse();
   });
