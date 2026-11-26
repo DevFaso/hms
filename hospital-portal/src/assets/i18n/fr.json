@@ -11457,7 +11457,8 @@
     "STOCK_CONDITION_CHOOSE_UNIT": "Choisissez : conditionnements ou unités",
     "STOCK_CONDITION_MISSING_LOSS": "Rien ne revient en stock : les unités sont enregistrées comme perte.",
     "CANCEL_READY_NOT_INTACT": "« Stock manquant ou endommagé » ne peut pas revenir en vente comme intact : choisissez endommagé, périmé, contaminé ou manquant.",
-    "LEDGER_REASON_MISSING": "Manquant sur une préparation annulée (perte)"
+    "LEDGER_REASON_MISSING": "Manquant sur une préparation annulée (perte)",
+    "TRANSFER_NO_DESTINATIONS": "Aucun autre dépôt actif n’est configuré dans cet hôpital. Ajoutez un dépôt de destination au registre des pharmacies avant de transférer du stock."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

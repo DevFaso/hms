@@ -17,6 +17,10 @@ import java.util.UUID;
 @Repository
 public interface StockTransactionRepository extends JpaRepository<StockTransaction, UUID> {
 
+    /** The counterpart receipt of one atomic inter-store transfer. */
+    java.util.Optional<StockTransaction> findByReferenceIdAndTransactionType(UUID referenceId,
+                                                                            StockTransactionType transactionType);
+
     Page<StockTransaction> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
     Page<StockTransaction> findByStockLotId(UUID stockLotId, Pageable pageable);

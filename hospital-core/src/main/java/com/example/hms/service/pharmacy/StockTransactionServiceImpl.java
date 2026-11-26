@@ -77,6 +77,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final FefoLotPolicy fefoLotPolicy;
     /** QA D3415 (r70): a return that may not go back on sale is set aside. */
     private final StockQuarantine stockQuarantine;
+    private final StockTransferBooking transferBooking;
 
     @Override
     @Transactional
@@ -90,6 +91,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        StockTransferBooking.Route transferRoute = transferBooking.prepare(dto, item);
         requireFefoForTransfer(dto, lot);
         // QA D668 (returns), D779 (every movement): an item counted in whole
         // units never moves by a fraction, or its stock shows decimals.
@@ -111,6 +113,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         StockTransaction tx = stockTransactionMapper.toEntity(dto, item, lot, performer);
         tx.setWitnessedByUser(witness);
         StockTransaction saved = stockTransactionRepository.save(tx);
+        transferBooking.bookCounterpart(transferRoute, saved);
 
         // QA D3415 (r70): a returned morphine ampoule went straight back into the saleable lot. A return that may
         // not be sold again (not intact, or a controlled drug back from outside) stays off the lot, set aside.

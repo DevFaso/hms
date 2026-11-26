@@ -11457,7 +11457,8 @@
     "STOCK_CONDITION_CHOOSE_UNIT": "Elija: envases o unidades",
     "STOCK_CONDITION_MISSING_LOSS": "Nada vuelve al stock: las unidades se registran como pérdida.",
     "CANCEL_READY_NOT_INTACT": "« Stock faltante o dañado » no puede volver a la venta como intacto: elija dañado, caducado, contaminado o faltante.",
-    "LEDGER_REASON_MISSING": "Faltante en una preparación anulada (pérdida)"
+    "LEDGER_REASON_MISSING": "Faltante en una preparación anulada (pérdida)",
+    "TRANSFER_NO_DESTINATIONS": "No other active store is configured in this hospital. Add a destination store in the pharmacy registry before transferring stock."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

@@ -55,6 +55,26 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     return TestBed.createComponent(StockAdjustmentComponent).componentInstance;
   }
 
+  it('D3943: lists every other active store of the source hospital, including ward stores', () => {
+    const c = create();
+    c.selectedPharmacyId = 'source';
+    c.pharmacies.set([
+      { id: 'source', hospitalId: 'A', name: 'Central', active: true },
+      {
+        id: 'ward',
+        hospitalId: 'A',
+        name: 'Ward store',
+        active: true,
+        pharmacyType: 'HOSPITAL_DISPENSARY',
+      },
+      { id: 'foreign', hospitalId: 'B', name: 'Other hospital', active: true },
+      { id: 'closed', hospitalId: 'A', name: 'Closed', active: false },
+    ]);
+    expect(c.transferDestinationOptions().map((p) => p.id)).toEqual(['ward']);
+    c.selectedPharmacyId = 'missing';
+    expect(c.transferDestinationOptions()).toEqual([]);
+  });
+
   it('does not offer DISPENSE as a manual stock movement', () => {
     const c = create();
     expect(c.formTransactionTypes).not.toContain('DISPENSE');

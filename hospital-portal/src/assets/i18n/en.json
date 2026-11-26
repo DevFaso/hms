@@ -11457,7 +11457,8 @@
     "STOCK_CONDITION_CHOOSE_UNIT": "Choose: packs or single units",
     "STOCK_CONDITION_MISSING_LOSS": "Nothing comes back to stock: the units are recorded as a loss.",
     "CANCEL_READY_NOT_INTACT": "« Stock missing or damaged » cannot go back on sale as intact: choose damaged, expired, contaminated or missing.",
-    "LEDGER_REASON_MISSING": "Missing from a cancelled fill (loss)"
+    "LEDGER_REASON_MISSING": "Missing from a cancelled fill (loss)",
+    "TRANSFER_NO_DESTINATIONS": "No other active store is configured in this hospital. Add a destination store in the pharmacy registry before transferring stock."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

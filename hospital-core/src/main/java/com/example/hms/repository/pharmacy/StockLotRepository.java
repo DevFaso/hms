@@ -17,6 +17,9 @@ import java.util.UUID;
 
 @Repository
 public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
+    /** A transfer never waits for a lot while it holds another stock row. */
+    @Query(value = "SELECT * FROM clinical.stock_lots WHERE id = :id FOR UPDATE NOWAIT", nativeQuery = true)
+    java.util.Optional<StockLot> tryLockById(@Param("id") UUID id);
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 

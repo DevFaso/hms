@@ -303,6 +303,12 @@
                 id="trDest"
                 [(ngModel)]="transferDestinationPharmacyId"
                 name="transferDestinationPharmacyId"
+                [disabled]="pharmaciesLoaded() && transferDestinationOptions().length === 0"
+                [attr.aria-describedby]="
+                  pharmaciesLoaded() && transferDestinationOptions().length === 0
+                    ? 'transferDestinationHint'
+                    : null
+                "
                 required
               >
                 <option value="">{{ 'PHARMACY.SELECT_DESTINATION_OPTION' | translate }}</option>
@@ -310,6 +316,11 @@
                   <option [value]="p.id">{{ p.name }}</option>
                 }
               </select>
+              @if (pharmaciesLoaded() && transferDestinationOptions().length === 0) {
+                <p id="transferDestinationHint" class="hint">
+                  {{ 'PHARMACY.TRANSFER_NO_DESTINATIONS' | translate }}
+                </p>
+              }
             </div>
           </div>
         }

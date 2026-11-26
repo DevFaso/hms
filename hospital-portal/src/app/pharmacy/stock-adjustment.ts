@@ -557,7 +557,11 @@ export class StockAdjustmentComponent implements OnInit {
 
   /** Pharmacies available as transfer destinations (excludes the source). */
   transferDestinationOptions(): PharmacyResponse[] {
-    return this.pharmacies().filter((p) => p.id !== this.selectedPharmacyId);
+    const source = this.pharmacies().find((p) => p.id === this.selectedPharmacyId);
+    if (!source) return [];
+    return this.pharmacies().filter(
+      (p) => p.id !== source.id && p.hospitalId === source.hospitalId && p.active,
+    );
   }
 
   /**
