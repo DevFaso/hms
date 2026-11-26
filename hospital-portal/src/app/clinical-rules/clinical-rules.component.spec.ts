@@ -198,7 +198,7 @@ describe('ClinicalRulesComponent (V356)', () => {
 
   it('does not download a previous hospital pack after the scope changes', () => {
     load(overview(true, [rule('RULE')]));
-    const createUrl = spyOn(URL, 'createObjectURL').and.returnValue('blob:test');
+    const createUrl = spyOn(globalThis.URL, 'createObjectURL').and.returnValue('blob:test');
     q<HTMLButtonElement>('clinical-rules-pack')!.click();
     const pack = httpMock.expectOne(`${URL}/signoff-pack`);
     roleContext.activeHospitalId = 'h-2';
