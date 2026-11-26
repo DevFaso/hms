@@ -222,6 +222,21 @@ export class AdminAssignmentsComponent implements OnInit {
     }
 
     this.load();
+    const reactivate = this.route.snapshot.queryParamMap.get('reactivate');
+    if (reactivate && /^[0-9a-f-]{36}$/i.test(reactivate)) {
+      this.service.getById(reactivate).subscribe({
+        next: (row) => {
+          if (this.roleContext.isSuperAdmin()) {
+            this.openEdit(row);
+            this.formActive.set(true);
+          } else {
+            // The hospital administrator uses the existing confirmation-code flow.
+            this.openDetail(row);
+          }
+        },
+        error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      });
+    }
     const hospitals$: Observable<HospitalOption[]> = this.fullAdmin
       ? this.hospitalService.list()
       : this.hospitalService.organisationHospitals();

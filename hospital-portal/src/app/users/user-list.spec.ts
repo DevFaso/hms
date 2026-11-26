@@ -81,6 +81,24 @@ describe('UserListComponent registration', () => {
     fixture.detectChanges();
   }
 
+  it('D4021: an enabled account with revoked scoped access appears in the inactive filter', () => {
+    const retired = {
+      id: 'retired',
+      active: true,
+      accessActive: false,
+      deleted: false,
+      reactivationAssignmentId: '00000000-0000-0000-0000-000000004021',
+    } as never;
+    const working = { id: 'working', active: true, accessActive: true, deleted: false } as never;
+    component.users.set([retired, working]);
+    component.statusFilter = 'inactive';
+    component.applyFilter();
+    expect(component.filtered()).toEqual([retired]);
+    expect(component.isDirectoryActive(retired)).toBeFalse();
+    expect(component.reactivationHref(retired)).toContain('/admin-assignments?reactivate=');
+    expect(component.reactivationHref(working)).toBeNull();
+  });
+
   it('ends the delete confirmation with no doubled question mark (D192)', () => {
     component.confirmDelete({ id: 'u7', firstName: 'Awa', lastName: 'Traoré' } as never);
     fixture.detectChanges();

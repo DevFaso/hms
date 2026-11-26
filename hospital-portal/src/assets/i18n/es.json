@@ -10076,7 +10076,7 @@
     "DEACTIVATE_CONFIRM": "¿Está seguro de que desea desactivar",
     "DEACTIVATE_FAILED": "Error al desactivar el miembro del personal",
     "DEACTIVATE_STAFF": "Desactivar personal",
-    "DEACTIVATE_WARNING": "Su rol en este hospital se desactiva de inmediato: ya no podrá trabajar aquí. Su cuenta de usuario sigue activa para cualquier otro hospital.",
+    "DEACTIVATE_WARNING": "Se desactivar? el acceso del personal en este hospital. La cuenta se conserva; el acceso a otros hospitales depende de sus propias asignaciones.",
     "DEACTIVATING": "Desactivando…",
     "DEPARTMENT": "Departamento",
     "DEPARTMENT_EMAIL": "Correo del departamento",
@@ -10151,7 +10151,9 @@
     "VIEW_DEPARTMENT_DETAILS": "Ver detalles del departamento",
     "WEEKLY_SHIFTS": "Turnos semanales",
     "NO_DEPARTMENT_OPTION": "— Ningún departamento —",
-    "DEPARTMENTS_LOAD_FAILED": "No se pudieron cargar los departamentos."
+    "DEPARTMENTS_LOAD_FAILED": "No se pudieron cargar los departamentos.",
+    "REACTIVATE": "Reactivar",
+    "REQUIRES_ASSIGNMENT": "Gestionar las asignaciones para restablecer el acceso del personal"
   },
   "TREATMENT": {
     "ACTIVE": "Activo",
@@ -10319,7 +10321,9 @@
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
     "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales",
     "DEPARTMENT": "Departamento",
-    "DEPARTMENT_HINT": "El departamento donde el profesional recibe citas. Se puede cambiar luego en « Personal »."
+    "DEPARTMENT_HINT": "El departamento donde el profesional recibe citas. Se puede cambiar luego en « Personal ».",
+    "ACCOUNT_RETAINED_NO_ACCESS": "Cuenta conservada; sin funci?n activa en este ?mbito.",
+    "REACTIVATE_ACCESS": "Reactivar el acceso al hospital"
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",

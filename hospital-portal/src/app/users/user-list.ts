@@ -1,3 +1,4 @@
+import { assignmentReactivationHref } from '../shared/assignment-reactivation';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -364,6 +365,17 @@ export class UserListComponent implements OnInit, OnDestroy {
     }
   }
 
+  isDirectoryActive(user: UserSummary): boolean {
+    return user.active && user.accessActive !== false;
+  }
+
+  reactivationHref(user: UserSummary): string | null {
+    if (this.isSelf(user)) return null;
+    return user.active && user.accessActive === false
+      ? assignmentReactivationHref(user.reactivationAssignmentId)
+      : null;
+  }
+
   loadUsers(page = 0): void {
     this.loading.set(true);
 
@@ -476,9 +488,9 @@ export class UserListComponent implements OnInit, OnDestroy {
     // Here we only apply the client-side status filter on the already-loaded page.
     let result = this.users();
     if (this.statusFilter === 'active') {
-      result = result.filter((u) => u.active && !u.deleted);
+      result = result.filter((u) => this.isDirectoryActive(u) && !u.deleted);
     } else if (this.statusFilter === 'inactive') {
-      result = result.filter((u) => !u.active && !u.deleted);
+      result = result.filter((u) => !this.isDirectoryActive(u) && !u.deleted);
     }
     // 'deleted' needs no client-side filtering: the page itself is the
     // server-side ghost worklist (onlyDeleted).
@@ -939,7 +951,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
-    if (user.deleted || !user.active) return false;
+    if (user.deleted || !this.isDirectoryActive(user)) return false;
     const role = (user.roleName ?? '').toUpperCase();
     if (role === 'SUPER_ADMIN' || role === 'ROLE_SUPER_ADMIN') return false;
     if (this.impersonation.active()?.impersonating) return false;

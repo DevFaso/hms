@@ -157,7 +157,10 @@
             <tr>
               <td class="name-cell">
                 <div class="user-name-wrap">
-                  <div class="user-avatar" [class.inactive]="!user.active || user.deleted">
+                  <div
+                    class="user-avatar"
+                    [class.inactive]="!isDirectoryActive(user) || user.deleted"
+                  >
                     {{ getInitials(user) }}
                   </div>
                   <div>
@@ -174,18 +177,23 @@
               <td>
                 <span
                   class="status-badge"
-                  [class.active]="user.active && !user.deleted"
-                  [class.inactive]="!user.active && !user.deleted"
+                  [class.active]="isDirectoryActive(user) && !user.deleted"
+                  [class.inactive]="!isDirectoryActive(user) && !user.deleted"
                   [class.deleted]="user.deleted"
                 >
                   {{
                     user.deleted
                       ? ('COMMON.DELETED' | translate)
-                      : user.active
+                      : isDirectoryActive(user)
                         ? ('COMMON.ACTIVE' | translate)
                         : ('COMMON.INACTIVE' | translate)
                   }}
                 </span>
+                @if (user.active && user.accessActive === false && !user.deleted) {
+                  <small class="access-hint">{{
+                    'USERS.ACCOUNT_RETAINED_NO_ACCESS' | translate
+                  }}</small>
+                }
               </td>
               <td>
                 <div class="action-group">
@@ -199,6 +207,19 @@
                     >
                       <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
+                  }
+                  @if (!user.deleted && isManageable(user)) {
+                    @if (reactivationHref(user); as href) {
+                      <a
+                        class="action-link restore"
+                        [href]="href"
+                        [title]="'USERS.REACTIVATE_ACCESS' | translate"
+                        [attr.aria-label]="'USERS.REACTIVATE_ACCESS' | translate"
+                        data-testid="user-reactivate-access"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+                      </a>
+                    }
                   }
                   @if (user.deleted) {
                     <button

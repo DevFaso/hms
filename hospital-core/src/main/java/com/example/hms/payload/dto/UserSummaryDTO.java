@@ -43,8 +43,14 @@ public class UserSummaryDTO {
     @Schema(description = "Profile image URL")
     private String profileImageUrl;
 
-    @Schema(description = "Whether the user is currently active")
+    @Schema(description = "Account enabled, independently of accessActive in the displayed hospital scope")
     private boolean active;
+
+    @Schema(description = "Whether a live role assignment grants access in the directory's hospital scope")
+    private Boolean accessActive;
+
+    @Schema(description = "An inactive staff assignment in this visible scope; reactivation follows its existing approval flow")
+    private UUID reactivationAssignmentId;
 
     @Schema(description = "Whether the user has been soft-deleted")
     private boolean deleted;
@@ -55,7 +61,7 @@ public class UserSummaryDTO {
     @Schema(description = "Derived profile type: STAFF | PATIENT | ADMIN")
     private String profileType;
 
-    @Schema(description = "Count of active roles across all hospitals")
+    @Schema(description = "Count of active roles in the displayed hospital scope")
     private Integer roleCount;
 
     @Schema(description = "QA D914: whether the caller may edit, delete or restore this account "

@@ -13,6 +13,8 @@ export interface UserSummary {
   lastName: string;
   profileImageUrl?: string;
   active: boolean;
+  accessActive?: boolean;
+  reactivationAssignmentId?: string;
   deleted: boolean;
   roleName: string;
   profileType: string;

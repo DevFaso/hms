@@ -516,3 +516,58 @@ describe('AdminAssignmentsComponent — a hospital admin is not offered "Active"
     expect(service.update.calls.mostRecent().args[1].active).toBeTrue();
   });
 });
+
+describe('D4021: reactivation links use the existing confirmation policy', () => {
+  for (const superAdmin of [false, true]) {
+    it(`opens a reviewable form without writing, super-admin=${superAdmin}`, () => {
+      const id = '00000000-0000-0000-0000-000000004021';
+      const service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', [
+        'list',
+        'getById',
+        'update',
+        'create',
+        'regenerateCode',
+      ]);
+      service.list.and.returnValue(
+        of({ content: [], number: 0, totalPages: 0, totalElements: 0 }) as never,
+      );
+      service.getById.and.returnValue(
+        of({ id, active: false, roleId: 'nurse', hospitalId: 'hospital' } as AssignmentResponse),
+      );
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: AssignmentAdminService, useValue: service },
+          { provide: HospitalService, useValue: { list: () => of([]) } },
+          { provide: RoleService, useValue: { list: () => of([]) } },
+          { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+          {
+            provide: RoleContextService,
+            useValue: {
+              isSuperAdmin: () => superAdmin,
+              hasAnyActiveRole: () => true,
+              activeHospitalId: 'hospital',
+            },
+          },
+          {
+            provide: ToastService,
+            useValue: jasmine.createSpyObj('ToastService', ['error', 'success']),
+          },
+          { provide: TranslateService, useValue: { instant: (key: string) => key } },
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { queryParamMap: convertToParamMap({ reactivate: id }) } },
+          },
+        ],
+      });
+      const component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+      spyOn(component, 'load');
+      component.ngOnInit();
+      expect(service.getById).toHaveBeenCalledOnceWith(id);
+      expect(component.modal()).toBe(superAdmin ? 'edit' : 'detail');
+      expect(component.selected()?.id).toBe(id);
+      expect(service.update).not.toHaveBeenCalled();
+      expect(service.create).not.toHaveBeenCalled();
+      expect(service.regenerateCode).not.toHaveBeenCalled();
+    });
+  }
+});

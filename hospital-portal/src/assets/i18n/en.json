@@ -10076,7 +10076,7 @@
     "DEACTIVATE_CONFIRM": "Are you sure you want to deactivate",
     "DEACTIVATE_FAILED": "Failed to deactivate staff",
     "DEACTIVATE_STAFF": "Deactivate Staff",
-    "DEACTIVATE_WARNING": "Their role at this hospital is switched off at once: they can no longer work here. Their user account stays active for any other hospital.",
+    "DEACTIVATE_WARNING": "Staff access in this hospital will be disabled. The account is retained; access at other hospitals follows its own assignments.",
     "DEACTIVATING": "Deactivating…",
     "DEPARTMENT": "Department",
     "DEPARTMENT_EMAIL": "Department Email",
@@ -10151,7 +10151,9 @@
     "VIEW_DEPARTMENT_DETAILS": "View Department Details",
     "WEEKLY_SHIFTS": "Weekly Shifts",
     "NO_DEPARTMENT_OPTION": "— No department —",
-    "DEPARTMENTS_LOAD_FAILED": "The departments could not be loaded."
+    "DEPARTMENTS_LOAD_FAILED": "The departments could not be loaded.",
+    "REACTIVATE": "Reactivate",
+    "REQUIRES_ASSIGNMENT": "Manage role assignments to restore staff access"
   },
   "TREATMENT": {
     "ACTIVE": "Active",
@@ -10319,7 +10321,9 @@
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
     "HOSPITAL_SCOPE_CLEAR": "Show every hospital",
     "DEPARTMENT": "Department",
-    "DEPARTMENT_HINT": "The department a clinician is booked in. It can be changed later on « Staff »."
+    "DEPARTMENT_HINT": "The department a clinician is booked in. It can be changed later on « Staff ».",
+    "ACCOUNT_RETAINED_NO_ACCESS": "Account retained; no active role in this scope.",
+    "REACTIVATE_ACCESS": "Reactivate hospital access"
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",

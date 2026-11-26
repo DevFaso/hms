@@ -236,6 +236,27 @@ public class UserMapper {
                 .build();
     }
 
+    /** D4021: directory roles describe live grants in the displayed scope, never retired global role names. */
+    public UserSummaryDTO toSummaryDTO(User user, java.util.Collection<UserRoleHospitalAssignment> visibleAssignments) {
+        UserSummaryDTO dto = toSummaryDTO(user);
+        if (dto == null) {
+            return null;
+        }
+        Set<UserRoleHospitalAssignment> visible = visibleAssignments == null ? Set.of()
+            : new java.util.HashSet<>(visibleAssignments);
+        Set<Role> roles = safeRolesFromAssignments(activeOnly(visible));
+        dto.setRoleName(pickPrimaryRole(roles, true));
+        dto.setRoleCount(roles.size());
+        dto.setAccessActive(!roles.isEmpty());
+        dto.setReactivationAssignmentId(roles.isEmpty() ? visible.stream()
+            .filter(a -> a != null && Boolean.FALSE.equals(a.getActive()) && a.getRole() != null)
+            .filter(a -> a.getRole().getCode() != null
+                && !"ROLE_PATIENT".equalsIgnoreCase(a.getRole().getCode())
+                && !"PATIENT".equalsIgnoreCase(a.getRole().getCode()))
+            .map(UserRoleHospitalAssignment::getId).filter(Objects::nonNull).sorted().findFirst().orElse(null) : null);
+        return dto;
+    }
+
     private String deriveProfileType(User user) {
         if (user == null)
             return null;
