@@ -533,7 +533,8 @@ public class OPositiveReleaseAuthorityService {
                 OPositiveReleaseAuthority.PHYSICIAN_ROLE_CODES)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("transfusion.oPositive.followUp.physicianOnly"));
         }
-        if (exposureStateOf(decision, decision.getRelease().getBloodUnit()) == ExposureState.NOT_GIVEN) {
+        ExposureState state = exposureStateOf(decision, decision.getRelease().getBloodUnit());
+        if (state == ExposureState.NOT_GIVEN) {
             // The bag came back unused: nobody was exposed. The follow-up is closed by that fact, here if no
             // return wrote it yet, and the caller is shown the closed row instead of a refusal.
             if (decision.getDisposition() == null) {
@@ -549,7 +550,14 @@ public class OPositiveReleaseAuthorityService {
         if (decides && decision.getAntiDDecision() != null) {
             throw new FieldBusinessException("antiDDecision", "transfusion.oPositive.followUp.alreadyDecided");
         }
-        if (!informs && !decides) {
+        String prospective = bounded(request.getNote(), "note");
+        if (state != ExposureState.CONFIRMED && (decides || Boolean.TRUE.equals(request.getPatientInformed()))) {
+            // The exposure is documented once the bag is recorded as given: nothing is written as decided or told
+            // about an exposure that may not happen. A note may be kept meanwhile; it completes nothing.
+            throw new FieldBusinessException(decides ? "antiDDecision" : "patientInformed",
+                "transfusion.oPositive.followUp.administrationNotConfirmed");
+        }
+        if (!informs && !decides && prospective == null) {
             throw new FieldBusinessException("antiDDecision", "transfusion.oPositive.followUp.nothingRecorded");
         }
         LocalDateTime now = LocalDateTime.now(clock);
@@ -562,7 +570,7 @@ public class OPositiveReleaseAuthorityService {
             decision.setPatientInformedByUserId(caller);
             decision.setPatientInformedAt(now);
         }
-        String note = bounded(request.getNote(), "note");
+        String note = prospective;
         if (note != null) {
             decision.setFollowUpNote(decision.getFollowUpNote() == null ? note : decision.getFollowUpNote() + "\n" + note);
         }

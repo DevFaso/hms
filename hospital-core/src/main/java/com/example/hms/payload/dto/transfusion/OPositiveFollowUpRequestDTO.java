@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
  * What a clinician records after an RhD positive exposure: the decision, that the patient was told, or both. An
  * empty body is refused at the edge, on the decision.
  */
-@com.example.hms.payload.dto.OneOf(fields = {"antiDDecision", "patientInformed", "bagNotGiven"},
+@com.example.hms.payload.dto.OneOf(fields = {"antiDDecision", "patientInformed", "bagNotGiven", "note"},
     message = "{transfusion.oPositive.followUp.nothingRecorded}")
 @Data
 @Builder

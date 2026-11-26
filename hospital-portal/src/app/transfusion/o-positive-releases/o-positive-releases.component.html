@@ -379,6 +379,11 @@
           </ul>
           @if (r.followUpNote) {
             <p class="opos-note">{{ r.followUpNote }}</p>
+            @if (bagNotGiven(r)) {
+              <p class="opos-note warn-inline" data-testid="opos-note-void">
+                {{ 'TRANSFUSION.OPOS.NOTE_VOID' | translate }}
+              </p>
+            }
           }
           @if (canFollowUp && followUpOwed(r) && r.exposureState === 'NOT_GIVEN') {
             <button
@@ -402,7 +407,22 @@
                 [placeholder]="'TRANSFUSION.OPOS.FOLLOW_UP_NOTE' | translate"
                 [(ngModel)]="followUpNotes[r.id]"
               ></textarea>
-              @if (!r.antiDDecision) {
+              @if (r.exposureState !== 'CONFIRMED') {
+                <!-- The exposure is documented once the bag is recorded as given: only a note meanwhile. -->
+                <p class="opos-note" role="status" data-testid="opos-await-administration">
+                  {{ 'TRANSFUSION.OPOS.AWAIT_ADMINISTRATION' | translate }}
+                </p>
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  data-testid="opos-note-save"
+                  [disabled]="busyId() === r.id"
+                  (click)="saveProspectiveNote(r)"
+                >
+                  {{ 'TRANSFUSION.OPOS.NOTE_SAVE_ACTION' | translate }}
+                </button>
+              }
+              @if (r.exposureState === 'CONFIRMED' && !r.antiDDecision) {
                 <form class="opos-inline-form" (ngSubmit)="recordAntiD(r)">
                   <div class="field">
                     <label [for]="'opos-antid-' + r.id">
@@ -435,7 +455,7 @@
                   </button>
                 </form>
               }
-              @if (!r.patientInformedAt) {
+              @if (r.exposureState === 'CONFIRMED' && !r.patientInformedAt) {
                 <button
                   type="button"
                   class="btn-secondary btn-sm"

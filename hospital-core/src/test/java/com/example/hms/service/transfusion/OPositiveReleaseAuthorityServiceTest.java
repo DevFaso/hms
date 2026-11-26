@@ -913,25 +913,44 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
-    @DisplayName("a follow-up recorded while the bag was out is voided cleanly when the bag comes back unused: what was written stays, nothing is owed, no flag")
-    void aFollowUpRecordedBeforeAnUnusedReturnIsVoided() {
+    @DisplayName("the follow-up of an exposure is completed only once the bag is recorded as given: before that only a note is kept, and an unused return leaves no completed exposure record")
+    void aFollowUpIsCompletedOnlyOnceTheBagIsGiven() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
-        BloodUnit unit = decision.getRelease().getBloodUnit();
-        unit.setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
-        unit.setRequest(decision.getRelease().getRequest());
+        UUID id = decision.getId();
         when(roleValidator.getCurrentUserId()).thenReturn(doctor);
-        // The clinician does not wait for the hang to be recorded: the anti-D window is short.
-        service.recordFollowUp(decision.getId(), hospitalId,
-            OPositiveFollowUpRequestDTO.builder().antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build());
+        // The bag is out, its administration not confirmed: nothing is written as decided, nor as told.
+        assertThatThrownBy(() -> service.recordFollowUp(id, hospitalId,
+            OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build()))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("not recorded yet");
+        assertThatThrownBy(() -> service.recordFollowUp(id, hospitalId,
+            OPositiveFollowUpRequestDTO.builder().antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build()))
+            .isInstanceOf(FieldBusinessException.class).hasMessageContaining("not recorded yet");
+        assertThat(decision.getPatientInformedAt()).isNull();
+        assertThat(decision.getAntiDDecision()).isNull();
+        // A prospective note is kept; it completes nothing and the task stays open.
+        service.recordFollowUp(id, hospitalId, OPositiveFollowUpRequestDTO.builder().note("Anti-D to be given if transfused").build());
+        assertThat(decision.getFollowUpNote()).isEqualTo("Anti-D to be given if transfused");
         assertThat(decision.followUpOwed()).isTrue();
+        verify(fixture.inBasket, never()).removeOpenItemsForReference(id, OPositiveReleaseNotices.FOLLOW_UP_REFERENCE_TYPE);
 
+        // The bag comes back unused: closed with that reason, and no decision, no « patient informed » on record.
         decision.setDisposition(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
         when(fixture.decisionRepository.findByHospital_IdOrderByIssuedAtDesc(hospitalId)).thenReturn(List.of(decision));
         assertThat(decision.followUpOwed()).isFalse();
         assertThat(service.list(hospitalId, false)).singleElement().satisfies(row -> {
             assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN");
-            assertThat(row.getAntiDDecision()).as("what was written is kept as written").isEqualTo(AntiDDecision.ANTI_D_IMMUNOGLOBULIN);
+            assertThat(row.getAntiDDecision()).isNull();
+            assertThat(row.getPatientInformedAt()).isNull();
         });
+
+        // Given: the same two facts are then recorded.
+        when(roleValidator.getCurrentUserId()).thenReturn(issuer);
+        OPositiveReleaseDecision given = release(request(), naming(doctor), null, false);
+        given.setDisposition(com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor);
+        service.recordFollowUp(given.getId(), hospitalId, OPositiveFollowUpRequestDTO.builder()
+            .antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).patientInformed(Boolean.TRUE).build());
+        assertThat(given.followUpOwed()).isFalse();
         // The flag does not rest on it, whatever the bag does next.
         var row = exposure(NOW, hospitalId, com.example.hms.enums.BloodUnitStatus.ISSUED, true, 1);
         when(row.getDisposition()).thenReturn(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED);
@@ -993,8 +1012,7 @@ class OPositiveReleaseAuthorityServiceTest {
     @DisplayName("the follow-up stays open until a physician has decided on anti-D or exchange AND the patient was told")
     void followUp() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
-        decision.getRelease().getBloodUnit().setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
-        decision.getRelease().getBloodUnit().setRequest(decision.getRelease().getRequest());
+        decision.setDisposition(com.example.hms.enums.OPositiveBagDisposition.ADMINISTERED);
         UUID id = decision.getId();
         OPositiveFollowUpRequestDTO empty = new OPositiveFollowUpRequestDTO();
         OPositiveFollowUpRequestDTO decides = OPositiveFollowUpRequestDTO.builder().antiDDecision(AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build();

@@ -101,9 +101,13 @@ class EmergencyBloodReleaseGuardTest {
     void oNegativeFirstIsNeverAnAbsoluteBlock() throws IOException {
         String source = read(SERVICE);
         assertThat(source).doesNotContain("transfusion.emergency.oNegativeFirst");
-        assertThat(count(source, "negativeStockAhead(")).as("defined, read once by the documented release").isEqualTo(2);
-        assertThat(method(source, "public BloodUnitResponseDTO emergencyRelease(")).contains("negativeStockAhead(")
+        assertThat(count(source, "negativeOnHand(")).as("defined, read once by the documented release").isEqualTo(2);
+        assertThat(method(source, "public BloodUnitResponseDTO emergencyRelease(")).contains("negativeOnHand(")
             .contains("transfusion.emergency.negativeStatementRequired");
+        // One read per submit: what is recorded as the reason O negative stayed is that read, never a second one.
+        assertThat(method(source, "ONegativeStatus negativeStatus(")).as("records from the stock it is handed").doesNotContain("negativeStock(")
+            .doesNotContain("unitRepository.");
+        assertThat(method(source, "private EmergencyBloodRelease recordRelease(")).doesNotContain("negativeStock(");
     }
 
     @Test

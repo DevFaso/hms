@@ -712,6 +712,12 @@ class TransfusionEmergencyReleasePostgresIT {
         Object rawNote = entityManager.createNativeQuery(
             "SELECT review_note FROM clinical.o_positive_release_decisions WHERE id = :id").setParameter("id", decisionId).getSingleResult();
         assertThat((String) rawNote).as("the biologist's words are encrypted at rest").doesNotContain("Anti-D discussed");
+        // pr1346: the exposure is documented once the bag is given, not while it is only out.
+        actingAs(doctorUser);
+        assertThatThrownBy(() -> service.recordPositiveFollowUp(decisionId,
+            com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder().patientInformed(Boolean.TRUE).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        hang(requestId, bagId);
         actingAs(doctorUser);
         com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO followed = service.recordPositiveFollowUp(decisionId,
             com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder()
@@ -905,10 +911,13 @@ class TransfusionEmergencyReleasePostgresIT {
         service.emergencyRelease(requestId, documented(bagId, EmergencyReleaseType.O_POSITIVE_DECISION));
         UUID first = service.getRequest(requestId).getEmergencyReleases().get(0).getPositiveDecision().getId();
 
-        // A follow-up recorded while the bag is out is accepted (the anti-D window does not wait for the hang).
+        // While the bag is out only a prospective note is kept: no decision, no « patient informed ».
         actingAs(doctorUser);
+        assertThatThrownBy(() -> service.recordPositiveFollowUp(first, com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder()
+            .antiDDecision(com.example.hms.enums.AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         service.recordPositiveFollowUp(first, com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO.builder()
-            .antiDDecision(com.example.hms.enums.AntiDDecision.ANTI_D_IMMUNOGLOBULIN).build());
+            .note("Anti-D if transfused").build());
         actingAs(techUser);
 
         // The bag comes back to the laboratory unused, by hand in the database: no hook wrote it.
@@ -922,7 +931,9 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThat(both).filteredOn(row -> row.getId().equals(first)).singleElement().satisfies(row -> {
             assertThat(row.getDisposition()).isEqualTo("SUPERSEDED");
             assertThat(row.getExposureState()).isEqualTo("NOT_GIVEN");
-            assertThat(row.getAntiDDecision()).as("what was written stays as written").isNotNull();
+            assertThat(row.getFollowUpNote()).as("the prospective note stays as written").isEqualTo("Anti-D if transfused");
+            assertThat(row.getAntiDDecision()).as("no completed exposure record").isNull();
+            assertThat(row.getPatientInformedAt()).isNull();
         });
 
         hang(requestId, bagId);

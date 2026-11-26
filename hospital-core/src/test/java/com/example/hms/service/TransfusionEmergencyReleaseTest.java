@@ -1496,4 +1496,23 @@ class TransfusionEmergencyReleaseTest {
             eq(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED), any());
         verify(positive.inBasket).removeOpenItemsForReference(positive.last().getId(), "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
     }
+
+    @Test
+    @DisplayName("pr1346: the O negative stock is read once per submit; what is recorded is what that one read said")
+    void theStockIsReadOncePerSubmit() {
+        adultMale();
+        BloodUnit arrived = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
+        // A bag received a moment later answers any second read: there must be none.
+        when(unitRepository.findStockForPatient(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+            LocalDate.now())).thenReturn(List.of()).thenReturn(List.of(arrived));
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+
+        service.emergencyRelease(request.getId(), EmergencyReleaseRequestDTO.builder().bloodUnitId(unit.getId())
+            .releaseType(EmergencyReleaseType.O_POSITIVE_DECISION).reason("Haemorrhage, nothing else in time").build());
+
+        verify(unitRepository, org.mockito.Mockito.times(1)).findStockForPatient(any(), any(), any(), any(), any(), any());
+        assertThat(positive.last().getNegativeStatus()).as("not « kept by the protocol » on a later read")
+            .isEqualTo(com.example.hms.enums.ONegativeStatus.OUT_OF_STOCK);
+    }
 }

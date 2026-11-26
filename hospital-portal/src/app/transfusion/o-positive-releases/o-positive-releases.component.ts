@@ -223,6 +223,15 @@ export class OPositiveReleasesComponent implements OnInit {
     );
   }
 
+  /** While the administration is not recorded only a note is kept; it completes nothing. */
+  saveProspectiveNote(row: OPositiveReleaseDecision): void {
+    const note = this.noteOf(row);
+    if (!note.note) return;
+    this.act(row, this.transfusion.recordPositiveFollowUp(row.id, note), 'NOTE_SAVED', {
+      note: 'opos-fu-note-' + row.id,
+    });
+  }
+
   /** The bag came back unused and nothing wrote it yet: the follow-up is closed with that reason. */
   closeNotGiven(row: OPositiveReleaseDecision): void {
     this.act(

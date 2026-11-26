@@ -965,7 +965,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     private EmergencyBloodRelease recordRelease(TransfusionRequest request, BloodUnit unit, EmergencyReleaseType type,
                                                 String reason,
                                                 com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation,
-                                                UUID authoriserUserId, List<BloodUnit> negativeShown) {
+                                                UUID authoriserUserId, List<BloodUnit> negativeShown,
+                                                List<BloodUnit> negativeOnHand) {
         UUID actorUserId = roleValidator.getCurrentUserId();
         EmergencyBloodRelease saved = releaseRepository.save(EmergencyBloodRelease.builder()
             .request(request)
@@ -982,7 +983,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 : negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")))
             .build());
         // V380: O positive red cells keep their decision beside the release row, and what follows it is filed.
-        positiveAuthority.record(saved, authorisation, request, unit, negativeStatus(request, type, authorisation, negativeShown));
+        positiveAuthority.record(saved, authorisation, request, unit, negativeStatus(authorisation, negativeShown, negativeOnHand));
         UUID hospitalId = request.getHospital().getId();
         UUID requestId = request.getId();
         UUID unitId = unit.getId();
@@ -1007,15 +1008,16 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /** Why O negative did not go out instead, for the decision row of an O positive release. */
-    private com.example.hms.enums.ONegativeStatus negativeStatus(TransfusionRequest request, EmergencyReleaseType type,
+    private static com.example.hms.enums.ONegativeStatus negativeStatus(
             com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation,
-            List<BloodUnit> negativeShown) {
+            List<BloodUnit> negativeShown, List<BloodUnit> negativeOnHand) {
         if (!negativeShown.isEmpty()) {
             return com.example.hms.enums.ONegativeStatus.STATED_UNOBTAINABLE;
         }
-        // No statement was asked (the plain issue, or a patient O positive goes to first): what the stock holds is
-        // read here, never inferred from an empty list on the form.
-        boolean inStock = authorisation.applies() && !negativeStock(request).isEmpty();
+        // No statement was asked (the plain issue, or a patient O positive goes to first): what the stock held at
+        // the ONE read of this submit, the same the statement was asked on; never a second read, never inferred
+        // from an empty list on the form.
+        boolean inStock = authorisation.applies() && !negativeOnHand.isEmpty();
         return inStock ? com.example.hms.enums.ONegativeStatus.PROTOCOL_FIRST_LINE
             : com.example.hms.enums.ONegativeStatus.OUT_OF_STOCK;
     }
@@ -1084,7 +1086,8 @@ public class TransfusionServiceImpl implements TransfusionService {
                 positiveAuthority.authorise(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, positiveAssessmentFor(request, unit));
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
-            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, authorisation, null, List.of());
+            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, authorisation, null, List.of(),
+                authorisation.applies() ? negativeStock(request) : List.of());
         }
         if (crossmatchAfterwards) {
             notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
@@ -1134,7 +1137,10 @@ public class TransfusionServiceImpl implements TransfusionService {
         } else {
             requireIncompatibleReleaseAllowed(request, unit, crossmatch);
         }
-        List<BloodUnit> negativeShown = negativeStockAhead(request, unit);
+        // The stock is read ONCE per submit: the statement is asked, and the release recorded, on the same answer.
+        List<BloodUnit> negativeOnHand = negativeOnHand(request, unit);
+        List<BloodUnit> negativeShown = negativeOnHand.isEmpty() || !positiveAssessment(request).oNegativeFirst()
+            ? List.of() : negativeOnHand;
         if (!negativeShown.isEmpty() && !Boolean.TRUE.equals(release.getNegativeUnobtainable())) {
             throw new FieldBusinessException(FIELD_NEGATIVE_UNOBTAINABLE, "transfusion.emergency.negativeStatementRequired",
                 unit.getUnitNumber(), negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")));
@@ -1149,7 +1155,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID answerable = ownAuthoriser ? release.getAuthoriserUserId() : authorisation.answerable();
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
-        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, authorisation, answerable, negativeShown);
+        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, authorisation, answerable, negativeShown, negativeOnHand);
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
@@ -1299,14 +1305,13 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /**
-     * The O negative this O positive bag would go out ahead of, by what the system shows: empty when
-     * the bag is not O positive, or this patient does not take O negative first. The system can be
+     * The O negative on hand when an O positive bag is released, read once per submit: empty when the bag is
+     * not O positive. It is shown, and a statement asked, when this patient takes O negative first. The system can be
      * wrong (a bag recorded as returned can still be on the ward), so this asks for a statement and
      * never refuses outright: the documented decision must not become a block on transfusion.
      */
-    private List<BloodUnit> negativeStockAhead(TransfusionRequest request, BloodUnit unit) {
-        if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())
-                || !positiveAssessment(request).oNegativeFirst()) {
+    private List<BloodUnit> negativeOnHand(TransfusionRequest request, BloodUnit unit) {
+        if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())) {
             return List.of();
         }
         return negativeStock(request);

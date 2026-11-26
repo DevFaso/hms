@@ -62,6 +62,7 @@ function decision(over: Partial<OPositiveReleaseDecision> = {}): OPositiveReleas
     patientInformedByName: null,
     patientInformedAt: null,
     followUpNote: null,
+    exposureState: 'CONFIRMED',
     ...over,
   };
 }
@@ -148,7 +149,18 @@ describe('OPositiveReleasesComponent (V380)', () => {
     expect(cards[0].querySelector('[data-testid="opos-exposure-state"]')!.textContent).toContain(
       'TRANSFUSION.OPOS.EXPOSURE_UNCONFIRMED',
     );
-    expect(cards[0].querySelector('[data-testid="opos-anti-d-save"]')).not.toBeNull();
+    // Out, not recorded as given: nothing is completed, only a note can be kept.
+    expect(cards[0].querySelector('[data-testid="opos-anti-d-save"]')).toBeNull();
+    expect(cards[0].querySelector('[data-testid="opos-informed-save"]')).toBeNull();
+    expect(cards[0].querySelector('[data-testid="opos-await-administration"]')).not.toBeNull();
+    component.followUpNotes['out'] = '  Anti-D si transfusée ';
+    tx.recordPositiveFollowUp.and.returnValue(
+      of(
+        decision({ id: 'out', exposureState: 'UNCONFIRMED', followUpNote: 'Anti-D si transfusée' }),
+      ),
+    );
+    (cards[0].querySelector('[data-testid="opos-note-save"]') as HTMLElement).click();
+    expect(tx.recordPositiveFollowUp).toHaveBeenCalledWith('out', { note: 'Anti-D si transfusée' });
     expect(cards[1].querySelector('[data-testid="opos-exposure-state"]')!.textContent).toContain(
       'TRANSFUSION.OPOS.EXPOSURE_NOT_GIVEN',
     );
@@ -329,8 +341,15 @@ describe('OPositiveReleasesComponent (V380)', () => {
   it('pr1346: a bag that came back unused has its follow-up closed, with the reason; one not written yet can be closed', async () => {
     await start(
       ['ROLE_DOCTOR'],
-      [decision({ exposureState: 'NOT_GIVEN', disposition: 'RETURNED_UNUSED' })],
+      [
+        decision({
+          exposureState: 'NOT_GIVEN',
+          disposition: 'RETURNED_UNUSED',
+          followUpNote: 'Anti-D si transfusée',
+        }),
+      ],
     );
+    expect(el('opos-note-void')).not.toBeNull();
     expect(component.followUpOwed(component.releases()[0])).toBeFalse();
     expect(el('opos-follow-up-closed')).not.toBeNull();
     expect(el('opos-anti-d-save')).toBeNull();
@@ -356,6 +375,7 @@ describe('OPositiveReleasesComponent (V380)', () => {
       [decision({ exposureState: 'NOT_GIVEN', disposition: 'SUPERSEDED' })],
     );
     expect(el('opos-superseded')).not.toBeNull();
+    expect(el('opos-note-void')).toBeNull();
     expect(el('opos-anti-d-save')).toBeNull();
     expect(el('opos-close-not-given')).toBeNull();
   });
