@@ -383,6 +383,37 @@ describe('RegistrationsComponent global super-admin view', () => {
     expect(fixture.componentInstance.loadError()).toBeFalse();
   });
 
+  it('includes later pages for each hospital in the network count', () => {
+    const { fixture, http } = page();
+    const firstPage = Array.from({ length: ALL_PAGES_SIZE }, (_, index) => ({
+      id: `r-${index}`,
+      hospitalId: 'h1',
+      hospitalName: 'First',
+      active: true,
+    }));
+    http
+      .expectOne(
+        (r) =>
+          r.url === '/registrations' &&
+          r.params.get('hospitalId') === 'h1' &&
+          r.params.get('page') === '0',
+      )
+      .flush(firstPage);
+    http
+      .expectOne(
+        (r) =>
+          r.url === '/registrations' &&
+          r.params.get('hospitalId') === 'h1' &&
+          r.params.get('page') === '1',
+      )
+      .flush([{ id: 'r-last', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([{ id: 'r-other', hospitalId: 'h2', hospitalName: 'Second', active: true }]);
+    expect(fixture.componentInstance.registrations().length).toBe(ALL_PAGES_SIZE + 2);
+    expect(fixture.componentInstance.totalPages()).toBe(21);
+  });
+
   it('reports a failed hospital instead of displaying incomplete network totals', () => {
     const { fixture, http } = page();
     http
