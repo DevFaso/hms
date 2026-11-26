@@ -47,3 +47,7 @@ test-output.txt
 # Per-user permission allowlist — never commit. settings.json (without
 # .local) may be committed when the team wants a shared allowlist.
 .claude/settings.local.json
+
+# Railway IaC: local undo snapshots written by `railway config migrate cutover`
+# (docs/runbooks/railway-config-as-code.md)
+.railway/.cac-migration*.json
