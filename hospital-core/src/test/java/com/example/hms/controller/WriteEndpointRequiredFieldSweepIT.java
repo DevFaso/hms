@@ -273,6 +273,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             NOTES_OPTIONAL),
         Map.entry("POST /staff/{staffId}/credentials/renew",
             "every field optional (diplomas do not expire: no mandatory expiry)"),
+        Map.entry("POST /transfusions/o-positive-releases/{decisionId}/review",
+            "V380: the biologist's review note is optional"),
         Map.entry("POST /transfers/{orderId}/complete",
             "the completing staff (the caller by default) and notes are optional"),
         Map.entry("PUT /appointments/{id}/status",

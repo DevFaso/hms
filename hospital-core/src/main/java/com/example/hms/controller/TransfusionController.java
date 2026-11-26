@@ -297,7 +297,7 @@ public class TransfusionController {
     @Operation(summary = "Set the hospital's emergency O RhD positive protocol",
         description = "The hospital's biologist only; a super-admin alone is refused.")
     public ResponseEntity<com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO> setPositiveProtocol(
-        @RequestBody com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO update) {
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.OPositiveProtocolDTO update) {
         return ResponseEntity.ok(transfusionService.setPositiveProtocol(update));
     }
 

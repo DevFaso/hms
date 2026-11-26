@@ -142,6 +142,8 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("OrderReviewHoldServiceImpl.currentVersion#findById", CALLER_CHECKS + " (only the version of an order its own write just scoped, updatePrescription or the blood group screen)"),
         entry("OrderReviewHoldServiceImpl.toRow#findById", "the order the hold row names, read to label a row already scoped to the acting hospital"),
         entry("DeathDisputeServiceImpl.escalateUnreviewed#findById", SYSTEM + "; the death record named by the dispute row"),
+        entry("OPositiveReleaseAuthorityService.escalateOverdueCountersigns#findByIdUnscoped", SYSTEM
+            + "; V380 sweep: the patient named by the overdue decision row, for the director's notice at that row's hospital"),
         entry("DeathDisputeServiceImpl.escalateUnreviewed#findByIdUnscoped", SYSTEM + "; the patient named by the dispute row"),
         entry("ChatMessageServiceImpl.sendMessage#findById", "resolves the message recipient; no clinical row is written"),
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),
