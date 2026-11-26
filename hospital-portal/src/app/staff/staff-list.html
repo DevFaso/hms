@@ -188,7 +188,14 @@
             <p class="staff-email">{{ member.email }}</p>
           </div>
           <div class="staff-actions-col">
-            <span class="status-dot" [class.active]="member.active"></span>
+            <span
+              class="staff-status"
+              [class.active]="member.active"
+              [class.inactive]="!member.active"
+            >
+              <span class="status-dot" [class.active]="member.active" aria-hidden="true"></span>
+              {{ (member.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+            </span>
             @if (canManageStaff) {
               <div class="action-group">
                 <button
@@ -200,15 +207,38 @@
                   <span class="material-symbols-outlined">edit</span>
                 </button>
                 @if (!isOwnCard(member)) {
-                  <button
-                    class="action-link danger"
-                    data-test="staff-deactivate"
-                    [title]="'STAFF.DEACTIVATE' | translate"
-                    [attr.aria-label]="'STAFF.DEACTIVATE' | translate"
-                    (click)="confirmDelete(member)"
-                  >
-                    <span class="material-symbols-outlined">person_off</span>
-                  </button>
+                  @if (member.active) {
+                    <button
+                      class="action-link danger"
+                      data-test="staff-deactivate"
+                      [title]="'STAFF.DEACTIVATE' | translate"
+                      [attr.aria-label]="'STAFF.DEACTIVATE' | translate"
+                      (click)="confirmDelete(member)"
+                    >
+                      <span class="material-symbols-outlined">person_off</span>
+                    </button>
+                  } @else if (reactivationHref(member); as href) {
+                    <a
+                      class="action-link"
+                      [href]="href"
+                      data-test="staff-reactivate"
+                      [title]="'STAFF.REACTIVATE' | translate"
+                      [attr.aria-label]="'STAFF.REACTIVATE' | translate"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+                    </a>
+                  } @else {
+                    <a
+                      class="action-link"
+                      href="/admin-assignments"
+                      [title]="'STAFF.REQUIRES_ASSIGNMENT' | translate"
+                      [attr.aria-label]="'STAFF.REQUIRES_ASSIGNMENT' | translate"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >assignment_ind</span
+                      >
+                    </a>
+                  }
                 }
               </div>
             }
@@ -460,6 +490,7 @@
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
+            data-test="staff-deactivate-confirm"
           >
             {{ deleting() ? ('STAFF.DEACTIVATING' | translate) : ('STAFF.DEACTIVATE' | translate) }}
           </button>

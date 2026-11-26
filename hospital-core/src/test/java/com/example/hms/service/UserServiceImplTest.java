@@ -2479,7 +2479,7 @@ class UserServiceImplTest {
             pending.setActive(false);
             when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(live, pending)));
-            when(userMapper.toSummaryDTO(live)).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
+            when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(live), org.mockito.ArgumentMatchers.anyCollection())).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
                     .id(live.getId()).roleName("ROLE_NURSE").profileType("STAFF").email("awa@example.org").build());
 
             java.util.List<com.example.hms.payload.dto.ChatRecipientDTO> rows = userService.listChatRecipients(5000);
@@ -2593,7 +2593,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
             when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
-            when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+            when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(patientAccount), org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
                     .firstName("Pat").build());
 
@@ -2632,7 +2632,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
             when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(account)));
-            when(userMapper.toSummaryDTO(account)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+            when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(account), org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("p@example.com").username("p@example.com").build());
 
             var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
@@ -2649,7 +2649,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
             when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(staffAccount)));
-            when(userMapper.toSummaryDTO(staffAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+            when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(staffAccount), org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("n@example.com").username("nurse.b").firstName("Nurse").roleName("ROLE_NURSE").build());
 
             var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
@@ -2687,7 +2687,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), true));
             when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
-            when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+            when(userMapper.toSummaryDTO(org.mockito.ArgumentMatchers.eq(patientAccount), org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("p@example.com").build());
 
             assertThat(userService.getAllUsers(0, 10, false, false).getContent().get(0).getEmail())

@@ -622,6 +622,16 @@
           }
         </div>
         <div class="modal-actions">
+          @if (!row.active && !isOwnRow(row)) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="assignment-reinvite"
+              (click)="openRegen(row)"
+            >
+              {{ 'ASSIGN_ADMIN.REGENERATE' | translate }}
+            </button>
+          }
           <button type="button" class="btn-primary" (click)="closeModal()">
             {{ 'COMMON.CLOSE' | translate }}
           </button>
