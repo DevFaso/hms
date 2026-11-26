@@ -321,7 +321,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             .orElseThrow(() -> new ResourceNotFoundException("instrumentOutbox.message.notFound", id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         // B1: the performing laboratory's own result messages are its to see and retry.
-        if (!message.getLabOrder().isHandledBy(hospitalId)) {
+        if (message.getLabOrder() == null || !message.getLabOrder().isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException("instrumentOutbox.message.notFound", id);
         }
         return message;

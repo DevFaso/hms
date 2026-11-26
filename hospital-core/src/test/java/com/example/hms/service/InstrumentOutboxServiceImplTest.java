@@ -343,6 +343,17 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
+    void orphanMessageIsNotFoundBeforePayloadOrRetry() {
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ERROR);
+        row.setLabOrder(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        assertThatThrownBy(() -> service.getMessage(row.getId())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.retry(row.getId())).isInstanceOf(ResourceNotFoundException.class);
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
     void realRestrictedChartGateBlocksAdministratorUntilBreakGlass() {
         UUID patientId = labOrder.getPatient().getId();
         UUID actor = UUID.randomUUID();
