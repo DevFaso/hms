@@ -103,12 +103,12 @@ public class OrdonnancePdfService {
     }
 
     /**
-     * QA D3865: the patient's known allergies on the ordonnance (a hand-built instance in a unit test may leave it
+     * QA D3865: the patient's known allergies on the ordonnance (a hand-built instance or a mocked slice bean may leave it
      * out; each line's allergy override is printed regardless).
      */
     private PrescriptionAllergyNotice allergyNotice;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setAllergyNotice(PrescriptionAllergyNotice allergyNotice) {
         this.allergyNotice = allergyNotice;
     }

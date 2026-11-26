@@ -60,7 +60,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
      */
     private com.example.hms.service.pharmacy.PrescriptionAllergyNotice allergyNotice;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setAllergyNotice(com.example.hms.service.pharmacy.PrescriptionAllergyNotice allergyNotice) {
         this.allergyNotice = allergyNotice;
     }

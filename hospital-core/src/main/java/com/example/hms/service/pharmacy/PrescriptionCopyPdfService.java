@@ -71,7 +71,7 @@ public class PrescriptionCopyPdfService {
      */
     private PrescriptionAllergyNotice allergyNotice;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setAllergyNotice(PrescriptionAllergyNotice allergyNotice) {
         this.allergyNotice = allergyNotice;
     }
