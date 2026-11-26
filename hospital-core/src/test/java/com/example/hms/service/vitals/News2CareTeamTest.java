@@ -106,7 +106,7 @@ class News2CareTeamTest {
     void remindersReachTheResponsibleOnCallAndWardTeamOnly() {
         admittedTo(WARD);
 
-        assertThat(team.reminderCircle(HOSPITAL, PATIENT))
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "nurse_triage"))
             .containsExactlyInAnyOrder("dr_attending", "dr_oncall", "dr_ward", "nurse_w1")
             .doesNotContain("dr_elsewhere", "nurse_x", "nurse_y", "nurse_w2", "mw_a");
         assertThat(team.wardNurses(HOSPITAL, PATIENT)).containsExactly("nurse_w1");
@@ -125,8 +125,43 @@ class News2CareTeamTest {
     void aStayWithNoDepartmentKeepsItsDoctorsAndNoHospitalWideStaff() {
         admittedTo(null);
 
-        assertThat(team.reminderCircle(HOSPITAL, PATIENT)).containsExactlyInAnyOrder("dr_attending", "dr_oncall");
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "nurse_triage")).containsExactlyInAnyOrder("dr_attending", "dr_oncall");
         assertThat(team.wardNurses(HOSPITAL, PATIENT)).isEmpty();
+    }
+
+    @Test
+    void aRecordingAttendingWhoIsAlsoTheOnlyOnCallDoctorNeverLeavesTheRemindersToNobody() {
+        // Rex on #1339 (P1): the recorder cannot acknowledge; a circle of herself alone reached nobody three times.
+        admittedTo(null);
+        when(onCall.findByHospitalAndWindow(eq(HOSPITAL), any(), any())).thenReturn(List.of(onCallShift("dr_attending")));
+
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "dr_attending"))
+            .doesNotContain("dr_attending")
+            .containsExactlyInAnyOrder("dr_ward", "dr_oncall", "dr_elsewhere", "nurse_w1", "nurse_w2", "nurse_x", "nurse_y");
+    }
+
+    @Test
+    void aRecordingNurseWhoIsHerWardsOnlyNurseNeverLeavesTheRemindersToNobody() {
+        Admission stay = new Admission();
+        stay.setAdmissionDateTime(NOW.minusDays(1));
+        Department ward = new Department();
+        ward.setId(WARD);
+        stay.setDepartment(ward);
+        when(admissions.findByPatient_IdAndHospital_IdAndStatusIn(eq(PATIENT), eq(HOSPITAL), any())).thenReturn(List.of(stay));
+        when(staff.findActiveUsernamesByHospitalDepartmentAndRole(HOSPITAL, WARD, "ROLE_DOCTOR")).thenReturn(List.of());
+        when(staff.findActiveUsernamesByHospitalDepartmentAndRole(HOSPITAL, WARD, "ROLE_NURSE")).thenReturn(List.of("nurse_w1"));
+        when(onCall.findByHospitalAndWindow(eq(HOSPITAL), any(), any())).thenReturn(List.of());
+
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "NURSE_W1"))
+            .doesNotContain("nurse_w1")
+            .contains("dr_attending", "dr_ward", "nurse_x");
+    }
+
+    @Test
+    void theRecorderIsNeverInTheCircle() {
+        admittedTo(WARD);
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "nurse_w1"))
+            .containsExactlyInAnyOrder("dr_attending", "dr_oncall", "dr_ward");
     }
 
     @Test
@@ -134,7 +169,7 @@ class News2CareTeamTest {
         // Triage: no open stay; nobody on call.
         when(onCall.findByHospitalAndWindow(eq(HOSPITAL), any(), any())).thenReturn(List.of());
 
-        assertThat(team.reminderCircle(HOSPITAL, PATIENT)).containsExactlyInAnyOrder(
+        assertThat(team.reminderCircle(HOSPITAL, PATIENT, "nurse_triage")).containsExactlyInAnyOrder(
             "dr_attending", "dr_ward", "dr_oncall", "dr_elsewhere", "nurse_w1", "nurse_w2", "nurse_x", "nurse_y");
     }
 }

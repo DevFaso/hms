@@ -86,7 +86,7 @@ class EarlyWarningEscalationCircleTest {
         when(staffRepository.findActiveUsernamesByHospitalAndRole(HOSPITAL, "ROLE_NURSE"))
             .thenReturn(List.of("nurse_a", "nurse_b"));
         when(careTeam.wardNurses(HOSPITAL, PATIENT)).thenReturn(Set.of("nurse_b"));
-        when(careTeam.reminderCircle(HOSPITAL, PATIENT)).thenReturn(Set.of("dr_a", "nurse_b"));
+        when(careTeam.reminderCircle(HOSPITAL, PATIENT, "nurse_a")).thenReturn(Set.of("dr_a", "nurse_b"));
         when(clinicalRecipients.nursesInCharge(HOSPITAL, true)).thenReturn(Set.of("nurse_a", "nurse_b"));
         when(clinicalRecipients.cover(eq(HOSPITAL), any())).thenReturn(Set.of("dr_b"));
         when(onCallScheduleRepository.findByHospitalAndWindow(eq(HOSPITAL), any(), any())).thenReturn(List.of());
@@ -159,10 +159,10 @@ class EarlyWarningEscalationCircleTest {
     @Test
     void remindersReachThePatientsCareTeamNotTheWholeHospital() {
         // Review of #1339: the care team (News2CareTeam), never every doctor and nurse of the hospital.
-        assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_NEWS2, HOSPITAL, PATIENT))
+        assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_NEWS2, HOSPITAL, PATIENT, "nurse_a"))
             .containsExactlyInAnyOrder("dr_a", "nurse_b");
         // Every other source keeps the obstetric circle.
-        assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, HOSPITAL, PATIENT))
+        assertThat(worker.reminderCircle(ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, HOSPITAL, PATIENT, null))
             .contains("mw_a");
     }
 

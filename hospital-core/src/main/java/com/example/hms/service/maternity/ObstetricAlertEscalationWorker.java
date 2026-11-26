@@ -253,7 +253,7 @@ public class ObstetricAlertEscalationWorker {
                 row.getId());
         }
         deliver(row, REMINDER_KEY, reminderArgs, message, patientName,
-            reminderCircle(row.getSourceType(), row.getHospitalId(), row.getPatientId()),
+            reminderCircle(row.getSourceType(), row.getHospitalId(), row.getPatientId(), documenter),
             noticeType(row.getSourceType(), true), Set.of());
         if (next >= maxRounds) {
             log.warn("Urgent obstetric alert {} at hospital {} still unacknowledged after {} reminder(s); no more rounds",
@@ -312,12 +312,12 @@ public class ObstetricAlertEscalationWorker {
      * doctors and nurses only when that team holds nobody ({@code News2CareTeam}). Every other source: the obstetric
      * circle widened to the hospital's doctors, midwives and nurses.
      */
-    Set<String> reminderCircle(String sourceType, UUID hospitalId, UUID patientId) {
+    Set<String> reminderCircle(String sourceType, UUID hospitalId, UUID patientId, String recorder) {
         if (!ObstetricAlertEscalationService.SOURCE_NEWS2.equals(sourceType)) {
             return reminderRecipients(hospitalId);
         }
         if (careTeam != null) {
-            return careTeam.reminderCircle(hospitalId, patientId);
+            return careTeam.reminderCircle(hospitalId, patientId, recorder);
         }
         Set<String> recipients = new LinkedHashSet<>(doctors(hospitalId));
         recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));

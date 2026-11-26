@@ -66,29 +66,48 @@ public class News2CareTeam {
         return departmentNurses(hospitalId, departmentId);
     }
 
-    /** Who each reminder reaches: the responsible doctor, the on-call doctors, the ward team; see the class comment. */
-    public Set<String> reminderCircle(UUID hospitalId, UUID patientId) {
+    /**
+     * Who each reminder reaches: the responsible doctor, the on-call doctors, the ward team; see the class comment.
+     *
+     * <p>Rex on #1339 (P1): the recorder cannot acknowledge her own alert and gets no reminder item, so she never
+     * counts. She is taken out BEFORE the hospital-wide stand-in is decided: a recording attending (or the only
+     * on-call doctor, or a nurse who is the ward's only nurse) with nobody else around left a circle of herself alone,
+     * and every reminder reached nobody. The circle holds somebody other than the recorder whenever the hospital has
+     * one.
+     */
+    public Set<String> reminderCircle(UUID hospitalId, UUID patientId, String recorderUsername) {
         Optional<Admission> stay = openStay(patientId, hospitalId);
         Set<String> circle = new LinkedHashSet<>();
         stay.map(News2CareTeam::responsibleUsername).ifPresent(circle::add);
         circle.addAll(onCallDoctors(hospitalId));
         UUID departmentId = stay.map(News2CareTeam::departmentIdOf).orElse(null);
-        Set<String> team = new LinkedHashSet<>();
         if (departmentId != null) {
             for (String role : DOCTOR_ROLES) {
-                team.addAll(staffRepository.findActiveUsernamesByHospitalDepartmentAndRole(hospitalId, departmentId, role));
+                circle.addAll(staffRepository.findActiveUsernamesByHospitalDepartmentAndRole(hospitalId, departmentId, role));
             }
-            team.addAll(departmentNurses(hospitalId, departmentId));
+            circle.addAll(departmentNurses(hospitalId, departmentId));
         }
-        if (circle.isEmpty() && team.isEmpty()) {
-            // Nobody stands for this patient: the hospital's doctors and nurses, so the alert never goes unheard.
-            for (String role : DOCTOR_ROLES) {
-                team.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
+        Set<String> others = without(circle, recorderUsername);
+        if (!others.isEmpty()) {
+            return others;
+        }
+        // Nobody but the recorder stands for this patient: the hospital's doctors and nurses, so it never goes unheard.
+        Set<String> hospital = new LinkedHashSet<>();
+        for (String role : DOCTOR_ROLES) {
+            hospital.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
+        }
+        hospital.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));
+        return without(hospital, recorderUsername);
+    }
+
+    private static Set<String> without(Set<String> usernames, String excluded) {
+        Set<String> kept = new LinkedHashSet<>();
+        for (String username : usernames) {
+            if (username != null && (excluded == null || !username.equalsIgnoreCase(excluded))) {
+                kept.add(username);
             }
-            team.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NURSE_ROLE));
         }
-        circle.addAll(team);
-        return circle;
+        return kept;
     }
 
     private Set<String> departmentNurses(UUID hospitalId, UUID departmentId) {
