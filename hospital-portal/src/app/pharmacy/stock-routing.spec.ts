@@ -188,6 +188,11 @@ describe('StockRoutingComponent', () => {
     component.saving.set(false);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).not.toBeNull();
+    component.selectedPartner.set(stockCheckResponse.data.partnerPharmacies[0] as any);
+    component.showPartnerForm.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PHARMACY_WORKSPACE.SCOPE_LOCKED');
   });
 
   it('P-05: should auto-check stock when navigated with :prescriptionId param', async () => {
