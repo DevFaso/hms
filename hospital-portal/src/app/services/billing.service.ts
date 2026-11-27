@@ -89,6 +89,65 @@ export interface InvoicePayerShare {
   rejectionReason?: string | null;
   decidedAt?: string | null;
   createdAt?: string | null;
+  /** Insurer claims PR 1 (QA D2712): the policy and subscriber of the coverage the share was computed under. */
+  policyNumber?: string | null;
+  subscriberName?: string | null;
+  subscriberRelationship?: string | null;
+}
+
+/** Insurer claims PR 1 (G1): one act a payer pays part of, as a claim lists it (PayerShareLineDTO). */
+export interface PayerShareLine {
+  itemId: string;
+  description?: string | null;
+  /** The hospital's act code from its price list; null for an act not priced from it. */
+  actCode?: string | null;
+  /** The price-list category a plan reads (IMAGING, PROCEDURE, ...), else the line's own category. */
+  category?: string | null;
+  quantity?: number | null;
+  grossAmount: number;
+  payerShare: number;
+  patientShare: number;
+  preAuthorisationNumber?: string | null;
+}
+
+/** Insurer claims PR 1 (G2): one page of « Parts assureurs », with the count and total of every page. */
+export interface PayerSharePage {
+  content: OpenPayerShare[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  totalAmount: number;
+}
+
+/** Insurer claims PR 1 (G2): the filters of « Parts assureurs »; each one left out is not applied. */
+export interface PayerShareFilter {
+  statuses?: PayerShareStatus[];
+  payerId?: string | null;
+  planId?: string | null;
+  /** Service date (the invoice date), inclusive, yyyy-MM-dd. */
+  fromDate?: string | null;
+  toDate?: string | null;
+  /** Zero-based. */
+  page?: number;
+  size?: number;
+}
+
+/** Insurer claims PR 1 (QA D3984): a line's pre-authorisation number as recorded. */
+export interface InvoiceLinePreAuthorisation {
+  itemId: string;
+  invoiceId: string;
+  preAuthorisationNumber: string;
+  recordedAt?: string | null;
+  orderUpdated: boolean;
+}
+
+/** Insurer claims PR 1 (QA D3984): an imaging order's number recorded from the desk (no clinical field). */
+export interface ImagingPreAuthorisationDesk {
+  orderId: string;
+  authorizationNumber: string;
+  authorizationPending: boolean;
+  invoiceLinesUpdated: number;
 }
 
 /** QA D2706 (r70): one payer share on the hospital-wide « Parts assureurs » list (OpenPayerShareDTO). */
@@ -104,6 +163,15 @@ export interface OpenPayerShare {
   amount: number;
   status: PayerShareStatus;
   createdAt?: string | null;
+  /* Insurer claims PR 1 (G1): what a claim needs. */
+  payerId?: string | null;
+  planId?: string | null;
+  payerType?: string | null;
+  policyNumber?: string | null;
+  subscriberName?: string | null;
+  subscriberRelationship?: string | null;
+  coverageVerifiedAt?: string | null;
+  lines?: PayerShareLine[];
 }
 
 export interface InvoiceItemResponse {
@@ -129,6 +197,11 @@ export interface InvoiceItemResponse {
   patientShareAmount?: number;
   /** QA D2437: on a draft, the payer's part is an estimate, fixed when the invoice is issued. */
   payerShareEstimated?: boolean;
+  /** Insurer claims PR 1 (QA D3984): the insurer's pre-authorisation number of the act. */
+  preAuthorisationNumber?: string | null;
+  preAuthorisationRecordedAt?: string | null;
+  /** The kind of order the line bills (IMAGING_ORDER, PROCEDURE_ORDER), when posted at checkout. */
+  sourceOrderType?: string | null;
 }
 
 /** Backend InvoiceLinePriceSource. */
@@ -592,11 +665,42 @@ export class BillingService {
     return this.http.get<InvoicePayerShare[]>(`/billing-invoices/${invoiceId}/payer-shares`);
   }
 
-  /** QA D2706 (r70): the hospital-wide « Parts assureurs » list (OPEN and CLAIMED by default). */
-  listHospitalPayerShares(statuses: PayerShareStatus[] = []): Observable<OpenPayerShare[]> {
-    const query = statuses.map((s) => `status=${encodeURIComponent(s)}`).join('&');
-    return this.http.get<OpenPayerShare[]>(
-      `/billing-invoices/payer-shares${query ? '?' + query : ''}`,
+  /**
+   * QA D2706 (r70), insurer claims PR 1 (G1, G2): one page of the hospital-wide « Parts assureurs » list (OPEN and
+   * CLAIMED by default), filtered by payer, plan and service date, with each share's policy and claimed acts.
+   */
+  searchHospitalPayerShares(filter: PayerShareFilter = {}): Observable<PayerSharePage> {
+    let params = new HttpParams();
+    for (const status of filter.statuses ?? []) params = params.append('status', status);
+    if (filter.payerId) params = params.set('payerId', filter.payerId);
+    if (filter.planId) params = params.set('planId', filter.planId);
+    if (filter.fromDate) params = params.set('fromDate', filter.fromDate);
+    if (filter.toDate) params = params.set('toDate', filter.toDate);
+    if (filter.page != null) params = params.set('page', String(filter.page));
+    if (filter.size != null) params = params.set('size', String(filter.size));
+    return this.http.get<PayerSharePage>('/billing-invoices/payer-shares', { params });
+  }
+
+  /** Insurer claims PR 1 (QA D3984): record or correct an invoice line's pre-authorisation number. */
+  recordLinePreAuthorisation(
+    invoiceId: string,
+    itemId: string,
+    authorizationNumber: string,
+  ): Observable<InvoiceLinePreAuthorisation> {
+    return this.http.put<InvoiceLinePreAuthorisation>(
+      `/billing-invoices/${invoiceId}/items/${itemId}/pre-authorisation`,
+      { authorizationNumber },
+    );
+  }
+
+  /** Insurer claims PR 1 (QA D3984): the desk records an imaging order's pre-authorisation number. */
+  recordImagingPreAuthorisation(
+    orderId: string,
+    authorizationNumber: string,
+  ): Observable<ImagingPreAuthorisationDesk> {
+    return this.http.put<ImagingPreAuthorisationDesk>(
+      `/billing-invoices/imaging-orders/${orderId}/pre-authorisation`,
+      { authorizationNumber },
     );
   }
 

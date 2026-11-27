@@ -1926,6 +1926,67 @@ class ImagingOrderServiceImplTest {
         verify(imagingOrderRepository, never()).save(any());
     }
 
+    // ── Insurer claims PR 1 (QA D3984): the desk and billing record the number, with no clinical field back ──
+
+    @Test
+    void theDeskRecordsTheNumber_itReachesTheInvoiceLinesAndClosesTheTask_claimsPr1() {
+        com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp followUp = followUpMock();
+        com.example.hms.service.billing.InvoiceLinePreAuthorisations lines =
+            mock(com.example.hms.service.billing.InvoiceLinePreAuthorisations.class);
+        imagingOrderService.setInvoiceLinePreAuthorisations(lines);
+        UUID desk = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(desk);
+        when(roleValidator.canRecordPreAuthorisation(desk, hospitalId)).thenReturn(true);
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.STAT, ImagingOrderStatus.COMPLETED);
+        order.setAuthorizationPendingSince(LocalDateTime.now().minusHours(3));
+        when(lines.copyFromOrder(com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER, orderId,
+            hospitalId, "PEC-2026/17", desk)).thenReturn(1);
+
+        com.example.hms.payload.dto.imaging.ImagingPreAuthorisationDeskDTO answer =
+            imagingOrderService.recordAuthorizationAtDesk(orderId, "  PEC-2026/17 ");
+
+        assertThat(answer.getAuthorizationNumber()).isEqualTo("PEC-2026/17");
+        assertThat(answer.isAuthorizationPending()).isFalse();
+        assertThat(answer.getInvoiceLinesUpdated()).isEqualTo(1);
+        assertThat(order.getAuthorizationNumber()).isEqualTo("PEC-2026/17");
+        verify(imagingOrderRepository).save(order);
+        verify(followUp).apply(order, com.example.hms.service.support.ImagingPreAuthorisationPolicy.FollowUp.CLOSED);
+    }
+
+    @Test
+    void theDeskIsRefusedAnotherHospitalsOrderAndARoleThatRecordsNoNumber_claimsPr1() {
+        UUID desk = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(desk);
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.STAT, ImagingOrderStatus.COMPLETED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        assertThatThrownBy(() -> imagingOrderService.recordAuthorizationAtDesk(orderId, "PEC-1"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.canRecordPreAuthorisation(desk, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> imagingOrderService.recordAuthorizationAtDesk(orderId, "PEC-1"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getAuthorizationNumber()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void aNumberRecordedOnTheInvoiceLineReachesItsOrder_unlessCancelledBeforeTheStudy_claimsPr1() {
+        ImagingOrder order = awaitingAuthorisation(ImagingOrderPriority.ROUTINE, ImagingOrderStatus.COMPLETED);
+
+        assertThat(imagingOrderService.recordAuthorizationFromInvoiceLine(orderId, hospitalId, "PEC-9")).isTrue();
+        assertThat(order.getAuthorizationNumber()).isEqualTo("PEC-9");
+        assertThat(imagingOrderService.recordAuthorizationFromInvoiceLine(orderId, UUID.randomUUID(), "PEC-10"))
+            .as("another hospital").isFalse();
+
+        order.setStatus(ImagingOrderStatus.CANCELLED);
+        order.setAuthorizationPendingSince(null);
+        assertThat(imagingOrderService.recordAuthorizationFromInvoiceLine(orderId, hospitalId, "PEC-11")).isFalse();
+        assertThat(order.getAuthorizationNumber()).isEqualTo("PEC-9");
+    }
+
     // ── Provisional rule 2 (2026-11-15): « Commander quand même » records a reason ──
 
     private List<ImagingOrder> stubDuplicate() {

@@ -132,6 +132,7 @@ public class ImagingOrderRequestDTO {
     private Boolean requiresAuthorization;
 
     @Size(max = 120)
+    @com.example.hms.validation.NoCardNumber
     @Schema(description = "Authorization number when already secured")
     private String authorizationNumber;
 

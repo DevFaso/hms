@@ -66,10 +66,18 @@ public interface VisitChargeSource {
      */
     record VisitCharge(String description, BillingText text, ItemCategory category, int quantity,
                        BigDecimal unitPrice, Treatment service, TariffResolver.Tariff tariff,
-                       PriceListCategory coverageCategory) {
+                       PriceListCategory coverageCategory, java.util.UUID sourceOrderId,
+                       String preAuthorisationNumber) {
 
         public VisitCharge {
             quantity = Math.max(quantity, 1);
+        }
+
+        /** A line with no source order (the consultation, the bed days, a line priced from the list). */
+        public VisitCharge(String description, BillingText text, ItemCategory category, int quantity,
+                           BigDecimal unitPrice, Treatment service, TariffResolver.Tariff tariff,
+                           PriceListCategory coverageCategory) {
+            this(description, text, category, quantity, unitPrice, service, tariff, coverageCategory, null, null);
         }
 
         /** A line priced by a service, or not at all (no price-list tariff). */
@@ -83,7 +91,19 @@ public interface VisitChargeSource {
          * leaves it to the source's {@link BillableOrderType#coverageCategory()}.
          */
         public VisitCharge coveredAs(PriceListCategory coverage) {
-            return new VisitCharge(description, text, category, quantity, unitPrice, service, tariff, coverage);
+            return new VisitCharge(description, text, category, quantity, unitPrice, service, tariff, coverage,
+                sourceOrderId, preAuthorisationNumber);
+        }
+
+        /**
+         * Insurer claims plan PR 1 (V383, QA D3984): the order this line bills, and the insurer's pre-authorisation
+         * number already recorded on it (null or blank when none), so the line carries it and a number recorded on
+         * the order later reaches the line.
+         */
+        public VisitCharge forOrder(java.util.UUID orderId, String preAuthorisation) {
+            String number = preAuthorisation == null || preAuthorisation.isBlank() ? null : preAuthorisation.strip();
+            return new VisitCharge(description, text, category, quantity, unitPrice, service, tariff,
+                coverageCategory, orderId, number);
         }
 
         /**

@@ -38,6 +38,7 @@ public class ImagingOrderStatusUpdateRequestDTO {
     private Boolean requiresAuthorization;
 
     @Schema(description = "Authorization number if available")
+    @com.example.hms.validation.NoCardNumber
     private String authorizationNumber;
 
     @Schema(description = "Cancellation reason when status is CANCELLED")

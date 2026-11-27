@@ -43,9 +43,12 @@ public class ProcedureOrderChargeSource implements VisitChargeSource {
                 String code = order.getProcedureCode();
                 String key = code != null && !code.isBlank() ? code : procedure;
                 Optional<TariffResolver.Tariff> tariff = visit.tariff(PriceListLinkType.PROCEDURE_CODE, key);
+                // Insurer claims plan PR 1 (V383): the line names its order, so a pre-authorisation recorded on
+                // the line is kept with the act.
                 lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
                     .orElseGet(() -> VisitCharge.of(procedure, ItemCategory.SERVICE, 1,
-                        visit.prices().sameName(procedure))));
+                        visit.prices().sameName(procedure)))
+                    .forOrder(order.getId(), null));
             }
         }
         return lines;

@@ -21,6 +21,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { actionRoles } from '../../core/action-permissions';
 import { AllergyReviewDialogComponent } from '../../shared/allergy-acknowledgement/allergy-review-dialog.component';
 import { refusalReason } from '../../shared/refusal-reason';
+import { ImagingPreAuthEntryComponent } from '../../billing/line-pre-authorisation/imaging-pre-auth-entry.component';
 
 /** Policy 4: the notice of an allergy conflict awaiting the prescriber's review (its reference is the order). */
 export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
@@ -31,12 +32,24 @@ export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
  */
 export const NOTE_TO_SIGN_REFERENCE = 'ENCOUNTER_NOTE_SIGNATURE';
 
+/**
+ * Insurer claims PR 1 (QA D3984): billing's follow-up of an urgent study done without its pre-authorisation number
+ * (ImagingPreAuthorisationFollowUp.REFERENCE_TYPE; its reference is the imaging order). Answered in place.
+ */
+export const IMAGING_PREAUTH_REFERENCE = 'IMAGING_PREAUTH';
+
 const SERVER_TIME = new ServerTimePipe();
 
 @Component({
   selector: 'app-in-basket-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, RovingFocusDirective, AllergyReviewDialogComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    RovingFocusDirective,
+    AllergyReviewDialogComponent,
+    ImagingPreAuthEntryComponent,
+  ],
   templateUrl: './in-basket-panel.html',
   styleUrl: './in-basket-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,6 +105,30 @@ export class InBasketPanelComponent {
       !!item.referenceId &&
       this.canReviewAllergy()
     );
+  }
+
+  /** The roles that record a pre-authorisation number (RoleValidator#canRecordPreAuthorisation). */
+  private readonly canRecordPreAuth = computed(() =>
+    this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ACCOUNTANT',
+      'ROLE_BILLING_SPECIALIST',
+      'ROLE_CLAIMS_REVIEWER',
+      'ROLE_RECEPTIONIST',
+    ]),
+  );
+
+  isImagingPreAuth(item: InBasketItem): boolean {
+    return (
+      item.referenceType === IMAGING_PREAUTH_REFERENCE &&
+      !!item.referenceId &&
+      this.canRecordPreAuth()
+    );
+  }
+
+  /** The server closed the follow-up task with the number: the list is read again. */
+  onPreAuthRecorded(): void {
+    this.loadData();
   }
 
   isNoteToSign(item: InBasketItem): boolean {

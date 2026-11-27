@@ -546,6 +546,16 @@ public class RoleValidator {
             CLAIMS_REVIEWER_ROLE);
     }
 
+    /**
+     * Insurer claims plan PR 1 (QA D3984, plan section 4.4): who records or corrects the insurer's pre-authorisation
+     * number of an act at {@code hospitalId} - on its invoice line or, without any clinical field, on its imaging
+     * order: the deciders of a payer share and reception, which obtains the number from the patient's insurer.
+     */
+    public boolean canRecordPreAuthorisation(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            CLAIMS_REVIEWER_ROLE, RECEPTIONIST_ROLE);
+    }
+
     /** Billing-money plan PR 6: who reads a hospital's payer catalogue there (the price list's readers). */
     public boolean canReadPayers(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,

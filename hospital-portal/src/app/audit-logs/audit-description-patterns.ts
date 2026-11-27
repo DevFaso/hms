@@ -1663,6 +1663,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYER_SHARE_EVENT' },
   },
   {
+    // Insurer claims PR 1 (QA D3984): a pre-authorisation number recorded on a line, or copied from its order.
+    key: 'AUDIT.DESC.PRE_AUTHORISATION_ON_LINE',
+    re: /^Pre-authorisation recorded on line (\S+) of invoice (\S+)$/,
+    params: ['line', 'invoice'],
+  },
+  {
+    key: 'AUDIT.DESC.PRE_AUTHORISATION_COPIED',
+    re: /^Pre-authorisation copied from order (\S+) to (\d+) invoice line\(s\)$/,
+    params: ['order', 'count'],
+  },
+  {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
     key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
     re: /^Price list item (\S+) created with price version (\S+)$/,

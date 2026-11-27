@@ -111,6 +111,7 @@ class InvoiceCoveragePostgresIT {
     @Autowired private BillingInvoiceRepository invoices;
     @Autowired private InvoiceItemRepository items;
     @Autowired private InvoicePayerShareRepository shares;
+    @Autowired private com.example.hms.repository.InvoicePayerShareLineRepository shareLines;
     @Autowired private InvoiceAdjustmentRepository adjustments;
     @Autowired private PatientInsuranceRepository insurances;
     @Autowired private PayerRepository payers;
@@ -164,6 +165,7 @@ class InvoiceCoveragePostgresIT {
             Clock.fixed(Instant.parse("2026-11-17T10:00:00Z"), ZoneOffset.UTC));
         BillingInvoiceMapper mapper = mock(BillingInvoiceMapper.class);
         when(mapper.toBillingInvoiceResponseDTO(any())).thenReturn(new BillingInvoiceResponseDTO());
+        coverage.setShareLineRepository(shareLines);
         billing = new BillingInvoiceServiceImpl(invoices, mock(PatientRepository.class), mock(HospitalRepository.class),
             mock(EncounterRepository.class), items, mock(PdfInvoiceService.class), mapper, roles, payments, scope,
             mock(PatientHospitalRegistrationRepository.class), mock(InvoiceNumberAllocator.class), transactions,
@@ -386,5 +388,138 @@ class InvoiceCoveragePostgresIT {
             cashier, now);
         refusedBy("UPDATE billing.billing_invoices SET payer_share_total = 10.5 WHERE id = ?", invoice);
         refusedBy("UPDATE billing.invoice_items SET payer_share_amount = -1 WHERE billing_invoice_id = ?", invoice);
+    }
+    @Test
+    @DisplayName("claims PR 1 (G1, G2): « Parts assureurs » filters by payer, period and status, pages, and names the policy")
+    void theShareListFiltersPagesAndNamesThePolicy() {
+        seedPatient();
+        UUID visit = draftBc2(UUID.randomUUID());
+        assertThat(issue(visit)).isEqualByComparingTo("5600");
+        // Another hospital's invoice, share and payer: never on hospital A's list, whatever the filters.
+        UUID hospitalB = UUID.randomUUID();
+        UUID strayInvoice = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO billing.billing_invoices (id, patient_id, hospital_id, invoice_number, invoice_date, due_date,
+                total_amount, amount_paid, status, check_in_copay, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 900, 0, 'SENT', false, now(), now())
+            """, strayInvoice, patient, hospitalB, "XB-" + strayInvoice.toString().substring(0, 8), SERVICE_DAY,
+            SERVICE_DAY.plusDays(30));
+        jdbc.update("""
+            INSERT INTO billing.invoice_payer_shares (id, invoice_id, hospital_id, patient_insurance_id, payer_plan_id,
+                amount, coverage_year, status, created_at, updated_at)
+            VALUES (gen_random_uuid(), ?, ?, ?, ?, 900, 2026, 'OPEN', now(), now())
+            """, strayInvoice, hospitalB, insurance, plan);
+        UUID payer = jdbc.queryForObject("SELECT payer_id FROM billing.payer_plans WHERE id = ?", UUID.class, plan);
+
+        com.example.hms.payload.dto.billing.PayerSharePageDTO all = inTx(() -> coverage.searchAtHospital(null));
+        assertThat(all.getTotalElements()).isEqualTo(1);
+        assertThat(all.getTotalAmount()).isEqualByComparingTo("5600");
+        assertThat(all.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getPatientName()).contains("Awa");
+            assertThat(row.getPolicyNumber()).isEqualTo("BC2-001");
+            assertThat(row.getPayerType()).isEqualTo("AMU");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getCategory)
+                .containsExactly("CONSULTATION", "IMAGING");
+        });
+
+        // By payer and November: found; by another payer, by October or as PAID: not.
+        assertThat(inTx(() -> coverage.searchAtHospital(new InvoiceCoverageService.ShareFilter(null, payer, plan,
+            patient, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30), 0, 10))).getTotalElements()).isEqualTo(1);
+        assertThat(inTx(() -> coverage.searchAtHospital(new InvoiceCoverageService.ShareFilter(null,
+            UUID.randomUUID(), null, null, null, null, null, null))).getTotalElements()).isZero();
+        assertThat(inTx(() -> coverage.searchAtHospital(new InvoiceCoverageService.ShareFilter(null, null, null, null,
+            LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), null, null))).getTotalElements()).isZero();
+        assertThat(inTx(() -> coverage.searchAtHospital(new InvoiceCoverageService.ShareFilter(
+            List.of(com.example.hms.enums.PayerShareStatus.PAID), null, null, null, null, null, null, null)))
+            .getTotalElements()).isZero();
+        // A page past the end is empty, with the same totals.
+        com.example.hms.payload.dto.billing.PayerSharePageDTO second = inTx(() -> coverage.searchAtHospital(
+            new InvoiceCoverageService.ShareFilter(null, null, null, null, null, null, 1, 1)));
+        assertThat(second.getContent()).isEmpty();
+        assertThat(second.getTotalElements()).isEqualTo(1);
+        assertThat(second.getTotalPages()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("claims PR 1 (QA D3984): an order's number reaches its live lines at its hospital, and nothing else")
+    void anOrdersNumberReachesItsLinesOnly() {
+        UUID visit = draftBc2(UUID.randomUUID());
+        UUID order = UUID.randomUUID();
+        // The X-ray line was posted for the imaging order; the V383 CHECK wants both source columns together.
+        jdbc.update("""
+            UPDATE billing.invoice_items SET source_order_type = 'IMAGING_ORDER', source_order_id = ?
+             WHERE billing_invoice_id = ? AND item_description = 'Radio thorax'
+            """, order, visit);
+        com.example.hms.service.billing.InvoiceLinePreAuthorisations copier =
+            new com.example.hms.service.billing.InvoiceLinePreAuthorisations(items, null,
+                Clock.fixed(Instant.parse("2026-11-18T08:00:00Z"), ZoneOffset.UTC));
+
+        assertThat(inTx(() -> copier.copyFromOrder(com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER,
+            order, UUID.randomUUID(), "BON-117", cashier))).as("another hospital").isZero();
+        assertThat(inTx(() -> copier.copyFromOrder(com.example.hms.service.billing.BillableOrderType.PROCEDURE_ORDER,
+            order, hospitalA, "BON-117", cashier))).as("another kind of order").isZero();
+        assertThat(inTx(() -> copier.copyFromOrder(com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER,
+            order, hospitalA, "BON-117", null))).isEqualTo(1);
+
+        assertThat(jdbc.queryForList("""
+            SELECT pre_authorisation_number FROM billing.invoice_items
+             WHERE billing_invoice_id = ? AND pre_authorisation_number IS NOT NULL
+            """, String.class, visit)).containsExactly("BON-117");
+        // The amounts are not touched.
+        assertThat(jdbc.queryForObject("SELECT SUM(total_price) FROM billing.invoice_items WHERE billing_invoice_id = ?",
+            BigDecimal.class, visit)).isEqualByComparingTo("8500");
+        // The V383 CHECKs: one source column without the other, a number without its stamp, or a blank number.
+        refusedBy("UPDATE billing.invoice_items SET source_order_id = NULL WHERE source_order_id = ?", order);
+        refusedBy("UPDATE billing.invoice_items SET source_order_type = 'NOTHING' WHERE source_order_id = ?", order);
+        refusedBy("UPDATE billing.invoice_items SET pre_authorisation_recorded_at = NULL WHERE source_order_id = ?",
+            order);
+        refusedBy("UPDATE billing.invoice_items SET pre_authorisation_number = '  ' WHERE source_order_id = ?", order);
+        // A cancelled invoice's line no longer takes a number.
+        jdbc.update("UPDATE billing.billing_invoices SET status = 'CANCELLED' WHERE id = ?", visit);
+        assertThat(inTx(() -> copier.copyFromOrder(com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER,
+            order, hospitalA, "BON-118", cashier))).isZero();
+    }
+    /** The list names the patient: BC2 is a real row here (its foreign keys are not this test's subject). */
+    private void seedPatient() {
+        tx.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = replica");
+            jdbc.update("""
+                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
+                    is_active, chart_restricted, created_at, updated_at)
+                VALUES (?, ?, 'Awa', 'Ouedraogo', DATE '1990-06-15', '+226 70 28 43 17', true, false, now(), now())
+                """, patient, UUID.randomUUID());
+        });
+    }
+
+    @Test
+    @DisplayName("review of #1353: a share the payer rejected still lists the acts it claimed, with their amounts")
+    void aRejectedShareKeepsTheActsItClaimed() {
+        seedPatient();
+        UUID visit = draftBc2(UUID.randomUUID());
+        assertThat(issue(visit)).isEqualByComparingTo("5600");
+        UUID share = jdbc.queryForObject("SELECT id FROM billing.invoice_payer_shares WHERE invoice_id = ?",
+            UUID.class, visit);
+        assertThat(jdbc.queryForList("""
+            SELECT amount FROM billing.invoice_payer_share_lines WHERE share_id = ? ORDER BY amount
+            """, BigDecimal.class, share)).usingElementComparator(BigDecimal::compareTo)
+            .containsExactly(new BigDecimal("1600"), new BigDecimal("4000"));
+
+        inTx(() -> coverage.reject(visit, share, "Hors délai"));
+        // The live split is cleared with the share...
+        assertThat(column("payer_share_total", visit)).isEqualByComparingTo("0");
+
+        // ...but the closed list still shows what was claimed.
+        com.example.hms.payload.dto.billing.PayerSharePageDTO rejected = inTx(() -> coverage.searchAtHospital(
+            new InvoiceCoverageService.ShareFilter(List.of(com.example.hms.enums.PayerShareStatus.REJECTED), null,
+                null, null, null, null, null, null)));
+        assertThat(rejected.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getAmount()).isEqualByComparingTo("5600");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getCategory)
+                .containsExactly("CONSULTATION", "IMAGING");
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getPayerShare)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(new BigDecimal("1600"), new BigDecimal("4000"));
+        });
+        refusedBy("UPDATE billing.invoice_payer_share_lines SET amount = 10.5 WHERE share_id = ?", share);
     }
 }

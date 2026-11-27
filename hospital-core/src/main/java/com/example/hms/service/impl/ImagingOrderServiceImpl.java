@@ -575,13 +575,90 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.FieldBusinessException("authorizationNumber",
                 "imaging.order.authorizationNumberBlank");
         }
+        // Insurer claims PR 1 (D-15): the number reaches invoice lines and the paper; never a payment-card number.
+        com.example.hms.utility.CardNumbers.requireNone(number, "authorizationNumber");
+        ImagingOrder saved = applyAuthorization(order, number);
+        // Insurer claims plan PR 1 (QA D3984): the number reaches the invoice lines the order was billed on.
+        copyToInvoiceLines(saved, number, com.example.hms.security.CallerIdentity.currentUserId());
+        return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /** The order takes the number: pre-authorisation required and numbered, its pending flag and task reconciled. */
+    private ImagingOrder applyAuthorization(ImagingOrder order, String number) {
         order.setRequiresAuthorization(true);
         order.setAuthorizationNumber(number);
         ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
-
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
-        return imagingOrderMapper.toResponseDTO(saved);
+        return saved;
+    }
+
+    /** Insurer claims plan PR 1: copies the order's number onto its invoice lines; null in a hand-built unit test. */
+    private com.example.hms.service.billing.InvoiceLinePreAuthorisations invoiceLinePreAuthorisations;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setInvoiceLinePreAuthorisations(
+            com.example.hms.service.billing.InvoiceLinePreAuthorisations invoiceLinePreAuthorisations) {
+        this.invoiceLinePreAuthorisations = invoiceLinePreAuthorisations;
+    }
+
+    private int copyToInvoiceLines(ImagingOrder order, String number, UUID actorId) {
+        if (invoiceLinePreAuthorisations == null || order.getHospital() == null) {
+            return 0;
+        }
+        return invoiceLinePreAuthorisations.copyFromOrder(
+            com.example.hms.service.billing.BillableOrderType.IMAGING_ORDER, order.getId(),
+            order.getHospital().getId(), number, actorId);
+    }
+
+    /**
+     * Insurer claims plan PR 1 (QA D3984, US-1): the desk or billing records the number the insurer gave, without
+     * any clinical field in the answer (owner rule 2026-11-06: reception sees no clinical notes). Who: the
+     * pre-authorisation recorders ({@code RoleValidator#canRecordPreAuthorisation}) at the order's hospital, which
+     * must be the acting one; never a support session. A cancelled order is closed (QA D1066) unless its study was
+     * done before it was cancelled, as on the clinicians' path.
+     */
+    @Override
+    public com.example.hms.payload.dto.imaging.ImagingPreAuthorisationDeskDTO recordAuthorizationAtDesk(UUID orderId,
+                                                                                                      String rawNumber) {
+        com.example.hms.security.context.ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService,
+            "pre-authorisation number");
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID userId = roleValidator.getCurrentUserId();
+        ImagingOrder order = getOrderEntity(orderId);
+        if (hospitalId == null || order.getHospital() == null || !hospitalId.equals(order.getHospital().getId())) {
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
+        }
+        if (userId == null || !roleValidator.canRecordPreAuthorisation(userId, hospitalId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolve("billing.preAuthorisation.recordersOnly"));
+        }
+        if (order.getAuthorizationPendingSince() == null) {
+            com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+                IMAGING_ORDER_CANCELLED_LOCKED);
+        }
+        String number = com.example.hms.service.billing.InvoiceLinePreAuthorisations.normalise(rawNumber,
+            com.example.hms.service.billing.InvoiceLinePreAuthorisations.FIELD);
+        ImagingOrder saved = applyAuthorization(order, number);
+        int lines = copyToInvoiceLines(saved, number, userId);
+        return new com.example.hms.payload.dto.imaging.ImagingPreAuthorisationDeskDTO(saved.getId(),
+            saved.getAuthorizationNumber(), ImagingPreAuthorisationPolicy.isPending(saved), lines);
+    }
+
+    @Override
+    public boolean recordAuthorizationFromInvoiceLine(UUID orderId, UUID hospitalId, String number) {
+        if (orderId == null || hospitalId == null || number == null || number.isBlank()) {
+            return false;
+        }
+        ImagingOrder order = imagingOrderRepository.findById(orderId)
+            .filter(found -> found.getHospital() != null && hospitalId.equals(found.getHospital().getId()))
+            .orElse(null);
+        if (order == null || (order.getStatus() == ImagingOrderStatus.CANCELLED
+                && order.getAuthorizationPendingSince() == null)) {
+            return false;
+        }
+        applyAuthorization(order, number);
+        return true;
     }
 
     /** The actor's staff row at the order's hospital, or null (a clinician with none there). */
