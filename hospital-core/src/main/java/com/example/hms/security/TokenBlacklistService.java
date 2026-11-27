@@ -76,4 +76,21 @@ public interface TokenBlacklistService {
     default boolean isSessionRevoked(String sessionId) {
         return sessionId != null && !sessionId.isBlank() && isBlacklisted(SESSION_KEY_PREFIX + sessionId);
     }
+
+    /**
+     * Marks the sign-in session {@code sessionId} as locked (the idle lock
+     * screen is up) since {@code lockedAtMs}, until {@link #unlockSession} or
+     * {@code expirationMs}. While it is locked the filters admit only the
+     * requests of {@link SessionLockGate}. A blank id is ignored.
+     */
+    void lockSession(String sessionId, long lockedAtMs, long expirationMs);
+
+    /** Whether the session's screen is locked ({@link #lockSession}); {@code false} for a blank id. */
+    boolean isSessionLocked(String sessionId);
+
+    /** When the session was locked, in epoch milliseconds, or {@code null} when it is not locked. */
+    Long sessionLockedAt(String sessionId);
+
+    /** Lifts the lock of {@code sessionId}: its holder authenticated again. */
+    void unlockSession(String sessionId);
 }

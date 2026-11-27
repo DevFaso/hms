@@ -62,7 +62,12 @@ describe('Dashboard — the organisation admin reads no patient data (platform a
         { provide: AuthService, useValue: auth },
         {
           provide: IdleService,
-          useValue: { start: () => undefined, stop: () => undefined, locked: () => false },
+          useValue: {
+            start: () => undefined,
+            stop: () => undefined,
+            locked: () => false,
+            contentHidden: () => false,
+          },
         },
       ],
     });

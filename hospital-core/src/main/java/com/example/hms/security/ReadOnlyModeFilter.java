@@ -106,6 +106,8 @@ public class ReadOnlyModeFilter extends OncePerRequestFilter {
         "/api/auth/verify-email",
         "/api/auth/resend-verification",
         "/api/auth/verify-password",
+        "/api/auth/session/lock",
+        "/api/auth/session/unlock",
         "/api/auth/ws-ticket"
     );
 

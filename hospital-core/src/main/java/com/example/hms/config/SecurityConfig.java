@@ -615,6 +615,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_AUTH_LOGOUT).permitAll()
                 .requestMatchers(API_AUTH_LOGOUT).authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
+                .requestMatchers("/auth/session/lock", "/auth/session/unlock").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
                 .requestMatchers("/auth/session/bootstrap").authenticated()
 

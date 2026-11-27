@@ -59,6 +59,48 @@ class IntegrationHealthRecorderTest {
     }
 
     @Test
+    @DisplayName("D4308: the platform administrators are told on the third failure of a window, once")
+    void repeatedFailureIsReportedOncePerWindow() {
+        com.example.hms.service.platform.PlatformInbox inbox =
+            org.mockito.Mockito.mock(com.example.hms.service.platform.PlatformInbox.class);
+        recorder.setPlatformInbox(inbox);
+        IntegrationHealthSnapshot snapshot = IntegrationHealthSnapshot.builder()
+            .integrationId(INTEGRATION).organization(organization)
+            .lastStatus(IntegrationHealthStatus.NO_HISTORY).successCount24h(0).failureCount24h(0).build();
+        when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.of(snapshot));
+
+        recorder.recordFailure(INTEGRATION, orgId, "HTTP 503", null);
+        recorder.recordFailure(INTEGRATION, orgId, "HTTP 503", null);
+        org.mockito.Mockito.verifyNoInteractions(inbox);
+
+        recorder.recordFailure(INTEGRATION, orgId, "HTTP 503", null);
+        recorder.recordFailure(INTEGRATION, orgId, "HTTP 503", null);
+        recorder.recordFailure(INTEGRATION, orgId, "HTTP 503", null);
+
+        verify(inbox, times(1)).integrationFailingRepeatedly(
+            org.mockito.ArgumentMatchers.eq(INTEGRATION), org.mockito.ArgumentMatchers.eq(orgId),
+            any(), org.mockito.ArgumentMatchers.eq(IntegrationHealthRecorder.REPEATED_FAILURE_THRESHOLD));
+    }
+
+    @Test
+    @DisplayName("D4308: a connector with no partner behind it is not reported as failing")
+    void aConnectorWithNothingBehindItIsNotReported() {
+        com.example.hms.service.platform.PlatformInbox inbox =
+            org.mockito.Mockito.mock(com.example.hms.service.platform.PlatformInbox.class);
+        recorder.setPlatformInbox(inbox);
+        IntegrationHealthSnapshot snapshot = IntegrationHealthSnapshot.builder()
+            .integrationId(INTEGRATION).organization(organization)
+            .lastStatus(IntegrationHealthStatus.NO_HISTORY).successCount24h(0).failureCount24h(0).build();
+        when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.of(snapshot));
+
+        for (int i = 0; i < 4; i++) {
+            recorder.recordFailure(INTEGRATION, orgId, IntegrationDiagnosticText.NOT_CONNECTED, null);
+        }
+
+        org.mockito.Mockito.verifyNoInteractions(inbox);
+    }
+
+    @Test
     @DisplayName("recordSuccess on a fresh snapshot upserts as HEALTHY with success_count=1")
     void freshSuccessCreatesHealthy() {
         when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.empty());

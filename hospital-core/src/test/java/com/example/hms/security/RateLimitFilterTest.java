@@ -116,4 +116,44 @@ class RateLimitFilterTest {
             assertThat(filter.shouldNotFilter(request)).as(path).isFalse();
         }
     }
+
+    private static MockHttpServletRequest loginFrom(String peer, String forwardedFor) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
+        request.setServletPath("/api/auth/login");
+        request.setRequestURI("/api/auth/login");
+        request.setRemoteAddr(peer);
+        if (forwardedFor != null) {
+            request.addHeader("X-Forwarded-For", forwardedFor);
+        }
+        return request;
+    }
+
+    @Test
+    void behindATrustedProxy_theCallersOwnForwardedEntryDoesNotBuyANewBucket() throws ServletException, IOException {
+        RateLimitFilter behindProxy = new RateLimitFilter(5, true);
+        // Each attempt claims a different address at the left; our proxy appended the real one.
+        for (int i = 0; i < 5; i++) {
+            behindProxy.doFilter(loginFrom("10.0.0.5", "203.0.113." + i + ", 41.203.10.7"),
+                new MockHttpServletResponse(), chain);
+        }
+        MockHttpServletResponse sixth = new MockHttpServletResponse();
+        behindProxy.doFilter(loginFrom("10.0.0.5", "198.51.100.1, 41.203.10.7"), sixth, chain);
+
+        assertThat(sixth.getStatus()).isEqualTo(429);
+        // Another real client behind the same proxy has its own bucket.
+        MockHttpServletResponse other = new MockHttpServletResponse();
+        behindProxy.doFilter(loginFrom("10.0.0.5", "41.203.10.8"), other, chain);
+        assertThat(other.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void withoutATrustedProxy_theForwardedHeaderIsIgnored() throws ServletException, IOException {
+        for (int i = 0; i < 5; i++) {
+            filter.doFilter(loginFrom("10.0.0.9", "41.203.10." + i), new MockHttpServletResponse(), chain);
+        }
+        MockHttpServletResponse sixth = new MockHttpServletResponse();
+        filter.doFilter(loginFrom("10.0.0.9", "41.203.10.99"), sixth, chain);
+
+        assertThat(sixth.getStatus()).isEqualTo(429);
+    }
 }

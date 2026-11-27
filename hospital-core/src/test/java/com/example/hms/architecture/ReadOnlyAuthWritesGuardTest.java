@@ -82,6 +82,8 @@ class ReadOnlyAuthWritesGuardTest {
         Map.entry("POST /auth/username/reminder", Kind.OPEN),
         // The lock screen and the notification socket: an open session stays readable. Neither writes data.
         Map.entry("POST /auth/verify-password", Kind.OPEN),
+        Map.entry("POST /auth/session/lock", Kind.OPEN),
+        Map.entry("POST /auth/session/unlock", Kind.OPEN),
         Map.entry("POST /auth/ws-ticket", Kind.OPEN));
 
     private record AuthWrite(String method, String pattern) {

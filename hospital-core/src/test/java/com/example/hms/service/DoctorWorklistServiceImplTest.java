@@ -1259,7 +1259,11 @@ class DoctorWorklistServiceImplTest {
         when(vital.getSpo2Percent()).thenReturn(98);
         // QA D628: the febrile reading must reach the worklist.
         when(vital.getTemperatureCelsius()).thenReturn(38.9);
-        when(patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patientId))
+        // The summary reads the vitals taken at the hospital of the visit.
+        com.example.hms.model.Hospital visitHospital = new com.example.hms.model.Hospital();
+        visitHospital.setId(UUID.randomUUID());
+        when(enc.getHospital()).thenReturn(visitHospital);
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, visitHospital.getId()))
                 .thenReturn(Optional.of(vital));
 
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
@@ -1298,7 +1302,10 @@ class DoctorWorklistServiceImplTest {
         lenient().when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenReturn(Collections.emptyList());
 
-        when(patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(any()))
+        com.example.hms.model.Hospital errorVisitHospital = new com.example.hms.model.Hospital();
+        errorVisitHospital.setId(UUID.randomUUID());
+        when(enc.getHospital()).thenReturn(errorVisitHospital);
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
                 .thenThrow(new RuntimeException("DB error"));
 
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);

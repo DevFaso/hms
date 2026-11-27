@@ -27,6 +27,8 @@ export class ResetPasswordComponent implements OnInit {
   newPassword = '';
   confirmPassword = '';
   error = '';
+  /** The refusal is shown under its field: the banner does not repeat it. */
+  errorOnField = false;
   success = '';
   loading = false;
   showNewPassword = false;
@@ -68,6 +70,7 @@ export class ResetPasswordComponent implements OnInit {
   submit(): void {
     if (!this.isBrowser || this.loading) return;
     this.error = '';
+    this.errorOnField = false;
     refuseFields(this.host.nativeElement, [], this.passwordFields);
 
     if (!this.newPassword || !this.confirmPassword) {
@@ -76,16 +79,19 @@ export class ResetPasswordComponent implements OnInit {
         id === 'newPassword' ? !this.newPassword : !this.confirmPassword,
       );
       refuseFields(this.host.nativeElement, missing, this.passwordFields, this.error);
+      this.errorOnField = true;
       return;
     }
     if (this.newPassword.length < 8) {
       this.error = this.translate.instant('RESET.ERR_MIN_LENGTH');
       refuseFields(this.host.nativeElement, ['newPassword'], this.passwordFields, this.error);
+      this.errorOnField = true;
       return;
     }
     if (this.newPassword !== this.confirmPassword) {
       this.error = this.translate.instant('RESET.ERR_MISMATCH');
       refuseFields(this.host.nativeElement, ['confirmPassword'], this.passwordFields, this.error);
+      this.errorOnField = true;
       return;
     }
 
@@ -109,6 +115,14 @@ export class ResetPasswordComponent implements OnInit {
             err?.status === 400
               ? err?.error?.message || this.translate.instant('RESET.ERR_LINK_INVALID')
               : this.translate.instant('RESET.ERR_UNAVAILABLE');
+          // A refusal of the password itself (too short, too common, built on
+          // the account's name) is shown under the field it is about.
+          const onPassword = err?.status === 400 ? err?.error?.fieldErrors?.newPassword : null;
+          if (typeof onPassword === 'string' && onPassword) {
+            this.error = onPassword;
+            this.errorOnField = true;
+            refuseFields(this.host.nativeElement, ['newPassword'], this.passwordFields, onPassword);
+          }
         },
       });
   }

@@ -4,7 +4,7 @@ import { provideRouter } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
-import { ProfileComponent } from './profile';
+import { ProfileComponent, isInternalAddress } from './profile';
 import { NO_BREAK_SPACE } from '../shared/pipes/phone.pipe';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -1090,5 +1090,38 @@ describe('ProfileComponent — editing the profile', () => {
         entityType: 'USER',
       } as AuditEvent),
     ).toBe('Échec de connexion : identifiants incorrects');
+  });
+});
+
+describe("Profile — a person's own activity (r81 D4273)", () => {
+  it('an internal address is not one a person can recognise; a public one is', () => {
+    for (const internal of [
+      'fd12:a9af:1::7',
+      'fe80::1',
+      '::1',
+      '10.0.3.4',
+      '172.16.0.9',
+      '172.31.255.1',
+      '192.168.1.20',
+      '127.0.0.1',
+      '169.254.10.10',
+      '::ffff:10.0.0.1',
+    ]) {
+      expect(isInternalAddress(internal)).withContext(internal).toBeTrue();
+    }
+    for (const outside of ['41.203.10.7', '172.32.0.1', '2001:db8::7', '196.28.245.1']) {
+      expect(isInternalAddress(outside)).withContext(outside).toBeFalse();
+    }
+  });
+
+  it('a sign-in row shows its device and its address; a row from inside the platform shows neither', () => {
+    const read = ProfileComponent.prototype;
+    const signIn = { details: 'device=Chrome, Windows', ipAddress: '41.203.10.7' } as never;
+    const internal = { details: '{"route":"x"}', ipAddress: 'fd12:a9af:1::7' } as never;
+
+    expect(read.activityDevice(signIn)).toBe('Chrome, Windows');
+    expect(read.activityAddress(signIn)).toBe('41.203.10.7');
+    expect(read.activityDevice(internal)).toBe('');
+    expect(read.activityAddress(internal)).toBe('');
   });
 });

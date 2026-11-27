@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.ObgynReferralStatus;
 import com.example.hms.enums.ObgynReferralUrgency;
 import com.example.hms.exception.BusinessException;
@@ -151,7 +152,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-        Page<ObgynReferral> rows = referralRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
+        // A referral written in a visit follows that visit's restriction, in the query.
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+        Page<ObgynReferral> rows = restricted.isEmpty()
+            ? referralRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+            : referralRepository.findByPatientAcrossHospitalsOutsideVisits(
+                patientId, readable, restricted.visitIdsForQuery(), pageable);
         reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital OB/GYN referral read on the treatment relationship");

@@ -10,6 +10,7 @@ import com.example.hms.service.integration.probe.IntegrationConnectivityProbe;
 import com.example.hms.service.integration.probe.Probe;
 import com.example.hms.service.integration.probe.Resyncable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -70,17 +71,24 @@ public class IntegrationHealthActionService {
         try {
             outcome = probe.probe();
             if (outcome == null) {
-                outcome = Probe.failed("Probe returned null result");
+                outcome = Probe.failed(IntegrationDiagnosticText.PROBE_NO_ANSWER);
             }
         } catch (RuntimeException ex) {
             long latency = (System.nanoTime() - start) / 1_000_000;
-            String msg = "Probe threw " + ex.getClass().getSimpleName() + ": " + ex.getMessage();
-            recorder.recordFailure(integrationId, organizationId, msg, latency);
-            return IntegrationProbeResultDTO.builder()
-                .integrationId(integrationId)
-                .ok(false).latencyMs(latency).message(msg).build();
+            // QA D4078: the exception goes to the server log; what is stored and
+            // shown is a diagnostic the reader's language has words for.
+            log.warn("[INTEGRATION-PROBE] {} threw", integrationId, ex);
+            outcome = Probe.failed(latency, IntegrationDiagnosticText.PROBE_ERROR);
         }
+        return recordOutcome(integrationId, organizationId, outcome);
+    }
 
+    /**
+     * Record what a test found and answer it in the caller's language. Also the
+     * entry point for a test that is not a registered probe (QA D4300: the
+     * configuration check of a platform integration).
+     */
+    public IntegrationProbeResultDTO recordOutcome(String integrationId, UUID organizationId, Probe outcome) {
         if (outcome.ok()) {
             recorder.recordSuccess(integrationId, organizationId, outcome.latencyMs());
         } else {
@@ -90,7 +98,7 @@ public class IntegrationHealthActionService {
             .integrationId(integrationId)
             .ok(outcome.ok())
             .latencyMs(outcome.latencyMs())
-            .message(outcome.message())
+            .message(IntegrationDiagnosticText.localize(outcome.message(), LocaleContextHolder.getLocale()))
             .build();
     }
 
@@ -115,9 +123,9 @@ public class IntegrationHealthActionService {
         try {
             resync.resync(organizationId);
         } catch (RuntimeException ex) {
-            log.warn("[INTEGRATION-RESYNC] {} threw: {}", integrationId, ex.getMessage());
+            log.warn("[INTEGRATION-RESYNC] {} threw", integrationId, ex);
             recorder.recordFailure(integrationId, organizationId,
-                "Re-sync failed: " + ex.getMessage(), null);
+                IntegrationDiagnosticText.RESYNC_ERROR, null);
         }
     }
 
@@ -129,6 +137,19 @@ public class IntegrationHealthActionService {
     /** Pre-flight check used by the controller before dispatching @Async. */
     public boolean supportsResync(String integrationId) {
         return resyncablesById.containsKey(integrationId);
+    }
+
+    /** QA D4300: every integration a probe or a re-sync is registered for, in a stable order. */
+    public java.util.SortedSet<String> registeredIntegrationIds() {
+        java.util.SortedSet<String> ids = new java.util.TreeSet<>(probesById.keySet());
+        ids.addAll(resyncablesById.keySet());
+        return ids;
+    }
+
+    /** True while the registered connector is a placeholder with no partner behind it. */
+    public boolean isStub(String integrationId) {
+        IntegrationConnectivityProbe probe = probesById.get(integrationId);
+        return probe != null && probe.stub();
     }
 
     public boolean isKnownIntegration(String integrationId) {

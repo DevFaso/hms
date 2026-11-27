@@ -5,10 +5,12 @@ import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
+import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
@@ -20,6 +22,7 @@ import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -36,6 +39,8 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final BreakGlassGate breakGlassGate;
     private final PatientRepository patientRepository;
+    private final EncounterRepository encounterRepository;
+    private final SensitivityClassifier sensitivityClassifier;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
@@ -43,7 +48,9 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                                   TreatmentRelationshipResolver resolver,
                                   PatientHospitalRegistrationRepository registrationRepository,
                                   BreakGlassGate breakGlassGate,
-                                  PatientRepository patientRepository) {
+                                  PatientRepository patientRepository,
+                                  EncounterRepository encounterRepository,
+                                  SensitivityClassifier sensitivityClassifier) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
@@ -51,6 +58,8 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         this.registrationRepository = registrationRepository;
         this.breakGlassGate = breakGlassGate;
         this.patientRepository = patientRepository;
+        this.encounterRepository = encounterRepository;
+        this.sensitivityClassifier = sensitivityClassifier;
     }
 
     @Override
@@ -122,6 +131,36 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             return false;
         }
         return !cachedDecision(actorUserId, patientId, actingHospitalId).permitted();
+    }
+
+    /** The cache holder of {@link #withheldVisits}, so an empty answer is cached as firmly as a full one. */
+    private record WithheldVisits(List<Encounter> visits) {
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Encounter> withheldVisits(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
+        if (patientId == null || actingHospitalId == null) {
+            return List.of();
+        }
+        String key = CACHE_PREFIX + "withheldVisits:" + actorUserId + ":" + patientId + ":" + actingHospitalId;
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs != null
+                && attrs.getAttribute(key, RequestAttributes.SCOPE_REQUEST) instanceof WithheldVisits(List<Encounter> cached)) {
+            return cached;
+        }
+        boolean unlocked = breakGlassGate.isUnlocked(actorUserId, patientId, actingHospitalId);
+        // The rule itself stays where it is written: the classifier names the
+        // category, CrossHospitalRows says whether a row of it may surface.
+        List<Encounter> withheld = unlocked ? List.of()
+            : encounterRepository.findRecordedElsewhere(patientId, actingHospitalId).stream()
+                .filter(visit -> !CrossHospitalRows.maySurface(visit.getHospital(), actingHospitalId,
+                    sensitivityClassifier.effectiveCategory(visit), false))
+                .toList();
+        if (attrs != null) {
+            attrs.setAttribute(key, new WithheldVisits(withheld), RequestAttributes.SCOPE_REQUEST);
+        }
+        return withheld;
     }
 
     /**

@@ -500,7 +500,7 @@
       "INTEGRATIONS_TITLE": "Integration health",
       "INTEGRATIONS_DESC": "Per-tenant connector inventory and call health",
       "AUDIT_SEARCH_TITLE": "Audit search",
-      "AUDIT_SEARCH_DESC": "Cross-tenant audit search with impersonator filter",
+      "AUDIT_SEARCH_DESC": "Cross-tenant audit search with a support-session filter",
       "EMERGENCY_TITLE": "Emergency controls",
       "EMERGENCY_DESC": "Force-logout-all, kill-feature, force MFA re-enrol, broadcast",
       "SUBSCRIPTIONS_TITLE": "Subscriptions",
@@ -874,7 +874,7 @@
   "INTEGRATION_MESSAGES": {
     "TITLE": "Integration message log",
     "SUBTITLE": "Review partner messages and failures. This page records an event in the log; it does not resend the message to the partner.",
-    "DLQ_BADGE": "{{ count }} failed messages",
+    "DLQ_BADGE": "{{ count }} failed messages to handle",
     "SHOW_DLQ_ONLY": "Show failed messages",
     "SEARCH": "Search",
     "SEARCHING": "Searching…",
@@ -902,7 +902,8 @@
       "SENT": "Sent",
       "RECEIVED": "Received",
       "FAILED": "Failed",
-      "REPLAYED": "Event recorded"
+      "REPLAYED": "Event recorded",
+      "FAILED_RESOLVED": "Failed — handled"
     },
     "COL": {
       "RECEIVED_AT": "Received",
@@ -915,6 +916,34 @@
     },
     "ERROR": {
       "REPLAY_FAILED": "Could not record the event. Try again."
+    },
+    "DLQ_BADGE_ONE": "{{ count }} failed message to handle",
+    "REPLAY_DONE": "Replay recorded: the message is no longer counted as failed.",
+    "REPLAY_CONFIRM": {
+      "TITLE": "Record a replay in the log?",
+      "MESSAGE": "A new \"Event recorded\" line will be added for this message of the {{ integration }} integration, and the message will no longer be counted as failed. Nothing is sent to the partner again. A message can be replayed only once."
+    },
+    "DIRECTION": {
+      "OUTBOUND": "Outbound",
+      "INBOUND": "Inbound"
+    },
+    "TYPE": {
+      "PROBE": "Connection test",
+      "RESYNC": "Re-synchronisation"
+    },
+    "DETAIL": {
+      "OPEN": "Details",
+      "TITLE": "Message detail",
+      "ORGANIZATION": "Organization",
+      "PLATFORM_WIDE": "Whole platform",
+      "CORRELATION_ID": "Correlation ID",
+      "LAST_ATTEMPT": "Last attempt",
+      "PAYLOAD": "Message content",
+      "NO_PAYLOAD": "No content was recorded for this message.",
+      "LOADING": "Loading the content…",
+      "LOAD_ERROR": "The content of this message could not be loaded. Try again.",
+      "EXCHANGE": "Attempts of this exchange",
+      "EXCHANGE_PREVIEW": "The first {{shown}} of {{total}} attempts."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -973,21 +1002,20 @@
     }
   },
   "IMPERSONATION": {
-    "BANNER_PREFIX": "You are acting as",
-    "BANNER_SUFFIX": "via support impersonation.",
-    "AS": "as",
-    "EXIT": "Exit impersonation",
-    "IMPERSONATE_USER": "Impersonate this user",
-    "MODAL_TITLE": "Start support impersonation",
-    "MODAL_PREFIX": "You are about to act as",
+    "BANNER": "Support session: you are acting on behalf of",
+    "OPENED_BY": "opened by",
+    "EXIT": "Leave the support session",
+    "IMPERSONATE_USER": "Open a support session for this user",
+    "MODAL_TITLE": "Open a support session",
+    "MODAL_PREFIX": "You are about to act on behalf of",
     "MODAL_WARNING": "Every action you take will be tagged with your real identity. The session expires automatically after 30 minutes.",
     "REASON_LABEL": "Reason (required, persisted in audit)",
     "REASON_PLACEHOLDER": "e.g. Validating refill bug reported by patient",
     "MFA_LABEL": "MFA code (required when MFA is enrolled)",
     "MFA_PLACEHOLDER": "6-digit code",
-    "START_BUTTON": "Start impersonation",
-    "STARTING": "Starting…",
-    "COUNTDOWN_LABEL": "Impersonation expires in"
+    "START_BUTTON": "Open the support session",
+    "STARTING": "Opening…",
+    "COUNTDOWN_LABEL": "Support session ends in"
   },
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
@@ -1597,6 +1625,7 @@
     "TREND_BAR_TITLE": "{{count}} appointments"
   },
   "ANNOUNCEMENTS": {
+    "PLATFORM_WIDE": "Platform",
     "CREATE": "Create",
     "CREATE_ANNOUNCEMENT": "Create Announcement",
     "DELETE_ANNOUNCEMENT": "Delete Announcement",
@@ -1619,10 +1648,12 @@
       "LOAD_FAILED": "Failed to load announcements",
       "SAVE_FAILED": "Failed to save announcement",
       "TEXT_REQUIRED": "Announcement text is required",
-      "UPDATED": "Announcement updated"
+      "UPDATED": "Announcement updated",
+      "TEXT_TOO_LONG": "The announcement text cannot exceed {{ max }} characters."
     },
     "CREATE_FIRST": "Create your first announcement.",
-    "NONE_YET": "No announcements yet."
+    "NONE_YET": "No announcements yet.",
+    "TEXT_LIMIT": "{{ count }} / {{ max }} characters"
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -1866,6 +1897,9 @@
       "LAB_SELF_RELEASE": "Self-release: the result was released by the person who entered it.",
       "FHIR_EVERYTHING": "FHIR full record of patient {{patient}} returned ({{count}} entries;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Sign-in failed: wrong username or password",
+      "SIGNED_IN_PASSWORD": "Signed in (password)",
+      "SIGNED_IN_SECOND_FACTOR": "Signed in (password and second step)",
+      "SIGNED_OUT": "Signed out",
       "LOGIN_FAILED_INACTIVE": "Sign-in failed: the account is not active",
       "LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED": "Sign-in refused: the temporary password has expired",
       "LOGIN_REFUSED_NO_ROLE": "Sign-in refused: the account has no active role",
@@ -2166,7 +2200,7 @@
       "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
       "SUPPORT_SESSION_MONEY_REFUSED": "Support session refused: {{what}} (money)",
       "PHARMACY_PAYMENT_VOIDED_IDS": "Pharmacy payment {{payment}} voided for cancelled dispense {{dispense}}",
-      "SUPPORT_SESSION_CLINICAL_REFUSED": "Support session refused: a clinical act ({{roles}}) during impersonation",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Clinical act ({{roles}}) refused during a support session",
       "PAYER_CREATED": "Payer {{payer}} created",
       "PAYER_UPDATED": "Payer {{payer}} updated",
       "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
@@ -3884,7 +3918,7 @@
   },
   "COST_PANEL": {
     "TITLE": "Cost per hospital",
-    "SUBTITLE": "What each hospital would be billed for the selected period. Today the amount is based on recorded activity (audit events); the log, monitoring and storage columns stay at zero until those measurements are connected.",
+    "SUBTITLE": "What each hospital would be charged for the chosen period. The amount is the number of audit events recorded for the hospital, multiplied by the rate shown below.",
     "FROM": "From",
     "TO": "To",
     "REFRESH": "Refresh",
@@ -3897,7 +3931,13 @@
     "COL_SPLUNK": "Log events",
     "COL_GRAFANA": "Monitoring series",
     "COL_STORAGE_GIB": "Storage (GiB)",
-    "COL_AMOUNT": "Chargeback amount"
+    "COL_AMOUNT": "Chargeback amount",
+    "EXPORT_CSV": "Export (CSV)",
+    "EXPORT_FILE": "costs-per-hospital",
+    "PERIOD": "Period shown: {{ from }} to {{ to }}",
+    "RATE": "Rate applied: {{ amount }} per recorded event (provisional rate, set by the platform operator).",
+    "NO_RATE": "No rate is configured: the amount is not computed. Ask the platform operator to set the rate per event.",
+    "TOTAL": "Total"
   },
   "EMPI": {
     "MERGE_BUTTON": "Merge duplicates",
@@ -4241,7 +4281,7 @@
     "FAILED_TITLE": "This activation link no longer works",
     "FAILED_MSG": "The link is invalid or has expired. Enter your e-mail address to receive a new one.",
     "MISSING_TITLE": "Incomplete activation link",
-    "MISSING_MSG": "This link is missing its e-mail address or token. Enter your e-mail address to receive a new one.",
+    "MISSING_MSG": "This link is incomplete. Enter your e-mail address to receive a new one.",
     "RESEND": "Send a new activation link",
     "RESENT": "If this address belongs to an account that is not yet active, a new activation link is on its way. It is valid for 24 hours.",
     "BACK_TO_LOGIN": "Back to sign in"
@@ -5236,6 +5276,8 @@
   "LOCK": {
     "AVATAR_ALT": "Avatar",
     "ENTER_PASSWORD": "Enter your password to unlock",
+    "SSO_HINT": "Sign in again with your identity provider to unlock",
+    "SSO_CONTINUE": "Sign in again to unlock",
     "ERROR_SESSION_EXPIRED": "Your session has expired. Please sign in again.",
     "ERROR_SESSION_MISMATCH": "This session belongs to a different user. Please sign in again.",
     "ERROR_VERIFY_FAILED": "Could not verify your password. Please try again.",
@@ -5297,12 +5339,9 @@
     "SENDING": "Sending…",
     "SEND_RESET_LINK": "Send Reset Link",
     "FORGOT_USERNAME_TITLE": "Forgot Username",
-    "FU_ADMIN_MANAGED": "Username recovery is managed by your system administrator.",
-    "FU_CONTACT": "Please contact your hospital administrator or IT support — they can look up your account using your name or email address.",
-    "FU_TIP_LABEL": "Tip:",
-    "FU_TIP_TEXT": "If you know the email address on your account, you can use",
-    "FU_TIP_RESET": "Reset Password",
-    "FU_TIP_SUFFIX": "to regain access without needing your username.",
+    "FU_INSTRUCTION": "Enter the e-mail address or phone number of your account. We will send your username to it.",
+    "FU_SEND": "Send my username",
+    "FU_ACK": "If an activated account matches what you entered, its username has just been sent to its e-mail address or by SMS. Nothing after a few minutes? Ask the reception desk or the administrator of your hospital.",
     "ALL_FIELDS_REQUIRED": "All required fields must be filled.",
     "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters.",
     "PASSWORDS_MISMATCH": "Passwords do not match.",
@@ -6075,7 +6114,8 @@
     "CONFIRM_ROTATE_KEY": "Rotate this key? The current key stops working immediately.",
     "CONFIRM_REVOKE_KEY": "Revoke this key? The client loses access immediately and permanently.",
     "CONFIRM_REVOKE_ENDPOINT": "Revoke this endpoint? Deliveries stop permanently; the log stays readable.",
-    "CONFIRM_ROTATE_SECRET": "Rotate the signing secret? The receiver must be updated or its verification will fail."
+    "CONFIRM_ROTATE_SECRET": "Rotate the signing secret? The receiver must be updated or its verification will fail.",
+    "LAST_ATTEMPT_AT": "Last attempt"
   },
   "ROI": {
     "TITLE": "Release of Information",
@@ -7108,7 +7148,7 @@
         "TITLE_FALLBACK": "Shared Health Data",
         "IMAGING_TAB": "Imaging"
       },
-      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to.",
+      "USER_NOT_FOUND": "This identifier matches no patient or caregiver account that can receive this access. Check it with the person.",
       "REVOKE_CONFIRM_TITLE": "Revoke this access?",
       "REVOKE_CONFIRM_MESSAGE": "This person will no longer see your record. You can grant access again later."
     },
@@ -8478,7 +8518,8 @@
         "HOSPITAL_INCOMPATIBLE_RELEASE_PROTOCOL": "Incompatible release fallback setting",
         "IMAGING_CATALOGUE_EXAM": "Imaging catalogue exam",
         "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
-        "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off"
+        "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off",
+        "PLATFORM_REQUEST": "Request to the platform"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -10405,8 +10446,8 @@
       "RESTORED": "{{name}} has been restored.",
       "RESTORE_FAILED": "Failed to restore user",
       "IMPERSONATE_REASON_TOO_SHORT": "Reason must be at least 5 characters.",
-      "IMPERSONATE_STARTED": "Now acting as {{name}}.",
-      "IMPERSONATE_FAILED": "Failed to start impersonation",
+      "IMPERSONATE_STARTED": "Support session opened: you are acting on behalf of {{name}}.",
+      "IMPERSONATE_FAILED": "The support session could not be opened",
       "USERNAME_ISSUED": "Temporary username: {{username}}. The person chooses their own at first sign-in."
     },
     "TOTAL": "Total",
@@ -10737,6 +10778,19 @@
       "readBackRequired": "Read-back required",
       "readBackAt": "Read back {{at}}",
       "followUp": "Order follow-up"
+    },
+    "openPlatformItem": "Open",
+    "platformRequest": {
+      "open": "Write to the platform",
+      "title": "Request to the platform",
+      "hint": "Your request arrives in the platform administrators’ inbox, with your hospital’s name and yours. No SMS or e-mail is sent.",
+      "subject": "Subject",
+      "message": "Message",
+      "send": "Send",
+      "sending": "Sending…",
+      "sent": "Request sent to the platform administrators.",
+      "failed": "The request could not be sent. Try again.",
+      "required": "This field is required."
     }
   },
   "common": {

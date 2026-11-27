@@ -4164,6 +4164,12 @@
         <sqlFile path="V403__stock_receipt_metadata.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V410 (QA D4308): an in-basket item for the platform administrators may name no hospital. -->
+    <changeSet id="V410-in-basket-platform-items" author="hms-team" runOnChange="false">
+        <sqlFile path="V410__in_basket_platform_items.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
          malware check; the daily upload allowance is counted from it. -->
     <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">

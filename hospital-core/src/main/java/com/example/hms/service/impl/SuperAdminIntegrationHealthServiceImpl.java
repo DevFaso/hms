@@ -22,7 +22,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import com.example.hms.service.integration.eligibility.StubEligibilityProvider;
+import com.example.hms.service.integration.health.IntegrationDiagnosticText;
+import com.example.hms.service.integration.probe.Probe;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
 
@@ -65,6 +71,18 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
         if (hasAnyEligibilityProvider()) {
             rows.add(buildEligibilityRow(byIntegration.getOrDefault(INTEGRATION_ID_ELIGIBILITY, List.of()), locale));
         }
+        // QA D4300: a connector that can be tested or re-synchronised is listed,
+        // with its history, even when no catalog adapter describes it. Before, the
+        // partner connectors answered the actions and were on no screen.
+        Set<String> listed = new HashSet<>();
+        for (IntegrationHealthRowDTO row : rows) {
+            listed.add(row.getIntegrationId());
+        }
+        for (String connectorId : actionService.registeredIntegrationIds()) {
+            if (listed.add(connectorId)) {
+                rows.add(buildConnectorRow(connectorId, byIntegration.getOrDefault(connectorId, List.of()), locale));
+            }
+        }
 
         return aggregate(rows);
     }
@@ -77,14 +95,59 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
         if (INTEGRATION_ID_ELIGIBILITY.equals(integrationId)) {
             return hasAnyEligibilityProvider();
         }
-        Locale locale = LocaleContextHolder.getLocale();
+        if (descriptorOf(integrationId, LocaleContextHolder.getLocale()) != null) {
+            return true;
+        }
+        return actionService.isKnownIntegration(integrationId);
+    }
+
+    @Override
+    public Optional<Probe> configurationCheck(String integrationId) {
+        if (integrationId == null || integrationId.isBlank()) {
+            return Optional.empty();
+        }
+        if (INTEGRATION_ID_ELIGIBILITY.equals(integrationId)) {
+            if (!hasAnyEligibilityProvider()) {
+                return Optional.empty();
+            }
+            return Optional.of(eligibilityIsStub()
+                ? Probe.failed(IntegrationDiagnosticText.NOT_CONNECTED)
+                : Probe.ok(0L, IntegrationDiagnosticText.CONFIGURED));
+        }
+        IntegrationDescriptor descriptor = descriptorOf(integrationId, LocaleContextHolder.getLocale());
+        if (descriptor == null) {
+            return Optional.empty();
+        }
+        if (descriptor.isStub()) {
+            return Optional.of(Probe.failed(IntegrationDiagnosticText.NOT_CONNECTED));
+        }
+        if (!descriptor.isEnabled()) {
+            return Optional.of(Probe.failed(IntegrationDiagnosticText.DISABLED));
+        }
+        return Optional.of(Probe.ok(0L, IntegrationDiagnosticText.CONFIGURED));
+    }
+
+    private IntegrationDescriptor descriptorOf(String integrationId, Locale locale) {
         for (PlatformIntegrationAdapter adapter : platformAdapters) {
             IntegrationDescriptor descriptor = adapter.describe(locale);
             if (descriptor != null && integrationId.equals(descriptor.getId())) {
-                return true;
+                return descriptor;
             }
         }
-        return false;
+        return null;
+    }
+
+    /** Every eligibility provider is the built-in reference one: no insurer is connected. */
+    private boolean eligibilityIsStub() {
+        if (eligibilityProviders == null) {
+            return true;
+        }
+        for (EligibilityProvider provider : eligibilityProviders) {
+            if (!(provider instanceof StubEligibilityProvider)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -107,7 +170,37 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
                 return buildRow(descriptor, snapshots);
             }
         }
+        if (actionService.isKnownIntegration(integrationId)) {
+            return buildConnectorRow(integrationId,
+                snapshotRepository.findByIntegrationIdOrderByLastStatusAscUpdatedAtDesc(integrationId), locale);
+        }
         throw new ResourceNotFoundException("integration.health.notfound", integrationId);
+    }
+
+    /**
+     * QA D4300: a registered connector with no catalog entry. Its name comes from
+     * the bundle ({@code integration.connector.<id>.displayName}); a connector the
+     * bundle does not know is listed under its identifier rather than hidden.
+     */
+    private IntegrationHealthRowDTO buildConnectorRow(String connectorId,
+                                                      List<IntegrationHealthSnapshot> snapshots,
+                                                      Locale locale) {
+        List<IntegrationHealthOrgEntryDTO> orgEntries = mapEntries(snapshots);
+        String name = messageSource.getMessage(
+            "integration.connector." + connectorId + ".displayName", null, connectorId, locale);
+        return IntegrationHealthRowDTO.builder()
+            .integrationId(connectorId)
+            .displayName(name)
+            .serviceType(null)
+            .provider(text("integration.connector.provider", locale))
+            .enabled(true)
+            .stub(actionService.isStub(connectorId))
+            .probeSupported(actionService.supportsProbe(connectorId))
+            .resyncSupported(actionService.supportsResync(connectorId))
+            .capabilities(List.of())
+            .rolledUpStatus(rollUp(orgEntries))
+            .organizations(orgEntries)
+            .build();
     }
 
     private Map<String, List<IntegrationHealthSnapshot>> groupSnapshotsByIntegration() {
@@ -144,7 +237,9 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
             .provider(descriptor.getProvider())
             .enabled(descriptor.isEnabled())
             .stub(descriptor.isStub())
-            .probeSupported(actionService.supportsProbe(descriptor.getId()))
+            // QA D4300: every listed integration can be tested - by its probe, or by
+            // the configuration check when it has none.
+            .probeSupported(true)
             .resyncSupported(actionService.supportsResync(descriptor.getId()))
             .capabilities(descriptor.getCapabilities() == null ? List.of() : descriptor.getCapabilities())
             .rolledUpStatus(rollUp(orgEntries))
@@ -166,7 +261,7 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
             .serviceType(null)
             .provider(text("integration.eligibility.provider", locale))
             .enabled(true)
-            .probeSupported(actionService.supportsProbe(INTEGRATION_ID_ELIGIBILITY))
+            .probeSupported(true)
             .resyncSupported(actionService.supportsResync(INTEGRATION_ID_ELIGIBILITY))
             .capabilities(List.of(
                 text("integration.eligibility.capability.coverage", locale),

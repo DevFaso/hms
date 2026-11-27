@@ -93,8 +93,12 @@ class IntegrationHealthActionServiceTest {
         IntegrationProbeResultDTO result = service.testConnection("boom.partner", orgId);
 
         assertThat(result.isOk()).isFalse();
-        assertThat(result.getMessage()).contains("network down");
-        verify(recorder).recordFailure(anyString(), any(), anyString(), any());
+        // QA D4078: the exception stays in the server log; a diagnostic key is
+        // stored and answered (read as a sentence once a bundle is loaded).
+        assertThat(result.getMessage()).isEqualTo(IntegrationDiagnosticText.PROBE_ERROR)
+            .doesNotContain("network down");
+        verify(recorder).recordFailure(anyString(), any(),
+            org.mockito.ArgumentMatchers.eq(IntegrationDiagnosticText.PROBE_ERROR), any());
     }
 
     @Test

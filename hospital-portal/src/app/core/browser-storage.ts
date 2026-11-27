@@ -148,8 +148,11 @@ export function clearTabSession(): void {
   }
 }
 
-/** The SSO state of this tab: `bound`, `restoring` (a reload is at the provider), or null (not SSO). */
-export type SsoTabState = 'bound' | 'restoring';
+/**
+ * The SSO state of this tab: `bound`, `restoring` (a reload is at the provider), `unlocking` (the
+ * lock screen sent the holder to sign in again at the provider), or null (not SSO).
+ */
+export type SsoTabState = 'bound' | 'restoring' | 'unlocking';
 
 export function markSsoTab(state: SsoTabState): void {
   try {
@@ -162,7 +165,7 @@ export function markSsoTab(state: SsoTabState): void {
 export function ssoTabState(): SsoTabState | null {
   try {
     const state = sessionStorage.getItem(SSO_TAB_KEY);
-    return state === 'bound' || state === 'restoring' ? state : null;
+    return state === 'bound' || state === 'restoring' || state === 'unlocking' ? state : null;
   } catch {
     return null;
   }

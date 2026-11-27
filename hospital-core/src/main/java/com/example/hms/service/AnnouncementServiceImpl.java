@@ -15,7 +15,6 @@ import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AnnouncementServiceImpl implements AnnouncementService {
     private static final String ANNOUNCEMENT_NOT_FOUND_KEY = "announcement.notFound";
+    /** The length of {@code announcement.text} (V1). */
+    static final int MAX_TEXT_LENGTH = 255;
     private final AnnouncementRepository announcementRepository;
     private final HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
@@ -44,10 +45,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             return List.of();
         }
         List<Announcement> announcements = hospitalId != null
-            ? announcementRepository.findByHospital_IdOrderByDateDesc(
-                hospitalId,
-                PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "date"))
-            ).getContent()
+            ? announcementRepository.findVisibleAtHospital(hospitalId, PageRequest.of(0, effectiveLimit))
             : announcementRepository.findAll().stream()
                 .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
                 .limit(effectiveLimit)
@@ -150,13 +148,19 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         if (text == null || text.isBlank()) {
             throw new FieldBusinessException("text", "announcement.text.required");
         }
+        // QA D4321: the limit is stated, on its field. An over-long text used to
+        // reach the column and come back as a generic data-constraint error.
+        if (text.length() > MAX_TEXT_LENGTH) {
+            throw new FieldBusinessException("text", "announcement.text.tooLong", MAX_TEXT_LENGTH, text.length());
+        }
     }
 
     private AnnouncementResponseDTO toDTO(Announcement announcement) {
         return new AnnouncementResponseDTO(
             announcement.getId(),
             announcement.getText(),
-            announcement.getDate()
+            announcement.getDate(),
+            announcement.getHospital() == null
         );
     }
 

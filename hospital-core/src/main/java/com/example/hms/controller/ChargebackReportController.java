@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.observability.ChargebackReportService;
 import com.example.hms.observability.ChargebackReportService.TenantCostRow;
 import com.example.hms.observability.ChargebackReportService.TenantCostRowV2;
@@ -9,8 +10,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -98,16 +97,32 @@ public class ChargebackReportController {
      * input-validation lesson from PR #352 Copilot review on this
      * exact controller's {@code parseOrDefault}.
      */
+    /**
+     * QA D4305-D4307: the cost page's one call - the period applied (the default
+     * one when none is given), the rate, the rows and the totals.
+     */
+    @GetMapping("/report")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ChargebackReportService.ChargebackReport> report(
+        @RequestParam(value = "from", required = false) String fromRaw,
+        @RequestParam(value = "to", required = false) String toRaw
+    ) {
+        if (!service.isEnabled()) {
+            return ResponseEntity.noContent().build();
+        }
+        Window window = parseWindow(fromRaw, toRaw);
+        return ResponseEntity.ok(service.report(window.from().toLocalDate(), window.to().toLocalDate()));
+    }
+
+    /** QA D4303 / D4307: each refusal names its field and is read in the caller's language. */
     private static Window parseWindow(String fromRaw, String toRaw) {
         LocalDate toDate = parseDateOrThrow(toRaw, "to", LocalDate.now());
         LocalDate fromDate = parseDateOrThrow(fromRaw, "from", toDate.minusDays(30));
         if (fromDate.isAfter(toDate)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "from (" + fromDate + ") must be on or before to (" + toDate + ")");
+            throw new FieldBusinessException("from", "cost.period.inverted");
         }
         if (fromDate.plusDays(MAX_WINDOW_DAYS - 1L).isBefore(toDate)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "window exceeds the " + MAX_WINDOW_DAYS + "-day cap");
+            throw new FieldBusinessException("to", "cost.period.tooLong", MAX_WINDOW_DAYS);
         }
         return new Window(fromDate.atStartOfDay(), toDate.atTime(LocalTime.MAX));
     }
@@ -117,8 +132,7 @@ public class ChargebackReportController {
         try {
             return LocalDate.parse(raw.trim());
         } catch (DateTimeParseException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "query parameter '" + paramName + "' must be ISO-8601 (YYYY-MM-DD): " + raw);
+            throw new FieldBusinessException(paramName, "cost.period.invalidDate");
         }
     }
 

@@ -13,6 +13,27 @@ public interface ObgynReferralRepository extends JpaRepository<ObgynReferral, UU
     Page<ObgynReferral> findByPatient_Id(UUID patientId, Pageable pageable);
     /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
     Page<ObgynReferral> findByPatient_IdAndHospital_IdIn(UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+
+    /**
+     * {@link #findByPatient_IdAndHospital_IdIn} less the referrals written in
+     * a visit the acting hospital may not read
+     * ({@code RecordAccessPolicy.withheldVisits}): a referral follows its
+     * visit's restriction, in the query, so the page and its count agree.
+     */
+    @org.springframework.data.jpa.repository.Query(value = """
+        SELECT r FROM ObgynReferral r
+        WHERE r.patient.id = :patientId AND r.hospital.id IN :hospitalIds
+          AND (r.encounter IS NULL OR r.encounter.id NOT IN :withheldVisitIds)
+        """, countQuery = """
+        SELECT COUNT(r) FROM ObgynReferral r
+        WHERE r.patient.id = :patientId AND r.hospital.id IN :hospitalIds
+          AND (r.encounter IS NULL OR r.encounter.id NOT IN :withheldVisitIds)
+        """)
+    Page<ObgynReferral> findByPatientAcrossHospitalsOutsideVisits(
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+        @org.springframework.data.repository.query.Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+        @org.springframework.data.repository.query.Param("withheldVisitIds") java.util.Collection<UUID> withheldVisitIds,
+        Pageable pageable);
     Page<ObgynReferral> findByHospital_Id(UUID hospitalId, Pageable pageable);
     Page<ObgynReferral> findByObgyn_Id(UUID userId, Pageable pageable);
 
