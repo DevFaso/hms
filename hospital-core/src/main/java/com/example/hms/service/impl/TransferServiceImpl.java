@@ -322,6 +322,10 @@ public class TransferServiceImpl implements TransferService {
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {
             throw new com.example.hms.exception.FieldBusinessException("isolationOverrideReason", "transfer.r7.overrideReasonRequired");
         }
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getIsolationOverrideReason())) {
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverrideReason", "clinical.override.reasonMin");
+        }
+        request.setIsolationOverrideReason(com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getIsolationOverrideReason()));
         return true;
     }
 
