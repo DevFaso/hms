@@ -1071,6 +1071,29 @@ class LabOrderEndToEndIT extends BaseIT {
             .build();
     }
 
+    @Test
+    void creationReturnsTheDatabaseGeneratedOrderCode() throws Exception {
+        var jdbc = applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        String url = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<String>) connection -> connection.getMetaData().getURL());
+        assertThat(url).startsWith("jdbc:h2:mem:");
+        String code = "LAB-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(java.util.Locale.ROOT);
+        jdbc.execute("ALTER TABLE lab.lab_orders ALTER COLUMN order_number SET DEFAULT '" + code + "'");
+        try {
+            MvcResult created = mockMvc.perform(post(LAB_ORDERS).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(orderRequest(LocalDateTime.now())))
+                    .with(signedInAs(doctor)).with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.labOrderCode").value(code))
+                .andReturn();
+            UUID id = UUID.fromString(jsonData(created, "id"));
+            mockMvc.perform(get(LAB_ORDERS + "/{id}", id).contextPath(API).with(signedInAs(doctor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.labOrderCode").value(code));
+        } finally {
+            jdbc.execute("ALTER TABLE lab.lab_orders ALTER COLUMN order_number SET DEFAULT NULL");
+        }
+    }
+
     private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
         LabOrderRequestDTO request = orderRequest(orderedAt);
         MvcResult created = mockMvc.perform(post(LAB_ORDERS).contextPath(API)
