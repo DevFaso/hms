@@ -152,6 +152,38 @@ class LabInstrumentServiceImplTest {
         assertThat(service.create(HOSPITAL_ID, requestDto, LOCALE)).isEqualTo(responseDto);
     }
 
+    /**
+     * #1379 F1: a row stored before the date checks (future installation,
+     * next dates before the last) takes a status-only edit: the portal sends
+     * every stored date back unchanged, and only changed dates are checked.
+     */
+    @Test
+    void statusOnlyEditOfARowWithStoredInvalidDatesIsSaved() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        instrument.setInstallationDate(today.plusYears(4));
+        instrument.setLastCalibrationDate(today.minusDays(2));
+        instrument.setNextCalibrationDate(today.minusDays(20));
+        instrument.setLastMaintenanceDate(today.plusDays(5));
+        instrument.setNextMaintenanceDate(today.minusDays(9));
+        requestDto.setStatus(InstrumentStatus.OUT_OF_SERVICE.name());
+        requestDto.setInstallationDate(instrument.getInstallationDate());
+        requestDto.setLastCalibrationDate(instrument.getLastCalibrationDate());
+        requestDto.setNextCalibrationDate(instrument.getNextCalibrationDate());
+        requestDto.setLastMaintenanceDate(instrument.getLastMaintenanceDate());
+        requestDto.setNextMaintenanceDate(instrument.getNextMaintenanceDate());
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        when(instrumentRepository.save(instrument)).thenReturn(instrument);
+        when(mapper.toDto(instrument)).thenReturn(responseDto);
+
+        assertThat(service.update(INSTRUMENT_ID, requestDto, LOCALE)).isEqualTo(responseDto);
+
+        // Changing one date of an inverted pair is still checked against the other.
+        requestDto.setNextCalibrationDate(today.minusDays(10));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("lab.instrument.nextBeforeLast"));
+    }
+
     @Test
     void createAndUpdateRejectInvalidInstrumentDatesBeforeSaving() {
         when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));

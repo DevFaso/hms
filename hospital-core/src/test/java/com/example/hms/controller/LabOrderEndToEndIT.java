@@ -182,6 +182,9 @@ class LabOrderEndToEndIT extends BaseIT {
             var second = labInventoryItemRepository.searchActive(hospital.getId(), "match-b", org.springframework.data.domain.PageRequest.of(0, 10));
             assertThat(second.getContent()).extracting(LabInventoryItem::getItemCode).containsExactly("MATCH-B");
             assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "foreign", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            // A typed % or _ is a literal character, not a wildcard.
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "%", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "match_a", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
             mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
                     .contextPath(API).with(scopedAs(labManager)).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))

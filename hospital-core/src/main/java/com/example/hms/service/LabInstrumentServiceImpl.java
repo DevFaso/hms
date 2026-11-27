@@ -72,8 +72,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         LabFacilityAccess.require(instrument.getHospital().getId(), true);
-        validateDates(dto);
-        validateEffectivePairs(instrument, dto);
+        validateChangedDates(instrument, dto);
 
         // Check serial number uniqueness if changed
         if (dto.getSerialNumber() != null
@@ -110,17 +109,39 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         requireOrdered(dto.getLastMaintenanceDate(), dto.getNextMaintenanceDate(), "nextMaintenanceDate");
     }
 
-    private static void validateEffectivePairs(LabInstrument existing, LabInstrumentRequestDTO dto) {
-        if (dto.getLastCalibrationDate() != null || dto.getNextCalibrationDate() != null) {
-            requireOrdered(dto.getLastCalibrationDate() != null ? dto.getLastCalibrationDate() : existing.getLastCalibrationDate(),
-                dto.getNextCalibrationDate() != null ? dto.getNextCalibrationDate() : existing.getNextCalibrationDate(),
-                "nextCalibrationDate");
+    /**
+     * QA r81 (#1379 F1): an edit checks only the dates it changes. The portal
+     * sends every stored date back, so a row saved before these checks (a
+     * future installation, a next date before the last) must still take a
+     * status-only edit. A changed date is checked on its own and against the
+     * other date of its pair as it will be stored.
+     */
+    private static void validateChangedDates(LabInstrument existing, LabInstrumentRequestDTO dto) {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        if (changed(dto.getInstallationDate(), existing.getInstallationDate())) {
+            requireNotFuture(dto.getInstallationDate(), today, "installationDate");
         }
-        if (dto.getLastMaintenanceDate() != null || dto.getNextMaintenanceDate() != null) {
-            requireOrdered(dto.getLastMaintenanceDate() != null ? dto.getLastMaintenanceDate() : existing.getLastMaintenanceDate(),
-                dto.getNextMaintenanceDate() != null ? dto.getNextMaintenanceDate() : existing.getNextMaintenanceDate(),
-                "nextMaintenanceDate");
+        boolean lastCalibrationChanged = changed(dto.getLastCalibrationDate(), existing.getLastCalibrationDate());
+        boolean lastMaintenanceChanged = changed(dto.getLastMaintenanceDate(), existing.getLastMaintenanceDate());
+        if (lastCalibrationChanged) requireNotFuture(dto.getLastCalibrationDate(), today, "lastCalibrationDate");
+        if (lastMaintenanceChanged) requireNotFuture(dto.getLastMaintenanceDate(), today, "lastMaintenanceDate");
+        if (lastCalibrationChanged || changed(dto.getNextCalibrationDate(), existing.getNextCalibrationDate())) {
+            requireOrdered(effective(dto.getLastCalibrationDate(), existing.getLastCalibrationDate()),
+                effective(dto.getNextCalibrationDate(), existing.getNextCalibrationDate()), "nextCalibrationDate");
         }
+        if (lastMaintenanceChanged || changed(dto.getNextMaintenanceDate(), existing.getNextMaintenanceDate())) {
+            requireOrdered(effective(dto.getLastMaintenanceDate(), existing.getLastMaintenanceDate()),
+                effective(dto.getNextMaintenanceDate(), existing.getNextMaintenanceDate()), "nextMaintenanceDate");
+        }
+    }
+
+    /** A date the request sets to a new value; null leaves the stored one. */
+    private static boolean changed(java.time.LocalDate sent, java.time.LocalDate stored) {
+        return sent != null && !sent.equals(stored);
+    }
+
+    private static java.time.LocalDate effective(java.time.LocalDate sent, java.time.LocalDate stored) {
+        return sent != null ? sent : stored;
     }
 
     private static void requireNotFuture(java.time.LocalDate date, java.time.LocalDate today, String field) {
@@ -131,7 +152,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
 
     private static void requireOrdered(java.time.LocalDate last, java.time.LocalDate next, String field) {
         if (last != null && next != null && next.isBefore(last)) {
-            throw new com.example.hms.exception.FieldBusinessException(field, "query.dateRange.reversed");
+            throw new com.example.hms.exception.FieldBusinessException(field, "lab.instrument.nextBeforeLast");
         }
     }
 
