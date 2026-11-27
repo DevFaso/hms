@@ -262,6 +262,12 @@ public class MortalityServiceImpl implements MortalityService {
         if (deathRecord.isEnteredInError()) {
             throw new BusinessException("mortality.enteredInError.closed");
         }
+        if (request.getDiedAt() != null) {
+            throw new com.example.hms.exception.FieldBusinessException("diedAt", "mortality.amendment.timeCannotChange");
+        }
+        if (!amendmentChangesRecord(deathRecord, request)) {
+            throw new com.example.hms.exception.FieldBusinessException("amendmentReason", "mortality.amendment.noChanges");
+        }
         // QA D1802: read before the edit, so an amendment out of a contradicted stillbirth is audited as reconciled.
         boolean declaredStillbirth = com.example.hms.service.maternity.StillbirthCertificateConflicts
             .declaresStillbirth(deathRecord);
@@ -321,6 +327,27 @@ public class MortalityServiceImpl implements MortalityService {
             certificateConflicts.certificateChanged(amended, declaredStillbirth, roleValidator.getCurrentUserId());
         }
         return mapper.toDto(amended);
+    }
+
+    private static boolean amendmentChangesRecord(DeathRecord record, DeathRecordAmendmentDTO request) {
+        return changed(request.getImmediateCause(), record.getImmediateCause())
+            || changed(request.getImmediateCauseCode(), record.getImmediateCauseCode())
+            || changed(request.getUnderlyingCause(), record.getUnderlyingCause())
+            || changed(request.getUnderlyingCauseCode(), record.getUnderlyingCauseCode())
+            || changed(request.getContributingCauses(), record.getContributingCauses())
+            || changed(request.getMannerOfDeath(), record.getMannerOfDeath())
+            || changed(request.getMaternalDeath(), record.getMaternalDeath())
+            || (request.getMaternalDeath() != null && !Objects.equals(request.getMaternalDeathTiming(), record.getMaternalDeathTiming()))
+            || changed(request.getPerinatalDeath(), record.getPerinatalDeath())
+            || (request.getPerinatalDeath() != null && !Objects.equals(request.getPerinatalType(), record.getPerinatalType()))
+            || changed(request.getBornAt(), record.getBornAt())
+            || changed(request.getBirthStatus(), record.getBirthStatus())
+            || changed(request.getGestationalAgeWeeks(), record.getGestationalAgeWeeks())
+            || changed(request.getNotes(), record.getNotes());
+    }
+
+    private static boolean changed(Object requested, Object existing) {
+        return requested != null && !Objects.equals(requested, existing);
     }
 
     @Override
