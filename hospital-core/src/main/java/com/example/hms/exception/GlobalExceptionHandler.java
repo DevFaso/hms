@@ -678,7 +678,7 @@ public class GlobalExceptionHandler {
         }
         if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
             if (template.matches("\\{jakarta\\.validation\\.constraints\\.(NotNull|NotBlank|NotEmpty)\\.message}")) {
-                return localized("error.validation.requiredField", "Please enter {0}", label);
+                return localized("error.validation.requiredField", "{0}: Please enter a value", label);
             }
             if (violation != null && template.equals("{jakarta.validation.constraints.Min.message}")) {
                 Object minimum = violation.getConstraintDescriptor().getAttributes().get("value");
