@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Hospital performance metrics",
     "TITLE": "Analytics",
     "KPI": {
+      "PERIOD": "From {{from}} to {{to}}",
       "SECTION_HEADING": "Operational KPIs",
       "LOADING": "Loading KPIs...",
       "DOOR_TO_DOCTOR_LABEL": "Door-to-doctor",
