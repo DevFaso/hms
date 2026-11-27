@@ -78,6 +78,8 @@ class MedicationCatalogControllerTest {
                 .nameFr("Paracétamol")
                 .genericName("Paracetamol")
                 .hospitalId(hospitalId)
+                // Required on a creation: every new entry proposes a version (R29: refused at the edge).
+                .changeReason("Référencé à la LNME")
                 .build();
 
         // Go-live D2 (V385): a new entry is proposed, not created: 202 and the version awaiting approval.
