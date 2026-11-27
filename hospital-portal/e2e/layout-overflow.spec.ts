@@ -407,6 +407,56 @@ const DRAWERS: DrawerCase[] = [
   },
 ];
 
+test.describe('layout: prescription patient safety (D4111)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the patient name and blood group remain readable', async ({ page }, testInfo) => {
+    const baseURL = testInfo.project.use.baseURL as string;
+    await signInAs(page, 'ROLE_DOCTOR', baseURL);
+    await installLocalIconFonts(page);
+    const patient = {
+      id: TEST_ID,
+      firstName: 'Pengdwend\u00e9-LongueIdentit\u00e9',
+      lastName: 'Yam\u00e9ogo',
+      active: true,
+    };
+    await page.route(/\/api\/patients(?:\?.*)?$/, (r) => r.fulfill({ json: [patient] }));
+    await page.route(`**/api/patients/${TEST_ID}/storyboard**`, (r) =>
+      r.fulfill({
+        json: {
+          patient: {
+            id: TEST_ID,
+            fullName: 'Pengdwend\u00e9-LongueIdentit\u00e9 Yam\u00e9ogo',
+            bloodType: null,
+          },
+          allergies: [],
+          problems: [],
+          hasHighSeverityAllergy: false,
+          hasChronicProblem: false,
+        },
+      }),
+    );
+    await page.goto(`/prescriptions?new=1&patientId=${TEST_ID}`, { waitUntil: 'domcontentloaded' });
+    const name = page.locator('.picker-chip .chip-name');
+    await expect(name).toContainText('Pengdwend\u00e9-LongueIdentit\u00e9');
+    const blood = page.locator('[data-testid="patient-safety-blood-group"]');
+    await expect(blood).toBeVisible();
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(() => name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
+        .toBe(true);
+      await expect
+        .poll(() => blood.evaluate((el) => el.getBoundingClientRect().width))
+        .toBeGreaterThan(60);
+      await testInfo.attach(`prescription-${width}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+    }
+  });
+});
+
 /*
  * QA D2644 (r65): « Latéralité » shared its row with the full-width « Question
  * clinique » and was squeezed to an empty 60 px select (0 px at 390, its label
