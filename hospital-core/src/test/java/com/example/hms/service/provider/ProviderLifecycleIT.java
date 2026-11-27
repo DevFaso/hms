@@ -139,15 +139,13 @@ class ProviderLifecycleIT extends BaseIT {
         ProviderCreateRequestDTO second = request(FacilityType.PHARMACY);
         second.getProfessional().setLicenceAuthority("  dgpml ");
         second.getProfessional().setLicenceNumber(first.getProfessional().getLicenceNumber());
-        UUID one = onboardingService.create(first).getId();
-        UUID two = onboardingService.create(second).getId();
-        onboardingService.verify(one, ProviderVerifyRequestDTO.builder()
-            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+        onboardingService.create(first);
 
-        ProviderVerifyRequestDTO confirmed = ProviderVerifyRequestDTO.builder()
-            .ifuMatchesRccm(true).cnssMatchesRccm(true).build();
-        assertThatThrownBy(() -> onboardingService.verify(two, confirmed))
-            .isInstanceOf(ConflictException.class);
+        // QA r81 D4312: the second facility is refused when it registers, on the
+        // licence field; it used to be accepted and refused only at VERIFY.
+        assertThatThrownBy(() -> onboardingService.create(second))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith("professional.licenceNumber:");
     }
 
     @Test
