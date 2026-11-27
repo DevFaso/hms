@@ -72,6 +72,13 @@ const NO_DESTINATION = {
     'staff only (accountants and hospital admins asked to approve an outpatient credit); the staff bell expands the message',
   MEWS_ESCALATION:
     'staff only (maternal early warning, policy 2026-11-20: midwife in charge and doctors); the staff bell expands the message',
+  // Scorecard K4 (V386): the one escalation ladder of every urgent clinical message.
+  URGENT_CLINICAL_ALERT:
+    'staff only (the circle of the alert); the CRITICAL in-basket item is the action, the staff bell expands the message',
+  URGENT_CLINICAL_ALERT_ESCALATION:
+    'staff only (covering clinician, médecin-chef); the staff bell expands the message',
+  URGENT_ALERT_UNRESOLVED:
+    'staff only (hospital administrators flagged of an unresolved alert, no clinical text); the staff bell expands the message',
 };
 
 const CALL = /create(?:Literal)?Notification\s*\(/g;

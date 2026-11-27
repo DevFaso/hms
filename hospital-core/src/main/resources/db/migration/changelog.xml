@@ -4112,6 +4112,12 @@
     <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
     </changeSet>
+    <!-- V386 (scorecard K4): one escalation ladder for every urgent clinical alert: the owed first notice, no
+         round cap, the new sources, and the register of unresolved alerts. -->
+    <changeSet id="V386-urgent-alert-escalation-ladder" author="hms-team" runOnChange="false">
+        <sqlFile path="V386__urgent_alert_escalation_ladder.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
 
     <!-- V383 (insurer claims plan PR 1, QA r77 D3984): the pre-authorisation number on an invoice line, and the
          order the line bills. -->

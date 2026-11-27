@@ -282,16 +282,36 @@ public class IncompatibleReleaseNotices {
 
     // ── The overdue countersignature ────────────────────────────────────
 
+    /** Scorecard K4: the ladder an overdue countersignature stays on until it is signed. */
+    private static final OverdueCountersignLadder LADDER = new OverdueCountersignLadder(
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_INCOMPATIBLE_COUNTERSIGN,
+        com.example.hms.service.escalation.UrgentAlerts.TYPE_INCOMPATIBLE_COUNTERSIGN_OVERDUE);
+
+    /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the notices alone). */
+    private final com.example.hms.service.escalation.UrgentAlertsAccess urgentAlerts =
+        new com.example.hms.service.escalation.UrgentAlertsAccess();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlerts.useProvider(urgentAlertsProvider);
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts.useService(urgentAlerts);
+    }
+
     /** The countersignatures past their deadline that nobody was told about yet, the oldest first. */
     public List<UUID> overdueCountersignIds() {
         return incompatibleRows.findOverdueCountersignIds(LocalDateTime.now(clock));
     }
 
     /**
-     * One countersignature past its deadline is escalated to the laboratory director, once, and listed for audit.
-     * The alert is filed in the transaction that marks the row as escalated: if it cannot be delivered the mark is
-     * not kept, and the next sweep tries again. With no laboratory director the row is left to the next sweep,
-     * loudly: marking it escalated would say somebody was told.
+     * One countersignature past its deadline is escalated to the laboratory director and listed for audit, and
+     * from then on it is on the escalation ladder until it is signed (scorecard K4). The alert is filed in the
+     * transaction that marks the row as escalated: if it cannot be delivered
+     * the mark is not kept, and the next sweep tries again. With no laboratory director the ladder's first notice
+     * goes to the médecin-chef.
      *
      * @return the number of items filed
      */
@@ -307,7 +327,9 @@ public class IncompatibleReleaseNotices {
         if (directors.isEmpty()) {
             log.error("Overdue countersignature of incompatible release decision {} has no laboratory director to go to",
                 decision.getId());
-            return 0;
+            if (urgentAlerts.get() == null) {
+                return 0;
+            }
         }
         Patient patient = decision.getRelease().getRequest().getPatient();
         String unitNumber = decision.getRelease().getBloodUnit().getUnitNumber();
@@ -322,6 +344,21 @@ public class IncompatibleReleaseNotices {
         for (UUID director : directors) {
             // In this transaction, not after it: a failure here undoes the mark above.
             inBasketService.createItem(copyFor(director, overdue, titleArgs, bodyArgs));
+        }
+        // Scorecard K4: from now on the countersignature is on the ladder until it is signed (OverdueCountersignLadder).
+        com.example.hms.service.maternity.ObstetricAlertEscalationService escalation = urgentAlerts.get();
+        UUID patientId = patient != null ? patient.getId() : decision.getPatientId();
+        if (escalation != null && patientId != null) {
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert alert = LADDER.alertFor(
+                userRepository, new com.example.hms.service.escalation.UrgentAlerts.Subject(hospitalId, patientId,
+                    patient != null ? patient.getFullName() : null),
+                decision.getId(), new Object[]{unitNumber, decision.getCountersignDeadlineHours()}, decision.getIssuedByUserId(), directors);
+            if (alert.namedRecipients().isEmpty()) {
+                // Nobody was told above: the ladder owes the first notice, to the médecin-chef.
+                escalation.raiseAfterCommit(alert);
+            } else {
+                escalation.raiseAlreadyNotified(alert);
+            }
         }
         UUID id = decision.getId();
         TransactionCallbacks.afterCommit(() -> {

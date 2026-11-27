@@ -201,8 +201,10 @@ class EarlyWarningEscalationGuardTest {
     @Test
     void everyVitalSetEarlyWarningSourceIsAcceptedAndHasItsNoticeInEnglishAndFrench() {
         Set<String> vitalSetSources = ObstetricAlertEscalationService.VITAL_SET_EARLY_WARNING_SOURCES;
+        // K4: an adult's urgent hypertension is read on a vital set too, and repeats like the scores do.
         assertThat(vitalSetSources).containsExactlyInAnyOrder(
-            ObstetricAlertEscalationService.SOURCE_NEWS2, ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN);
+            ObstetricAlertEscalationService.SOURCE_NEWS2, ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN,
+            ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION);
         List<String> missing = new ArrayList<>();
         for (String source : List.of(ObstetricAlertEscalationService.SOURCE_NEWS2,
                 ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN, ObstetricAlertEscalationService.SOURCE_VITAL_SIGN)) {

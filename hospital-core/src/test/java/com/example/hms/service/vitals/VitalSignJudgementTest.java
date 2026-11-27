@@ -423,6 +423,42 @@ class VitalSignJudgementTest {
     }
 
     @Test
+    void anAdultsUrgentHypertensionIsFiledAsAnUrgentAlertToAcknowledgeAndAPlainWarningIsNot() {
+        // Scorecard K4: an item to acknowledge on the escalation ladder, beside the bell.
+        com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        judgement.setUrgentAlerts(urgentAlerts);
+        Patient adult = motherDeliveredBefore(false);
+        UUID hospitalId = UUID.randomUUID();
+        when(news2.recipients(adult.getId(), hospitalId, "nurse_a", null))
+            .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
+        PatientVitalSign vital = bpSet(adult).systolicBpMmHg(190).diastolicBpMmHg(100)
+            .organDamageSymptoms("CHEST_PAIN").build();
+        vital.setId(UUID.randomUUID());
+
+        judgement.escalate(vital, judgement.judge(vital), adult.getId(), hospitalId, "nurse_a", null);
+
+        org.mockito.ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> filed =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(urgentAlerts).raiseAfterCommit(filed.capture());
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert alert = filed.getValue();
+        assertThat(alert.sourceType()).isEqualTo(com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION);
+        assertThat(alert.sourceId()).isEqualTo(vital.getId());
+        assertThat(alert.patientId()).isEqualTo(adult.getId());
+        assertThat(alert.hospitalId()).isEqualTo(hospitalId);
+        assertThat(alert.alertType()).isEqualTo(com.example.hms.service.escalation.UrgentAlerts.TYPE_URGENT_HYPERTENSION);
+        // The threshold and the sentence are the rule's own: nothing new decides what is urgent.
+        assertThat(alert.alertMessageKey()).isEqualTo(judgement.judge(vital).bloodPressure().messageKey());
+        // Those the bell reached get their item, never a second bell.
+        assertThat(alert.alreadyNotified()).containsExactly("nurse_a", "dr_a");
+
+        org.mockito.Mockito.clearInvocations(urgentAlerts);
+        PatientVitalSign plain = bpSet(adult).systolicBpMmHg(185).diastolicBpMmHg(100).build();
+        plain.setId(UUID.randomUUID());
+        judgement.escalate(plain, judgement.judge(plain), adult.getId(), hospitalId, "nurse_a", null);
+        verify(urgentAlerts, never()).raiseAfterCommit(any());
+    }
+
+    @Test
     void aPlainAdultWarningNotifiesNoOne() {
         Patient adult = motherDeliveredBefore(false);
         PatientVitalSign vital = bpSet(adult).systolicBpMmHg(185).diastolicBpMmHg(100).build();

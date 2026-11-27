@@ -4,13 +4,14 @@ import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.ImagingReport;
+import com.example.hms.model.UrgentAlertIncident;
 import com.example.hms.model.User;
+import com.example.hms.service.escalation.UrgentEscalationSupport;
+import com.example.hms.service.lab.CriticalResultEscalationLadder;
 import com.example.hms.repository.ImagingReportRepository;
-import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -44,11 +45,13 @@ import com.example.hms.service.i18n.NotificationLocales;
  *       excludes on means an unacknowledged critical finding goes permanently
  *       silent, which is the exact failure this service exists to prevent.
  *       There is no round cap.</li>
- *   <li><b>It widens.</b> Round 1 nudges the ordering provider, who may simply
- *       not have looked. From round 2 they have demonstrably not responded, so
- *       the hospital's admins join — re-notifying only the same person was the
- *       original defect. The provider stays on the list at every round: they
- *       remain the one who can act clinically.</li>
+ *   <li><b>It widens, to clinicians.</b> Scorecard K4: the steps are those of the one escalation
+ *       ladder ({@link UrgentEscalationSupport}): the covering clinician is added, then the
+ *       médecin-chef, then the finding is « non résolu » (an incident is recorded) and the
+ *       reminders slow down without ever stopping. The provider stays on the list at every step:
+ *       they remain the one who knows the patient. A hospital administrator cannot acknowledge a
+ *       finding and reads none of it: the administrators get the incident flag only, which names
+ *       no study and no patient.</li>
  * </ul>
  *
  * <p><b>No read-back, deliberately.</b> The lab loop demands one because a
@@ -67,14 +70,8 @@ public class ImagingCriticalNotificationService {
     private static final String NOTIFICATION_TYPE = "CRITICAL_IMAGING_FINDING";
     private static final String ESCALATION_TYPE = "CRITICAL_IMAGING_FINDING_ESCALATION";
 
-    /**
-     * Round at which the chain stops being a nudge and starts involving people
-     * who did not order the study.
-     */
-    private static final int TIER_TWO_ROUND = 2;
-
-    /** Tier-2 recipients: accountable for the desk, not for the order. */
-    private static final String TIER_TWO_ROLE = "ROLE_HOSPITAL_ADMIN";
+    /** The notice of the last step of the ladder and of every reminder after it: {3} the minutes unacknowledged. */
+    static final String UNRESOLVED_KEY = "imaging.critical.unresolved";
 
     /** SMS is a 320-char channel and carries no findings text (the recall-SMS stance). */
     private static final int IMPRESSION_SNIPPET_LIMIT = 140;
@@ -83,13 +80,10 @@ public class ImagingCriticalNotificationService {
     private final NotificationService notificationService;
     private final SmsService smsService;
     private final ImagingReportRepository imagingReportRepository;
-    private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final MessageSource messageSource;
-
-    /** Minutes an unacknowledged critical finding waits before escalation. */
-    @Value("${hms.imaging.critical-escalation.escalate-after-minutes:30}")
-    private long escalateAfterMinutes;
+    /** Scorecard K4: the one escalation ladder (when a step is due, who it adds, the incident). */
+    private final UrgentEscalationSupport ladder;
 
     /**
      * Notify the ordering provider that a report carries a critical finding.
@@ -146,7 +140,7 @@ public class ImagingCriticalNotificationService {
     }
 
     /**
-     * Escalate critical findings still unacknowledged past the configured delay.
+     * Takes the step of the ladder that is due for each critical finding still unacknowledged.
      *
      * <p>Per-report failures are logged and skipped so one bad row never stalls
      * the sweep.
@@ -164,13 +158,18 @@ public class ImagingCriticalNotificationService {
     public Integer escalateOverdue() {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
-        LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime now = LocalDateTime.now(clock);
+        closeAnsweredIncidents();
+        // No step of the ladder is shorter than its minimum: a report notified or escalated more recently has
+        // nothing due. Which step is due is the ladder's to say, from the hospital's own minutes.
+        LocalDateTime cutoff = now.minus(Duration.ofMinutes(CriticalResultEscalationLadder.MIN_MINUTES));
         List<ImagingReport> overdue = imagingReportRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (ImagingReport report : overdue) {
             try {
-                escalateOne(report);
-                escalated++;
+                if (escalateOne(report, now)) {
+                    escalated++;
+                }
             } catch (RuntimeException ex) {
                 log.warn("Critical-imaging escalation failed for report {}: {}",
                     report.getId(), ex.getMessage(), ex);
@@ -179,46 +178,88 @@ public class ImagingCriticalNotificationService {
         return escalated;
     }
 
-    private void escalateOne(ImagingReport report) {
-        int round = (report.getCriticalEscalationLevel() == null ? 0 : report.getCriticalEscalationLevel()) + 1;
-        NotificationText message = buildMessage(report, true);
-
-        for (String recipient : escalationRecipients(report, round)) {
-            notificationService.createNotification(message.key(), message.args(), recipient, ESCALATION_TYPE);
-        }
-        // SMS once per round, not once per recipient: the transport targets the
-        // study's chart context, so fanning it out would send the same text
-        // repeatedly for one event.
-        sendSmsBestEffort(report, true);
-
-        // Stamp even with no resolvable recipient, so the interval advances and
-        // the sweep does not reconsider the row every pass.
-        report.setCriticalEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
-        report.setCriticalEscalatedAt(LocalDateTime.now(clock));
-        imagingReportRepository.save(report);
-
-        if (round >= TIER_TWO_ROUND) {
-            log.warn("Critical imaging finding on report {} still unacknowledged after {} escalation round(s)",
-                report.getId(), round);
+    /** The incident of a finding a clinician has since acknowledged is closed, with that clinician's name on it. */
+    private void closeAnsweredIncidents() {
+        for (UrgentAlertIncident incident : ladder.openIncidents(UrgentAlertIncident.SOURCE_IMAGING_REPORT)) {
+            imagingReportRepository.findById(incident.getSourceId())
+                .filter(report -> report.getCriticalResultAcknowledgedAt() != null)
+                .ifPresent(report -> {
+                    User by = report.getCriticalResultAcknowledgedBy() == null
+                        ? null : report.getCriticalResultAcknowledgedBy().getUser();
+                    ladder.closeIncident(UrgentAlertIncident.SOURCE_IMAGING_REPORT, report.getId(),
+                        UrgentAlertIncident.RESOLVED_ACKNOWLEDGED, by == null ? null : by.getId(),
+                        report.getCriticalResultAcknowledgedAt());
+                });
         }
     }
 
-    private Set<String> escalationRecipients(ImagingReport report, int round) {
+    private boolean escalateOne(ImagingReport report, LocalDateTime now) {
+        int level = report.getCriticalEscalationLevel() == null ? 0 : report.getCriticalEscalationLevel();
+        UUID hospitalId = report.getHospital() != null ? report.getHospital().getId() : null;
+        Optional<CriticalResultEscalationLadder.Step> due = ladder.due(level, report.getCriticalNotifiedAt(),
+            report.getCriticalEscalatedAt(), hospitalId, now);
+        if (due.isEmpty()) {
+            return false;
+        }
+        CriticalResultEscalationLadder.Step step = due.get();
+        boolean unresolved = UrgentEscalationSupport.unresolved(step);
+        long minutes = UrgentEscalationSupport.minutesSince(report.getCriticalNotifiedAt(), now);
+        NotificationText message = buildMessage(report, true);
+        if (unresolved) {
+            Object[] args = java.util.Arrays.copyOf(message.args(), message.args().length + 1);
+            args[args.length - 1] = minutes;
+            message = NotificationText.of(UNRESOLVED_KEY, args);
+        }
+
+        Set<String> chain = escalationRecipients(report, step);
+        for (String recipient : chain) {
+            notificationService.createNotification(message.key(), message.args(), recipient, ESCALATION_TYPE);
+        }
+        if (step != CriticalResultEscalationLadder.Step.REMINDER) {
+            // One SMS to the ordering provider at each step that widens the circle, and one to the clinicians
+            // the step adds; a reminder texts nobody.
+            sendSmsBestEffort(report, true);
+            Set<String> added = new LinkedHashSet<>(ladder.addedAt(hospitalId, step, resolveOrderingUsername(report)));
+            added.removeIf(name -> name.equalsIgnoreCase(resolveOrderingUsername(report)));
+            ladder.smsAfterCommit(added, smsInitials(report), report.getId());
+        }
+
+        // Stamp even with no resolvable recipient, so the ladder advances and
+        // the sweep does not reconsider the row every pass.
+        report.setCriticalEscalationLevel((short) Math.min(level + 1, Short.MAX_VALUE));
+        report.setCriticalEscalatedAt(now);
+        imagingReportRepository.save(report);
+
+        if (unresolved) {
+            // On the register of incidents from the last step on; the administrators are flagged once, with
+            // no study, no patient and no finding.
+            ladder.openIncident(UrgentAlertIncident.SOURCE_IMAGING_REPORT, report.getId(), hospitalId, now, minutes,
+                chain.size());
+        }
+        if (chain.isEmpty()) {
+            log.error("Critical imaging finding on report {} reached the step {} with no clinician to tell",
+                report.getId(), step);
+        }
+        return true;
+    }
+
+    /**
+     * The clinicians a step tells: the ordering provider, the covering clinician, and from the second step the
+     * médecin-chef. Never an administrator.
+     */
+    private Set<String> escalationRecipients(ImagingReport report, CriticalResultEscalationLadder.Step step) {
         Set<String> recipients = new LinkedHashSet<>();
 
         String ordering = resolveOrderingUsername(report);
         if (ordering != null) {
             recipients.add(ordering);
         }
-
-        if (round >= TIER_TWO_ROUND) {
-            UUID hospitalId = report.getHospital() != null ? report.getHospital().getId() : null;
-            if (hospitalId != null) {
-                recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, TIER_TWO_ROLE));
-            } else {
-                log.warn("Critical imaging report {} has no resolvable hospital; "
-                    + "tier-2 escalation has nobody to notify", report.getId());
-            }
+        UUID hospitalId = report.getHospital() != null ? report.getHospital().getId() : null;
+        if (hospitalId != null) {
+            recipients.addAll(ladder.seniors(hospitalId, step, ordering));
+        } else {
+            log.warn("Critical imaging report {} has no resolvable hospital; "
+                + "the escalation has only its ordering provider", report.getId());
         }
         return recipients;
     }
@@ -263,7 +304,7 @@ public class ImagingCriticalNotificationService {
     /**
      * The in-app alert text. Names the study and the patient and says where to
      * act; the impression is truncated rather than sent whole. Read by the
-     * ordering provider (and, on escalation, the desk's administrators), each in
+     * ordering provider (and, on escalation, the covering clinician and the médecin-chef), each in
      * the language they read it in (QA D665). The SMS does not reuse it (K4: it
      * carries the patient's initials and nothing clinical).
      */

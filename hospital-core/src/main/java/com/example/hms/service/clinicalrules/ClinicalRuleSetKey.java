@@ -58,7 +58,9 @@ public enum ClinicalRuleSetKey {
     /** Owner decision 2026-11-26 (V381): who authorises a release despite an incompatible crossmatch, and the fallback. */
     INCOMPATIBLE_RELEASE_AUTHORITY(ClinicalRuleArea.LAB),
     /** QA D3862 (r77): who acknowledges an adult HIGH NEWS2, and who the reminders reach. */
-    NEWS2_ESCALATION(ClinicalRuleArea.VITALS);
+    NEWS2_ESCALATION(ClinicalRuleArea.VITALS),
+    /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
+    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS);
 
     private final ClinicalRuleArea area;
 

@@ -639,6 +639,52 @@ class IncompatibleReleaseDecisionsTest {
         assertThat(fixture.incompatibleNotices.escalateOverdueCountersign(decision.getId())).as("once").isZero();
     }
 
+    @Test
+    @DisplayName("K4: an overdue countersignature goes on the escalation ladder until it is signed; with no director the médecin-chef starts it")
+    void anOverdueCountersignatureGoesOnTheLadder() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        fixture.incompatibleNotices.setUrgentAlerts(urgentAlerts);
+        fixture.incompatibleFallback(true);
+        typed(AboGroup.A, RhFactor.POSITIVE);
+        TransfusionRequest request = request();
+        IncompatibleReleaseDecision decision = release(request,
+            incompatibleBag(request, "A-1", AboGroup.A, RhFactor.POSITIVE, null, null), nobodyReachable());
+
+        assertThat(fixture.incompatibleNotices.escalateOverdueCountersign(decision.getId())).isEqualTo(1);
+
+        // The director was told in this transaction: the ladder starts from its first step, and names them.
+        ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> filed = ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(urgentAlerts).raiseAlreadyNotified(filed.capture());
+        assertThat(filed.getValue().sourceType()).isEqualTo(com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_INCOMPATIBLE_COUNTERSIGN);
+        assertThat(filed.getValue().sourceId()).isEqualTo(decision.getId());
+        assertThat(filed.getValue().hospitalId()).isEqualTo(hospitalId);
+        assertThat(filed.getValue().namedRecipients()).containsExactly("u-" + director);
+        assertThat(filed.getValue().documentedByUserId()).as("the issuer").isEqualTo(decision.getIssuedByUserId());
+
+    }
+
+    @Test
+    @DisplayName("K4: with no laboratory director an overdue countersignature still reaches somebody: the ladder owes its first notice")
+    void anOverdueCountersignatureWithNoDirectorStillReachesSomebody() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        fixture.incompatibleNotices.setUrgentAlerts(urgentAlerts);
+        fixture.incompatibleFallback(true);
+        typed(AboGroup.A, RhFactor.POSITIVE);
+        TransfusionRequest request = request();
+        IncompatibleReleaseDecision orphan = release(request,
+            incompatibleBag(request, "A-1", AboGroup.A, RhFactor.POSITIVE, null, null), nobodyReachable());
+        roles.remove(director);
+
+        fixture.incompatibleNotices.escalateOverdueCountersign(orphan.getId());
+
+        assertThat(orphan.getCountersignEscalatedAt()).isEqualTo(NOW);
+        ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> filed = ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(urgentAlerts).raiseAfterCommit(filed.capture());
+        assertThat(filed.getValue().sourceId()).isEqualTo(orphan.getId());
+        assertThat(filed.getValue().namedRecipients()).isEmpty();
+        verify(urgentAlerts, never()).raiseAlreadyNotified(any());
+    }
+
     // ── Monitoring ──────────────────────────────────────────────────────
 
     @Test

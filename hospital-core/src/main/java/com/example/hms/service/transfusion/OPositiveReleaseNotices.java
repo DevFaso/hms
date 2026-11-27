@@ -321,11 +321,30 @@ public class OPositiveReleaseNotices {
         return decisionRepository.findOverdueCountersignIds(LocalDateTime.now(clock));
     }
 
+    /** Scorecard K4: the ladder an overdue countersignature stays on until it is signed. */
+    private static final OverdueCountersignLadder LADDER = new OverdueCountersignLadder(
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN,
+        com.example.hms.service.escalation.UrgentAlerts.TYPE_O_POSITIVE_COUNTERSIGN_OVERDUE);
+
+    /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the notices alone). */
+    private final com.example.hms.service.escalation.UrgentAlertsAccess urgentAlerts =
+        new com.example.hms.service.escalation.UrgentAlertsAccess();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlerts.useProvider(urgentAlertsProvider);
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts.useService(urgentAlerts);
+    }
+
     /**
-     * One countersignature past its deadline is escalated to the laboratory director, once. The alert is filed
+     * One countersignature past its deadline is escalated to the laboratory director, and from then on it is on
+     * the escalation ladder until it is signed (scorecard K4). The alert is filed
      * in the transaction that marks the row as escalated: if it cannot be delivered the mark is not kept, and
-     * the next sweep tries again. With no laboratory director the row is left to the next sweep, loudly: marking
-     * it escalated would say somebody was told.
+     * the next sweep tries again. With no laboratory director the ladder's first notice goes to the médecin-chef.
      *
      * @return the number of items filed
      */
@@ -341,7 +360,9 @@ public class OPositiveReleaseNotices {
         if (directors.isEmpty()) {
             log.error("Overdue countersignature of O positive release decision {} has no laboratory director to go to",
                 decision.getId());
-            return 0;
+            if (urgentAlerts.get() == null) {
+                return 0;
+            }
         }
         Patient patient = patientRepository.findByIdUnscoped(decision.getPatientId()).orElse(null);
         String unitNumber = decision.getRelease().getBloodUnit().getUnitNumber();
@@ -356,6 +377,21 @@ public class OPositiveReleaseNotices {
         for (UUID director : directors) {
             // In this transaction, not after it: a failure here undoes the mark above.
             inBasketService.createItem(copyFor(director, overdue, titleArgs, bodyArgs));
+        }
+        // Scorecard K4: from now on the countersignature is on the ladder until it is signed (OverdueCountersignLadder).
+        com.example.hms.service.maternity.ObstetricAlertEscalationService escalation = urgentAlerts.get();
+        UUID patientId = decision.getPatientId();
+        if (escalation != null && patientId != null) {
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert alert = LADDER.alertFor(
+                userRepository, new com.example.hms.service.escalation.UrgentAlerts.Subject(hospitalId, patientId,
+                    patient != null ? patient.getFullName() : null),
+                decision.getId(), new Object[]{unitNumber, decision.getReviewDeadlineHours()}, decision.getIssuedByUserId(), directors);
+            if (alert.namedRecipients().isEmpty()) {
+                // Nobody was told above: the ladder owes the first notice, to the médecin-chef.
+                escalation.raiseAfterCommit(alert);
+            } else {
+                escalation.raiseAlreadyNotified(alert);
+            }
         }
         UUID id = decision.getId();
         TransactionCallbacks.afterCommit(() -> {

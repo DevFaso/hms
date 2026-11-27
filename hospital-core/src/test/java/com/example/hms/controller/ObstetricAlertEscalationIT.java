@@ -335,8 +335,9 @@ class ObstetricAlertEscalationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("QA D605: escalation stops at the round cap")
-    void escalationStopsAtTheCap() throws Exception {
+    @DisplayName("K4: nothing stops after three reminders: the ladder goes on, an incident opens, admins get a flag with no patient data")
+    void escalationDoesNotStopAfterThreeReminders() throws Exception {
+        Actor admin = staffActor("admin", "ROLE_HOSPITAL_ADMIN", JobTitle.HOSPITAL_ADMIN, hospital);
         UUID episodeId = startEpisode();
         PartographEntryRequestDTO entry = new PartographEntryRequestDTO();
         entry.setObservationTime(LocalDateTime.now().withNano(0));
@@ -357,8 +358,19 @@ class ObstetricAlertEscalationIT extends BaseIT {
         long nurseBefore = notificationsOf(nurse).size();
         backdate(escalationRepository.findAll());
         sweep();
-        assertThat(escalationRepository.findAll()).allSatisfy(r -> assertThat(r.getEscalationLevel()).isEqualTo((short) 3));
-        assertThat(notificationsOf(nurse)).hasSize((int) nurseBefore);
+        assertThat(escalationRepository.findAll()).allSatisfy(r -> assertThat(r.getEscalationLevel()).isEqualTo((short) 4));
+        assertThat(notificationsOf(nurse)).as("the reminder after the third still goes out")
+            .hasSize((int) nurseBefore + rows.size());
+        // The alert is on the register of incidents, by id only.
+        assertThat(applicationContext.getBean(com.example.hms.repository.UrgentAlertIncidentRepository.class)
+            .findByHospitalIdOrderByOpenedAtDesc(hospital.getId())).hasSize(rows.size())
+            .allSatisfy(incident -> assertThat(incident.getResolvedAt()).isNull());
+        // The administrator learns that an incident is open, and nothing about the patient or the alert.
+        assertThat(notificationsOf(admin)).hasSize(rows.size()).allSatisfy(n -> {
+            assertThat(n.getType()).isEqualTo(com.example.hms.service.escalation.UrgentEscalationSupport.ADMIN_FLAG_TYPE);
+            assertThat(n.getMessage()).doesNotContain("Awa").doesNotContain("Femme");
+        });
+        assertThat(inBasketOf(admin)).as("admins are off the in-basket (D5)").isEmpty();
     }
 
     @Test
@@ -466,6 +478,8 @@ class ObstetricAlertEscalationIT extends BaseIT {
     private void backdate(List<ObstetricAlertEscalation> rows) {
         for (ObstetricAlertEscalation row : rows) {
             row.setLastEscalationAt(LocalDateTime.now().minusMinutes(30));
+            // V386: the steps of the ladder count from the first notice.
+            row.setFirstNoticeFiledAt(LocalDateTime.now().minusMinutes(30));
         }
         escalationRepository.saveAll(rows);
     }
