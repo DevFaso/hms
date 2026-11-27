@@ -5,7 +5,10 @@ import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.recordaccess.OptOutRequestDTO;
 import com.example.hms.payload.dto.recordaccess.RecordAccessDecisionDTO;
 import com.example.hms.payload.dto.recordaccess.RecordSharingOptOutDTO;
+import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.recordaccess.MinorPortalRights;
+import com.example.hms.service.recordaccess.MinorPortalRightsGuard;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.service.recordaccess.RecordSharingOptOutService;
@@ -77,6 +80,7 @@ public class RecordAccessController {
     private final RecordSharingOptOutService optOutService;
     private final PatientRepository patientRepository;
     private final ControllerAuthUtils authUtils;
+    private final org.springframework.beans.factory.ObjectProvider<MinorPortalRightsGuard> minorPortalRights;
 
     @Operation(summary = "May the caller, at their active hospital, read this patient's chart from other hospitals?",
         description = "Answers with the carrier that establishes the treatment relationship, or the first gate that refused.")
@@ -111,7 +115,7 @@ public class RecordAccessController {
             @Valid @RequestBody(required = false) OptOutRequestDTO body,
             @RequestHeader(name = "Accept-Language", required = false) String lang,
             Authentication auth) {
-        requireSelfUnlessStaff(patientId, auth, OPT_OUT_STAFF);
+        requireMinorMay(requireSelfUnlessStaff(patientId, auth, OPT_OUT_STAFF), MinorPortalRights.Action.CLOSE_SHARING);
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
         String reason = body == null ? null : body.reason();
         return ResponseEntity.ok(optOutService.optOut(patientId, reason, actorUserId, parseLocale(lang)));
@@ -127,7 +131,8 @@ public class RecordAccessController {
             Authentication auth) {
         // Admins only: a receptionist who is ALSO a patient passes the matcher and
         // the annotation on ROLE_PATIENT, and must then be bound to their own row.
-        requireSelfUnlessStaff(patientId, auth, OPT_OUT_REVOKE_STAFF);
+        requireMinorMay(requireSelfUnlessStaff(patientId, auth, OPT_OUT_REVOKE_STAFF),
+            MinorPortalRights.Action.REOPEN_SHARING);
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
         return ResponseEntity.ok(optOutService.revoke(patientId, actorUserId, parseLocale(lang)));
     }
@@ -138,14 +143,26 @@ public class RecordAccessController {
      * is not this one, is refused with 403 — never 404, since the patient id
      * in the path is theirs to know or not.
      */
-    private void requireSelfUnlessStaff(UUID patientId, Authentication auth, List<String> staffRoles) {
-        if (staffRoles.stream().anyMatch(r -> authUtils.hasAuthority(auth, r))) return;
+    private Patient requireSelfUnlessStaff(UUID patientId, Authentication auth, List<String> staffRoles) {
+        if (staffRoles.stream().anyMatch(r -> authUtils.hasAuthority(auth, r))) return null;
         UUID userId = authUtils.resolveUserId(auth).orElse(null);
-        boolean own = userId != null && patientRepository.findByUserId(userId)
-            .map(p -> patientId.equals(p.getId()))
-            .orElse(false);
-        if (!own) {
+        Patient own = userId == null ? null : patientRepository.findByUserId(userId)
+            .filter(p -> patientId.equals(p.getId()))
+            .orElse(null);
+        if (own == null) {
             throw new AccessDeniedException("A patient may only manage their own record-sharing opt-out.");
+        }
+        return own;
+    }
+
+    /**
+     * QA D4269: a patient acting on their own record ({@code self} is null for staff, who act for the patient
+     * at the desk, where a parent or the legal guardian decides for a minor).
+     */
+    private void requireMinorMay(Patient self, MinorPortalRights.Action action) {
+        MinorPortalRightsGuard guard = self == null ? null : minorPortalRights.getIfAvailable();
+        if (guard != null) {
+            guard.require(self, action);
         }
     }
 

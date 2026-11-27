@@ -68,6 +68,9 @@ public interface PatientPortalService {
             Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto);
 
     /** The patient's own ROI requests across hospitals, newest first. */
+    /** QA D4270: the caller's own approved record copy, resolved for the release renderer. */
+    com.example.hms.service.roi.RoiRequestService.ApprovedCopy myApprovedRoiCopy(Authentication auth, UUID requestId);
+
     java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
             Authentication auth);
 

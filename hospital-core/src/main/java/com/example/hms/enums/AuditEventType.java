@@ -398,6 +398,8 @@ public enum AuditEventType {
      * delete the audit tables accept. Written by the database function itself (counts and cutoff only).
      */
     AUDIT_RETENTION_PURGED,
+    /** QA D4269 (r81): an action on a minor's own portal account refused by the age rule (ids, action, age band). */
+    MINOR_PORTAL_ACTION_REFUSED,
 
     OTHER
 }

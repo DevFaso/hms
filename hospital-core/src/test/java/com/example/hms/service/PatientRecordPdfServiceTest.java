@@ -225,6 +225,28 @@ class PatientRecordPdfServiceTest {
     }
 
     @Test
+    void thePatientsOwnApprovedCopyIsRenderedAtTheApprovingHospitalWithNoPinnedScope_D4270() throws Exception {
+        HospitalContextHolder.clear();
+        stubCommonPath();
+        when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
+        UUID requestId = UUID.randomUUID();
+        when(auditEventLogService.logEvent(any())).thenReturn(
+            com.example.hms.payload.dto.AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
+        // A staff copy with no pinned scope stays refused: only the resolved own copy carries its hospital.
+        assertThatThrownBy(() -> service.renderForRoi(new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, requestId, hospitalId)))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(textOf(service.renderForRoi(new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, requestId, hospitalId, true)))).contains("Karim Porgo");
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.DATA_ACCESS);
+        assertThat(audit.getValue().getResourceId()).isEqualTo(requestId.toString());
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+        verify(storyboardService, never()).getStoryboard(any(), any());
+        verify(chartReviewService, never()).getCompleteChartReview(any(), any());
+    }
+
+    @Test
     void roiDownloadEmitsExactlyOneRequestLinkedEventAndReturnsARealPdf() throws Exception {
         stubCommonPath();
         when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());

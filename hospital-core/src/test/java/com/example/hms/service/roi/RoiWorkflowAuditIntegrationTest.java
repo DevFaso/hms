@@ -123,7 +123,8 @@ class RoiWorkflowAuditIntegrationTest extends BaseIT {
         var pdf = new com.example.hms.service.PatientRecordPdfService(patientRepo, registrations, storyboard, chart,
             auditLog, users, com.example.hms.i18n.TestMessageSources.bundles());
         var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
-            new com.example.hms.controller.RoiRecordExportController(service, pdf)).build();
+            new com.example.hms.controller.RoiRecordExportController(service, pdf,
+                mock(com.example.hms.service.PatientPortalService.class))).build();
         com.example.hms.security.context.HospitalContextHolder.setContext(
             com.example.hms.security.context.HospitalContext.builder().activeHospitalId(hospitalId).build());
         for (int i = 0; i < 2; i++) {

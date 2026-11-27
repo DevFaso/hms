@@ -134,7 +134,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // Resolves unscoped then authorizes against the registration table —
         // the tenant-scoped findById used to 404 every cross-hospital patient
         // whose chart header had just loaded fine. See PatientChartAccess.
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        Patient patient = release
+            ? patientChartAccess.requireForRelease(patientId, hospitalId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         // E9 #60 — the chart review follows the patient: with an acting hospital
         // every section reads the policy's readable set and the reach of the

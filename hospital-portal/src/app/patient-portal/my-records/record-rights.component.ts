@@ -20,6 +20,8 @@ import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason'
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { RoleContextService } from '../../core/role-context.service';
 import { actionRoles } from '../../core/action-permissions';
+import { saveBlob } from '../../shared/download-file';
+import { blobRefusalReason } from '../../shared/blob-refusal';
 
 /** Own-account requests only. The server resolves identity; a request never edits medical data. */
 @Component({
@@ -127,6 +129,27 @@ import { actionRoles } from '../../core/action-permissions';
               <p>
                 {{ request.decidedAt | serverTime | date: 'short' }} ·
                 {{ request.decidedByName || ('COMMON.UNKNOWN' | translate) }}
+              </p>
+            }
+            <!-- QA D4270: an approved copy is downloaded here; once its period is over, the row says so. -->
+            @if (request.copyDownloadable === true) {
+              <button
+                type="button"
+                [attr.data-testid]="'record-copy-download-' + request.id"
+                [disabled]="downloadingId() !== null"
+                (click)="download(request)"
+              >
+                {{ 'RECORD_RIGHTS.DOWNLOAD' | translate }}
+              </button>
+              @if (request.copyAvailableUntil) {
+                <p>
+                  {{ 'RECORD_RIGHTS.DOWNLOAD_UNTIL' | translate }}
+                  {{ request.copyAvailableUntil | date: 'mediumDate' }}
+                </p>
+              }
+            } @else if (request.copyDownloadable === false) {
+              <p data-testid="record-copy-expired">
+                {{ 'RECORD_RIGHTS.COPY_EXPIRED' | translate }}
               </p>
             }
           </article>
@@ -268,6 +291,29 @@ export class RecordRightsComponent implements OnInit {
         },
       });
   }
+  readonly downloadingId = signal<string | null>(null);
+
+  /** QA D4270: the patient's own approved copy; a refusal is said in the server's words. */
+  download(request: RoiRequest): void {
+    if (this.downloadingId() !== null || request.copyDownloadable !== true) return;
+    this.downloadingId.set(request.id);
+    this.error.set('');
+    this.http
+      .get(`/me/patient/roi-requests/${request.id}/record.pdf`, { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => {
+          this.downloadingId.set(null);
+          saveBlob(blob, `record-copy-${request.requestedOn}.pdf`);
+        },
+        error: (err) => {
+          this.downloadingId.set(null);
+          void blobRefusalReason(err).then((message) =>
+            this.error.set(message ?? this.translate.instant('RECORD_RIGHTS.DOWNLOAD_FAILED')),
+          );
+        },
+      });
+  }
+
   statusKey(status: string): string {
     const keys: Record<string, string> = {
       PENDING: 'ROI.STATUS_PENDING',

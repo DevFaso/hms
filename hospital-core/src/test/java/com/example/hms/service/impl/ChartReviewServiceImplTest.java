@@ -119,6 +119,8 @@ class ChartReviewServiceImplTest {
         patient.setId(PATIENT_ID);
 
         when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
+        // QA D4270: a release resolves its patient through the release gate (the patient's own approved copy).
+        org.mockito.Mockito.lenient().when(patientChartAccess.requireForRelease(eq(PATIENT_ID), any())).thenReturn(patient);
         when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
 
         // Default empty results so individual tests only have to populate what they need.
@@ -258,6 +260,8 @@ class ChartReviewServiceImplTest {
         var repository = mock(com.example.hms.repository.RoiRequestRepository.class);
         var roles = mock(com.example.hms.utility.RoleValidator.class);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
+        // QA D4270: a clinician, one of the roles that collect any approved copy of the hospital.
+        when(roles.hasAnyAuthority(any(String[].class))).thenReturn(true);
         var request = com.example.hms.model.RoiRequest.builder().hospital(hospital).patientId(PATIENT_ID)
             .requesterType(com.example.hms.enums.RoiRequesterType.THIRD_PARTY)
             .requesterName("Approved third party").scopeDescription("FULL_RECORD")
@@ -268,7 +272,8 @@ class ChartReviewServiceImplTest {
             mock(com.example.hms.repository.StaffRepository.class), roles, mock(com.example.hms.service.RequiredAuditEventLogPort.class),
             mock(com.example.hms.mapper.RoiRequestMapper.class), java.time.Clock.systemUTC());
         var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
-            new com.example.hms.controller.RoiRecordExportController(requests, pdf)).build();
+            new com.example.hms.controller.RoiRecordExportController(requests, pdf,
+                mock(com.example.hms.service.PatientPortalService.class))).build();
         com.example.hms.security.context.HospitalContextHolder.setContext(
             com.example.hms.security.context.HospitalContext.builder().principalUserId(readerId).activeHospitalId(HOSPITAL_ID).build());
         try {

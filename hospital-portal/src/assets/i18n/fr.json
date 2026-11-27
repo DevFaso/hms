@@ -2211,6 +2211,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
+      "MINOR_PORTAL_ACTION_REFUSED": "Action refusée sur le compte portail d’un mineur (règle des droits des mineurs selon l’âge)",
       "AUDIT_RETENTION_PURGED": "Entrées d’audit au-delà de la durée de conservation supprimées",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
@@ -7841,6 +7842,7 @@
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
         "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques validé",
         "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de règle clinique révoquée",
+        "MINOR_PORTAL_ACTION_REFUSED": "Action du portail refusée à un mineur",
         "AUDIT_RETENTION_PURGED": "Entrées d’audit supprimées après la durée de conservation"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
@@ -16839,6 +16841,12 @@
     "CODE_SENT_GENERIC": "Un code a été envoyé.",
     "EXPIRES": "Valable jusqu’à {{time}}."
   },
+  "MINOR_RIGHTS": {
+    "UNDER_13": "Ce compte est celui d’un enfant de moins de 13 ans : il est en lecture seule. Un parent ou le tuteur légal effectue cette démarche à l’accueil de l’établissement.",
+    "AGE_13_14": "À 13 et 14 ans, votre compte est en lecture seule. Pour cette démarche, adressez-vous à l’accueil de l’établissement avec un parent ou votre tuteur légal.",
+    "FAMILY_15_17": "Avant 18 ans, donner à un autre adulte l’accès à votre dossier se fait à l’accueil, avec un parent ou votre tuteur légal. Vous pouvez retirer vous-même un accès déjà donné, sauf celui d’un parent ou d’un tuteur vérifié.",
+    "SHARING_15_17": "Avant 18 ans, vous pouvez fermer vous-même le partage avec les autres hôpitaux. Pour le rouvrir, adressez-vous à l’accueil avec un parent ou votre tuteur légal."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",
     "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",
@@ -16858,6 +16866,11 @@
     "FAILED": "Impossible de terminer cette action. Réessayez.",
     "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
     "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
+    "DOWNLOAD": "Télécharger ma copie (PDF)",
+    "DOWNLOAD_UNTIL": "Copie disponible jusqu’au",
+    "COPY_EXPIRED": "Le délai pour télécharger cette copie est dépassé. Faites une nouvelle demande.",
+    "DOWNLOAD_FAILED": "La copie n’a pas pu être téléchargée. Réessayez.",
+    "DESK_COPY_EXPIRED": "Délai de retrait de la copie dépassé",
     "EXPORT": "Télécharger la copie approuvée (PDF)"
   }
 }

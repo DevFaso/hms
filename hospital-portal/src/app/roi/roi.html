@@ -179,12 +179,12 @@
                     </td>
                   }
                   <td class="actions-cell">
-                    @if (
-                      canExport() &&
-                      row.status === 'FULFILLED' &&
-                      row.requestKind !== 'CORRECTION' &&
-                      row.scopeDescription === 'FULL_RECORD'
-                    ) {
+                    @if (copyExpired(row)) {
+                      <span class="copy-expired" data-testid="roi-copy-expired">{{
+                        'RECORD_RIGHTS.DESK_COPY_EXPIRED' | translate
+                      }}</span>
+                    }
+                    @if (canExportRow(row)) {
                       <button
                         type="button"
                         class="btn-link"

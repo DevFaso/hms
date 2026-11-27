@@ -2245,6 +2245,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
   },
+  // QA D4269: an action on a minor's own portal account refused by the age rule (action and band in details).
+  {
+    key: 'AUDIT.DESC.MINOR_PORTAL_ACTION_REFUSED',
+    re: /^Portal action refused by the minors' rights rule$/,
+    params: [],
+  },
   // V382: the retention purge of the audit tables records itself (counts and cutoff in details).
   {
     key: 'AUDIT.DESC.AUDIT_RETENTION_PURGED',

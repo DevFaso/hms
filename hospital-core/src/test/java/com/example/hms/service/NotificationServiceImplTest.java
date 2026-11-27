@@ -573,4 +573,58 @@ class NotificationServiceImplTest {
         assertThat(service.withdrawForSubjects(recipient, type, ids)).isZero();
         verifyNoInteractions(notificationRepository);
     }
+
+    @Nested
+    @DisplayName("QA D4269: a minor's own SMS and e-mail consent, by age")
+    class MinorsOwnContactConsent {
+
+        private final UUID minorUserId = UUID.randomUUID();
+        private final AuditEventLogService refusals = org.mockito.Mockito.mock(AuditEventLogService.class);
+
+        private void patientBorn(java.time.LocalDate dateOfBirth, List<NotificationPreference> stored) {
+            service.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+                refusals, java.time.Clock.systemDefaultZone()));
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setId(UUID.randomUUID());
+            patient.setDateOfBirth(dateOfBirth);
+            when(patientRepository.findByUserId(minorUserId)).thenReturn(Optional.of(patient));
+            when(notificationPreferenceRepository.findByUser_Id(minorUserId)).thenReturn(stored);
+        }
+
+        private NotificationPreference stored(NotificationChannel channel, boolean enabled) {
+            User user = new User(); user.setId(minorUserId);
+            return NotificationPreference.builder().user(user).notificationType(NotificationType.LAB_RESULT)
+                .channel(channel).enabled(enabled).build();
+        }
+
+        @Test
+        @DisplayName("at 14 no SMS or e-mail choice changes: refused before the account is locked")
+        void atFourteenNothingChanges() {
+            patientBorn(java.time.LocalDate.now().minusYears(14), List.of());
+            var off = List.of(new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.SMS, false));
+            assertThatThrownBy(() -> service.updatePreferences(minorUserId, off))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            verify(userRepository, never()).lockForNotificationPreferences(any());
+            verify(notificationPreferenceRepository, never()).saveAll(any());
+        }
+
+        @Test
+        @DisplayName("at 16 a consent is withdrawn alone, and giving one back is refused")
+        void atSixteenWithdrawOnly() {
+            patientBorn(java.time.LocalDate.now().minusYears(16), List.of(stored(NotificationChannel.EMAIL, false)));
+            var giveBack = List.of(new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.EMAIL, true));
+            assertThatThrownBy(() -> service.updatePreferences(minorUserId, giveBack))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            verify(userRepository, never()).lockForNotificationPreferences(any());
+
+            User user = new User(); user.setId(minorUserId);
+            when(userRepository.lockForNotificationPreferences(minorUserId)).thenReturn(Optional.of(user));
+            // A choice that changes nothing (e-mail already off, in-app) is no consent change; SMS off is a withdrawal.
+            service.updatePreferences(minorUserId, List.of(
+                new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.SMS, false),
+                new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.EMAIL, false),
+                new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.IN_APP, true)));
+            verify(notificationPreferenceRepository).saveAll(any());
+        }
+    }
 }

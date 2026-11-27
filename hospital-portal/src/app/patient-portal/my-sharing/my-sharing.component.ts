@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -24,6 +25,7 @@ import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { refusalReason } from '../../shared/refusal-reason';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { PortalRights, minorNoticeKey } from '../minor-rights';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -79,6 +81,11 @@ export class MySharingComponent implements OnInit {
   showOptOutForm = signal(false);
   optOutReason = '';
   private patientId = '';
+  /** QA D4269: what the account may do alone, by the patient's age; null until known (the server decides). */
+  readonly rights = signal<PortalRights | null>(null);
+  readonly canCloseSharing = computed(() => this.rights()?.closeSharing !== false);
+  readonly canReopenSharing = computed(() => this.rights()?.reopenSharing !== false);
+  readonly minorNotice = computed(() => minorNoticeKey(this.rights(), 'sharing'));
 
   /* ── Access log ── */
   loadingLog = signal(true);
@@ -103,6 +110,7 @@ export class MySharingComponent implements OnInit {
     this.portal.getMyProfile().subscribe({
       next: (profile) => {
         this.patientId = profile.id ?? '';
+        this.rights.set(profile.portalRights ?? null);
         this.loadOptOut();
       },
       error: (err: unknown) => {
@@ -177,6 +185,7 @@ export class MySharingComponent implements OnInit {
   }
 
   openOptOutForm(): void {
+    if (!this.canCloseSharing()) return;
     this.optOutReason = '';
     this.showOptOutForm.set(true);
   }
@@ -216,7 +225,7 @@ export class MySharingComponent implements OnInit {
   }
 
   async revokeOptOut(): Promise<void> {
-    if (!this.patientId || this.optOutSaving()) return;
+    if (!this.patientId || this.optOutSaving() || !this.canReopenSharing()) return;
     // QA CX-010: one click opened the record to other hospitals again.
     const confirmed = await this.confirm.ask({
       titleKey: 'PORTAL.SHARING.OPT_OUT.REVOKE_CONFIRM',

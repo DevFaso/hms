@@ -1,4 +1,5 @@
 import { WritableSignal, signal } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
@@ -50,10 +51,13 @@ describe('RoiComponent', () => {
   // the mid-flight unpin test needs that invalidation to actually happen.
   let scopedHospitalId: WritableSignal<string | null>;
   let decisionRoles: boolean;
+  /** QA D4270: when set, the roles this user holds (the mock then answers per role list). */
+  let heldRoles: string[] | null;
 
   beforeEach(async () => {
     scopedHospitalId = signal<string | null>('h1');
     decisionRoles = true;
+    heldRoles = null;
     roiService = jasmine.createSpyObj<RoiService>('RoiService', [
       'worklist',
       'create',
@@ -100,15 +104,71 @@ describe('RoiComponent', () => {
             globalView: () => scopedHospitalId() === null,
             selectedHospitalId: () => scopedHospitalId(),
             permittedHospitalIds: ['h1'],
-            hasAnyActiveRole: () => decisionRoles,
+            hasAnyActiveRole: (roles: readonly string[]) =>
+              heldRoles ? roles.some((role) => heldRoles?.includes(role)) : decisionRoles,
           },
         },
+        { provide: AuthService, useValue: { getUserId: () => 'u-admin' } },
         { provide: ToastService, useValue: toast },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(RoiComponent);
     component = fixture.componentInstance;
+  });
+
+  it('QA D4270: the records desk and the clinicians produce any approved copy of the hospital', () => {
+    const approved = request({ status: 'FULFILLED', scopeDescription: 'FULL_RECORD' });
+    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']) {
+      heldRoles = [role];
+      expect(component.canExportRow(approved)).withContext(role).toBeTrue();
+    }
+    heldRoles = ['ROLE_ACCOUNTANT'];
+    expect(component.canExportRow(approved)).toBeFalse();
+    heldRoles = ['ROLE_RECEPTIONIST'];
+    expect(
+      component.canExportRow(request({ status: 'DENIED', scopeDescription: 'FULL_RECORD' })),
+    ).toBeFalse();
+    expect(
+      component.canExportRow(request({ status: 'PENDING', scopeDescription: 'FULL_RECORD' })),
+    ).toBeFalse();
+    expect(
+      component.canExportRow(request({ status: 'FULFILLED', scopeDescription: 'Labs only' })),
+    ).toBeFalse();
+  });
+
+  it('QA D4270: a hospital administrator produces only the copies they approved', () => {
+    heldRoles = ['ROLE_HOSPITAL_ADMIN'];
+    const mine = request({
+      status: 'FULFILLED',
+      scopeDescription: 'FULL_RECORD',
+      decisionActorUserId: 'u-admin',
+    });
+    const anothers = { ...mine, decisionActorUserId: 'u-other' };
+    expect(component.canExportRow(mine)).toBeTrue();
+    expect(component.canExportRow(anothers)).toBeFalse();
+    component.exportCopy(anothers);
+    expect(roiService.downloadCopy).not.toHaveBeenCalled();
+    roiService.downloadCopy.and.returnValue(of(new Blob(['%PDF'])));
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:copy');
+    component.exportCopy(mine);
+    expect(roiService.downloadCopy).toHaveBeenCalledOnceWith(mine.id);
+  });
+
+  it('QA D4270: a copy whose collection period is over is said expired and not offered', () => {
+    heldRoles = ['ROLE_RECEPTIONIST'];
+    const expired = request({
+      status: 'FULFILLED',
+      scopeDescription: 'FULL_RECORD',
+      copyDownloadable: false,
+    });
+    roiService.worklist.and.returnValue(of(page([expired])));
+    fixture.detectChanges();
+    expect(component.canExportRow(expired)).toBeFalse();
+    expect(component.copyExpired(expired)).toBeTrue();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="roi-copy-expired"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="roi-export-copy"]')).toBeNull();
   });
 
   it('does not offer or send a PDF export after the hospital scope is removed', () => {

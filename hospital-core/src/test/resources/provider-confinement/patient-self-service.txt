@@ -65,6 +65,7 @@ GET /me/patient/recipient-verification
 GET /me/patient/referrals
 GET /me/patient/refills
 GET /me/patient/roi-requests
+GET /me/patient/roi-requests/{requestId}/record.pdf
 GET /me/patient/social-history
 GET /me/patient/surgical-history
 GET /me/patient/treatment-plans

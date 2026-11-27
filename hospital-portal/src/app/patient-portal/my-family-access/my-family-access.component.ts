@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -23,6 +24,7 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dial
 import { refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
+import { PortalRights, minorNoticeKey } from '../minor-rights';
 
 /** QA D1281: the grant form's required fields, in reading order. */
 const GRANT_USERNAME_ID = 'family-proxy-username';
@@ -99,8 +101,22 @@ export class MyFamilyAccessComponent implements OnInit {
   /** Earliest selectable expiry — a grant that expires in the past is a revoke. */
   readonly minExpiry = localDateString();
 
+  /** QA D4269: what the account may do alone, by the patient's age; null until known (the server decides). */
+  readonly rights = signal<PortalRights | null>(null);
+  readonly canGrant = computed(() => this.rights()?.grantFamilyAccess !== false);
+  readonly canRevoke = computed(() => this.rights()?.revokeFamilyAccess !== false);
+  readonly minorNotice = computed(() => minorNoticeKey(this.rights(), 'family'));
+
   ngOnInit(): void {
     this.loadProxies();
+    this.portalService.getMyProfile().subscribe({
+      next: (profile) => {
+        this.rights.set(profile.portalRights ?? null);
+        if (!this.canGrant()) this.showGrantForm.set(false);
+      },
+      // Unknown rights hide nothing: the server refuses what the age does not allow, in its own words.
+      error: () => void 0,
+    });
   }
 
   loadProxies(): void {

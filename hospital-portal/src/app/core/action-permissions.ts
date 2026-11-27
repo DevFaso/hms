@@ -32,7 +32,15 @@ export const ACTION_PERMISSIONS = {
   },
   roiRecordPdfExport: {
     endpoint: 'RoiRecordExportController#download',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+    // QA D4270: the records desk too, and the hospital administrator for the requests they approved (roi.ts).
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_RECEPTIONIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
   },
   // QA D3220: « Demander du sang » on the labour card, the post-partum watch and the prescription dialog.
   transfusionRequestCreate: {

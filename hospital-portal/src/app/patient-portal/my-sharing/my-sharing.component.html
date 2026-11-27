@@ -87,16 +87,18 @@
           </div>
         </div>
       } @else if (optedOut()) {
-        <button
-          type="button"
-          class="opt-out-btn opt-out-btn--ghost"
-          data-testid="opt-out-revoke"
-          (click)="revokeOptOut()"
-          [disabled]="optOutSaving()"
-        >
-          {{ 'PORTAL.SHARING.OPT_OUT.DISABLE' | translate }}
-        </button>
-      } @else {
+        @if (canReopenSharing()) {
+          <button
+            type="button"
+            class="opt-out-btn opt-out-btn--ghost"
+            data-testid="opt-out-revoke"
+            (click)="revokeOptOut()"
+            [disabled]="optOutSaving()"
+          >
+            {{ 'PORTAL.SHARING.OPT_OUT.DISABLE' | translate }}
+          </button>
+        }
+      } @else if (canCloseSharing()) {
         <button
           type="button"
           class="opt-out-btn"
@@ -106,6 +108,13 @@
         >
           {{ 'PORTAL.SHARING.OPT_OUT.ENABLE' | translate }}
         </button>
+      }
+      <!-- QA D4269: why a minor's account does not offer the action, and who does it. -->
+      @if (minorNotice(); as noticeKey) {
+        <p class="minor-notice" role="note" data-testid="minor-rights-notice">
+          <span class="material-symbols-outlined" aria-hidden="true">info</span>
+          <span>{{ noticeKey | translate }}</span>
+        </p>
       }
       <p class="rec-muted opt-out-note">
         {{ 'PORTAL.SHARING.OPT_OUT.OWN_HOSPITAL_NOTE' | translate }}
