@@ -394,6 +394,15 @@ class InsurerClaimsPostgresIT {
             kabore.share())).isEqualByComparingTo("13600");
         assertThat(text("SELECT status FROM billing.invoice_payer_shares WHERE id = ?", sawadogo.share()))
             .isEqualTo("CLAIMED");
+        // QA D3983: a claimed share is refused on its bordereau, never wholly from the share list; the database
+        // update itself only refuses an open share, so the patient's balance never moves from here.
+        assertThatThrownBy(() -> coverage.reject(sawadogo.invoice(), sawadogo.share(), "Hors délai"))
+            .isInstanceOf(ConflictException.class);
+        Integer rejectedWhole = tx.execute(status -> shares.rejectWhole(sawadogo.share(), hospitalA, accountant,
+            java.time.LocalDateTime.now(), "Hors délai"));
+        assertThat(rejectedWhole).isZero();
+        assertThat(text("SELECT status FROM billing.invoice_payer_shares WHERE id = ?", sawadogo.share()))
+            .isEqualTo("CLAIMED");
         // Sent again (a retry): the same bordereau, the same number, nothing claimed twice.
         assertThat(batches.submit(draft.getId(), null).getNumber()).isEqualTo(submitted.getNumber());
 
