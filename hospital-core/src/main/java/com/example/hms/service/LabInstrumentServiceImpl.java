@@ -57,6 +57,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Transactional
     public LabInstrumentResponseDTO create(UUID hospitalId, LabInstrumentRequestDTO dto, Locale locale) {
         requireHospitalScope(hospitalId, locale);
+        validateDates(dto);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
@@ -77,6 +78,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
+        validateDates(dto);
 
         // Check serial number uniqueness if changed
         if (dto.getSerialNumber() != null
@@ -103,6 +105,27 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     }
 
     // ── helpers ───────────────────────────────────────────────────
+
+    private static void validateDates(LabInstrumentRequestDTO dto) {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        requireNotFuture(dto.getInstallationDate(), today, "installationDate");
+        requireNotFuture(dto.getLastCalibrationDate(), today, "lastCalibrationDate");
+        requireNotFuture(dto.getLastMaintenanceDate(), today, "lastMaintenanceDate");
+        requireOrdered(dto.getLastCalibrationDate(), dto.getNextCalibrationDate(), "nextCalibrationDate");
+        requireOrdered(dto.getLastMaintenanceDate(), dto.getNextMaintenanceDate(), "nextMaintenanceDate");
+    }
+
+    private static void requireNotFuture(java.time.LocalDate date, java.time.LocalDate today, String field) {
+        if (date != null && date.isAfter(today)) {
+            throw new com.example.hms.exception.FieldBusinessException(field, "clinical.date.future");
+        }
+    }
+
+    private static void requireOrdered(java.time.LocalDate last, java.time.LocalDate next, String field) {
+        if (last != null && next != null && next.isBefore(last)) {
+            throw new com.example.hms.exception.FieldBusinessException(field, "query.dateRange.reversed");
+        }
+    }
 
     private Department resolveDepartment(String departmentId) {
         if (departmentId == null || departmentId.isBlank()) return null;

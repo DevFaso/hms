@@ -108,6 +108,30 @@ class LabInstrumentServiceImplTest {
         HospitalContextHolder.clear();
     }
 
+    @Test
+    void createAndUpdateRejectInvalidInstrumentDatesBeforeSaving() {
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        requestDto.setInstallationDate(today.plusDays(1));
+        assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setInstallationDate(today);
+        requestDto.setLastCalibrationDate(today);
+        requestDto.setNextCalibrationDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextCalibrationDate(today);
+        requestDto.setLastMaintenanceDate(today);
+        requestDto.setNextMaintenanceDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(instrumentRepository, never()).save(any());
+    }
+
     // ── getByHospital ────────────────────────────────────────────
 
     @Test
