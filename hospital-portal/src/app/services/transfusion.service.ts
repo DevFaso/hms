@@ -81,6 +81,8 @@ export interface AntibodyStatusResponse {
   severeTransfusionReaction?: boolean;
   severeTransfusionReactionType?: TransfusionReactionType | null;
   severeTransfusionReactionAt?: string | null;
+  /** QA D4151 review: the hospital that holds the reaction's record (it follows the patient). */
+  severeTransfusionReactionHospitalName?: string | null;
 }
 
 export interface AntibodyWorkupRequest {

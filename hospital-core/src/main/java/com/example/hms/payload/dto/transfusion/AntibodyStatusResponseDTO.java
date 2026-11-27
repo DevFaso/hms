@@ -58,6 +58,8 @@ public class AntibodyStatusResponseDTO {
     private boolean severeTransfusionReaction;
     private com.example.hms.enums.TransfusionReactionType severeTransfusionReactionType;
     private LocalDateTime severeTransfusionReactionAt;
+    /** The hospital that holds that reaction's record (it follows the patient to every hospital). */
+    private String severeTransfusionReactionHospitalName;
 
     @Data
     @Builder

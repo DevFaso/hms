@@ -14,7 +14,11 @@ public interface TransfusionReactionRepository extends JpaRepository<Transfusion
 
     List<TransfusionReaction> findByHospital_IdOrderByOnsetAtDesc(UUID hospitalId);
 
-    /** QA D4151: the newest reaction of one of these severities on the patient's record at this hospital. */
-    java.util.Optional<TransfusionReaction> findFirstByPatient_IdAndHospital_IdAndSeverityInOrderByOnsetAtDesc(
-        UUID patientId, UUID hospitalId, java.util.Collection<com.example.hms.enums.TransfusionReactionSeverity> severities);
+    /**
+     * QA D4151: the newest reaction of one of these severities on the patient's record, at any hospital (a
+     * severe reaction follows the patient, like the antibody flag).
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"hospital"})
+    java.util.Optional<TransfusionReaction> findFirstByPatient_IdAndSeverityInOrderByOnsetAtDesc(
+        UUID patientId, java.util.Collection<com.example.hms.enums.TransfusionReactionSeverity> severities);
 }

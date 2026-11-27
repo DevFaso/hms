@@ -162,6 +162,8 @@ public class LabResultReleaseNotifier {
 
     static final String ORDER_VOIDED_MESSAGE_KEY = "lab.order.voided.notification";
     static final String ORDER_CANCELLED_MESSAGE_KEY = "lab.order.cancelled.notification";
+    /** A voided order that had no result: nothing the clinician could have read is withdrawn. */
+    static final String ORDER_VOIDED_NO_RESULT_MESSAGE_KEY = "lab.order.voidedNoResult.notification";
 
     /**
      * QA D4149 (r81): an order was declared entered in error (its results leave every list) or was
@@ -170,6 +172,14 @@ public class LabResultReleaseNotifier {
      * that withdrew the order: the names are read here, the notice is written after the commit.
      */
     public void prescriberOrderWithdrawn(LabOrder order, boolean voided, UUID actorUserId) {
+        prescriberOrderWithdrawn(order, voided, voided, actorUserId);
+    }
+
+    /**
+     * {@link #prescriberOrderWithdrawn(LabOrder, boolean, UUID)}, saying whether the voided order had a result:
+     * a void of an order with none speaks of the order, never of « this result ».
+     */
+    public void prescriberOrderWithdrawn(LabOrder order, boolean voided, boolean hadResult, UUID actorUserId) {
         User clinician = order != null && order.getOrderingStaff() != null ? order.getOrderingStaff().getUser() : null;
         if (clinician == null || clinician.getUsername() == null || clinician.getUsername().isBlank()
                 || (actorUserId != null && actorUserId.equals(clinician.getId()))) {
@@ -177,7 +187,8 @@ public class LabResultReleaseNotifier {
         }
         UUID orderId = order.getId();
         String username = clinician.getUsername();
-        String messageKey = voided ? ORDER_VOIDED_MESSAGE_KEY : ORDER_CANCELLED_MESSAGE_KEY;
+        String messageKey = !voided ? ORDER_CANCELLED_MESSAGE_KEY
+            : hadResult ? ORDER_VOIDED_MESSAGE_KEY : ORDER_VOIDED_NO_RESULT_MESSAGE_KEY;
         Object[] args = {testNameOf(order), patientNameOf(order), order.getCancellationReason()};
         TransactionCallbacks.afterCommit(() -> {
             try {

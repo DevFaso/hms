@@ -1155,7 +1155,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         // "new result available" notifications leave with them.
         resultReleaseNotifier.patientResultsWithdrawn(saved, voidedResultIds);
         // QA D4149: the prescriber may have acted on a result that no longer exists: they are told, with why.
-        resultReleaseNotifier.prescriberOrderWithdrawn(saved, true, roleValidator.getCurrentUserId());
+        resultReleaseNotifier.prescriberOrderWithdrawn(saved, true, !voidedResultIds.isEmpty(),
+            roleValidator.getCurrentUserId());
         log.info("Lab order {} voided as entered in error", saved.getId());
         return labOrderMapper.toLabOrderResponseDTO(saved);
     }
@@ -1164,12 +1165,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason,
                                                         Locale locale) {
-        LabOrder labOrder = labOrderRepository.findById(id)
+        // QA D4148 review: a cancellation decides on the order as it is committed, under the lock the
+        // collection and the void take, so a tube collected meanwhile is never cancelled over.
+        boolean cancelling = toStatus == LabOrderStatus.CANCELLED;
+        LabOrder labOrder = (cancelling ? labOrderRepository.findWithLockById(id) : labOrderRepository.findById(id))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (!labOrder.isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        if (cancelling) {
+            LabOrderStatus committed = labOrderRepository.findStatusById(id);
+            if (committed != null) {
+                labOrder.setStatus(committed);
+            }
         }
 
         LabOrderStatus current = labOrder.getStatus();

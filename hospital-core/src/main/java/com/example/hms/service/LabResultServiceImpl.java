@@ -1080,6 +1080,8 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         requireResultInActiveHospital(labResult);
+        // QA D4150 (class): nor is it deleted by the laboratory that sent the order out.
+        requireEnteredByPerformingLab(labResult.getLabOrder(), roleValidator.requireActiveHospitalId());
         requireNotReleased(labResult);
         // QA D1428 class: nor is the signature taken away with the row.
         if (labResult.getSignedAt() != null) {

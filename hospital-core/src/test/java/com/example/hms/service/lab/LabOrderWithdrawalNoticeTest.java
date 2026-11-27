@@ -82,6 +82,22 @@ class LabOrderWithdrawalNoticeTest {
             .contains("entered in error").contains("Reason: Mauvais patient prélevé");
     }
 
+    /** Review of QA D4149: a void of an order that never had a result does not speak of « this result ». */
+    @Test
+    void aVoidOfAnOrderWithNoResultSpeaksOfTheOrder() {
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+
+        notifier.prescriberOrderWithdrawn(order, true, false, UUID.randomUUID());
+
+        verify(notificationService).createNotification(eq("lab.order.voidedNoResult.notification"), args.capture(),
+            eq("dr.kabore"), eq("LAB_RESULT"));
+        com.example.hms.service.i18n.NotificationLocalizer localizer = new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles());
+        List<Object> stored = com.example.hms.service.i18n.NotificationLocalizer.storable(args.getValue());
+        assertThat(localizer.render("lab.order.voidedNoResult.notification", stored, Locale.FRENCH))
+            .contains("Kaliémie").contains("avant tout résultat").doesNotContain("ce résultat");
+    }
+
     @Test
     void aCancellationTellsThePrescriber_withTheReason() {
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);

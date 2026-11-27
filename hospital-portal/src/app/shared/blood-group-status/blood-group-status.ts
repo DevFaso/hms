@@ -25,6 +25,8 @@ export interface BloodGroupStatus {
   /** The newest such reaction: its type (ACUTE_HEMOLYTIC, ...) and when it began. */
   severeTransfusionReactionType?: string | null;
   severeTransfusionReactionAt?: string | null;
+  /** QA D4151 review: the hospital that holds the reaction's record (it follows the patient). */
+  severeTransfusionReactionHospitalName?: string | null;
 }
 
 /** What a screen shows: the confirmed group when there is one, else the declared one (labelled so). */

@@ -66,18 +66,18 @@ class LabResultEntryPerformingLabTest {
             .doesNotThrowAnyException();
     }
 
-    /** The class: every write of a result's value asks the rule, in its own method. */
+    /** The class: every write of a result (its entry, its edit, its deletion) asks the rule, in its own method. */
     @Test
-    void theEntryAndTheEditBothAskTheRule() throws IOException {
+    void theEntryTheEditAndTheDeleteAllAskTheRule() throws IOException {
         String source = Files.readString(Path.of("src/main/java/com/example/hms/service/LabResultServiceImpl.java"),
             StandardCharsets.UTF_8).replace("\r\n", "\n");
         for (String method : List.of("private LabResultResponseDTO createLabResult(",
-                "public LabResultResponseDTO updateLabResult(")) {
+                "public LabResultResponseDTO updateLabResult(", "public void deleteLabResult(")) {
             int start = source.indexOf(method);
             assertThat(start).as(method).isPositive();
             int end = source.indexOf("\n    }\n", start);
             assertThat(source.substring(start, end)).as(method + "…) asks who performs the order")
-                .contains("requireEnteredByPerformingLab(labOrder,");
+                .contains("requireEnteredByPerformingLab(");
         }
     }
 }

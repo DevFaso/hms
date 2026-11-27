@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -126,6 +127,22 @@ class LabOrderPrescriberCancelTest {
         verify(resultReleaseNotifier, never()).prescriberOrderWithdrawn(any(), anyBoolean(), any());
     }
 
+    /** Review of QA D4148: a collection committed meanwhile decides, not the order as it was first read. */
+    @Test
+    void aCollectionCommittedMeanwhileIsNotCancelledOver() {
+        order.setStatus(LabOrderStatus.PENDING);
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.COLLECTED);
+        actingAs(prescriberId);
+        UUID id = order.getId();
+
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "Changed my mind",
+                Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.order.cancelForbidden");
+        verify(labOrderRepository).findWithLockById(id);
+        verify(labOrderRepository, never()).save(any());
+    }
+
     @Test
     void anotherDoctorDoesNotCancelAColleaguesOrder() {
         actingAs(colleagueId);
@@ -158,6 +175,6 @@ class LabOrderPrescriberCancelTest {
         service.voidLabOrder(order.getId(), "Wrong patient sampled", Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ENTERED_IN_ERROR);
-        verify(resultReleaseNotifier).prescriberOrderWithdrawn(order, true, managerId);
+        verify(resultReleaseNotifier).prescriberOrderWithdrawn(eq(order), eq(true), anyBoolean(), eq(managerId));
     }
 }

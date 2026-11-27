@@ -55,38 +55,32 @@ public class PatientBloodGroupStatusService {
     }
 
     /**
-     * QA D4151: the severe transfusion reactions on record, for the safety line of one chart. Lazy like the
+     * QA D4151: the severe transfusion reaction on record, for the safety line of one chart. Lazy like the
      * others; absent in a test that builds this by hand.
      */
-    private ObjectProvider<com.example.hms.repository.TransfusionReactionRepository> reactions;
+    private ObjectProvider<SevereTransfusionReactionLookup> reactions;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public void setReactions(ObjectProvider<com.example.hms.repository.TransfusionReactionRepository> reactions) {
+    public void setReactions(ObjectProvider<SevereTransfusionReactionLookup> reactions) {
         this.reactions = reactions;
     }
 
-    /** QA D4151: the severities that stay on the patient's record as a safety line. */
-    static final java.util.Set<com.example.hms.enums.TransfusionReactionSeverity> ON_RECORD = java.util.EnumSet.of(
-        com.example.hms.enums.TransfusionReactionSeverity.SEVERE,
-        com.example.hms.enums.TransfusionReactionSeverity.LIFE_THREATENING);
-
     /**
-     * QA D4151 (r81): a severe reaction stopped the transfusion, alerted the doctors and the laboratory, and
-     * then appeared nowhere on the patient's record: the next prescriber of blood saw nothing. It is read here,
-     * for every screen that shows the blood group of one chart.
+     * QA D4151 (r81) and its review: a severe reaction stopped the transfusion, alerted the doctors and the
+     * laboratory, and then appeared nowhere on the patient's record: the next prescriber of blood saw nothing.
+     * It follows the patient to every hospital, like the antibody flag, with the hospital that holds it.
      */
     private void withSevereReaction(BloodGroupStatusDTO status, UUID patientId, UUID hospitalId) {
-        com.example.hms.repository.TransfusionReactionRepository repository =
-            reactions == null ? null : reactions.getIfAvailable();
-        if (repository == null || hospitalId == null) {
+        SevereTransfusionReactionLookup lookup = reactions == null ? null : reactions.getIfAvailable();
+        if (lookup == null) {
             return;
         }
-        Optional<com.example.hms.model.TransfusionReaction> newest = repository
-            .findFirstByPatient_IdAndHospital_IdAndSeverityInOrderByOnsetAtDesc(patientId, hospitalId, ON_RECORD);
+        Optional<SevereTransfusionReactionLookup.SevereReaction> newest = lookup.shownAt(patientId, hospitalId);
         status.setSevereTransfusionReaction(newest.isPresent());
         newest.ifPresent(reaction -> {
-            status.setSevereTransfusionReactionType(reaction.getReactionType());
-            status.setSevereTransfusionReactionAt(reaction.getOnsetAt());
+            status.setSevereTransfusionReactionType(reaction.type());
+            status.setSevereTransfusionReactionAt(reaction.onsetAt());
+            status.setSevereTransfusionReactionHospitalName(reaction.hospitalName());
         });
     }
 

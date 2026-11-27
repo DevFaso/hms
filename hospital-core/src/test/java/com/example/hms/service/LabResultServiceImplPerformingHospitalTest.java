@@ -252,6 +252,30 @@ class LabResultServiceImplPerformingHospitalTest {
         verify(labResultRepository, never()).save(any());
     }
 
+    /** QA D4150 (class): the ordering hospital does not delete the performing laboratory's draft of an order sent out. */
+    @Test
+    void theOrderingHospitalDoesNotDeleteTheResultOfAnOrderItSentOut() {
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        UUID id = result.getId();
+
+        assertThatThrownBy(() -> service.deleteLabResult(id, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.result.entryOtherLab");
+        verify(labResultRepository, never()).deleteById(any());
+    }
+
+    /** ...while the performing laboratory still deletes its own draft. */
+    @Test
+    void thePerformingLaboratoryDeletesItsOwnDraft() {
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+
+        service.deleteLabResult(result.getId(), Locale.ENGLISH);
+
+        verify(labResultRepository).deleteById(result.getId());
+    }
+
     @Test
     void resultIsReadableByBothHospitalsAndNotByAThird() {
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));

@@ -139,7 +139,7 @@ public class WristbandPdfService {
         return mrn != null ? mrn : DASH;
     }
 
-    /** The test a tube is for, and its priority when it is not routine. */
+    /** The test a tube is for, after its priority when it is not routine. */
     private static String specimenTest(com.example.hms.model.LabOrder order) {
         if (order == null || order.getLabTestDefinition() == null) {
             return DASH;
@@ -147,7 +147,8 @@ public class WristbandPdfService {
         String test = safe(order.getLabTestDefinition().getName());
         String priority = order.getPriority();
         boolean routine = priority == null || priority.isBlank() || "ROUTINE".equalsIgnoreCase(priority.trim());
-        return routine ? test : test + "  [" + priority.trim().toUpperCase(java.util.Locale.ROOT) + "]";
+        // The priority leads: a long test name is what gets cut on the label, never « [STAT] ».
+        return routine ? test : "[" + priority.trim().toUpperCase(java.util.Locale.ROOT) + "] " + test;
     }
 
     /**

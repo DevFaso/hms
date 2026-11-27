@@ -16633,7 +16633,7 @@
     "ALLO_IMMUNISED": "Aloinmunización: {{antibody}}",
     "ALLO_IMMUNISED_UNIDENTIFIED": "Aloinmunización: escrutinio de anticuerpos positivo, anticuerpo no identificado",
     "RHD_EXPOSED": "Expuesto a glóbulos rojos RhD positivo de urgencia: escrutinio de anticuerpos y seguimiento por comprobar",
-    "SEVERE_REACTION": "Reacción transfusional grave en la historia ({{type}}, {{date}}): compruebe antes de cualquier transfusión",
+    "SEVERE_REACTION": "Reacción transfusional grave en la historia ({{type}}, {{date}}, {{hospital}}): compruebe antes de cualquier transfusión",
     "SEVERE_REACTION_UNTYPED": "Reacción transfusional grave en la historia: compruebe antes de cualquier transfusión",
     "RHD_EXPOSED_UNCONFIRMED": "O RhD positivo entregado de urgencia, administración no confirmada: por comprobar",
     "DECLARED_FIELD": "Grupo sanguíneo declarado (no verificado)",

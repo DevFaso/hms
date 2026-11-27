@@ -228,12 +228,16 @@ class WristbandPdfServiceTest {
         // The name, then the date of birth and the record number at the ordering hospital.
         assertThat(label).contains("Awa Kaboré", "pdf.wristband.dob 1 mai 1990", "pdf.wristband.mrn OUA-1234");
         // The test the tube is for, and that it is not routine.
-        assertThat(label).contains("Kaliémie [STAT]");
+        assertThat(label).contains("[STAT] Kaliémie");
         assertThat(label).contains("ACC-20261127-00007", "Blood 27 nov. 2026 05:22");
 
         order.setPriority("ROUTINE");
         assertThat(textOf(service.generateSpecimenLabelPdf(specimen.getId(), hospitalId)))
             .contains("Kaliémie").doesNotContain("[");
+        // A long test name is cut; the priority never is.
+        potassium.setName("Recherche et identification des anticorps irréguliers anti-érythrocytaires avec titrage");
+        order.setPriority("STAT");
+        assertThat(textOf(service.generateSpecimenLabelPdf(specimen.getId(), hospitalId))).contains("[STAT]");
     }
 
     @Test

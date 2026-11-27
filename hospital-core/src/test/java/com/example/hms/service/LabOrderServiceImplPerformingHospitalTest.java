@@ -478,7 +478,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Test
     void cancellationStaysWithTheOrderingHospitalEvenWhenActingAtTheLaboratory() {
         UUID labUserId = UUID.randomUUID();
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.isLabManager(labUserId, ordering.getId())).thenReturn(false);
@@ -498,7 +499,8 @@ class LabOrderServiceImplPerformingHospitalTest {
         order.setStatus(LabOrderStatus.ORDERED);
         order.setLabTestDefinition(null);
         UUID directorId = UUID.randomUUID();
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(directorId);
         when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);
@@ -517,7 +519,8 @@ class LabOrderServiceImplPerformingHospitalTest {
         // QA D666 decision (E9 #67): HOSPITAL_ADMIN is off clinical orders, in the service as in the controller.
         order.setStatus(LabOrderStatus.ORDERED);
         UUID adminId = UUID.randomUUID();
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(adminId);
         org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(adminId, ordering.getId())).thenReturn(true);
@@ -534,7 +537,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class, names = {"RESULTED", "VERIFIED", "COMPLETED"})
     void aResultedOrderIsNotCancelled_D1098(LabOrderStatus resulted) {
         order.setStatus(resulted);
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
 
         UUID id = order.getId();
@@ -553,7 +557,8 @@ class LabOrderServiceImplPerformingHospitalTest {
         // QA D673: LAB_DIRECTOR_A cancelled with {status:'CANCELLED'} and no reason, and got 200.
         order.setStatus(LabOrderStatus.ORDERED);
         UUID directorId = UUID.randomUUID();
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(directorId);
         when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);

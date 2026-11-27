@@ -82,4 +82,7 @@ public class BloodGroupStatusDTO {
 
     /** When that reaction began. */
     private java.time.LocalDateTime severeTransfusionReactionAt;
+
+    /** The hospital that holds that reaction's record (it follows the patient to every hospital). */
+    private String severeTransfusionReactionHospitalName;
 }

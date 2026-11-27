@@ -16633,7 +16633,7 @@
     "ALLO_IMMUNISED": "Allo-immunisation: {{antibody}}",
     "ALLO_IMMUNISED_UNIDENTIFIED": "Allo-immunisation: positive antibody screen, antibody not identified",
     "RHD_EXPOSED": "Exposed to RhD positive red cells in an emergency: antibody screen and follow-up to check",
-    "SEVERE_REACTION": "Severe transfusion reaction on record ({{type}}, {{date}}): check before any transfusion",
+    "SEVERE_REACTION": "Severe transfusion reaction on record ({{type}}, {{date}}, {{hospital}}): check before any transfusion",
     "SEVERE_REACTION_UNTYPED": "Severe transfusion reaction on record: check before any transfusion",
     "RHD_EXPOSED_UNCONFIRMED": "O RhD positive issued in an emergency, administration not confirmed: to check",
     "DECLARED_FIELD": "Declared blood group (not verified)",
