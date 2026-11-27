@@ -426,7 +426,9 @@ public class ActingScopeResolver {
      * {@code ?hospitalId=}, a body field or a path variable) — design §3.3
      * step 1 and §3.4 step 2. A verified super-admin may name any hospital;
      * anyone else, receptionists included, only one in their live permitted
-     * set. A refusal is audited (hourly per actor, hospital and reason) and
+     * set; on a write outside the patient portal, not one where a staff caller
+     * is only a patient ({@link HospitalContextRequestOverrides#refusesStaffWriteAt}).
+     * A refusal is audited (hourly per actor, hospital and reason) and
      * returned; the context is left unchanged.
      *
      * <p>Once the scope has been read by another consumer, or narrowed
@@ -441,7 +443,9 @@ public class ActingScopeResolver {
             return current();
         }
         HospitalContext context = ensureContext();
-        boolean permitted = context.isSuperAdmin() || context.getPermittedHospitalIds().contains(requestedHospitalId);
+        boolean permitted = context.isSuperAdmin()
+            || (context.getPermittedHospitalIds().contains(requestedHospitalId)
+                && !HospitalContextRequestOverrides.refusesStaffWriteAt(context, requestedHospitalId));
         if (!permitted) {
             ActingScope.Reason reason = classifyRefusal(context.getPrincipalUserId(), requestedHospitalId);
             recordRefusal(context, requestedHospitalId, reason, ActingScope.Source.REQUESTED);
