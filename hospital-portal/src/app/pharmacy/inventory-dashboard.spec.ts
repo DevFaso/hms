@@ -1,5 +1,8 @@
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { InventoryDashboardComponent } from './inventory-dashboard';
 import { InventoryItemResponse, PharmacyService } from '../services/pharmacy.service';
@@ -332,4 +335,29 @@ describe('Inventory workspace scoped reads', () => {
     expect(c.expiryFailed()).toBeTrue();
     expect(TestBed.inject(ToastService).error).not.toHaveBeenCalled();
   });
+});
+
+describe('InventoryDashboard expiry day wording', () => {
+  for (const [language, messages, singular, plural] of [
+    ['en', en, '1 day', '2 days'],
+    ['fr', fr, '1 jour', '2 jours'],
+    ['es', es, '1 d\u00eda', '2 d\u00edas'],
+  ] as const) {
+    it(`uses singular for one day in ${language}`, () => {
+      TestBed.configureTestingModule({
+        imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
+        providers: [
+          { provide: PharmacyService, useValue: {} },
+          { provide: ToastService, useValue: {} },
+          { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+        ],
+      });
+      const component = TestBed.createComponent(InventoryDashboardComponent).componentInstance;
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(language, messages);
+      translate.use(language);
+      expect(translate.instant(component.expiryDaysLabelKey(1), { days: 1 })).toBe(singular);
+      expect(translate.instant(component.expiryDaysLabelKey(2), { days: 2 })).toBe(plural);
+    });
+  }
 });

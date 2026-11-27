@@ -26,7 +26,6 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityManager;
 import com.example.hms.validation.PickedDayNotInFutureValidator;
@@ -68,7 +67,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final StockTransactionMapper stockTransactionMapper;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
-    private final NotificationService notificationService;
+    private final LowStockAlertDelivery lowStockAlertDelivery;
     private final MessageSource messageSource;
     /** QA D655: a controlled substance is received in front of a witness. */
     private final ControlledStockWitness controlledStockWitness;
@@ -524,6 +523,9 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
+        // Validate stock and pack metadata from the locked row, including legacy items not yet tracked by lot.
+        inventoryItemRepository.lockById(item.getId());
+        refreshIfManaged(item);
         receiveInUnits(item, dto);
 
         validateReceiptQuantitiesAndDates(dto);
@@ -536,7 +538,27 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getUnitCost() != null && dto.getUnitCost().signum() < 0) {
             throw new com.example.hms.exception.FieldBusinessException("unitCost", "stockTransaction.unitCost.min");
         }
+        // D3946: serialise validation with goods-in for this item; a concurrent receipt sees the committed batch.
+        StockLotBalance.requireReconciled(item, stockLotRepository.sumRemainingForItem(item.getId()));
+        if (dto.getLotNumber() != null) {
+            dto.setLotNumber(dto.getLotNumber().trim());
+        }
         requireConsistentLotExpiry(item, dto);
+        List<StockLot> matching = stockLotRepository.findSameLot(item.getId(), dto.getLotNumber(), dto.getExpiryDate());
+        if (matching.size() > 1) {
+            throw new com.example.hms.exception.FieldBusinessException("lotNumber", "pharmacy.inventory.lot.duplicate");
+        }
+
+        if (!matching.isEmpty()) {
+            StockLot existing = matching.getFirst();
+            if (dto.getUnitCost() != null && (existing.getUnitCost() == null
+                || dto.getUnitCost().compareTo(existing.getUnitCost()) != 0)) {
+                throw new com.example.hms.exception.FieldBusinessException("unitCost", "pharmacy.inventory.lot.costMismatch");
+            }
+            if (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().compareTo(dto.getInitialQuantity()) != 0) {
+                throw new com.example.hms.exception.FieldBusinessException("remainingQuantity", "pharmacy.inventory.lot.partialTopUp");
+            }
+        }
 
         // The receipt is recorded against the signed-in user (D82): a
         // caller-supplied receiver let one user book a delivery in a
@@ -552,28 +574,18 @@ public class InventoryServiceImpl implements InventoryService {
         User witness = ControlledStockWitness.isControlled(item)
             ? controlledStockWitness.resolve(dto.getWitnessedBy(), item, receivedByUser) : null;
 
-        // QA D733: the same lot received twice made two rows, so the FEFO
-        // pick, the counts and the expiry report saw two batches. A further
-        // delivery of a batch adds to its row; the item row is locked so two
-        // receipts of a new lot at once still make one row.
-        BigDecimal received = dto.getRemainingQuantity() != null
+        // A further delivery of the same unambiguous batch tops up its existing row (D733).
+        BigDecimal received = matching.isEmpty() && dto.getRemainingQuantity() != null
             ? dto.getRemainingQuantity() : dto.getInitialQuantity();
-        StockLot savedLot = null;
-        if (dto.getLotNumber() != null && dto.getExpiryDate() != null) {
-            inventoryItemRepository.lockById(item.getId());
-            List<StockLot> same = stockLotRepository.findSameLot(item.getId(), dto.getLotNumber().trim(),
-                dto.getExpiryDate());
-            if (!same.isEmpty()) {
-                savedLot = same.get(0);
-                stockLotRepository.addReceipt(savedLot.getId(), dto.getInitialQuantity(),
-                    LocalDateTime.now(ZoneId.systemDefault()));
-                received = dto.getInitialQuantity();
-                refreshIfManaged(savedLot);
+        StockLot savedLot;
+        if (matching.isEmpty()) {
+            savedLot = stockLotRepository.saveAndFlush(stockLotMapper.toEntity(dto, item, receivedByUser));
+        } else {
+            savedLot = matching.getFirst();
+            if (stockLotRepository.addReceipt(savedLot.getId(), received, LocalDateTime.now(ZoneId.systemDefault())) != 1) {
+                throw new com.example.hms.exception.FieldBusinessException("lotNumber", "pharmacy.inventory.lot.duplicate");
             }
-        }
-        if (savedLot == null) {
-            StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
-            savedLot = stockLotRepository.save(lot);
+            refreshIfManaged(savedLot);
         }
 
         // Update quantity on hand: atomically, so a fill or a return of the
@@ -583,7 +595,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Record stock transaction
         recordStockTransaction(item, savedLot, StockTransactionType.RECEIPT,
-                received, "Stock receipt: lot " + savedLot.getLotNumber(), witness);
+                received, "Stock receipt: lot " + savedLot.getLotNumber(), witness, dto);
 
         // Audit
         logAudit(AuditEventType.STOCK_RECEIPT,
@@ -694,28 +706,21 @@ public class InventoryServiceImpl implements InventoryService {
             return;
         }
         List<InventoryItem> lowStock = inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId);
-        // The alert is pushed to the user who triggered the sweep, so the
-        // recipient IS the caller and the request locale is the right one.
+        // Delivery resolves the pharmacy team's live hospital assignments, independently of the caller.
         // The audit row is read by everyone, each in their own language
         // (QA D894): it is written in English, the shape the portal's
         // pattern reads, whatever the caller's language.
         Locale locale = LocaleContextHolder.getLocale();
-        String unknown = messageSource.getMessage("inventory.lowStock.unknown", null, locale);
         String unknownForAudit = messageSource.getMessage("inventory.lowStock.unknown", null, Locale.ENGLISH);
         for (InventoryItem item : lowStock) {
             boolean hasMedication = item.getMedicationCatalogItem() != null;
             boolean hasPharmacy = item.getPharmacy() != null;
             String onHand = String.valueOf(item.getQuantityOnHand());
             String threshold = String.valueOf(item.getReorderThreshold());
-            // QA D1235 class: the alert reader sees the drug in their own language.
-            String drugName = hasMedication
-                ? com.example.hms.utility.DrugDisplayNames.forReader(item.getMedicationCatalogItem(), locale) : null;
-            Object[] alertArgs = {drugName != null ? drugName : unknown,
-                hasPharmacy ? item.getPharmacy().getName() : unknown, onHand, threshold};
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
 
-            pushReorderAlert(item, alertArgs);
+            pushReorderAlert(item);
 
             logAudit(AuditEventType.STOCK_REORDER_ALERT,
                 messageSource.getMessage("inventory.lowStock.notification", auditArgs, Locale.ENGLISH),
@@ -725,16 +730,10 @@ public class InventoryServiceImpl implements InventoryService {
 
     // ── Private helpers ──────────────────────────────────────────────────
 
-    /** Pushes the low-stock alert to the caller who triggered the sweep; a failure never stops the sweep. */
-    private void pushReorderAlert(InventoryItem item, Object[] alertArgs) {
+    /** One item's failed delivery must not stop the remaining items. */
+    private void pushReorderAlert(InventoryItem item) {
         try {
-            UUID currentUserId = roleValidator.getCurrentUserId();
-            if (currentUserId == null) {
-                return;
-            }
-            userRepository.findById(currentUserId).ifPresent(user ->
-                notificationService.createNotification("inventory.lowStock.notification", alertArgs,
-                    user.getUsername(), "REORDER_ALERT"));
+            lowStockAlertDelivery.deliver(item.getId());
         } catch (Exception e) {
             log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
         }
@@ -780,6 +779,12 @@ public class InventoryServiceImpl implements InventoryService {
     private void recordStockTransaction(InventoryItem item, StockLot lot,
                                         StockTransactionType type, BigDecimal quantity, String reason,
                                         User witness) {
+        recordStockTransaction(item, lot, type, quantity, reason, witness, null);
+    }
+
+    private void recordStockTransaction(InventoryItem item, StockLot lot,
+                                        StockTransactionType type, BigDecimal quantity, String reason,
+                                        User witness, StockLotRequestDTO receipt) {
         User performer = resolveCurrentUser();
         StockTransaction tx = StockTransaction.builder()
                 .inventoryItem(item)
@@ -790,6 +795,14 @@ public class InventoryServiceImpl implements InventoryService {
                 .performedByUser(performer)
                 .witnessedByUser(witness)
                 .build();
+        if (receipt != null) {
+            tx.setLotNumber(receipt.getLotNumber());
+            tx.setExpiryDate(receipt.getExpiryDate());
+            tx.setSupplier(receipt.getSupplier());
+            tx.setUnitCost(receipt.getUnitCost());
+            tx.setReceiptDate(receipt.getReceivedDate());
+            tx.setReceiptNotes(receipt.getNotes());
+        }
         stockTransactionRepository.save(tx);
     }
 

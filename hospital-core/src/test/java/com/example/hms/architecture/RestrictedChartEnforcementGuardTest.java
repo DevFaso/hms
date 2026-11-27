@@ -135,6 +135,8 @@ class RestrictedChartEnforcementGuardTest {
         entry("QuarantineLineDTO", "stock put in quarantine"),
         entry("ReturnableDispenseDTO", "stock returns, worked by the pharmacy"),
         entry("StockLotResponseDTO", "a stock lot"),
+        entry("StockCountResponseDTO", "physical stock count for an inventory item, no patient"),
+        entry("StockConsumptionLine", "aggregate pharmacy stock movements by item and unit, no patient"),
         // Answers to the caller's own clinical act, safety-critical at the point of care.
         entry("AllergyConflictDTO",
             "the allergy check on the order the caller is signing (a POST): prescribing safely needs it"),
