@@ -239,7 +239,10 @@ public class AuditEventLogController {
         if (scope != null) {
             return ResponseEntity.ok(scopedPage(scope, AuditEventLogSpecifications.byUser(userId), pageable));
         }
-        return ResponseEntity.ok(auditService.getAuditLogsByUser(userId, pageable));
+        // Their own activity: without the session's technical rows (D4273).
+        return ResponseEntity.ok(self
+            ? auditService.getOwnActivity(userId, pageable)
+            : auditService.getAuditLogsByUser(userId, pageable));
     }
 
     /**

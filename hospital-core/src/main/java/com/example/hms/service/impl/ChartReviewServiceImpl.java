@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
@@ -171,10 +172,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         }
         notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(NoteEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())));
-        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources, release, patientCopy);
-        List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, sources);
-        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, sources, patientCopy);
-        List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), readable, sources);
+        // What a visit produced follows the visit: a result, a prescription,
+        // an imaging order or a procedure order recorded in a withheld visit
+        // is withheld with it (and unlocked with it).
+        RestrictedVisitScope restricted = release || readable == null ? RestrictedVisitScope.none()
+            : RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patient.getId(), hospitalId));
+        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources, release, patientCopy, restricted);
+        List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, sources, restricted);
+        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, sources, patientCopy, restricted);
+        List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), readable, sources, restricted);
         List<TimelineEventDTO> timeline = buildTimeline(encounters, notes, results, medications, imaging, procedures);
 
         ChartReviewDTO.Totals totals = ChartReviewDTO.Totals.builder()
@@ -414,7 +420,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                             RowSources sources, boolean release, boolean patientCopy) {
+                                             RowSources sources, boolean release, boolean patientCopy,
+                                             RestrictedVisitScope restricted) {
         // QA D1380: every result, counted; id breaks resultDate ties, so a
         // page boundary is the same on every read.
         Pageable page = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "resultDate", "id"));
@@ -427,7 +434,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // QA D741: a superseded result and a legacy duplicate are not current.
         List<LabResult> source = ClinicalLabResultView.current(readable != null
             ? labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, page)
-            : labResultRepository.findAllPatientResults(patientId, page));
+            : labResultRepository.findAllPatientResults(patientId, page))
+            .stream().filter(restricted::admits).toList();
         // A laboratory's treatment right to foreign orders is not disclosure authority.
         if (release) {
             source = source.stream().filter(r -> hospitalId.equals(orderingHospitalIdOf(r))).toList();
@@ -456,7 +464,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                                     RowSources sources) {
+                                                     RowSources sources, RestrictedVisitScope restricted) {
         // QA D1380: every prescription (667 for one QA patient), counted.
         Pageable page = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt"));
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
@@ -467,7 +475,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
                 .getContent(), hospitalId)
             : prescriptionRepository
                 .findByPatient_Id(patientId, page)
-                .getContent());
+                .getContent())
+            .stream().filter(restricted::admits).toList();
         source.forEach(p -> sources.treatment(p.getId(), CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())));
         return source.stream()
             .map(this::toMedicationDto)
@@ -477,7 +486,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                              RowSources sources, boolean patientCopy) {
+                                              RowSources sources, boolean patientCopy,
+                                              RestrictedVisitScope restricted) {
         // QA D1380: every imaging order, counted.
         Pageable page = Pageable.unpaged();
         // QA D652: less another hospital's never-sent DRAFTs (NeverSentRule).
@@ -488,6 +498,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             : imagingOrderRepository
                 .findByPatient_IdOrderByOrderedAtDesc(patientId, page)
                 .getContent();
+        orders = orders.stream().filter(restricted::admits).toList();
         orders.forEach(o -> sources.treatment(o.getId(), CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())));
         if (orders.isEmpty()) {
             return List.of();
@@ -626,11 +637,13 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         return Integer.compare(aValue, bValue);
     }
 
-    private List<ProcedureEntryDTO> loadProcedures(UUID patientId, Set<UUID> readable, RowSources sources) {
+    private List<ProcedureEntryDTO> loadProcedures(UUID patientId, Set<UUID> readable, RowSources sources,
+                                                   RestrictedVisitScope restricted) {
         // QA D1380: every procedure order, counted.
-        List<ProcedureOrder> orders = readable != null
+        List<ProcedureOrder> orders = (readable != null
             ? procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable)
-            : procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+            : procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId))
+            .stream().filter(restricted::admits).toList();
         orders.forEach(o -> sources.treatment(o.getId(), CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())));
         return orders.stream()
             .map(this::toProcedureDto)

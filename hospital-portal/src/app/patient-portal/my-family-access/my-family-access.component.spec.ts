@@ -11,6 +11,7 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { PortalRights } from '../minor-rights';
+import { expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 
 describe('MyFamilyAccessComponent', () => {
   let component: MyFamilyAccessComponent;
@@ -234,6 +235,7 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
   });
 
   it('QA D893: an unknown username says so, in the server message, not a generic failure', () => {
+    component.showGrantForm.set(true);
     fixture.detectChanges();
     const message = "Aucun compte ne porte l'identifiant inconnu.xyz.";
     portal.grantProxy.and.returnValue(
@@ -247,6 +249,8 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     component.grantAccess();
     expect(toast.error).toHaveBeenCalledWith(message);
     expect(component.granting()).toBeFalse();
+    // r81 D4266: the refusal is said under the identifier too.
+    expectFieldsMarked(fixture, { 'family-proxy-username': message });
   });
 
   it('QA D893: a 404 without a message still names the unknown user', () => {

@@ -1914,7 +1914,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<ProxyResponseDTO> getMyProxies(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
         return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
-                .stream().map(this::toProxyResponseDTO).toList();
+                .stream().map(this::toProxyResponseDTO).map(PatientPortalServiceImpl::asTheGrantorReadsIt).toList();
         // Expired-but-ACTIVE rows still list for the grantor (with EXPIRED shown
         // as the effective status in the DTO) so they can see and clean them up.
     }
@@ -1926,12 +1926,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D4269: before anything about the other account is looked up or said.
         requireMinorMay(patient, com.example.hms.service.recordaccess.MinorPortalRights.Action.GRANT_FAMILY_ACCESS);
 
-        // QA D893: an unknown username said "User not found with ID: <username>."
-        // (the by-id key) and the portal showed only a generic failure. Each
-        // refusal now names what the patient can fix, in their language.
+        // One answer for an identifier that names nobody and for one that
+        // names an account that cannot use family access (it holds no patient
+        // or caregiver role, is not active, or was removed): the grantor
+        // learns only that this identifier cannot receive the access. The
+        // refusals are counted per grantor, and too many in an hour stop the
+        // form for the rest of it.
+        UUID grantorKey = patient.getId();
+        if (grantThrottle.blocked(grantorKey)) {
+            throw new BusinessException("portal.proxy.tooManyAttempts");
+        }
         String proxyUsername = dto.getProxyUsername() == null ? null : dto.getProxyUsername().trim();
-        User proxyUser = userRepository.findByUsername(proxyUsername)
-                .orElseThrow(() -> new ResourceNotFoundException("portal.proxy.userNotFound", proxyUsername));
+        User proxyUser = proxyUsername == null || proxyUsername.isEmpty() ? null
+                : userRepository.findByUsername(proxyUsername).filter(this::canUseFamilyAccess).orElse(null);
+        if (proxyUser == null) {
+            grantThrottle.refused(grantorKey);
+            throw new ResourceNotFoundException("portal.proxy.notGrantable");
+        }
 
         // Prevent granting proxy to yourself
         if (patient.getUser() != null && patient.getUser().getId().equals(proxyUser.getId())) {
@@ -1964,7 +1975,34 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .notes(dto.getNotes())
                 .build();
 
-        return toProxyResponseDTO(patientProxyRepository.save(proxy));
+        return asTheGrantorReadsIt(toProxyResponseDTO(patientProxyRepository.save(proxy)));
+    }
+
+    /** Refused family-access grants, per grantor (this instance's memory). */
+    private final com.example.hms.service.recordaccess.FamilyGrantThrottle grantThrottle =
+            new com.example.hms.service.recordaccess.FamilyGrantThrottle();
+
+    /**
+     * Whether the account can open « Accès reçus »: active, not removed, and
+     * holding the patient role (a caregiver's account is a patient account).
+     */
+    private boolean canUseFamilyAccess(User account) {
+        if (!account.isActive() || account.isDeleted()) {
+            return false;
+        }
+        return com.example.hms.security.EffectiveRoles
+                .codes(account, assignmentRepository.findByUser(account))
+                .contains(com.example.hms.security.EffectiveRoles.ROLE_PATIENT);
+    }
+
+    /**
+     * A grant as its grantor reads it: the identifier they typed and what
+     * they chose. The holder's name and account id are not part of it.
+     */
+    private static ProxyResponseDTO asTheGrantorReadsIt(ProxyResponseDTO dto) {
+        dto.setProxyUserId(null);
+        dto.setProxyDisplayName(dto.getProxyUsername());
+        return dto;
     }
 
     @Override

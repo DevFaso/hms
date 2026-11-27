@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -178,8 +179,12 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
             // QA D1537: a live draft stays (on hold); a discarded one is not a stopped course.
+            // A prescription follows the restriction of the visit it was written in.
+            RestrictedVisitScope restricted = RestrictedVisitScope.of(
+                recordAccessPolicy.withheldVisits(requesterUserId, patient.getId(), hospital.getId()));
             prescriptions = PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
-                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId()));
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId()))
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");

@@ -221,7 +221,12 @@ export class MyFamilyAccessComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.granting.set(false);
-        this.toast.error(this.grantFailureMessage(err));
+        const message = this.grantFailureMessage(err);
+        // The identifier cannot receive the access: said under the identifier.
+        if ((err as { status?: number } | null)?.status === 404) {
+          refuseFields(this.host.nativeElement, [GRANT_USERNAME_ID], GRANT_FIELDS, message);
+        }
+        this.toast.error(message);
       },
     });
   }

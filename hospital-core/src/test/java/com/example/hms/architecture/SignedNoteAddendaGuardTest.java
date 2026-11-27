@@ -60,7 +60,6 @@ class SignedNoteAddendaGuardTest {
         Map.entry("DoctorWorklistServiceImpl.java", "counts the doctor's unsigned notes (QA D2261)"),
         Map.entry("PatientServiceImpl.java", "maps nursing notes through NursingNoteMapper.toResponse, which carries addenda"),
         Map.entry("NursingNoteServiceImpl.java", "maps every note through NursingNoteMapper.toResponse, which carries addenda"),
-        Map.entry("PatientSnapshotServiceImpl.java", "a comment names the entity; no note is read"),
         Map.entry("UnsignedNoteFollowUp.java", "files and clears the author's 'note to sign' task"),
         Map.entry("NurseTaskServiceImpl.java", "writes a nursing note; reads none back"),
         Map.entry("SensitivityClassifier.java", "classifies a note's sensitivity"),

@@ -166,7 +166,7 @@ class UserServiceImplTest {
         BootstrapSignupRequest request = new BootstrapSignupRequest();
         request.setUsername("admin");
         request.setEmail("admin@test.com");
-        request.setPassword("password");
+        request.setPassword("Vq8#tR3!zL");
         request.setFirstName("Admin");
         request.setLastName("User");
 
@@ -194,7 +194,7 @@ class UserServiceImplTest {
         BootstrapSignupRequest request = new BootstrapSignupRequest();
         request.setUsername("admin");
         request.setEmail("admin@test.com");
-        request.setPassword("password");
+        request.setPassword("Vq8#tR3!zL");
         request.setFirstName("Admin");
         request.setLastName("User");
         request.setPhoneNumber("+1234567890");
@@ -227,7 +227,7 @@ class UserServiceImplTest {
         BootstrapSignupRequest request = new BootstrapSignupRequest();
         request.setUsername("admin");
         request.setEmail("admin@test.com");
-        request.setPassword("password");
+        request.setPassword("Vq8#tR3!zL");
         request.setFirstName("Admin");
         request.setLastName("User");
         request.setPhoneNumber("+1234567890");
@@ -258,7 +258,7 @@ class UserServiceImplTest {
         BootstrapSignupRequest request = new BootstrapSignupRequest();
         request.setUsername("admin");
         request.setEmail("admin@test.com");
-        request.setPassword("password");
+        request.setPassword("Vq8#tR3!zL");
         request.setFirstName("Admin");
         request.setLastName("User");
         request.setPhoneNumber("+1234567890");
@@ -284,10 +284,10 @@ class UserServiceImplTest {
         user.setForcePasswordChange(true);
         user.setTemporaryPasswordExpiresAt(java.time.LocalDateTime.now().plusHours(5));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(passwordEncoder.encode("NewPass99!")).thenReturn("$2a$hashed");
+        when(passwordEncoder.encode("Zr4!kT9#bN")).thenReturn("$2a$hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        userService.changeOwnPassword(userId, "NewPass99!");
+        userService.changeOwnPassword(userId, "Zr4!kT9#bN");
 
         assertThat(user.isForcePasswordChange()).isFalse();
         assertThat(user.getTemporaryPasswordExpiresAt()).as("the holder's own password does not expire").isNull();
@@ -302,7 +302,7 @@ class UserServiceImplTest {
     void changeOwnPassword_userNotFound_throwsResourceNotFoundException() {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.changeOwnPassword(userId, "NewPass99!"))
+        assertThatThrownBy(() -> userService.changeOwnPassword(userId, "Zr4!kT9#bN"))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -333,7 +333,7 @@ class UserServiceImplTest {
             req.setPhoneNumber(phone);
             req.setFirstName("John");
             req.setLastName("Doe");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_HOSPITAL_ADMIN"));
             return req;
         }
@@ -559,7 +559,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+1111111111");
             req.setFirstName("Jane");
             req.setLastName("Doe");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_PATIENT"));
             req.setHospitalId(hospitalId);
 
@@ -591,7 +591,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+1111111111");
             req.setFirstName("Jane");
             req.setLastName("Doe");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_PATIENT"));
             req.setHospitalId(hospitalId);
 
@@ -624,7 +624,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+22670707070");
             req.setFirstName("Awa");
             req.setLastName("Ouedraogo");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_PATIENT"));
             req.setHospitalId(hospitalId);
 
@@ -662,7 +662,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+1111111111");
             req.setFirstName("Jane");
             req.setLastName("Doe");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_PATIENT"));
             req.setHospitalId(hospitalId);
 
@@ -822,7 +822,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+2222222222");
             req.setFirstName("New");
             req.setLastName("Patient");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             req.setRoleNames(Set.of("ROLE_PATIENT"));
             req.setHospitalId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
 
@@ -1660,11 +1660,11 @@ class UserServiceImplTest {
         @DisplayName("new password that differs from current hash is encoded and saved")
         void newPasswordUpdatesHash() {
             stubHappyPath();
-            when(passwordEncoder.matches("NewPass123", "$2a$10$existingHash")).thenReturn(false);
-            when(passwordEncoder.encode("NewPass123")).thenReturn("$2a$10$newHash");
+            when(passwordEncoder.matches("Lm5#qW8!xD", "$2a$10$existingHash")).thenReturn(false);
+            when(passwordEncoder.encode("Lm5#qW8!xD")).thenReturn("$2a$10$newHash");
 
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
-            dto.setPassword("NewPass123");
+            dto.setPassword("Lm5#qW8!xD");
 
             userService.updateUser(userId, dto);
 
@@ -1969,7 +1969,7 @@ class UserServiceImplTest {
             req.setPhoneNumber("+1234567899");
             req.setFirstName("John");
             req.setLastName("Doe");
-            req.setPassword("Temp@1234");
+            req.setPassword("Tk7@vR2!mQ");
             // SUPER_ADMIN: the one staff role registrable without a hospital
             // context, which keeps this fixture out of JWT-resolution stubs.
             req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));

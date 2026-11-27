@@ -6,6 +6,8 @@ export interface AnnouncementResponse {
   id: string;
   text: string;
   date: string;
+  /** A platform announcement: only a platform administrator in global view changes it. */
+  platformWide?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

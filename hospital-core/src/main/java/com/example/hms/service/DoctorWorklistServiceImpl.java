@@ -346,9 +346,9 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         int waitMinutes = (int) Math.min(
                 com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now(java.time.ZoneId.systemDefault())), Integer.MAX_VALUE);
         String[] roomBed = parseRoomBed(patientRoomBed.get(p.getId()));
-        String latestVitalsSummary = fetchVitalsSummary(p.getId());
-
         UUID encHospitalId = enc.getHospital() != null ? enc.getHospital().getId() : null;
+        String latestVitalsSummary = fetchVitalsSummary(p.getId(), encHospitalId);
+
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .encounterId(enc.getId())
@@ -406,10 +406,18 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return new String[]{room, bed};
     }
 
-    private String fetchVitalsSummary(UUID patientId) {
+    /**
+     * The latest vitals taken at the hospital of the visit. The worklist is
+     * that hospital's: its summary reads no other hospital's rows, so nothing
+     * recorded elsewhere reaches it.
+     */
+    private String fetchVitalsSummary(UUID patientId, UUID hospitalId) {
+        if (hospitalId == null) {
+            return null;
+        }
         try {
-            Optional<PatientVitalSign> vOpt =
-                    patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patientId);
+            Optional<PatientVitalSign> vOpt = patientVitalSignRepository
+                    .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId);
             if (vOpt.isPresent()) {
                 // QA D628: temperature included, labels in the request locale.
                 return com.example.hms.utility.VitalsSummaryText.of(vOpt.get());
