@@ -167,6 +167,29 @@ describe('WitnessConfirmComponent (QA D2679)', () => {
     expect(field()).not.toBeNull();
   });
 
+  it('a confirmation left on screen past its expiry is dropped and the field is asked again', () => {
+    jasmine.clock().install();
+    try {
+      jasmine.clock().mockDate(new Date('2026-11-27T10:00:00Z'));
+      svc.confirmWitness.and.returnValue(of({ data: confirmation('w-pass', 5) }) as never);
+      pick('w-pass');
+      type('s3cret');
+      el('witness-confirm-submit')!.click();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.isConfirmed()).toBeTrue();
+      expect(host().querySelector('#dispWitnessSecret')).toBeNull();
+
+      jasmine.clock().tick(5 * 60_000 + 1);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isConfirmed()).toBeFalse();
+      expect(el('witness-confirmed')).toBeNull();
+      expect(host().querySelector('#dispWitnessSecret')).not.toBeNull();
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('an expired confirmation no longer counts', () => {
     svc.confirmWitness.and.returnValue(of({ data: confirmation('w-pass', -1) }) as never);
     pick('w-pass');

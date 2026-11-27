@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   inject,
@@ -73,6 +74,12 @@ export class WitnessConfirmComponent {
   private readonly svc = inject(PharmacyService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** Ends the confirmation on screen when the server's does: `Date.now()` alone is read only once. */
+  private expiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.clearExpiry());
+  }
 
   /** What the witness is typing; a signal, so clearing it clears the field at once. */
   protected readonly secret = signal('');
@@ -112,6 +119,7 @@ export class WitnessConfirmComponent {
         this.secret.set('');
         const confirmation = res?.data ?? null;
         this.lastConfirmation.set(confirmation);
+        this.expireAt(confirmation);
         if (confirmation) this.confirmed.emit(confirmation);
       },
       error: (err: unknown) => {
@@ -121,6 +129,28 @@ export class WitnessConfirmComponent {
         this.showServerRefusal(err);
       },
     });
+  }
+
+  /**
+   * Review of #1369: a form left open past the confirmation's expiry kept saying « confirmed » and hid the field,
+   * while the server refused the movement. At expiry the confirmation is dropped, so the field is asked again.
+   */
+  private expireAt(confirmation: WitnessConfirmation | null): void {
+    this.clearExpiry();
+    if (!confirmation) return;
+    const left = serverDateOrInstant(confirmation.expiresAt).getTime() - Date.now();
+    if (!(left > 0)) return;
+    this.expiryTimer = setTimeout(() => {
+      this.expiryTimer = null;
+      if (this.lastConfirmation() === confirmation) this.lastConfirmation.set(null);
+    }, left);
+  }
+
+  private clearExpiry(): void {
+    if (this.expiryTimer !== null) {
+      clearTimeout(this.expiryTimer);
+      this.expiryTimer = null;
+    }
   }
 
   /**
