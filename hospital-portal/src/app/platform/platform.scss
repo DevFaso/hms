@@ -1095,7 +1095,14 @@
 }
 
 .detail-item {
-  label {
+  span,
+  a {
+    font-size: 0.85rem;
+    color: #1e293b;
+    word-break: break-word;
+  }
+
+  .detail-label {
     display: block;
     font-size: 0.72rem;
     font-weight: 600;
@@ -1103,13 +1110,6 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 4px;
-  }
-
-  span,
-  a {
-    font-size: 0.85rem;
-    color: #1e293b;
-    word-break: break-word;
   }
 }
 
