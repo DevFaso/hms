@@ -8,6 +8,7 @@ import com.example.hms.model.medication.MedicationCatalogVersion;
 import com.example.hms.payload.dto.medication.MedicationCatalogSimilarEntryDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.MedicationCatalogVersionRepository;
+import com.example.hms.service.pharmacy.WholeUnitQuantity;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,9 +49,11 @@ public class MedicationCatalogDuplicates {
     private static final Pattern MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern NOT_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Pattern DIGIT_THEN_LETTER = Pattern.compile("(\\d)(\\p{L})");
-    /** The units a strength is written in, as the words of a name read once punctuation is gone ("120 mg/5 ml"). */
-    private static final Set<String> STRENGTH_UNITS = Set.of(
-        "mg", "g", "kg", "mcg", "µg", "ug", "ml", "l", "ui", "iu", "mmol", "meq");
+    /**
+     * The units a strength is written in beyond the measured units of the stock rule ({@link WholeUnitQuantity}):
+     * a name may end in "10 mmol" or "20 meq".
+     */
+    private static final Set<String> STRENGTH_ONLY_UNITS = Set.of("mmol", "meq");
 
     private final MedicationCatalogItemRepository catalogue;
     private final MedicationCatalogVersionRepository versions;
@@ -213,7 +216,7 @@ public class MedicationCatalogDuplicates {
         String[] words = key.split(" ");
         int end = words.length;
         boolean number = false;
-        while (end > 0 && (isNumber(words[end - 1]) || STRENGTH_UNITS.contains(words[end - 1]))) {
+        while (end > 0 && (isNumber(words[end - 1]) || isStrengthUnit(words[end - 1]))) {
             number |= isNumber(words[end - 1]);
             end--;
         }
@@ -221,6 +224,10 @@ public class MedicationCatalogDuplicates {
             return key;
         }
         return String.join(" ", java.util.Arrays.copyOf(words, end));
+    }
+
+    private static boolean isStrengthUnit(String word) {
+        return WholeUnitQuantity.isMeasured(word) || STRENGTH_ONLY_UNITS.contains(word);
     }
 
     private static boolean isNumber(String word) {
