@@ -500,7 +500,7 @@
       "INTEGRATIONS_TITLE": "Santé des intégrations",
       "INTEGRATIONS_DESC": "Inventaire des connecteurs et santé des appels par tenant",
       "AUDIT_SEARCH_TITLE": "Recherche d'audit",
-      "AUDIT_SEARCH_DESC": "Recherche d'audit multi-tenant avec filtre d'emprunt d'identité",
+      "AUDIT_SEARCH_DESC": "Recherche d'audit multi-tenant avec filtre des sessions de support",
       "EMERGENCY_TITLE": "Contrôles d'urgence",
       "EMERGENCY_DESC": "Déconnexion globale, désactivation de fonctionnalité, réinitialisation forcée de la validation en deux étapes, diffusion",
       "SUBSCRIPTIONS_TITLE": "Abonnements",
@@ -874,7 +874,7 @@
   "INTEGRATION_MESSAGES": {
     "TITLE": "Journal des messages d'intégration",
     "SUBTITLE": "Consultez les messages des partenaires et les échecs. Cette page enregistre une demande dans le journal ; elle ne renvoie pas le message au partenaire.",
-    "DLQ_BADGE": "{{ count }} messages en échec",
+    "DLQ_BADGE": "{{ count }} messages en échec à traiter",
     "SHOW_DLQ_ONLY": "Afficher les messages en échec",
     "SEARCH": "Rechercher",
     "SEARCHING": "Recherche…",
@@ -902,7 +902,8 @@
       "SENT": "Envoyé",
       "RECEIVED": "Reçu",
       "FAILED": "Échoué",
-      "REPLAYED": "Événement enregistré"
+      "REPLAYED": "Événement enregistré",
+      "FAILED_RESOLVED": "Échoué — traité"
     },
     "COL": {
       "RECEIVED_AT": "Reçu",
@@ -915,6 +916,34 @@
     },
     "ERROR": {
       "REPLAY_FAILED": "Impossible d’enregistrer l’événement. Réessayez."
+    },
+    "DLQ_BADGE_ONE": "{{ count }} message en échec à traiter",
+    "REPLAY_DONE": "Rejeu enregistré : le message n’est plus compté comme en échec.",
+    "REPLAY_CONFIRM": {
+      "TITLE": "Enregistrer un rejeu dans le journal ?",
+      "MESSAGE": "Une nouvelle ligne « Événement enregistré » sera ajoutée pour ce message de l’intégration {{ integration }}, et le message ne sera plus compté comme en échec. Rien n’est renvoyé au partenaire. Un message ne peut être rejoué qu’une fois."
+    },
+    "DIRECTION": {
+      "OUTBOUND": "Sortant",
+      "INBOUND": "Entrant"
+    },
+    "TYPE": {
+      "PROBE": "Test de connexion",
+      "RESYNC": "Resynchronisation"
+    },
+    "DETAIL": {
+      "OPEN": "Détails",
+      "TITLE": "Détail du message",
+      "ORGANIZATION": "Organisation",
+      "PLATFORM_WIDE": "Plateforme entière",
+      "CORRELATION_ID": "Identifiant de corrélation",
+      "LAST_ATTEMPT": "Dernière tentative",
+      "PAYLOAD": "Contenu du message",
+      "NO_PAYLOAD": "Aucun contenu n’a été enregistré pour ce message.",
+      "LOADING": "Chargement du contenu…",
+      "LOAD_ERROR": "Impossible de charger le contenu de ce message. Réessayez.",
+      "EXCHANGE": "Tentatives de cet échange",
+      "EXCHANGE_PREVIEW": "Les {{shown}} premières tentatives sur {{total}}."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -973,21 +1002,20 @@
     }
   },
   "IMPERSONATION": {
-    "BANNER_PREFIX": "Vous agissez en tant que",
-    "BANNER_SUFFIX": "via un emprunt d'identité par le support.",
-    "AS": "en tant que",
-    "EXIT": "Quitter l'emprunt d'identité",
-    "IMPERSONATE_USER": "Emprunter l'identité de cet utilisateur",
-    "MODAL_TITLE": "Démarrer un emprunt d'identité par le support",
-    "MODAL_PREFIX": "Vous êtes sur le point d'agir en tant que",
+    "BANNER": "Session de support : vous agissez au nom de",
+    "OPENED_BY": "ouverte par",
+    "EXIT": "Quitter la session de support",
+    "IMPERSONATE_USER": "Ouvrir une session de support pour cet utilisateur",
+    "MODAL_TITLE": "Ouvrir une session de support",
+    "MODAL_PREFIX": "Vous allez agir au nom de",
     "MODAL_WARNING": "Toutes vos actions seront étiquetées avec votre identité réelle. La session expire automatiquement au bout de 30 minutes.",
     "REASON_LABEL": "Motif (requis, conservé dans l'audit)",
     "REASON_PLACEHOLDER": "ex. Validation d'un bug de renouvellement signalé par le patient",
     "MFA_LABEL": "Code de validation (requis si la validation en deux étapes est activée)",
     "MFA_PLACEHOLDER": "Code à 6 chiffres",
-    "START_BUTTON": "Démarrer l'emprunt d'identité",
-    "STARTING": "Démarrage…",
-    "COUNTDOWN_LABEL": "Expiration de l'emprunt d'identité dans"
+    "START_BUTTON": "Ouvrir la session de support",
+    "STARTING": "Ouverture…",
+    "COUNTDOWN_LABEL": "Fin de la session de support dans"
   },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
@@ -1597,6 +1625,7 @@
     "TREND_BAR_TITLE": "{{count}} rendez-vous"
   },
   "ANNOUNCEMENTS": {
+    "PLATFORM_WIDE": "Plateforme",
     "CREATE": "Créer",
     "CREATE_ANNOUNCEMENT": "Créer une annonce",
     "DELETE_ANNOUNCEMENT": "Supprimer l'annonce",
@@ -1619,10 +1648,12 @@
       "LOAD_FAILED": "Échec du chargement des annonces",
       "SAVE_FAILED": "Échec de l'enregistrement de l'annonce",
       "TEXT_REQUIRED": "Le texte de l'annonce est requis",
-      "UPDATED": "Annonce mise à jour"
+      "UPDATED": "Annonce mise à jour",
+      "TEXT_TOO_LONG": "Le texte de l’annonce ne peut pas dépasser {{ max }} caractères."
     },
     "CREATE_FIRST": "Créez votre première annonce.",
-    "NONE_YET": "Aucune annonce pour le moment."
+    "NONE_YET": "Aucune annonce pour le moment.",
+    "TEXT_LIMIT": "{{ count }} / {{ max }} caractères"
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -1847,6 +1878,9 @@
       "LAB_SELF_RELEASE": "Autovalidation : le résultat a été validé par la personne qui l’a saisi.",
       "FHIR_EVERYTHING": "Dossier FHIR complet du patient {{patient}} renvoyé ({{count}} entrées ;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Échec de connexion : identifiant ou mot de passe incorrect",
+      "SIGNED_IN_PASSWORD": "Connexion réussie (mot de passe)",
+      "SIGNED_IN_SECOND_FACTOR": "Connexion réussie (mot de passe et validation en deux étapes)",
+      "SIGNED_OUT": "Déconnexion",
       "LOGIN_FAILED_INACTIVE": "Échec de connexion : le compte n’est pas actif",
       "LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED": "Connexion refusée : le mot de passe temporaire a expiré",
       "LOGIN_REFUSED_NO_ROLE": "Connexion refusée : le compte n’a aucun rôle actif",
@@ -2147,7 +2181,7 @@
       "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}",
       "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)",
       "PHARMACY_PAYMENT_VOIDED_IDS": "Paiement pharmacie {{payment}} annulé pour la délivrance annulée {{dispense}}",
-      "SUPPORT_SESSION_CLINICAL_REFUSED": "Session de support refusée : un acte clinique ({{roles}}) pendant une prise en main du compte",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Acte clinique ({{roles}}) refusé pendant une session de support",
       "PAYER_CREATED": "Organisme payeur {{payer}} créé",
       "PAYER_UPDATED": "Organisme payeur {{payer}} modifié",
       "PAYER_DEACTIVATED": "Organisme payeur {{payer}} désactivé, motif enregistré",
@@ -3873,7 +3907,7 @@
   },
   "COST_PANEL": {
     "TITLE": "Coûts par établissement",
-    "SUBTITLE": "Ce qui serait facturé à chaque établissement pour la période choisie. Le montant repose aujourd’hui sur l’activité enregistrée (événements d’audit) ; les colonnes journaux, supervision et stockage restent à zéro tant que ces mesures ne sont pas branchées.",
+    "SUBTITLE": "Ce qui serait facturé à chaque établissement pour la période choisie. Le montant est le nombre d’événements d’audit enregistrés pour l’établissement, multiplié par le tarif indiqué ci-dessous.",
     "FROM": "Du",
     "TO": "Au",
     "REFRESH": "Actualiser",
@@ -3886,7 +3920,13 @@
     "COL_SPLUNK": "Événements de journal",
     "COL_GRAFANA": "Séries de supervision",
     "COL_STORAGE_GIB": "Stockage (Gio)",
-    "COL_AMOUNT": "Montant refacturé"
+    "COL_AMOUNT": "Montant refacturé",
+    "EXPORT_CSV": "Exporter (CSV)",
+    "EXPORT_FILE": "couts-par-etablissement",
+    "PERIOD": "Période affichée : du {{ from }} au {{ to }}",
+    "RATE": "Tarif appliqué : {{ amount }} par événement enregistré (tarif provisoire, réglable par l’exploitant de la plateforme).",
+    "NO_RATE": "Aucun tarif n’est configuré : le montant n’est pas calculé. Demandez à l’exploitant de la plateforme de régler le tarif par événement.",
+    "TOTAL": "Total de la période"
   },
   "EMPI": {
     "MERGE_BUTTON": "Fusionner les doublons",
@@ -4230,7 +4270,7 @@
     "FAILED_TITLE": "Ce lien d'activation ne fonctionne plus",
     "FAILED_MSG": "Le lien est invalide ou a expiré. Saisissez votre adresse e-mail pour en recevoir un nouveau.",
     "MISSING_TITLE": "Lien d'activation incomplet",
-    "MISSING_MSG": "Il manque l'adresse e-mail ou le jeton dans ce lien. Saisissez votre adresse e-mail pour en recevoir un nouveau.",
+    "MISSING_MSG": "Ce lien est incomplet. Saisissez votre adresse e-mail pour en recevoir un nouveau.",
     "RESEND": "Envoyer un nouveau lien d'activation",
     "RESENT": "Si cette adresse correspond à un compte non encore activé, un nouveau lien d'activation est en route. Il est valable 24 heures.",
     "BACK_TO_LOGIN": "Retour à la connexion"
@@ -5225,6 +5265,8 @@
   "LOCK": {
     "AVATAR_ALT": "Avatar",
     "ENTER_PASSWORD": "Entrez votre mot de passe pour déverrouiller",
+    "SSO_HINT": "Reconnectez-vous auprès de votre fournisseur d'identité pour déverrouiller",
+    "SSO_CONTINUE": "Se reconnecter pour déverrouiller",
     "ERROR_SESSION_EXPIRED": "Votre session a expiré. Veuillez vous reconnecter.",
     "ERROR_SESSION_MISMATCH": "Cette session appartient à un autre utilisateur. Veuillez vous reconnecter.",
     "ERROR_VERIFY_FAILED": "Impossible de vérifier votre mot de passe. Veuillez réessayer.",
@@ -5286,12 +5328,9 @@
     "SENDING": "Envoi en cours…",
     "SEND_RESET_LINK": "Envoyer le lien de réinitialisation",
     "FORGOT_USERNAME_TITLE": "Nom d'utilisateur oublié",
-    "FU_ADMIN_MANAGED": "La récupération du nom d'utilisateur est gérée par votre administrateur système.",
-    "FU_CONTACT": "Veuillez contacter l'administrateur de votre hôpital ou le support informatique — ils peuvent retrouver votre compte à partir de votre nom ou de votre adresse e-mail.",
-    "FU_TIP_LABEL": "Astuce :",
-    "FU_TIP_TEXT": "Si vous connaissez l'adresse e-mail de votre compte, vous pouvez utiliser",
-    "FU_TIP_RESET": "Réinitialiser le mot de passe",
-    "FU_TIP_SUFFIX": "pour retrouver l'accès sans avoir besoin de votre nom d'utilisateur.",
+    "FU_INSTRUCTION": "Saisissez l'adresse e-mail ou le numéro de téléphone de votre compte. Nous y enverrons votre nom d'utilisateur.",
+    "FU_SEND": "Envoyer mon nom d'utilisateur",
+    "FU_ACK": "Si un compte activé correspond à ce que vous avez saisi, son nom d'utilisateur vient d'être envoyé à son adresse e-mail ou par SMS. Rien reçu après quelques minutes ? Demandez à l'accueil ou à l'administrateur de votre hôpital.",
     "ALL_FIELDS_REQUIRED": "Tous les champs obligatoires doivent être remplis.",
     "PASSWORD_MIN_LENGTH": "Le mot de passe doit contenir au moins 8 caractères.",
     "PASSWORDS_MISMATCH": "Les mots de passe ne correspondent pas.",
@@ -6065,7 +6104,8 @@
     "CONFIRM_ROTATE_KEY": "Renouveler cette clé ? La clé actuelle cesse de fonctionner immédiatement.",
     "CONFIRM_REVOKE_KEY": "Révoquer cette clé ? Le client perd l'accès immédiatement et définitivement.",
     "CONFIRM_REVOKE_ENDPOINT": "Révoquer ce point de terminaison ? Les envois s'arrêtent définitivement ; le journal reste consultable.",
-    "CONFIRM_ROTATE_SECRET": "Renouveler le secret de signature ? Le récepteur doit être mis à jour, sinon sa vérification échouera."
+    "CONFIRM_ROTATE_SECRET": "Renouveler le secret de signature ? Le récepteur doit être mis à jour, sinon sa vérification échouera.",
+    "LAST_ATTEMPT_AT": "Dernière tentative"
   },
   "ROI": {
     "TITLE": "Communication du dossier",
@@ -7098,7 +7138,7 @@
         "TITLE_FALLBACK": "Données de santé partagées",
         "IMAGING_TAB": "Imagerie"
       },
-      "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès.",
+      "USER_NOT_FOUND": "Cet identifiant ne correspond à aucun compte patient ou aidant pouvant recevoir cet accès. Vérifiez-le auprès de la personne.",
       "REVOKE_CONFIRM_TITLE": "Révoquer cet accès ?",
       "REVOKE_CONFIRM_MESSAGE": "Cette personne ne verra plus votre dossier. Vous pourrez lui redonner l'accès plus tard."
     },
@@ -8446,7 +8486,8 @@
         "HOSPITAL_INCOMPATIBLE_RELEASE_PROTOCOL": "Réglage de libération incompatible sans médecin",
         "IMAGING_CATALOGUE_EXAM": "Examen du catalogue d'imagerie",
         "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »",
-        "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique"
+        "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique",
+        "PLATFORM_REQUEST": "Demande à la plateforme"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -10397,8 +10438,8 @@
       "RESTORED": "{{name}} a été restauré.",
       "RESTORE_FAILED": "Échec de la restauration de l'utilisateur",
       "IMPERSONATE_REASON_TOO_SHORT": "Le motif doit comporter au moins 5 caractères.",
-      "IMPERSONATE_STARTED": "Vous agissez maintenant en tant que {{name}}.",
-      "IMPERSONATE_FAILED": "Échec du démarrage de l'emprunt d'identité",
+      "IMPERSONATE_STARTED": "Session de support ouverte : vous agissez au nom de {{name}}.",
+      "IMPERSONATE_FAILED": "Impossible d'ouvrir la session de support",
       "USERNAME_ISSUED": "Nom d’utilisateur provisoire : {{username}}. La personne choisit le sien à sa première connexion."
     },
     "TOTAL": "Total",
@@ -10729,6 +10770,19 @@
       "readBackRequired": "Relecture requise",
       "readBackAt": "Relu le {{at}}",
       "followUp": "Demander un suivi"
+    },
+    "openPlatformItem": "Ouvrir",
+    "platformRequest": {
+      "open": "Écrire à la plateforme",
+      "title": "Demande à la plateforme",
+      "hint": "Votre demande arrive dans la boîte de réception des administrateurs de la plateforme, avec le nom de votre hôpital et le vôtre. Aucun SMS ni e-mail n’est envoyé.",
+      "subject": "Objet",
+      "message": "Votre message",
+      "send": "Envoyer",
+      "sending": "Envoi…",
+      "sent": "Demande envoyée aux administrateurs de la plateforme.",
+      "failed": "La demande n’a pas pu être envoyée. Réessayez.",
+      "required": "Ce champ est obligatoire."
     }
   },
   "common": {

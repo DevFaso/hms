@@ -3,6 +3,8 @@ package com.example.hms.security.oidc;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.HospitalScopeResponses;
 import com.example.hms.security.IdleSessionGate;
+import com.example.hms.security.SessionLockGate;
+import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.security.SuperAdminAuthorities;
 import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.security.context.HospitalContext;
@@ -54,6 +56,22 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
     private final IdleSessionGate idleSessionGate;
     private final TenantLifecycleGate tenantLifecycleGate;
     private final UserRepository userRepository;
+    /** Where a locked screen is recorded. Set by the container; absent in a hand-built filter. */
+    private TokenBlacklistService tokenBlacklistService;
+
+    /**
+     * The container hands the one store the configuration switched on (in
+     * memory, or Redis: their conditions exclude each other), or none.
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    void useTokenBlacklistService(org.springframework.beans.factory.ObjectProvider<TokenBlacklistService> stores) {
+        this.tokenBlacklistService = stores.getIfAvailable();
+    }
+
+    /** Sets the store directly (a hand-built filter). */
+    public void setTokenBlacklistService(TokenBlacklistService tokenBlacklistService) {
+        this.tokenBlacklistService = tokenBlacklistService;
+    }
 
     public KeycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
                                          ActingScopeResolver actingScopeResolver,
@@ -107,6 +125,19 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                     HospitalContextHolder.clear();
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
+                    return;
+                }
+
+                // ── Locked screen (SessionLockGate), as on the password path ──
+                String lockKey = SessionLockGate.providerLockKey(jwtAuth.getToken());
+                if (tokenBlacklistService != null && tokenBlacklistService.isSessionLocked(lockKey)
+                        && SessionLockGate.providerLocked(
+                            tokenBlacklistService.sessionLockedAt(lockKey), jwtAuth.getToken())
+                        && !SessionLockGate.admits(request)) {
+                    log.debug("[OIDC] Refusing request while the session's screen is locked");
+                    HospitalContextHolder.clear();
+                    SecurityContextHolder.clearContext();
+                    SessionLockGate.writeRefusal(response);
                     return;
                 }
 

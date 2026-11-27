@@ -36,6 +36,8 @@ export class MfaChallengeComponent {
 
   loading = signal(false);
   error = signal('');
+  /** The refusal is shown under the code field: the banner does not repeat it. */
+  errorOnField = signal(false);
 
   /** 6-digit TOTP or 8-char backup code */
   code = '';
@@ -68,11 +70,13 @@ export class MfaChallengeComponent {
       const message = this.translate.instant('MFA.CHALLENGE_INVALID_CODE');
       refuseFields(this.host.nativeElement, CODE_FIELD_IDS, CODE_FIELD_IDS, message);
       this.error.set(message);
+      this.errorOnField.set(true);
       return;
     }
     refuseFields(this.host.nativeElement, [], CODE_FIELD_IDS, '');
     this.loading.set(true);
     this.error.set('');
+    this.errorOnField.set(false);
 
     this.mfaService.verifyLogin(this.mfaToken, this.code).subscribe({
       next: (res) => {
@@ -146,6 +150,7 @@ export class MfaChallengeComponent {
         this.error.set(message);
         this.code = '';
         refuseFields(this.host.nativeElement, CODE_FIELD_IDS, CODE_FIELD_IDS, message);
+        this.errorOnField.set(true);
       },
     });
   }

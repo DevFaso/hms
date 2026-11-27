@@ -1,5 +1,7 @@
 package com.example.hms.mapper;
 
+import com.example.hms.service.integration.health.IntegrationDiagnosticText;
+import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.enums.integration.IntegrationHealthStatus;
 import com.example.hms.model.Organization;
 import com.example.hms.model.integration.IntegrationHealthSnapshot;
@@ -22,7 +24,9 @@ public class IntegrationHealthSnapshotMapper {
                 : snapshot.getLastStatus())
             .lastSuccessAt(snapshot.getLastSuccessAt())
             .lastFailureAt(snapshot.getLastFailureAt())
-            .lastErrorMessage(snapshot.getLastErrorMessage())
+            // QA D4303: read in the caller's language, never as stored.
+            .lastErrorMessage(IntegrationDiagnosticText.localize(
+                snapshot.getLastErrorMessage(), LocaleContextHolder.getLocale()))
             .successCount24h(snapshot.getSuccessCount24h() == null ? 0 : snapshot.getSuccessCount24h())
             .failureCount24h(snapshot.getFailureCount24h() == null ? 0 : snapshot.getFailureCount24h())
             .updatedAt(snapshot.getUpdatedAt())

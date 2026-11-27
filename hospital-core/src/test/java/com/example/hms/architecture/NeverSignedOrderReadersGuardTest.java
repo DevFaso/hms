@@ -159,7 +159,7 @@ class NeverSignedOrderReadersGuardTest {
         // QA D1537 review (round 4): the clinician's prescriptions list, paged and unpaged, leaves out a
         // proposal withdrawn before signing at the acting hospital too.
         String prescriptions = read("service/PrescriptionServiceImpl.java");
-        assertThat(SourceScan.methodBody(prescriptions, "patientRows"))
+        assertThat(SourceScan.methodBody(prescriptions, "sentRows"))
             .contains("findSentAcrossHospitals(").doesNotContain("findByPatient_IdAndHospital_IdIn");
         assertThat(SourceScan.methodBody(prescriptions, "getPrescriptionsByPatientId"))
             .contains("PrescriptionIssuance.withoutDiscardedProposals(");

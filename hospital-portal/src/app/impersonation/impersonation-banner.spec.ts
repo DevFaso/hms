@@ -8,6 +8,7 @@ import { signal } from '@angular/core';
 
 import { ImpersonationBannerComponent } from './impersonation-banner';
 import { ImpersonationService } from '../services/impersonation.service';
+import { closeScreens, openScreen } from '../testing/screen-frame';
 
 interface MockImpersonationService {
   active: ReturnType<typeof signal>;
@@ -60,7 +61,10 @@ describe('ImpersonationBannerComponent', () => {
     };
   });
 
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    closeScreens();
+    TestBed.resetTestingModule();
+  });
 
   it('hides when no impersonation is active', () => {
     const fixture = setup(null);
@@ -100,4 +104,30 @@ describe('ImpersonationBannerComponent', () => {
     expect(service.forceStop).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/super-admin');
   });
+  // r81 D4272: on a phone the way out of the support session stays on the screen.
+  for (const width of [390, 768, 1440]) {
+    it(`keeps the exit button inside a ${width} px screen, whole and on one line`, async () => {
+      service.remainingMs.set(29 * 60_000);
+      const fixture = setup({
+        impersonating: true,
+        targetUsername: 'r81s.r81sreset.r81.a-long-generated-username',
+        impersonatorUsername: 'super.administrator.of.the.platform',
+      });
+      const screen = await openScreen(width);
+      screen.body.appendChild(fixture.nativeElement);
+
+      const banner = screen.querySelector<HTMLElement>('[data-test="impersonation-banner"]')!;
+      const exit = screen.querySelector<HTMLElement>('.exit-btn')!;
+      const bannerBox = banner.getBoundingClientRect();
+      const exitBox = exit.getBoundingClientRect();
+
+      expect(exitBox.width).toBeGreaterThan(0);
+      expect(exitBox.left).toBeGreaterThanOrEqual(bannerBox.left);
+      expect(exitBox.right).toBeLessThanOrEqual(Math.min(bannerBox.right, width) + 0.5);
+      expect(bannerBox.right).toBeLessThanOrEqual(width + 0.5);
+      // The label is not cut or folded: the button is as wide as its content.
+      expect(exit.scrollWidth).toBeLessThanOrEqual(exit.clientWidth + 1);
+      expect(screen.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    });
+  }
 });

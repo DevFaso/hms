@@ -58,7 +58,12 @@ describe('Shell startup requests (QA D1012 class guard)', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: IdleService,
-          useValue: { start: () => undefined, stop: () => undefined, locked: () => false },
+          useValue: {
+            start: () => undefined,
+            stop: () => undefined,
+            locked: () => false,
+            contentHidden: () => false,
+          },
         },
       ],
     });

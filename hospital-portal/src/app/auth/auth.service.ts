@@ -75,6 +75,14 @@ export interface LoginUserProfile {
   hospitalIds?: string[];
 }
 
+/** The answer of POST /auth/token/refresh. */
+export interface RefreshedTokens {
+  accessToken: string;
+  refreshToken: string;
+  /** The session's screen is locked on the server: the lock screen is shown. */
+  sessionLocked?: boolean;
+}
+
 export interface JwtPayload {
   sub?: string;
   exp?: number;
@@ -261,11 +269,11 @@ export class AuthService {
    * session, it is forwarded once in the body so the backend can rotate it
    * and switch the user over to the cookie-based flow.
    */
-  refreshTokenRequest(restore = false): Observable<{ accessToken: string; refreshToken: string }> {
+  refreshTokenRequest(restore = false): Observable<RefreshedTokens> {
     const legacyRefreshToken = this.getRefreshToken();
     const baseUrl = this.isBrowser ? `${globalThis.location.origin}/api` : '/api';
     const body = legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {};
-    return this.http.post<{ accessToken: string; refreshToken: string }>(
+    return this.http.post<RefreshedTokens>(
       `${baseUrl}/auth/token/refresh`,
       body,
       restore
@@ -346,6 +354,11 @@ export class AuthService {
 
   holdOriginalSession(token: string | null, profile: LoginUserProfile | null): void {
     this.originalSession = { token, profile };
+  }
+
+  /** The super-admin's own profile while a support session is open, else null. */
+  heldProfile(): LoginUserProfile | null {
+    return this.originalSession.profile;
   }
 
   /** Hands the snapshot back once and forgets it. */

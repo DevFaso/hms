@@ -49,6 +49,9 @@ export interface WebhookDelivery {
   status: WebhookDeliveryStatus;
   attempts: number;
   responseStatus?: number;
+  /** QA D4078: the cause of the last failure, as a stable code (TIMEOUT, RECEIVER_REFUSED, ...). */
+  errorCode?: string;
+  /** The same cause as a sentence in the reader's language. */
   lastError?: string;
   lastAttemptAt?: string;
   sentAt?: string;

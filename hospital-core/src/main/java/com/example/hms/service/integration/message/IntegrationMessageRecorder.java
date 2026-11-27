@@ -383,6 +383,12 @@ public class IntegrationMessageRecorder {
             // caller's 409, not a recording failure to swallow.
             throw new ConflictException(MessageUtil.resolve("integration.message.contentPurged"));
         }
+        // QA D4301: one replay per failure. Checked under the same row lock, so
+        // two presses of the button - or two operators - cannot both write a
+        // replay: the second waits for the first to commit and then finds it.
+        if (original.isPresent() && isAlreadyResolved(original.get())) {
+            throw new ConflictException(MessageUtil.resolve("integration.message.replay.alreadyReplayed"));
+        }
         try {
             return original
                 .map(row -> persistReplay(row, newStatus, errorMessage))
@@ -391,6 +397,11 @@ public class IntegrationMessageRecorder {
             log.error("[INTEGRATION-MESSAGE] Failed to record replay for {}", originalMessageId, ex);
             return null;
         }
+    }
+
+    private boolean isAlreadyResolved(IntegrationMessageEvent row) {
+        return row.getCorrelationId() != null && row.getLastAttemptedAt() != null
+            && repository.existsLaterAttempt(row.getCorrelationId(), row.getLastAttemptedAt());
     }
 
     private IntegrationMessageEvent persistReplay(

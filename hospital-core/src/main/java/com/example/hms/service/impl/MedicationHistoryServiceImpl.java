@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PharmacyFillMapper;
@@ -85,9 +86,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
         // QA D1537: a draft thrown away before anyone signed it is no course the patient took.
+        // A prescription, and the dispensing that fills it, follow the restriction of the visit it was written in.
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId), hospitalId);
         List<Prescription> prescriptions = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
-            NeverSentRule.prescriptionsReadableHere(fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId));
-        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
+            NeverSentRule.prescriptionsReadableHere(
+                fetchPrescriptions(patientId, readable, restricted, startDate, endDate), hospitalId));
+        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, restricted, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
 
@@ -197,7 +202,10 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // E9 #59c — fills follow the patient across the readable hospitals.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readable);
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId), hospitalId);
+        List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readable)
+            .stream().filter(restricted::admits).toList();
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(fills.stream().map(f -> CrossHospitalReachRecorder.hospitalIdOf(f.getHospital())).toList(), hospitalId),
             "Cross-hospital pharmacy fill read on the treatment relationship");
@@ -239,8 +247,10 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
     // ========== Helper Methods ==========
 
-    private List<Prescription> fetchPrescriptions(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
+    private List<Prescription> fetchPrescriptions(UUID patientId, Set<UUID> readableHospitalIds,
+                                                  RestrictedVisitScope restricted, LocalDate startDate, LocalDate endDate) {
+        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds)
+            .stream().filter(restricted::admits).toList();
         
         // Filter by date range if provided
         if (startDate != null || endDate != null) {
@@ -252,13 +262,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return prescriptions;
     }
 
-    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
-        if (startDate != null && endDate != null) {
-            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
-                patientId, readableHospitalIds, startDate, endDate);
-        } else {
-            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readableHospitalIds);
-        }
+    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, Set<UUID> readableHospitalIds,
+                                                  RestrictedVisitScope restricted, LocalDate startDate, LocalDate endDate) {
+        List<PharmacyFill> fills = startDate != null && endDate != null
+            ? pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
+                patientId, readableHospitalIds, startDate, endDate)
+            : pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readableHospitalIds);
+        return fills.stream().filter(restricted::admits).toList();
     }
 
     private boolean isWithinDateRange(LocalDate date, LocalDate startDate, LocalDate endDate) {
