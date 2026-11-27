@@ -367,6 +367,18 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('keeps a long selected patient name readable in a narrow picker', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Pengdwend?-LongueIdentit?'));
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.width = '180px';
+    fixture.detectChanges();
+    const name = host.querySelector('.chip-name') as HTMLElement;
+    expect(name.textContent).toContain('Pengdwend?-LongueIdentit?');
+    expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1);
+    expect(name.getBoundingClientRect().height).toBeGreaterThan(20);
+  });
+
   it('a required picker marks its input required and blank while no patient is picked (QA D1245)', () => {
     const fixture = TestBed.createComponent(PatientPickerComponent);
     fixture.componentRef.setInput('required', true);
