@@ -12377,7 +12377,7 @@
     "WORKLIST_PSYCHOSOCIAL": "Psychosocial",
     "WORKLIST_ALL": "All",
     "RECORDS": "records",
-    "NO_HISTORIES": "No maternal histories",
+    "NO_HISTORIES": "No records in this worklist",
     "NO_HISTORIES_HINT": "Records matching this worklist will appear here.",
     "PATIENT": "Patient",
     "RECORDED": "Recorded",

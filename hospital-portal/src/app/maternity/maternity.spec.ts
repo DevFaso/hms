@@ -102,6 +102,15 @@ describe('MaternityComponent — tabs', () => {
     });
   });
 
+  it('identifies an empty selected worklist without claiming the hospital has no histories', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    create(['ROLE_NURSE']);
+    expect(host().querySelector('.empty-state h3')?.textContent?.trim()).toBe(
+      'Aucun dossier dans cette liste',
+    );
+  });
+
   it('shows server totals beyond the current page and never requests restricted nurse counts', () => {
     maternity.highRisk.and.returnValue(
       of({ content: [], totalElements: 42, totalPages: 3, number: 0, size: 1 }),
