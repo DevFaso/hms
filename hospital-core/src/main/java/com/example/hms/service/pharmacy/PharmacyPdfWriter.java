@@ -84,6 +84,16 @@ public final class PharmacyPdfWriter implements AutoCloseable {
         }
     }
 
+    /** A paragraph aligned with the indented medicine fields, including wrapped lines. */
+    public void indentedParagraph(PDFont font, float fontSize, String text) throws IOException {
+        float indent = width(BOLD, fontSize, "   ");
+        for (String line : wrap(font, fontSize, sanitize(font, text), contentWidth() - indent)) {
+            ensureRoom(fontSize * LEADING);
+            y -= fontSize * LEADING;
+            show(font, fontSize, MARGIN + indent, y, line);
+        }
+    }
+
     /** "Label : value", the label in bold, the value wrapped after it. */
     public void field(String label, String value, float fontSize) throws IOException {
         String head = sanitize(BOLD, label) + " ";

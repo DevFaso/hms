@@ -297,7 +297,7 @@ public class OrdonnancePdfService {
                 com.example.hms.service.emar.MedicationRoutes.label(rx.getRoute(), locale), 10f);
         pdf.field("   " + label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 10f);
         if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(rx)) {
-            pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, "   " + (rx.getPrnMinIntervalHours() != null
+            pdf.indentedParagraph(PharmacyPdfWriter.REGULAR, 10f, (rx.getPrnMinIntervalHours() != null
                     ? label(locale, "pdf.rxcopy.asNeededInterval", rx.getPrnMinIntervalHours())
                     : label(locale, "pdf.rxcopy.asNeeded")));
         }
