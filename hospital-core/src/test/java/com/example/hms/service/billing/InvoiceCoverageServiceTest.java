@@ -631,6 +631,82 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1353 (F1): a credit note that keeps the total under a ceiling re-splits the claimed acts")
+    void aCreditNoteThatKeepsTheTotalMovesTheClaimedActs() {
+        // 80 %, per-invoice ceiling 10 000 F: A 5 000 (posted first) and B 20 000 give A 4 000 + B 6 000 = 10 000.
+        PayerPlanTerms capped = PayerPlanTerms.builder().hospitalId(HOSPITAL_A).planId(plan.getId())
+            .defaultCoveragePercent(80).perInvoiceCeiling(new BigDecimal("10000"))
+            .effectiveFrom(LocalDate.of(2026, 1, 1)).build();
+        when(terms.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL_A))
+            .thenReturn(List.of(capped));
+        InvoiceItem first = line("5000", ItemCategory.SERVICE, null, 1);
+        first.setCoverageCategory(PriceListCategory.IMAGING);
+        InvoiceItem second = line("20000", ItemCategory.SERVICE, null, 2);
+        second.setCoverageCategory(PriceListCategory.IMAGING);
+        lines = new ArrayList<>(List.of(first, second));
+        invoice.setTotalAmount(new BigDecimal("25000"));
+        com.example.hms.repository.InvoicePayerShareLineRepository shareLines =
+            mock(com.example.hms.repository.InvoicePayerShareLineRepository.class);
+        service.setShareLineRepository(shareLines);
+        List<com.example.hms.model.InvoicePayerShareLine> stored = new ArrayList<>();
+        when(shareLines.saveAll(any())).thenAnswer(call -> {
+            call.<Iterable<com.example.hms.model.InvoicePayerShareLine>>getArgument(0).forEach(stored::add);
+            return stored;
+        });
+        when(shareLines.findByShareIdInAndHospitalId(any(), eq(HOSPITAL_A))).thenAnswer(call -> List.copyOf(stored));
+        when(shareLines.findByShareIdAndHospitalId(any(), eq(HOSPITAL_A))).thenAnswer(call -> stored.stream()
+            .filter(row -> row.getShareId().equals(call.getArgument(0))).toList());
+        when(shareLines.deleteByShareAndHospital(any(), eq(HOSPITAL_A))).thenAnswer(call -> {
+            int before = stored.size();
+            stored.removeIf(row -> row.getShareId().equals(call.getArgument(0)));
+            return before - stored.size();
+        });
+
+        assertThat(service.applyAtIssue(invoice, BILLING_A)).isEqualByComparingTo("10000");
+        InvoicePayerShare share = onlyShare();
+        assertThat(first.getPayerShareAmount()).isEqualByComparingTo("4000");
+        assertThat(second.getPayerShareAmount()).isEqualByComparingTo("6000");
+        // Sent to the payer on a bordereau: the total stands, so the credit note is allowed.
+        service.claim(invoice.getId(), share.getId());
+
+        // A is credited in full: A 0, B 16 000 capped at 10 000; the total is still 10 000.
+        creditNotes.put(first.getId(), new BigDecimal("5000"));
+        invoice.setTotalAmount(new BigDecimal("20000"));
+        assertThat(service.recomputeAfterLineChange(invoice, BILLING_A)).isEqualByComparingTo("10000");
+
+        assertThat(onlyShare().getId()).isEqualTo(share.getId());
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.CLAIMED);
+        assertThat(first.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(second.getPayerShareAmount()).isEqualByComparingTo("10000");
+        assertThat(stored).singleElement().satisfies(row -> {
+            assertThat(row.getShareId()).isEqualTo(share.getId());
+            assertThat(row.getInvoiceItemId()).isEqualTo(second.getId());
+            assertThat(row.getAmount()).isEqualByComparingTo("10000");
+        });
+
+        // « Parts assureurs » lists what the invoice lines now say.
+        first.setBillingInvoice(invoice);
+        second.setBillingInvoice(invoice);
+        when(items.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(any(), eq(HOSPITAL_A))).thenReturn(lines);
+        when(shares.searchAtHospital(eq(HOSPITAL_A), any(), any(), any(), eq(true), any(), eq(true), any(), eq(true),
+                any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(share),
+                org.springframework.data.domain.PageRequest.of(0, 25), 1));
+        com.example.hms.payload.dto.billing.PayerSharePageDTO page = service.searchAtHospital(null);
+        assertThat(page.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getLines()).extracting(com.example.hms.payload.dto.billing.PayerShareLineDTO::getItemId)
+                .containsExactly(second.getId());
+            assertThat(row.getLines().get(0).getPayerShare()).isEqualByComparingTo("10000");
+        });
+
+        // Recomputed again with nothing changed: the rows are not rewritten.
+        org.mockito.Mockito.clearInvocations(shareLines);
+        service.recomputeAfterLineChange(invoice, BILLING_A);
+        org.mockito.Mockito.verify(shareLines, org.mockito.Mockito.never()).deleteByShareAndHospital(any(), any());
+        org.mockito.Mockito.verify(shareLines, org.mockito.Mockito.never()).saveAll(any());
+    }
+
+    @Test
     @DisplayName("cancelling the invoice cancels its open share (the ceiling is freed); a claimed share refuses it")
     void cancellingTheInvoice() {
         service.applyAtIssue(invoice, BILLING_A);

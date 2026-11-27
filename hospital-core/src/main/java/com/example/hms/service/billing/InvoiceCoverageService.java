@@ -235,6 +235,9 @@ public class InvoiceCoverageService {
             ? new CoverageCalculator.Result(List.of(), BigDecimal.ZERO.setScale(2))
             : compute(invoice, hospitalId, lines, coverage, day);
         if (result.total().compareTo(current.getAmount()) == 0) {
+            // Review of #1353 (F1): the total can stand while the split moves (a ceiling filled in line order), so
+            // the share's own rows follow the lines, whatever its status: the amount owed is unchanged.
+            resplitShareLines(current, result);
             applyToLines(lines, result);
             return InvoiceBalance.payerShareOf(invoice);
         }
@@ -868,6 +871,36 @@ public class InvoiceCoverageService {
         if (!rows.isEmpty()) {
             shareLineRepository.saveAll(rows);
         }
+    }
+
+    /**
+     * Review of #1353 (F1): a credit note left the share's total as it was but moved what it pays of each line (under
+     * a per-invoice or annual ceiling the lines are filled in order). The share's rows are replaced by the new split
+     * so « Parts assureurs » lists what the invoice lines now say; nothing is written when the split is unchanged.
+     */
+    private void resplitShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+        if (shareLineRepository == null || share.getId() == null) {
+            return;
+        }
+        Map<UUID, BigDecimal> stored = new HashMap<>();
+        for (com.example.hms.model.InvoicePayerShareLine row
+                : shareLineRepository.findByShareIdAndHospitalId(share.getId(), share.getHospitalId())) {
+            stored.put(row.getInvoiceItemId(), row.getAmount());
+        }
+        Map<UUID, BigDecimal> now = new HashMap<>();
+        for (CoverageCalculator.LineShare line : result.lines()) {
+            if (line.id() != null && line.share() != null && line.share().signum() > 0) {
+                now.put(line.id(), line.share());
+            }
+        }
+        boolean same = stored.size() == now.size() && now.entrySet().stream()
+            .allMatch(entry -> stored.containsKey(entry.getKey())
+                && stored.get(entry.getKey()).compareTo(entry.getValue()) == 0);
+        if (same) {
+            return;
+        }
+        shareLineRepository.deleteByShareAndHospital(share.getId(), share.getHospitalId());
+        writeShareLines(share, result);
     }
 
     private BigDecimal pharmacyUsed(UUID patientId, UUID hospitalId, int year, UUID excludedPrescriptionId) {
