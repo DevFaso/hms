@@ -174,3 +174,44 @@
     padding: 0.5rem !important;
   }
 }
+
+// QA D4186 (r81): the receipt history, and the mark of a reprinted receipt.
+.receipt-history {
+  .history-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .table-responsive {
+    overflow-x: auto;
+  }
+  .history-table {
+    width: 100%;
+  }
+  .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .history-voided td {
+    color: var(--text-secondary, inherit);
+  }
+}
+
+.receipt-duplicate {
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.75rem;
+  display: inline-block;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.receipt-voided {
+  display: block;
+  letter-spacing: 0;
+  text-transform: none;
+}

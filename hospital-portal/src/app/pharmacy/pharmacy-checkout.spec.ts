@@ -20,10 +20,15 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'getDispense',
       'createPayment',
-      'listPharmacies',
+      'listStores',
       'listDispensesByPharmacy',
+      'listPaymentsByPharmacy',
     ]);
-    svc.listPharmacies.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Main' }] }) as never);
+    // QA D4186: the receipt history loads with the pharmacy.
+    svc.listPaymentsByPharmacy.and.returnValue(
+      of({ data: { content: [], totalPages: 0 } }) as never,
+    );
+    svc.listStores.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Main' }] }) as never);
     svc.listDispensesByPharmacy.and.returnValue(
       of({
         data: {

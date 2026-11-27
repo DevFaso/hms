@@ -19,6 +19,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PatientIdLineComponent } from '../shared/patient-id-line/patient-id-line.component';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { refusalReason } from '../shared/refusal-reason';
 
@@ -44,6 +45,7 @@ interface StatusOption {
     TranslateModule,
     DatePipe,
     CfaPipe,
+    PatientIdLineComponent,
   ],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,

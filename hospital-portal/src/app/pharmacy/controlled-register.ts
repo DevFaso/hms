@@ -21,6 +21,7 @@ import {
   PharmacyService,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -55,6 +56,7 @@ function localIsoDate(d: Date): string {
     FormsModule,
     TranslateModule,
     ServerTimePipe,
+    DateTimePipe,
     EnumLabelPipe,
   ],
   templateUrl: './controlled-register.html',
@@ -88,7 +90,7 @@ export class ControlledRegisterComponent implements OnInit {
     this.to = localIsoDate(today);
     this.from = localIsoDate(new Date(today.getFullYear(), today.getMonth(), 1));
     // QA D1347: every pharmacy (all pages), not the first 100.
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);

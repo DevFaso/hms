@@ -201,6 +201,13 @@ public class WorkQueuePrescriptionDTO implements com.example.hms.payload.dto.pre
         /** QA D1036: the middle name, so the work queue shows the patient's whole name. */
         private String middleName;
         private String lastName;
+        /**
+         * QA D4185 (r81): the record number at the order's hospital and the date of birth, so two patients with
+         * the same name are told apart at the counter. The search already found by record number; the row and the
+         * dispense panel never showed it.
+         */
+        private String mrn;
+        private java.time.LocalDate dateOfBirth;
     }
 
     @Getter
