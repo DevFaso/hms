@@ -82,10 +82,10 @@ class AllergyOverrideAtSigningGuardTest {
             .doesNotContain("isAllergiesReviewed()")
             .doesNotContain("getOverrideReason()");
         assertThat(require)
-            .as("the reason must be non-blank and tied by the token to the allergy the warning names")
+            .as("the reason must meet the clinical override minimum and be tied by the token to the allergy the warning names")
             .contains("getAllergyOverrideReason()")
-            .contains(".trim()")
-            .contains("isEmpty()")
+            .contains("ClinicalOverrideReason.trim(")
+            .contains("ClinicalOverrideReason.isSufficient(reason)")
             .contains("tokenMatches(request, token)");
         String token = methodBody(text, "private String doseExceptionToken(");
         assertThat(token).as("the token names the allergy, not only that one exists").contains("AllergyStop::key");
