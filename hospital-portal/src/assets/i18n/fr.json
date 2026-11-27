@@ -7537,14 +7537,14 @@
         "PENDING": "Prête à retirer"
       },
       "IMAGING_ORDER_STATUS": {
-        "CANCELLED": "Annulé",
-        "COMPLETED": "Terminé",
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
         "DRAFT": "Brouillon",
         "IN_PROGRESS": "En cours",
-        "ORDERED": "Prescrit",
+        "ORDERED": "Prescrite",
         "PENDING_AUTHORIZATION": "En attente d’autorisation",
         "RESULTS_AVAILABLE": "Résultats disponibles",
-        "SCHEDULED": "Planifié"
+        "SCHEDULED": "Planifiée"
       },
       "IMAGING_REPORT_STATUS": {
         "ADDENDUM": "Addendum",
