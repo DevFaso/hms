@@ -1,7 +1,11 @@
 // Railway Infrastructure as Code for the "e-keneya" project.
 //
-// Replaces the three Config-as-Code files (railway.toml, hospital-portal/railway.toml,
-// keycloak/prod/railway.toml), which Railway stops reading on 2026-12-01.
+// This is the only place the build and deploy settings of the services live. It replaced
+// three Config-as-Code files (one at the repo root, one in hospital-portal/, one in
+// keycloak/prod/), which Railway stops reading on 2026-12-01 and which are deleted.
+// Never add a Config-as-Code file back: a service without a stored config path reads one
+// found at the repo root, whatever service it was written for. On 2026-11-26 the dev
+// Keycloak built the backend image that way. RailwayConfigTest fails if one reappears.
 //
 // READ THIS BEFORE EDITING
 // - Railway does NOT read this file during a deploy. Nothing changes until someone runs
@@ -21,9 +25,9 @@ const REPO = "DevFaso/hms";
 const REGION = "us-east4-eqdc4a";
 const ONE_REPLICA = { [REGION]: 1 };
 
-// ---- Settings moved from the three railway.toml files (identical in dev and prod) ----
+// ---- Build and deploy settings (identical in dev and prod) ----
 
-// Was railway.toml (repo root). The Dockerfile path is relative to the repo root.
+// Backend. The Dockerfile path is relative to the repo root.
 // Watch patterns: only rebuild the backend when something that reaches the bootJar or
 // its runtime image changes, not on every frontend, Keycloak, docs or CI push.
 const BACKEND_BUILD = {
@@ -39,12 +43,11 @@ const BACKEND_BUILD = {
     "gradle.properties",
     "gradle/**",
     "gradlew",
-    "railway.toml",
   ],
 } as const;
 const BACKEND_HEALTHCHECK = { healthcheck: "/api/actuator/health", healthcheckTimeout: 180 };
 
-// Was hospital-portal/railway.toml. The Dockerfile path is relative to the service's
+// Frontend. The Dockerfile path is relative to the service's
 // root directory (/hospital-portal); the watch pattern is relative to the repo root.
 // Each frontend service must keep its BUILD_CONFIG variable (dev / production) in the
 // dashboard: it picks the Angular environment at build time.
@@ -56,7 +59,7 @@ const FRONTEND_BUILD = {
 } as const;
 const FRONTEND_HEALTHCHECK = { healthcheck: "/", healthcheckTimeout: 60 };
 
-// Was keycloak/prod/railway.toml, shared by every hms-keycloak-* service.
+// Keycloak, shared by every hms-keycloak-* service.
 // Health check: Keycloak 26 serves /health/ready on the management port (9000), which
 // Railway's edge cannot reach; /realms/master/ is on the main port and returns 200
 // whenever Keycloak is up.

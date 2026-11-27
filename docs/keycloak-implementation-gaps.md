@@ -176,8 +176,9 @@ covered by the 2.8.A/B/C subsections below.
 - ✅ **2.8.A engineering** Single parameterized Railway image —
   `ARG BUILD_CONFIG={dev,uat,prod}` in
   [`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile), one
-  [`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml) shared
-  across all three Railway services. Image stamps a
+  settings block shared across the Railway services (first a
+  `keycloak/prod/railway.toml`, since 2026-11-26 `KEYCLOAK_BUILD` in
+  [`.railway/railway.ts`](../.railway/railway.ts)). Image stamps a
   `com.bitnesttechs.hms.env` Docker label and a `KC_HMS_ENV` runtime
   env var so the running env is grep-able from boot logs and metrics.
   [`keycloak/prod/README.md`](../keycloak/prod/README.md) rewritten as
@@ -223,10 +224,10 @@ not archive) and Android `local.properties` defaults at
 ### Phase 2.8.A — Provision per-environment Keycloak (DevOps; blocks 2.8.B/C)
 
 **Status:** ⏳ pending (waiting on DevOps to click through the Railway
-recipe). Engineering side is shipped: one Dockerfile, one `railway.toml`,
+recipe). Engineering side is shipped: one Dockerfile, one settings block,
 parameterized via `BUILD_CONFIG={dev,prod}` —
 [`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile),
-[`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml), and
+[`.railway/railway.ts`](../.railway/railway.ts), and
 [`keycloak/prod/README.md`](../keycloak/prod/README.md) (the per-env
 runbook). The realm-export.json baked into the Dockerfile already
 carries every fix from Phase 2.7 (standard scopes, user-profile config,
