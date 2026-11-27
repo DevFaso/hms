@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
+import { ssoTabState } from '../core/browser-storage';
 
 export { SESSION_RESTORE_HEADER } from './session-lifetime';
 
@@ -38,10 +39,13 @@ interface CredentialStatus {
  * The refresh is marked SESSION_RESTORE_REQUEST: the error interceptor hands
  * its refusal back untouched instead of signing out on the server and
  * redirecting; the shared deadline and the reviewed 409 retry still apply.
+ *
+ * A tab signed in by SSO has no refresh cookie: OidcAuthService.initialize
+ * restores it through the identity provider, so it is left alone here.
  */
 export function restoreSessionOnStartup(): Promise<void> {
   const auth = inject(AuthService);
-  if (!auth.hasTabSession() || auth.getToken()) return Promise.resolve();
+  if (!auth.hasTabSession() || auth.getToken() || ssoTabState()) return Promise.resolve();
   const sessionScope = inject(SessionScopeService);
   const http = inject(HttpClient);
 

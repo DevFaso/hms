@@ -401,6 +401,46 @@ class SupportImpersonationServiceImplTest {
     }
 
     @Test
+    @DisplayName("endForImpersonator(): an unresolved target is not audited, but the session still ends")
+    void endForImpersonatorWithAnUnresolvedTargetStillEnds() {
+        UUID goneId = UUID.randomUUID();
+        when(userRepository.findById(goneId)).thenReturn(Optional.empty());
+        java.time.Instant expiresAt = java.time.Instant.now().plusSeconds(900);
+        sessionTracker.register(actorId, goneId, "imp-jti", expiresAt);
+
+        assertThat(service.endForImpersonator(actorId, "the portal was reloaded")).isTrue();
+
+        verify(auditEventLogService, never()).logEvent(any());
+        verify(tokenBlacklistService).blacklist("imp-jti", expiresAt.toEpochMilli());
+        assertThat(sessionTracker.hasActive(actorId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("endForImpersonator(): a failed blacklist is logged and the session still ends")
+    void endForImpersonatorWhenTheBlacklistFails() {
+        java.time.Instant expiresAt = java.time.Instant.now().plusSeconds(900);
+        sessionTracker.register(actorId, targetId, "imp-jti", expiresAt);
+        org.mockito.Mockito.doThrow(new IllegalStateException("store down"))
+            .when(tokenBlacklistService).blacklist("imp-jti", expiresAt.toEpochMilli());
+
+        assertThat(service.endForImpersonator(actorId, "the super admin signed in again")).isTrue();
+
+        verify(auditEventLogService).logEvent(any());
+        assertThat(sessionTracker.hasActive(actorId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("endForImpersonator(): no recorded token id → nothing to blacklist, the session still ends")
+    void endForImpersonatorWithoutAJti() {
+        sessionTracker.register(actorId, targetId, " ", java.time.Instant.now().plusSeconds(900));
+
+        assertThat(service.endForImpersonator(actorId, "the portal was reloaded")).isTrue();
+
+        verify(tokenBlacklistService, never()).blacklist(any(), anyLong());
+        assertThat(sessionTracker.hasActive(actorId)).isFalse();
+    }
+
+    @Test
     @DisplayName("endForImpersonator(): nothing tracked → false, no audit, no blacklist")
     void endForImpersonatorWithoutSessionIsANoOp() {
         assertThat(service.endForImpersonator(actorId, "the super admin signed in again")).isFalse();

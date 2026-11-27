@@ -18,7 +18,9 @@ import { stepUpRequestOptions } from './step-up';
  * Keep the original super-admin token and profile snapshot in memory (never
  * in web storage; dropped when the session ends) before swapping in the
  * impersonation token; restore both on stop. A reload during impersonation
- * signs in again: the server refuses a refresh while it is active.
+ * ends it: the tab stays bound to the super admin, and the restore's refresh
+ * makes the server end the tracked impersonation (audited) and return the
+ * super admin's own session. A new sign-in by the super admin ends it too.
  *
  * <p>Beyond the obvious token swap, the service also re-hydrates
  * {@link RoleContextService} and the persisted user profile from the new

@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 
 import { AuthService } from './auth.service';
 import { SESSION_RESTORE_HEADER, restoreSessionOnStartup } from './session-restore';
-import { TAB_SESSION_KEY, tabBindingFor } from '../core/browser-storage';
+import { SSO_TAB_KEY, TAB_SESSION_KEY, tabBindingFor } from '../core/browser-storage';
 
 function fakeJwt(payload: Record<string, unknown>): string {
   const b64 = (v: string) => btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
@@ -76,6 +76,16 @@ describe('restoreSessionOnStartup — the session after a reload comes from the 
     await run();
     http.expectNone((r) => isRefresh(r.url));
     expect(auth.getToken()).toBeNull();
+  });
+
+  it('a tab signed in by SSO is not restored through the native refresh (the identity provider restores it)', async () => {
+    await bindTo('u1');
+    sessionStorage.setItem(SSO_TAB_KEY, 'bound');
+
+    await run();
+
+    http.expectNone((r) => isRefresh(r.url));
+    expect(auth.hasTabSession()).toBeTrue();
   });
 
   it('restores the token and the profile of the account the tab is bound to', async () => {

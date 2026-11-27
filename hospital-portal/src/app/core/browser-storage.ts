@@ -37,9 +37,17 @@ export const REMEMBERED_USERNAME_KEY = 'hms.login.rememberedUsername';
 /** This tab signed in: after a reload it asks the refresh cookie for its session (see bindTab). */
 export const TAB_SESSION_KEY = 'hms.session.tab';
 
+/**
+ * This tab signed in through the identity provider (SSO): `bound`, or `restoring` while a reload is
+ * getting the session back from the provider (see markSsoTab). Its tokens are memory-only and it has
+ * no refresh cookie, so it never restores through the native refresh.
+ */
+export const SSO_TAB_KEY = 'hms.session.sso';
+
 /** Every `sessionStorage` key the portal writes; all belong to the signed-in user. */
 export const SESSION_SCOPED_KEYS: readonly string[] = [
   'hms.session.tab',
+  'hms.session.sso',
   'hms_idle_locked',
   'hms_lock_ts',
   'hms-chunk-reload',
@@ -129,6 +137,35 @@ export function tabBinding(): string | null {
 export function clearTabSession(): void {
   try {
     sessionStorage.removeItem(TAB_SESSION_KEY);
+    sessionStorage.removeItem(SSO_TAB_KEY);
+  } catch {
+    /* storage not available */
+  }
+}
+
+/** The SSO state of this tab: `bound`, `restoring` (a reload is at the provider), or null (not SSO). */
+export type SsoTabState = 'bound' | 'restoring';
+
+export function markSsoTab(state: SsoTabState): void {
+  try {
+    sessionStorage.setItem(SSO_TAB_KEY, state);
+  } catch {
+    /* storage not available: a reload signs in again */
+  }
+}
+
+export function ssoTabState(): SsoTabState | null {
+  try {
+    const state = sessionStorage.getItem(SSO_TAB_KEY);
+    return state === 'bound' || state === 'restoring' ? state : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSsoTab(): void {
+  try {
+    sessionStorage.removeItem(SSO_TAB_KEY);
   } catch {
     /* storage not available */
   }

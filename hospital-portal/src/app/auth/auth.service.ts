@@ -10,6 +10,7 @@ import { SESSION_RESTORE_HEADER, SESSION_RESTORE_REQUEST } from './session-lifet
 import {
   bindTab,
   clearSessionScopedStorage,
+  clearSsoTab,
   clearTabSession,
   clearUserDrafts,
   purgeLegacyBrowserStorage,
@@ -131,7 +132,9 @@ export class AuthService {
   // ---------- Storage ----------
   // The access token lives in memory only, never in web storage. A reload of
   // a tab that signed in restores it through the refresh cookie
-  // (session-restore.ts); a new tab or a restarted browser signs in again.
+  // (session-restore.ts), or through the identity provider after an SSO
+  // sign-in (oidc-auth.service.ts); a tab opened fresh signs in again (a
+  // duplicated or browser-restored tab carries the tab's binding with it).
   // See core/browser-storage.ts.
   private accessToken: string | null = null;
 
@@ -149,6 +152,9 @@ export class AuthService {
     // While impersonating, the tab stays bound to the super admin: a reload
     // restores the admin's own session (the server ends the impersonation).
     if (this.originalSession.token) return;
+    // A native token: the tab now restores through the refresh cookie (an SSO
+    // sign-in marks the tab again right after, see OidcAuthService).
+    clearSsoTab();
     const subject = this.tokenSubject(token);
     if (!subject) return;
     void tabBindingFor(subject)
