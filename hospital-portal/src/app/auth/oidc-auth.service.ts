@@ -51,6 +51,13 @@ export class OidcAuthService {
    */
   readonly discoveryFailed = signal(false);
 
+  /**
+   * True once, right after the tab came back from the sign-in the lock screen
+   * asked for ({@link reauthenticate}): the only moment the lock screen asks
+   * the server whether it may open.
+   */
+  readonly reauthenticated = signal(false);
+
   /** True when the SSO feature flag is on. */
   isEnabled(): boolean {
     return !!environment.oidc?.enabled;
@@ -122,13 +129,14 @@ export class OidcAuthService {
     if (this.oauth.hasValidAccessToken()) {
       // Back from a reload's round trip: only the account this tab signed in as is restored.
       if (
-        sso === 'restoring' &&
+        (sso === 'restoring' || sso === 'unlocking') &&
         !(await this.auth.isTokenForThisTab(this.oauth.getAccessToken()))
       ) {
         this.auth.endLocalSession();
         this.ready.set(true);
         return;
       }
+      this.reauthenticated.set(sso === 'unlocking');
       this.hydrateLegacyAuthFromOidc();
       this.oauth.setupAutomaticSilentRefresh();
       this.authenticated.set(true);
@@ -144,6 +152,18 @@ export class OidcAuthService {
     }
 
     this.ready.set(true);
+  }
+
+  /**
+   * The lock screen of a tab signed in here: the holder signs in again at the
+   * provider (`prompt=login`, so its own session does not answer for them).
+   * The tab comes back as after a reload, marked as coming back from this
+   * sign-in, and the server lets through only a sign-in later than the lock.
+   */
+  reauthenticate(): void {
+    if (!this.isEnabled()) return;
+    markSsoTab('unlocking');
+    this.oauth.initCodeFlow('', { prompt: 'login' });
   }
 
   /** Kick off Authorization Code + PKCE — browser navigates to Keycloak. */

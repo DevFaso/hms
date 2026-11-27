@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -182,10 +183,14 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         List<ProcedureOrder> orders;
         if (activeHospitalId != null) {
             // E9 #59b — procedure orders follow the patient across the
-            // readable hospitals (untagged, V158); every foreign row is accounted.
+            // readable hospitals. Untagged (V158): an order follows the
+            // restriction of the visit it was placed in. Every foreign row is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
-            orders = procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, activeHospitalId));
+            orders = procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital procedure order read on the treatment relationship");

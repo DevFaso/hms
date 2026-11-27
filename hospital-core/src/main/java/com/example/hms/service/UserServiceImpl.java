@@ -159,6 +159,8 @@ public class UserServiceImpl implements UserService {
     public UserResponseDTO createUser(UserRequestDTO dto) {
         long existingUsers = userRepository.count();
 
+        com.example.hms.security.PasswordPolicy.require("password", dto.getPassword(), new com.example.hms.security.PasswordPolicy.Identity(
+                dto.getUsername(), dto.getFirstName(), dto.getLastName(), dto.getEmail(), dto.getPhoneNumber()));
         String encodedPwd = passwordEncoder.encode(dto.getPassword());
         User user = userMapper.toEntity(dto, encodedPwd);
         final com.example.hms.utility.ActivationTokens.Issued activation =
@@ -238,6 +240,9 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail().toLowerCase(Locale.ROOT));
+        com.example.hms.security.PasswordPolicy.require("password", request.getPassword(), new com.example.hms.security.PasswordPolicy.Identity(
+                request.getUsername(), request.getFirstName(), request.getLastName(), request.getEmail(),
+                request.getPhoneNumber()));
         String encodedPassword = passwordEncoder.encode(request.getPassword());
         LocalDateTime passwordSetAt = LocalDateTime.now();
         user.setPasswordHash(encodedPassword);
@@ -958,6 +963,9 @@ public class UserServiceImpl implements UserService {
         if (!passwordChosenByAdmin) {
             rawPassword = generateTempPassword();
             request.setForcePasswordChange(true);
+        } else {
+            com.example.hms.security.PasswordPolicy.require("password", rawPassword, new com.example.hms.security.PasswordPolicy.Identity(
+                    u.getUsername(), request.getFirstName(), request.getLastName(), email, phone));
         }
         // Back onto the request so createUserWithRolesAndHospital can hand a
         // generated one to the registrar when no channel reaches the holder
@@ -1112,6 +1120,8 @@ public class UserServiceImpl implements UserService {
         String rawPassword = request.getPassword();
         if (rawPassword == null || rawPassword.isBlank()) {
             rawPassword = generateTempPassword();
+        } else {
+            com.example.hms.security.PasswordPolicy.require("password", rawPassword, user);
         }
         request.setPassword(rawPassword);
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
@@ -2015,6 +2025,7 @@ public class UserServiceImpl implements UserService {
         // and it differs from the current hash.
         if (hasText(dto.getPassword())
                 && !passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
+            com.example.hms.security.PasswordPolicy.require("password", dto.getPassword(), user);
             String encoded = passwordEncoder.encode(dto.getPassword());
             LocalDateTime passwordSetAt = LocalDateTime.now();
             // Only an administrator reaches here (a self-edit cannot carry a
@@ -2456,6 +2467,7 @@ public class UserServiceImpl implements UserService {
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
+        com.example.hms.security.PasswordPolicy.require("newPassword", newPassword, user);
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -2504,6 +2516,8 @@ public class UserServiceImpl implements UserService {
         }
         String encodedPassword = null;
         if (newPassword != null) {
+            // Against the username the holder is taking, not the one being replaced.
+            com.example.hms.security.PasswordPolicy.require("newPassword", newPassword, com.example.hms.security.PasswordPolicy.Identity.of(user));
             encodedPassword = passwordEncoder.encode(newPassword);
             user.setPasswordHash(encodedPassword);
             user.setPasswordChangedAt(LocalDateTime.now());

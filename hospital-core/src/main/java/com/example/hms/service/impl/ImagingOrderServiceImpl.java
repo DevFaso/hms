@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -813,7 +814,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (patientId == null
                 || !NeverSentRule.readableHere(orderHospitalId, activeHospitalId, wasSent(order))
                 || !recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId)
-                    .contains(orderHospitalId)) {
+                    .contains(orderHospitalId)
+                // An imaging order follows the restriction of the visit it was placed in, as in the list.
+                || !RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, activeHospitalId))
+                    .admits(order)) {
             throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
@@ -852,7 +856,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             // E9 #59b — imaging orders follow the patient: read across the
             // readable hospitals at the database, where this used to load the
             // patient's whole history and keep the acting hospital's rows in
-            // memory. Untagged (V158), so every foreign row travels; accounted.
+            // memory. Untagged (V158): an order follows its visit's restriction; accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             // QA D2915: the chart list is the care team's of the acting hospital; a technician there
             // (whatever their token names) has none.
@@ -869,6 +873,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
             // QA D652: less another hospital's never-sent DRAFTs, as the by-id read (NeverSentRule).
             orders = NeverSentRule.imagingOrdersReadableHere(orders, activeHospitalId);
+            // And less the orders placed in a visit withheld from this hospital, as the by-id read.
+            RestrictedVisitScope restricted = reader.administrator() ? RestrictedVisitScope.none()
+                : RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, activeHospitalId));
+            orders = orders.stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital imaging order read on the treatment relationship");

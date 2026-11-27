@@ -238,6 +238,41 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
                                                  Pageable pageable);
 
     /**
+     * {@link #findPatientResultsReadableAt} for a hospital-scoped read, less
+     * the results of an order placed in a visit the acting hospital may not
+     * read ({@code RecordAccessPolicy.withheldVisits}): a result follows its
+     * order's visit, in the query, so a page is never thinned after the fact.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "labOrder.encounter",
+        "labOrder.orderingStaff.user.staffProfile",
+        "labOrder.orderingStaff.user.patientProfile",
+        "labOrder.encounter.department",
+        "assignment",
+        "assignment.user",
+        "assignment.user.staffProfile",
+        "assignment.user.patientProfile"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND (r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+          AND (r.labOrder.encounter IS NULL OR r.labOrder.encounter.id NOT IN :withheldVisitIds)
+    """)
+    List<LabResult> findPatientResultsReadableOutsideVisits(@Param("patientId") UUID patientId,
+                                                            @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                                            @Param("actingHospitalId") UUID actingHospitalId,
+                                                            @Param("withheldVisitIds") Collection<UUID> withheldVisitIds,
+                                                            Pageable pageable);
+
+    /**
      * Every hospital's results for the patient: the only call that sets
      * {@link #findPatientResultsReadableAt}'s {@code globalView} flag. Two
      * callers may read that wide, and only they call this:

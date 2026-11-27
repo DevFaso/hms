@@ -57,10 +57,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/announcements/announcement-list.ts::unmarked-refusal::submitForm::ANNOUNCEMENTS.TOAST.TEXT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/bed-management/bed-management.ts::unmarked-refusal::submitBed::BEDS.TOAST.BED_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

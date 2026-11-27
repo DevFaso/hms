@@ -262,11 +262,14 @@ class AuditEventLogControllerTest {
     void getLogsByUserLetsAnyoneReadTheirOwnActivity() {
         UUID userId = UUID.randomUUID();
         when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
-        when(auditService.getAuditLogsByUser(userId, pageable)).thenReturn(new PageImpl<>(List.of(responseDTO)));
+        when(auditService.getOwnActivity(userId, pageable)).thenReturn(new PageImpl<>(List.of(responseDTO)));
 
         ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getLogsByUser(userId, pageable, auth);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // r81 D4273: their own activity, without the session's technical rows; never the full audit read.
+        assertThat(result.getBody().getContent()).hasSize(1);
+        org.mockito.Mockito.verify(auditService, org.mockito.Mockito.never()).getAuditLogsByUser(userId, pageable);
     }
 
     @Test

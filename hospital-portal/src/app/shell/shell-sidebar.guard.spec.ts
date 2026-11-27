@@ -73,7 +73,12 @@ describe('Sidebar entries (QA r65 D2760 / D2777 class guards)', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: IdleService,
-          useValue: { start: () => undefined, stop: () => undefined, locked: () => false },
+          useValue: {
+            start: () => undefined,
+            stop: () => undefined,
+            locked: () => false,
+            contentHidden: () => false,
+          },
         },
       ],
     });

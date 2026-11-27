@@ -145,14 +145,33 @@ class AnnouncementServiceImplTest {
             UUID hospitalId = UUID.randomUUID();
             Announcement a = buildAnnouncement(UUID.randomUUID(), "Scoped", LocalDateTime.now());
             HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
-            when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(a)));
+            when(announcementRepository.findVisibleAtHospital(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(List.of(a));
 
             List<AnnouncementResponseDTO> result = service.getAnnouncements(5);
 
             assertEquals(1, result.size());
             assertEquals("Scoped", result.get(0).getText());
-            verify(announcementRepository).findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class));
+            verify(announcementRepository).findVisibleAtHospital(eq(hospitalId), any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("a platform announcement listed at a hospital says it is one, so the page offers no change")
+        void platformAnnouncementIsMarkedPlatformWide() {
+            UUID hospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(hospitalId);
+            Announcement own = buildAnnouncement(UUID.randomUUID(), "Own", LocalDateTime.now());
+            own.setHospital(hospital);
+            Announcement platform = buildAnnouncement(UUID.randomUUID(), "Platform", LocalDateTime.now());
+            HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
+            when(announcementRepository.findVisibleAtHospital(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(List.of(own, platform));
+
+            List<AnnouncementResponseDTO> result = service.getAnnouncements(5);
+
+            org.junit.jupiter.api.Assertions.assertFalse(result.get(0).isPlatformWide());
+            org.junit.jupiter.api.Assertions.assertTrue(result.get(1).isPlatformWide());
         }
     }
 
@@ -340,6 +359,35 @@ class AnnouncementServiceImplTest {
                 assertEquals("text", ex.getField());
             }
             org.mockito.Mockito.verifyNoInteractions(announcementRepository, notificationService, assignmentRepository);
+        }
+
+        @Test
+        @DisplayName("QA D4321: an over-long text is refused naming the field and the limit, and nothing is stored")
+        void overLongTextIsRefusedWithItsLimit() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                UUID hospitalA = UUID.randomUUID();
+                HospitalContextHolder.setContext(HospitalContext.builder()
+                    .activeHospitalId(hospitalA).permittedHospitalIds(java.util.Set.of(hospitalA)).build());
+
+                com.example.hms.exception.FieldBusinessException ex = assertThrows(
+                    com.example.hms.exception.FieldBusinessException.class,
+                    () -> service.createAnnouncement("x".repeat(2700)));
+
+                assertEquals("text", ex.getField());
+                org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("255"), ex.getMessage());
+                org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("2"), ex.getMessage());
+                org.mockito.Mockito.verifyNoInteractions(announcementRepository, notificationService,
+                    assignmentRepository);
+                // The limit itself is accepted.
+                when(announcementRepository.save(any(Announcement.class))).thenAnswer(inv -> inv.getArgument(0));
+                when(assignmentRepository.findLiveStaffUsersAtHospital(hospitalA)).thenReturn(List.of());
+                assertEquals(255, service.createAnnouncement("x".repeat(255)).getText().length());
+            } finally {
+                com.example.hms.utility.MessageUtil.setMessageSource(null);
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
         }
 
         @Test

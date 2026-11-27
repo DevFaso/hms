@@ -91,14 +91,7 @@ public class PasswordResetController {
 
     /** Extract client IP, honoring common proxy headers. */
     private static String clientIp(HttpServletRequest request) {
-        String h = request.getHeader("X-Forwarded-For");
-        if (h != null && !h.isBlank()) {
-            // XFF may contain a list: client, proxy1, proxy2...
-            int comma = h.indexOf(',');
-            return comma > 0 ? h.substring(0, comma).trim() : h.trim();
-        }
-        h = request.getHeader("X-Real-IP");
-        return (h != null && !h.isBlank()) ? h.trim() : request.getRemoteAddr();
+        return com.example.hms.security.ClientAddress.of(request);
     }
 
     private ResponseEntity<Void> handleResetRequest(String identifier, Locale locale, HttpServletRequest request) {

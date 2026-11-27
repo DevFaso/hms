@@ -130,7 +130,12 @@ describe('Dashboard links (QA r65 D2761 class guard)', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: IdleService,
-          useValue: { start: () => undefined, stop: () => undefined, locked: () => false },
+          useValue: {
+            start: () => undefined,
+            stop: () => undefined,
+            locked: () => false,
+            contentHidden: () => false,
+          },
         },
       ],
     });

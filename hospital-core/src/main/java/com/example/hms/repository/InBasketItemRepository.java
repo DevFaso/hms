@@ -30,7 +30,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         LEFT JOIN FETCH i.patient
         LEFT JOIN FETCH i.encounter
         WHERE i.recipientUser.id = :userId
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND (:type IS NULL OR i.itemType = :type)
           AND (:status IS NULL OR i.status = :status)
         ORDER BY
@@ -43,7 +43,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
     """, countQuery = """
         SELECT COUNT(i) FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND (:type IS NULL OR i.itemType = :type)
           AND (:status IS NULL OR i.status = :status)
     """)
@@ -63,7 +63,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
     @Query("""
         SELECT COUNT(i) FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND i.status = :status
     """)
     long countByRecipientForSummary(
@@ -75,7 +75,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
     @Query("""
         SELECT COUNT(i) FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND i.status = :status
           AND i.itemType = :itemType
     """)
@@ -142,7 +142,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         SELECT i FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
           AND i.referenceType = :referenceType
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND (:status IS NULL OR i.status = :status)
         ORDER BY i.createdAt DESC
         """)
@@ -157,7 +157,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         SELECT COUNT(i) FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
           AND i.referenceType = :referenceType
-          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId OR i.hospital IS NULL)
           AND i.status = :status
         """)
     long countByRecipientAndReferenceType(

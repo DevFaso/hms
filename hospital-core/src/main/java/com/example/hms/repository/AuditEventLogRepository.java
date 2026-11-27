@@ -36,6 +36,12 @@ public interface AuditEventLogRepository
 
     Page<AuditEventLog> findByUserId(UUID userId, Pageable pageable);
 
+    /** A user's rows without the event types in {@code hidden} (their own activity). */
+    @Query("select a from AuditEventLog a where a.user.id = :userId and a.eventType not in :hidden")
+    Page<AuditEventLog> findOwnActivity(@Param("userId") UUID userId,
+                                        @Param("hidden") java.util.Collection<com.example.hms.enums.AuditEventType> hidden,
+                                        Pageable pageable);
+
     Page<AuditEventLog> findByEventType(AuditEventType eventType, Pageable pageable);
 
     Page<AuditEventLog> findByEntityTypeIgnoreCaseAndResourceId(
@@ -82,51 +88,26 @@ public interface AuditEventLogRepository
     List<Object[]> countByEventTypeForHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
     /**
-     * Per-hospital audit-event count over a date window. Roadmap row 44
-     * (per-tenant cost observability) foundation pass. Grouped by the
-     * denormalized {@code hospitalName} snapshot so the rollup can
-     * render without joining hospital.hospitals back in. Rows whose
-     * snapshot is null (SYSTEM-actor writes with no hospital
-     * assignment) are excluded — those belong to a separate
-     * platform-shared bucket the row-44 follow-on will surface.
-     */
-    @Query("SELECT a.hospitalName AS hospitalName, COUNT(a) AS cnt "
-           + "FROM AuditEventLog a "
-           + "WHERE a.hospitalName IS NOT NULL "
-           + "AND a.eventTimestamp >= :from "
-           + "AND a.eventTimestamp <= :to "
-           + "GROUP BY a.hospitalName "
-           + "ORDER BY a.hospitalName ASC")
-    List<Object[]> countByHospitalBetween(@Param("from") LocalDateTime from,
-                                          @Param("to") LocalDateTime to);
-
-    /**
-     * Stable-key variant of {@link #countByHospitalBetween} (row-44
-     * follow-on). Groups by {@code assignment.hospital.id} so a
-     * hospital rename does not split historic data across old/new
-     * snapshots, AND so two hospitals that happen to share a display
-     * name aren't collapsed into one chargeback row. Hospital name
-     * comes back as a JOIN projection for the UI; the load-bearing
-     * key is the UUID. Caught on the foundation-pass repo query in
-     * PR #352 Copilot review (multi-tenancy-scoping skill — "Aggregate
-     * queries must group by a stable key, not display name").
+     * QA D4307: the one per-hospital count of the cost pages. A row belongs to
+     * the hospital stamped on it ({@code hospitalId}, V235) and, for a row
+     * written before that stamp existed, to its assignment's hospital. The two
+     * earlier queries each used a different one of those (the name snapshot,
+     * the assignment) and so disagreed for the same period. The name is the
+     * hospital's current one; the key is its id.
      *
-     * <p>Rows without an {@code assignment} (SYSTEM-actor writes —
-     * MLLP / schedulers / Kafka consumers) are excluded — those carry
-     * no per-tenant attribution and roll up under the
-     * platform-shared bucket the follow-on still owes.
+     * <p>Returns {@code [hospitalId, hospitalName, count]}. Rows that belong to
+     * no hospital (platform-wide events) are not attributed to any.
      */
-    @Query("SELECT a.assignment.hospital.id AS hospitalId, "
-           + "       a.assignment.hospital.name AS hospitalName, "
-           + "       COUNT(a) AS cnt "
+    @Query("SELECT h.id, h.name, COUNT(a) "
            + "FROM AuditEventLog a "
-           + "WHERE a.assignment.hospital.id IS NOT NULL "
-           + "AND a.eventTimestamp >= :from "
+           + "LEFT JOIN a.assignment asg "
+           + "JOIN Hospital h ON h.id = COALESCE(a.hospitalId, asg.hospital.id) "
+           + "WHERE a.eventTimestamp >= :from "
            + "AND a.eventTimestamp <= :to "
-           + "GROUP BY a.assignment.hospital.id, a.assignment.hospital.name "
-           + "ORDER BY a.assignment.hospital.name ASC")
-    List<Object[]> countByHospitalIdBetween(@Param("from") LocalDateTime from,
-                                            @Param("to") LocalDateTime to);
+           + "GROUP BY h.id, h.name "
+           + "ORDER BY h.name ASC, h.id ASC")
+    List<Object[]> countAttributedToHospitalBetween(@Param("from") LocalDateTime from,
+                                          @Param("to") LocalDateTime to);
 
     /**
      * Hospital-scoped audit events, newest first: rows anchored at the

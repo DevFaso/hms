@@ -129,7 +129,9 @@ describe('MfaChallengeComponent', () => {
 
     expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(auth.setToken).not.toHaveBeenCalled();
-    expect(text('.error-banner')).toBe('Ce code n’a pas été accepté.');
+    // r81 D4276: the reason is said once, under the field, not in a banner as well.
+    expect(text('#mfa-challenge-code-invalid-msg')).toBe('Ce code n’a pas été accepté.');
+    expect(host().querySelector('.error-banner')).toBeNull();
     const field = host().querySelector<HTMLInputElement>('#mfa-challenge-code')!;
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(fixture.componentInstance.code).toBe('');

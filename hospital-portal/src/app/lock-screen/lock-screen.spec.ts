@@ -7,6 +7,9 @@ import { of, throwError } from 'rxjs';
 import { LockScreenComponent } from './lock-screen';
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../core/idle.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
+import { SSO_TAB_KEY } from '../core/browser-storage';
+import { signal, WritableSignal } from '@angular/core';
 
 /**
  * Regression cover for the unlock path.
@@ -56,7 +59,14 @@ describe('LockScreenComponent — unlock', () => {
     auth.getSubject.and.returnValue('doctor_b');
     auth.refreshTokenRequest.and.returnValue(of(FRESH_TOKENS));
 
-    idle = jasmine.createSpyObj<IdleService>('IdleService', ['unlock', 'lock', 'start', 'stop']);
+    idle = jasmine.createSpyObj<IdleService>('IdleService', [
+      'unlock',
+      'release',
+      'ensureServerLock',
+      'lock',
+      'start',
+      'stop',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [LockScreenComponent, TranslateModule.forRoot()],
@@ -114,7 +124,9 @@ describe('LockScreenComponent — unlock', () => {
 
     httpMock.expectNone('/auth/verify-password');
     expect(auth.setToken).not.toHaveBeenCalled();
-    expect(idle.unlock).toHaveBeenCalled();
+    // The lock is forgotten, the page behind it is never put back.
+    expect(idle.release).toHaveBeenCalled();
+    expect(idle.unlock).not.toHaveBeenCalled();
     expect(changed).toBeTrue();
   });
 
@@ -230,7 +242,8 @@ describe('LockScreenComponent — unlock', () => {
     );
 
     expect(lockedOut).toHaveBeenCalledTimes(1);
-    expect(idle.unlock).toHaveBeenCalled();
+    expect(idle.release).toHaveBeenCalled();
+    expect(idle.unlock).not.toHaveBeenCalled();
     expect(component.error).toBe('');
     expect(component.password).toBe('');
     expect(component.loading()).toBeFalse();
@@ -281,5 +294,130 @@ describe('LockScreenComponent — unlock', () => {
 
     // expectOne throws if the component issued the request twice.
     expectVerify().flush({ message: 'Password verified.' });
+  });
+  // ── r81 D4262: only the server's acceptance of the password opens the screen ──
+
+  it('tells the server about the lock again when the lock screen opens', () => {
+    setUp({ tokenExpired: false });
+    expect(idle.ensureServerLock).toHaveBeenCalled();
+  });
+
+  it('signing out or switching user forgets the lock without putting the page back', () => {
+    setUp({ tokenExpired: false });
+    component.signOut();
+    component.switchUser();
+
+    expect(idle.release).toHaveBeenCalledTimes(2);
+    expect(idle.unlock).not.toHaveBeenCalled();
+  });
+
+  it('a password tab does not ask the identity provider to unlock', () => {
+    setUp({ tokenExpired: false });
+    expect(component.sso).toBeFalse();
+    httpMock.expectNone('/auth/session/unlock');
+    expect(fixture.nativeElement.querySelector('#unlock-password')).not.toBeNull();
+  });
+});
+
+/**
+ * r81 D4262, a tab signed in at the identity provider. The lock screen asks
+ * the server whether it may open only when the tab has just come back from
+ * the sign-in it asked for, and opens only on the server's 204.
+ */
+describe('LockScreenComponent — a tab signed in at the identity provider (r81 F1)', () => {
+  let idle: jasmine.SpyObj<IdleService>;
+  let httpMock: HttpTestingController;
+  let reauthenticated: WritableSignal<boolean>;
+  let reauthenticate: jasmine.Spy;
+
+  function open(back: boolean): ComponentFixture<LockScreenComponent> {
+    reauthenticated.set(back);
+    const fixture = TestBed.createComponent(LockScreenComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  beforeEach(async () => {
+    sessionStorage.setItem(SSO_TAB_KEY, 'bound');
+    const auth = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getToken',
+      'isExpired',
+      'getUserProfile',
+      'getSubject',
+    ]);
+    auth.getUserProfile.and.returnValue(null);
+    auth.getSubject.and.returnValue('dr.alice');
+    idle = jasmine.createSpyObj<IdleService>('IdleService', [
+      'unlock',
+      'release',
+      'ensureServerLock',
+    ]);
+    reauthenticated = signal(false);
+    reauthenticate = jasmine.createSpy('reauthenticate');
+    await TestBed.configureTestingModule({
+      imports: [LockScreenComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: auth },
+        { provide: IdleService, useValue: idle },
+        { provide: OidcAuthService, useValue: { reauthenticated, reauthenticate } },
+      ],
+    }).compileComponents();
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    sessionStorage.removeItem(SSO_TAB_KEY);
+  });
+
+  it('opening the lock screen asks the server nothing about unlocking: it stays locked', () => {
+    const fixture = open(false);
+
+    httpMock.expectNone('/auth/session/unlock');
+    expect(idle.unlock).not.toHaveBeenCalled();
+    expect(idle.ensureServerLock).toHaveBeenCalledTimes(1);
+    // No password here: the way in is the provider.
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#unlock-password')).toBeNull();
+    host.querySelector<HTMLButtonElement>('.btn-unlock')!.click();
+    expect(reauthenticate).toHaveBeenCalledTimes(1);
+    expect(idle.unlock).not.toHaveBeenCalled();
+  });
+
+  it("back from the sign-in it asked for, the server's 204 opens the screen, once", () => {
+    open(true);
+
+    httpMock
+      .expectOne('/auth/session/unlock')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    expect(idle.unlock).toHaveBeenCalledTimes(1);
+    expect(reauthenticated()).toBeFalse();
+
+    // The next lock of the same page asks nothing again.
+    open(false);
+    httpMock.expectNone('/auth/session/unlock');
+    expect(idle.unlock).toHaveBeenCalledTimes(1);
+  });
+
+  for (const refusal of [
+    { status: 403, statusText: 'Forbidden' },
+    { status: 500, statusText: 'Server Error' },
+  ]) {
+    it(`back from the sign-in but refused (${refusal.status}): the screen stays locked and the lock is reported`, () => {
+      open(true);
+
+      httpMock.expectOne('/auth/session/unlock').flush({ code: 'session_locked' }, refusal);
+      expect(idle.unlock).not.toHaveBeenCalled();
+      expect(idle.ensureServerLock).toHaveBeenCalledTimes(1);
+    });
+  }
+
+  it('an answer that is not the 204 does not open the screen', () => {
+    open(true);
+
+    httpMock.expectOne('/auth/session/unlock').flush({}, { status: 200, statusText: 'OK' });
+    expect(idle.unlock).not.toHaveBeenCalled();
   });
 });
