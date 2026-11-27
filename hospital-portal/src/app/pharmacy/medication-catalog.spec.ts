@@ -9,6 +9,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { MedicationCatalogComponent } from './medication-catalog';
 import { PharmacyService, MedicationCatalogItemResponse } from '../services/pharmacy.service';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents } from '../core/role-equivalence';
 import { ToastService } from '../core/toast.service';
 import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
@@ -42,6 +43,9 @@ describe('MedicationCatalogComponent (QA D50)', () => {
           provide: RoleContextService,
           useValue: {
             hasAnyActiveRoleExactly: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            // The real doctor equivalence (ROLE_PHYSICIAN and ROLE_SURGEON are doctors).
+            hasAnyActiveRole: (wanted: string[]) =>
+              expandRoleEquivalents(roles).some((r) => wanted.includes(r)),
           },
         },
       ],
@@ -50,6 +54,18 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
+
+  for (const role of ['ROLE_PHYSICIAN', 'ROLE_SURGEON', 'ROLE_DOCTOR']) {
+    it(`review of #1360: a médecin-chef holding ${role} sees the approval queue and history`, () => {
+      const el = render([role]);
+      expect(el.querySelector('.approvals-panel')).not.toBeNull();
+    });
+  }
+
+  it('review of #1360: a nurse sees no approval panel', () => {
+    const el = render(['ROLE_NURSE']);
+    expect(el.querySelector('.approvals-panel')).toBeNull();
+  });
 
   it('shows the pharmacist the catalog read-only: no create, edit or delete', () => {
     const el = render(['ROLE_PHARMACIST']);
@@ -166,6 +182,7 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
           provide: RoleContextService,
           useValue: {
             hasAnyActiveRoleExactly: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            hasAnyActiveRole: (wanted: string[]) => expandRoleEquivalents(roles).some((r) => wanted.includes(r)),
           },
         },
       ],
@@ -483,7 +500,7 @@ describe('MedicationCatalogComponent — the category column is labelled (QA D52
       imports: [MedicationCatalogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PharmacyService, useValue: svc },
-        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true, hasAnyActiveRole: () => true } },
       ],
     });
     const translate = TestBed.inject(TranslateService);
@@ -523,7 +540,7 @@ describe('Medication catalogue search ordering', () => {
       providers: [
         { provide: PharmacyService, useValue: svc },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => false } },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => false, hasAnyActiveRole: () => false } },
       ],
     });
     const fixture = TestBed.createComponent(MedicationCatalogComponent);
@@ -555,7 +572,7 @@ describe('Medication catalogue search ordering', () => {
       imports: [MedicationCatalogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PharmacyService, useValue: svc },
-        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true, hasAnyActiveRole: () => true } },
       ],
     });
     const c = TestBed.createComponent(MedicationCatalogComponent).componentInstance;

@@ -117,10 +117,12 @@ export class MedicationCatalogComponent implements OnInit {
   /**
    * Go-live D2 (V385): who reads the approval queue and an entry's history, mirroring
    * MedicationCatalogController (those who propose and those who decide). Which of them may
-   * approve WHICH version is the server's answer on each version, never guessed here.
+   * approve WHICH version is the server's answer on each version, never guessed here. With the doctor
+   * equivalence, as the route guard and the server read it: a médecin-chef who holds ROLE_PHYSICIAN or
+   * ROLE_SURGEON decides dose limits, so the panel is theirs too (review of #1360).
    */
   readonly canSeeApprovals = computed(() =>
-    this.roleContext.hasAnyActiveRoleExactly([
+    this.roleContext.hasAnyActiveRole([
       'ROLE_PHARMACIST',
       'ROLE_HOSPITAL_ADMIN',
       'ROLE_DOCTOR',
