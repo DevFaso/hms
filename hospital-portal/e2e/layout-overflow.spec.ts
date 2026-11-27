@@ -449,10 +449,9 @@ test.describe('layout: prescription patient safety (D4111)', () => {
       await expect
         .poll(() => blood.evaluate((el) => el.getBoundingClientRect().width))
         .toBeGreaterThan(60);
-      await testInfo.attach(`prescription-${width}`, {
-        body: await page.screenshot(),
-        contentType: 'image/png',
-      });
+      const screenshot = testInfo.outputPath(`prescription-${width}.png`);
+      await page.screenshot({ path: screenshot });
+      await testInfo.attach(`prescription-${width}`, { path: screenshot, contentType: 'image/png' });
     }
   });
 });

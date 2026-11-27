@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { defineConfig } from '@playwright/test';
 import base from './playwright.production.config';
 
@@ -9,7 +10,9 @@ export default defineConfig({
   timeout: 90_000,
   workers: 1,
   webServer: {
-    command: 'npm run build && node scripts/serve-built-portal.mjs',
+    command: process.env.PLAYWRIGHT_PREBUILT === '1'
+      ? 'node scripts/serve-built-portal.mjs'
+      : 'npm run build && node scripts/serve-built-portal.mjs',
     url: 'http://127.0.0.1:4281',
     reuseExistingServer: false,
     timeout: 600_000,
