@@ -97,7 +97,7 @@
                 (keydown.enter)="select(culture)"
                 tabindex="0"
               >
-                <td>{{ culture.createdAt | serverTime | date: 'short' }}</td>
+                <td>{{ culture.createdAt | serverTime | dateTime }}</td>
                 <td>{{ culture.patientName || '—' }}</td>
                 <td>{{ culture.labTestName || '—' }}</td>
                 <td>{{ culture.specimenSource || '—' }}</td>
@@ -183,7 +183,7 @@
             {{ ' '
             }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
-              {{ culture.correctedAt | serverTime | date: 'short' }}
+              {{ culture.correctedAt | serverTime | dateTime }}
               @if (culture.correctedByName) {
                 ({{ culture.correctedByName }})
               }
@@ -230,7 +230,7 @@
             @for (c of culture.corrections; track c.id) {
               <div class="correction-entry" data-testid="correction-entry">
                 <p>
-                  {{ c.correctedAt | serverTime | date: 'short' }}
+                  {{ c.correctedAt | serverTime | dateTime }}
                   @if (c.correctedByName) {
                     ({{ c.correctedByName }})
                   }
@@ -250,7 +250,7 @@
         @if (culture.finalizedAt) {
           <p class="finalized-line">
             {{ 'MICRO.FINALIZED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
-            {{ culture.finalizedAt | serverTime | date: 'short' }}
+            {{ culture.finalizedAt | serverTime | dateTime }}
             @if (culture.finalizedByName) {
               ({{ culture.finalizedByName }})
             }

@@ -160,7 +160,7 @@
                     }}</span>
                   }
                 </td>
-                <td>{{ r.requestedAt | serverTime | date: 'short' }}</td>
+                <td>{{ r.requestedAt | serverTime | dateTime }}</td>
                 <td>
                   <div class="action-group">
                     <button
@@ -504,7 +504,7 @@
                       <td>{{ r.reason || '—' }}</td>
                       <td>{{ r.authoriserName || '—' }}</td>
                       <td>{{ r.issuedByName || '—' }}</td>
-                      <td>{{ r.issuedAt | serverTime | date: 'short' }}</td>
+                      <td>{{ r.issuedAt | serverTime | dateTime }}</td>
                     </tr>
                   }
                 </tbody>
@@ -553,7 +553,7 @@
                 <div class="administration-facts">
                   <span
                     >{{ 'TRANSFUSION.ADMIN_STARTED' | translate }}{{ 'COMMON.COLON' | translate }}
-                    {{ a.startedAt | serverTime | date: 'short' }}</span
+                    {{ a.startedAt | serverTime | dateTime }}</span
                   >
                   @if (a.administeredByName) {
                     <span
@@ -570,7 +570,7 @@
                   @if (a.completedAt) {
                     <span
                       >{{ 'TRANSFUSION.ADMIN_ENDED' | translate }}{{ 'COMMON.COLON' | translate }}
-                      {{ a.completedAt | serverTime | date: 'short' }}</span
+                      {{ a.completedAt | serverTime | dateTime }}</span
                     >
                   }
                   @if (a.volumeTransfusedMl !== null) {
@@ -627,7 +627,7 @@
                     <span>
                       {{ 'TRANSFUSION.REACTION_' + rx.reactionType | translate }} —
                       {{ 'TRANSFUSION.SEVERITY_' + rx.severity | translate }} —
-                      {{ rx.onsetAt | serverTime | date: 'short' }}
+                      {{ rx.onsetAt | serverTime | dateTime }}
                     </span>
                   </div>
                 }

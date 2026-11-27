@@ -184,8 +184,8 @@
                    row existed here, and it is what the queue is sorted by.
                    `createdAt` is when it actually landed, which is what
                    "how long has this been waiting" means. -->
-              <td>{{ row.resultDate ? (row.resultDate | serverTime | date: 'short') : '—' }}</td>
-              <td>{{ row.createdAt ? (row.createdAt | serverTime | date: 'short') : '—' }}</td>
+              <td>{{ row.resultDate ? (row.resultDate | serverTime | dateTime) : '—' }}</td>
+              <td>{{ row.createdAt ? (row.createdAt | serverTime | dateTime) : '—' }}</td>
               <td class="actions-cell">
                 @if (canReleaseResult(row)) {
                   <button
@@ -353,9 +353,7 @@
                       : {
                           test: target.labTestName,
                           level: qcLevelKey(hold) | translate,
-                          at: hold.recordedAt
-                            ? (hold.recordedAt | serverTime | date: 'short')
-                            : '—',
+                          at: hold.recordedAt ? (hold.recordedAt | serverTime | dateTime) : '—',
                           by: hold.recordedBy || '—',
                         }
                 }}

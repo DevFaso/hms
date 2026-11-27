@@ -71,9 +71,7 @@
             <dd>{{ row.orderedByName || '—' }}</dd>
             <dt>{{ 'LAB_CRITICAL_PENDING.PAGING_SINCE' | translate }}</dt>
             <dd>
-              {{
-                row.criticalNotifiedAt ? (row.criticalNotifiedAt | serverTime | date: 'short') : '—'
-              }}
+              {{ row.criticalNotifiedAt ? (row.criticalNotifiedAt | serverTime | dateTime) : '—' }}
             </dd>
             <dt>{{ 'LAB_CRITICAL_PENDING.ROUNDS' | translate }}</dt>
             <dd>{{ escalationRounds(row) }}</dd>

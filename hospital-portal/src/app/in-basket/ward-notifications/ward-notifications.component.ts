@@ -6,12 +6,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { NurseInboxItem, NurseTaskService } from '../../services/nurse-task.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 
 /**
@@ -23,7 +23,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-ward-notifications',
   standalone: true,
-  imports: [TranslateModule, DatePipe, ServerTimePipe],
+  imports: [TranslateModule, ServerTimePipe, DateTimePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section
@@ -48,7 +48,7 @@ import { refusalReason } from '../../shared/refusal-reason';
             >
               <p class="ward-notifications__message">{{ item.message }}</p>
               <div class="ward-notifications__meta">
-                <span>{{ item.createdAt | serverTime | date: 'short' }}</span>
+                <span>{{ item.createdAt | serverTime | dateTime }}</span>
                 @if (!item.read) {
                   <button type="button" class="btn-secondary" (click)="markRead(item)">
                     {{ 'WARD_INBOX.MARK_READ' | translate }}

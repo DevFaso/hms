@@ -46,6 +46,7 @@ import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
@@ -81,6 +82,7 @@ type Tab = 'requests' | 'units' | 'opositive';
     ModalDialogDirective,
     BackdropCloseDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

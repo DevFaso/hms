@@ -26,6 +26,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ToastService } from '../../core/toast.service';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { LocaleNumberPipe } from '../../shared/pipes/lab-value.pipe';
@@ -82,6 +83,7 @@ const TARGET_FIELD_IDS: Readonly<Record<string, string>> = {
     SubmitGuardDirective,
     MeasurePipe,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     TranslateModule,
     LocaleNumberPipe,

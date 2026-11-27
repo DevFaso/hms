@@ -25,6 +25,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import {
@@ -50,6 +51,7 @@ import {
   imports: [
     ModalDialogDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

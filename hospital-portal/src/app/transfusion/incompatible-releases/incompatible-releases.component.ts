@@ -21,6 +21,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
@@ -43,6 +44,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
     FormsModule,
     TranslateModule,
     ServerTimePipe,
+    DateTimePipe,
     FormControlStyleDirective,
     SubmitGuardDirective,
   ],

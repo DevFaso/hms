@@ -126,12 +126,12 @@
               </td>
               <td class="numeric">{{ row.attempts }}</td>
               <td class="date-cell">
-                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
+                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | dateTime) : '—' }}
               </td>
               <td class="error-cell" [title]="row.lastError ?? ''">
                 {{ row.lastError ?? '—' }}
               </td>
-              <td class="date-cell">{{ row.createdAt | serverTime | date: 'short' }}</td>
+              <td class="date-cell">{{ row.createdAt | serverTime | dateTime }}</td>
               <td class="actions-cell">
                 <button
                   class="btn-icon"
@@ -270,7 +270,7 @@
               }
               <dt>{{ 'LAB_OUTBOX.SUMMARY_QUEUED' | translate }}</dt>
               <dd data-testid="outbox-summary-queued">
-                {{ d.message.createdAt | serverTime | date: 'short' }}
+                {{ d.message.createdAt | serverTime | dateTime }}
               </dd>
               @if (waitingReason(); as w) {
                 <dt>{{ 'LAB_OUTBOX.SUMMARY_WAITING' | translate }}</dt>
@@ -322,7 +322,7 @@
                   }}<span class="status-badge" [attr.data-status]="sibling.status">
                     {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}
                   </span>
-                  <span>{{ sibling.createdAt | serverTime | date: 'short' }}</span>
+                  <span>{{ sibling.createdAt | serverTime | dateTime }}</span>
                 </li>
               }
             </ul>

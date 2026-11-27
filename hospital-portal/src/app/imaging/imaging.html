@@ -297,7 +297,7 @@
                     o.priority | enumLabel: 'imagingOrderPriority'
                   }}</span>
                 </td>
-                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
+                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | dateTime) : '—' }}</td>
                 <td>
                   <div class="action-group">
                     <button
@@ -509,7 +509,7 @@
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
-                <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
+                <td>{{ r.createdAt ? (r.createdAt | serverTime | dateTime) : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
                     r.reportStatus | enumLabel: 'imagingReportStatus'

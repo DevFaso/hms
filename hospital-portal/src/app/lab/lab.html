@@ -997,7 +997,7 @@
                       }}
                     </td>
                     <td>
-                      {{ s.collectedAt ? (s.collectedAt | serverTime | date: 'short') : '—' }}
+                      {{ s.collectedAt ? (s.collectedAt | serverTime | dateTime) : '—' }}
                     </td>
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>

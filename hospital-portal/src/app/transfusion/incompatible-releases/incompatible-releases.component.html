@@ -148,7 +148,7 @@
       <dl class="opos-grid">
         <div>
           <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_AT' | translate }}</dt>
-          <dd>{{ r.issuedAt | serverTime | date: 'short' }}</dd>
+          <dd>{{ r.issuedAt | serverTime | dateTime }}</dd>
         </div>
         <div>
           <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_BY' | translate }}</dt>
@@ -249,7 +249,7 @@
                   | translate
                     : {
                         name: r.patientInformedByName || '—',
-                        at: (r.patientInformedAt | serverTime | date: 'short'),
+                        at: (r.patientInformedAt | serverTime | dateTime),
                       }
               }}
             }
@@ -283,7 +283,7 @@
                   | translate
                     : {
                         name: r.countersignedByName || '—',
-                        at: (r.countersignedAt | serverTime | date: 'short'),
+                        at: (r.countersignedAt | serverTime | dateTime),
                       }
               }}
             </span>
@@ -293,7 +293,7 @@
                 (r.countersignOverdue
                   ? 'TRANSFUSION.INCOMPAT.OVERDUE_SINCE'
                   : 'TRANSFUSION.INCOMPAT.DUE_BY'
-                ) | translate: { at: (r.countersignDueAt | serverTime | date: 'short') }
+                ) | translate: { at: (r.countersignDueAt | serverTime | dateTime) }
               }}
             </span>
             @if (canCountersign) {
@@ -324,7 +324,7 @@
                   | translate
                     : {
                         name: r.monitoringRecordedByName,
-                        at: (r.monitoringRecordedAt | serverTime | date: 'short'),
+                        at: (r.monitoringRecordedAt | serverTime | dateTime),
                       }
               }}
             }
