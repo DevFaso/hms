@@ -39,7 +39,9 @@ public class MinorPortalRightsGuard {
 
     /** Refuses (403, in the reader's language) an action the patient's age does not allow alone. */
     public void require(Patient patient, MinorPortalRights.Action action) {
-        String key = refusalKeyFor(patient, action);
+        // The patient acts on their own account: they are the actor of a refusal.
+        String key = refusalKeyFor(patient, action, patient == null || patient.getUser() == null
+            ? null : patient.getUser().getId());
         if (key != null) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(key));
         }
@@ -50,10 +52,23 @@ public class MinorPortalRightsGuard {
      * activation pages are public and the caller holds no session to be denied.
      */
     public void requireActivatable(Patient patient) {
-        String key = refusalKeyFor(patient, MinorPortalRights.Action.ACTIVATE_ACCOUNT);
+        // QA D4269 review: the actor is whoever is signed in (the desk, an administrator, the patient entering a
+        // code), never the patient by default; the anonymous e-mail link leaves it empty.
+        String key = refusalKeyFor(patient, MinorPortalRights.Action.ACTIVATE_ACCOUNT,
+            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId());
         if (key != null) {
             throw new BusinessException(key);
         }
+    }
+
+    /**
+     * QA D4269 review: whether this patient may have an own account switched on, asked without a refusal (a restore
+     * keeps a child's account off; it refuses nothing, so nothing is audited).
+     */
+    public boolean mayHaveOwnAccount(Patient patient) {
+        return patient == null || MinorPortalRights.permits(
+            MinorPortalRights.bandOf(patient.getDateOfBirth(), LocalDate.now(clock)),
+            MinorPortalRights.Action.ACTIVATE_ACCOUNT);
     }
 
     public MinorPortalRights.Rights rightsOf(Patient patient) {
@@ -66,21 +81,21 @@ public class MinorPortalRightsGuard {
             && MinorPortalRights.lapsedAtMajority(grantor.getDateOfBirth(), grantedAt, LocalDate.now(clock));
     }
 
-    private String refusalKeyFor(Patient patient, MinorPortalRights.Action action) {
+    private String refusalKeyFor(Patient patient, MinorPortalRights.Action action, UUID actorUserId) {
         if (patient == null) {
             return null;
         }
         MinorPortalRights.Band band = MinorPortalRights.bandOf(patient.getDateOfBirth(), LocalDate.now(clock));
         String key = MinorPortalRights.refusalKey(band, action);
         if (key != null) {
-            auditRefusal(patient, action, band);
+            auditRefusal(patient, action, band, actorUserId);
         }
         return key;
     }
 
-    private void auditRefusal(Patient patient, MinorPortalRights.Action action, MinorPortalRights.Band band) {
+    private void auditRefusal(Patient patient, MinorPortalRights.Action action, MinorPortalRights.Band band,
+                              UUID actorUserId) {
         try {
-            UUID actorUserId = patient.getUser() == null ? null : patient.getUser().getId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.MINOR_PORTAL_ACTION_REFUSED)
                 .status(AuditStatus.FAILURE)

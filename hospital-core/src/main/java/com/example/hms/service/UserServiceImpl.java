@@ -136,6 +136,19 @@ public class UserServiceImpl implements UserService {
      * read (a tenant carrying duplicate rows, V113, is checked row by row rather than skipped), and a child under 13
      * is refused: a parent or the legal guardian acts for them at the desk. Nothing is switched on when it refuses.
      */
+    /** QA D4269 review: every patient row linked to the account may have an own account (no refusal audited). */
+    private boolean mayHaveOwnAccount(UUID userId) {
+        if (minorPortalRights == null || userId == null) {
+            return true;
+        }
+        for (UUID patientId : patientRepository.findIdsByUserId(userId)) {
+            if (!patientRepository.findByIdUnscoped(patientId).map(minorPortalRights::mayHaveOwnAccount).orElse(true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void requireOwnAccountAge(UUID userId) {
         if (minorPortalRights == null || userId == null) {
             return;
@@ -1870,13 +1883,10 @@ public class UserServiceImpl implements UserService {
         // account without the marker is simply not activated yet).
         Boolean recorded = user.getActivatedBeforeDelete();
         boolean previouslyActivated = recorded != null ? recorded : wasEverActivated(user);
-        // QA D4269 review: a restore puts the record back; a child under 13's own account stays off.
-        if (previouslyActivated) {
-            try {
-                requireOwnAccountAge(user.getId());
-            } catch (com.example.hms.exception.BusinessException underTheAge) {
-                previouslyActivated = false;
-            }
+        // QA D4269 review: a restore puts the record back; a child under 13's own account stays off. Asked without a
+        // refusal: the restore itself is allowed, so no refused action is audited.
+        if (previouslyActivated && !mayHaveOwnAccount(user.getId())) {
+            previouslyActivated = false;
         }
         user.setActivatedBeforeDelete(null);
         user.setDeleted(false);

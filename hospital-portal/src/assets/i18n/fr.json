@@ -16844,8 +16844,8 @@
   "MINOR_RIGHTS": {
     "UNDER_13": "Ce compte est celui d’un enfant de moins de 13 ans : il est en lecture seule. Un parent ou le tuteur légal effectue cette démarche à l’accueil de l’établissement.",
     "AGE_13_14": "À 13 et 14 ans, votre compte est en lecture seule. Pour cette démarche, adressez-vous à l’accueil de l’établissement avec un parent ou votre tuteur légal.",
-    "FAMILY_15_17": "Avant 18 ans, donner à un autre adulte l’accès à votre dossier se fait à l’accueil, avec un parent ou votre tuteur légal. Vous pouvez retirer vous-même un accès déjà donné, sauf celui d’un parent ou d’un tuteur vérifié.",
-    "SHARING_15_17": "Avant 18 ans, vous pouvez fermer vous-même le partage avec les autres hôpitaux. Pour le rouvrir, adressez-vous à l’accueil avec un parent ou votre tuteur légal."
+    "FAMILY_15_17": "Avant 18 ans, donner à un autre adulte l’accès à votre dossier se fait auprès de l’administration de l’établissement, avec un parent ou votre tuteur légal. Vous pouvez retirer vous-même un accès déjà donné, sauf celui d’un parent ou d’un tuteur vérifié.",
+    "SHARING_15_17": "Avant 18 ans, vous pouvez fermer vous-même le partage avec les autres hôpitaux. Pour le rouvrir, adressez-vous à l’administration de l’établissement avec un parent ou votre tuteur légal."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",

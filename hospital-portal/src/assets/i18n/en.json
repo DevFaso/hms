@@ -16844,8 +16844,8 @@
   "MINOR_RIGHTS": {
     "UNDER_13": "This account belongs to a child under 13: it is read-only. A parent or the legal guardian does this at the reception desk of the facility.",
     "AGE_13_14": "At 13 and 14 your account is read-only. For this, go to the reception desk of the facility with a parent or your legal guardian.",
-    "FAMILY_15_17": "Before 18, giving another adult access to your record is done at the reception desk with a parent or your legal guardian. You can withdraw an access already given yourself, except a verified parent’s or guardian’s.",
-    "SHARING_15_17": "Before 18, you can close sharing with other hospitals yourself. To open it again, go to the reception desk with a parent or your legal guardian."
+    "FAMILY_15_17": "Before 18, giving another adult access to your record is done with the facility’s administration, with a parent or your legal guardian. You can withdraw an access already given yourself, except a verified parent’s or guardian’s.",
+    "SHARING_15_17": "Before 18, you can close sharing with other hospitals yourself. To open it again, contact the facility’s administration with a parent or your legal guardian."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Access or correct my record",

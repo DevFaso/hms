@@ -2022,6 +2022,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .revokedAt(p.getRevokedAt())
                 .notes(p.getNotes())
                 .createdAt(p.getCreatedAt())
+                .verifiedParentOrGuardian(p.isVerifiedParentOrGuardian())
                 .build();
     }
 

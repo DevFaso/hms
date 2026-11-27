@@ -129,6 +129,7 @@ class RoiRequestServiceTest {
         UUID admin = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(admin);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(admin, hospitalId)).thenReturn(true);
         return admin;
     }
 
@@ -174,6 +175,22 @@ class RoiRequestServiceTest {
 
         when(roleValidator.isSuperAdminActingAt(hospitalId)).thenReturn(true);
         assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
+    }
+
+    /**
+     * QA D4270 review: the approver collects only while they still administer the request's hospital. Demoted
+     * there, though still an administrator elsewhere (the token's roles are a union), they are refused.
+     */
+    @Test
+    void aDemotedApproverNoLongerCollectsTheCopy_D4270() {
+        UUID admin = asHospitalAdminAtHospital();
+        RoiRequest row = approvedFullCopy(NOW.minusDays(1));
+        row.setDecisionActorUserId(admin);
+        assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
+
+        when(roleValidator.isHospitalAdmin(admin, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.copyForExport(row.getId()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
     }
 
     @Test

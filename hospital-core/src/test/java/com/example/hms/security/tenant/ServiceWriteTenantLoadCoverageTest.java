@@ -174,6 +174,8 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
         entry("UserServiceImpl.requireOwnAccountAge#findByIdUnscoped", "QA D4269: the patient rows linked to "
             + "the account being switched on, by its own user id; read for the date of birth only, nothing returned"),
+        entry("UserServiceImpl.mayHaveOwnAccount#findByIdUnscoped", "QA D4269: the patient rows linked to the "
+            + "account a restore puts back, by its own user id; read for the date of birth only, nothing returned"),
         entry("UserRoleHospitalAssignmentServiceImpl.requireOwnAccountAge#findByIdUnscoped", "QA D4269: the patient "
             + "rows linked to the invitation's holder, by its user id; read for the date of birth only, nothing returned"),
         entry("PatientPortalServiceImpl.verifyProxyAccess#findByIdUnscoped", "QA D1212 (round 23): the grantor's"

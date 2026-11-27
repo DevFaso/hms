@@ -205,7 +205,7 @@
                   }}
                 </td>
                 <td>
-                  @if (canRevoke()) {
+                  @if (canRevokeRow(p)) {
                     <button
                       class="btn-danger-sm"
                       [attr.data-testid]="'revoke-proxy-' + p.id"

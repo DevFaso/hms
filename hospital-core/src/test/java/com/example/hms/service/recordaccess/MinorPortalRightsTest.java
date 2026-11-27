@@ -109,8 +109,15 @@ class MinorPortalRightsTest {
                 assertThat(text).as("%s in %s", key, language).isNotBlank();
             }
         }
+        // QA D4269 review: granting access, re-opening sharing and withdrawing a verified guardian's access have no
+        // desk route; the reader is sent to the facility's administration, never « à l'accueil ».
+        for (String key : new String[]{"portal.minor.grantNeedsGuardian", "portal.minor.sharingOnNeedsGuardian",
+                "portal.minor.verifiedGuardianAccess"}) {
+            assertThat(bundles.getMessage(key, null, java.util.Locale.FRENCH)).as(key)
+                .contains("administration de l’établissement").doesNotContain("accueil");
+        }
         assertThat(bundles.getMessage("portal.minor.grantNeedsGuardian", null, java.util.Locale.FRENCH))
-            .contains("parent", "tuteur", "accueil");
+            .contains("parent", "tuteur");
     }
 
     private static Set<Action> allowed(Band band) {

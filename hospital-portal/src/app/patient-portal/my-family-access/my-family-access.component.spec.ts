@@ -360,6 +360,25 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     expect(testId('minor-rights-notice')?.textContent).toContain('MINOR_RIGHTS.FAMILY_15_17');
   });
 
+  it("QA D4269: at 15 to 17 a verified parent's access offers no withdrawal; an adult's does", () => {
+    portal.getMyProxies.and.returnValue(
+      of([
+        { ...received, id: 'g-1' },
+        { ...received, id: 'g-2', verifiedParentOrGuardian: true },
+      ]),
+    );
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: rightsOf('AGE_15_17', true) } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+    expect(testId('revoke-proxy-g-1')).not.toBeNull();
+    expect(testId('revoke-proxy-g-2')).toBeNull();
+
+    component.rights.set(rightsOf('ADULT', true));
+    fixture.detectChanges();
+    expect(testId('revoke-proxy-g-2')).not.toBeNull();
+  });
+
   it('QA D4269: an adult, and an account whose rights are not known, keep every action and see no notice', () => {
     portal.getMyProxies.and.returnValue(of([{ ...received, id: 'g-1' }]));
     fixture.detectChanges();

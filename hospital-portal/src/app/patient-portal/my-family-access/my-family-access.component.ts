@@ -105,6 +105,16 @@ export class MyFamilyAccessComponent implements OnInit {
   readonly rights = signal<PortalRights | null>(null);
   readonly canGrant = computed(() => this.rights()?.grantFamilyAccess !== false);
   readonly canRevoke = computed(() => this.rights()?.revokeFamilyAccess !== false);
+
+  /**
+   * QA D4269: « Retirer » on this row. A minor (15–17) withdraws an access alone except a verified parent's or
+   * guardian's, which the server refuses; that row offers no button. While the rights are unknown the server decides.
+   */
+  canRevokeRow(proxy: ProxyResponse): boolean {
+    if (!this.canRevoke()) return false;
+    const band = this.rights()?.band;
+    return !(proxy.verifiedParentOrGuardian === true && band !== undefined && band !== 'ADULT');
+  }
   readonly minorNotice = computed(() => minorNoticeKey(this.rights(), 'family'));
 
   ngOnInit(): void {

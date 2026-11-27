@@ -68,8 +68,8 @@ public class RoiRequestService {
     private int responseTargetDays = 30;
 
     /**
-     * QA D4270: how long after the decision an approved copy stays collectable (by the patient, the desk and the
-     * clinicians). Past it the request is expired: a new request is made and decided.
+     * QA D4270: how long after the decision an approved copy stays collectable (by the patient, the clinicians and
+     * the approving administrator). Past it the request is expired: a new request is made and decided.
      */
     @org.springframework.beans.factory.annotation.Value("${hms.roi.copy-download-days:30}")
     private int copyDownloadDays = 30;
@@ -313,7 +313,10 @@ public class RoiRequestService {
         boolean collects = roleValidator.isSuperAdminActingAt(hospitalId)
             || (caller != null && roleValidator.collectsReleaseCopies(caller, hospitalId));
         if (!collects) {
-            if (caller == null || !caller.equals(request.getDecisionActorUserId())) {
+            // The approver collects only while they still administer the request's hospital: an administrator
+            // demoted there (but holding a role elsewhere) no longer produces its copies.
+            if (caller == null || !caller.equals(request.getDecisionActorUserId())
+                    || !roleValidator.isHospitalAdmin(caller, hospitalId)) {
                 throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                     com.example.hms.utility.MessageUtil.resolveOrRaw("roi.request.copyApproverOnly"));
             }

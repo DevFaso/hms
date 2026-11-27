@@ -96,6 +96,36 @@ class MinorPortalRightsGuardTest {
         assertThatCode(() -> guard.requireActivatable(thirteen)).doesNotThrowAnyException();
     }
 
+    /** QA D4269 review: a refused activation names who acted (the signed-in caller), never the patient by default. */
+    @Test
+    void aRefusedActivationNamesTheSignedInCallerOrNoOne() {
+        Patient child = born(TODAY.minusYears(9));
+        org.mockito.ArgumentCaptor<AuditEventRequestDTO> row = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+
+        // The anonymous e-mail link: no session, no actor.
+        com.example.hms.security.context.HospitalContextHolder.clear();
+        assertThatThrownBy(() -> guard.requireActivatable(child)).isInstanceOf(BusinessException.class);
+        verify(audit).logEvent(row.capture());
+        assertThat(row.getValue().getUserId()).isNull();
+
+        // The desk or an administrator: the caller.
+        UUID deskUser = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(deskUser).build());
+        try {
+            assertThatThrownBy(() -> guard.requireActivatable(child)).isInstanceOf(BusinessException.class);
+            verify(audit, org.mockito.Mockito.times(2)).logEvent(row.capture());
+            assertThat(row.getValue().getUserId()).isEqualTo(deskUser);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        // Asked without a refusal (a restore): answered, nothing audited.
+        assertThat(guard.mayHaveOwnAccount(child)).isFalse();
+        assertThat(guard.mayHaveOwnAccount(born(TODAY.minusYears(13)))).isTrue();
+        verify(audit, org.mockito.Mockito.times(2)).logEvent(any());
+    }
+
     @Test
     void aFailedAuditNeverLetsTheActionThrough() {
         when(audit.logEvent(any())).thenThrow(new IllegalStateException("sink down"));

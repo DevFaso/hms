@@ -142,7 +142,7 @@ class MinorPortalRightsEnforcementGuardTest {
     private static final java.util.Set<String> ACCOUNT_OWNERS = java.util.Set.of(
         "com/example/hms/model/User", "com/example/hms/model/UserRoleHospitalAssignment");
     private static final java.util.Set<String> AGE_RULE_CALLS = java.util.Set.of(
-        "requireOwnAccountAge", "requireActivatable");
+        "requireOwnAccountAge", "requireActivatable", "mayHaveOwnAccount");
 
     @Test
     void everyServicePathThatSwitchesAnAccountOnAsksTheAgeFirst() throws Exception {

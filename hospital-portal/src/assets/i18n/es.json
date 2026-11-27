@@ -16844,8 +16844,8 @@
   "MINOR_RIGHTS": {
     "UNDER_13": "Esta cuenta es de un niño menor de 13 años: es de solo lectura. Uno de los padres o el tutor legal realiza este trámite en la recepción del establecimiento.",
     "AGE_13_14": "A los 13 y 14 años su cuenta es de solo lectura. Para este trámite, acuda a la recepción del establecimiento con uno de los padres o su tutor legal.",
-    "FAMILY_15_17": "Antes de los 18 años, dar a otro adulto acceso a su expediente se hace en la recepción, con uno de los padres o su tutor legal. Puede retirar usted mismo un acceso ya dado, salvo el de un padre o tutor verificado.",
-    "SHARING_15_17": "Antes de los 18 años, puede cerrar usted mismo el intercambio con otros hospitales. Para abrirlo de nuevo, acuda a la recepción con uno de los padres o su tutor legal."
+    "FAMILY_15_17": "Antes de los 18 años, dar a otro adulto acceso a su expediente se hace ante la administración del establecimiento, con uno de los padres o su tutor legal. Puede retirar usted mismo un acceso ya dado, salvo el de un padre o tutor verificado.",
+    "SHARING_15_17": "Antes de los 18 años, puede cerrar usted mismo el intercambio con otros hospitales. Para abrirlo de nuevo, acuda a la administración del establecimiento con uno de los padres o su tutor legal."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Acceder a mi expediente o corregirlo",
