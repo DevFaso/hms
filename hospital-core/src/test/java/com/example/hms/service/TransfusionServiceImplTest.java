@@ -711,7 +711,7 @@ class TransfusionServiceImplTest {
     @Test
     void aSevereReactionIsFiledAsAnUrgentAlertWithTheReactionAndAMildOneIsNot() {
         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "urgentAlerts", urgentAlerts);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setUrgentAlerts", urgentAlerts);
         when(reactionRepository.save(any())).thenAnswer(i -> {
             TransfusionReaction reaction = i.getArgument(0);
             reaction.setId(UUID.randomUUID());

@@ -588,30 +588,17 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     }
 
     /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the report alone). */
-    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
-
-    /**
-     * Resolved when used, never at wiring: a context without the escalation service (a test slice) gets
-     * {@code null} here and each use falls back as when the service is absent, where an optional {@code @Lazy} injection point gave a
-     * never-null proxy that failed on first use.
-     */
-    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider;
+    private final com.example.hms.service.escalation.UrgentAlertsAccess urgentAlerts =
+        new com.example.hms.service.escalation.UrgentAlertsAccess();
 
     @org.springframework.beans.factory.annotation.Autowired
     void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
-        this.urgentAlertsProvider = urgentAlertsProvider;
+        this.urgentAlerts.useProvider(urgentAlertsProvider);
     }
 
     /** A unit test's escalation service, used in place of the context's. */
     void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
-        this.urgentAlerts = urgentAlerts;
-    }
-
-    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts() {
-        if (this.urgentAlerts != null) {
-            return this.urgentAlerts;
-        }
-        return urgentAlertsProvider == null ? null : urgentAlertsProvider.getIfAvailable();
+        this.urgentAlerts.useService(urgentAlerts);
     }
 
     /**
@@ -624,13 +611,13 @@ public class MicroCultureServiceImpl implements MicroCultureService {
      * {@code ObstetricAlertEscalationService#raiseAfterCommit}.
      */
     private void filePositiveCultureForAcknowledgement(MicroCultureResult culture) {
-        if (urgentAlerts() == null || culture.getId() == null || culture.getPatient() == null
+        if (urgentAlerts.get() == null || culture.getId() == null || culture.getPatient() == null
                 || culture.getHospital() == null) {
             return;
         }
         List<String> named = ordererUsername(culture);
         // The item says a culture is positive and sends its reader to the report: the organisms are read there.
-        urgentAlerts().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
+        urgentAlerts.get().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
                 new com.example.hms.service.escalation.UrgentAlerts.Subject(culture.getHospital().getId(),
                     culture.getPatient().getId(), culture.getPatient().getFullName()),
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,

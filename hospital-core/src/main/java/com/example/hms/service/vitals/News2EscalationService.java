@@ -65,31 +65,18 @@ public class News2EscalationService {
     private final NotificationService notificationService;
 
     /** QA D3862: the urgent-alert escalation (setter-injected; absent, a HIGH score stays a bell notice). */
-    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
+    private final com.example.hms.service.escalation.UrgentAlertsAccess urgentAlerts =
+        new com.example.hms.service.escalation.UrgentAlertsAccess();
     private com.example.hms.service.i18n.NotificationLocalizer localizer;
-
-    /**
-     * Resolved when used, never at wiring: a context without the escalation service (a test slice) gets
-     * {@code null} here and each use falls back as when the service is absent, where an optional {@code @Lazy} injection point gave a
-     * never-null proxy that failed on first use.
-     */
-    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider;
 
     @org.springframework.beans.factory.annotation.Autowired
     void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
-        this.urgentAlertsProvider = urgentAlertsProvider;
+        this.urgentAlerts.useProvider(urgentAlertsProvider);
     }
 
     /** A unit test's escalation service, used in place of the context's. */
     void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
-        this.urgentAlerts = urgentAlerts;
-    }
-
-    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts() {
-        if (this.urgentAlerts != null) {
-            return this.urgentAlerts;
-        }
-        return urgentAlertsProvider == null ? null : urgentAlertsProvider.getIfAvailable();
+        this.urgentAlerts.useService(urgentAlerts);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -169,7 +156,7 @@ public class News2EscalationService {
      */
     private void fileForAcknowledgement(PatientVitalSign vital, NewsScoreResult score, UUID patientId, UUID hospitalId,
                                         Set<String> rang) {
-        if (urgentAlerts() == null || localizer == null || vital == null || vital.getId() == null) {
+        if (urgentAlerts.get() == null || localizer == null || vital == null || vital.getId() == null) {
             return;
         }
         try {
@@ -186,7 +173,7 @@ public class News2EscalationService {
             String title = localizer.render(ITEM_TITLE_KEY, java.util.List.of(typeLabel, patientName, message), staff);
             Staff recorder = vital.getRecordedByStaff();
             UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
-            urgentAlerts().raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+            urgentAlerts.get().raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
                 hospitalId, patientId, patientName,
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWS2, vital.getId(),
                 ALERT_TYPE_HIGH, typeLabel, message, recorderUserId, title, messageKey, messageArgs, rang));
