@@ -50,6 +50,25 @@ class ImagingDuplicateOverrideTest {
     }
 
     @Test
+    void anOtherNoteShorterThanTenCharactersIsRefused() {
+        // QA r81 D4108 class: « ok » is not a written explanation.
+        for (String note : List.of("ok", "   ok      ", "123456789")) {
+            com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO request = new com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO();
+            request.setDuplicateOverride(true);
+            request.setDuplicateOverrideReason(ImagingDuplicateOverrideReason.OTHER);
+            request.setDuplicateOverrideNote(note);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> ImagingDuplicateOverride.requireReason(request))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    e -> assertThat(e.getMessageKey()).isEqualTo("clinical.override.reasonMin"));
+        }
+        com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO request = new com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO();
+        request.setDuplicateOverride(true);
+        request.setDuplicateOverrideReason(ImagingDuplicateOverrideReason.OTHER);
+        request.setDuplicateOverrideNote("Suivi oncologique");
+        ImagingDuplicateOverride.requireReason(request);
+    }
+
+    @Test
     void anUnflaggedPlacementIsNotAudited() {
         override.audit(order(), List.of());
         verify(audit, never()).logEvent(any());

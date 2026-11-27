@@ -1658,6 +1658,24 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void aShortReasonDoesNotCarryThePlateletRhRestriction() {
+        // QA r81 D4108 class: « ok » is not an override reason.
+        patient.setGender("F");
+        patient.setDateOfBirth(java.time.LocalDate.of(1995, 6, 1));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = crossmatchWithReason(donor, "ok");
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("clinical.override.reasonMin"));
+        verify(crossmatchRepository, never()).save(any());
+    }
+
+    @Test
     void anUnrecordedGenderIsProtectedRatherThanPermitted() {
         // gender is free text with no canonical vocabulary, so this is the
         // common case, not the exotic one.

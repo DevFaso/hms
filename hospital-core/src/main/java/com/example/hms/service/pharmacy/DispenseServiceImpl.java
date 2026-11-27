@@ -1211,6 +1211,13 @@ public class DispenseServiceImpl implements DispenseService {
                             String.join(" | ", cdsResult.alerts())),
                     DispenseAlertCards.of(cdsResult));
         }
+        if (cdsResult.requiresOverride()
+                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(dto.getCdsOverrideReason())) {
+            // QA r81 D4108 class: the override reason is at least 10 non-whitespace characters.
+            throw new com.example.hms.cdshooks.CdsCriticalBlockException(
+                    MessageUtil.resolveOrRaw("clinical.override.reasonMin"), DispenseAlertCards.of(cdsResult),
+                    "cdsOverrideReason");
+        }
         // QA D1555: the order's drug against the patient's CURRENT allergies, every fill (a refill's included).
         com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, prescription);
 

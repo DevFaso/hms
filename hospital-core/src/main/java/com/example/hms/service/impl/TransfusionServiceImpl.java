@@ -701,6 +701,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (Boolean.TRUE.equals(request.getCompatible()) && !serologicallyCompatible) {
             boolean rhOnly = isPlateletRhOnlyMismatch(group, unit, transfusionRequest);
             boolean overridden = rhOnly && hasText(request.getIncompatibilityReason());
+            if (overridden && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getIncompatibilityReason())) {
+                // QA r81 D4108 class: an override reason is at least 10 non-whitespace characters. An
+                // incompatible RESULT's reason below is a laboratory finding (« Anti-K ») and keeps its own rule.
+                throw new FieldBusinessException("incompatibilityReason", "clinical.override.reasonMin");
+            }
             if (!overridden) {
                 throw new com.example.hms.exception.FieldBusinessException("incompatibilityReason", rhOnly ? "transfusion.crossmatch.incompatibleRhOverridable" : "transfusion.crossmatch.incompatible",
                     unit.getUnitNumber(),

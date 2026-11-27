@@ -1321,6 +1321,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (rationale.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.rationaleRequired");
         }
+        // QA r81 D4108 class: continuing despite the allergy is an override, so its rationale is at least
+        // 10 non-whitespace characters (provisional rule). Stopping the order is not an override.
+        if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE
+                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(rationale)) {
+            throw new com.example.hms.exception.FieldBusinessException("rationale", "clinical.override.reasonMin");
+        }
         if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE && plan.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.planRequired");
         }
@@ -3259,9 +3265,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         logger.warn("ALLERGY ALERT: patient {} has a documented allergy the prescribed drug may meet. Override: {}",
             patient.getId(), request.getForceOverride());
         if (!Boolean.TRUE.equals(request.getForceOverride())) {
-            // Sent as a critical CDS card so the prescribing screen shows the alert.
-            throw new CdsCriticalBlockException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.allergy.refusal", block.get().summary()), List.of(block.get()));
+            // Sent as a critical CDS card so the prescribing screen shows the alert. The card's summary
+            // already starts with « Alerte allergie : » (QA r81 review F4: never wrapped a second time).
+            String message = block.get().summary();
+            throw new CdsCriticalBlockException(message, List.of(block.get()));
         }
         if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
             throw new CdsCriticalBlockException(

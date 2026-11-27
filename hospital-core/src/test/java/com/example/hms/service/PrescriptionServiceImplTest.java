@@ -1308,9 +1308,11 @@ class PrescriptionServiceImplTest {
         when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
+        // QA r81 review F4: the refusal names its source once (« Alerte allergie : » not twice).
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy alert");
+            .hasMessageContaining("Allergy alert")
+            .satisfies(e -> assertThat(e.getMessage().split("Allergy alert", -1)).hasSize(2));
     }
 
     @Test
@@ -5168,7 +5170,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("10");
+            .hasMessage("Enter a reason with at least 10 non-whitespace characters.");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -8038,6 +8040,24 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void policy4_aContinueRationaleShorterThanTenCharactersIsRefused() {
+        // QA r81 D4108 class: « ok » does not justify continuing despite an allergy.
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        UUID rxId = rx.getId();
+        String token = policy4_currentToken(rx);
+
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(
+                com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe 30 min", "ok", token)))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("rationale");
+                assertThat(e.getMessageKey()).isEqualTo("clinical.override.reasonMin");
+            });
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void policy4_theReviewNeedsADecisionARationaleAndForContinueAPlan() {
         UUID doctorUserId = UUID.randomUUID();
         Prescription rx = policy4_conflictingOrder(doctorUserId);
@@ -8080,7 +8100,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
         String token = policy4_currentToken(rx);
         UUID rxId = rx.getId();
-        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated", token);
+        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated before without reaction", token);
 
         rx.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
         assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))
