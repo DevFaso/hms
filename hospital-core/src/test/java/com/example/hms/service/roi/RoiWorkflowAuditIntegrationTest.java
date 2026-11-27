@@ -56,6 +56,8 @@ class RoiWorkflowAuditIntegrationTest extends BaseIT {
             .email(tag + "@example.test").firstName("Test").lastName(tag).isActive(true).build());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospital.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(actor.getId());
+        // The decision actor is this hospital's administrator: the approver collects its copies (QA D4270).
+        when(roleValidator.isHospitalAdmin(actor.getId(), hospital.getId())).thenReturn(true);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             actor.getUsername(), "ignored", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
         request = requests.saveAndFlush(RoiRequest.builder().hospital(hospital).patientId(UUID.randomUUID())
