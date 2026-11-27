@@ -243,12 +243,19 @@ export class LabQcDashboardComponent implements OnInit {
     this.showRecordForm.set(true);
     if (this.tests().length === 0) {
       this.labService.listTestDefinitions().subscribe({
-        next: (list) => this.tests.set(list.filter((t) => t.isActive)),
+        next: (list) => {
+          const quantitative = list.filter(
+            (t) => t.isActive && !t.culture && !t.expectedResult?.trim(),
+          );
+          this.tests.set(quantitative);
+          this.selectTest(
+            quantitative.some((t) => t.id === testDefinitionId) ? testDefinitionId! : '',
+          );
+        },
         error: () => this.toast.error(this.translate.instant('LAB_QC.RECORD.TESTS_LOAD_FAILED')),
       });
-    }
-    if (testDefinitionId) {
-      this.selectTest(testDefinitionId);
+    } else {
+      this.selectTest(this.tests().some((t) => t.id === testDefinitionId) ? testDefinitionId! : '');
     }
   }
 
