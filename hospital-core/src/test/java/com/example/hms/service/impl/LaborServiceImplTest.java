@@ -879,6 +879,20 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void recordDeliveryRejectsShortRecentDeliveryOverrides() {
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        for (String reason : java.util.List.of("ok", "          ", "123456789")) {
+            DeliveryRecordRequestDTO request = deliveryRequest();
+            request.setRecentDeliveryOverrideReason(reason);
+            assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
     void recordDeliveryAcceptsAnOverrideAndKeepsTheReasonOnTheRecord() {
         when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
             org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
@@ -1310,6 +1324,21 @@ class LaborServiceImplTest {
             .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
                 .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.episode.recentDelivery");
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void startEpisodeRejectsShortRecentDeliveryOverrides() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+        for (String reason : java.util.List.of("ok", "          ", "123456789")) {
+            LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+                .laborOnsetAt(LocalDateTime.now().minusHours(2)).recentDeliveryOverrideReason(reason).build();
+            assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+                .isInstanceOf(BusinessException.class);
+        }
         verify(episodeRepository, never()).save(any());
     }
 

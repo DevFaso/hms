@@ -792,8 +792,11 @@ public class LaborServiceImpl implements LaborService {
             // QA D1339 (round 29): marked on the override field the form shows.
             throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.episode.recentDelivery");
         }
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "clinical.override.reasonMin");
+        }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
-            new Object[]{reason.trim()}, NotificationLocales.STAFF);
+            new Object[]{com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(reason)}, NotificationLocales.STAFF);
         String existing = request.getRiskNotes();
         return existing == null || existing.isBlank() ? note : note + "\n" + existing;
     }
@@ -1380,8 +1383,11 @@ public class LaborServiceImpl implements LaborService {
             // QA D1339 (round 29): marked on the override field the form shows.
             throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.delivery.recentDelivery");
         }
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "clinical.override.reasonMin");
+        }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
-            new Object[]{reason.trim()}, NotificationLocales.STAFF);
+            new Object[]{com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(reason)}, NotificationLocales.STAFF);
         String existing = request.getNotes();
         return existing == null || existing.isBlank() ? note : note + "\n" + existing;
     }
