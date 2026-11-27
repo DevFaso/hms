@@ -119,6 +119,23 @@ describe('DataResidencyComponent (MVP-9)', () => {
     expect(state!.busy).toBeFalse();
   });
 
+  it('identifies the selected organization in the edit form when switching rows', () => {
+    setup();
+    const fixture = TestBed.createComponent(DataResidencyComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.startEdit(cmp.rows()[0]);
+    fixture.detectChanges();
+    const target = () => fixture.nativeElement.querySelector('[data-test=edit-organization]').textContent;
+    expect(target()).toContain('Alpha Clinic');
+    expect(target()).toContain('ACL');
+    cmp.startEdit(cmp.rows()[1]);
+    fixture.detectChanges();
+    expect(target()).toContain('Beta Hospital');
+    expect(target()).toContain('BHP');
+    expect(target()).not.toContain('Alpha Clinic');
+  });
+
   it('persists the region update and patches the row in place on success', () => {
     const updated: OrganizationRegionRow = {
       organizationId: 'o1',
