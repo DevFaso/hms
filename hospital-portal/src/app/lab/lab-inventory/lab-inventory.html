@@ -155,6 +155,7 @@
             <th>{{ 'LAB_INVENTORY.ITEM_CODE' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.CATEGORY' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.QUANTITY' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.REORDER_THRESHOLD' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.EXPIRATION' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.STOCK_STATUS' | translate }}</th>
             @if (canManage()) {
@@ -169,6 +170,7 @@
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
               <td>{{ item.quantity | labValue: item.unit }}</td>
+              <td>{{ item.reorderThreshold | labValue: item.unit }}</td>
               <td>
                 {{
                   item.expirationDate
@@ -180,6 +182,10 @@
                 @if (item.expired) {
                   <span class="status-badge expired">{{
                     'LAB_INVENTORY.EXPIRED' | translate
+                  }}</span>
+                } @else if (item.quantity <= 0) {
+                  <span class="status-badge low-stock">{{
+                    'PHARMACY.OUT_OF_STOCK' | translate
                   }}</span>
                 } @else if (item.lowStock) {
                   <span class="status-badge low-stock">{{

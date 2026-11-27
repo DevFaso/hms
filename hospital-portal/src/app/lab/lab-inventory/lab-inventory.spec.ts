@@ -107,6 +107,19 @@ describe('LabInventoryComponent', () => {
     expect(component.totalElements()).toBe(3);
   });
 
+  it('distinguishes empty stock from low stock and displays the reorder threshold', () => {
+    fixture.detectChanges();
+    flushItems({
+      ...PAGED,
+      content: [mockItem({ name: 'Reagent', quantity: 0, reorderThreshold: 10, lowStock: true })],
+    });
+    fixture.detectChanges();
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr') as HTMLElement;
+    expect(row.textContent).toContain('PHARMACY.OUT_OF_STOCK');
+    expect(row.textContent).not.toContain('LAB_INVENTORY.LOW_STOCK');
+    expect(row.querySelectorAll('td')[4].textContent).toContain('10');
+  });
+
   it('should show loading state initially', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeTrue();
