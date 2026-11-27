@@ -2151,6 +2151,8 @@
       "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
       "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}} : part {{share}} sur la facture {{invoice}}",
+      "PRE_AUTHORISATION_ON_LINE": "Numéro de préautorisation enregistré sur la ligne {{line}} de la facture {{invoice}}",
+      "PRE_AUTHORISATION_COPIED": "Numéro de préautorisation copié de la demande {{order}} sur {{count}} ligne(s) de facture",
       "PACS_SETTINGS_CHANGED": "Paramètres de connexion PACS modifiés",
       "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)",
       "MFA_RESET_BY_ADMIN": "Validation en deux étapes réinitialisée par un administrateur : {{reason}}",
@@ -7802,6 +7804,7 @@
         "PAYER_SHARE_APPLIED": "Part assureur appliquée à une facture",
         "PAYER_SHARE_DECIDED": "Décision de l’assureur sur sa part enregistrée",
         "PAYER_SHARE_CANCELLED": "Part assureur annulée",
+        "PRE_AUTHORISATION_RECORDED": "Numéro de préautorisation enregistré",
         "MFA_RESET": "Validation en deux étapes réinitialisée",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Choix SMS / e-mail du patient modifiés",
         "IMAGING_IMAGE_WITHDRAWN": "Image d’imagerie retirée",
@@ -16500,6 +16503,44 @@
     "RESENT": "Activation renvoyée.",
     "RESENT_NOWHERE": "L’activation n’a pas pu être envoyée : affichez le code et remettez-le en main propre.",
     "RESEND_FAILED": "L’activation n’a pas pu être renvoyée."
+  },
+  "INSURER_CLAIMS": {
+    "SHARES": {
+      "FILTERS": "Filtrer les parts assureurs",
+      "PAYER": "Organisme payeur",
+      "ALL_PAYERS": "Tous les organismes",
+      "ALL_PLANS": "Toutes les formules",
+      "FROM": "Soins du",
+      "TO": "Soins au",
+      "APPLY": "Appliquer",
+      "CLEAR": "Effacer",
+      "PERIOD_REVERSED": "La fin de la période est avant son début.",
+      "POLICY": "N° de police",
+      "POLICY_VALUE": "N° de police {{number}}",
+      "SUBSCRIBER": "Assuré principal",
+      "SUBSCRIBER_VALUE": "Assuré principal : {{name}}",
+      "UNVERIFIED": "Couverture jamais vérifiée à l’accueil : vérifiez les droits du patient avant de réclamer.",
+      "ACTS": "Actes réclamés",
+      "ACT": "Acte",
+      "PRE_AUTH": "Préautorisation",
+      "NO_PRE_AUTH": "Aucune",
+      "PAYER_PART": "Part assureur",
+      "PAGES": "Pages des parts assureurs",
+      "PAGE": "Page {{page}} sur {{pages}}",
+      "PREVIOUS": "Précédente",
+      "NEXT": "Suivante"
+    },
+    "LINE": {
+      "VALUE": "N° de préautorisation {{number}}",
+      "RECORD": "Saisir le n° de préautorisation",
+      "CORRECT": "Corriger le n° de préautorisation",
+      "LABEL": "Numéro de préautorisation (assureur)",
+      "REQUIRED": "Saisissez le numéro de préautorisation donné par l’assureur.",
+      "CHARACTERS": "Lettres, chiffres, espaces et . / _ # : - uniquement (120 caractères au plus).",
+      "SAVED": "Numéro de préautorisation enregistré.",
+      "SAVED_WITH_ORDER": "Numéro de préautorisation enregistré sur l’acte et sur sa demande d’imagerie.",
+      "FAILED": "Le numéro de préautorisation n’a pas pu être enregistré."
+    }
   },
   "R70_MONEY": {
     "DEFERRAL": {

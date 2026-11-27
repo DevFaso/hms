@@ -674,6 +674,13 @@
                                 : (it.itemCategory | enumLabel: 'invoiceItemCategory')
                             }}
                           </div>
+                          <!-- Insurer claims PR 1 (QA D3984): the act's insurer pre-authorisation number. -->
+                          <app-line-pre-authorisation
+                            [invoiceId]="inv.id"
+                            [invoiceStatus]="inv.status"
+                            [line]="it"
+                            (saved)="preAuthorisationSaved(inv.id)"
+                          />
                         </td>
                         <td>{{ it.quantity }}</td>
                         <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">

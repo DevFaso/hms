@@ -10,6 +10,8 @@ import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
 import { CashSessionComponent } from '../billing/cash-session/cash-session.component';
 import { CashSupervisorComponent } from '../billing/cash-session/cash-supervisor.component';
+import { ImagingPreAuthEntryComponent } from '../billing/line-pre-authorisation/imaging-pre-auth-entry.component';
+import { LinePreAuthorisationComponent } from '../billing/line-pre-authorisation/line-pre-authorisation.component';
 import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
 import { PayerSharesListComponent } from '../billing/payer-shares/payer-shares-list.component';
 import { PayersComponent } from '../billing/payers/payers.component';
@@ -126,6 +128,16 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashSupervisorComponent',
     file: 'billing/cash-session/cash-supervisor.component',
     type: CashSupervisorComponent,
+  },
+  {
+    name: 'ImagingPreAuthEntryComponent',
+    file: 'billing/line-pre-authorisation/imaging-pre-auth-entry.component',
+    type: ImagingPreAuthEntryComponent,
+  },
+  {
+    name: 'LinePreAuthorisationComponent',
+    file: 'billing/line-pre-authorisation/line-pre-authorisation.component',
+    type: LinePreAuthorisationComponent,
   },
   {
     name: 'InvoicePayerSharesComponent',
