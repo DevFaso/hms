@@ -270,9 +270,12 @@ public class MedicationCatalogVersionService {
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
     }
 
-    /** The catalogue entry a version is for, only while it still belongs where the version says. */
+    /**
+     * The catalogue entry a version is for, only while it still belongs where the version says. Locked: an
+     * administrator's edit or withdrawal of the same row waits for this approval, and this one for theirs.
+     */
     private MedicationCatalogItem entryOf(MedicationCatalogVersion version) {
-        MedicationCatalogItem item = catalogRepository.findById(version.getCatalogItemId())
+        MedicationCatalogItem item = catalogRepository.findLockedById(version.getCatalogItemId())
             .orElseThrow(() -> new ResourceNotFoundException(CATALOG_NOT_FOUND));
         UUID owner = item.getHospital() == null ? null : item.getHospital().getId();
         if (!java.util.Objects.equals(owner, version.getHospitalId())) {

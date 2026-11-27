@@ -437,7 +437,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void requestFormularyApproval_ofAnotherHospitalsEntry_isNotFound() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
@@ -484,7 +484,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_notFound_throws() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.empty());
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update(itemId, requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -492,7 +492,7 @@ class MedicationCatalogItemServiceImplTest {
 
     /** A hospital admin acting at the hospital that owns {@link #item}. */
     private void actingAtTheItemsHospital() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
     }
@@ -524,7 +524,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void update_anotherHospitalsEntry_isNotFound_evenWhenTheBodyNamesItsHospital() {
         // The lookup used the body's hospital as given: an admin of B naming A edited A's formulary.
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
@@ -535,7 +535,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_aHospitalIdThatIsNotTheEntrys_isNotFound() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         requestDTO.setHospitalId(UUID.randomUUID());
 
@@ -547,7 +547,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void update_aPlatformEntry_isTheSuperAdminsOnly_andAHospitalAdminIsToldWhy() {
         item.setHospital(null);
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         requestDTO.setHospitalId(null);
 
@@ -564,7 +564,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_aSuperAdminInGlobalView_editsAHospitalsEntryWithoutNamingTheHospital() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         requestDTO.setHospitalId(null);
@@ -578,7 +578,7 @@ class MedicationCatalogItemServiceImplTest {
     void update_aSuperAdminPinnedToAnotherHospital_doesNotReachThisHospitalsEntryByItsId() {
         // Review of #1250: the super-admin bypass ignored the pin. Acting at hospital B, the id of
         // hospital A's entry is "not found", for an edit and for a deactivation.
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         requestDTO.setHospitalId(null);
@@ -601,7 +601,7 @@ class MedicationCatalogItemServiceImplTest {
     void update_aPlatformEntry_isEditedByASuperAdminPinnedToAHospital() {
         // A platform entry is in every hospital's list: the pin does not hide it from the platform admin.
         item.setHospital(null);
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         requestDTO.setHospitalId(null);
@@ -621,11 +621,14 @@ class MedicationCatalogItemServiceImplTest {
         service.deactivate(itemId, null);
 
         assertThat(item.isActive()).isFalse();
+        // Review F1 (#1360): the row is read under its lock, so an approval being applied lands first or waits.
+        verify(catalogRepository).findLockedById(itemId);
+        verify(catalogRepository, never()).findById(any());
     }
 
     @Test
     void deactivate_anotherHospitalsEntry_isNotFound() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
@@ -666,7 +669,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void deactivate_notFound_throws() {
-        when(catalogRepository.findById(itemId)).thenReturn(Optional.empty());
+        when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deactivate(itemId, hospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);

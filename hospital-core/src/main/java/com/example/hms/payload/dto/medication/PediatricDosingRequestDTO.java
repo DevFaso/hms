@@ -71,6 +71,7 @@ public class PediatricDosingRequestDTO {
     private PediatricDoseLimitStatus pediatricDoseStatus;
 
     /** Go-live D2 (V385): why these limits are proposed. Required: the approver reads it, the history keeps it. */
+    @jakarta.validation.constraints.NotBlank(message = "{medication.catalog.version.reasonRequired}")
     @Size(max = 1000)
     private String changeReason;
 }

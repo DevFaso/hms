@@ -81,6 +81,9 @@ class GuardDriftRatchetTest {
         DOCTOR_WITHOUT_NURSE.forEach((handler, reason) -> assertThat(reason).as(handler).isNotBlank());
     }
 
+    private static final String MEDICATION_CATALOG_DECISION_REASON =
+        "The catalogue's approval circuit: a pharmacist or the médecin-chef decides (MedicationCatalogApprovalPolicy);"
+            + " the queue and history are read by those who propose and decide, never by nursing";
     private static final String ADMISSIONCONTROLLER_REASON =
         "Admission, discharge and order-set orders are an ordering physician act";
     private static final String ADMISSIONORDERSETCONTROLLER_REASON =
@@ -157,6 +160,12 @@ class GuardDriftRatchetTest {
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        // Go-live D2 (V385): the médecin-chef approves dose limits (and formulary entries where the hospital
+        // has no pharmacist); the policy narrows the doctors to that one. Nurses neither propose nor decide.
+        listed.put("MedicationCatalogController.approve", MEDICATION_CATALOG_DECISION_REASON);
+        listed.put("MedicationCatalogController.reject", MEDICATION_CATALOG_DECISION_REASON);
+        listed.put("MedicationCatalogController.listVersions", MEDICATION_CATALOG_DECISION_REASON);
+        listed.put("MedicationCatalogController.history", MEDICATION_CATALOG_DECISION_REASON);
         listed.put("MinorResultReleaseController.overview", MINOR_RELEASE_REASON);
         listed.put("MinorResultReleaseController.markGuardianVerified", MINOR_RELEASE_REASON);
         listed.put("MinorResultReleaseController.release", MINOR_RELEASE_REASON);

@@ -18,6 +18,15 @@ import lombok.Setter;
 @Builder
 public class MedicationCatalogVersionDecisionDTO {
 
+    /**
+     * Required for a refusal ({@link com.example.hms.validation.OnRefusal}) and for submitting an entry as it
+     * stands, which creates a version awaiting approval ({@link com.example.hms.validation.OnCreate}); optional
+     * on an approval. Each handler validates its own group, so the body is refused at the edge, by field.
+     */
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnRefusal.class,
+        message = "{medication.catalog.version.rejectionReasonRequired}")
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnCreate.class,
+        message = "{medication.catalog.version.reasonRequired}")
     @Size(max = 1000)
     private String reason;
 }

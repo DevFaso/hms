@@ -94,7 +94,7 @@ class MedicationCatalogVersionServiceTest {
 
         when(hospitals.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitals.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(catalogue.findById(itemId)).thenReturn(Optional.of(item));
+        when(catalogue.findLockedById(itemId)).thenReturn(Optional.of(item));
         when(catalogue.save(any(MedicationCatalogItem.class))).thenAnswer(call -> {
             MedicationCatalogItem saved = call.getArgument(0);
             if (saved.getId() == null) {
@@ -196,6 +196,22 @@ class MedicationCatalogVersionServiceTest {
         assertThat(item.getStrength()).isEqualTo("1000");
         assertThat(item.isControlled()).isTrue();
         assertThat(item.getFormularyApprovedVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void anApprovalWritesTheEntryUnderItsRowLock_soAConcurrentEditCannotWriteAStaleCopyOverIt() throws Exception {
+        // Review F1 (#1360): an approval read the row unlocked; an administrator's edit or withdrawal committed
+        // in between was overwritten (or the approved value undone by the edit's own stale copy).
+        MedicationCatalogVersion version = proposedStrengthChange();
+        actingAs(pharmacist);
+        service.approve(version.getId(), null);
+
+        verify(catalogue, atLeastOnce()).findLockedById(itemId);
+        verify(catalogue, never()).findById(any());
+        assertThat(com.example.hms.repository.MedicationCatalogItemRepository.class
+                .getMethod("findLockedById", UUID.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Lock.class).value())
+            .isEqualTo(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     }
 
     @Test

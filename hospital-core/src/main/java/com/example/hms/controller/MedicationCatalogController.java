@@ -68,7 +68,9 @@ public class MedicationCatalogController {
     @WriteAudited(skip = true, reason = VERSION_AUDITED)
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Propose a new medication for the catalog (awaits approval)")
-    public ResponseEntity<MedicationCatalogVersionResponseDTO> create(@Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
+    public ResponseEntity<MedicationCatalogVersionResponseDTO> create(
+            @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+                com.example.hms.validation.OnCreate.class}) @RequestBody MedicationCatalogItemRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(catalogService.create(dto));
     }
 
@@ -78,7 +80,8 @@ public class MedicationCatalogController {
     @Operation(summary = "Submit an entry nobody approved yet, as it stands, for approval")
     public ResponseEntity<MedicationCatalogItemResponseDTO> requestApproval(
             @PathVariable UUID id,
-            @Valid @RequestBody MedicationCatalogVersionDecisionDTO dto) {
+            @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+                com.example.hms.validation.OnCreate.class}) @RequestBody MedicationCatalogVersionDecisionDTO dto) {
         return ResponseEntity.ok(catalogService.requestFormularyApproval(id, dto.getReason()));
     }
 
@@ -115,7 +118,8 @@ public class MedicationCatalogController {
     @Operation(summary = "Refuse a version, with the reason")
     public ResponseEntity<MedicationCatalogVersionResponseDTO> reject(
             @PathVariable UUID versionId,
-            @Valid @RequestBody MedicationCatalogVersionDecisionDTO dto) {
+            @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+                com.example.hms.validation.OnRefusal.class}) @RequestBody MedicationCatalogVersionDecisionDTO dto) {
         return ResponseEntity.ok(versionService.reject(versionId, dto.getReason()));
     }
 

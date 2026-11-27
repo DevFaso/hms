@@ -84,8 +84,12 @@ public class MedicationCatalogItemRequestDTO {
     /**
      * Go-live D2 (V385): why the entry is created, or why what prescribing and dispensing read is changed.
      * Required whenever the request proposes a version (a new entry; a change of name, ATC, form, strength,
-     * route, RxNorm or controlled flag); the approver reads it and the history keeps it.
+     * route, RxNorm or controlled flag); the approver reads it and the history keeps it. A new entry always
+     * proposes one, so its creation refuses a missing reason at the edge with the other missing fields; an edit
+     * needs it only when it changes one of those, which the service checks.
      */
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnCreate.class,
+        message = "{medication.catalog.version.reasonRequired}")
     @Size(max = 1000)
     private String changeReason;
 

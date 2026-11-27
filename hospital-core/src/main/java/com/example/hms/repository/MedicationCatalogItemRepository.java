@@ -14,6 +14,16 @@ import java.util.UUID;
 @Repository
 public interface MedicationCatalogItemRepository extends JpaRepository<MedicationCatalogItem, UUID> {
 
+    /**
+     * Go-live D2 (V385): the entry, locked for a write. An approval applies a version to the row while an
+     * administrator may be editing or withdrawing it; each takes the row lock first, so the second reads what
+     * the first committed instead of writing its stale copy over it (an approved value undone, a withdrawn
+     * medicine put back).
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM MedicationCatalogItem m WHERE m.id = :id")
+    Optional<MedicationCatalogItem> findLockedById(@Param("id") UUID id);
+
     Page<MedicationCatalogItem> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     /**

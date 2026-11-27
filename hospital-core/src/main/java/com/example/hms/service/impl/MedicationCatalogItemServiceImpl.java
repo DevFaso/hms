@@ -268,7 +268,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      */
     private MedicationCatalogItem requireWritable(UUID id, UUID requestedHospitalId) {
         boolean platformAdmin = roleValidator.isSuperAdminFromJwtClaim();
-        MedicationCatalogItem item = catalogRepository.findById(id)
+        // Go-live D2 (V385): locked, so an approval being applied to this row lands first or waits (review F1).
+        MedicationCatalogItem item = catalogRepository.findLockedById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
         UUID owner = item.getHospital() == null ? null : item.getHospital().getId();
         if (owner == null) {
