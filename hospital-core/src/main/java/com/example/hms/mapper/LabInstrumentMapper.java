@@ -1,7 +1,7 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.InstrumentStatus;
-import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabInstrument;
@@ -56,7 +56,7 @@ public class LabInstrumentMapper {
             try {
                 status = InstrumentStatus.valueOf(dto.getStatus().toUpperCase());
             } catch (IllegalArgumentException e) {
-                throw new BusinessRuleException("Invalid instrument status: " + dto.getStatus());
+                throw new FieldBusinessException("status", "lab.instrument.invalidStatus");
             }
         }
 
@@ -87,7 +87,7 @@ public class LabInstrumentMapper {
             try {
                 entity.setStatus(InstrumentStatus.valueOf(dto.getStatus().toUpperCase()));
             } catch (IllegalArgumentException e) {
-                throw new BusinessRuleException("Invalid instrument status: " + dto.getStatus());
+                throw new FieldBusinessException("status", "lab.instrument.invalidStatus");
             }
         }
         if (dto.getInstallationDate() != null) entity.setInstallationDate(dto.getInstallationDate());
