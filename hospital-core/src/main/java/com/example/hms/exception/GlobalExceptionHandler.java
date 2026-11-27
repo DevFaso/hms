@@ -684,6 +684,27 @@ public class GlobalExceptionHandler {
                 Object minimum = violation.getConstraintDescriptor().getAttributes().get("value");
                 if (minimum != null) return localized("error.validation.minimumField", "{0} must be at least {1}", label, minimum);
             }
+            if (violation != null) {
+                var attributes = violation.getConstraintDescriptor().getAttributes();
+                Object value = attributes.get("value");
+                if (value != null && template.equals("{jakarta.validation.constraints.Max.message}")) {
+                    return localized("error.validation.maximumField", "{0} must be at most {1}", label, value);
+                }
+                if (value != null && template.equals("{jakarta.validation.constraints.DecimalMin.message}")) {
+                    String displayValue = com.example.hms.utility.DisplayNumbers.labValue(value.toString(), org.springframework.context.i18n.LocaleContextHolder.getLocale());
+                    boolean inclusive = !Boolean.FALSE.equals(attributes.get("inclusive"));
+                    return inclusive
+                        ? localized("error.validation.minimumField", "{0} must be at least {1}", label, displayValue)
+                        : localized("error.validation.greaterField", "{0} must be greater than {1}", label, displayValue);
+                }
+                if (value != null && template.equals("{jakarta.validation.constraints.DecimalMax.message}")) {
+                    String displayValue = com.example.hms.utility.DisplayNumbers.labValue(value.toString(), org.springframework.context.i18n.LocaleContextHolder.getLocale());
+                    boolean inclusive = !Boolean.FALSE.equals(attributes.get("inclusive"));
+                    return inclusive
+                        ? localized("error.validation.maximumField", "{0} must be at most {1}", label, displayValue)
+                        : localized("error.validation.lessField", "{0} must be less than {1}", label, displayValue);
+                }
+            }
             return localized("error.validation.namedField", "{0}: {1}", label, message);
         }
         return message;
