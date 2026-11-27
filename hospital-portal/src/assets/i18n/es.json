@@ -1934,6 +1934,7 @@
       "CROSS_HOSPITAL_READ_LAB": "Solicitud de laboratorio de otro hospital consultada por el laboratorio que la realiza",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Resultado de laboratorio de otro hospital consultado por el laboratorio que lo realiza",
       "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerta de aloinmunización de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
+      "CROSS_HOSPITAL_SEVERE_REACTION": "Reacción transfusional grave de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "CROSS_HOSPITAL_RHD_EXPOSURE_FLAG": "Indicación de exposición a RhD positivo de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "O_POSITIVE_RELEASE_DECIDED": "Decisión de entrega de urgencia de O positivo registrada para la unidad {{unit}}, solicitud {{request}}",
       "O_POSITIVE_RELEASE_COUNTERSIGNED": "Entrega de urgencia de O positivo contrafirmada (decisión {{decision}})",

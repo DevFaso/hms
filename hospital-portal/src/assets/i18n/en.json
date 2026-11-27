@@ -1934,6 +1934,7 @@
       "CROSS_HOSPITAL_READ_LAB": "Lab order of another hospital read by the performing laboratory",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Lab result of another hospital read by the performing laboratory",
       "CROSS_HOSPITAL_ANTIBODY_FLAG": "Allo-immunisation flag of another hospital read (transfusion safety, shown whatever the record-sharing choice)",
+      "CROSS_HOSPITAL_SEVERE_REACTION": "Severe transfusion reaction recorded at another hospital read (transfusion safety, shown whatever the record-sharing choice)",
       "CROSS_HOSPITAL_RHD_EXPOSURE_FLAG": "RhD positive exposure flag of another hospital read (transfusion safety, shown whatever the record-sharing choice)",
       "O_POSITIVE_RELEASE_DECIDED": "Emergency O positive release decision recorded for unit {{unit}} against request {{request}}",
       "O_POSITIVE_RELEASE_COUNTERSIGNED": "Emergency O positive release countersigned (decision {{decision}})",
