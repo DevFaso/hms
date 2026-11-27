@@ -125,8 +125,21 @@
                 [(ngModel)]="formText"
                 name="text"
                 [placeholder]="'ANNOUNCEMENTS.TEXT_PLACEHOLDER' | translate"
+                [attr.maxlength]="maxTextLength"
+                aria-describedby="announcementTextLimit"
                 required
               ></textarea>
+              <!-- QA D4321: the limit is stated, and counted while typing. -->
+              <small
+                id="announcementTextLimit"
+                class="field-hint"
+                data-testid="announcement-text-limit"
+              >
+                {{
+                  'ANNOUNCEMENTS.TEXT_LIMIT'
+                    | translate: { count: formText.length, max: maxTextLength }
+                }}
+              </small>
             </div>
           </div>
           <div class="modal-actions">

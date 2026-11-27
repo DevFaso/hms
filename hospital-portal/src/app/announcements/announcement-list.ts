@@ -102,9 +102,19 @@ export class AnnouncementListComponent implements OnInit {
     this.editing.set(null);
   }
 
+  /** The length of the announcement text the server accepts (AnnouncementServiceImpl). */
+  readonly maxTextLength = 255;
+
   submitForm(): void {
     if (!this.formText.trim()) {
       this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_REQUIRED'));
+      return;
+    }
+    // QA D4321: a pasted text can exceed what the field lets one type.
+    if (this.formText.trim().length > this.maxTextLength) {
+      this.toast.error(
+        this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_TOO_LONG', { max: this.maxTextLength }),
+      );
       return;
     }
     this.saving.set(true);

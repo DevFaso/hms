@@ -71,6 +71,91 @@ class ChatMessageServiceImplTest {
         // QA D877: refusals are bundle keys now; resolve them as a request would.
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        // QA D4320: by default the two people of a test are colleagues at one hospital.
+        when(userRoleHospitalAssignmentRepository.sharesActiveHospital(any(), any())).thenReturn(true);
+    }
+
+    /** QA D4320: chat recipients are limited to people the sender may message. */
+    @Test
+    void sendMessage_refusesAStaffRecipientWhoIsNoColleague_asAnUnknownOne_D4320() {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+        User sender = new User();
+        sender.setId(senderId);
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
+        recipient.setFirstName("Awa");
+        recipient.setLastName("Traore");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        when(userRepository.findByEmail("awa@hopital-b.test")).thenReturn(Optional.of(recipient));
+        when(userRepository.findByEmail("nobody@nowhere.test")).thenReturn(Optional.empty());
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(senderId)).thenReturn(true);
+        when(userRoleHospitalAssignmentRepository.sharesActiveHospital(senderId, recipientId)).thenReturn(false);
+        setSecurityContext("ROLE_NURSE");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+
+        String unknown = assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.sendMessage(ChatMessageRequestDTO.builder()
+                .recipientEmail("nobody@nowhere.test").content("x").build(), Locale.ENGLISH)).getMessage();
+        com.example.hms.exception.ResourceNotFoundException refusal = assertThrows(
+            com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.sendMessage(ChatMessageRequestDTO.builder()
+                .recipientEmail("awa@hopital-b.test").content("x").build(), Locale.ENGLISH));
+
+        // The same answer as for an address nobody holds, and nothing about the account behind it.
+        assertThat(refusal.getMessage()).isEqualTo(unknown.replace("nobody@nowhere.test", "awa@hopital-b.test"));
+        assertThat(refusal.getMessage()).doesNotContain("Awa").doesNotContain("Traore");
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+        verify(notificationService, never()).createNotification(any(), any(), any(), any());
+    }
+
+    @Test
+    void sendMessage_refusesAPlatformAdministratorAsRecipient_unlessAnsweringThem_D4320() {
+        UUID senderId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        User sender = new User();
+        sender.setId(senderId);
+        User admin = userWithRole(adminId, "ROLE_SUPER_ADMIN");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(senderId)).thenReturn(true);
+        when(userRoleHospitalAssignmentRepository.sharesActiveHospital(senderId, adminId)).thenReturn(false);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
+            .thenReturn(ChatMessageResponseDTO.builder().build());
+        setSecurityContext("ROLE_NURSE");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientId(adminId).content("x").build();
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+
+        // Once the administrator has written to the nurse, the nurse may answer.
+        when(chatMessageRepository.existsBySender_IdAndRecipient_Id(adminId, senderId)).thenReturn(true);
+        assertNotNull(service.sendMessage(dto, Locale.ENGLISH));
+    }
+
+    @Test
+    void sendMessage_aPlatformAdministratorReachesAnybody_D4320() {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+        User sender = new User();
+        sender.setId(senderId);
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        when(userRepository.findById(recipientId)).thenReturn(Optional.of(recipient));
+        when(userRoleHospitalAssignmentRepository.sharesActiveHospital(any(), any())).thenReturn(false);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
+            .thenReturn(ChatMessageResponseDTO.builder().build());
+        setSecurityContext("ROLE_SUPER_ADMIN");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+
+        assertNotNull(service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(recipientId).content("x").build(), Locale.ENGLISH));
     }
 
     @AfterEach

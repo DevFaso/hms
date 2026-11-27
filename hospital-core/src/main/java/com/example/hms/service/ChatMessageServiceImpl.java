@@ -141,6 +141,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.self"));
         }
 
+        // QA D4320: chat recipients are limited to people the sender may message.
+        // A recipient outside that set answers exactly as an unknown one does.
+        requireReachableRecipient(sender, recipient,
+            dto.getRecipientId() != null ? dto.getRecipientId() : dto.getRecipientEmail());
+
         // Enforce role-based messaging hierarchy. Sender roles are
         // read from SecurityContextHolder inside the validator; the sender
         // is passed for the patient/clinician shared-hospital check.
@@ -362,6 +367,35 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         } else if (senderIsStaff && !recipientIsStaff) {
             requireSharedHospital(recipient.getId(), sender.getId());
         }
+    }
+
+    /**
+     * QA D4320: a staff member reaches a colleague - somebody holding an active
+     * role at a hospital where the sender holds one too - and can answer anybody
+     * who wrote to them first. A platform administrator reaches everybody. The
+     * patient boundary keeps its own, stricter rule ({@link #validateMessageHierarchy}).
+     *
+     * <p>The refusal is the unknown-recipient one, with the identifier as it was
+     * sent, so it tells the sender nothing about the account behind it.
+     */
+    private void requireReachableRecipient(User sender, User recipient, Object requested) {
+        if (isSuperAdminContext()) {
+            return;
+        }
+        boolean recipientIsStaff = recipient.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
+            .map(ur -> ur.getRole().getName())
+            .anyMatch(name -> !ROLE_PATIENT.equals(name.startsWith(ROLE_PREFIX) ? name : ROLE_PREFIX + name));
+        boolean senderIsStaff = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+            .anyMatch(a -> !ROLE_PATIENT.equals(a.getAuthority()));
+        if (!senderIsStaff || !recipientIsStaff) {
+            return;
+        }
+        if (userRoleHospitalAssignmentRepository.sharesActiveHospital(sender.getId(), recipient.getId())
+                || chatMessageRepository.existsBySender_IdAndRecipient_Id(recipient.getId(), sender.getId())) {
+            return;
+        }
+        throw new ResourceNotFoundException("chat.recipient.notFound", requested);
     }
 
     private void requireSharedHospital(UUID patientUserId, UUID staffUserId) {

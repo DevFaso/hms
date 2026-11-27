@@ -23,6 +23,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import com.example.hms.service.integration.health.IntegrationDiagnosticText;
+import org.springframework.context.i18n.LocaleContextHolder;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -59,8 +66,15 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
         // so a 200-row page can't return a quarter-GB of envelope
         // data. Operators pull the full payload via the row-detail
         // endpoint (getById).
+        List<UUID> ids = page.getContent().stream().map(IntegrationMessageEvent::getId).toList();
+        Set<UUID> resolved = ids.isEmpty() ? Set.of() : new HashSet<>(repository.findResolvedFailureIds(ids));
+        Map<UUID, String> organizationNames = organizationNames(page.getContent());
         List<IntegrationMessageEventDTO> content = page.getContent().stream()
-            .map(SuperAdminIntegrationMessageServiceImpl::toSummaryDto)
+            .map(event -> mapBase(event)
+                .payload(null)
+                .resolved(resolved.contains(event.getId()))
+                .organizationName(organizationNames.get(event.getOrganizationId()))
+                .build())
             .toList();
         return IntegrationMessagePageDTO.builder()
             .content(content)
@@ -79,7 +93,44 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
     public IntegrationMessageEventDTO getById(UUID messageId) {
         IntegrationMessageEvent event = repository.findById(messageId)
             .orElseThrow(() -> new ResourceNotFoundException("integration.message.notFound", messageId));
-        return toDto(event);
+        return toDetailDto(event);
+    }
+
+    /** QA D4302: the message with its content, its organisation and the rows of its exchange. */
+    private IntegrationMessageEventDTO toDetailDto(IntegrationMessageEvent event) {
+        List<IntegrationMessageEventDTO.Attempt> attempts = event.getCorrelationId() == null
+            ? List.of()
+            : repository.findTop50ByCorrelationIdOrderByReceivedAtAsc(event.getCorrelationId()).stream()
+                .map(row -> new IntegrationMessageEventDTO.Attempt(
+                    row.getId(), row.getStatus(), row.getAttemptCount(),
+                    IntegrationDiagnosticText.localize(row.getErrorMessage(), LocaleContextHolder.getLocale()),
+                    row.getLastAttemptedAt(), row.getReceivedAt()))
+                .toList();
+        boolean resolved = event.getStatus() == IntegrationMessageStatus.FAILED
+            && !repository.findResolvedFailureIds(List.of(event.getId())).isEmpty();
+        return mapBase(event)
+            .payload(event.getPayload())
+            .resolved(resolved)
+            .organizationName(organizationNames(List.of(event)).get(event.getOrganizationId()))
+            .attempts(attempts)
+            .build();
+    }
+
+    private Map<UUID, String> organizationNames(List<IntegrationMessageEvent> events) {
+        Set<UUID> organizationIds = new HashSet<>();
+        for (IntegrationMessageEvent event : events) {
+            if (event.getOrganizationId() != null) {
+                organizationIds.add(event.getOrganizationId());
+            }
+        }
+        Map<UUID, String> names = new HashMap<>();
+        if (organizationIds.isEmpty()) {
+            return names;
+        }
+        for (Object[] row : repository.findOrganizationNames(organizationIds)) {
+            names.put((UUID) row[0], (String) row[1]);
+        }
+        return names;
     }
 
     @Override
@@ -98,9 +149,8 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
         // trail; replaying an already-REPLAYED row is a no-op the
         // operator should know about.
         if (original.getStatus() != IntegrationMessageStatus.FAILED) {
-            throw new ConflictException(
-                "Integration message " + originalMessageId + " is not in FAILED state "
-                    + "(current: " + original.getStatus() + "); only FAILED messages can be replayed.");
+            // QA D4303: a refusal in the reader's language, with no raw status.
+            throw new ConflictException(MessageUtil.resolve("integration.message.replay.notFailed"));
         }
 
         // The retention sweep erased the content (V177) - after resolution,
@@ -129,23 +179,9 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             // INTERNAL_SERVER_ERROR for monitoring and operator UI.
             throw new ResponseStatusException(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "Replay row could not be persisted for message: " + originalMessageId);
+                MessageUtil.resolve("integration.message.replay.notRecorded"));
         }
-        return toDto(replay);
-    }
-
-    static IntegrationMessageEventDTO toDto(IntegrationMessageEvent event) {
-        return mapBase(event).payload(event.getPayload()).build();
-    }
-
-    /**
-     * Search-list variant: same shape as {@link #toDto} minus the
-     * payload, which would otherwise let a 200-row page return up to
-     * ~12 MB of envelope data per request. Operators fetch the full
-     * payload via the row-detail endpoint.
-     */
-    static IntegrationMessageEventDTO toSummaryDto(IntegrationMessageEvent event) {
-        return mapBase(event).payload(null).build();
+        return toDetailDto(replay);
     }
 
     private static IntegrationMessageEventDTO.IntegrationMessageEventDTOBuilder mapBase(
@@ -160,7 +196,8 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .correlationId(event.getCorrelationId())
             .payloadPurgedAt(event.getPayloadPurgedAt())
             .status(event.getStatus())
-            .errorMessage(event.getErrorMessage())
+            .errorMessage(IntegrationDiagnosticText.localize(
+                event.getErrorMessage(), LocaleContextHolder.getLocale()))
             .attemptCount(event.getAttemptCount())
             .lastAttemptedAt(event.getLastAttemptedAt())
             .receivedAt(event.getReceivedAt());

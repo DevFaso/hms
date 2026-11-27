@@ -874,7 +874,7 @@
   "INTEGRATION_MESSAGES": {
     "TITLE": "Registro de mensajes de integración",
     "SUBTITLE": "Consulte los mensajes de los socios y los errores. Esta página registra un evento; no reenvía el mensaje al socio.",
-    "DLQ_BADGE": "{{ count }} mensajes fallidos",
+    "DLQ_BADGE": "{{ count }} failed messages to handle",
     "SHOW_DLQ_ONLY": "Mostrar mensajes fallidos",
     "SEARCH": "Buscar",
     "SEARCHING": "Buscando…",
@@ -902,7 +902,8 @@
       "SENT": "Enviado",
       "RECEIVED": "Recibido",
       "FAILED": "Fallido",
-      "REPLAYED": "Evento registrado"
+      "REPLAYED": "Evento registrado",
+      "FAILED_RESOLVED": "Failed — handled"
     },
     "COL": {
       "RECEIVED_AT": "Recibido",
@@ -915,6 +916,33 @@
     },
     "ERROR": {
       "REPLAY_FAILED": "No se pudo registrar el evento. Inténtelo de nuevo."
+    },
+    "DLQ_BADGE_ONE": "{{ count }} failed message to handle",
+    "REPLAY_DONE": "Replay recorded: the message is no longer counted as failed.",
+    "REPLAY_CONFIRM": {
+      "TITLE": "Record a replay in the log?",
+      "MESSAGE": "A new \"Event recorded\" line will be added for this message of the {{ integration }} integration, and the message will no longer be counted as failed. Nothing is sent to the partner again. A message can be replayed only once."
+    },
+    "DIRECTION": {
+      "OUTBOUND": "Outbound",
+      "INBOUND": "Inbound"
+    },
+    "TYPE": {
+      "PROBE": "Connection test",
+      "RESYNC": "Re-synchronisation"
+    },
+    "DETAIL": {
+      "OPEN": "Details",
+      "TITLE": "Message detail",
+      "ORGANIZATION": "Organización",
+      "PLATFORM_WIDE": "Whole platform",
+      "CORRELATION_ID": "Correlation ID",
+      "LAST_ATTEMPT": "Last attempt",
+      "PAYLOAD": "Message content",
+      "NO_PAYLOAD": "No content was recorded for this message.",
+      "LOADING": "Loading the content…",
+      "LOAD_ERROR": "The content of this message could not be loaded. Try again.",
+      "EXCHANGE": "Attempts of this exchange"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1619,10 +1647,12 @@
       "LOAD_FAILED": "Error al cargar los anuncios",
       "SAVE_FAILED": "Error al guardar el anuncio",
       "TEXT_REQUIRED": "El texto del anuncio es obligatorio",
-      "UPDATED": "Anuncio actualizado"
+      "UPDATED": "Anuncio actualizado",
+      "TEXT_TOO_LONG": "The announcement text cannot exceed {{ max }} characters."
     },
     "CREATE_FIRST": "Cree su primer anuncio.",
-    "NONE_YET": "Aún no hay anuncios."
+    "NONE_YET": "Aún no hay anuncios.",
+    "TEXT_LIMIT": "{{ count }} / {{ max }} characters"
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -3852,7 +3882,7 @@
   },
   "COST_PANEL": {
     "TITLE": "Costes por centro",
-    "SUBTITLE": "Lo que se facturaría a cada centro en el periodo elegido. Hoy el importe se basa en la actividad registrada (eventos de auditoría); las columnas de registros, supervisión y almacenamiento quedan en cero hasta que esas mediciones estén conectadas.",
+    "SUBTITLE": "What each hospital would be charged for the chosen period. The amount is the number of audit events recorded for the hospital, multiplied by the rate shown below.",
     "FROM": "Desde",
     "TO": "Hasta",
     "REFRESH": "Actualizar",
@@ -3865,7 +3895,13 @@
     "COL_SPLUNK": "Eventos de registro",
     "COL_GRAFANA": "Series de supervisión",
     "COL_STORAGE_GIB": "Almacenamiento (GiB)",
-    "COL_AMOUNT": "Monto a facturar"
+    "COL_AMOUNT": "Monto a facturar",
+    "EXPORT_CSV": "Export (CSV)",
+    "EXPORT_FILE": "costs-per-hospital",
+    "PERIOD": "Period shown: {{ from }} to {{ to }}",
+    "RATE": "Rate applied: {{ rate }} per recorded event (provisional rate, set by the platform operator).",
+    "NO_RATE": "No rate is configured: the amount is not computed. Ask the platform operator to set the rate per event.",
+    "TOTAL": "Total"
   },
   "EMPI": {
     "MERGE_BUTTON": "Fusionar duplicados",
@@ -6043,7 +6079,8 @@
     "CONFIRM_ROTATE_KEY": "¿Rotar esta clave? La clave actual deja de funcionar de inmediato.",
     "CONFIRM_REVOKE_KEY": "¿Revocar esta clave? El cliente pierde el acceso de inmediato y de forma permanente.",
     "CONFIRM_REVOKE_ENDPOINT": "¿Revocar este punto de conexión? Los envíos se detienen permanentemente; el registro sigue disponible.",
-    "CONFIRM_ROTATE_SECRET": "¿Rotar el secreto de firma? Hay que actualizar el receptor o su verificación fallará."
+    "CONFIRM_ROTATE_SECRET": "¿Rotar el secreto de firma? Hay que actualizar el receptor o su verificación fallará.",
+    "LAST_ATTEMPT_AT": "Last attempt"
   },
   "ROI": {
     "TITLE": "Entrega de información",
@@ -8446,7 +8483,8 @@
         "HOSPITAL_INCOMPATIBLE_RELEASE_PROTOCOL": "Ajuste de entrega incompatible sin médico",
         "IMAGING_CATALOGUE_EXAM": "Examen del catálogo de imagen",
         "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
-        "HOSPITAL_RULE_SIGNOFF": "Validación de regla clínica"
+        "HOSPITAL_RULE_SIGNOFF": "Validación de regla clínica",
+        "PLATFORM_REQUEST": "Solicitud a la plataforma"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -10695,6 +10733,18 @@
       "readBackRequired": "Relectura requerida",
       "readBackAt": "Releído el {{at}}",
       "followUp": "Solicitar seguimiento"
+    },
+    "openPlatformItem": "Open",
+    "platformRequest": {
+      "open": "Write to the platform",
+      "title": "Request to the platform",
+      "hint": "Your request arrives in the platform administrators’ inbox, with your hospital’s name and yours. No SMS or e-mail is sent.",
+      "subject": "Subject",
+      "message": "Message",
+      "send": "Send",
+      "sending": "Sending…",
+      "sent": "Request sent to the platform administrators.",
+      "failed": "The request could not be sent. Try again."
     }
   },
   "common": {

@@ -2,6 +2,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  HostListener,
   OnInit,
   computed,
   inject,
@@ -10,7 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { catchError, of } from 'rxjs';
 
 import { IntegrationMessagesService } from '../../services/integration-messages.service';
@@ -24,6 +25,11 @@ import { toServerDateTime } from '../../shared/date-utils';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ToastService } from '../../core/toast.service';
+import { refusalReason } from '../../shared/refusal-reason';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -52,6 +58,7 @@ interface ReplayState {
     RouterLink,
     TranslateModule,
     DatePipe,
+    OrgTextPipe,
   ],
   templateUrl: './integration-messages.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -59,6 +66,9 @@ interface ReplayState {
 })
 export class IntegrationMessagesComponent implements OnInit {
   private readonly service = inject(IntegrationMessagesService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly statusOptions = STATUS_OPTIONS;
 
@@ -151,9 +161,84 @@ export class IntegrationMessagesComponent implements OnInit {
     return !!row.payloadPurgedAt;
   }
 
-  replay(messageId: string): void {
+  /**
+   * QA D4301: a failure is replayed once. One that a later attempt took over
+   * (it was replayed, or the sender's retry got through) is shown as handled
+   * and has no button - which is also what the banner counts.
+   */
+  canReplay(row: IntegrationMessageEvent): boolean {
+    return row.status === 'FAILED' && !this.isPurged(row) && !row.resolved;
+  }
+
+  /** The status shown: a handled failure reads as such, not as one still waiting. */
+  statusKey(row: { status: IntegrationMessageStatus; resolved?: boolean }): string {
+    return row.status === 'FAILED' && row.resolved
+      ? 'INTEGRATION_MESSAGES.STATUS.FAILED_RESOLVED'
+      : `INTEGRATION_MESSAGES.STATUS.${row.status}`;
+  }
+
+  /** QA D4303: the product's own message types have words; a partner's (ADT^A04) is shown as sent. */
+  typeLabel(messageType: string | null): string {
+    if (!messageType) return '—';
+    const key = `INTEGRATION_MESSAGES.TYPE.${messageType}`;
+    const label = this.translate.instant(key);
+    return label === key ? messageType : label;
+  }
+
+  /** French counts 0 and 1 in the singular; English and Spanish only 1. */
+  readonly dlqBadgeKey = computed(() => {
+    const count = this.deadLetterCount();
+    const singular = currentLocale().startsWith('fr') ? count < 2 : count === 1;
+    return singular ? 'INTEGRATION_MESSAGES.DLQ_BADGE_ONE' : 'INTEGRATION_MESSAGES.DLQ_BADGE';
+  });
+
+  // ── QA D4302: detail drawer ────────────────────────────────────────
+  readonly detail = signal<IntegrationMessageEvent | null>(null);
+  readonly detailLoading = signal(false);
+  readonly detailErrored = signal(false);
+  readonly detailOpen = signal(false);
+
+  openDetail(row: IntegrationMessageEvent): void {
+    this.detailOpen.set(true);
+    this.detail.set(row);
+    this.detailLoading.set(true);
+    this.detailErrored.set(false);
+    this.service
+      .getById(row.id)
+      .pipe(
+        catchError(() => {
+          this.detailErrored.set(true);
+          return of(null);
+        }),
+      )
+      .subscribe((full) => {
+        // A slow answer for a row the operator has already left is dropped.
+        if (this.detail()?.id !== row.id) return;
+        if (full) this.detail.set(full);
+        this.detailLoading.set(false);
+      });
+  }
+
+  @HostListener('document:keydown.escape')
+  closeDetail(): void {
+    this.detailOpen.set(false);
+    this.detail.set(null);
+  }
+
+  async replay(messageId: string): Promise<void> {
     const row = this.rows().find((r) => r.id === messageId);
-    if (row && this.isPurged(row)) {
+    if ((row && !this.canReplay(row)) || this.replayBusyFor(messageId)) {
+      return;
+    }
+    // QA D4301: asked first, and said what it does.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'INTEGRATION_MESSAGES.REPLAY_CONFIRM.TITLE',
+      messageKey: 'INTEGRATION_MESSAGES.REPLAY_CONFIRM.MESSAGE',
+      params: { integration: row?.integrationId ?? '' },
+      confirmKey: 'INTEGRATION_MESSAGES.REPLAY',
+    });
+    // Asked again after the question: a second click may have started one meanwhile.
+    if (!confirmed || this.replayBusyFor(messageId)) {
       return;
     }
     this.replayState.update((map) => {
@@ -172,15 +257,15 @@ export class IntegrationMessagesComponent implements OnInit {
           // button disables. Anything else keeps the generic error and the
           // row where the operator can see it.
           const purged = err instanceof HttpErrorResponse && err.status === 409;
+          // The server's own reason when it gave one (already replayed, content
+          // purged), in the reader's language.
+          const reason =
+            refusalReason(err) ??
+            this.translate.instant('INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED');
+          this.toast.error(reason);
           this.replayState.update((map) => {
             const next = new Map(map);
-            next.set(messageId, {
-              messageId,
-              busy: false,
-              errorKey: purged
-                ? 'INTEGRATION_MESSAGES.CONTENT_PURGED'
-                : 'INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED',
-            });
+            next.set(messageId, { messageId, busy: false, errorKey: reason });
             return next;
           });
           if (purged) {
@@ -199,6 +284,8 @@ export class IntegrationMessagesComponent implements OnInit {
           next.delete(messageId);
           return next;
         });
+        this.toast.success(this.translate.instant('INTEGRATION_MESSAGES.REPLAY_DONE'));
+        if (this.detail()?.id === messageId) this.closeDetail();
         this.search();
       });
   }

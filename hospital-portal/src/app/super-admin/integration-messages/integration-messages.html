@@ -19,7 +19,7 @@
     <div class="dlq-badge" data-test="dlq-badge">
       <span class="material-symbols-outlined" aria-hidden="true">error</span>
       <span>
-        {{ 'INTEGRATION_MESSAGES.DLQ_BADGE' | translate: { count: deadLetterCount() } }}
+        {{ dlqBadgeKey() | translate: { count: deadLetterCount() } }}
       </span>
       <button
         type="button"
@@ -137,25 +137,37 @@
       </thead>
       <tbody>
         @for (row of rows(); track row.id) {
-          <tr [attr.data-test-row]="row.id">
+          <tr [attr.data-test-row]="row.id" class="message-row" (click)="openDetail(row)">
             <td>{{ row.receivedAt | serverTime | date: 'short' }}</td>
             <td>
               <code>{{ row.integrationId }}</code>
             </td>
             <td>
               <span class="direction-badge" [attr.data-direction]="row.direction">{{
-                row.direction
+                row.direction | keyLabel: 'INTEGRATION_MESSAGES.DIRECTION.'
               }}</span>
             </td>
-            <td>{{ row.messageType | dash }}</td>
+            <td>{{ typeLabel(row.messageType) }}</td>
             <td>
-              <span class="status-badge" [attr.data-status]="row.status">
-                {{ row.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
+              <span
+                class="status-badge"
+                [attr.data-status]="row.status"
+                [attr.data-resolved]="row.resolved ? 'true' : null"
+              >
+                {{ statusKey(row) | translate }}
               </span>
             </td>
             <td>{{ row.attemptCount }}</td>
             <td class="cell-error">{{ row.errorMessage | dash }}</td>
-            <td class="cell-actions">
+            <td class="cell-actions" (click)="$event.stopPropagation()">
+              <button
+                type="button"
+                class="detail-btn"
+                [attr.data-test-detail]="row.id"
+                (click)="openDetail(row)"
+              >
+                {{ 'INTEGRATION_MESSAGES.DETAIL.OPEN' | translate }}
+              </button>
               @if (isPurged(row)) {
                 <small
                   class="purged-note"
@@ -169,7 +181,7 @@
                 </small>
               }
               <!-- QA D1124: a purged message cannot be replayed; the "content purged" note above says why, so no dead button. -->
-              @if (row.status === 'FAILED' && !isPurged(row)) {
+              @if (canReplay(row)) {
                 <button
                   type="button"
                   class="replay-btn"
@@ -184,7 +196,7 @@
                   }
                 </button>
                 @if (replayErrorKeyFor(row.id); as errorKey) {
-                  <small class="row-error">{{ errorKey | translate }}</small>
+                  <small class="row-error" role="alert">{{ errorKey }}</small>
                 }
               }
             </td>
@@ -209,5 +221,127 @@
         </button>
       </nav>
     }
+  }
+
+  <!-- QA D4302: what one message is - its content, its exchange, its attempts. -->
+  @if (detailOpen() && detail(); as d) {
+    <div class="drawer-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
+    <aside
+      class="drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="message-detail-title"
+      data-test="message-detail"
+    >
+      <div class="drawer-header">
+        <h2 id="message-detail-title">{{ 'INTEGRATION_MESSAGES.DETAIL.TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="drawer-close"
+          (click)="closeDetail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <dl class="detail-grid">
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.INTEGRATION' | translate }}</dt>
+          <dd>
+            <code>{{ d.integrationId }}</code>
+          </dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.DETAIL.ORGANIZATION' | translate }}</dt>
+          <dd data-test="detail-organization">
+            {{
+              d.organizationName
+                ? (d.organizationName | orgText)
+                : ('INTEGRATION_MESSAGES.DETAIL.PLATFORM_WIDE' | translate)
+            }}
+          </dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.DIRECTION' | translate }}</dt>
+          <dd>{{ d.direction | keyLabel: 'INTEGRATION_MESSAGES.DIRECTION.' }}</dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.TYPE' | translate }}</dt>
+          <dd>{{ typeLabel(d.messageType) }}</dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.STATUS' | translate }}</dt>
+          <dd>
+            <span
+              class="status-badge"
+              [attr.data-status]="d.status"
+              [attr.data-resolved]="d.resolved ? 'true' : null"
+            >
+              {{ statusKey(d) | translate }}
+            </span>
+          </dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.DETAIL.CORRELATION_ID' | translate }}</dt>
+          <dd data-test="detail-correlation">
+            <code class="wrap">{{ d.correlationId | dash }}</code>
+          </dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.RECEIVED_AT' | translate }}</dt>
+          <dd>{{ d.receivedAt | serverTime | dateTime }}</dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.DETAIL.LAST_ATTEMPT' | translate }}</dt>
+          <dd>{{ d.lastAttemptedAt | serverTime | dateTime }}</dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.ATTEMPTS' | translate }}</dt>
+          <dd>{{ d.attemptCount }}</dd>
+          <dt>{{ 'INTEGRATION_MESSAGES.COL.ERROR' | translate }}</dt>
+          <dd class="detail-error">{{ d.errorMessage | dash }}</dd>
+        </dl>
+
+        <h3 class="detail-heading">{{ 'INTEGRATION_MESSAGES.DETAIL.PAYLOAD' | translate }}</h3>
+        @if (detailLoading()) {
+          <p class="detail-note">{{ 'INTEGRATION_MESSAGES.DETAIL.LOADING' | translate }}</p>
+        } @else if (detailErrored()) {
+          <p class="detail-note error" role="alert">
+            {{ 'INTEGRATION_MESSAGES.DETAIL.LOAD_ERROR' | translate }}
+          </p>
+        } @else if (d.payloadPurgedAt) {
+          <p class="detail-note">
+            {{
+              'INTEGRATION_MESSAGES.CONTENT_PURGED_TITLE'
+                | translate: { date: (d.payloadPurgedAt | serverTime | dateTime) }
+            }}
+          </p>
+        } @else if (d.payload) {
+          <pre class="payload" data-test="detail-payload" tabindex="0">{{ d.payload }}</pre>
+        } @else {
+          <p class="detail-note">{{ 'INTEGRATION_MESSAGES.DETAIL.NO_PAYLOAD' | translate }}</p>
+        }
+
+        @if (d.attempts && d.attempts.length > 0) {
+          <h3 class="detail-heading">{{ 'INTEGRATION_MESSAGES.DETAIL.EXCHANGE' | translate }}</h3>
+          <ol class="attempt-list" data-test="detail-attempts">
+            @for (a of d.attempts; track a.id) {
+              <li [class.current]="a.id === d.id">
+                <span class="attempt-when">{{ a.lastAttemptedAt | serverTime | dateTime }}</span>
+                <span class="status-badge" [attr.data-status]="a.status">
+                  {{ a.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
+                </span>
+                @if (a.errorMessage) {
+                  <span class="attempt-error">{{ a.errorMessage }}</span>
+                }
+              </li>
+            }
+          </ol>
+        }
+
+        @if (canReplay(d)) {
+          <div class="drawer-footer">
+            <button
+              type="button"
+              class="replay-btn"
+              data-test="detail-replay"
+              [disabled]="replayBusyFor(d.id)"
+              (click)="replay(d.id)"
+            >
+              {{
+                (replayBusyFor(d.id)
+                  ? 'INTEGRATION_MESSAGES.REPLAYING'
+                  : 'INTEGRATION_MESSAGES.REPLAY'
+                ) | translate
+              }}
+            </button>
+          </div>
+        }
+      </div>
+    </aside>
   }
 </div>

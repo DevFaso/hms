@@ -874,7 +874,7 @@
   "INTEGRATION_MESSAGES": {
     "TITLE": "Journal des messages d'intégration",
     "SUBTITLE": "Consultez les messages des partenaires et les échecs. Cette page enregistre une demande dans le journal ; elle ne renvoie pas le message au partenaire.",
-    "DLQ_BADGE": "{{ count }} messages en échec",
+    "DLQ_BADGE": "{{ count }} messages en échec à traiter",
     "SHOW_DLQ_ONLY": "Afficher les messages en échec",
     "SEARCH": "Rechercher",
     "SEARCHING": "Recherche…",
@@ -902,7 +902,8 @@
       "SENT": "Envoyé",
       "RECEIVED": "Reçu",
       "FAILED": "Échoué",
-      "REPLAYED": "Événement enregistré"
+      "REPLAYED": "Événement enregistré",
+      "FAILED_RESOLVED": "Échoué — traité"
     },
     "COL": {
       "RECEIVED_AT": "Reçu",
@@ -915,6 +916,33 @@
     },
     "ERROR": {
       "REPLAY_FAILED": "Impossible d’enregistrer l’événement. Réessayez."
+    },
+    "DLQ_BADGE_ONE": "{{ count }} message en échec à traiter",
+    "REPLAY_DONE": "Rejeu enregistré : le message n’est plus compté comme en échec.",
+    "REPLAY_CONFIRM": {
+      "TITLE": "Enregistrer un rejeu dans le journal ?",
+      "MESSAGE": "Une nouvelle ligne « Événement enregistré » sera ajoutée pour ce message de l’intégration {{ integration }}, et le message ne sera plus compté comme en échec. Rien n’est renvoyé au partenaire. Un message ne peut être rejoué qu’une fois."
+    },
+    "DIRECTION": {
+      "OUTBOUND": "Sortant",
+      "INBOUND": "Entrant"
+    },
+    "TYPE": {
+      "PROBE": "Test de connexion",
+      "RESYNC": "Resynchronisation"
+    },
+    "DETAIL": {
+      "OPEN": "Détails",
+      "TITLE": "Détail du message",
+      "ORGANIZATION": "Organisation",
+      "PLATFORM_WIDE": "Plateforme entière",
+      "CORRELATION_ID": "Identifiant de corrélation",
+      "LAST_ATTEMPT": "Dernière tentative",
+      "PAYLOAD": "Contenu du message",
+      "NO_PAYLOAD": "Aucun contenu n’a été enregistré pour ce message.",
+      "LOADING": "Chargement du contenu…",
+      "LOAD_ERROR": "Impossible de charger le contenu de ce message. Réessayez.",
+      "EXCHANGE": "Tentatives de cet échange"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1619,10 +1647,12 @@
       "LOAD_FAILED": "Échec du chargement des annonces",
       "SAVE_FAILED": "Échec de l'enregistrement de l'annonce",
       "TEXT_REQUIRED": "Le texte de l'annonce est requis",
-      "UPDATED": "Annonce mise à jour"
+      "UPDATED": "Annonce mise à jour",
+      "TEXT_TOO_LONG": "Le texte de l’annonce ne peut pas dépasser {{ max }} caractères."
     },
     "CREATE_FIRST": "Créez votre première annonce.",
-    "NONE_YET": "Aucune annonce pour le moment."
+    "NONE_YET": "Aucune annonce pour le moment.",
+    "TEXT_LIMIT": "{{ count }} / {{ max }} caractères"
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -3852,7 +3882,7 @@
   },
   "COST_PANEL": {
     "TITLE": "Coûts par établissement",
-    "SUBTITLE": "Ce qui serait facturé à chaque établissement pour la période choisie. Le montant repose aujourd’hui sur l’activité enregistrée (événements d’audit) ; les colonnes journaux, supervision et stockage restent à zéro tant que ces mesures ne sont pas branchées.",
+    "SUBTITLE": "Ce qui serait facturé à chaque établissement pour la période choisie. Le montant est le nombre d’événements d’audit enregistrés pour l’établissement, multiplié par le tarif indiqué ci-dessous.",
     "FROM": "Du",
     "TO": "Au",
     "REFRESH": "Actualiser",
@@ -3865,7 +3895,13 @@
     "COL_SPLUNK": "Événements de journal",
     "COL_GRAFANA": "Séries de supervision",
     "COL_STORAGE_GIB": "Stockage (Gio)",
-    "COL_AMOUNT": "Montant refacturé"
+    "COL_AMOUNT": "Montant refacturé",
+    "EXPORT_CSV": "Exporter (CSV)",
+    "EXPORT_FILE": "couts-par-etablissement",
+    "PERIOD": "Période affichée : du {{ from }} au {{ to }}",
+    "RATE": "Tarif appliqué : {{ rate }} par événement enregistré (tarif provisoire, réglable par l’exploitant de la plateforme).",
+    "NO_RATE": "Aucun tarif n’est configuré : le montant n’est pas calculé. Demandez à l’exploitant de la plateforme de régler le tarif par événement.",
+    "TOTAL": "Total de la période"
   },
   "EMPI": {
     "MERGE_BUTTON": "Fusionner les doublons",
@@ -6043,7 +6079,8 @@
     "CONFIRM_ROTATE_KEY": "Renouveler cette clé ? La clé actuelle cesse de fonctionner immédiatement.",
     "CONFIRM_REVOKE_KEY": "Révoquer cette clé ? Le client perd l'accès immédiatement et définitivement.",
     "CONFIRM_REVOKE_ENDPOINT": "Révoquer ce point de terminaison ? Les envois s'arrêtent définitivement ; le journal reste consultable.",
-    "CONFIRM_ROTATE_SECRET": "Renouveler le secret de signature ? Le récepteur doit être mis à jour, sinon sa vérification échouera."
+    "CONFIRM_ROTATE_SECRET": "Renouveler le secret de signature ? Le récepteur doit être mis à jour, sinon sa vérification échouera.",
+    "LAST_ATTEMPT_AT": "Dernière tentative"
   },
   "ROI": {
     "TITLE": "Communication du dossier",
@@ -8412,7 +8449,8 @@
         "HOSPITAL_INCOMPATIBLE_RELEASE_PROTOCOL": "Réglage de libération incompatible sans médecin",
         "IMAGING_CATALOGUE_EXAM": "Examen du catalogue d'imagerie",
         "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »",
-        "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique"
+        "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique",
+        "PLATFORM_REQUEST": "Demande à la plateforme"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -10695,6 +10733,18 @@
       "readBackRequired": "Relecture requise",
       "readBackAt": "Relu le {{at}}",
       "followUp": "Demander un suivi"
+    },
+    "openPlatformItem": "Ouvrir",
+    "platformRequest": {
+      "open": "Écrire à la plateforme",
+      "title": "Demande à la plateforme",
+      "hint": "Votre demande arrive dans la boîte de réception des administrateurs de la plateforme, avec le nom de votre hôpital et le vôtre. Aucun SMS ni e-mail n’est envoyé.",
+      "subject": "Objet",
+      "message": "Votre message",
+      "send": "Envoyer",
+      "sending": "Envoi…",
+      "sent": "Demande envoyée aux administrateurs de la plateforme.",
+      "failed": "La demande n’a pas pu être envoyée. Réessayez."
     }
   },
   "common": {
