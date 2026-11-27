@@ -2103,6 +2103,8 @@
       "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
       "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})",
+      "WITNESS_CONFIRMED": "Témoin d’un mouvement de stupéfiant confirmé ({{method}})",
+      "WITNESS_CONFIRMATION_REFUSED": "Confirmation du témoin d’un mouvement de stupéfiant refusée ({{reason}})",
       "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré",
       "OBSTETRIC_RULE_SKIPPED_ULTRASOUND": "Règle obstétricale non appliquée pour une échographie en urgence",
       "OBSTETRIC_RULE_SKIPPED_REFERRAL": "Règle obstétricale non appliquée pour une orientation gynéco-obstétricale en urgence",
@@ -2178,6 +2180,7 @@
       "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main",
       "SENSITIVE_RESULT_RELEASED": "Résultat sensible ({{category}}) communiqué à un parent ou tuteur vérifié",
       "PROXY_RELATIONSHIP_VERIFIED": "Lien de parenté de l’accès famille vérifié ({{relationship}})",
+      "FAMILY_ACCESS_READ": "Dossier consulté par l’accès famille ({{section}})",
       "SENSITIVITY_RECOMMENDATION_APPLIED": "Catégorie sensible recommandée appliquée : de {{from}} à {{to}}",
       "MEDICATION_SENSITIVITY_CHANGED": "Catégorie sensible du médicament changée de {{from}} à {{to}}",
       "ADOLESCENT_AGE_SET": "Âge de confidentialité des adolescents fixé à {{age}} ans",
@@ -6954,6 +6957,7 @@
         "COPY_RELEASED": "Une copie a été délivrée",
         "IDENTITY_CHANGE": "Dossiers fusionnés",
         "RELEASED_TO_FAMILY": "Résultat communiqué à un parent ou tuteur",
+        "FAMILY_ACCESS": "Consulté par un proche (accès famille)",
         "UNKNOWN": "Accès enregistré"
       },
       "SUMMARY_EMERGENCY": "accès d'urgence à votre dossier",
@@ -8222,6 +8226,8 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "CONTROLLED_STOCK_WITNESS": "Confirmation du témoin de stupéfiant",
+        "FAMILY_ACCESS": "Accès famille",
         "PRICE_LIST_ITEM": "Article de la grille tarifaire",
         "BILLING": "Facturation",
         "SAFEGUARDING": "Revue de vigilance protection de l’enfance",
@@ -11353,6 +11359,18 @@
     "VERIFIED": "Vérifié",
     "WORK_QUEUE": "File d'attente",
     "WORK_QUEUE_LOAD_FAILED": "Échec du chargement de la file d'attente",
+    "QUEUE_SEARCH": "Rechercher un patient, un n° de dossier ou un médicament",
+    "QUEUE_SEARCH_CLEAR": "Effacer",
+    "QUEUE_SEARCH_EMPTY": "Aucune ordonnance de la file ne correspond à « {{term}} ».",
+    "WITNESS_CONFIRM_PASSWORD": "Mot de passe du témoin",
+    "WITNESS_CONFIRM_CODE": "Code de l’application d’authentification du témoin",
+    "WITNESS_CONFIRM_HINT": "Le témoin le saisit lui-même, ici. Sans sa confirmation, le mouvement n’est pas enregistré.",
+    "WITNESS_CONFIRM_SUBMIT": "Confirmer le témoin",
+    "WITNESS_CONFIRM_CONFIRMING": "Confirmation…",
+    "WITNESS_CONFIRM_CONFIRMED": "Témoin confirmé : {{name}} (valable jusqu’à {{time}})",
+    "WITNESS_CONFIRM_FAILED": "La confirmation du témoin n’a pas pu être vérifiée. Réessayez.",
+    "WITNESS_CONFIRM_UNAVAILABLE": "Ce témoin ne peut pas confirmer ici : son compte n’a ni mot de passe local ni application d’authentification. Choisissez un autre témoin.",
+    "WITNESS_CONFIRM_FALLBACK_HINT": "L’administrateur de l’hôpital est proposé parce qu’aucun autre pharmacien, vérificateur ou gestionnaire de magasin ne peut être témoin.",
     "MARK_READY": "Marquer prête à retirer",
     "READY_FOR_COLLECTION": "Prête à retirer",
     "READY_SINCE": "Prête depuis le {{date}}",
@@ -13910,6 +13928,7 @@
     "REQUESTS_TAB": "Demandes",
     "UNITS_TAB": "Unités",
     "NEW_REQUEST": "Demander du sang",
+    "HANDOVER_PATIENT_FAILED": "Le patient n’a pas pu être chargé. Choisissez-le dans le formulaire.",
     "RECEIVE_UNIT": "Réceptionner une unité",
     "NO_REQUESTS": "Aucune demande de transfusion",
     "NO_REQUESTS_HINT": "Les demandes émises par les cliniciens apparaissent ici.",
@@ -14827,8 +14846,15 @@
       "NUMBER": "Nº",
       "ISSUED_AT": "Émis le : {{date}}",
       "TOTAL_PAID": "Total payé",
+      "QUANTITY": "Quantité",
+      "UNIT_PRICE": "Prix unitaire",
+      "LINE_TOTAL": "Montant total",
+      "INSURER_SHARE": "Part de l’assureur",
+      "MRN": "N° de dossier",
+      "CASHIER": "Encaissé par",
+      "PHONE": "Tél.",
       "THANKS": "Merci de votre confiance. Conservez ce reçu pour vos dossiers médicaux.",
-      "SIGNATURE": "Signature du pharmacien :"
+      "SIGNATURE": "Signature et cachet :"
     }
   },
   "MY_PHARMACY_INVOICES": {
@@ -16123,7 +16149,13 @@
     "OPEN_REFILLS": "Ouvrir les demandes de renouvellement",
     "RELEASED_TO": "Communiqué à {{recipient}}",
     "RELEASED_TO_UNNAMED": "Communiqué à un parent ou tuteur",
-    "RESULT_CATEGORY": "Catégorie du résultat : {{category}}"
+    "RESULT_CATEGORY": "Catégorie du résultat : {{category}}",
+    "FAMILY_SECTION_READ": "Partie consultée : {{section}}",
+    "FAMILY_SECTION_APPOINTMENTS": "rendez-vous",
+    "FAMILY_SECTION_MEDICATIONS": "médicaments",
+    "FAMILY_SECTION_LAB_RESULTS": "résultats d’analyses",
+    "FAMILY_SECTION_BILLING": "factures",
+    "FAMILY_SECTION_RECORDS": "dossier médical et imagerie"
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Échographie",

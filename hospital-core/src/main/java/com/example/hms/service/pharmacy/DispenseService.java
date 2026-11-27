@@ -78,6 +78,13 @@ public interface DispenseService {
      */
     Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter);
 
+    /**
+     * QA D2319: the work queue of the caller's active hospital narrowed to a typed term (a patient's name,
+     * their record number at this hospital, or a medication), under the same claim filter. A blank term is
+     * the queue itself.
+     */
+    Page<WorkQueuePrescriptionDTO> searchWorkQueue(String term, Pageable pageable, QueueClaimFilter claimFilter);
+
     /** QA D2675 (r65): what a fill costs and how it is settled (paid, covered, « à facturer », unpaid). */
     com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO getPaymentStatus(UUID dispenseId);
 }

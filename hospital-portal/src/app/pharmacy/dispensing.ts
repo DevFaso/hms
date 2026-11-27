@@ -102,6 +102,9 @@ export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: strin
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** QA D2319: the pause after the last keystroke before the queue is searched. */
+const QUEUE_SEARCH_DELAY_MS = 300;
+
 /** G13: how often the queue refreshes while the tab is visible (claims change under us). */
 export const QUEUE_POLL_MS = 60_000;
 
@@ -183,10 +186,12 @@ export function sameDispenseUnit(
   return lot === '' || order === '' || lot === order;
 }
 
+import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.component';
 @Component({
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    WitnessConfirmComponent,
     CountUnitPipe,
     PatientSafetyHeaderComponent,
     SubmitGuardDirective,
@@ -241,6 +246,14 @@ export class DispensingComponent implements OnInit, OnDestroy {
   queueLoading = signal(false);
   queuePage = 0;
   queueTotalPages = 0;
+  /**
+   * QA D2319: the queue's search box (patient name, record number or medication). The server narrows the
+   * hospital's whole queue, so a prescription on a later page is found.
+   */
+  queueSearch = '';
+  /** The term the rows on screen answer; the empty-state wording depends on it. */
+  readonly queueSearchApplied = signal('');
+  private queueSearchDelay: ReturnType<typeof setTimeout> | undefined;
 
   // Roadmap row 4 / T-68 — offline-queue UI state. `pendingQueued` mirrors
   // OfflineDispenseQueueService.pending$ so the offline banner re-renders
@@ -500,18 +513,30 @@ export class DispensingComponent implements OnInit, OnDestroy {
     if (!quiet) this.queueLoading.set(true);
     const filter = this.currentQueueFilter();
     const pageNumber = this.queuePage;
+    const search = this.queueSearch.trim();
     // The poll, the visibility refresh, the post-claim reload, the settings
-    // reload and the filter change all land here: only the latest request's
+    // reload, the filter change and the search box all land here: only the latest request's
     // answer may be applied, never an older one that happens to arrive last.
     this.queueRequest?.unsubscribe();
-    this.queueRequest = this.svc.getDispenseWorkQueue(pageNumber, 20, filter).subscribe({
+    this.queueRequest = (
+      search
+        ? this.svc.getDispenseWorkQueue(pageNumber, 20, filter, undefined, search)
+        : this.svc.getDispenseWorkQueue(pageNumber, 20, filter)
+    ).subscribe({
       next: (res) => {
         this.queueLoading.set(false);
-        // Belt and braces: an answer for a filter or page no longer shown is dropped.
-        if (filter !== this.currentQueueFilter() || pageNumber !== this.queuePage) return;
+        // Belt and braces: an answer for a filter, page or term no longer shown is dropped.
+        if (
+          filter !== this.currentQueueFilter() ||
+          pageNumber !== this.queuePage ||
+          search !== this.queueSearch.trim()
+        ) {
+          return;
+        }
         const page = res?.data;
         this.workQueue.set(page?.content ?? []);
         this.queueTotalPages = page?.totalPages ?? 0;
+        this.queueSearchApplied.set(search);
         onLoaded?.();
       },
       error: () => {
@@ -520,6 +545,25 @@ export class DispensingComponent implements OnInit, OnDestroy {
         onFailed?.();
       },
     });
+  }
+
+  /** QA D2319: a typed term searches from the first page, once the typing pauses. */
+  onQueueSearchInput(): void {
+    clearTimeout(this.queueSearchDelay);
+    this.queueSearchDelay = setTimeout(() => this.runQueueSearch(), QUEUE_SEARCH_DELAY_MS);
+  }
+
+  /** Enter in the box, or the pause after typing: the queue is read again for the term, from page 1. */
+  runQueueSearch(): void {
+    clearTimeout(this.queueSearchDelay);
+    this.queuePage = 0;
+    this.loadWorkQueue();
+  }
+
+  clearQueueSearch(): void {
+    if (!this.queueSearch) return;
+    this.queueSearch = '';
+    this.runQueueSearch();
   }
 
   /** The filter the queue is listed by: the chosen one when claims are on, else ALL. */

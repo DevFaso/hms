@@ -725,6 +725,73 @@ class StockTransactionServiceImplTest {
             assertThat(candidates.get(0).displayName()).isEqualTo("Awa Traore");
         }
 
+        @Test
+        @DisplayName("QA D2679: the administrator is listed only where no pharmacy colleague can witness, and as the fallback")
+        void administratorIsListedOnlyAsTheFallback() {
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            com.example.hms.model.Role pharmacist = new com.example.hms.model.Role();
+            pharmacist.setCode("ROLE_PHARMACIST");
+            com.example.hms.model.Role admin = new com.example.hms.model.Role();
+            admin.setCode("ROLE_HOSPITAL_ADMIN");
+            User colleague = new User();
+            colleague.setId(witnessId);
+            User administrator = new User();
+            administrator.setId(UUID.randomUUID());
+
+            // One pharmacist (the caller) and the administrator: the administrator, flagged as the fallback.
+            when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
+                    assignment(user, pharmacist, true), assignment(administrator, admin, true)));
+            var alone = service.listWitnessCandidates();
+            assertThat(alone).extracting(c -> c.userId()).containsExactly(administrator.getId());
+            assertThat(alone.get(0).fallback()).isTrue();
+            assertThat(alone.get(0).confirmationMethod()).isEqualTo(ControlledWitnessConfirmation.METHOD_PASSWORD);
+
+            // A second pharmacist: the colleague, and the administrator is no longer offered.
+            when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
+                    assignment(user, pharmacist, true), assignment(colleague, pharmacist, true),
+                    assignment(administrator, admin, true)));
+            var withColleague = service.listWitnessCandidates();
+            assertThat(withColleague).extracting(c -> c.userId()).containsExactly(witnessId);
+            assertThat(withColleague.get(0).fallback()).isFalse();
+        }
+
+        @Test
+        @DisplayName("QA D2679: the witness confirms for the caller at the active hospital, and the answer says until when")
+        void witnessConfirms() {
+            ControlledWitnessConfirmation confirmation = org.mockito.Mockito.mock(ControlledWitnessConfirmation.class);
+            ControlledStockWitness rule = new ControlledStockWitness(assignmentRepository, userRepository);
+            rule.setConfirmation(confirmation);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "controlledStockWitness", rule);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            User witness = new User();
+            witness.setId(witnessId);
+            witness.setFirstName("Awa");
+            witness.setLastName("Traore");
+            when(userRepository.findById(witnessId)).thenReturn(Optional.of(witness));
+            when(assignmentRepository.existsActiveWitness(
+                    witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(true);
+            java.time.LocalDateTime now = java.time.LocalDateTime.of(2026, 11, 26, 9, 0);
+            when(confirmation.confirm(witness, user, hospitalId, "s3cret")).thenReturn(
+                    com.example.hms.model.pharmacy.StockWitnessConfirmation.builder()
+                            .witnessUserId(witnessId).performedByUserId(userId).hospitalId(hospitalId)
+                            .method(ControlledWitnessConfirmation.METHOD_PASSWORD)
+                            .confirmedAt(now).expiresAt(now.plusMinutes(5)).build());
+
+            var answer = service.confirmWitness(new com.example.hms.payload.dto.pharmacy.WitnessConfirmationRequestDTO(
+                    witnessId, "s3cret"));
+
+            assertThat(answer.witnessedBy()).isEqualTo(witnessId);
+            assertThat(answer.displayName()).isEqualTo("Awa Traore");
+            assertThat(answer.method()).isEqualTo(ControlledWitnessConfirmation.METHOD_PASSWORD);
+            assertThat(answer.expiresAt()).isEqualTo(now.plusMinutes(5));
+            // The request never prints the secret.
+            assertThat(new com.example.hms.payload.dto.pharmacy.WitnessConfirmationRequestDTO(witnessId, "s3cret")
+                    .toString()).doesNotContain("s3cret");
+        }
+
         private com.example.hms.model.UserRoleHospitalAssignment assignment(
                 User u, com.example.hms.model.Role role, boolean active) {
             com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();

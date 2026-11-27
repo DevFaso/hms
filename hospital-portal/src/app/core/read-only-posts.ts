@@ -42,6 +42,7 @@ export const READ_ONLY_POST_ROUTES: readonly string[] = [
   '/patients/term-search',
   '/patients/{id}/doctor-record',
   '/patients/{id}/doctor-timeline',
+  '/pharmacy/dispense/work-queue/term-search',
   '/prenatal/schedule',
   '/prescriptions/term-search',
   '/reception/patients/duplicate-candidates',

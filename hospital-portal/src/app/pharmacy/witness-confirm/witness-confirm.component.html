@@ -1,0 +1,66 @@
+@if (witnessId()) {
+  <div class="field witness-confirm" data-testid="witness-confirm" data-submit-scope>
+    @if (candidate()?.fallback) {
+      <small class="field-hint" data-testid="witness-fallback-hint">{{
+        'PHARMACY.WITNESS_CONFIRM_FALLBACK_HINT' | translate
+      }}</small>
+    }
+    @if (unavailable()) {
+      <p class="form-error" role="alert" data-testid="witness-confirm-unavailable">
+        {{ 'PHARMACY.WITNESS_CONFIRM_UNAVAILABLE' | translate }}
+      </p>
+    } @else if (standing(); as confirmation) {
+      <p class="witness-confirmed" role="status" data-testid="witness-confirmed">
+        <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+        {{
+          'PHARMACY.WITNESS_CONFIRM_CONFIRMED'
+            | translate
+              : {
+                  name: confirmation.displayName || candidate()?.displayName || '',
+                  time: (confirmation.expiresAt | serverTime | date: 'shortTime'),
+                }
+        }}
+      </p>
+    } @else {
+      <label [for]="fieldId()">
+        {{
+          (usesCode() ? 'PHARMACY.WITNESS_CONFIRM_CODE' : 'PHARMACY.WITNESS_CONFIRM_PASSWORD')
+            | translate
+        }}
+        *
+      </label>
+      <div class="witness-confirm-row">
+        <input
+          [id]="fieldId()"
+          [name]="fieldId()"
+          data-server-field="secret"
+          [type]="usesCode() ? 'text' : 'password'"
+          [attr.inputmode]="usesCode() ? 'numeric' : null"
+          autocomplete="off"
+          required
+          maxlength="256"
+          [value]="secret()"
+          (input)="secret.set($any($event.target).value)"
+          (keydown.enter)="$event.preventDefault(); confirm()"
+        />
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="witness-confirm-submit"
+          [disabled]="confirming()"
+          appSubmitGuard
+          submitGuardRequired
+          (click)="confirm()"
+        >
+          {{
+            (confirming()
+              ? 'PHARMACY.WITNESS_CONFIRM_CONFIRMING'
+              : 'PHARMACY.WITNESS_CONFIRM_SUBMIT'
+            ) | translate
+          }}
+        </button>
+      </div>
+      <small class="field-hint">{{ 'PHARMACY.WITNESS_CONFIRM_HINT' | translate }}</small>
+    }
+  </div>
+}

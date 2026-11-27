@@ -74,4 +74,11 @@ public class AccessLogEntryDTO {
     /** The category of the released result, never its value. */
     @Schema(description = "Category of the released result, never its value.", example = "HIV")
     private String resultCategory;
+
+    /**
+     * QA D3451 (proxy-read part): for a read through family access ({@code FAMILY_ACCESS}), which part of the
+     * record was opened (APPOINTMENTS, MEDICATIONS, LAB_RESULTS, BILLING, RECORDS). Null on every other row.
+     */
+    @Schema(description = "Part of the record a family-access holder opened; null on other rows.", example = "MEDICATIONS")
+    private String accessedSection;
 }

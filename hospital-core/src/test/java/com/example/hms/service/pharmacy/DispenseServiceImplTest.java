@@ -391,6 +391,46 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D2319: a typed term searches the caller's hospital queue, accents folded, and the rows carry their claims")
+        void searchNarrowsTheSameQueue() {
+            Pageable pageable = PageRequest.of(0, 20);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.searchWorkQueue(eq(hospitalId), any(), eq("%kabore%"), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription)));
+            when(queueClaimService.activeClaimsFor(List.of(prescription)))
+                    .thenReturn(java.util.Map.of(prescriptionId, claimDto(true)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows = service
+                    .searchWorkQueue("  Kaboré ", pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent();
+
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).getClaim().isMine()).isTrue();
+            verify(prescriptionRepository, never()).findWorkQueue(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D2319: the search keeps the MINE filter, and a blank term is the queue itself")
+        void searchKeepsTheClaimFilter() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime activeAfter = java.time.LocalDateTime.now(FIXED_CLOCK).minusMinutes(15);
+            when(queueClaimService.isEnabled()).thenReturn(true);
+            when(queueClaimService.activeAfter()).thenReturn(activeAfter);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.searchWorkQueueClaimedBy(eq(hospitalId), any(), eq("%chw-000123%"), eq(userId),
+                    eq(activeAfter), eq(pageable))).thenReturn(new PageImpl<>(List.of(prescription)));
+            when(prescriptionRepository.findWorkQueueClaimedBy(eq(hospitalId), any(), eq(userId), eq(activeAfter),
+                    eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+
+            assertThat(service.searchWorkQueue("CHW-000123", pageable, com.example.hms.enums.QueueClaimFilter.MINE)
+                    .getContent()).hasSize(1);
+            assertThat(service.searchWorkQueue("   ", pageable, com.example.hms.enums.QueueClaimFilter.MINE)
+                    .getContent()).isEmpty();
+            verify(prescriptionRepository).findWorkQueueClaimedBy(eq(hospitalId), any(), eq(userId), eq(activeAfter),
+                    eq(pageable));
+        }
+
+        @Test
         @DisplayName("AC-13: MINE pages the caller's active claims, with the clock's activeAfter")
         void mineUsesItsOwnQuery() {
             Pageable pageable = PageRequest.of(0, 20);

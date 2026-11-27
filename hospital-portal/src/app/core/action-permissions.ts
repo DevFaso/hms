@@ -34,6 +34,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'RoiRecordExportController#download',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
+  // QA D3220: « Demander du sang » on the labour card, the post-partum watch and the prescription dialog.
+  transfusionRequestCreate: {
+    endpoint: 'TransfusionController#createRequest',
+    roles: ['ROLE_DOCTOR', 'ROLE_SURGEON', 'ROLE_MIDWIFE'],
+  },
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],

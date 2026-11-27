@@ -123,10 +123,12 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   'PHARMACY.WITNESS_REQUIRED': 'txWitness',
 };
 
+import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.component';
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    WitnessConfirmComponent,
     FormControlStyleDirective,
     CountUnitPipe,
     FocusOnRenderDirective,

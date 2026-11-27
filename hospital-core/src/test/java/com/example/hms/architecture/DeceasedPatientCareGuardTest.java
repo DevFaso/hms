@@ -145,6 +145,7 @@ class DeceasedPatientCareGuardTest {
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation
         Consultation#acknowledgeConsultation,updateConsultation,completeConsultation,declineConsultation,cancelConsultation,assignConsultation,reassignConsultation | closes or documents a request made before the death
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
+        Dispense#searchWorkQueue | a read over POST: the queue's typed search term travels in the body (QA D2319)
         Dispense#cancelReady,cancelDispense | hands stock back
         Encounter#update,delete,completeExamination,markReadyForDischarge,checkOut,closeUnseen | late documentation and visit close-out
         Encounter#upsertEncounterNote,addEncounterNoteAddendum,signEncounterNote,cosignEncounterNote | notes about care before the death, with their real time

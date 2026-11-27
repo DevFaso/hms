@@ -64,6 +64,7 @@ import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconcilia
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
+import { WitnessConfirmComponent } from '../pharmacy/witness-confirm/witness-confirm.component';
 import { CheckinDialogComponent } from '../reception/checkin-dialog/checkin-dialog.component';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { EmpiCandidatesPanelComponent } from '../reception/empi-candidates-panel/empi-candidates-panel.component';
@@ -362,6 +363,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     type: StockAdjustmentComponent,
   },
   { name: 'StockRoutingComponent', file: 'pharmacy/stock-routing', type: StockRoutingComponent },
+  {
+    name: 'WitnessConfirmComponent',
+    file: 'pharmacy/witness-confirm/witness-confirm.component',
+    type: WitnessConfirmComponent,
+  },
   {
     name: 'CheckinDialogComponent',
     file: 'reception/checkin-dialog/checkin-dialog.component',

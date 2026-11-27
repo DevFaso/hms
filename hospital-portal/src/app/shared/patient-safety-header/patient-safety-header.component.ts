@@ -23,6 +23,7 @@ import { KeyLabelPipe } from '../pipes/key-label.pipe';
 import { ServerTimePipe } from '../pipes/server-time.pipe';
 import { serverDateOrInstant } from '../date-utils';
 import { BloodGroupStatusComponent } from '../blood-group-status/blood-group-status.component';
+import { BloodRequestLinkComponent } from '../blood-request-link/blood-request-link.component';
 
 type LoadState = 'loading' | 'ready' | 'error' | 'hidden';
 
@@ -53,6 +54,7 @@ const SEVERE: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE_THREATENIN
     KeyLabelPipe,
     ServerTimePipe,
     BloodGroupStatusComponent,
+    BloodRequestLinkComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-safety-header.component.html',
@@ -63,6 +65,11 @@ export class PatientSafetyHeaderComponent implements OnChanges, OnDestroy {
   readonly hospitalId = input<string | null | undefined>(null);
   /** Hide the name line where the host already shows the patient's name prominently. */
   readonly showName = input<boolean>(true);
+  /**
+   * QA D3220: « Demander du sang » beside the blood group, on the cards where bleeding is watched (labour and
+   * delivery, post-partum) and where the prescriber writes orders. Off on the other screens.
+   */
+  readonly bloodRequest = input<boolean>(false);
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly summary = signal<PatientStoryboard | null>(null);

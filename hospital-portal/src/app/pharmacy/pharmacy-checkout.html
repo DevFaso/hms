@@ -189,6 +189,20 @@
   @if (receipt(); as r) {
     <section class="receipt">
       <header class="receipt-header">
+        <!-- QA D2310: the pharmacy the receipt comes from, with where to find it. -->
+        @if (r.receipt?.pharmacyName || dispense()?.pharmacyName; as pharmacyName) {
+          <p class="receipt-pharmacy" data-testid="receipt-pharmacy">
+            <strong>{{ pharmacyName }}</strong>
+            @if (r.receipt?.pharmacyAddress) {
+              <br />{{ r.receipt?.pharmacyAddress }}
+            }
+            @if (r.receipt?.pharmacyPhone) {
+              <br />{{ 'PHARMACY_CHECKOUT.RECEIPT.PHONE' | translate
+              }}{{ 'COMMON.COLON' | translate }}
+              {{ r.receipt?.pharmacyPhone | appPhone }}
+            }
+          </p>
+        }
         <h1>{{ 'PHARMACY_CHECKOUT.RECEIPT.TITLE' | translate }}</h1>
         <p class="receipt-meta">
           <!-- QA D1032: the server's receipt number (CODE-PH-YYYY-000001), never a slice of the id -->
@@ -202,11 +216,34 @@
       <div class="receipt-body">
         <dl>
           <dt>{{ 'PHARMACY_CHECKOUT.MEDICATION' | translate }}</dt>
-          <dd>{{ dispense()?.medicationName }}</dd>
+          <dd>{{ r.receipt?.medicationName || dispense()?.medicationName }}</dd>
+          <!-- QA D2310: how many, at what price each, and what the line comes to. -->
+          @if (receiptQuantity(r); as qty) {
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.QUANTITY' | translate }}</dt>
+            <dd data-testid="receipt-quantity">
+              {{ qty | countUnit: r.receipt?.unit || dispense()?.unit }}
+            </dd>
+          }
+          @if (r.receipt?.unitPrice !== null && r.receipt?.unitPrice !== undefined) {
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.UNIT_PRICE' | translate }}</dt>
+            <dd data-testid="receipt-unit-price">{{ r.receipt?.unitPrice | cfa: r.currency }}</dd>
+          }
+          @if (r.receipt?.insurerShare) {
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.LINE_TOTAL' | translate }}</dt>
+            <dd data-testid="receipt-line-total">{{ r.receipt?.lineTotal | cfa: r.currency }}</dd>
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.INSURER_SHARE' | translate }}</dt>
+            <dd data-testid="receipt-insurer-share">
+              {{ r.receipt?.insurerShare | cfa: r.currency }}
+            </dd>
+          }
           <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
           <dd>
             {{ dispense()?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
           </dd>
+          @if (r.receipt?.patientMrn) {
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.MRN' | translate }}</dt>
+            <dd data-testid="receipt-mrn">{{ r.receipt?.patientMrn }}</dd>
+          }
           <dt>{{ 'PHARMACY_CHECKOUT.PAYMENT_METHOD' | translate }}</dt>
           <dd>
             {{ methodLabel(r.paymentMethod) }}
@@ -221,6 +258,11 @@
           }
           @if (r.referenceNumber) {
             <dd>{{ r.referenceNumber }}</dd>
+          }
+          <!-- QA D2310: who took the money (the cashier of record; not always the pharmacist). -->
+          @if (r.receipt?.cashierName) {
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.CASHIER' | translate }}</dt>
+            <dd data-testid="receipt-cashier">{{ r.receipt?.cashierName }}</dd>
           }
         </dl>
         <div class="total-row">

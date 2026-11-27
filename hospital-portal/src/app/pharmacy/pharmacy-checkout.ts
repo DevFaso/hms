@@ -69,6 +69,7 @@ export const PHARMACY_CHECKOUT_METHODS: readonly {
   { value: 'MOBILE_MONEY', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.MOBILE_MONEY' },
 ];
 
+import { PhonePipe } from '../shared/pipes/phone.pipe';
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
@@ -80,6 +81,7 @@ export const PHARMACY_CHECKOUT_METHODS: readonly {
     DatePipe,
     CfaPipe,
     CountUnitPipe,
+    PhonePipe,
   ],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -323,6 +325,12 @@ export class PharmacyCheckoutComponent implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  /** QA D2310: the quantity the receipt prints: the server's line, else the dispense on screen. */
+  receiptQuantity(receipt: PharmacyPaymentResponse): number | null {
+    const quantity = receipt.receipt?.quantity ?? this.dispense()?.quantityDispensed ?? null;
+    return quantity !== null && quantity > 0 ? quantity : null;
   }
 
   printReceipt(): void {

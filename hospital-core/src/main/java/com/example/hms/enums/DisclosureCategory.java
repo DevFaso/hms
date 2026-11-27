@@ -57,10 +57,20 @@ public enum DisclosureCategory {
      * (policy 2026-11-20: a minor's HIV result). The patient is told who released it, to whom, when and which
      * category of result, never the value. A disclosure outside the treating team.
      */
-    RELEASED_TO_FAMILY;
+    RELEASED_TO_FAMILY,
+
+    /**
+     * QA D3451 (proxy-read part, r77): the holder of a family-access grant (a parent, a guardian, a relative
+     * the patient authorised) read part of the record. Not the care team: the patient is told who read, how
+     * they are related and which part, never what it held.
+     */
+    FAMILY_ACCESS;
 
     /** Entity type stamped by {@code EligibilityServiceImpl} on its audit rows. */
     private static final String ELIGIBILITY_ENTITY = "EligibilityCheck";
+
+    /** Entity type stamped by {@code ProxyReadAudit} on a read through a family-access grant. */
+    private static final String FAMILY_ACCESS_ENTITY = "FamilyAccess";
 
     /**
      * Classify one audit row, or {@code null} if it is not something a
@@ -81,11 +91,17 @@ public enum DisclosureCategory {
             case PATIENT_EXPORT, DATA_EXPORT -> COPY_RELEASED;
             case PATIENT_MERGE -> IDENTITY_CHANGE;
             case SENSITIVE_RESULT_RELEASED_TO_PROXY -> RELEASED_TO_FAMILY;
-            case PATIENT_ACCESS -> ELIGIBILITY_ENTITY.equalsIgnoreCase(entityType)
-                ? INSURANCE
-                : TREATMENT_ACCESS;
+            case PATIENT_ACCESS -> patientAccess(entityType);
             default -> null;
         };
+    }
+
+    /** {@code PATIENT_ACCESS} is three different events to a patient; the emitter's entity type says which. */
+    private static DisclosureCategory patientAccess(String entityType) {
+        if (ELIGIBILITY_ENTITY.equalsIgnoreCase(entityType)) {
+            return INSURANCE;
+        }
+        return FAMILY_ACCESS_ENTITY.equalsIgnoreCase(entityType) ? FAMILY_ACCESS : TREATMENT_ACCESS;
     }
 
     /**
@@ -123,6 +139,7 @@ public enum DisclosureCategory {
         return this == SHARED_WITH_PROVIDER
             || this == INSURANCE
             || this == COPY_RELEASED
-            || this == RELEASED_TO_FAMILY;
+            || this == RELEASED_TO_FAMILY
+            || this == FAMILY_ACCESS;
     }
 }

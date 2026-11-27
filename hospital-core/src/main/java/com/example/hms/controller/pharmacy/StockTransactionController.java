@@ -83,6 +83,24 @@ public class StockTransactionController {
         return ResponseEntity.ok(ApiResponseWrapper.success(stockTransactionService.listWitnessCandidates()));
     }
 
+    /**
+     * QA D2679: the witness confirms, with their own password or authenticator code, that they are present for
+     * the caller's controlled-drug movements. Open to whoever may record such a movement (a fill, a receipt, a
+     * destruction, an adjustment); the witness's eligibility and factor are the service's checks.
+     */
+    @PostMapping("/witness-confirmations")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Confirm the witness of a controlled-drug movement",
+            description = "The witness's own password, or the code of their authenticator when they have one. "
+                    + "The confirmation stands for the caller's controlled movements at the active hospital for "
+                    + "a few minutes; a controlled movement naming a witness who has not confirmed is refused.")
+    @ApiResponse(responseCode = "201", description = "Witness confirmed")
+    @ApiResponse(responseCode = "400", description = "Not an eligible witness, or the password or code was refused")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.pharmacy.WitnessConfirmationResponseDTO>>
+            confirmWitness(@Valid @RequestBody com.example.hms.payload.dto.pharmacy.WitnessConfirmationRequestDTO dto) {
+        return ResponseEntity.status(201).body(ApiResponseWrapper.success(stockTransactionService.confirmWitness(dto)));
+    }
+
     @GetMapping("/returnable-transfers")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Paired transfers with stock available to return")

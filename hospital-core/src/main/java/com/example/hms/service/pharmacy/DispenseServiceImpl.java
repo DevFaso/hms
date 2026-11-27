@@ -2047,7 +2047,24 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Page<Prescription> page = workQueuePage(hospitalId, claimFilter, pageable);
+        return toWorkQueueRows(workQueuePage(hospitalId, claimFilter, null, pageable), hospitalId);
+    }
+
+    /**
+     * QA D2319: the queue held 34 rows in pages of 20, oldest first, with no way to find a patient: today's
+     * prescription was on page 2. The search reads the SAME queue (hospital, statuses, ended-stay rule, claim
+     * filter) narrowed in the database, so a match on any page is found and the rows carry the same claims,
+     * allergy alerts and attention reasons as the list.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<WorkQueuePrescriptionDTO> searchWorkQueue(String term, Pageable pageable, QueueClaimFilter claimFilter) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        String pattern = com.example.hms.utility.PatientMatchKeys.nameContainsPattern(term);
+        return toWorkQueueRows(workQueuePage(hospitalId, claimFilter, pattern, pageable), hospitalId);
+    }
+
+    private Page<WorkQueuePrescriptionDTO> toWorkQueueRows(Page<Prescription> page, UUID hospitalId) {
         List<Prescription> rows = page.getContent();
         Map<UUID, WorkQueueClaimDTO> claims = queueClaimService.activeClaimsFor(rows);
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(rows);
@@ -2089,7 +2106,8 @@ public class DispenseServiceImpl implements DispenseService {
      * own page and count queries; ALL (or claims switched off, or no caller
      * id for MINE) is today's list.
      */
-    private Page<Prescription> workQueuePage(UUID hospitalId, QueueClaimFilter claimFilter, Pageable pageable) {
+    private Page<Prescription> workQueuePage(UUID hospitalId, QueueClaimFilter claimFilter, String searchPattern,
+                                             Pageable pageable) {
         List<PrescriptionStatus> statuses = List.copyOf(WORK_QUEUE_STATUSES);
         QueueClaimFilter filter = claimFilter != null && queueClaimService.isEnabled()
                 ? claimFilter : QueueClaimFilter.ALL;
@@ -2099,12 +2117,20 @@ public class DispenseServiceImpl implements DispenseService {
                 if (callerId == null) {
                     throw new BusinessException("pharmacy.currentUserUnknown");
                 }
-                yield prescriptionRepository.findWorkQueueClaimedBy(hospitalId, statuses, callerId,
-                        queueClaimService.activeAfter(), pageable);
+                yield searchPattern == null
+                        ? prescriptionRepository.findWorkQueueClaimedBy(hospitalId, statuses, callerId,
+                                queueClaimService.activeAfter(), pageable)
+                        : prescriptionRepository.searchWorkQueueClaimedBy(hospitalId, statuses, searchPattern, callerId,
+                                queueClaimService.activeAfter(), pageable);
             }
-            case UNCLAIMED -> prescriptionRepository.findWorkQueueUnclaimed(hospitalId, statuses,
-                    queueClaimService.activeAfter(), pageable);
-            case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
+            case UNCLAIMED -> searchPattern == null
+                    ? prescriptionRepository.findWorkQueueUnclaimed(hospitalId, statuses,
+                            queueClaimService.activeAfter(), pageable)
+                    : prescriptionRepository.searchWorkQueueUnclaimed(hospitalId, statuses, searchPattern,
+                            queueClaimService.activeAfter(), pageable);
+            case ALL -> searchPattern == null
+                    ? prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable)
+                    : prescriptionRepository.searchWorkQueue(hospitalId, statuses, searchPattern, pageable);
         };
     }
 
