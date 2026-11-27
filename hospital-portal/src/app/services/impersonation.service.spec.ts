@@ -8,10 +8,6 @@ import { ImpersonationService } from './impersonation.service';
 import { AuthService, LoginUserProfile, SessionBootstrapResponse } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
-const ORIGINAL_TOKEN_KEY = 'auth_token_pre_impersonation';
-const ORIGINAL_REMEMBER_KEY = 'auth_remember_pre_impersonation';
-const ORIGINAL_PROFILE_KEY = 'auth_profile_pre_impersonation';
-
 /**
  * Minimal RS256-shaped JWT: header.payload.signature, all base64url. The
  * payload is what {@link ImpersonationService} decodes to hydrate roles
@@ -53,12 +49,11 @@ describe('ImpersonationService', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let roleContext: jasmine.SpyObj<RoleContextService>;
   let storedToken: string | null;
-  let rememberFlag: boolean;
   let storedProfile: LoginUserProfile | null;
+  let held: { token: string | null; profile: LoginUserProfile | null };
 
   beforeEach(() => {
     storedToken = 'super-admin.jwt';
-    rememberFlag = true;
     storedProfile = {
       id: 'super-id',
       username: 'super.admin',
@@ -68,25 +63,31 @@ describe('ImpersonationService', () => {
       hospitalIds: ['h1'],
       primaryHospitalId: 'h1',
     };
+    held = { token: null, profile: null };
     auth = jasmine.createSpyObj<AuthService>('AuthService', [
       'getToken',
       'setToken',
       'clearToken',
-      'isTokenRemembered',
       'getUserProfile',
       'setUserProfile',
       'getRoles',
       'sessionBootstrap',
+      'holdOriginalSession',
+      'releaseOriginalSession',
     ]);
+    auth.holdOriginalSession.and.callFake((token, profile) => (held = { token, profile }));
+    auth.releaseOriginalSession.and.callFake(() => {
+      const released = held;
+      held = { token: null, profile: null };
+      return released;
+    });
     auth.getToken.and.callFake(() => storedToken);
-    auth.setToken.and.callFake((token: string, remember = true) => {
+    auth.setToken.and.callFake((token: string) => {
       storedToken = token;
-      rememberFlag = remember;
     });
     auth.clearToken.and.callFake(() => {
       storedToken = null;
     });
-    auth.isTokenRemembered.and.callFake(() => rememberFlag);
     auth.getUserProfile.and.callFake(() => storedProfile);
     auth.setUserProfile.and.callFake((p: LoginUserProfile) => {
       storedProfile = p;
@@ -111,10 +112,6 @@ describe('ImpersonationService', () => {
       value: null,
     });
 
-    [ORIGINAL_TOKEN_KEY, ORIGINAL_REMEMBER_KEY, ORIGINAL_PROFILE_KEY].forEach((k) =>
-      sessionStorage.removeItem(k),
-    );
-
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withXhr()),
@@ -132,13 +129,13 @@ describe('ImpersonationService', () => {
     // MVP-4b: tear down any countdown interval the test left armed so it
     // doesn't fire after the spec returns and pollute the next one.
     (service as unknown as { stopCountdown(): void }).stopCountdown();
-    [ORIGINAL_TOKEN_KEY, ORIGINAL_REMEMBER_KEY, ORIGINAL_PROFILE_KEY].forEach((k) =>
-      sessionStorage.removeItem(k),
-    );
   });
 
-  it('start() preserves original token + remember + profile, then swaps in impersonation token', () => {
-    rememberFlag = true; // simulate a remember-me login
+  function snapshot(token: string | null, profile: LoginUserProfile | null = null): void {
+    held = { token, profile };
+  }
+
+  it('start() preserves original token + profile, then swaps in impersonation token', () => {
     const targetJwt = fakeJwt({
       sub: 'nurse.alice',
       roles: ['ROLE_NURSE'],
@@ -163,14 +160,16 @@ describe('ImpersonationService', () => {
       targetUsername: 'nurse.alice',
     });
 
-    // Original session preserved with the right `remember` flag (closes #5).
-    expect(sessionStorage.getItem(ORIGINAL_TOKEN_KEY)).toBe('super-admin.jwt');
-    expect(sessionStorage.getItem(ORIGINAL_REMEMBER_KEY)).toBe('1');
-    expect(sessionStorage.getItem(ORIGINAL_PROFILE_KEY)).toContain('super.admin');
+    // Original session preserved in memory, never in web storage.
+    expect(held.token).toBe('super-admin.jwt');
+    expect(held.profile?.username).toBe('super.admin');
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let i = 0; i < storage.length; i++) {
+        expect(storage.getItem(storage.key(i)!)).not.toContain('super-admin.jwt');
+      }
+    }
 
-    // Impersonation token always installed in sessionStorage (remember=false)
-    // and AuthService.setToken now clears the OTHER storage (closes #2).
-    expect(auth.setToken).toHaveBeenCalledWith(targetJwt, false);
+    expect(auth.setToken).toHaveBeenCalledWith(targetJwt);
 
     // Role context hydrated from the impersonation JWT (closes #1, #3).
     expect(roleContext.setRoles).toHaveBeenCalledWith(['ROLE_NURSE']);
@@ -184,35 +183,29 @@ describe('ImpersonationService', () => {
     expect(service.isActive()).toBeTrue();
   });
 
-  it('stop() restores original token, remember flag, profile, and role context', () => {
-    sessionStorage.setItem(ORIGINAL_TOKEN_KEY, 'super-admin.jwt');
-    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, '1');
-    sessionStorage.setItem(
-      ORIGINAL_PROFILE_KEY,
-      JSON.stringify({
-        id: 'super-id',
-        username: 'super.admin',
-        email: 'super@example.com',
-        roles: ['ROLE_SUPER_ADMIN'],
-        active: true,
-        hospitalIds: ['h1'],
-        primaryHospitalId: 'h1',
-      }),
-    );
+  it('stop() restores original token, profile, and role context', () => {
+    snapshot('super-admin.jwt', {
+      id: 'super-id',
+      username: 'super.admin',
+      email: 'super@example.com',
+      roles: ['ROLE_SUPER_ADMIN'],
+      active: true,
+      hospitalIds: ['h1'],
+      primaryHospitalId: 'h1',
+    });
     storedToken = 'imp.jwt';
 
     service.stop().subscribe();
     http.expectOne('/super-admin/impersonation/stop').flush({ impersonating: false });
 
-    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt', true);
+    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt');
     expect(roleContext.setRoles).toHaveBeenCalledWith(['ROLE_SUPER_ADMIN']);
     expect(roleContext.setPermittedHospitalIds).toHaveBeenCalledWith(['h1']);
     expect(storedProfile?.username).toBe('super.admin');
 
     // Snapshots cleared so a future impersonation re-snapshots cleanly.
-    expect(sessionStorage.getItem(ORIGINAL_TOKEN_KEY)).toBeNull();
-    expect(sessionStorage.getItem(ORIGINAL_REMEMBER_KEY)).toBeNull();
-    expect(sessionStorage.getItem(ORIGINAL_PROFILE_KEY)).toBeNull();
+    expect(held.token).toBeNull();
+    expect(held.profile).toBeNull();
 
     expect(service.active()?.impersonating).toBeFalse();
     expect(service.isActive()).toBeFalse();
@@ -221,19 +214,14 @@ describe('ImpersonationService', () => {
   it('D1973: a legacy profile snapshot cannot replace the restored token roles while bootstrap is pending', () => {
     const bootstrap = new Subject<SessionBootstrapResponse>();
     auth.sessionBootstrap.and.returnValue(bootstrap);
-    sessionStorage.setItem(ORIGINAL_TOKEN_KEY, fakeJwt({ roles: ['ROLE_SUPER_ADMIN'] }));
-    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, '1');
-    sessionStorage.setItem(
-      ORIGINAL_PROFILE_KEY,
-      JSON.stringify({
-        id: 'super-id',
-        username: 'synthetic.super',
-        email: 'synthetic@example.test',
-        roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
-        hospitalIds: ['h1'],
-        primaryHospitalId: 'h1',
-      }),
-    );
+    snapshot(fakeJwt({ roles: ['ROLE_SUPER_ADMIN'] }), {
+      id: 'super-id',
+      username: 'synthetic.super',
+      email: 'synthetic@example.test',
+      roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+      hospitalIds: ['h1'],
+      primaryHospitalId: 'h1',
+    } as LoginUserProfile);
     storedToken = fakeJwt({ roles: ['ROLE_NURSE'] });
     service.stop().subscribe();
     http.expectOne('/super-admin/impersonation/stop').flush({ impersonating: false });
@@ -242,25 +230,12 @@ describe('ImpersonationService', () => {
     bootstrap.complete();
   });
 
-  it('stop() preserves a session-only login by restoring with remember=false (closes #5)', () => {
-    sessionStorage.setItem(ORIGINAL_TOKEN_KEY, 'super-admin.jwt');
-    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, '0'); // session-only original
-    storedToken = 'imp.jwt';
-
-    service.stop().subscribe();
-    http.expectOne('/super-admin/impersonation/stop').flush({ impersonating: false });
-
-    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt', false);
-    expect(rememberFlag).toBeFalse();
-  });
-
   it('forceStop() drops the impersonation token without hitting the server', () => {
-    sessionStorage.setItem(ORIGINAL_TOKEN_KEY, 'super-admin.jwt');
-    sessionStorage.setItem(ORIGINAL_REMEMBER_KEY, '1');
+    snapshot('super-admin.jwt');
 
     service.forceStop();
 
-    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt', true);
+    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt');
     expect(service.active()?.impersonating).toBeFalse();
   });
 
@@ -343,11 +318,10 @@ describe('ImpersonationService', () => {
     // forceStop ran → original session restored, banner hidden.
     expect(service.isActive()).toBeFalse();
     expect(service.expiresAt()).toBeNull();
-    // Two setToken calls in order: 1) impersonation token (remember=false),
-    // 2) restore of the snapshotted original (remember=true since the
-    // outer beforeEach starts with rememberFlag=true).
-    expect(auth.setToken).toHaveBeenCalledWith(targetJwt, false);
-    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt', true);
+    // Two setToken calls in order: 1) impersonation token, 2) restore of the
+    // snapshotted original.
+    expect(auth.setToken).toHaveBeenCalledWith(targetJwt);
+    expect(auth.setToken).toHaveBeenCalledWith('super-admin.jwt');
   });
 
   it('refreshActive() re-arms the countdown after a page refresh', () => {

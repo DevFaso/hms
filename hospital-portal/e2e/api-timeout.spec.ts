@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures/test-fixtures';
 import { signInAs } from './helpers/role-session';
+import { TAB_SESSION_KEY, isSessionRestore } from './helpers/tab-session';
 import en from '../src/assets/i18n/en.json';
 import fr from '../src/assets/i18n/fr.json';
 import es from '../src/assets/i18n/es.json';
@@ -228,6 +229,7 @@ test('a stalled refresh retains the open patient view, its input and the existin
     }
   });
   await page.route('**/api/auth/token/refresh', async (route) => {
+    if (isSessionRestore(route)) return route.fallback();
     refreshCalls++;
     await held;
     await route
@@ -244,14 +246,13 @@ test('a stalled refresh retains the open patient view, its input and the existin
     const search = page.locator('.filter-toolbar .search-bar input');
     await expect(search).toBeVisible();
     await expect.poll(() => refreshCalls).toBe(1);
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
     await search.fill('Keep this input');
     await page.clock.fastForward(30000);
     await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
     await expect(search).toHaveValue('Keep this input');
     await expect(page.getByTestId('api-timeout-banner')).toBeVisible();
     await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
-    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+    expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
     expect(logoutCalls).toBe(0);
     expect(refreshCalls).toBe(1);
   } finally {
@@ -326,7 +327,7 @@ test('a business failure after a successful refresh keeps the user on the patien
   let firstUrl = '';
   let logoutCalls = 0;
   await page.route('**/api/auth/token/refresh', (route) =>
-    route.fulfill({ json: { accessToken: token } }),
+    isSessionRestore(route) ? route.fallback() : route.fulfill({ json: { accessToken: token } }),
   );
   await page.route('**/api/auth/logout', async (route) => {
     logoutCalls++;
@@ -356,7 +357,7 @@ test('a business failure after a successful refresh keeps the user on the patien
   );
   await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
   await expect(page.locator('.filter-toolbar .search-bar input')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
   expect(logoutCalls).toBe(0);
 });
 
@@ -395,7 +396,7 @@ test('an uncertain upload warning is cleared when the patient signs out', async 
     await page.getByTestId('shell-profile-menu').locator('button.logout').click();
     await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
     await expect(page.getByTestId('api-timeout-banner')).toHaveCount(0);
-    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+    expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).toBeNull();
   } finally {
     release();
   }
@@ -405,6 +406,7 @@ test('terminal refresh 410 ends the legacy session and opens login', async ({ pa
   await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
   let refreshCalls = 0;
   await page.route('**/api/auth/token/refresh', async (route) => {
+    if (isSessionRestore(route)) return route.fallback();
     refreshCalls++;
     await route.fulfill({ status: 410, json: { message: 'Legacy issuer retired' } });
   });
@@ -413,7 +415,7 @@ test('terminal refresh 410 ends the legacy session and opens login', async ({ pa
   );
   await page.goto('/patients');
   await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
-  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).toBeNull();
   expect(refreshCalls).toBe(1);
 });
 
@@ -465,6 +467,7 @@ for (const resourceConflict of [false, true]) {
       JSON.stringify({ sub: 'layout-guard', roles: ['ROLE_SUPER_ADMIN'], exp: 9999999999 }),
     ).toString('base64url');
     await page.route('**/api/auth/token/refresh', async (route) => {
+      if (isSessionRestore(route)) return route.fallback();
       refreshes++;
       await route.fulfill(
         resourceConflict
@@ -489,7 +492,7 @@ for (const resourceConflict of [false, true]) {
       await expect(confirmation).toHaveCount(0);
       expect(writes).toBe(1);
       await expect(page).toHaveURL(/\/billing(?:[?#]|$)/);
-      expect(await page.evaluate(() => localStorage.getItem('auth_token'))).not.toBeNull();
+      expect(await page.evaluate((k) => sessionStorage.getItem(k), TAB_SESSION_KEY)).not.toBeNull();
     }
   });
 }

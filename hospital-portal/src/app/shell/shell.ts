@@ -2306,12 +2306,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.tearDownAndRedirect({ reason: 'locked' });
   }
 
+  /**
+   * Another account signed in from this browser while the screen was locked:
+   * this tab's session ends locally; the server session is the other tab's.
+   */
+  onLockScreenAccountChanged(): void {
+    this.tearDownAndRedirect(undefined, true);
+  }
+
   /** Shared tear-down: stop idle, log out, redirect to login */
-  private tearDownAndRedirect(queryParams?: { reason: string }): void {
+  private tearDownAndRedirect(queryParams?: { reason: string }, localOnly = false): void {
     this.idle.stop();
     this.permissions.clear();
     clearReportedSilent403s();
-    this.auth.logout();
+    if (localOnly) this.auth.endLocalSession();
+    else this.auth.logout();
     if (queryParams) {
       void this.router.navigate(['/login'], { queryParams });
     } else {

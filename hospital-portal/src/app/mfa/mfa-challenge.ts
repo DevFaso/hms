@@ -8,6 +8,7 @@ import { MfaService } from '../auth/mfa.service';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { clearIdleLock } from '../core/browser-storage';
 
 const CODE_FIELD_IDS = ['mfa-challenge-code'];
 
@@ -83,9 +84,11 @@ export class MfaChallengeComponent {
         }
 
         // Successful MFA — same flow as normal login completion
-        this.auth.setToken(token, true);
+        this.auth.setToken(token);
+        // A fresh sign-in never lands on a previous lock screen.
+        clearIdleLock();
         if (res.refreshToken) {
-          this.auth.setRefreshToken(res.refreshToken, true);
+          this.auth.setRefreshToken(res.refreshToken);
         }
 
         // E9 #55b: the live session decides the hospital scope; the MFA body

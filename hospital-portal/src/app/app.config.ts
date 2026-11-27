@@ -14,7 +14,7 @@ import { provideRouter, withNavigationErrorHandler, NavigationError } from '@ang
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
-import { provideOAuthClient } from 'angular-oauth2-oidc';
+import { OAuthStorage, provideOAuthClient } from 'angular-oauth2-oidc';
 
 import { routes } from './app.routes';
 import { OidcAuthService } from './auth/oidc-auth.service';
@@ -29,6 +29,8 @@ import { languageInterceptor } from './interceptors/language.interceptor';
 import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
 import { DEFAULT_LANG, currentLocale } from './shared/i18n/app-locale';
 import { translationsReady } from './shared/i18n/translations-ready';
+import { restoreSessionOnStartup } from './auth/session-restore';
+import { PortalOAuthStorage } from './core/browser-storage';
 
 export function handleChunkLoadNavigationError(error: NavigationError): void {
   inject(ChunkRecoveryService).handle(error);
@@ -86,7 +88,12 @@ export const appConfig: ApplicationConfig = {
     // Becomes a no-op when `environment.oidc.enabled` is false, so legacy
     // form-based login keeps working untouched during the rollout.
     provideOAuthClient(),
+    // The library's tokens stay in memory, never in web storage (core/browser-storage.ts).
+    { provide: OAuthStorage, useClass: PortalOAuthStorage },
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
+    // The session lives in memory: a reload of a signed-in tab gets it back
+    // through the refresh cookie before the first route is resolved.
+    provideAppInitializer(() => restoreSessionOnStartup()),
     // QA D505: comma decimals in every numeric input, whatever the browser locale.
     provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
     // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when

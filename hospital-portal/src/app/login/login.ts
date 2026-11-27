@@ -28,6 +28,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { clearIdleLock, readRememberedUsername, rememberUsername } from '../core/browser-storage';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
@@ -63,7 +64,11 @@ export class Login implements OnInit, AfterViewInit {
   password = '';
   error = '';
   loading = false;
-  remember = true;
+  /**
+   * « Remember my username »: only the username is kept on this browser for
+   * the next sign-in; the session itself always ends with the tab.
+   */
+  remember = false;
   showPassword = false;
   showBootstrapPassword = false;
   currentYear = new Date().getFullYear();
@@ -151,6 +156,11 @@ export class Login implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     if (!this.isBrowser) return;
+    const remembered = readRememberedUsername();
+    if (remembered) {
+      this.username = remembered;
+      this.remember = true;
+    }
     const reason = this.route.snapshot.queryParamMap.get('reason');
     // D2001: the lock screen signed the user out on the account lockout.
     if (reason === 'locked') {
@@ -351,6 +361,9 @@ export class Login implements OnInit, AfterViewInit {
       }>('/auth/login', payload)
       .subscribe({
         next: (res) => {
+          // The credentials were accepted: keep (or forget) the username only.
+          rememberUsername(this.remember ? this.username : null);
+
           // ── Multi-role gate: ask user to pick a role ──
           if (res?.roleSelectionRequired && res.availableRoles?.length) {
             // ROLE_SUPER_ADMIN first: it reaches every page an inherited role
@@ -396,12 +409,14 @@ export class Login implements OnInit, AfterViewInit {
             return;
           }
 
-          this.auth.setToken(token, this.remember);
+          this.auth.setToken(token);
+          // A fresh sign-in never lands on a previous lock screen.
+          clearIdleLock();
 
-          // Persist the refresh token so the error interceptor can silently
-          // renew the access token when it expires, avoiding logout mid-session.
+          // The refresh token travels as an HttpOnly cookie; this call only
+          // purges a legacy stored copy.
           if (res.refreshToken) {
-            this.auth.setRefreshToken(res.refreshToken, this.remember);
+            this.auth.setRefreshToken(res.refreshToken);
           }
 
           // Seed role context from JWT immediately so the UI has provisional

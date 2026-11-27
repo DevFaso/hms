@@ -152,6 +152,19 @@ public class AuthController {
      */
     private final ObjectProvider<ProviderMfaGate> providerMfaGate;
 
+    /**
+     * Ends a super admin's tracked impersonation when the portal reloads or the
+     * admin signs in again ({@link #endTrackedImpersonation}). Through an
+     * {@link ObjectProvider} for the same reason as {@link #providerMfaGate}.
+     */
+    private final ObjectProvider<com.example.hms.service.SupportImpersonationService> supportImpersonation;
+
+    /**
+     * Sent by the portal on the refresh that restores a reloaded tab's session
+     * (the access token lives in the tab's memory only).
+     */
+    static final String SESSION_RESTORE_HEADER = "X-Session-Restore";
+
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
             AuthBootstrapService authBootstrapService,
@@ -171,7 +184,8 @@ public class AuthController {
             WsTicketService wsTicketService,
             RefreshTokenCookieService refreshTokenCookieService,
             AuthControllerProperties authProps,
-            ObjectProvider<ProviderMfaGate> providerMfaGate) {
+            ObjectProvider<ProviderMfaGate> providerMfaGate,
+            ObjectProvider<com.example.hms.service.SupportImpersonationService> supportImpersonation) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.authBootstrapService = authBootstrapService;
@@ -192,6 +206,7 @@ public class AuthController {
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.authProps = authProps;
         this.providerMfaGate = providerMfaGate;
+        this.supportImpersonation = supportImpersonation;
 
         // KC-5 cutover signal: surface the gate state in the startup log so the
         // ops on-call running the cutover runbook can confirm the flip took
@@ -412,6 +427,9 @@ public class AuthController {
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
             loginAttemptService.resetAttempts(user.getId());
+            // A super admin signing in again leaves any impersonation of the
+            // previous session behind: end it (audited) so the new session works.
+            endTrackedImpersonation(user.getId(), "the super admin signed in again");
 
             // Pull details from related profiles
             var patient = user.getPatientProfile();
@@ -1120,7 +1138,14 @@ public class AuthController {
         // check, a 401 on the impersonation token would auto-trigger this
         // refresh path and silently elevate the caller back to super-admin
         // without ever emitting an IMPERSONATION_ENDED audit event.
-        if (impersonationSessionTracker.hasActive(user.getId())) {
+        //
+        // The portal's start-up refresh after a reload is the exception: the
+        // tab no longer holds the impersonation token (memory only), so the
+        // tracked session is ended there, with its IMPERSONATION_ENDED row,
+        // and the super admin's own session continues.
+        boolean restore = "1".equals(request.getHeader(SESSION_RESTORE_HEADER));
+        if (impersonationSessionTracker.hasActive(user.getId())
+                && !(restore && endTrackedImpersonation(user.getId(), "the portal was reloaded"))) {
             log.warn("🔄 [REFRESH] Refused — an impersonation session is active");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MessageResponse(
@@ -1979,6 +2004,19 @@ public class AuthController {
     private boolean isProviderUserChallenged(UUID userId, String username) {
         ProviderMfaGate gate = providerMfaGate.getIfAvailable();
         return gate != null && gate.isProviderUser(userId, username);
+    }
+
+    /**
+     * Ends the user's tracked impersonation, if any (audited, impersonation
+     * token blacklisted, tracker entry removed). {@code false} when there was
+     * none or the service is absent (a {@code @WebMvcTest} slice).
+     */
+    private boolean endTrackedImpersonation(UUID userId, String reason) {
+        if (!impersonationSessionTracker.hasActive(userId)) {
+            return false;
+        }
+        var service = supportImpersonation.getIfAvailable();
+        return service != null && service.endForImpersonator(userId, reason);
     }
 
     /**

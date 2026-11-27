@@ -228,6 +228,48 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     roleContext.clearSession();
   });
 
+  it('« remember my username » keeps the username only, and unticking forgets it', () => {
+    localStorage.removeItem('hms.login.rememberedUsername');
+    const before = localStorage.length;
+    component.username = 'nurse.a';
+    component.password = 'irrelevant';
+    component.remember = true;
+    component.submit();
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/login'))
+      .flush({ roleSelectionRequired: true, availableRoles: ['ROLE_NURSE', 'ROLE_DOCTOR'] });
+    expect(localStorage.getItem('hms.login.rememberedUsername')).toBe('nurse.a');
+    expect(localStorage.length).toBe(before + 1);
+
+    component.loading = false;
+    component.remember = false;
+    component.submit('ROLE_NURSE');
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/login'))
+      .flush({ roleSelectionRequired: true, availableRoles: ['ROLE_NURSE', 'ROLE_DOCTOR'] });
+    expect(localStorage.getItem('hms.login.rememberedUsername')).toBeNull();
+    roleContext.clearSession();
+  });
+
+  it('fills in a remembered username, and is unticked by default otherwise', () => {
+    localStorage.removeItem('hms.login.rememberedUsername');
+    component.ngOnInit();
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/bootstrap-status'))
+      .flush({ allowed: false });
+    expect(component.remember).toBeFalse();
+    expect(component.username).toBe('');
+
+    localStorage.setItem('hms.login.rememberedUsername', 'nurse.a');
+    component.ngOnInit();
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/bootstrap-status'))
+      .flush({ allowed: false });
+    expect(component.remember).toBeTrue();
+    expect(component.username).toBe('nurse.a');
+    localStorage.removeItem('hms.login.rememberedUsername');
+  });
+
   it('QA D787: the reset dialog posts what was typed (e-mail, username or phone) as one identifier', () => {
     component.openForgotPassword();
     for (const typed of [' 70 20 20 20 ', 'patient_a3', 'a@b.c']) {

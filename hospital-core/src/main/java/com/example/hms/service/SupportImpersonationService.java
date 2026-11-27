@@ -49,6 +49,20 @@ public interface SupportImpersonationService {
      */
     ImpersonationActiveResponseDTO stop(String bearerJwt);
 
+    /**
+     * Ends the impersonator's tracked session when it can no longer be stopped
+     * with its own token: the super admin reloaded the portal (the start-up
+     * refresh, which runs without the in-memory impersonation token) or signed
+     * in again. Records IMPERSONATION_ENDED, blacklists the impersonation token
+     * by its tracked JTI and unregisters the entry, so the super admin's own
+     * session continues and a new impersonation can start.
+     *
+     * @param impersonatorUserId the super admin
+     * @param reason             why the session ended, kept in the audit row
+     * @return {@code true} when an active session was ended
+     */
+    boolean endForImpersonator(java.util.UUID impersonatorUserId, String reason);
+
     /** Reflects the current request's {@code ImpersonationContextHolder} state. */
     ImpersonationActiveResponseDTO getActive();
 }

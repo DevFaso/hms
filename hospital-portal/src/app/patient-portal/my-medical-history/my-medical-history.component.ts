@@ -12,6 +12,8 @@ import {
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { AuthService } from '../../auth/auth.service';
+import { readPatientNote, writePatientNote } from '../../core/browser-storage';
 
 @Component({
   selector: 'app-my-medical-history',
@@ -30,6 +32,7 @@ import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.
 })
 export class MyMedicalHistoryComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
+  private readonly auth = inject(AuthService);
 
   medicalHistory = signal<PatientDiagnosisSummary[]>([]);
   surgicalHistory = signal<SurgicalHistorySummary[]>([]);
@@ -37,7 +40,8 @@ export class MyMedicalHistoryComponent implements OnInit {
   socialHistory = signal<SocialHistorySummary | null>(null);
   loading = signal(true);
 
-  // Personal notes (localStorage-backed)
+  // Personal notes: kept in memory while the page is open, per signed-in
+  // user, and cleared at sign-out (core/browser-storage.ts).
   medicalNotes = signal('');
   surgicalNotes = signal('');
   familyNotes = signal('');
@@ -45,12 +49,10 @@ export class MyMedicalHistoryComponent implements OnInit {
 
   editingSection = signal<string | null>(null);
 
-  private readonly NOTES_PREFIX = 'portal-notes-';
-  // NOTE: Replace with user/session-derived secret from a secure source in production.
-  private readonly NOTES_KEY_MATERIAL = 'portal-notes-key-material';
+  private static readonly SECTIONS = ['medical', 'surgical', 'family', 'social'] as const;
 
   ngOnInit(): void {
-    void this.loadNotes();
+    this.loadNotes();
 
     forkJoin({
       medical: this.portal.getMyMedicalHistory(),
@@ -86,7 +88,7 @@ export class MyMedicalHistoryComponent implements OnInit {
 
   toggleNoteEdit(section: string): void {
     if (this.editingSection() === section) {
-      void this.saveNotes(section);
+      this.saveNotes(section);
       this.editingSection.set(null);
     } else {
       this.editingSection.set(section);
@@ -101,12 +103,12 @@ export class MyMedicalHistoryComponent implements OnInit {
   cancelNoteEdit(section: string): void {
     if (this.editingSection() !== section) return;
     this.editingSection.set(null);
-    void this.restoreNote(section);
+    this.onNoteChange(section, readPatientNote(this.noteOwner(), section));
   }
 
-  private async restoreNote(section: string): Promise<void> {
-    const stored = localStorage.getItem(this.NOTES_PREFIX + section) || '';
-    this.onNoteChange(section, await this.decryptNote(stored));
+  /** The signed-in user the notes belong to; without one nothing is kept. */
+  private noteOwner(): string | null {
+    return this.auth.getUserProfile()?.id ?? this.auth.getUserId();
   }
 
   onNoteChange(section: string, value: string): void {
@@ -141,94 +143,14 @@ export class MyMedicalHistoryComponent implements OnInit {
     }
   }
 
-  private async loadNotes(): Promise<void> {
-    const medical = localStorage.getItem(this.NOTES_PREFIX + 'medical') || '';
-    const surgical = localStorage.getItem(this.NOTES_PREFIX + 'surgical') || '';
-    const family = localStorage.getItem(this.NOTES_PREFIX + 'family') || '';
-    const social = localStorage.getItem(this.NOTES_PREFIX + 'social') || '';
-    this.medicalNotes.set(await this.decryptNote(medical));
-    this.surgicalNotes.set(await this.decryptNote(surgical));
-    this.familyNotes.set(await this.decryptNote(family));
-    this.socialNotes.set(await this.decryptNote(social));
-  }
-
-  private async saveNotes(section: string): Promise<void> {
-    const value = this.getNotes(section);
-    if (value) {
-      const encrypted = await this.encryptNote(value);
-      localStorage.setItem(this.NOTES_PREFIX + section, encrypted);
-    } else {
-      localStorage.removeItem(this.NOTES_PREFIX + section);
+  private loadNotes(): void {
+    const owner = this.noteOwner();
+    for (const section of MyMedicalHistoryComponent.SECTIONS) {
+      this.onNoteChange(section, readPatientNote(owner, section));
     }
   }
 
-  private async getCryptoKey(salt: Uint8Array): Promise<CryptoKey> {
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(this.NOTES_KEY_MATERIAL) as BufferSource,
-      'PBKDF2',
-      false,
-      ['deriveKey'] as KeyUsage[],
-    );
-    return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt: salt as BufferSource, iterations: 100000, hash: 'SHA-256' },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt'] as KeyUsage[],
-    );
-  }
-
-  private toBase64(bytes: Uint8Array): string {
-    let binary = '';
-    for (const byte of bytes) {
-      binary += String.fromCharCode(byte);
-    }
-    return btoa(binary);
-  }
-
-  private fromBase64(base64: string): Uint8Array {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
-  private async encryptNote(plainText: string): Promise<string> {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await this.getCryptoKey(salt);
-    const cipherBuffer = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
-      key,
-      new TextEncoder().encode(plainText) as BufferSource,
-    );
-    return JSON.stringify({
-      s: this.toBase64(salt),
-      i: this.toBase64(iv),
-      c: this.toBase64(new Uint8Array(cipherBuffer)),
-    });
-  }
-
-  private async decryptNote(payload: string): Promise<string> {
-    if (!payload) return '';
-    try {
-      const parsed = JSON.parse(payload) as { s: string; i: string; c: string };
-      if (!parsed?.s || !parsed?.i || !parsed?.c) return '';
-      const salt = this.fromBase64(parsed.s);
-      const iv = this.fromBase64(parsed.i);
-      const cipherBytes = this.fromBase64(parsed.c);
-      const key = await this.getCryptoKey(salt);
-      const plainBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as BufferSource },
-        key,
-        cipherBytes as BufferSource,
-      );
-      return new TextDecoder().decode(plainBuffer);
-    } catch {
-      return '';
-    }
+  private saveNotes(section: string): void {
+    writePatientNote(this.noteOwner(), section, this.getNotes(section));
   }
 }

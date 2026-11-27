@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/test-fixtures';
+import { fakeToken, seedTabSession } from './helpers/tab-session';
 
 const HOSPITAL = '00000000-0000-0000-0000-000000000201';
 const USER = '00000000-0000-0000-0000-000000000101';
@@ -31,20 +32,12 @@ test.describe('nursing oversight', () => {
       active: true,
       hospitalIds: [HOSPITAL],
     };
-    await page.addInitScript(
-      ({ profile }) => {
-        const payload = btoa(
-          JSON.stringify({
-            sub: profile.username,
-            userId: profile.id,
-            roles: profile.roles,
-            exp: 4102444800,
-          }),
-        );
-        localStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.review-signature`);
-        localStorage.setItem('user_profile', JSON.stringify(profile));
-      },
-      { profile },
+    await seedTabSession(
+      page,
+      fakeToken(
+        { sub: profile.username, userId: profile.id, roles: profile.roles, exp: 4102444800 },
+        'review-signature',
+      ),
     );
     await page.route('**/api/auth/session/bootstrap', (route) =>
       route.fulfill({

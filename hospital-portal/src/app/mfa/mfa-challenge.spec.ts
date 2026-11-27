@@ -125,8 +125,8 @@ describe('MfaChallengeComponent', () => {
     create({ mfaToken: 'mfa-1', mfaEnrolled: true });
     submit('123456');
 
-    expect(auth.setToken).toHaveBeenCalledWith('jwt', true);
-    expect(auth.setRefreshToken).toHaveBeenCalledWith('r', true);
+    expect(auth.setToken).toHaveBeenCalledWith('jwt');
+    expect(auth.setRefreshToken).toHaveBeenCalledWith('r');
     expect(roleContext.setRoles).toHaveBeenCalledWith(['ROLE_DOCTOR']);
     expect(router.navigateByUrl).toHaveBeenCalledWith('/dashboard');
     expect(host().querySelector('[role="alert"]')).toBeNull();

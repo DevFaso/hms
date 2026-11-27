@@ -3,6 +3,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { MyMedicalHistoryComponent } from './my-medical-history.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
+import { AuthService } from '../../auth/auth.service';
+import { clearUserDrafts, readPatientNote, writePatientNote } from '../../core/browser-storage';
 
 describe('MyMedicalHistoryComponent', () => {
   let component: MyMedicalHistoryComponent;
@@ -52,12 +54,24 @@ describe('MyMedicalHistoryComponent', () => {
       }),
   };
 
+  let userId: string | null;
+  const authStub = {
+    getUserProfile: () => (userId ? { id: userId } : null),
+    getUserId: () => userId,
+  };
+
   beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
+    clearUserDrafts();
+    userId = 'patient-user-1';
 
     await TestBed.configureTestingModule({
       imports: [MyMedicalHistoryComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: mockPortalService }],
+      providers: [
+        { provide: PatientPortalService, useValue: mockPortalService },
+        { provide: AuthService, useValue: authStub },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MyMedicalHistoryComponent);
@@ -67,6 +81,8 @@ describe('MyMedicalHistoryComponent', () => {
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    clearUserDrafts();
   });
 
   it('should create', () => {
@@ -97,22 +113,46 @@ describe('MyMedicalHistoryComponent', () => {
     expect(component.editingSection()).toBeNull();
   });
 
-  it('should save notes encrypted in localStorage', async () => {
-    component.onNoteChange('medical', 'test note');
-    // Manually call saveNotes via toggleNoteEdit (which calls void this.saveNotes)
+  it("keeps a saved note in memory under the user's own key, never in web storage", () => {
     component.toggleNoteEdit('medical'); // open
-    component.toggleNoteEdit('medical'); // close → triggers save
-    // Allow async encryption to complete
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    component.onNoteChange('medical', 'test note');
+    component.toggleNoteEdit('medical'); // close → save
 
-    const stored = localStorage.getItem('portal-notes-medical');
-    expect(stored).toBeTruthy();
-    // Stored value should be encrypted JSON, not plain text
-    expect(stored).not.toBe('test note');
-    const parsed = JSON.parse(stored!);
-    expect(parsed.s).toBeTruthy();
-    expect(parsed.i).toBeTruthy();
-    expect(parsed.c).toBeTruthy();
+    expect(readPatientNote('patient-user-1', 'medical')).toBe('test note');
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("shows the signed-in user's notes only, not another user's from the same tab", () => {
+    writePatientNote('patient-user-1', 'family', 'mine');
+    writePatientNote('someone-else', 'surgical', 'theirs');
+    const f = TestBed.createComponent(MyMedicalHistoryComponent);
+    f.detectChanges();
+    expect(f.componentInstance.familyNotes()).toBe('mine');
+    expect(f.componentInstance.surgicalNotes()).toBe('');
+  });
+
+  it('keeps nothing when no user is signed in', () => {
+    userId = null;
+    component.toggleNoteEdit('social');
+    component.onNoteChange('social', 'draft');
+    component.toggleNoteEdit('social');
+    expect(readPatientNote(null, 'social')).toBe('');
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it('an emptied note is dropped, and Escape restores the saved one', () => {
+    writePatientNote('patient-user-1', 'medical', 'saved');
+    component.toggleNoteEdit('medical');
+    component.onNoteChange('medical', 'typed but discarded');
+    component.cancelNoteEdit('medical');
+    expect(component.medicalNotes()).toBe('saved');
+
+    component.toggleNoteEdit('medical');
+    component.onNoteChange('medical', '');
+    component.toggleNoteEdit('medical');
+    expect(readPatientNote('patient-user-1', 'medical')).toBe('');
   });
 
   it('should get notes by section', () => {
@@ -136,6 +176,7 @@ describe('MyMedicalHistoryComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MyMedicalHistoryComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: authStub },
         {
           provide: PatientPortalService,
           useValue: {

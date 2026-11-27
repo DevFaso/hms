@@ -54,7 +54,7 @@ export class MfaEnrollComponent {
     const nav = this.router.getCurrentNavigation();
     const mfaToken = nav?.extras?.state?.['mfaToken'] as string | undefined;
     if (mfaToken) {
-      this.auth.setToken(mfaToken, false);
+      this.auth.setToken(mfaToken);
     } else {
       // No MFA token — cannot proceed with enrollment
       this.router.navigateByUrl('/login');

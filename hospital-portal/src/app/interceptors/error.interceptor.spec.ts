@@ -27,6 +27,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST } from '../services/step-up';
+import { SESSION_RESTORE_REQUEST } from '../auth/session-lifetime';
 import { backgroundRequestOptions } from '../services/ws-transport';
 
 describe('errorInterceptor', () => {
@@ -53,9 +54,12 @@ describe('errorInterceptor', () => {
         'setRefreshToken',
         'getToken',
         'isExpired',
+        'isTokenForShownAccount',
+        'endLocalSession',
       ],
       { sessionEnded$: new Subject<void>() },
     );
+    auth.isTokenForShownAccount.and.returnValue(true);
     auth.getToken.and.returnValue(null);
     auth.isExpired.and.returnValue(true);
     auth.getRefreshToken.and.returnValue(null);
@@ -390,6 +394,41 @@ describe('errorInterceptor', () => {
     expect(auth.setToken).toHaveBeenCalledWith('new-token');
     expect(auth.setRefreshToken).toHaveBeenCalledWith('r2');
     expect(body).toEqual({ ok: true });
+  });
+
+  it('the start-up session restore gets its refusal back untouched: no refresh, sign-out or redirect', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+    const context = new HttpContext().set(SESSION_RESTORE_REQUEST, true);
+    let failure: HttpErrorResponse | undefined;
+    http
+      .post('/api/auth/token/refresh', {}, { context })
+      .subscribe({ error: (e: HttpErrorResponse) => (failure = e) });
+    httpMock
+      .expectOne('/api/auth/token/refresh')
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(failure?.status).toBe(401);
+    expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('a refresh that mints another account than the tab shows ends the tab locally, without a server sign-out', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.isTokenForShownAccount.and.returnValue(false);
+    auth.refreshTokenRequest.and.returnValue(of({ accessToken: 'other-user', refreshToken: 'r2' }));
+
+    let failure: HttpErrorResponse | undefined;
+    http.get('/data').subscribe({ error: (e: HttpErrorResponse) => (failure = e) });
+    httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    httpMock.expectNone('/data');
+    expect(auth.setToken).not.toHaveBeenCalled();
+    expect(auth.endLocalSession).toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    expect(failure?.status).toBe(401);
   });
 
   it('a refused MFA step-up (401 mfa_required, 403 with a reason) is for the dialog: no refresh, no sign-out, no 403 page', () => {

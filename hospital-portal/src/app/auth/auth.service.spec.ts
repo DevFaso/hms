@@ -5,6 +5,15 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AuthService, type SessionBootstrapResponse } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ApiTimeoutService } from '../core/api-timeout.service';
+import {
+  LEGACY_STORAGE_KEYS,
+  LOCAL_STORAGE_ALLOWLIST,
+  SESSION_SCOPED_KEYS,
+  TAB_SESSION_KEY,
+  readPatientNote,
+  tabBindingFor,
+  writePatientNote,
+} from '../core/browser-storage';
 
 describe('AuthService — S-01 refresh-token cookie behaviour', () => {
   let service: AuthService;
@@ -202,49 +211,182 @@ describe('AuthService — resolveLandingPath', () => {
   });
 });
 
-describe('AuthService — setToken storage swap (closes Copilot review #2 on PR #224)', () => {
+describe('AuthService — where the session is kept', () => {
   let service: AuthService;
+  let httpMock: HttpTestingController;
   const KEY = 'auth_token';
+
+  function jwt(payload: Record<string, unknown>): string {
+    const b64 = (v: string) =>
+      btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+    return `${b64('{"alg":"none"}')}.${b64(JSON.stringify(payload))}.sig`;
+  }
+
+  function create(): AuthService {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    httpMock = TestBed.inject(HttpTestingController);
+    return TestBed.inject(AuthService);
+  }
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    TestBed.configureTestingModule({
-      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
-    });
-    service = TestBed.inject(AuthService);
   });
 
   afterEach(() => {
+    httpMock?.verify();
     localStorage.clear();
     sessionStorage.clear();
     TestBed.resetTestingModule();
   });
 
-  it('setToken(token, false) clears localStorage so a remember-me original cannot shadow the new token', () => {
-    localStorage.setItem(KEY, 'original-remembered.jwt');
+  function storedValues(): string {
+    const values: string[] = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let i = 0; i < storage.length; i++) values.push(storage.getItem(storage.key(i)!) ?? '');
+    }
+    return values.join('|');
+  }
 
-    service.setToken('impersonation.jwt', false);
+  /** Lets the digest of the tab binding settle. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
+  it('keeps the token in memory only, and binds the tab with an opaque digest', async () => {
+    service = create();
+    const token = jwt({ uid: 'user-123', sub: 'dr' });
+    service.setToken(token);
+    await settle();
+    expect(service.getToken()).toBe(token);
+    expect(storedValues()).not.toContain(token);
+    expect(storedValues()).not.toContain('user-123');
     expect(localStorage.getItem(KEY)).toBeNull();
-    expect(sessionStorage.getItem(KEY)).toBe('impersonation.jwt');
-    expect(service.getToken()).toBe('impersonation.jwt');
-  });
-
-  it('setToken(token, true) clears sessionStorage so a session-only token cannot leak across the swap', () => {
-    sessionStorage.setItem(KEY, 'session-only.jwt');
-
-    service.setToken('new-remembered.jwt', true);
-
     expect(sessionStorage.getItem(KEY)).toBeNull();
-    expect(localStorage.getItem(KEY)).toBe('new-remembered.jwt');
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe(await tabBindingFor('user-123'));
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toMatch(/^[0-9a-f]{64}$/);
+    expect(service.hasTabSession()).toBeTrue();
   });
 
-  it('isTokenRemembered() reflects the storage where the token currently lives', () => {
-    service.setToken('a.jwt', true);
-    expect(service.isTokenRemembered()).toBeTrue();
-    service.setToken('b.jwt', false);
-    expect(service.isTokenRemembered()).toBeFalse();
+  it('a reload starts without a token (the start-up restore asks the refresh cookie)', async () => {
+    sessionStorage.setItem(TAB_SESSION_KEY, await tabBindingFor('user-123'));
+    service = create();
+    expect(service.getToken()).toBeNull();
+    expect(service.hasTabSession()).toBeTrue();
+  });
+
+  it('after a reload, accepts a token for the bound account only', async () => {
+    sessionStorage.setItem(TAB_SESSION_KEY, await tabBindingFor('user-a'));
+    service = create();
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-a' }))).toBeTrue();
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-b' }))).toBeFalse();
+    sessionStorage.removeItem(TAB_SESSION_KEY);
+    expect(await service.isTokenForThisTab(jwt({ uid: 'user-a' }))).toBeFalse();
+  });
+
+  it('while impersonating, the tab stays bound to the super admin, so a reload brings the admin back', async () => {
+    service = create();
+    const admin = jwt({ uid: 'admin-1' });
+    service.setToken(admin);
+    await settle();
+    service.holdOriginalSession(admin, null);
+    service.setToken(jwt({ uid: 'target-9' }));
+    await settle();
+    expect(sessionStorage.getItem(TAB_SESSION_KEY)).toBe(await tabBindingFor('admin-1'));
+    expect(await service.isTokenForThisTab(admin)).toBeTrue();
+  });
+
+  it('a new token never clears the idle lock (only a fresh sign-in does)', () => {
+    sessionStorage.setItem('hms_idle_locked', 'true');
+    sessionStorage.setItem('hms_lock_ts', '1');
+    service = create();
+    service.setToken(jwt({ uid: 'user-a' }));
+    expect(sessionStorage.getItem('hms_idle_locked')).toBe('true');
+    expect(sessionStorage.getItem('hms_lock_ts')).toBe('1');
+  });
+
+  it('keeps the profile in memory only', () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'dr', email: '', roles: [], active: true });
+    expect(service.getUserProfile()?.id).toBe('u1');
+    expect(storedValues()).not.toContain('"u1"');
+    expect(sessionStorage.getItem('user_profile')).toBeNull();
+    expect(localStorage.getItem('user_profile')).toBeNull();
+  });
+
+  it('clearing the token drops the tab binding', async () => {
+    service = create();
+    service.setToken(jwt({ uid: 'user-a' }));
+    await settle();
+    service.clearToken();
+    await settle();
+    expect(service.getToken()).toBeNull();
+    expect(service.hasTabSession()).toBeFalse();
+  });
+
+  it('removes the session an earlier build left in web storage at start-up', () => {
+    for (const storage of [localStorage, sessionStorage]) {
+      storage.setItem('auth_token', 'old.jwt');
+      storage.setItem('auth_refresh_token', 'old.refresh');
+      storage.setItem('user_profile', '{"id":"u0"}');
+      storage.setItem('auth_token_pre_impersonation', 'old.jwt');
+      storage.setItem('auth_profile_pre_impersonation', '{"id":"u0"}');
+    }
+    localStorage.setItem('portal-notes-medical', '{"c":"x"}');
+    sessionStorage.setItem('hms.patientNotes.u0.medical', 'x');
+    localStorage.setItem('lang', 'fr');
+
+    service = create();
+
+    expect(storedValues()).not.toContain('old.');
+    expect(storedValues()).not.toContain('u0');
+    expect(localStorage.getItem('portal-notes-medical')).toBeNull();
+    expect(sessionStorage.getItem('hms.patientNotes.u0.medical')).toBeNull();
+    expect(localStorage.getItem('lang')).toBe('fr');
+    expect(service.getToken()).toBeNull();
+    expect(service.getUserProfile()).toBeNull();
+  });
+
+  it("drops the previous user's drafts when another account takes over the tab", () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    writePatientNote('u1', 'medical', 'note');
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    expect(readPatientNote('u1', 'medical')).toBe('note');
+
+    service.setUserProfile({ id: 'u2', username: 'b', email: '', roles: [], active: true });
+    expect(readPatientNote('u1', 'medical')).toBe('');
+  });
+
+  it('tells whether a refreshed token is for the account the tab shows', () => {
+    service = create();
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    expect(service.isTokenForShownAccount(jwt({ uid: 'u1' }))).toBeTrue();
+    expect(service.isTokenForShownAccount(jwt({ uid: 'u2' }))).toBeFalse();
+    // Nothing to compare against: accepted.
+    expect(service.isTokenForShownAccount(jwt({ sub: 'x' }))).toBeTrue();
+  });
+
+  it('the impersonation snapshot is handed back once, and never outlives the session', () => {
+    service = create();
+    service.holdOriginalSession('original.jwt', null);
+    expect(service.releaseOriginalSession().token).toBe('original.jwt');
+    expect(service.releaseOriginalSession().token).toBeNull();
+
+    service.holdOriginalSession('original.jwt', null);
+    service.endLocalSession();
+    expect(service.releaseOriginalSession().token).toBeNull();
+  });
+
+  it('endLocalSession clears the tab without a server sign-out', () => {
+    service = create();
+    service.setToken('a.jwt');
+    service.setUserProfile({ id: 'u1', username: 'a', email: '', roles: [], active: true });
+    service.endLocalSession();
+    httpMock.expectNone((r) => r.url.endsWith('/api/auth/logout'));
+    expect(service.getToken()).toBeNull();
+    expect(service.getUserProfile()).toBeNull();
+    expect(sessionStorage.length).toBe(0);
   });
 });
 
@@ -321,7 +463,7 @@ describe('AuthService — logout revokes the server session', () => {
     notice.noteTimeout('POST');
     const ended = jasmine.createSpy('session ended');
     service.sessionEnded$.subscribe(ended);
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
 
     service.logout();
     expect(ended).toHaveBeenCalledTimes(1);
@@ -338,7 +480,7 @@ describe('AuthService — logout revokes the server session', () => {
 
   it('clears session flags and chunk recovery state on logout', () => {
     sessionStorage.setItem('hms-chunk-reload', 'legacy-private-route');
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setProviderUser(true);
     roleContext.markSessionResolved();
@@ -351,8 +493,27 @@ describe('AuthService — logout revokes the server session', () => {
     expect(roleContext.sessionResolved()).toBeFalse();
   });
 
+  it('clears every session-scoped key, including the patient notes, and keeps only device preferences', () => {
+    for (const key of SESSION_SCOPED_KEYS) sessionStorage.setItem(key, 'x');
+    writePatientNote('u1', 'medical', 'note');
+    for (const key of LEGACY_STORAGE_KEYS) {
+      localStorage.setItem(key, 'x');
+      sessionStorage.setItem(key, 'x');
+    }
+    localStorage.setItem('portal-notes-family', 'x');
+    for (const key of LOCAL_STORAGE_ALLOWLIST) localStorage.setItem(key, 'pref');
+
+    service.logout();
+    httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
+
+    expect(sessionStorage.length).toBe(0);
+    expect(readPatientNote('u1', 'medical')).toBe('');
+    const left = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
+    expect(left.sort()).toEqual([...LOCAL_STORAGE_ALLOWLIST].sort());
+  });
+
   it('still signs out locally when the server call fails', () => {
-    localStorage.setItem('auth_token', 'current.jwt.token');
+    service.setToken('current.jwt.token');
     let thrown: unknown = null;
 
     try {
