@@ -14,7 +14,9 @@ import jakarta.validation.constraints.Size;
  * body is refused rather than answered with every row (QA D3753).
  */
 @RejectsUnknownFields(RejectsUnknownFields.Kind.SEARCH)
-public record SearchTermRequestDTO(@NotBlank @Size(max = MAX_LENGTH) String search) {
+public record SearchTermRequestDTO(
+        @NotBlank(message = "{search.term.required}")
+        @Size(max = MAX_LENGTH, message = "{search.term.tooLong}") String search) {
 
     /** The longest term a search box sends. */
     public static final int MAX_LENGTH = 200;

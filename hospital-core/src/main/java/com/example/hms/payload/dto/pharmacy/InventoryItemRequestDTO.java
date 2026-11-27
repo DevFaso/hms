@@ -48,5 +48,17 @@ public class InventoryItemRequestDTO {
     @com.example.hms.validation.NoCardNumber
     private String priceChangeReason;
 
+    /**
+     * QA D4181 (r81): true documents the item as handed over at no charge at this pharmacy, false withdraws that.
+     * Null leaves it as it is. Like a price, set by the store manager or a hospital administrator, with
+     * {@link #freeOfChargeReason} (true) or {@link #priceChangeReason} (false), and kept in the price history.
+     */
+    private Boolean freeOfCharge;
+
+    /** QA D4181: why the item is free (a national programme, a donation). Required with {@code freeOfCharge=true}. */
+    @Size(max = 500)
+    @com.example.hms.validation.NoCardNumber
+    private String freeOfChargeReason;
+
     private Boolean active;
 }

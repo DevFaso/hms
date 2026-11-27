@@ -7,7 +7,12 @@ import { BillingDeferralKind } from './billing-deferral.service';
 
 /* QA r65 D2673–D2676: pharmacy money and stock (reconciliation, refunds, pack size, payment status). */
 
-export type DispensePaymentState = 'NO_CHARGE' | 'PAID' | 'COVERED' | 'DEFERRED' | 'UNPAID';
+/**
+ * QA D4181 (r81): `NO_CHARGE` is a fill of an item the pharmacy documented as free of charge; `NOT_PRICED` is a
+ * fill of an item with neither a selling price nor such a reason, which the server refuses to hand over.
+ */
+export type DispensePaymentState =
+  'NO_CHARGE' | 'NOT_PRICED' | 'PAID' | 'COVERED' | 'DEFERRED' | 'UNPAID';
 
 /** QA D2675: what a fill costs and how it is settled. */
 export interface DispensePaymentStatus {
@@ -28,6 +33,10 @@ export interface DispensePaymentStatus {
    * still due: they alone stand behind it, or no money desk has confirmed it yet.
    */
   claimCoverGap?: 'OWN_VOUCHER' | 'NO_VOUCHER' | null;
+  /** QA D4181: PRICED, FREE or UNPRICED at the dispensing pharmacy. */
+  priceStanding?: 'PRICED' | 'FREE' | 'UNPRICED' | null;
+  /** QA D4181: on a free fill, the reason the pharmacy recorded on its inventory item. */
+  freeOfChargeReason?: string | null;
 }
 
 /** QA D2674: set once, the stock is counted in `unit`, `unitsPerPack` to a pack. */

@@ -64,7 +64,9 @@ public enum ClinicalRuleSetKey {
     /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
     URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS),
     /** QA D4140 (r81, V465): an imaging request placed by a nurse or a midwife waits for a physician's authorisation. */
-    IMAGING_ORDER_PHYSICIAN_AUTHORISATION(ClinicalRuleArea.IMAGING);
+    IMAGING_ORDER_PHYSICIAN_AUTHORISATION(ClinicalRuleArea.IMAGING),
+    /** Review of #1380 (QA r81 D4181): an unpriced fill leaves only on an urgency override or an open stay. */
+    UNPRICED_FILL_RELEASE(ClinicalRuleArea.BILLING);
 
     private final ClinicalRuleArea area;
 

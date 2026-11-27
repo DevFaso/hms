@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({StockTransactionServiceImpl.class, StockTransferBooking.class, StockTransactionMapper.class,
+@Import({StockTransactionServiceImpl.class, StockTransferBooking.class, PharmacyPriceHistory.class, StockTransactionMapper.class,
     com.example.hms.security.EncryptionKeyHolder.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class StockTransferPostgresIT {
@@ -124,7 +124,10 @@ class StockTransferPostgresIT {
         InventoryItem destinationItem = items.findByPharmacyIdAndMedicationCatalogItemId(destinationId, medicationId).orElseThrow();
         assertThat(items.findById(sourceItemId).orElseThrow().getQuantityOnHand()).isEqualByComparingTo("20");
         assertThat(destinationItem.getQuantityOnHand()).isEqualByComparingTo("10");
-        assertThat(destinationItem.getUnitPrice()).as("a new destination does not inherit the source selling price").isNull();
+        // QA D4181 (r81): reversed. The item a transfer creates is sold at its source's price; with none, a fill
+        // from the destination was charged nothing.
+        assertThat(destinationItem.getUnitPrice()).as("a new destination is sold at the source selling price")
+            .isEqualByComparingTo("500");
         assertThat(items.findById(sourceItemId).orElseThrow().getUnitPrice()).isEqualByComparingTo("500");
         StockTransaction receipt = ledger.findByTransferOriginId(transferred.getId()).orElseThrow();
         StockLot receivedLot = lots.findById(receipt.getStockLot().getId()).orElseThrow();

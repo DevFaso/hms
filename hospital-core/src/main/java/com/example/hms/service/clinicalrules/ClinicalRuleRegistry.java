@@ -158,6 +158,9 @@ public final class ClinicalRuleRegistry {
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
             "service.lab.CriticalResultEscalationSettingsService"),
         // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
+        // Review of #1380 (QA r81 D4181), coordinator decision: a missing price never blocks care.
+        rule(ClinicalRuleSetKey.UNPRICED_FILL_RELEASE, "2026-11-27.1",
+            "service.pharmacy.UnpricedFillRelease"),
         rule(ClinicalRuleSetKey.DISPENSED_PRODUCT_SUBSTITUTION, "2026-11-25.1",
             "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"),
         // Owner decision 2026-11-25, research report « Emergency O positive release authority »: who decides, by tier.

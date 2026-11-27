@@ -138,6 +138,22 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D4182: nothing is sold at the counter of a partner pharmacy")
+    void d4182_aPartnerPharmacyHasNoCounterOfTheHospital() {
+        pharmacy.setPharmacyType(com.example.hms.enums.PharmacyType.PARTNER_PHARMACY);
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field", "messageKey").containsExactly("pharmacyId", PharmacyStores.NOT_OWN_STORE_KEY);
+        verify(saleRepository, never()).save(any());
+        verify(inventoryItemRepository, never()).decrementOnHand(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("QA D1611: a counter sale paid by insurance is refused on paymentMethod")
     void d1611_insuranceIsNotAPayment() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
