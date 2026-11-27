@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientVitalSignMapper;
@@ -150,8 +151,18 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         Patient patient = requireScopedChart(patientId, hospitalId);
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospitalId);
-        List<PatientVitalSign> vitals = vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
-            patient.getId(), readable, PageRequest.of(0, Math.max(1, limit)));
+        // A vital sign names no visit: one taken at the hospital of a withheld
+        // visit, on a day that visit covers, is withheld with it. Judged row
+        // by row, so the latest ones are cut after it.
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patient.getId(), hospitalId));
+        int shown = Math.max(1, limit);
+        List<PatientVitalSign> vitals = restricted.isEmpty()
+            ? vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
+            patient.getId(), readable, PageRequest.of(0, shown))
+            : vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
+                patient.getId(), readable, org.springframework.data.domain.Pageable.unpaged())
+                .stream().filter(restricted::admits).limit(shown).toList();
         reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(
                 vitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList(), hospitalId),

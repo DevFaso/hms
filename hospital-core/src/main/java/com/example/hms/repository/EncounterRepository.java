@@ -36,6 +36,21 @@ public interface EncounterRepository
     """)
     List<Encounter> findByPatient_Id(@org.springframework.data.repository.query.Param("patientId") UUID patientId);
 
+    /**
+     * The patient's visits recorded at any hospital but this one, with their
+     * department: what {@code RecordAccessPolicy.withheldVisits} judges.
+     * Patient-wide on purpose (a restricted visit must be known to be
+     * withheld); it is never mapped to a response.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT e FROM Encounter e
+        LEFT JOIN FETCH e.department
+        WHERE e.patient.id = :patientId
+          AND e.hospital.id <> :actingHospitalId
+    """)
+    List<Encounter> findRecordedElsewhere(@org.springframework.data.repository.query.Param("patientId") UUID patientId,
+                                          @org.springframework.data.repository.query.Param("actingHospitalId") UUID actingHospitalId);
+
     // Encounters by STAFF/DOCTOR (also fully fetched)
     @org.springframework.data.jpa.repository.Query("""
         SELECT e FROM Encounter e

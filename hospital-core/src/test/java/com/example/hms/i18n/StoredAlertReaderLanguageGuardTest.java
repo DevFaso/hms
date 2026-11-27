@@ -64,6 +64,8 @@ class StoredAlertReaderLanguageGuardTest {
         // QA D3304: the stored copy of a maternal early-warning alert; each reader's item is rendered from its keys.
         Map.entry("service/vitals/MaternalEarlyWarningService.java", ALERT),
         Map.entry("service/escalation/UrgentAlerts.java", NOTICE),
+        // QA D4308: a platform inbox item's stored fallback; InBasketMapper renders the reader's from its key.
+        Map.entry("service/platform/PlatformInbox.java", NOTICE),
         Map.entry("service/escalation/UrgentEscalationSupport.java", "an SMS: the recipient's phone has no session"),
         // QA D3862: the stored copy of a HIGH NEWS2 or an URGENT newborn vital-set alert; the reader's is keyed.
         Map.entry("service/vitals/News2EscalationService.java", ALERT),

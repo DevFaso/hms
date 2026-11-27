@@ -2,10 +2,20 @@
   v1.0 row 11: skip-link MUST be the first focusable element in the shell
   so a keyboard user's first Tab reveals it. See docs/ui/accessibility.md §6.9.
 -->
-<app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
+<!--
+  While the screen is locked, everything but the lock screen is out of the
+  document (appOutOfDocument on each top-level element): nothing behind the
+  lock can be read from the page.
+-->
+<app-skip-link
+  target="#main-content"
+  [label]="'A11Y.SKIP_TO_MAIN' | translate"
+  [appOutOfDocument]="idle.contentHidden()"
+/>
 
 <div
   class="shell"
+  [appOutOfDocument]="idle.contentHidden()"
   [class.collapsed]="sidebarCollapsed()"
   [class.sidebar-resizing]="sidebarResizing()"
   [style.--sidebar-expanded-width]="sidebarWidth() + 'px'"
@@ -532,7 +542,7 @@
      everything else role="status" (polite). The icon glyph text
      ("check_circle" etc.) is decorative and must be aria-hidden or it
      gets announced verbatim. -->
-<div class="toast-container">
+<div class="toast-container" [appOutOfDocument]="idle.contentHidden()">
   @for (t of toast.toasts(); track t.id) {
     <div
       class="toast"

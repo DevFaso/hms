@@ -362,7 +362,9 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             .createdAt(msg.getCreatedAt())
             .sentAt(msg.getSentAt())
             .attempts(msg.getAttempts())
-            .lastError(msg.getLastError())
+            // QA D4078: a cause in the reader's language, never the text of an exception.
+            .lastError(com.example.hms.service.integration.InstrumentOutboxErrorText.describe(
+                msg.getLastError(), org.springframework.context.i18n.LocaleContextHolder.getLocale()))
             .lastAttemptAt(msg.getLastAttemptAt());
     }
 }

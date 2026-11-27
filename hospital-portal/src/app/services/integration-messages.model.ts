@@ -27,6 +27,23 @@ export interface IntegrationMessageEvent {
   attemptCount: number;
   lastAttemptedAt: string;
   receivedAt: string;
+  /** QA D4302: the organisation's name; null for a platform-wide message. */
+  organizationName?: string | null;
+  /** QA D4301: a failed message a later attempt has taken over: no longer waiting, not replayable. */
+  resolved?: boolean;
+  /** QA D4302: every row of the same exchange, oldest first (detail view only). */
+  attempts?: IntegrationMessageAttempt[] | null;
+  /** How many rows the exchange has; `attempts` holds the first 50 of them. */
+  attemptsTotal?: number | null;
+}
+
+export interface IntegrationMessageAttempt {
+  id: string;
+  status: IntegrationMessageStatus;
+  attemptCount: number | null;
+  errorMessage: string | null;
+  lastAttemptedAt: string;
+  receivedAt: string;
 }
 
 export interface IntegrationMessagePage {

@@ -29,4 +29,11 @@ public interface SuperAdminIntegrationHealthService {
      * not only the ones with a probe or a re-sync bean.
      */
     boolean isListed(String integrationId);
+
+    /**
+     * QA D4300: the test of a listed integration that has no connectivity probe
+     * of its own - whether it is configured and switched on. Empty for an
+     * integration this service does not list.
+     */
+    java.util.Optional<com.example.hms.service.integration.probe.Probe> configurationCheck(String integrationId);
 }

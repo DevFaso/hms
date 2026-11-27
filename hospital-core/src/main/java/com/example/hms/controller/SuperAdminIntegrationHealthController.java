@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.service.integration.probe.Probe;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.superadmin.IntegrationHealthRowDTO;
 import com.example.hms.payload.dto.superadmin.IntegrationHealthSummaryDTO;
@@ -59,10 +60,14 @@ public class SuperAdminIntegrationHealthController {
         requireKnown(integrationId);
         // QA D851: a listed integration with no probe is a refusal the
         // console can explain, not "integration not found".
-        if (!actionService.supportsProbe(integrationId)) {
-            throw BusinessRuleException.ofKey("integration.probe.unsupported", integrationId);
+        if (actionService.supportsProbe(integrationId)) {
+            return ResponseEntity.ok(actionService.testConnection(integrationId, organizationId));
         }
-        return ResponseEntity.ok(actionService.testConnection(integrationId, organizationId));
+        // QA D4300: a listed integration with no probe of its own is tested on its
+        // configuration, and the outcome is recorded like any other test.
+        Probe check = service.configurationCheck(integrationId)
+            .orElseThrow(() -> BusinessRuleException.ofKey("integration.probe.unsupported", integrationId));
+        return ResponseEntity.ok(actionService.recordOutcome(integrationId, organizationId, check));
     }
 
     @PostMapping("/{integrationId}/resync")

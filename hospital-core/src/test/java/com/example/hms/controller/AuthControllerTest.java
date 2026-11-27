@@ -2249,7 +2249,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(login)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value(
-                        "Your account has no active role: it was deactivated or has not been set up. Ask your administrator to assign or reactivate a role, then sign in again."));
+                        "Your account has no active role. Contact the administrator of your facility."));
 
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
         verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
@@ -2507,5 +2507,299 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(resets, never()).dispatch(any(), any(), any());
+    }
+
+    // =====================================================================
+    // r81: the screen lock is kept on the server; sign-ins are in the audit trail
+    // =====================================================================
+
+    @Test
+    void lockSession_marksTheSessionOfTheBearer() throws Exception {
+        authenticateAs("drjones");
+        when(jwtTokenProvider.getSessionId("access.jwt")).thenReturn("session-9");
+        when(jwtTokenProvider.getRefreshTokenExpirationMs()).thenReturn(172_800_000L);
+
+        mockMvc.perform(post("/auth/session/lock").header("Authorization", "Bearer access.jwt"))
+                .andExpect(status().isNoContent());
+
+        verify(tokenBlacklistService).lockSession(eq("session-9"),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void verifyPassword_correctPassword_liftsTheLockOfThatSession() throws Exception {
+        authenticateAs("drjones");
+        lockScreenAccount("drjones");
+        when(jwtTokenProvider.getSessionId("access.jwt")).thenReturn("session-9");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
+
+        mockMvc.perform(post("/auth/verify-password").header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("drjones", "CorrectPass1!", null))))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).unlockSession("session-9");
+    }
+
+    @Test
+    void verifyPassword_wrongPassword_leavesTheSessionLocked() throws Exception {
+        authenticateAs("drjones");
+        lockScreenAccount("drjones");
+        when(jwtTokenProvider.getSessionId("access.jwt")).thenReturn("session-9");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        mockMvc.perform(post("/auth/verify-password").header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("drjones", "WrongPassword!", null))))
+                .andExpect(status().isUnauthorized());
+
+        verify(tokenBlacklistService, never()).unlockSession(any());
+    }
+
+    @Test
+    void unlockSession_ofAPasswordSession_isAlwaysRefused_lockedOrNot() throws Exception {
+        authenticateAs("drjones");
+        when(jwtTokenProvider.getSessionId("access.jwt")).thenReturn("session-9");
+        for (boolean locked : new boolean[] {false, true}) {
+            when(tokenBlacklistService.isSessionLocked("session-9")).thenReturn(locked);
+            when(tokenBlacklistService.sessionLockedAt("session-9")).thenReturn(locked ? 1_000L : null);
+
+            mockMvc.perform(post("/auth/session/unlock").header("Authorization", "Bearer access.jwt"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("session_locked"));
+        }
+        // No bearer at all names no session either.
+        mockMvc.perform(post("/auth/session/unlock"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("session_locked"));
+
+        verify(tokenBlacklistService, never()).unlockSession(any());
+    }
+
+    /**
+     * Signs the request in as an identity-provider token of {@code subject} in
+     * provider session {@code sid}, signed in there at {@code authTime}; any
+     * may be {@code null}.
+     */
+    private void authenticateWithProvider(String subject, String sid, java.time.Instant authTime) {
+        java.util.Map<String, Object> claims = new java.util.HashMap<>();
+        claims.put("preferred_username", "dr.alice");
+        if (subject != null) {
+            claims.put("sub", subject);
+        }
+        if (sid != null) {
+            claims.put("sid", sid);
+        }
+        if (authTime != null) {
+            claims.put("auth_time", authTime);
+        }
+        java.time.Instant now = java.time.Instant.now();
+        var jwt = new org.springframework.security.oauth2.jwt.Jwt(
+                "provider-token", now, now.plusSeconds(60), java.util.Map.of("alg", "RS256"), claims);
+        SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                        jwt, AuthorityUtils.createAuthorityList("ROLE_DOCTOR"), "dr.alice"));
+    }
+
+    private static final String SID_KEY = "oidc:sid:kc-session-1";
+    private static final String PERSON_KEY = "oidc:sub:kc-user-1";
+
+    /** A lock on record under {@code key} since {@code lockedAt}. */
+    private void lockOnRecord(String key, Long lockedAt) {
+        when(tokenBlacklistService.isSessionLocked(key)).thenReturn(true);
+        when(tokenBlacklistService.sessionLockedAt(key)).thenReturn(lockedAt);
+    }
+
+    private void expectUnlockRefused() throws Exception {
+        mockMvc.perform(post("/auth/session/unlock"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("session_locked"));
+    }
+
+    @Test
+    void unlockSession_provider_withNoLockOnRecord_isRefused() throws Exception {
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.now());
+
+        expectUnlockRefused();
+    }
+
+    @Test
+    void unlockSession_provider_signedInBeforeTheLock_isRefused() throws Exception {
+        long lockedAt = System.currentTimeMillis();
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.ofEpochMilli(lockedAt - 60_000));
+        lockOnRecord(SID_KEY, lockedAt);
+        lockOnRecord(PERSON_KEY, lockedAt);
+
+        expectUnlockRefused();
+    }
+
+    @Test
+    void unlockSession_provider_withNoSignInTime_orNoSessionNorSubject_orAnUnreadableLock_isRefused() throws Exception {
+        lockOnRecord(SID_KEY, System.currentTimeMillis() - 60_000);
+
+        authenticateWithProvider("kc-user-1", "kc-session-1", null);
+        expectUnlockRefused();
+
+        authenticateWithProvider(null, null, java.time.Instant.now());
+        expectUnlockRefused();
+
+        lockOnRecord(SID_KEY, null);
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.now());
+        expectUnlockRefused();
+    }
+
+    @Test
+    void unlockSession_provider_theSessionsOwnLockWins_overAnOlderLockOfThePerson() throws Exception {
+        long sessionLockedAt = System.currentTimeMillis();
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.ofEpochMilli(sessionLockedAt - 30_000));
+        lockOnRecord(SID_KEY, sessionLockedAt);
+        lockOnRecord(PERSON_KEY, sessionLockedAt - 120_000);
+
+        expectUnlockRefused();
+    }
+
+    @Test
+    void unlockSession_provider_signedInAfterTheLock_isConfirmed_andTheLockStaysForOlderTokens() throws Exception {
+        long lockedAt = System.currentTimeMillis() - 60_000;
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.ofEpochMilli(lockedAt + 5_000));
+        lockOnRecord(SID_KEY, lockedAt);
+
+        mockMvc.perform(post("/auth/session/unlock")).andExpect(status().isNoContent());
+
+        verify(tokenBlacklistService, never()).unlockSession(any());
+    }
+
+    @Test
+    void unlockSession_provider_aNewProviderSession_isProvedAgainstThePersonsLock() throws Exception {
+        long lockedAt = System.currentTimeMillis() - 60_000;
+        lockOnRecord(PERSON_KEY, lockedAt);
+
+        // The sign-in opened a new provider session: the person's lock decides.
+        authenticateWithProvider("kc-user-1", "kc-session-2", java.time.Instant.ofEpochMilli(lockedAt + 5_000));
+        mockMvc.perform(post("/auth/session/unlock")).andExpect(status().isNoContent());
+
+        authenticateWithProvider("kc-user-1", "kc-session-2", java.time.Instant.ofEpochMilli(lockedAt - 5_000));
+        expectUnlockRefused();
+    }
+
+    @Test
+    void lockSession_provider_locksTheProviderSessionAndThePerson_atEveryCall() throws Exception {
+        authenticateWithProvider("kc-user-1", "kc-session-1", java.time.Instant.now());
+        when(jwtTokenProvider.getRefreshTokenExpirationMs()).thenReturn(172_800_000L);
+        lockOnRecord(SID_KEY, 1_000L);
+
+        mockMvc.perform(post("/auth/session/lock")).andExpect(status().isNoContent());
+
+        verify(tokenBlacklistService).lockSession(eq(SID_KEY),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+        verify(tokenBlacklistService).lockSession(eq(PERSON_KEY),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void lockSession_provider_withNoSession_locksThePersonOnce() throws Exception {
+        authenticateWithProvider("kc-user-1", null, java.time.Instant.now());
+        when(jwtTokenProvider.getRefreshTokenExpirationMs()).thenReturn(172_800_000L);
+
+        mockMvc.perform(post("/auth/session/lock")).andExpect(status().isNoContent());
+
+        verify(tokenBlacklistService, times(1)).lockSession(eq(PERSON_KEY),
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void login_success_isAuditedWithTheAddressAndTheDevice() throws Exception {
+        givenAuthenticatedWith("ROLE_NURSE");
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("nurse1").email("nurse1@example.com").build();
+        java.util.UUID id = java.util.UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", id);
+        when(userRepository.findByUsername("nurse1")).thenReturn(java.util.Optional.of(user));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("X-Forwarded-For", "41.203.10.7, 10.0.0.3")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("nurse1", "S3cret-typed-here", null))))
+                .andExpect(status().isOk());
+
+        var rows = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(rows.capture());
+        var signIn = rows.getAllValues().stream()
+                .filter(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LOGIN).toList();
+        assertThat(signIn).hasSize(1);
+        assertThat(signIn.get(0).getUserId()).isEqualTo(id);
+        assertThat(signIn.get(0).getIpAddress()).isEqualTo("41.203.10.7");
+        assertThat(signIn.get(0).getDetails()).isEqualTo("device=Chrome, Windows");
+        assertThat(signIn.get(0).getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
+        assertThat(String.valueOf(rows.getAllValues())).doesNotContain("S3cret-typed-here");
+    }
+
+    @Test
+    void login_refused_isAuditedWithTheAddress_andNeverWithWhatWasTyped() throws Exception {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        when(userRepository.findIdsByUsernameIgnoreCase("nurse1")).thenReturn(java.util.List.of(id));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("X-Forwarded-For", "41.203.10.7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("nurse1", "S3cret-typed-here", null))))
+                .andExpect(status().isUnauthorized());
+
+        var rows = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(rows.capture());
+        assertThat(rows.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LOGIN_FAILURE);
+        assertThat(rows.getValue().getUserId()).isEqualTo(id);
+        assertThat(rows.getValue().getIpAddress()).isEqualTo("41.203.10.7");
+        assertThat(rows.getValue().getUserName()).isNull();
+        assertThat(String.valueOf(rows.getValue())).doesNotContain("S3cret-typed-here");
+    }
+
+    @Test
+    void login_locked_isAuditedWithTheNameAskedForAndTheAddress() throws Exception {
+        when(loginAttemptService.remainingLockMs("nurse1")).thenReturn(90_000L);
+
+        mockMvc.perform(post("/auth/login")
+                        .header("X-Forwarded-For", "41.203.10.7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("nurse1", "S3cret-typed-here", null))))
+                .andExpect(status().is(423));
+
+        var rows = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(rows.capture());
+        assertThat(rows.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ACCOUNT_LOCKED);
+        assertThat(rows.getValue().getUserName()).isEqualTo("nurse1");
+        assertThat(rows.getValue().getIpAddress()).isEqualTo("41.203.10.7");
+        assertThat(String.valueOf(rows.getValue())).doesNotContain("S3cret-typed-here");
+    }
+
+    @Test
+    void logout_isAuditedWithTheAddress() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        lockScreenAccount("patient1");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .header("X-Forwarded-For", "41.203.10.7"))
+                .andExpect(status().isOk());
+
+        var rows = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(rows.capture());
+        var signOut = rows.getAllValues().stream()
+                .filter(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LOGOUT).toList();
+        assertThat(signOut).hasSize(1);
+        assertThat(signOut.get(0).getIpAddress()).isEqualTo("41.203.10.7");
+        assertThat(signOut.get(0).getEventDescription()).isEqualTo("Signed out");
+    }
+
+    @Test
+    void logout_withNoSessionPresented_writesNoSignOutRow() throws Exception {
+        mockMvc.perform(post("/auth/logout")).andExpect(status().isOk());
+
+        verify(auditEventLogService, never()).logEvent(any());
     }
 }

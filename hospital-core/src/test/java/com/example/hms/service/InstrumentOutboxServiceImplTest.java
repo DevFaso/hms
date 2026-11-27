@@ -211,7 +211,8 @@ class InstrumentOutboxServiceImplTest {
             .containsExactlyInAnyOrder("PENDING", "ERROR");
         InstrumentOutboxResponseDTO errorRow = result.stream()
             .filter(r -> "ERROR".equals(r.getStatus())).findFirst().orElseThrow();
-        assertThat(errorRow.getLastError()).isEqualTo("Negative acknowledgement: MSA|AE|1");
+        // QA D4078: a cause, not the stored English sentence (no bundle is loaded here).
+        assertThat(errorRow.getLastError()).isEqualTo("NEGATIVE_ACK: MSA|AE|1");
         assertThat(errorRow.getAttempts()).isEqualTo(1);
     }
 
@@ -271,7 +272,9 @@ class InstrumentOutboxServiceImplTest {
         assertThat(page.getContent().get(0).getPayload()).isNull();
         assertThat(page.getContent().get(0).getOrderingHospitalId()).isEqualTo(hospitalId);
         assertThat(page.getContent().get(0).getOrderingHospitalName()).isEqualTo("Ordering hospital");
-        assertThat(page.getContent().get(0).getLastError()).contains("SocketTimeoutException");
+        // QA D4078: the text of the exception never reaches the page.
+        assertThat(page.getContent().get(0).getLastError())
+            .isEqualTo("TIMEOUT").doesNotContain("Exception");
         assertThat(page.getPendingCount()).isEqualTo(3);
         assertThat(page.getErrorCount()).isEqualTo(2);
         assertThat(page.getAckCount()).isEqualTo(40);

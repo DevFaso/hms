@@ -192,7 +192,22 @@ public class WebhookDeliveryDispatchService {
             log.warn("Webhook endpoint {} auto-disabled after {} consecutive terminal failures",
                 endpoint.getId(), endpoint.getConsecutiveFailures());
             emitDisabledAudit(endpoint);
+            // QA D4308: the platform administrators read it in their inbox.
+            if (platformInbox != null) {
+                platformInbox.webhookEndpointDisabled(endpoint.getId(),
+                    endpoint.getHospital() != null ? endpoint.getHospital().getId() : null,
+                    endpoint.getHospital() != null ? endpoint.getHospital().getName() : null,
+                    endpoint.getConsecutiveFailures());
+            }
         }
+    }
+
+    /** Set by the container; absent in a test that builds this service by hand. */
+    private com.example.hms.service.platform.PlatformInbox platformInbox;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPlatformInbox(com.example.hms.service.platform.PlatformInbox platformInbox) {
+        this.platformInbox = platformInbox;
     }
 
     /** Best-effort, actor-less — the sweep has no request context (SYSTEM flow). */

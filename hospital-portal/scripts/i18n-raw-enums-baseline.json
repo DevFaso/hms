@@ -254,6 +254,7 @@
     "src/app/staff/staff-list.html::<option>dept",
     "src/app/staff/staff-list.html::<option>name",
     "src/app/super-admin/integration-health/integration-health.html::chip.status",
+    "src/app/super-admin/integration-messages/integration-messages.html::d.messageType",
     "src/app/super-admin/integration-messages/integration-messages.html::row.messageType",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::p.decisionReason",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::row.decisionReason",

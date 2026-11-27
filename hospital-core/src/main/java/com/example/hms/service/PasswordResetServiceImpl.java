@@ -62,8 +62,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private static final int TOKEN_BYTES = 32; // 256-bit entropy
     /** QA D2051: one message for an unknown, expired or already used reset link. */
     public static final String TOKEN_INVALID = "passwordReset.token.invalid";
-    /** The change-password minimum ({@code auth.password.tooShort}), which the reset page also enforces. */
-    private static final int MIN_PASSWORD_LENGTH = 8;
     /** QA D787: a phone number as typed: digits, an optional leading +, spaces, dots, dashes, brackets. */
     private static final Pattern PHONE_SHAPED = Pattern.compile("[+\\d][\\d\\s().-]*");
     private static final SecureRandom FALLBACK_RANDOM = new SecureRandom();
@@ -284,11 +282,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             .orElseThrow(() -> new BusinessException(TOKEN_INVALID));
 
         // Only a holder of a live link learns the policy; their link stays unspent.
-        if (newPassword == null || newPassword.length() < MIN_PASSWORD_LENGTH) {
-            throw new FieldBusinessException("newPassword", "auth.password.tooShort");
-        }
-
         User user = resetToken.getUser();
+        com.example.hms.security.PasswordPolicy.require("newPassword", newPassword, user);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setForcePasswordChange(false);
         com.example.hms.utility.TemporaryPasswords.retire(user);

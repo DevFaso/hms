@@ -109,6 +109,29 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     private final UserRepository userRepository;
     private final AuditEventLogRepository auditEventLogRepository;
 
+    /**
+     * QA D4308: the platform administrators' inbox. Set by the container; absent
+     * in a test that builds this service by hand, where nothing is filed.
+     */
+    private com.example.hms.service.platform.PlatformInbox platformInbox;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPlatformInbox(com.example.hms.service.platform.PlatformInbox platformInbox) {
+        this.platformInbox = platformInbox;
+    }
+
+    private void awaitingVerification(Hospital facility) {
+        if (platformInbox != null) {
+            platformInbox.providerAwaitingVerification(facility.getId(), facility.getName(), facility.getCode());
+        }
+    }
+
+    private void verificationDecided(Hospital facility) {
+        if (platformInbox != null) {
+            platformInbox.providerDecided(facility.getId());
+        }
+    }
+
     @Override
     public ProviderResponseDTO create(ProviderCreateRequestDTO request) {
         requireVerifiedSuperAdmin();
@@ -148,6 +171,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
 
         invalidateLifecycleCache();
         audit(facility, AuditEventType.PROVIDER_CREATED, ProviderVerificationStatus.SUBMITTED);
+        awaitingVerification(facility);
         return toResponse(facility, verification);
     }
 
@@ -319,6 +343,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         invalidateLifecycleCache();
 
         audit(facility, AuditEventType.PROVIDER_VERIFIED, ProviderVerificationStatus.VERIFIED);
+        verificationDecided(facility);
         return withDecider(toResponse(facility, verification), verification);
     }
 
@@ -332,6 +357,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         verificationRepository.save(verification);
         // The facility stays SUSPENDED and inactive: it was never verified.
         audit(facility, AuditEventType.PROVIDER_REJECTED, ProviderVerificationStatus.REJECTED);
+        verificationDecided(facility);
         return toResponse(facility, verification);
     }
 
@@ -349,6 +375,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         applyProfessional(next, request.getProfessional());
         next = verificationRepository.save(next);
         audit(facility, AuditEventType.PROVIDER_EVIDENCE_RESUBMITTED, ProviderVerificationStatus.SUBMITTED);
+        awaitingVerification(facility);
         return toResponse(facility, next);
     }
 
