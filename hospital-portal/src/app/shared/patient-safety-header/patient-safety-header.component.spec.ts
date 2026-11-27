@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { PatientSafetyHeaderComponent } from './patient-safety-header.component';
@@ -88,6 +88,38 @@ describe('PatientSafetyHeaderComponent', () => {
     storyboard.getStoryboard.and.returnValue(of(summary({ bloodType: null })));
     const el = show('p-1');
     expect(text(el, 'patient-safety-blood-group')).toBe('PATIENT_SAFETY.NOT_DOCUMENTED');
+  });
+
+  it('keeps the blood group readable when the request action shares a narrow header', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      {
+        PATIENT_SAFETY: { BLOOD_GROUP: 'Groupe sanguin', NOT_DOCUMENTED: 'Non renseign?' },
+      },
+      true,
+    );
+    translate.use('fr');
+    storyboard.getStoryboard.and.returnValue(
+      of(summary({ bloodType: null, fullName: 'Pengdwend? Yam?ogo' })),
+    );
+    const el = show('p-1');
+    el.style.width = '260px';
+    const fact = el.querySelector('.psh-fact-blood') as HTMLElement;
+    const action = document.createElement('span');
+    action.textContent = 'Demander du sang';
+    action.style.cssText = 'display:inline-block;flex:none;width:130px;white-space:nowrap';
+    fact.appendChild(action);
+    fixture.detectChanges();
+
+    const value = el.querySelector('[data-testid="patient-safety-blood-group"]') as HTMLElement;
+    expect(value.getBoundingClientRect().width).toBeGreaterThan(60);
+    expect(action.getBoundingClientRect().right).toBeLessThanOrEqual(
+      fact.getBoundingClientRect().right + 1,
+    );
+    expect(el.querySelector('[data-testid="patient-safety-name"]')?.textContent).toContain(
+      'Pengdwend? Yam?ogo',
+    );
   });
 
   it('renders nothing for a role the server refuses (the front desk)', () => {
