@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Indicateurs de performance hospitalière",
     "TITLE": "Analytique",
     "KPI": {
+      "PERIOD": "Du {{from}} au {{to}}",
       "SECTION_HEADING": "Indicateurs opérationnels",
       "LOADING": "Chargement des indicateurs…",
       "DOOR_TO_DOCTOR_LABEL": "Délai accueil-médecin",
@@ -4857,7 +4858,9 @@
       "REMOVE_RANGE": "Retirer cet intervalle",
       "ADD_RANGE": "Ajouter un intervalle",
       "ADD": "Ajouter un composant"
-    }
+    },
+    "CULTURE": "Culture (rapport de culture et antibiogramme)",
+    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",
@@ -10107,7 +10110,8 @@
     "RESET_FILTERS": "Réinitialiser les filtres",
     "LOAD_ERROR": "Impossible de charger les signatures. Veuillez réessayer.",
     "NO_MATCHES": "Aucune signature ne correspond à ces filtres.",
-    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports. Vous pouvez aussi consulter un rapport avec sa référence."
+    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports.",
+    "EMPTY_LOOKUP_HELP": "Vous pouvez aussi consulter un rapport avec sa référence."
   },
   "STAFF": {
     "ADD_STAFF": "Ajouter un membre",
@@ -13004,6 +13008,7 @@
     "PASSWORD_AGE": "Âge du mot de passe",
     "ROTATION_DUE": "Échéance de rotation",
     "DAYS_UNTIL_DUE": "Jours avant échéance",
+    "DAYS_ONE": "{{days}} jour",
     "DAYS_N": "{{days}} jours",
     "IMPORT_USERS_HINT": "CSV avec ligne d'en-tête. Colonnes requises : username, email, firstname, lastname, phonenumber, roles. Optionnelles : password, hospitalid, licensenumber, jobtitle. Les rôles peuvent être séparés par virgule, point-virgule, barre verticale ou espace.",
     "FORCE_PASSWORD_CHANGE": "Forcer le changement de mot de passe à la première connexion",
@@ -13550,6 +13555,7 @@
     "NONE_YET": "Aucun rapport planifié",
     "NONE_YET_HINT": "Créez-en un pour recevoir un CSV agrégé chaque jour, semaine ou mois.",
     "NO_RUNS": "Aucune exécution pour ce rapport",
+    "WEEK_LABEL": "Semaine {{week}}, {{year}}",
     "PERIOD_TOKEN": "Période",
     "ROWS": "Lignes",
     "GENERATED_AT": "Généré le",

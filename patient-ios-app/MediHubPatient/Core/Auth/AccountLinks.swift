@@ -1,14 +1,31 @@
 import Foundation
 
-/// Reads what a patient pastes from an account e-mail: either the whole link
-/// (`…/reset-password?token=…`, `…/verify?email=…&token=…`) or just the code.
+/// Reads what a patient pastes from an account e-mail: either the whole link or
+/// just the code. The link carries the token in its fragment
+/// (`…/reset-password#token=…`, `…/verify#token=…`); a link sent before carried
+/// it in the query (`…?token=…`, `…?email=…&token=…`).
 enum AccountLinkParser {
-    /// The `token` query item when the text is a link carrying one, else the
+    /// The `token` of a link carrying one (fragment first, then query), else the
     /// trimmed text itself (a code typed or pasted on its own).
     static func token(from text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let value = fragmentValue("token", in: trimmed), !value.isEmpty { return value }
         if let value = queryValue("token", in: trimmed), !value.isEmpty { return value }
         return trimmed
+    }
+
+    /// `name=value` inside the part of a link after `#`.
+    private static func fragmentValue(_ name: String, in text: String) -> String? {
+        guard let hash = text.firstIndex(of: "#") else { return nil }
+        let fragment = text[text.index(after: hash)...]
+        for pair in fragment.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2, String(parts[0]) == name {
+                let raw = String(parts[1])
+                return raw.removingPercentEncoding ?? raw
+            }
+        }
+        return nil
     }
 
     /// The `email` query item of a pasted activation link, if any.

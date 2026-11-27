@@ -11,7 +11,10 @@ import { VerifyEmailComponent } from './verify-email';
 describe('VerifyEmailComponent — the e-mail activation link lands somewhere', () => {
   let httpMock: HttpTestingController;
 
-  function open(query: Record<string, string>): ComponentFixture<VerifyEmailComponent> {
+  function open(
+    query: Record<string, string>,
+    fragment: string | null = null,
+  ): ComponentFixture<VerifyEmailComponent> {
     TestBed.configureTestingModule({
       imports: [VerifyEmailComponent, TranslateModule.forRoot()],
       providers: [
@@ -21,7 +24,7 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
         { provide: Location, useClass: SpyLocation },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+          useValue: { snapshot: { fragment, queryParamMap: convertToParamMap(query) } },
         },
       ],
     });
@@ -37,7 +40,26 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
 
   afterEach(() => httpMock.verify());
 
-  it('activates through POST /auth/verify-email, the address and token in the body, never the URL', () => {
+  it('exchanges the token of the link fragment by POST: no address, nothing in a request URL', () => {
+    const fixture = open({}, 'token=t-frag');
+    const req = httpMock.expectOne(
+      (r) =>
+        r.method === 'POST' &&
+        r.url === '/auth/verify-email' &&
+        r.params.keys().length === 0 &&
+        r.urlWithParams === '/auth/verify-email',
+    );
+    expect(req.request.body).toEqual({ token: 't-frag' });
+    // The fragment leaves the address bar once read.
+    expect((TestBed.inject(Location) as SpyLocation).path()).toBe('/verify');
+    req.flush({ message: 'Email verified successfully.', success: true });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.state()).toBe('verified');
+    expect(fixture.componentInstance.resendEmail).toBe('');
+  });
+
+  it('a link sent before (address and token in the query) still activates, both in the body', () => {
     const fixture = open({ email: 'a@b.c', token: 't1' });
     const req = httpMock.expectOne(
       (r) =>

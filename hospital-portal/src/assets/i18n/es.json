@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Métricas de rendimiento hospitalario",
     "TITLE": "Analítica",
     "KPI": {
+      "PERIOD": "Del {{from}} al {{to}}",
       "SECTION_HEADING": "Indicadores operativos",
       "LOADING": "Cargando indicadores…",
       "DOOR_TO_DOCTOR_LABEL": "Tiempo recepción-médico",
@@ -4857,7 +4858,9 @@
       "REMOVE_RANGE": "Remove this range",
       "ADD_RANGE": "Add a range",
       "ADD": "Add a component"
-    }
+    },
+    "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
+    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",
@@ -10107,7 +10110,8 @@
     "RESET_FILTERS": "Restablecer filtros",
     "LOAD_ERROR": "No se pudieron cargar las firmas. Inténtelo de nuevo.",
     "NO_MATCHES": "Ninguna firma coincide con estos filtros.",
-    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes. También puede consultar un informe por su referencia."
+    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes.",
+    "EMPTY_LOOKUP_HELP": "También puede consultar un informe por su referencia."
   },
   "STAFF": {
     "ADD_STAFF": "Agregar personal",
@@ -13004,6 +13008,7 @@
     "PASSWORD_AGE": "Edad de la contraseña",
     "ROTATION_DUE": "Rotación prevista",
     "DAYS_UNTIL_DUE": "Días hasta vencer",
+    "DAYS_ONE": "{{days}} día",
     "DAYS_N": "{{days}} días",
     "IMPORT_USERS_HINT": "CSV con fila de encabezado. Columnas requeridas: username, email, firstname, lastname, phonenumber, roles. Opcionales: password, hospitalid, licensenumber, jobtitle. Los roles pueden separarse con coma, punto y coma, barra vertical o espacio.",
     "FORCE_PASSWORD_CHANGE": "Forzar cambio de contraseña en el primer inicio",
@@ -13550,6 +13555,7 @@
     "NONE_YET": "Aún no hay informes programados",
     "NONE_YET_HINT": "Cree uno para recibir un CSV agregado cada día, semana o mes.",
     "NO_RUNS": "Sin ejecuciones para este informe",
+    "WEEK_LABEL": "Semana {{week}}, {{year}}",
     "PERIOD_TOKEN": "Período",
     "ROWS": "Filas",
     "GENERATED_AT": "Generado",

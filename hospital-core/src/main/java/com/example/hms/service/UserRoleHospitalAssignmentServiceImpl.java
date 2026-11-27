@@ -2913,10 +2913,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             if (!withFyi) {
                 return;
             }
+            // The code is the assignee's alone: the registrar's and the hospital's copies say where it was
+            // sent (masked), never what it is. The desk reads a code through the audited « show the code » action.
+            String sentTo = maskedActivationContact(user);
+            if (!hasText(confirmationCode) || sentTo == null) {
+                return;
+            }
             sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
-                notifyRegistrarBySms(assignment.getRegisteredBy(), locale, roleLabel, assigneeDisplay, hospitalDisplay, confirmationCode));
+                notifyRegistrarBySms(assignment.getRegisteredBy(), locale, roleLabel, assigneeDisplay, hospitalDisplay, sentTo));
             sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->
-                notifyHospitalBySms(hospital, locale, assigneeDisplay, roleLabel, confirmationCode));
+                notifyHospitalBySms(hospital, locale, assigneeDisplay, roleLabel, sentTo));
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
         }
@@ -2985,13 +2991,23 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
+    /** Where the assignee's code went, masked: the phone when there is one, else the e-mail; null with neither. */
+    private static String maskedActivationContact(User user) {
+        if (user == null) {
+            return null;
+        }
+        String phone = ActivationDeliveryTracker.maskPhone(user.getPhoneNumber());
+        return phone != null ? phone : ActivationDeliveryTracker.maskEmail(user.getEmail());
+    }
+
+    /** The registrar's copy: who was registered and where the code went ({@code sentTo}, masked). No code. */
     private void notifyRegistrarBySms(User registrar,
                                       Locale locale,
                                       String roleLabel,
                                       String assigneeDisplay,
                                       String hospitalDisplay,
-                                      String confirmationCode) {
-        if (registrar == null || !hasText(confirmationCode)) {
+                                      String sentTo) {
+        if (registrar == null) {
             return;
         }
         String phone = registrar.getPhoneNumber();
@@ -2999,16 +3015,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return;
         }
         sendSmsSilently(phone, hospitalDisplay == null
-            ? smsText("sms.activation.registrar.platform", locale, assigneeDisplay, roleLabel, confirmationCode)
-            : smsText("sms.activation.registrar", locale, assigneeDisplay, roleLabel, hospitalDisplay, confirmationCode));
+            ? smsText("sms.activation.registrar.platform", locale, assigneeDisplay, roleLabel, sentTo)
+            : smsText("sms.activation.registrar", locale, assigneeDisplay, roleLabel, hospitalDisplay, sentTo));
     }
 
+    /** The hospital's copy, on its main number: as the registrar's, no code. */
     private void notifyHospitalBySms(Hospital hospital,
                                      Locale locale,
                                      String assigneeDisplay,
                                      String roleLabel,
-                                     String confirmationCode) {
-        if (hospital == null || !hasText(confirmationCode)) {
+                                     String sentTo) {
+        if (hospital == null) {
             return;
         }
         String phone = hospital.getPhoneNumber();
@@ -3016,7 +3033,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return;
         }
         sendSmsSilently(phone, smsText("sms.activation.hospital", locale,
-            assigneeDisplay, roleLabel, confirmationCode));
+            assigneeDisplay, roleLabel, sentTo));
     }
 
     private void notifyAssigneeBySms(UserRoleHospitalAssignment assignment,

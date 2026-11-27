@@ -28,6 +28,7 @@ public class LabTestDefinitionMapper {
             .testCode(dto.getTestCode())
             .name(dto.getName())
             .category(dto.getCategory())
+            .culture(Boolean.TRUE.equals(dto.getCulture()))
             .description(dto.getDescription())
             .sampleType(dto.getSampleType())
             .unit(dto.getUnit())
@@ -55,6 +56,7 @@ public class LabTestDefinitionMapper {
                 .name(entity.getName())
                 .description(entity.getDescription())
                 .category(entity.getCategory())
+                .culture(entity.isCulture())
                 .unit(entity.getUnit())
                 .loincCode(entity.getLoincCode())
                 .loincDisplay(entity.getLoincDisplay())
@@ -102,6 +104,9 @@ public class LabTestDefinitionMapper {
         }
         if (dto.getTurnaroundTime() != null) {
             entity.setTurnaroundTimeMinutes(dto.getTurnaroundTime());
+        }
+        if (dto.getCulture() != null) {
+            entity.setCulture(dto.getCulture());
         }
         if (dto.getActive() != null) {
             entity.setActive(dto.getActive());

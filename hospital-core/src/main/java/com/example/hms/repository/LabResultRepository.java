@@ -151,6 +151,15 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     List<LabResult> findByLabOrder_Id(UUID labOrderId);
 
+    List<LabResult> findByLabOrder_IdAndLabOrder_Hospital_Id(UUID labOrderId, UUID hospitalId);
+
+    /** A result release cannot finish an order while any culture report remains preliminary. */
+    @Query("SELECT COUNT(c) FROM MicroCultureResult c WHERE c.labOrder.id = :orderId "
+        + "AND c.labOrder.labTestDefinition.culture = true AND c.status NOT IN (com.example.hms.enums.MicroCultureStatus.FINAL, "
+        + "com.example.hms.enums.MicroCultureStatus.CORRECTED)")
+    long countPendingCulturesForOrder(@Param("orderId") UUID orderId);
+
+
     /** FHIR DiagnosticReport search (Tier 2 item 42): one query for a whole page of orders. */
     List<LabResult> findByLabOrder_IdIn(Collection<UUID> labOrderIds);
 

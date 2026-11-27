@@ -75,6 +75,12 @@ final class SharedClinicalRowsCleanup {
         // restriction), so the repository wipe above cannot see them; they
         // would pin their order through fk_labresult_order.
         context.getBean(org.springframework.jdbc.core.JdbcTemplate.class).update("DELETE FROM lab.lab_results");
+        // Culture reports pin their order/specimen; include hidden entered-in-error rows in this test-only wipe.
+        org.springframework.jdbc.core.JdbcTemplate cultureRows = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        cultureRows.update("DELETE FROM lab.micro_susceptibilities");
+        cultureRows.update("DELETE FROM lab.micro_isolates");
+        cultureRows.update("DELETE FROM lab.micro_culture_corrections");
+        cultureRows.update("DELETE FROM lab.micro_culture_results");
         context.getBean(LabSpecimenRepository.class).deleteAll();
         context.getBean(LabOrderRepository.class).deleteAll();
         context.getBean(LabTestDefinitionRepository.class).deleteAll();

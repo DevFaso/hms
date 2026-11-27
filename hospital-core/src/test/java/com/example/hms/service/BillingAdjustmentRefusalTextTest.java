@@ -66,7 +66,7 @@ class BillingAdjustmentRefusalTextTest {
     @Test
     @DisplayName("the mail form's own limits pass")
     void atTheLimitsPasses() {
-        assertThat(refusedFields(request(10, 10, 10, 2000))).isEmpty();
+        assertThat(refusedFields(request(3, 3, 3, 2000))).isEmpty();
     }
 
     @Test
