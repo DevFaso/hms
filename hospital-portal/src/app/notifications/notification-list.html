@@ -61,7 +61,9 @@
           }
           <div class="notif-content">
             <h4 class="notif-title">{{ notif.title || notif.message }}</h4>
-            <p class="notif-message">{{ notif.message }}</p>
+            @if (notif.title?.trim() && notif.title?.trim() !== notif.message.trim()) {
+              <p class="notif-message">{{ notif.message }}</p>
+            }
             <span class="notif-time">{{ notif.createdAt | serverTime | dateTime }}</span>
           </div>
           @if (!notif.read) {
