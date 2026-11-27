@@ -573,7 +573,11 @@ public class AuthController {
         // runs with no session (open-in-view is off): the account save used to
         // commit on its own, then the assignment loop's lazy getRole() threw,
         // so the link answered 500 with the account half activated.
-        if (!userService.verifyEmail(dto.getEmail(), dto.getToken())) {
+        // The mailed link carries the token alone; the installed apps still send the address typed beside it.
+        boolean verified = dto.getEmail() == null || dto.getEmail().isBlank()
+            ? userService.verifyEmailByToken(dto.getToken())
+            : userService.verifyEmail(dto.getEmail(), dto.getToken());
+        if (!verified) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new EmailVerificationResponseDTO(MessageUtil.resolve(EMAIL_VERIFICATION_FAILED), false));
         }
@@ -631,12 +635,13 @@ public class AuthController {
         var user = userOpt.get();
 
         // Generate new token
-        user.setActivationToken(java.util.UUID.randomUUID().toString());
+        var issued = com.example.hms.utility.ActivationTokens.issue();
+        user.setActivationToken(issued.stored());
         user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         userRepository.save(user);
 
-        String activationLink = com.example.hms.utility.ActivationLinks.build(
-                authProps.frontendBaseUrl(), user.getEmail(), user.getActivationToken());
+        String activationLink = com.example.hms.utility.ActivationLinks.activation(
+                authProps.frontendBaseUrl(), issued.raw());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
             log.info("📧 Resent verification email to '{}'", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()));

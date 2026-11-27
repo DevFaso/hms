@@ -42,6 +42,7 @@ class ClinicalLabResultReadPathGuardTest {
         "com/example/hms/service/AfterVisitSummarySections.java",            // after-visit summary's tests
         "com/example/hms/service/ResultReviewServiceImpl.java",              // doctor's review queue
         "com/example/hms/service/LabResultServiceImpl.java",                 // list, by-id, compare, trend
+        "com/example/hms/service/impl/MicroCultureServiceImpl.java",          // culture reports; ordinary results only close its order
         "com/example/hms/fhir/provider/ObservationFhirResourceProvider.java",
         "com/example/hms/fhir/provider/DiagnosticReportFhirResourceProvider.java",
         "com/example/hms/fhir/bulk/FhirBulkExportRunner.java",
@@ -83,6 +84,7 @@ class ClinicalLabResultReadPathGuardTest {
     private static final Map<String, String> WORKFLOW_METHODS = Map.ofEntries(
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#findRecordedMessage", "HL7 replay lookup"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#completeOrderIfAllReleased", "order completion"),
+        Map.entry("com/example/hms/service/impl/MicroCultureServiceImpl.java#saveCulture", "internal order completion after a released culture; no result leaves the service"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#getAllLabResults", "no endpoint; laboratory list"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#getPendingRelease", "the laboratory's release worklist"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#updateLabResult", "laboratory write"),

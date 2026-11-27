@@ -217,6 +217,18 @@
   margin-top: 0.5rem;
 }
 
+// The visit has more fields than the other cards. Give it room to lay those
+// fields side by side on wide screens instead of making the whole row tall.
+@media (min-width: 1300px) {
+  .storyboard__sections {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .storyboard__section[data-testid='storyboard-encounter'] {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 600px) {
   .storyboard {
     position: static;

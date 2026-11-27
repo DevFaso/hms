@@ -102,6 +102,16 @@ describe('SchedulingComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('associates the next-day hint with the end time', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('#bulk-endTime') as HTMLInputElement;
+    const hint = fixture.nativeElement.querySelector('#bulk-endTime-hint') as HTMLElement;
+    expect(input.getAttribute('aria-describedby')).toBe(hint.id);
+    expect(hint.textContent?.trim()).toBeTruthy();
+  });
+
   it('marks missing fields when the single shift form is submitted empty', () => {
     fixture.detectChanges();
     component.openShiftModal('2026-11-16');

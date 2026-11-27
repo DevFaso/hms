@@ -1,6 +1,9 @@
 package com.example.hms.model;
 
+import com.example.hms.model.converter.SealedJsonListConverter;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -34,8 +37,13 @@ public class Notification {
      * The body in French, as written. Kept for clients that read it as is and
      * for the search filter; readers get it re-rendered from
      * {@link #messageKey} in their own language (QA D665).
+     *
+     * <p>Scorecard K4 (V387): a body can name a patient, a test and a value, so it is encrypted at rest with
+     * the PHI key, like the clinical columns. It cannot be searched in SQL: the search filter reads the
+     * recipient's rows and matches them in memory ({@code NotificationServiceImpl}).
      */
-    @Column(nullable = false)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(nullable = false, columnDefinition = "text")
     private String message;
 
     /** Message-bundle key of the body; null on rows written before V225 and on free text. */
@@ -46,8 +54,10 @@ public class Notification {
     /**
      * Arguments of {@link #messageKey}: strings and numbers as given, and
      * {@code {"key": "..."}} for an argument that is itself a message key.
+     * Encrypted at rest with the body (scorecard K4): the arguments are the same names and values.
      */
     @JsonIgnore
+    @Convert(converter = SealedJsonListConverter.class)
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "message_args", columnDefinition = "jsonb")
     private List<Object> messageArgs;

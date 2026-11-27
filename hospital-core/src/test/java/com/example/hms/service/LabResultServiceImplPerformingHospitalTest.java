@@ -333,6 +333,7 @@ class LabResultServiceImplPerformingHospitalTest {
         LabTestDefinition reflexDef = new LabTestDefinition();
         reflexDef.setId(UUID.randomUUID());
         reflexDef.setTestCode("FT4");
+        reflexDef.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
         rule.setReflexTestDefinition(reflexDef);
 
         // #721: the order is read unlocked for the permission checks and the

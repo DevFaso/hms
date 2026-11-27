@@ -86,3 +86,19 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.nursing-notes__scope {
+  --hospital-typeahead-min-width: 0;
+  margin-bottom: 0.75rem;
+
+  p {
+    margin: 0 0 0.5rem;
+    color: var(--text-secondary, #555);
+  }
+
+  app-hospital-typeahead {
+    display: block;
+    max-width: 400px;
+    margin-top: 0.5rem;
+  }
+}

@@ -18,13 +18,13 @@
     </button>
   </div>
 } @else {
-  <label>
+  <label class="picker-exact-toggle">
     <input
       type="checkbox"
       [checked]="nationalUniqueIdMode()"
       (change)="setNationalUniqueIdMode($any($event.target).checked)"
     />
-    {{ 'NATIONAL_IU.SEARCH_EXACT' | translate }}
+    <span>{{ 'NATIONAL_IU.SEARCH_EXACT' | translate }}</span>
   </label>
   @if (showMrnHint && !nationalUniqueIdMode()) {
     <p class="hint" [id]="inputId + '-mrn-hint'">{{ 'CARE_DASH.MRN_HINT' | translate }}</p>

@@ -228,6 +228,7 @@ export interface LabResultTrendPoint {
 }
 
 export interface LabTestDefinition {
+  culture?: boolean;
   id: string;
   testCode: string;
   testName: string;
@@ -489,6 +490,7 @@ export interface LabResultRequest {
 }
 
 export interface LabTestDefinitionRequest {
+  culture?: boolean;
   testCode: string;
   testName: string;
   category?: string;

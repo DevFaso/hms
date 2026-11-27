@@ -4068,10 +4068,32 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- ==========================================================         V382: the audit tables are append-only (support.audit_event_logs,
+         support.frontend_audit_events, permission_matrix_audit_events,
+         clinical.digital_signature_audit_log): triggers refuse UPDATE,
+         DELETE and TRUNCATE; support.purge_expired_audit_rows() is the one
+         delete, past a retention of at least six years, and records itself.
+         Dollar-quoted function bodies: splitStatements="false". Idempotent
+         (CREATE OR REPLACE, DROP TRIGGER IF EXISTS). PostgreSQL only.
+         ================================================================= -->
+    <changeSet id="V382-audit-rows-append-only" author="hms-team" runOnChange="false" dbms="postgresql">
+        <sqlFile path="V382__audit_rows_append_only.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V381 (owner decision 2026-11-26, option B): the fallback of a hospital for a release despite an
          incompatible crossmatch when no physician can be reached, and the decision kept for every such release. -->
     <changeSet id="V381-incompatible-release-fallback" author="hms-team" runOnChange="false">
         <sqlFile path="V381__incompatible_release_fallback.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V387 (scorecard K4): the in-app notification body is stored encrypted like the clinical text columns;
+         the column is widened to TEXT for the stored form. No row is rewritten by the migration. -->
+    <changeSet id="V387-notification-message-encrypted-at-rest" author="hms-team" runOnChange="false">
+        <sqlFile path="V387__notification_message_encrypted_at_rest.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
@@ -4084,6 +4106,10 @@
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
     </changeSet>
 
+    <changeSet id="V394-lab-culture-definition-flag" author="codex" runOnChange="false">
+        <sqlFile path="V394__lab_culture_definition_flag.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
     <changeSet id="V396-pharmacy-stock-controls" author="codex" runOnChange="false">
         <sqlFile path="V396__pharmacy_stock_controls.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>

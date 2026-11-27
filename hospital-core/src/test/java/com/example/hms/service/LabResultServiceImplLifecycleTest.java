@@ -668,6 +668,37 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("A pending culture keeps a released ordinary result on the worklist")
+    void ordinaryReleaseWaitsForTheCultureReport() {
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult first = resultOn(order, true);
+        LabResult last = resultOn(order, false);
+        when(labResultRepository.findById(last.getId())).thenReturn(Optional.of(last));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(first, last));
+        when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
+
+        when(labResultRepository.countPendingCulturesForOrder(order.getId())).thenReturn(1L);
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
+
+        assertThat(last.isReleased()).isTrue();
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    @Test
     @DisplayName("QA D178 — a release files a RESULT item in the ordering clinician's in-basket, after commit")
     void releaseFilesTheResultInTheOrderingClinicianInBasket() {
         com.example.hms.model.User doctor = new com.example.hms.model.User();
@@ -1951,6 +1982,20 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository).save(any(LabResult.class));
     }
 
+    @Test
+    void aReflexRuleCannotBindAnUnapprovedCultureDefinitionToANewOrder() {
+        LabTestDefinition draft = new LabTestDefinition();
+        draft.setId(UUID.randomUUID()); draft.setTestCode("CULTURE-DRAFT"); draft.setCulture(true);
+        LabReflexRule rule = new LabReflexRule(); rule.setId(UUID.randomUUID()); rule.setReflexTestDefinition(draft);
+        rule.setCondition("{\"severityFlag\":\"NORMAL\"}");
+        stubEntryPath();
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId())).thenReturn(List.of(rule));
+        when(labTestDefinitionRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
     // ── B12: reflex children carry the parent's provenance ─────────────────
 
     @Test
@@ -1969,6 +2014,7 @@ class LabResultServiceImplLifecycleTest {
         LabTestDefinition reflexDef = new LabTestDefinition();
         reflexDef.setId(UUID.randomUUID());
         reflexDef.setTestCode("MG");
+        reflexDef.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
         LabReflexRule rule = new LabReflexRule();
         rule.setId(UUID.randomUUID());
         rule.setReflexTestDefinition(reflexDef);

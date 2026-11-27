@@ -97,7 +97,9 @@
                       <tbody>
                         @for (run of runs(); track run.id) {
                           <tr>
-                            <td>{{ run.periodToken }}</td>
+                            <td [title]="run.periodToken">
+                              {{ periodLabel(run.periodToken, def.period) }}
+                            </td>
                             <td>
                               <span [class]="statusClass(run.status)">{{
                                 'REPORTS.RUN_' + run.status | translate

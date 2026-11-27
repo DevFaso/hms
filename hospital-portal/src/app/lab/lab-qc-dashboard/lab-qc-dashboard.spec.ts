@@ -123,6 +123,15 @@ describe('LabQcDashboardComponent', () => {
     expect(component.overallPassRate()).toBe(90); // 9/10 * 100
   });
 
+  it('shows no rate when there are no validation studies', () => {
+    component.validationSummary.set([]);
+    fixture.detectChanges();
+    const rate: HTMLElement = fixture.nativeElement.querySelector(
+      '[data-testid="validation-pass-rate"]',
+    );
+    expect(rate.textContent?.trim()).toBe('—');
+  });
+
   it('should show toast on load error', () => {
     mockLabService.getQcSummary.and.returnValue(throwError(() => new Error('fail')));
     const newFixture = TestBed.createComponent(LabQcDashboardComponent);

@@ -2004,6 +2004,7 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           requiresHospitalScope: true,
+          supportsGlobalHospitalView: true,
           roles: [
             'ROLE_RECEPTIONIST',
             'ROLE_HOSPITAL_ADMIN',

@@ -5,6 +5,7 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -17,6 +18,7 @@ import { ProfileService } from '../services/profile.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 /** How long the "account set up" message stays before the sign-out. */
 export const SETUP_SIGN_OUT_DELAY_MS = 2500;
@@ -43,6 +45,7 @@ export class AccountSetupComponent implements OnInit {
   private readonly profileService = inject(ProfileService);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private signOutTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -125,6 +128,35 @@ export class AccountSetupComponent implements OnInit {
     const problem = this.validationError();
     if (problem) {
       this.error = this.translate.instant(problem);
+      const fields = [
+        ...(this.needsUsername() ? [{ id: 'newUsername', value: this.newUsername.trim() }] : []),
+        { id: 'currentPassword', value: this.currentPassword },
+        ...(this.needsPassword()
+          ? [
+              { id: 'newPassword', value: this.newPassword },
+              { id: 'confirmPassword', value: this.confirmPassword },
+            ]
+          : []),
+      ];
+      const missing = fields.filter((field) => !field.value).map((field) => field.id);
+      const invalid =
+        missing.length > 0
+          ? missing
+          : [
+              problem.includes('USERNAME')
+                ? 'newUsername'
+                : problem.includes('CURRENT')
+                  ? 'currentPassword'
+                  : problem.includes('MISMATCH')
+                    ? 'confirmPassword'
+                    : 'newPassword',
+            ];
+      refuseFields(
+        this.host.nativeElement,
+        invalid,
+        fields.map((field) => field.id),
+        missing.length > 0 ? this.translate.instant('COMMON.FIELD_REQUIRED') : this.error,
+      );
       return;
     }
 

@@ -107,6 +107,11 @@
         (dismissed)="cancelEdit()"
       >
         <h2>{{ 'ORG_REGION.EDIT_TITLE' | translate }}</h2>
+        <p data-test="edit-organization">
+          {{ 'ORG_REGION.COL.ORG' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ state.organizationName | orgText: state.organizationCode }}
+          <code>{{ state.organizationCode }}</code>
+        </p>
         <div class="grid">
           <label>
             <span>{{ 'ORG_REGION.FIELD.REGION' | translate }}</span>

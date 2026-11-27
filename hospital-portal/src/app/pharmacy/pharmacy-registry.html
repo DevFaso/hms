@@ -40,6 +40,11 @@
           </div>
           <div class="pharmacy-info">
             <h4>{{ p.name }}</h4>
+            @if (hospitalName(p.hospitalId); as name) {
+              <p class="pharmacy-detail">
+                <span class="material-symbols-outlined">local_hospital</span> {{ name }}
+              </p>
+            }
             @if (p.pharmacyType) {
               <span class="type-chip">{{ p.pharmacyType | enumLabel: 'pharmacyType' }}</span>
             }

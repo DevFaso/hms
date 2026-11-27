@@ -29,6 +29,8 @@ public class LabTestDefinitionResponseDTO {
 
     private String description;
     private String category;
+
+    private boolean culture;
     private String unit;
     private String loincCode;
     private String loincDisplay;

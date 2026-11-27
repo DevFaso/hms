@@ -19,6 +19,7 @@ import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 interface StatCard {
   /** i18n key, not text: the cards are rendered with | translate. */
@@ -186,6 +187,6 @@ export class AnalyticsComponent implements OnInit {
 
   shortDate(dateStr: string): string {
     const d = serverDateOrInstant(dateStr); // #948 review: a LocalDate is that day, not UTC midnight
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+    return new Intl.DateTimeFormat(currentLocale(), { day: 'numeric', month: 'numeric' }).format(d);
   }
 }

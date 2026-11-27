@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Registro de mensajes de integración",
-    "SUBTITLE": "Búsqueda de mensajes estilo Bridges, cola de mensajes fallidos y reenvío para el tráfico de protocolos de socios.",
-    "DLQ_BADGE": "{{ count }} mensajes fallidos esperando reenvío",
-    "SHOW_DLQ_ONLY": "Mostrar solo DLQ",
+    "SUBTITLE": "Consulte los mensajes de los socios y los errores. Esta página registra un evento; no reenvía el mensaje al socio.",
+    "DLQ_BADGE": "{{ count }} mensajes fallidos",
+    "SHOW_DLQ_ONLY": "Mostrar mensajes fallidos",
     "SEARCH": "Buscar",
     "SEARCHING": "Buscando…",
     "RESET": "Restablecer",
     "RETRY": "Reintentar",
     "LOAD_ERROR": "No se pudo cargar el registro de mensajes. Reintente.",
     "EMPTY": "Ningún mensaje coincide con los filtros actuales.",
-    "REPLAY": "Reenviar",
-    "REPLAYING": "Reenviando…",
+    "REPLAY": "Registrar en el historial",
+    "REPLAYING": "Registrando…",
     "PAGER": "Página {{ current }} de {{ total }}",
     "CONTENT_PURGED": "Contenido eliminado (política de conservación)",
     "CONTENT_PURGED_TITLE": "Contenido del mensaje eliminado el {{ date }} según la política de conservación; el registro del evento se conserva.",
@@ -902,7 +902,7 @@
       "SENT": "Enviado",
       "RECEIVED": "Recibido",
       "FAILED": "Fallido",
-      "REPLAYED": "Reenviado"
+      "REPLAYED": "Evento registrado"
     },
     "COL": {
       "RECEIVED_AT": "Recibido",
@@ -914,7 +914,7 @@
       "ERROR": "Error"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Error al reenviar. Reintente."
+      "REPLAY_FAILED": "No se pudo registrar el evento. Inténtelo de nuevo."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Métricas de rendimiento hospitalario",
     "TITLE": "Analítica",
     "KPI": {
+      "PERIOD": "Del {{from}} al {{to}}",
       "SECTION_HEADING": "Indicadores operativos",
       "LOADING": "Cargando indicadores…",
       "DOOR_TO_DOCTOR_LABEL": "Tiempo recepción-médico",
@@ -2197,6 +2198,7 @@
       "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "AUDIT_RETENTION_PURGED": "Registros de auditoría que superan el plazo de conservación eliminados",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
       "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
@@ -4853,7 +4855,9 @@
       "REMOVE_RANGE": "Remove this range",
       "ADD_RANGE": "Add a range",
       "ADD": "Add a component"
-    }
+    },
+    "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
+    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",
@@ -7853,7 +7857,8 @@
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
-        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada"
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada",
+        "AUDIT_RETENTION_PURGED": "Registros de auditoría eliminados tras el plazo de conservación"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -10099,7 +10104,8 @@
     "RESET_FILTERS": "Restablecer filtros",
     "LOAD_ERROR": "No se pudieron cargar las firmas. Inténtelo de nuevo.",
     "NO_MATCHES": "Ninguna firma coincide con estos filtros.",
-    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes. También puede consultar un informe por su referencia."
+    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes.",
+    "EMPTY_LOOKUP_HELP": "También puede consultar un informe por su referencia."
   },
   "STAFF": {
     "ADD_STAFF": "Agregar personal",
@@ -11870,6 +11876,7 @@
     "NETWORK_HELP": "Elija un hospital para consultar sus solicitudes, consentimientos y programaciones."
   },
   "REGISTRATIONS": {
+    "HOSPITAL_REQUIRED": "Seleccione el hospital para esta inscripción.",
     "DEACTIVATE_TITLE": "¿Desactivar este registro?",
     "DEACTIVATE_BODY": "El paciente sale de la lista activa de este hospital. Podrá reactivar el registro más adelante.",
     "DEACTIVATE_REASON": "Motivo de la desactivación",
@@ -12985,6 +12992,7 @@
     "PASSWORD_AGE": "Edad de la contraseña",
     "ROTATION_DUE": "Rotación prevista",
     "DAYS_UNTIL_DUE": "Días hasta vencer",
+    "DAYS_ONE": "{{days}} día",
     "DAYS_N": "{{days}} días",
     "IMPORT_USERS_HINT": "CSV con fila de encabezado. Columnas requeridas: username, email, firstname, lastname, phonenumber, roles. Opcionales: password, hospitalid, licensenumber, jobtitle. Los roles pueden separarse con coma, punto y coma, barra vertical o espacio.",
     "FORCE_PASSWORD_CHANGE": "Forzar cambio de contraseña en el primer inicio",
@@ -13429,6 +13437,7 @@
     "BANNER_DEFAULT": "El sistema está en mantenimiento. La consulta funciona; los cambios están temporalmente deshabilitados."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "Estos campos contienen el texto guardado, que puede estar en un idioma distinto del mostrado en la lista. Los cambios sustituyen este texto para todos los hospitales.",
     "ACTIONS": "Acciones",
     "ACTIVE": "Activa",
     "ADD": "Añadir interacción",
@@ -13530,6 +13539,7 @@
     "NONE_YET": "Aún no hay informes programados",
     "NONE_YET_HINT": "Cree uno para recibir un CSV agregado cada día, semana o mes.",
     "NO_RUNS": "Sin ejecuciones para este informe",
+    "WEEK_LABEL": "Semana {{week}}, {{year}}",
     "PERIOD_TOKEN": "Período",
     "ROWS": "Filas",
     "GENERATED_AT": "Generado",
@@ -14862,6 +14872,8 @@
     "FIELD_REASON": "{{field}}: {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Elija el contexto hospitalario para leer las notas. Esta selección no cambia el resto de la historia.",
+    "CHOOSE_HOSPITAL": "Elegir hospital",
     "ACTION": "Acción:",
     "ASSESSMENT": "Valoración:",
     "DATA": "Datos:",
@@ -15224,6 +15236,8 @@
     "CONFIG_NOTE": "Versiones de pruebas, tipos de muestra e intervalos de referencia."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Complete o cancele la acción actual antes de cambiar de hospital.",
+    "SCOPE_CHANGED": "Hospital cambiado. Vuelva a elegir una receta de la lista.",
     "LABEL": "Espacio de farmacia",
     "CLAIMS_SUBTITLE": "Seguir las solicitudes, decisiones y reembolsos.",
     "LOADED_CLAIMS": "solicitudes cargadas",
@@ -16324,6 +16338,7 @@
     "PRINTED_ON": "Printed on {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "El hospital ha cambiado. Cierre este formulario y vuelva a abrirlo en el hospital correcto.",
     "TITLE": "Reglas clínicas y validación",
     "SUBTITLE": "Cada regla que aplica la plataforma, su fuente, quién la aprueba y si este establecimiento la ha validado.",
     "BEHAVIOUR_NOTE": "Una regla se aplica igual, validada o no: la validación registra la decisión del aprobador y solo cambia la mención « provisional ».",

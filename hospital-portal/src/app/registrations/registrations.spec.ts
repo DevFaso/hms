@@ -335,3 +335,151 @@ describe('RegistrationsComponent dashboard', () => {
     expect(service.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('RegistrationsComponent global super-admin view', () => {
+  function page() {
+    TestBed.configureTestingModule({
+      imports: [RegistrationsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: true,
+            hospitalId: null,
+            roles: ['ROLE_SUPER_ADMIN'],
+          }),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(RegistrationsComponent);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/hospitals').flush([
+      { id: 'h1', name: 'First' },
+      { id: 'h2', name: 'Second' },
+    ]);
+    return { fixture, http };
+  }
+
+  it('explains loading while allowing the registration form to open', () => {
+    const { fixture, http } = page();
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="registration-open-create"]',
+    ) as HTMLButtonElement;
+    button.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#reg-hospital')).not.toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('#reg-hospital')
+        ?.parentElement?.querySelector('[role="status"]')?.textContent,
+    ).toContain('COMMON.LOADING');
+    http.expectNone((request) => request.method === 'POST' && request.url === '/registrations');
+  });
+
+  it('lists registrations for both hospitals with context and no clinical write controls', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([{ id: 'r1', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([{ id: 'r2', hospitalId: 'h2', hospitalName: 'Second', active: true }]);
+    fixture.detectChanges();
+    const hospitals = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="registration-hospital"]'),
+    ).map((cell: any) => cell.textContent.trim());
+    expect(hospitals).toEqual(['First', 'Second']);
+    fixture.componentInstance.searchTerm.set('Second');
+    expect(fixture.componentInstance.filtered().map((row) => row.id)).toEqual(['r2']);
+    expect(fixture.componentInstance.canManage).toBeFalse();
+    expect(fixture.componentInstance.loadError()).toBeFalse();
+  });
+
+  it('uses the latest complete prefix for each hospital in the network count', () => {
+    const { fixture, http } = page();
+    const firstPage = Array.from({ length: ALL_PAGES_SIZE }, (_, index) => ({
+      id: `r-${index}`,
+      hospitalId: 'h1',
+      hospitalName: 'First',
+      active: true,
+    }));
+    http
+      .expectOne(
+        (r) =>
+          r.url === '/registrations' &&
+          r.params.get('hospitalId') === 'h1' &&
+          r.params.get('page') === '0',
+      )
+      .flush(firstPage);
+    http
+      .expectOne(
+        (r) =>
+          r.url === '/registrations' &&
+          r.params.get('hospitalId') === 'h1' &&
+          r.params.get('page') === '0' &&
+          r.params.get('size') === '400',
+      )
+      .flush([
+        { id: 'r-last', hospitalId: 'h1', hospitalName: 'First', active: true },
+        ...firstPage,
+      ]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([{ id: 'r-other', hospitalId: 'h2', hospitalName: 'Second', active: true }]);
+    expect(fixture.componentInstance.registrations().length).toBe(ALL_PAGES_SIZE + 2);
+    expect(fixture.componentInstance.totalPages()).toBe(21);
+  });
+
+  it('requires and submits the destination hospital for a global registration', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush([]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.canCreate).toBeTrue();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    fixture.componentInstance.form.patientId = 'p1';
+    fixture.componentInstance.submitForm();
+    http.expectNone((r) => r.method === 'POST' && r.url === '/registrations');
+    fixture.componentInstance.form.hospitalId = 'h2';
+    fixture.componentInstance.submitForm();
+    const post = http.expectOne((r) => r.method === 'POST' && r.url === '/registrations');
+    expect(post.request.body.hospitalId).toBe('h2');
+    expect(post.request.body.patientId).toBe('p1');
+    post.flush({ id: 'new', hospitalId: 'h2', active: true });
+    expect(fixture.componentInstance.registrations().map((row) => row.id)).toEqual(['new']);
+
+    fixture.componentInstance.registrations.set([]);
+    fixture.componentInstance.activeFilter.set('inactive');
+    fixture.componentInstance.openCreate();
+    fixture.componentInstance.form.hospitalId = 'h2';
+    fixture.componentInstance.form.patientId = 'p2';
+    fixture.componentInstance.submitForm();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url === '/registrations')
+      .flush({ id: 'active-new', hospitalId: 'h2', active: true });
+    expect(fixture.componentInstance.registrations()).toEqual([]);
+  });
+
+  it('reports a failed hospital instead of displaying incomplete network totals', () => {
+    const { fixture, http } = page();
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h1')
+      .flush([{ id: 'r1', hospitalId: 'h1', hospitalName: 'First', active: true }]);
+    http
+      .expectOne((r) => r.url === '/registrations' && r.params.get('hospitalId') === 'h2')
+      .flush('failed', { status: 500, statusText: 'Error' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.loadError()).toBeTrue();
+    expect(fixture.componentInstance.registrations()).toEqual([]);
+  });
+});

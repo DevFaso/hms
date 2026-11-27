@@ -161,7 +161,9 @@ public class UserServiceImpl implements UserService {
 
         String encodedPwd = passwordEncoder.encode(dto.getPassword());
         User user = userMapper.toEntity(dto, encodedPwd);
-        user.setActivationToken(UUID.randomUUID().toString());
+        final com.example.hms.utility.ActivationTokens.Issued activation =
+            com.example.hms.utility.ActivationTokens.issue();
+        user.setActivationToken(activation.stored());
         user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         user.setActive(false);
 
@@ -191,8 +193,8 @@ public class UserServiceImpl implements UserService {
             createAssignmentIfAbsent(saved.getId(), patient.getId(), targetHospitalId);
         }
 
-        final String activationLink = com.example.hms.utility.ActivationLinks.build(
-                frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
+        final String activationLink = com.example.hms.utility.ActivationLinks.activation(
+                frontendBaseUrl, activation.raw());
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
         } catch (Exception e) {
@@ -269,19 +271,22 @@ public class UserServiceImpl implements UserService {
 
         // Send welcome email (fire-and-forget — don't block bootstrap on mail failure)
         try {
-            String htmlBody = "<h2>Welcome to HMS, " + user.getFirstName() + "!</h2>"
-                    + "<p>Your <strong>Super Admin</strong> account has been created and is <strong>active immediately</strong>.</p>"
-                    + "<table style='border-collapse:collapse'>"
-                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Username:</td><td>" + user.getUsername() + "</td></tr>"
-                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Email:</td><td>" + user.getEmail() + "</td></tr>"
-                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Role:</td><td>Super Admin</td></tr>"
-                    + "</table>"
-                    + "<p style='margin-top:16px'>You can sign in now and begin configuring the system.</p>"
-                    + "<p style='color:#888;font-size:12px'>This is an automated message from HMS.</p>";
+            // From the bundle, in the language of the request, every value escaped: the account's
+            // username and nothing else (the address it is sent to is not repeated in it).
+            String htmlBody = "<h2>" + com.example.hms.utility.MessageUtil.resolve("email.bootstrap.welcome.heading",
+                    org.springframework.web.util.HtmlUtils.htmlEscape(user.getFirstName() == null ? "" : user.getFirstName()))
+                    + "</h2>"
+                    + "<p>" + com.example.hms.utility.MessageUtil.resolve("email.bootstrap.welcome.body") + "</p>"
+                    + "<p>" + com.example.hms.utility.MessageUtil.resolve("email.bootstrap.welcome.username",
+                        org.springframework.web.util.HtmlUtils.htmlEscape(user.getUsername())) + "</p>"
+                    + "<p style='margin-top:16px'>"
+                    + com.example.hms.utility.MessageUtil.resolve("email.bootstrap.welcome.signin") + "</p>"
+                    + "<p style='color:#888;font-size:12px'>"
+                    + com.example.hms.utility.MessageUtil.resolve("email.common.footer.automated") + "</p>";
             emailService.sendHtml(
                     java.util.List.of(user.getEmail()),
                     java.util.List.of(), java.util.List.of(),
-                    "HMS — Your Super Admin Account Is Ready",
+                    com.example.hms.utility.MessageUtil.resolve("email.bootstrap.welcome.subject"),
                     htmlBody);
             log.info("[BOOTSTRAP] Welcome email queued for {}",
                 com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()));
@@ -986,7 +991,7 @@ public class UserServiceImpl implements UserService {
         u.setActive(false);
         if (isPatient) {
             // Patients additionally keep the legacy email-link token.
-            u.setActivationToken(UUID.randomUUID().toString());
+            u.setActivationToken(com.example.hms.utility.ActivationTokens.issue().stored());
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         }
 
@@ -2284,14 +2289,31 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public boolean verifyEmail(String email, String token) {
-        User user = userRepository.findByEmail(email).orElse(null);
+        return activateByLink(userRepository.findByEmail(email).orElse(null), token);
+    }
+
+    /**
+     * The mailed link: the token alone finds the account (it is stored hashed; see
+     * {@code ActivationTokens}). Same activation, same answers as {@link #verifyEmail}.
+     */
+    @Override
+    @Transactional
+    public boolean verifyEmailByToken(String token) {
+        for (String stored : com.example.hms.utility.ActivationTokens.storedForms(token)) {
+            User user = userRepository.findByActivationToken(stored).orElse(null);
+            if (user != null) {
+                return activateByLink(user, token);
+            }
+        }
+        return false;
+    }
+
+    private boolean activateByLink(User user, String token) {
         if (user == null) {
             return false;
         }
 
-        if (user.getActivationToken() == null
-                || token == null
-                || !token.equals(user.getActivationToken())
+        if (!com.example.hms.utility.ActivationTokens.matches(user.getActivationToken(), token)
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
             log.warn("⚠️ Invalid or expired activation token for user {}", user.getId());
