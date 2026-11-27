@@ -8,10 +8,6 @@
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::raw::r.copayAmount raw": {
       "count": 1,
       "why": "pre-existing (class D621/D948): an amount interpolated with no format at all; use | cfa"
-    },
-    "src/app/super-admin/cost-panel/cost-panel.component.ts::pipe::row.chargebackAmount | number": {
-      "count": 1,
-      "why": "pre-existing (class D948): amount printed by | number; use | cfa"
     }
   }
 }

@@ -103,4 +103,44 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
         }
         return Boolean.TRUE.equals(redisTemplate.hasKey(KEY_PREFIX + jti));
     }
+
+    private static final String LOCK_PREFIX = "hms:session-lock:";
+
+    @Override
+    public void lockSession(String sessionId, long lockedAtMs, long expirationMs) {
+        long ttlMs = expirationMs - System.currentTimeMillis();
+        if (sessionId == null || sessionId.isBlank() || ttlMs <= 0) {
+            return;
+        }
+        redisTemplate.opsForValue().set(LOCK_PREFIX + sessionId, Long.toString(lockedAtMs), Duration.ofMillis(ttlMs));
+    }
+
+    @Override
+    public boolean isSessionLocked(String sessionId) {
+        return sessionLockedAt(sessionId) != null;
+    }
+
+    @Override
+    public Long sessionLockedAt(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return null;
+        }
+        String value = redisTemplate.opsForValue().get(LOCK_PREFIX + sessionId);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException unreadable) {
+            return 0L; // locked, at an unknown time: stays locked
+        }
+    }
+
+    @Override
+    public void unlockSession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        redisTemplate.delete(LOCK_PREFIX + sessionId);
+    }
 }

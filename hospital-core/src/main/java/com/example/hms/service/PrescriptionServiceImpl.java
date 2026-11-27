@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.CdsCriticalBlockException;
@@ -343,6 +344,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID requesterUserId = authService.getCurrentUserId();
         if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        // A prescription follows the restriction of the visit it was written in, as in the list.
+        if (!RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId))
+                .admits(prescription)) {
             return false;
         }
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
@@ -1972,7 +1978,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /**
      * E9 #59c - the prescription list follows the patient across the readable
      * hospitals, and every foreign row on the page is accounted for.
-     * Prescriptions carry no sensitivity tag (V158).
+     * A prescription carries no sensitivity tag of its own (V158): it follows
+     * the restriction of the visit it was written in, in the query, so the
+     * page and its count never include a withheld row.
      */
     private Page<Prescription> patientRows(UUID patientId, UUID hospitalId,
                                            List<PrescriptionStatus> filter, Pageable pageable) {
@@ -1988,14 +1996,30 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // review: nor any hospital's proposal withdrawn before signing, the
         // acting hospital's included (it was listed as CANCELLED). One query
         // for one hospital or several: the acting hospital's rows are kept.
-        Page<Prescription> rows = filter.isEmpty()
-            ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
-            : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
-                patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
+        Page<Prescription> rows = sentRows(patientId, hospitalId, readable, restricted, filter, pageable);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
             CROSS_HOSPITAL_READ);
         return rows;
+    }
+
+    /** The page of {@link #patientRows}: the plain query when no visit is withheld, else the one that leaves them out. */
+    private Page<Prescription> sentRows(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                        RestrictedVisitScope restricted, List<PrescriptionStatus> filter,
+                                        Pageable pageable) {
+        if (restricted.isEmpty()) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+                : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                    patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findSentAcrossHospitalsOutsideVisits(
+                patientId, readable, hospitalId, NEVER_SENT, restricted.visitIdsForQuery(), pageable)
+            : prescriptionRepository.findSentAcrossHospitalsAndStatusInOutsideVisits(
+                patientId, readable, hospitalId, NEVER_SENT, filter, restricted.visitIdsForQuery(), pageable);
     }
 
     private Page<Prescription> staffRows(UUID staffId, UUID hospitalId,
@@ -2781,9 +2805,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
             // QA D1537 review: and less any proposal withdrawn before signing.
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
             List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
                 NeverSentRule.prescriptionsReadableHere(
-                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId));
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId))
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                 CROSS_HOSPITAL_READ);

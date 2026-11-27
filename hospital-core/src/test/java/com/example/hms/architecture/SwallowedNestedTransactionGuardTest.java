@@ -87,7 +87,7 @@ class SwallowedNestedTransactionGuardTest {
         "service/DischargeSummaryServiceImpl.java: PrescriptionRepository.findByEncounter_Id", 1, REPO_READ,
         "service/DoctorWorklistServiceImpl.java: AdmissionRepository.findByAdmittingProviderIdOrderByAdmissionDateTimeDesc", 1, REPO_READ,
         "service/DoctorWorklistServiceImpl.java: ConsultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc", 2, REPO_READ,
-        "service/DoctorWorklistServiceImpl.java: PatientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc", 1, REPO_READ,
+        "service/DoctorWorklistServiceImpl.java: PatientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc", 1, REPO_READ,
         "service/EncounterServiceImpl.java: PrescriptionRepository.findByEncounter_Id", 1, REPO_READ,
         "service/EncounterServiceImpl.java: PatientRecallRepository.save", 1, REPO_WRITE,
         "service/impl/GeneralReferralServiceImpl.java: AppointmentRepository.save", 1, REPO_WRITE,

@@ -32,7 +32,8 @@ import {
   throwError,
   timer,
 } from 'rxjs';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, RefreshedTokens } from '../auth/auth.service';
+import { IdleService } from '../core/idle.service';
 import {
   SESSION_RESTORE_REQUEST,
   accountChangedError,
@@ -271,6 +272,18 @@ export function isPasswordChangeRequired(error: HttpErrorResponse): boolean {
 }
 
 /**
+ * The 403 every API call gets while the session's screen is locked on the
+ * server (SessionLockGate): neither a forbidden page nor a sign-out. The lock
+ * screen is shown, whatever this tab remembered.
+ */
+export const SESSION_LOCKED = 'session_locked';
+
+export function isSessionLocked(error: HttpErrorResponse): boolean {
+  const body = error.error as { code?: unknown } | null;
+  return error.status === 403 && !!body && typeof body === 'object' && body.code === SESSION_LOCKED;
+}
+
+/**
  * Remember the forced change on the stored profile, so the account-setup
  * guard keeps every page behind it, and open the setup screen.
  */
@@ -341,7 +354,7 @@ export const REFRESH_SUPERSEDED_DELAY_MS = 600;
 export function refreshWithSupersededRetry(
   auth: AuthService,
   restore = false,
-): Observable<{ accessToken: string; refreshToken: string }> {
+): Observable<RefreshedTokens> {
   // defer: each retry builds the request again, so a body-borne (legacy)
   // refresh token is re-read after the other tab stored the rotated one.
   return defer(() => auth.refreshTokenRequest(restore)).pipe(
@@ -380,6 +393,7 @@ function tryRefreshAndRetry(
   next: HttpHandlerFn,
   auth: AuthService,
   router: Router,
+  idle: IdleService,
   credentialCheck = false,
 ): Observable<HttpEvent<unknown>> {
   const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
@@ -397,6 +411,7 @@ function tryRefreshAndRetry(
       tap((tokens) => {
         refreshPending = false;
         isRefreshing = false;
+        if (tokens.sessionLocked) idle.lockFromServer();
         auth.setToken(tokens.accessToken);
         if (tokens.refreshToken) auth.setRefreshToken(tokens.refreshToken);
         refreshDone$.next({ token: tokens.accessToken });
@@ -475,6 +490,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const sessionScope = inject(SessionScopeService);
   const roleContext = inject(RoleContextService);
   const toast = inject(ToastService);
+  const idle = inject(IdleService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -536,7 +552,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           // A credential check is refreshed and retried once too (the access
           // token may have expired while the form was open); a 401 on the
           // retry is the wrong-password answer and reaches the form (D87).
-          return tryRefreshAndRetry(req, next, auth, router, isVerifyPassword);
+          return tryRefreshAndRetry(req, next, auth, router, idle, isVerifyPassword);
         }
 
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
@@ -563,6 +579,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         if (req.context.get(CSRF_REPLAY) && typeof message === 'string' && message.trim()) {
           toast.error(message.trim());
         }
+      } else if (isSessionLocked(error)) {
+        // The page keeps its place; the refusal is rethrown to the caller.
+        idle.lockFromServer();
       } else if (isPasswordChangeRequired(error)) {
         sendToAccountSetup(auth, router);
       } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {

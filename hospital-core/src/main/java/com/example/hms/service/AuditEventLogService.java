@@ -14,6 +14,14 @@ public interface AuditEventLogService {
 
     Page<AuditEventLogResponseDTO> getAuditLogsByUser(UUID userId, Pageable pageable);
 
+    /**
+     * What a person reads as their own activity: their rows without the
+     * session's technical housekeeping (token renewals and revocations, the
+     * second-factor prompt), which say nothing a person can act on. Sign-ins
+     * and sign-outs carry the device, the date and the address.
+     */
+    Page<AuditEventLogResponseDTO> getOwnActivity(UUID userId, Pageable pageable);
+
     Page<AuditEventLogResponseDTO> getAuditLogsByTarget(String entityType, String resourceId, Pageable pageable);
 
     AuditEventLogResponseDTO logEvent(AuditEventRequestDTO requestDTO);
