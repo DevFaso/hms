@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.imaging;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ImagingOrderWithdrawalRequestDTO {
 
+    @NotBlank(message = "{order.lifecycle.cancelReasonRequired}")
     @Size(max = 500)
     private String cancellationReason;
 }

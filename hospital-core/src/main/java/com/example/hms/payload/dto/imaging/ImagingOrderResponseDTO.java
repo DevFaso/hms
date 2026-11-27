@@ -118,7 +118,7 @@ public class ImagingOrderResponseDTO {
     private Boolean physicianAuthorisationRequired;
 
     /** QA D4140: no physician has authorised the request yet: nothing of the exam can be done. */
-    private boolean awaitingPhysicianAuthorisation;
+    private Boolean awaitingPhysicianAuthorisation;
 
     private String providerSignatureStatement;
 

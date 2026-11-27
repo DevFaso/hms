@@ -99,6 +99,8 @@ class LabResultEntryEndpointsGuardTest {
         Map.entry("TransfusionController#recordAntibodyWorkup", Kind.LAB_ONLY),
         Map.entry("TransfusionController#receiveUnit", Kind.LAB_ONLY),
         Map.entry("TransfusionController#discardUnit", Kind.LAB_ONLY),
+        // QA D4178: the laboratory's record of an issued bag coming back, or not.
+        Map.entry("TransfusionController#recordUnitReturn", Kind.LAB_ONLY),
         Map.entry("TransfusionController#recordCrossmatch", Kind.LAB_ONLY),
         Map.entry("TransfusionController#issueUnit", Kind.LAB_ONLY),
         Map.entry("TransfusionController#emergencyRelease", Kind.LAB_ONLY),

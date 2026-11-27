@@ -412,10 +412,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             ImagingOrderStatus.CANCELLED, RESULTED_STATES);
         roles().requireOrderer(order);
         UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
-        if (!authorisation().mayWithdraw(order, actorId)) {
-            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.withdrawForbidden"));
-        }
+        requireAuthor(order, actorId);
         String cancellationReason =
             com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, "cancellationReason");
         com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
@@ -431,6 +428,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
         return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /** QA D4140: only whoever placed a request that still waits withdraws it (ImagingOrderAuthorisation#mayWithdraw). */
+    private void requireAuthor(ImagingOrder order, UUID actorId) {
+        if (!authorisation().mayWithdraw(order, actorId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.withdrawForbidden"));
+        }
     }
 
     /**
