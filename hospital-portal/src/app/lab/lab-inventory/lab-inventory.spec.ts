@@ -120,6 +120,24 @@ describe('LabInventoryComponent', () => {
     expect(row.querySelectorAll('td')[4].textContent).toContain('10');
   });
 
+  it('D4154: a lot expiring within the window shows an expires-soon state', () => {
+    fixture.detectChanges();
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 13);
+    const iso = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+    flushItems({
+      ...PAGED,
+      content: [
+        mockItem({ name: 'Soon', expirationDate: iso }),
+        mockItem({ id: 'x', name: 'Far' }),
+      ],
+    });
+    fixture.detectChanges();
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toContain('LAB_INVENTORY.EXPIRING_SOON');
+    expect(rows[1].textContent).not.toContain('LAB_INVENTORY.EXPIRING_SOON');
+  });
+
   it('pluralizes counted units while leaving measured units unchanged', () => {
     fixture.detectChanges();
     flushItems({

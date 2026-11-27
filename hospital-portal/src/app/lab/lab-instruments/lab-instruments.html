@@ -1,4 +1,4 @@
-<div class="lab-instruments-container">
+﻿<div class="lab-instruments-container">
   <header class="page-header">
     <div class="header-left">
       <span class="material-symbols-outlined header-icon">precision_manufacturing</span>
@@ -164,7 +164,7 @@
               <td>
                 {{
                   instr.nextCalibrationDate
-                    ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
+                    ? (instr.nextCalibrationDate | serverTime | date: 'dd/MM/yyyy')
                     : '—'
                 }}
                 @if (instr.calibrationOverdue) {
@@ -174,7 +174,7 @@
               <td>
                 {{
                   instr.nextMaintenanceDate
-                    ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                    ? (instr.nextMaintenanceDate | serverTime | date: 'dd/MM/yyyy')
                     : '—'
                 }}
                 @if (instr.maintenanceOverdue) {

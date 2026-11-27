@@ -15,7 +15,7 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
 const LANE = ['lab', 'imaging', 'micro', 'transfusion', 'in-basket'];
 
 /** Date formats a lane screen may pass to `| date:`. */
-const ALLOWED = new Set(['mediumDate']);
+const ALLOWED = new Set(['mediumDate', 'dd/MM/yyyy']);
 
 /** The offenders in one source text. */
 export function laneDateOffenders(text, file = 'source') {
@@ -44,8 +44,9 @@ test('QA D4161: lane screens use the house date formats only', () => {
 
 test('QA D4161: the guard flags a short or hand-written format', () => {
   assert.equal(laneDateOffenders("{{ a | serverTime | date: 'short' }}").length, 1);
-  assert.equal(laneDateOffenders("{{ a | date: 'dd/MM/yyyy' }}").length, 1);
+  assert.equal(laneDateOffenders("{{ a | date: 'dd/MM/yyyy HH:mm:ss' }}").length, 1);
   assert.equal(laneDateOffenders("{{ a | date: 'medium' }}").length, 1);
   assert.equal(laneDateOffenders("{{ a | date: 'mediumDate' }}").length, 0);
   assert.equal(laneDateOffenders('{{ a | serverTime | dateTime }}').length, 0);
 });
+

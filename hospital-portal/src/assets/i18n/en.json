@@ -5228,6 +5228,8 @@
     "IN_STOCK": "In Stock",
     "LOW_STOCK": "Low Stock",
     "EXPIRED": "Expired",
+    "EXPIRING_SOON": "Expires soon",
+    "EXPIRING_SOON_HINT": "Expires within {{days}} days",
     "CREATED": "Inventory item created successfully.",
     "UPDATED": "Inventory item updated successfully.",
     "SAVE_ERROR": "Failed to save inventory item. Please try again.",

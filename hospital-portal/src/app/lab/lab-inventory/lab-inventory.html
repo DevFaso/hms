@@ -180,7 +180,11 @@
         </thead>
         <tbody>
           @for (item of items(); track item.id) {
-            <tr [class.low-stock-row]="item.lowStock" [class.expired-row]="item.expired">
+            <tr
+              [class.low-stock-row]="item.lowStock"
+              [class.expired-row]="item.expired"
+              [class.expiring-row]="isExpiringSoon(item)"
+            >
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
@@ -189,7 +193,7 @@
               <td>
                 {{
                   item.expirationDate
-                    ? (item.expirationDate | serverTime | date: 'mediumDate')
+                    ? (item.expirationDate | serverTime | date: 'dd/MM/yyyy')
                     : '—'
                 }}
               </td>
@@ -211,6 +215,16 @@
                 } @else {
                   {{ ' '
                   }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                }
+                @if (isExpiringSoon(item)) {
+                  {{ ' '
+                  }}<span
+                    class="status-badge expiring-soon"
+                    [attr.title]="
+                      'LAB_INVENTORY.EXPIRING_SOON_HINT' | translate: { days: expiringSoonDays }
+                    "
+                    >{{ 'LAB_INVENTORY.EXPIRING_SOON' | translate }}</span
+                  >
                 }
               </td>
               @if (canManage()) {

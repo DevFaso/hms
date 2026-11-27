@@ -1,5 +1,6 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
+import { EXPIRING_SOON_DAYS, isExpiringSoon } from './expiring-soon';
 import { CountUnitPipe } from '../../shared/pipes/count-unit.pipe';
 import {
   Component,
@@ -71,6 +72,13 @@ export class LabInventoryComponent implements OnInit {
   pageIndex = signal(0);
   activeSearch = signal('');
   searchText = '';
+
+  /** D4154: a lot expiring within this many days is flagged as expiring soon. */
+  readonly expiringSoonDays = EXPIRING_SOON_DAYS;
+
+  isExpiringSoon(item: LabInventoryItemResponse): boolean {
+    return isExpiringSoon(item.expirationDate, item.expired);
+  }
 
   canManage = computed(() => {
     const roles = this.auth.getRoles();

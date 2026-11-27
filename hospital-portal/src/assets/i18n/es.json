@@ -5228,6 +5228,8 @@
     "IN_STOCK": "En stock",
     "LOW_STOCK": "Stock bajo",
     "EXPIRED": "Vencido",
+    "EXPIRING_SOON": "Caduca pronto",
+    "EXPIRING_SOON_HINT": "Caduca en menos de {{days}} días",
     "CREATED": "Artículo de inventario creado exitosamente.",
     "UPDATED": "Artículo de inventario actualizado exitosamente.",
     "SAVE_ERROR": "Error al guardar artículo. Inténtelo de nuevo.",
