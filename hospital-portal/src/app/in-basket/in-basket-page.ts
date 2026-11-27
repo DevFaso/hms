@@ -6,6 +6,7 @@ import { LAB_RESULT_REVIEW_ROLES } from './lab-result-review-access';
 import { RoleContextService } from '../core/role-context.service';
 import { WardNotificationsComponent } from './ward-notifications/ward-notifications.component';
 import { UrgentAlertsBannerComponent } from '../shared/urgent-alerts/urgent-alerts-banner.component';
+import { PlatformRequestComponent } from './platform-request/platform-request.component';
 
 @Component({
   selector: 'app-in-basket-page',
@@ -16,6 +17,7 @@ import { UrgentAlertsBannerComponent } from '../shared/urgent-alerts/urgent-aler
     LabResultsInboxComponent,
     WardNotificationsComponent,
     UrgentAlertsBannerComponent,
+    PlatformRequestComponent,
   ],
   template: `
     <div class="in-basket-page">
@@ -35,6 +37,10 @@ import { UrgentAlertsBannerComponent } from '../shared/urgent-alerts/urgent-aler
         so a role that is on the page but not on the endpoint would otherwise
         get a 403 it never asked for.
       -->
+      <!-- QA D4308: a hospital administrator writes to the platform from here. -->
+      @if (canWriteToPlatform()) {
+        <app-platform-request />
+      }
       @if (canReviewLabResults()) {
         <app-lab-results-inbox />
       }
@@ -90,6 +96,10 @@ export class InBasketPageComponent {
   onUrgentAlertAcknowledged(): void {
     this.panel()?.refresh();
   }
+  /** QA D4308: `POST /platform-requests` admits hospital administrators only. */
+  readonly canWriteToPlatform = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN']),
+  );
 
   /** QA D2582: the ward notifications, for the roles whose alerts arrive there (`GET /nurse/inbox`). */
   readonly readsWardNotifications = computed(() =>

@@ -15,7 +15,7 @@
       }
     </div>
 
-    @if (error()) {
+    @if (error() && !errorOnField()) {
       <div class="error-banner" role="alert">
         <span>{{ error() }}</span>
       </div>

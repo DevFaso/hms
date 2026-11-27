@@ -1,5 +1,6 @@
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -298,6 +299,56 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       .expectOne('/auth/password/request')
       .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
     expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
+  });
+
+  it('r81 D4271: the forgotten-username dialog asks the server to send it, and answers the same either way', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotUsername();
+
+    component.forgotUsernameIdentifier = ' awa@exemple.test ';
+    component.submitForgotUsername();
+    const sent = httpMock.expectOne('/auth/username/reminder');
+    expect(sent.request.method).toBe('POST');
+    expect(sent.request.body).toEqual({ identifier: 'awa@exemple.test' });
+    sent.flush(null);
+    expect(component.forgotUsernameAck).toBe('LOGIN.FU_ACK');
+
+    component.openForgotUsername();
+    expect(component.forgotUsernameAck).toBe('');
+    component.forgotUsernameIdentifier = '70 00 00 00';
+    component.submitForgotUsername();
+    httpMock
+      .expectOne('/auth/username/reminder')
+      .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
+    expect(component.forgotUsernameAck).toBe('LOGIN.FU_ACK');
+  });
+
+  it("r81 D4271: pressing the reminder's submit with nothing typed marks the field and sends nothing", () => {
+    const fixture = TestBed.createComponent(Login);
+    const page = fixture.componentInstance;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    httpMock.match(() => true).forEach((pending) => pending.flush({}));
+    page.openForgotUsername();
+    fixture.detectChanges();
+    const sent = spyOn(TestBed.inject(HttpClient), 'post').and.callThrough();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="forgot-username-submit"]',
+      sent,
+    });
+
+    expect(marked).toContain('fu-identifier');
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('r81 D4271: an empty identifier posts nothing', () => {
+    component.openForgotUsername();
+    component.forgotUsernameIdentifier = '  ';
+    component.submitForgotUsername();
+    httpMock.expectNone('/auth/username/reminder');
+    expect(component.forgotUsernameAck).toBe('');
   });
 
   it('QA D787: an empty identifier asks for one and posts nothing', () => {

@@ -45,8 +45,13 @@ public class InBasketItem extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_inbasket_recipient"))
     private User recipientUser;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "hospital_id", nullable = false,
+    /**
+     * The hospital the item belongs to. Null for a platform item (QA D4308,
+     * V410): something addressed to the platform administrators that concerns
+     * no single hospital - a provider to verify, an integration failing.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "hospital_id",
         foreignKey = @ForeignKey(name = "fk_inbasket_hospital"))
     private Hospital hospital;
 

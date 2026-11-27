@@ -106,7 +106,7 @@ export function refuseFields(
         msg.setAttribute('role', 'alert');
         // Keep feedback outside checkbox labels and icon/password input wrappers,
         // so the message cannot become another item in their horizontal layout.
-        (el.closest('.checkbox-label, .input-wrapper') ?? el).insertAdjacentElement(
+        (el.closest(".checkbox-label, [class*='input-wrapper']") ?? el).insertAdjacentElement(
           'afterend',
           msg,
         );

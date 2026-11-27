@@ -117,4 +117,27 @@ class InMemoryTokenBlacklistServiceTest {
         assertThat(service.isSessionRevoked(" ")).isFalse();
         assertThat(service.isSessionRevoked(null)).isFalse();
     }
+
+    @Test
+    void aLockedSessionStaysLockedUntilItIsUnlocked() {
+        long now = System.currentTimeMillis();
+        service.lockSession("session-1", now, now + 60_000);
+
+        assertThat(service.isSessionLocked("session-1")).isTrue();
+        assertThat(service.sessionLockedAt("session-1")).isEqualTo(now);
+        assertThat(service.isSessionLocked("session-2")).isFalse();
+
+        service.unlockSession("session-1");
+        assertThat(service.isSessionLocked("session-1")).isFalse();
+    }
+
+    @Test
+    void aLockDoesNotOutliveItsSession() {
+        long now = System.currentTimeMillis();
+        service.lockSession("session-1", now - 120_000, now - 1);
+
+        assertThat(service.isSessionLocked("session-1")).isFalse();
+        assertThat(service.isSessionLocked(null)).isFalse();
+        assertThat(service.isSessionLocked(" ")).isFalse();
+    }
 }

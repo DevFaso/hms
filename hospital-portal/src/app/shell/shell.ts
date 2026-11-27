@@ -31,6 +31,7 @@ import { IdleService } from '../core/idle.service';
 import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
+import { OutOfDocumentDirective } from '../shared/a11y/out-of-document.directive';
 import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
 import { ImpersonationService } from '../services/impersonation.service';
 import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadcast-banner';
@@ -88,6 +89,7 @@ function isMobileViewport(): boolean {
     RouterLink,
     RouterLinkActive,
     LockScreenComponent,
+    OutOfDocumentDirective,
     ImpersonationBannerComponent,
     EmergencyBroadcastBannerComponent,
     DowntimeBannerComponent,
@@ -1856,6 +1858,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private broadcastOpened = false;
 
   constructor() {
+    // A support session does not sit behind a lock screen: when the screen
+    // locks while one is open, it is ended and the super-admin signs in again.
+    effect(() => {
+      if (this.idle.locked() && this.impersonation.active()?.impersonating) {
+        untracked(() => this.endSupportSessionAtLock());
+      }
+    });
     // Ask whether this session acts at a provider facility, again whenever
     // the scope changes or the session bootstrap resolves: the server answers
     // for the facility the request acts at. The nav switches to the provider
@@ -2324,8 +2333,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.tearDownAndRedirect(undefined, true);
   }
 
+  private endingSupportSession = false;
+
+  private endSupportSessionAtLock(): void {
+    if (this.endingSupportSession) return;
+    this.endingSupportSession = true;
+    this.impersonation.stop().subscribe({
+      next: () => this.tearDownAndRedirect(),
+      error: () => {
+        this.impersonation.forceStop();
+        this.tearDownAndRedirect();
+      },
+    });
+  }
+
   /** Shared tear-down: stop idle, log out, redirect to login */
   private tearDownAndRedirect(queryParams?: { reason: string }, localOnly = false): void {
+    // The lock is forgotten; the page behind it stays out of the document.
+    this.idle.release();
     this.idle.stop();
     this.permissions.clear();
     clearReportedSilent403s();

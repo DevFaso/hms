@@ -96,10 +96,37 @@ public class IntegrationHealthRecorder {
             repository.save(snapshot);
             persistEvent(integrationId, organizationId, IntegrationHealthStatus.FAILING,
                 latencyMs, truncate(errorMessage), now);
+            reportRepeatedFailure(snapshot, integrationId, organizationId, errorMessage);
         } catch (RuntimeException ex) {
             log.warn("IntegrationHealthRecorder.recordFailure failed for integration={} org={}: {}",
                 integrationId, organizationId, ex.getMessage());
         }
+    }
+
+    /** Failures in one 24-hour window after which the platform administrators are told. */
+    static final int REPEATED_FAILURE_THRESHOLD = 3;
+
+    /** QA D4308: set by the container; absent in a test that builds the recorder by hand. */
+    private com.example.hms.service.platform.PlatformInbox platformInbox;
+
+    @Autowired(required = false)
+    void setPlatformInbox(com.example.hms.service.platform.PlatformInbox platformInbox) {
+        this.platformInbox = platformInbox;
+    }
+
+    /**
+     * QA D4308: told once, on the failure that reaches the threshold in the
+     * current window - not on each one after it. A connector that only says
+     * nothing is connected behind it is not a failure anybody has to act on.
+     */
+    private void reportRepeatedFailure(IntegrationHealthSnapshot snapshot, String integrationId,
+                                       UUID organizationId, String errorMessage) {
+        if (platformInbox == null || snapshot.getFailureCount24h() != REPEATED_FAILURE_THRESHOLD
+                || IntegrationDiagnosticText.isConfigurationState(errorMessage)) {
+            return;
+        }
+        platformInbox.integrationFailingRepeatedly(integrationId, organizationId,
+            snapshot.getCountsWindowStartedAt(), snapshot.getFailureCount24h());
     }
 
     private void persistEvent(String integrationId, UUID organizationId,

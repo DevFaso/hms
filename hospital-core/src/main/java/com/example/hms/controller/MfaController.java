@@ -430,6 +430,8 @@ public class MfaController {
                 .eventDescription(usedBackup ? "MFA verified via backup code" : "MFA verified via TOTP")
                 .build());
 
+        auditEventLogService.logEvent(com.example.hms.security.audit.SignInAuditRows.signedIn(user, true));
+
         log.info("[MFA] Login MFA verified for user='{}' usedBackup={}", username, usedBackup);
 
         String preferredRole = jwtTokenProvider.resolvePreferredRole(roles);

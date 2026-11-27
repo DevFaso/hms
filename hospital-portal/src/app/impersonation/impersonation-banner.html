@@ -7,11 +7,10 @@
   >
     <span class="material-symbols-outlined banner-icon" aria-hidden="true">visibility</span>
     <span class="banner-text">
-      {{ 'IMPERSONATION.BANNER_PREFIX' | translate }}
-      <strong>{{ active()?.targetUsername }}</strong>
-      {{ 'IMPERSONATION.BANNER_SUFFIX' | translate }}
+      {{ 'IMPERSONATION.BANNER' | translate }}
+      <strong>{{ targetName() }}</strong>
       <span class="impersonator-tag">
-        ({{ 'IMPERSONATION.AS' | translate }} {{ active()?.impersonatorUsername }})
+        ({{ 'IMPERSONATION.OPENED_BY' | translate }} {{ impersonatorName() }})
       </span>
     </span>
     @if (remainingLabel()) {

@@ -141,6 +141,44 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
       expect(oauthMock.initCodeFlow).not.toHaveBeenCalled();
     });
 
+    it("r81: the lock screen's sign-in asks the provider to authenticate the holder again and marks the tab", () => {
+      spyOn(service, 'isEnabled').and.returnValue(true);
+      sessionStorage.setItem(SSO_TAB_KEY, 'bound');
+
+      service.reauthenticate();
+
+      expect(oauthMock.initCodeFlow).toHaveBeenCalledOnceWith('', { prompt: 'login' });
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBe('unlocking');
+    });
+
+    it('r81: back from that sign-in the tab says so once; back from a plain reload it does not', async () => {
+      oauthMock.hasValidAccessToken.and.returnValue(true);
+      oauthMock.getAccessToken.and.returnValue(kcToken('kc-user-1'));
+      oauthMock.getIdentityClaims.and.returnValue(claims);
+
+      sessionStorage.setItem(SSO_TAB_KEY, 'restoring');
+      await service.initialize();
+      expect(service.reauthenticated()).toBeFalse();
+
+      sessionStorage.setItem(SSO_TAB_KEY, 'unlocking');
+      await service.initialize();
+      expect(service.reauthenticated()).toBeTrue();
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBe('bound');
+    });
+
+    it('r81: back from that sign-in as another account, the tab is ended and nothing is unlocked', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'unlocking');
+      oauthMock.hasValidAccessToken.and.returnValue(true);
+      oauthMock.getAccessToken.and.returnValue(kcToken('kc-someone-else'));
+      oauthMock.getIdentityClaims.and.returnValue({ ...claims, sub: 'kc-someone-else' });
+
+      await service.initialize();
+
+      expect(service.reauthenticated()).toBeFalse();
+      expect(auth.getToken()).toBeNull();
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBeNull();
+    });
+
     it('back from the provider as another account, the tab is ended locally', async () => {
       sessionStorage.setItem(SSO_TAB_KEY, 'restoring');
       oauthMock.hasValidAccessToken.and.returnValue(true);

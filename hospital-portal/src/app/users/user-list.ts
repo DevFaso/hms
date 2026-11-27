@@ -1003,7 +1003,6 @@ export class UserListComponent implements OnInit, OnDestroy {
         ['impersonate-reason'],
         message,
       );
-      this.impersonateError.set(message);
       return;
     }
     this.impersonating.set(true);

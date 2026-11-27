@@ -132,6 +132,13 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
     expect(confirm.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(password);
     expect(host.querySelector('#newPassword-invalid-msg')?.textContent).toBe(c.error);
+    // r81 D4276: said once, under the field and below its input row, not in the banner as well.
+    fixture.detectChanges();
+    expect(host.querySelector('.rp-error-banner')).toBeNull();
+    expect(host.querySelector('.rp-input-wrapper .invalid-field-msg')).toBeNull();
+    expect(
+      host.querySelector('#newPassword-invalid-msg')?.previousElementSibling?.className,
+    ).toContain('rp-input-wrapper');
 
     c.newPassword = 'short';
     c.confirmPassword = 'short';

@@ -174,8 +174,9 @@ class CrossHospitalListByIdAgreementTest {
         while (sentQueries.find()) {
             found++;
         }
-        assertThat(found).as("findSentAcrossHospitals and findSentAcrossHospitalsAndStatusIn, value and count queries")
-            .isEqualTo(4);
+        assertThat(found).as("findSentAcrossHospitals and findSentAcrossHospitalsAndStatusIn, each with its"
+            + " OutsideVisits variant, value and count queries")
+            .isEqualTo(8);
         assertThat(read(findFile("PrescriptionServiceImpl.java"))).contains("NeverSentRule.sent(prescription)");
     }
 

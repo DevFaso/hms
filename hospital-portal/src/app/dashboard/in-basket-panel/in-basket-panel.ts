@@ -144,6 +144,22 @@ export class InBasketPanelComponent {
     this.loadData();
   }
 
+  /**
+   * QA D4308: a platform item (addressed to the platform administrators) opens
+   * the page where it is handled. Null for an item that has no such page.
+   */
+  platformLink(item: InBasketItem): string[] | null {
+    if (item.referenceType === 'PROVIDER_VERIFICATION' && item.referenceId) {
+      return ['/super-admin/providers', item.referenceId];
+    }
+    return item.referenceType === 'INTEGRATION_FAILING' ? ['/super-admin/integrations'] : null;
+  }
+
+  openPlatformItem(item: InBasketItem): void {
+    const link = this.platformLink(item);
+    if (link) this.router.navigate(link);
+  }
+
   isNoteToSign(item: InBasketItem): boolean {
     return item.referenceType === NOTE_TO_SIGN_REFERENCE && !!item.encounterId;
   }
