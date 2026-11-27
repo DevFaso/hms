@@ -10101,7 +10101,8 @@
     "RESET_FILTERS": "Reset filters",
     "LOAD_ERROR": "Unable to load signatures. Please try again.",
     "NO_MATCHES": "No signatures match these filters.",
-    "EMPTY_HELP": "Signatures will appear here after reports are signed. You can also check a report using its reference."
+    "EMPTY_HELP": "Signatures will appear here after reports are signed.",
+    "EMPTY_LOOKUP_HELP": "You can also check a report using its reference."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",
