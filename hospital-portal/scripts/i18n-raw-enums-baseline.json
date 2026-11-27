@@ -217,6 +217,7 @@
     "src/app/platform/platform.html::item.featureFlag",
     "src/app/platform/platform.html::item.serviceType",
     "src/app/platform/platform.html::own.serviceLevel",
+    "src/app/platform/platform.html::rel.cancelReason",
     "src/app/platform/platform.html::selectedService()!.serviceType",
     "src/app/platform/platform.html::svc.serviceType",
     "src/app/platform/platform.html::task.nextAction",
