@@ -45,9 +45,29 @@ test('lab inventory and instruments remain readable at supported widths', async 
       ]),
     }),
   );
+  await page.route('**/api/lab-test-definitions/search**', (route) =>
+    route.fulfill({
+      json: {
+        success: true,
+        data: pageOf([
+          {
+            id: 'culture-1',
+            testCode: 'CULT',
+            testName: 'Culture',
+            category: 'Microbiology',
+            sampleType: 'Blood',
+            approvalStatus: 'ACTIVE',
+            isActive: true,
+            culture: true,
+            referenceRanges: [],
+          },
+        ]),
+      },
+    }),
+  );
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const screen of ['lab-inventory', 'lab-instruments']) {
+    for (const screen of ['lab-inventory', 'lab-instruments', 'lab-test-config']) {
       await page.goto('/' + screen, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('tbody tr').first()).toBeVisible();
       if (screen === 'lab-inventory') {
@@ -66,7 +86,11 @@ test('lab inventory and instruments remain readable at supported widths', async 
             });
           expect(lines).toBe(1);
         }
-      } else await expect(page.locator('tbody tr').first()).toContainText('15/03/2025');
+      } else if (screen === 'lab-instruments') {
+        await expect(page.locator('tbody tr').first()).toContainText('15/03/2025');
+      } else {
+        await expect(page.locator('[data-testid="def-culture"]')).toBeVisible();
+      }
       await testInfo.attach(`${screen}-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: 'image/png',
