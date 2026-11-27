@@ -59,7 +59,12 @@ async function open(page: Page, baseURL: string, role: string | null, path: stri
   if (role) await signInAs(page, role, baseURL);
   await installLocalIconFonts(page);
   await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible();
+  // The first heading in the document is a menu group's, inside the navigation
+  // drawer. On a phone the closed drawer is hidden (P5: it left the Tab order),
+  // so wait for the first heading a reader can see: the page's own.
+  await expect(
+    page.locator('h1:visible, h2:visible, [role="heading"]:visible').first(),
+  ).toBeVisible();
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 

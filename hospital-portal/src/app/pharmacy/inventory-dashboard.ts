@@ -479,6 +479,10 @@ export class InventoryDashboardComponent implements OnInit {
     return this.translate.instant('PHARMACY.IN_STOCK');
   }
 
+  expiryDaysLabelKey(days: number): string {
+    return days === 1 ? 'PHARMACY.DAY_REMAINING_VALUE' : 'PHARMACY.DAYS_REMAINING_VALUE';
+  }
+
   getDaysUntilExpiry(expiryDate: string): number {
     const expiry = serverDateOrInstant(expiryDate); // a LocalDate: that local day
     const today = new Date();

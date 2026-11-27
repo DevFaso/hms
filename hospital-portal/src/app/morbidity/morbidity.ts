@@ -90,6 +90,16 @@ export class MorbidityComponent implements OnInit {
     this.load();
   }
 
+  /** Localize the display while retaining yyyy-MM for the API and navigation. */
+  monthLabel(): string {
+    const locale = this.translate.currentLang || 'fr';
+    return new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${this.month()}-01T00:00:00Z`));
+  }
+
   /** Grand total across the ranked rows, for the summary line. */
   totalShown(): number {
     return (this.data()?.overall ?? []).reduce((sum, slice) => sum + slice.count, 0);

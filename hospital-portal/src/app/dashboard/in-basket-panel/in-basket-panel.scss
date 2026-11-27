@@ -243,7 +243,10 @@
 
 .item-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
   padding: 12px 12px 12px 0;
 }
 

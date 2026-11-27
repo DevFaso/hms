@@ -164,6 +164,14 @@ jobs:
       - name: Run axe-core smoke
         run: npm run e2e:a11y
 
+      # Go-live P5: the pages of the ten main journeys (docs/qa/wcag-scope.md),
+      # as their working roles, at 390 / 768 / 1440 px: WCAG 2.1 A/AA, landmarks,
+      # reflow, phone targets and a keyboard smoke.
+      - name: Agreed WCAG 2.1 AA scope on the production bundle
+        env:
+          PLAYWRIGHT_PREBUILT: "1"
+        run: npm run e2e:wcag-scope
+
       - name: Production startup under Slow 3G
         env:
           PLAYWRIGHT_PREBUILT: "1"

@@ -18,6 +18,10 @@ import java.util.UUID;
 
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, UUID> {
+    /** Reload the delivery decision inside its own transaction; the sweep's entity may already be stale. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"pharmacy", "pharmacy.hospital", "medicationCatalogItem"})
+    @Query("SELECT i FROM InventoryItem i WHERE i.id = :id")
+    Optional<InventoryItem> findForAlertDelivery(@Param("id") UUID id);
     /** Transfers hold several stock rows: refuse contention immediately rather than waiting with a partial lock set. */
     @Query(value = "SELECT * FROM clinical.inventory_items WHERE id = :id FOR UPDATE NOWAIT", nativeQuery = true)
     Optional<InventoryItem> tryLockById(@Param("id") UUID id);
@@ -50,6 +54,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
     @Query("SELECT i FROM InventoryItem i WHERE i.pharmacy.hospital.id = :hospitalId "
          + "AND i.active = true AND i.quantityOnHand <= i.reorderThreshold")
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"pharmacy", "pharmacy.hospital", "medicationCatalogItem"})
     List<InventoryItem> findBelowReorderThresholdByHospital(@Param("hospitalId") UUID hospitalId);
 
     Page<InventoryItem> findByPharmacyHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
@@ -103,4 +108,11 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     @Query("UPDATE InventoryItem i SET i.quantityOnHand = i.quantityOnHand * :factor, i.updatedAt = :now "
          + "WHERE i.id = :id")
     int scaleOnHand(@Param("id") UUID id, @Param("factor") BigDecimal factor, @Param("now") LocalDateTime now);
+    /** Platform stock administration includes pharmacy providers as well as hospital stores. */
+    @Query("SELECT i.id FROM InventoryItem i WHERE i.active = true AND i.pharmacy.active = true "
+        + "AND i.pharmacy.hospital.active = true "
+        + "AND i.pharmacy.hospital.lifecycleState = com.example.hms.enums.HospitalLifecycleState.ACTIVE "
+        + "AND i.quantityOnHand <= i.reorderThreshold")
+    List<UUID> findLowStockIdsAcrossActiveFacilities();
+
 }

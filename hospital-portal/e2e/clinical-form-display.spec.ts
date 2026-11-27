@@ -304,17 +304,25 @@ test('hospital payer-share reason is styled without recording a decision', async
   await installLocalIconFonts(page);
   await page.route('**/api/billing-invoices/payer-shares?**', (route) =>
     route.fulfill({
-      json: [
-        {
-          id: TEST_ID,
-          invoiceId: TEST_ID,
-          invoiceNumber: 'cdx-INV',
-          patientName: 'cdx Patient',
-          payerName: 'cdx Synthetic payer',
-          amount: 750,
-          status: 'OPEN',
-        },
-      ],
+      // Insurer claims PR 1 (G2): one page of the list, with the count and total of every page.
+      json: {
+        content: [
+          {
+            id: TEST_ID,
+            invoiceId: TEST_ID,
+            invoiceNumber: 'cdx-INV',
+            patientName: 'cdx Patient',
+            payerName: 'cdx Synthetic payer',
+            amount: 750,
+            status: 'OPEN',
+          },
+        ],
+        page: 0,
+        size: 25,
+        totalElements: 1,
+        totalPages: 1,
+        totalAmount: 750,
+      },
     }),
   );
   await page.goto('/billing/parts-assureurs');

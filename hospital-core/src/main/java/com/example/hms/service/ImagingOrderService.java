@@ -25,6 +25,20 @@ public interface ImagingOrderService {
     ImagingOrderResponseDTO recordAuthorization(UUID orderId,
                                                 com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request);
 
+    /**
+     * Insurer claims plan PR 1 (QA D3984): the desk or billing records the pre-authorisation number of an order of
+     * the acting hospital. The answer carries no clinical field; the number reaches the order's invoice lines.
+     */
+    com.example.hms.payload.dto.imaging.ImagingPreAuthorisationDeskDTO recordAuthorizationAtDesk(UUID orderId,
+                                                                                               String number);
+
+    /**
+     * Insurer claims plan PR 1 (QA D3984): a number recorded on an invoice line that bills this order, at
+     * {@code hospitalId}, written on the order too (the caller has checked who may). False when the order is not
+     * found there or is cancelled without a study done: the line keeps the number either way.
+     */
+    boolean recordAuthorizationFromInvoiceLine(UUID orderId, UUID hospitalId, String number);
+
     /** Policy rule 3 (provisional): the patient is checked in at the imaging desk; recorded once. */
     ImagingOrderResponseDTO checkInPatient(UUID orderId);
 

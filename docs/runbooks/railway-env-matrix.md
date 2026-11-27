@@ -47,9 +47,10 @@ MediHub (project)
 > and [keycloak-admin-recovery-2026-05-09.md §3](keycloak-admin-recovery-2026-05-09.md#3-verify-uat-admin-login)
 > for the same naming.
 
-The single `railway.toml` per Dockerfile is shared across all
-services of the same kind (one `keycloak/prod/railway.toml` referenced
-by `hms-keycloak-{dev,prod}` etc.). Env vars are per-service
+Build and deploy settings are declared once per kind of service in
+`.railway/railway.ts` (one `KEYCLOAK_BUILD` block used by
+`hms-keycloak-{dev,prod}` etc.; see
+[railway-config-as-code.md](railway-config-as-code.md)). Env vars are per-service
 per-environment via Railway's variables UI. That's the intended
 split: code in the repo, secrets and per-env hostnames in Railway.
 
@@ -206,7 +207,7 @@ No `ExitOnOutOfMemoryError`, by decision: it would turn one oversized request
 into a kill of the whole process. A request-scoped OOM fails that request and
 the heap recovers. An OOM can also land in a background thread (scheduler,
 pool housekeeper, exporter) and stop it while health stays UP; the
-`HmsHeapHigh` alert is the signal for that, not a process exit; `railway.toml` keeps `on_failure` with 3 restarts. A limit
+`HmsHeapHigh` alert is the signal for that, not a process exit; `.railway/railway.ts` keeps on-failure with 3 restarts. A limit
 that is too small for the whole process (heap plus metaspace, threads and the
 OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
 deployment once the 3 restarts are spent (FAILED is for builds and deploy-time

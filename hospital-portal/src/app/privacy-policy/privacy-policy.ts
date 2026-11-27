@@ -4,7 +4,7 @@ import { Component, ChangeDetectionStrategy } from '@angular/core';
   selector: 'app-privacy-policy',
   standalone: true,
   template: `
-    <div class="privacy-policy">
+    <main class="privacy-policy">
       <div class="lang-toggle">
         <button [class.active]="lang === 'en'" (click)="setLang('en')">English</button>
         <button [class.active]="lang === 'fr'" (click)="setLang('fr')">Français</button>
@@ -415,7 +415,7 @@ import { Component, ChangeDetectionStrategy } from '@angular/core';
           </section>
         }
       </div>
-    </div>
+    </main>
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [

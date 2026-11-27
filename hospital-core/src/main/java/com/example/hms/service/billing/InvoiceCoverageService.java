@@ -177,6 +177,7 @@ public class InvoiceCoverageService {
         }
         InvoicePayerShare share = writeShare(invoice, hospitalId, applied.insurance().getId(), applied.plan().getId(),
             result.total(), day, actorId);
+        writeShareLines(share, result);
         applyToLines(lines, result);
         invoice.setPayerShareTotal(result.total());
         audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, share.getId(), "Payer share applied");
@@ -234,6 +235,9 @@ public class InvoiceCoverageService {
             ? new CoverageCalculator.Result(List.of(), BigDecimal.ZERO.setScale(2))
             : compute(invoice, hospitalId, lines, coverage, day);
         if (result.total().compareTo(current.getAmount()) == 0) {
+            // Review of #1353 (F1): the total can stand while the split moves (a ceiling filled in line order), so
+            // the share's own rows follow the lines, whatever its status: the amount owed is unchanged.
+            resplitShareLines(current, result);
             applyToLines(lines, result);
             return InvoiceBalance.payerShareOf(invoice);
         }
@@ -249,6 +253,7 @@ public class InvoiceCoverageService {
         if (result.total().signum() > 0) {
             InvoicePayerShare replacement = writeShare(invoice, hospitalId, current.getPatientInsuranceId(),
                 current.getPayerPlanId(), result.total(), day, actorId);
+            writeShareLines(replacement, result);
             audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, replacement.getId(),
                 "Payer share applied after a credit note");
         }
@@ -388,28 +393,51 @@ public class InvoiceCoverageService {
         }
         Map<UUID, PayerPlan> plans = new HashMap<>();
         Map<UUID, String> payerNames = new HashMap<>();
+        Map<UUID, Optional<PatientInsurance>> coverages = new HashMap<>();
         List<InvoicePayerShareDTO> out = new ArrayList<>();
         for (InvoicePayerShare share : shares) {
             PayerPlan plan = plans.computeIfAbsent(share.getPayerPlanId(),
                 id -> planRepository.findByIdAndHospitalId(id, hospitalId).orElse(null));
             String payerName = plan == null ? null : payerNames.computeIfAbsent(plan.getPayerId(),
                 id -> payerRepository.findByIdAndHospitalId(id, hospitalId).map(Payer::getName).orElse(null));
+            // Insurer claims plan PR 1 (QA D2712): the policy and subscriber of the coverage the share was computed
+            // under, read at the invoice's own hospital only.
+            Optional<PatientInsurance> coverage = coverages.computeIfAbsent(share.getPatientInsuranceId(),
+                id -> insuranceRepository.findByIdAndAssignment_Hospital_Id(id, hospitalId));
             out.add(new InvoicePayerShareDTO(share.getId(), payerName, plan != null ? plan.getName() : null,
                 share.getAmount(), share.getCoverageYear() != null ? share.getCoverageYear() : 0,
-                share.getStatus().name(), share.getRejectionReason(), share.getDecidedAt(), share.getCreatedAt()));
+                share.getStatus().name(), share.getRejectionReason(), share.getDecidedAt(), share.getCreatedAt(),
+                coverage.map(PatientInsurance::getPolicyNumber).orElse(null),
+                coverage.map(PatientInsurance::getSubscriberName).orElse(null),
+                coverage.map(PatientInsurance::getSubscriberRelationship).orElse(null)));
         }
         return List.copyOf(out);
     }
 
+    /** Insurer claims plan PR 1 (G2): the largest page of the « Parts assureurs » list. */
+    public static final int SHARE_PAGE_MAX = 100;
+    private static final int SHARE_PAGE_DEFAULT = 25;
+    private static final LocalDate EARLIEST_SERVICE_DAY = LocalDate.of(1900, 1, 1);
+    private static final LocalDate LATEST_SERVICE_DAY = LocalDate.of(9999, 12, 31);
+    /** Stands for a filter left out: never compared, since the matching {@code any…} flag is then true. */
+    private static final UUID NO_ID = new UUID(0L, 0L);
+
+    /** The filters of the « Parts assureurs » list; each null one is left out. Page is zero-based. */
+    public record ShareFilter(Collection<PayerShareStatus> statuses, UUID payerId, UUID planId, UUID patientId,
+                              LocalDate from, LocalDate to, Integer page, Integer size) {
+    }
+
     /**
-     * QA D2706 (r70): the « Parts assureurs » list of the acting hospital: every share OPEN or CLAIMED (or the
-     * statuses asked for), oldest first, with its invoice and patient. Read by the roles that decide a share
-     * (hospital admin, accountant, billing, claims reviewer) at that hospital; a verified super-admin pinned to it
-     * reads too. Another hospital's share is never read.
+     * QA D2706 (r70), insurer claims plan PR 1 (G1, G2): one page of the « Parts assureurs » list of the acting
+     * hospital: the shares OPEN or CLAIMED (or the statuses asked for), filtered by payer, plan, patient and service
+     * date (the invoice date, D-4), oldest service date first, with the total of every page. Each row carries what a
+     * claim needs: the payer and its kind, the plan, the policy number and subscriber of the coverage, and the acts
+     * the payer pays part of, each with its act code and pre-authorisation number. Read by the roles that decide a
+     * share (hospital admin, accountant, billing, claims reviewer) at that hospital; a verified super-admin pinned to
+     * it reads too. Another hospital's share, invoice, plan, coverage or line is never read.
      */
     @Transactional(readOnly = true)
-    public List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> listAtHospital(
-            java.util.Collection<PayerShareStatus> statuses) {
+    public com.example.hms.payload.dto.billing.PayerSharePageDTO searchAtHospital(ShareFilter filter) {
         UUID hospitalId = actingScopeResolver.requirePinned();
         UUID userId = roleValidator.getCurrentUserId();
         boolean reader = actingScopeResolver.isVerifiedSuperAdmin()
@@ -417,26 +445,70 @@ public class InvoiceCoverageService {
         if (!reader) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.payerShare.decidersOnly"));
         }
-        java.util.Collection<PayerShareStatus> wanted = statuses == null || statuses.isEmpty()
-            ? EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED) : statuses;
-        ShareNames names = new ShareNames(hospitalId);
-        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> out = new ArrayList<>();
-        for (InvoicePayerShare share : shareRepository.findByHospitalIdAndStatusInOrderByCreatedAtAsc(hospitalId,
-                wanted)) {
-            names.invoice(share.getInvoiceId()).ifPresent(invoice -> out.add(openShare(share, invoice, names)));
+        ShareFilter f = filter != null ? filter : new ShareFilter(null, null, null, null, null, null, null, null);
+        Collection<PayerShareStatus> wanted = f.statuses() == null || f.statuses().isEmpty()
+            ? EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED) : f.statuses();
+        LocalDate from = f.from() != null ? f.from() : EARLIEST_SERVICE_DAY;
+        LocalDate to = f.to() != null ? f.to() : LATEST_SERVICE_DAY;
+        if (to.isBefore(from)) {
+            throw new FieldBusinessException("toDate", "billing.payerShare.periodReversed");
         }
-        return List.copyOf(out);
+        int size = f.size() == null || f.size() <= 0 ? SHARE_PAGE_DEFAULT : Math.min(f.size(), SHARE_PAGE_MAX);
+        int page = f.page() == null || f.page() < 0 ? 0 : f.page();
+        UUID payerId = f.payerId() != null ? f.payerId() : NO_ID;
+        UUID planId = f.planId() != null ? f.planId() : NO_ID;
+        UUID patientId = f.patientId() != null ? f.patientId() : NO_ID;
+        org.springframework.data.domain.Page<InvoicePayerShare> found = shareRepository.searchAtHospital(hospitalId,
+            wanted, from, to, f.payerId() == null, payerId, f.planId() == null, planId, f.patientId() == null,
+            patientId, org.springframework.data.domain.PageRequest.of(page, size));
+        BigDecimal total = nonNull(shareRepository.sumSearchAtHospital(hospitalId, wanted, from, to,
+            f.payerId() == null, payerId, f.planId() == null, planId, f.patientId() == null, patientId));
+        ShareNames names = new ShareNames(hospitalId, found.getContent());
+        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> rows = new ArrayList<>();
+        for (InvoicePayerShare share : found.getContent()) {
+            names.invoice(share.getInvoiceId()).ifPresent(invoice -> rows.add(openShare(share, invoice, names)));
+        }
+        return new com.example.hms.payload.dto.billing.PayerSharePageDTO(List.copyOf(rows), page, size,
+            found.getTotalElements(), found.getTotalPages(), total);
     }
 
-    /** The invoices, plans and payer names one « Parts assureurs » list reads, each read once, at one hospital. */
+    /**
+     * The invoices, plans, payers, coverages, lines and act codes one page of « Parts assureurs » reads: each read
+     * once, the page's lines in one query, everything at one hospital.
+     */
     private final class ShareNames {
         private final UUID hospitalId;
         private final Map<UUID, Optional<BillingInvoice>> invoices = new HashMap<>();
         private final Map<UUID, Optional<PayerPlan>> plans = new HashMap<>();
-        private final Map<UUID, Optional<String>> payers = new HashMap<>();
+        private final Map<UUID, Optional<Payer>> payers = new HashMap<>();
+        private final Map<UUID, Optional<PatientInsurance>> coverages = new HashMap<>();
+        private final Map<UUID, List<InvoiceItem>> linesByInvoice;
+        private final Map<UUID, String> actCodes;
+        /** Per share, what it claimed of each line (V383); empty for a share written before V383. */
+        private final Map<UUID, Map<UUID, BigDecimal>> claimedByShare;
 
-        ShareNames(UUID hospitalId) {
+        ShareNames(UUID hospitalId, List<InvoicePayerShare> shares) {
             this.hospitalId = hospitalId;
+            Set<UUID> shareIds = shares.stream().map(InvoicePayerShare::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+            List<com.example.hms.model.InvoicePayerShareLine> claimed = shareLineRepository == null || shareIds.isEmpty()
+                ? List.of() : shareLineRepository.findByShareIdInAndHospitalId(shareIds, hospitalId);
+            this.claimedByShare = (claimed == null ? List.<com.example.hms.model.InvoicePayerShareLine>of() : claimed)
+                .stream()
+                .collect(Collectors.groupingBy(com.example.hms.model.InvoicePayerShareLine::getShareId,
+                    Collectors.toMap(com.example.hms.model.InvoicePayerShareLine::getInvoiceItemId,
+                        com.example.hms.model.InvoicePayerShareLine::getAmount, (a, b) -> a)));
+            Set<UUID> invoiceIds = shares.stream().map(InvoicePayerShare::getInvoiceId).collect(Collectors.toSet());
+            List<InvoiceItem> lines = invoiceIds.isEmpty() ? List.of()
+                : itemRepository.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(invoiceIds, hospitalId);
+            this.linesByInvoice = (lines == null ? List.<InvoiceItem>of() : lines).stream()
+                .filter(line -> line.getBillingInvoice() != null)
+                .collect(Collectors.groupingBy(line -> line.getBillingInvoice().getId()));
+            Set<UUID> itemIds = linesByInvoice.values().stream().flatMap(List::stream)
+                .map(InvoiceItem::getPriceListItemId).filter(Objects::nonNull).collect(Collectors.toSet());
+            this.actCodes = itemIds.isEmpty() ? Map.of() : priceListItemRepository.findAllById(itemIds).stream()
+                .filter(item -> hospitalId.equals(item.getHospitalId()) && item.getCode() != null)
+                .collect(Collectors.toMap(PriceListItem::getId, PriceListItem::getCode, (a, b) -> a));
         }
 
         Optional<BillingInvoice> invoice(UUID id) {
@@ -448,9 +520,59 @@ public class InvoiceCoverageService {
             return plans.computeIfAbsent(id, key -> planRepository.findByIdAndHospitalId(key, hospitalId));
         }
 
-        Optional<String> payer(PayerPlan plan) {
+        Optional<Payer> payer(PayerPlan plan) {
             return payers.computeIfAbsent(plan.getPayerId(),
-                key -> payerRepository.findByIdAndHospitalId(key, hospitalId).map(Payer::getName));
+                key -> payerRepository.findByIdAndHospitalId(key, hospitalId));
+        }
+
+        Optional<PatientInsurance> coverage(UUID id) {
+            return coverages.computeIfAbsent(id,
+                key -> insuranceRepository.findByIdAndAssignment_Hospital_Id(key, hospitalId));
+        }
+
+        /**
+         * The lines the share claimed, in posting order, each with what this share claimed of it. Review of #1353:
+         * read from the share's own rows (V383), so a share rejected or cancelled since (its lines' live amounts
+         * cleared) still lists its acts; a share written before V383 has none and falls back to the live split.
+         */
+        List<com.example.hms.payload.dto.billing.PayerShareLineDTO> claimedLines(InvoicePayerShare share) {
+            Map<UUID, BigDecimal> own = claimedByShare.get(share.getId());
+            return linesByInvoice.getOrDefault(share.getInvoiceId(), List.of()).stream()
+                .filter(line -> claimedOf(line, own).signum() > 0)
+                .sorted(Comparator.comparing(InvoiceItem::getCreatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder()))
+                    .thenComparing(line -> String.valueOf(line.getId())))
+                .map(line -> claimedLine(line, claimedOf(line, own)))
+                .toList();
+        }
+
+        private static BigDecimal claimedOf(InvoiceItem line, Map<UUID, BigDecimal> own) {
+            if (own != null) {
+                return own.getOrDefault(line.getId(), BigDecimal.ZERO);
+            }
+            return line.getPayerShareAmount() != null ? line.getPayerShareAmount() : BigDecimal.ZERO;
+        }
+
+        private com.example.hms.payload.dto.billing.PayerShareLineDTO claimedLine(InvoiceItem line, BigDecimal payer) {
+            BigDecimal gross = line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO;
+            String category;
+            if (line.getCoverageCategory() != null) {
+                category = line.getCoverageCategory().name();
+            } else {
+                category = line.getItemCategory() != null ? line.getItemCategory().name() : null;
+            }
+            return com.example.hms.payload.dto.billing.PayerShareLineDTO.builder()
+                .itemId(line.getId())
+                .description(BillingTextRenderer.render(line.getTextCode(), line.getTextArgs(),
+                    line.getItemDescription()))
+                .actCode(line.getPriceListItemId() != null ? actCodes.get(line.getPriceListItemId()) : null)
+                .category(category)
+                .quantity(line.getQuantity())
+                .grossAmount(gross)
+                .payerShare(payer)
+                .patientShare(gross.subtract(payer).max(BigDecimal.ZERO))
+                .preAuthorisationNumber(line.getPreAuthorisationNumber())
+                .build();
         }
     }
 
@@ -458,6 +580,8 @@ public class InvoiceCoverageService {
                                                                                   BillingInvoice invoice,
                                                                                   ShareNames names) {
         Optional<PayerPlan> plan = names.plan(share.getPayerPlanId());
+        Optional<Payer> payer = plan.flatMap(names::payer);
+        Optional<PatientInsurance> coverage = names.coverage(share.getPatientInsuranceId());
         com.example.hms.model.Patient patient = invoice.getPatient();
         return com.example.hms.payload.dto.billing.OpenPayerShareDTO.builder()
             .id(share.getId())
@@ -466,11 +590,19 @@ public class InvoiceCoverageService {
             .invoiceDate(invoice.getInvoiceDate())
             .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patient != null ? patient.getMrnForHospital(names.hospitalId) : null)
-            .payerName(plan.flatMap(names::payer).orElse(null))
+            .payerId(payer.map(Payer::getId).orElse(null))
+            .payerName(payer.map(Payer::getName).orElse(null))
+            .payerType(payer.map(Payer::getPayerType).map(Enum::name).orElse(null))
+            .planId(plan.map(PayerPlan::getId).orElse(null))
             .planName(plan.map(PayerPlan::getName).orElse(null))
+            .policyNumber(coverage.map(PatientInsurance::getPolicyNumber).orElse(null))
+            .subscriberName(coverage.map(PatientInsurance::getSubscriberName).orElse(null))
+            .subscriberRelationship(coverage.map(PatientInsurance::getSubscriberRelationship).orElse(null))
+            .coverageVerifiedAt(coverage.map(PatientInsurance::getVerifiedAt).orElse(null))
             .amount(share.getAmount())
             .status(share.getStatus().name())
             .createdAt(share.getCreatedAt())
+            .lines(names.claimedLines(share))
             .build();
     }
 
@@ -504,6 +636,28 @@ public class InvoiceCoverageService {
             }
         }
         return sum;
+    }
+
+    /**
+     * Insurer claims plan PR 1 (QA D2712): the payers' shares standing when a payment was received (as
+     * {@link #shareAt}), with their payer, plan and policy, so the receipt names who covered what at its moment.
+     */
+    @Transactional(readOnly = true)
+    public List<InvoicePayerShareDTO> sharesStandingAt(BillingInvoice invoice, LocalDateTime at) {
+        if (invoice == null || invoice.getId() == null || invoice.getHospital() == null) {
+            return List.of();
+        }
+        Set<UUID> standing = new java.util.HashSet<>();
+        for (InvoicePayerShare share : shareRepository.findByInvoiceIdAndHospitalIdOrderByCreatedAtAsc(
+                invoice.getId(), invoice.getHospital().getId())) {
+            boolean writtenBy = at == null || share.getCreatedAt() == null || !share.getCreatedAt().isAfter(at);
+            boolean endedBefore = !share.getStatus().isLive()
+                && (at == null || (share.getDecidedAt() != null && !share.getDecidedAt().isAfter(at)));
+            if (writtenBy && !endedBefore) {
+                standing.add(share.getId());
+            }
+        }
+        return readShares(invoice).stream().filter(share -> standing.contains(share.getId())).toList();
     }
 
     /* -------------------------------------------------------- internals */
@@ -687,6 +841,66 @@ public class InvoiceCoverageService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setPharmacyCoverUsage(com.example.hms.service.pharmacy.PharmacyCoverUsage pharmacyCoverUsage) {
         this.pharmacyCoverUsage = pharmacyCoverUsage;
+    }
+
+    /**
+     * Insurer claims PR 1 (review of #1353): what each share claimed of each line, kept with the share. Setter
+     * injected; a service built by hand in a unit test keeps none (the list then reads the live split).
+     */
+    private com.example.hms.repository.InvoicePayerShareLineRepository shareLineRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setShareLineRepository(com.example.hms.repository.InvoicePayerShareLineRepository shareLineRepository) {
+        this.shareLineRepository = shareLineRepository;
+    }
+
+    /** The share's own per-line rows, from the computation that wrote it (whole francs, more than 0 only). */
+    private void writeShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+        if (shareLineRepository == null || share.getId() == null) {
+            return;
+        }
+        List<com.example.hms.model.InvoicePayerShareLine> rows = result.lines().stream()
+            .filter(line -> line.id() != null && line.share() != null && line.share().signum() > 0)
+            .map(line -> com.example.hms.model.InvoicePayerShareLine.builder()
+                .hospitalId(share.getHospitalId())
+                .shareId(share.getId())
+                .invoiceItemId(line.id())
+                .amount(line.share())
+                .build())
+            .toList();
+        if (!rows.isEmpty()) {
+            shareLineRepository.saveAll(rows);
+        }
+    }
+
+    /**
+     * Review of #1353 (F1): a credit note left the share's total as it was but moved what it pays of each line (under
+     * a per-invoice or annual ceiling the lines are filled in order). The share's rows are replaced by the new split
+     * so « Parts assureurs » lists what the invoice lines now say; nothing is written when the split is unchanged.
+     */
+    private void resplitShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+        if (shareLineRepository == null || share.getId() == null) {
+            return;
+        }
+        Map<UUID, BigDecimal> stored = new HashMap<>();
+        for (com.example.hms.model.InvoicePayerShareLine row
+                : shareLineRepository.findByShareIdAndHospitalId(share.getId(), share.getHospitalId())) {
+            stored.put(row.getInvoiceItemId(), row.getAmount());
+        }
+        Map<UUID, BigDecimal> now = new HashMap<>();
+        for (CoverageCalculator.LineShare line : result.lines()) {
+            if (line.id() != null && line.share() != null && line.share().signum() > 0) {
+                now.put(line.id(), line.share());
+            }
+        }
+        boolean same = stored.size() == now.size() && now.entrySet().stream()
+            .allMatch(entry -> stored.containsKey(entry.getKey())
+                && stored.get(entry.getKey()).compareTo(entry.getValue()) == 0);
+        if (same) {
+            return;
+        }
+        shareLineRepository.deleteByShareAndHospital(share.getId(), share.getHospitalId());
+        writeShareLines(share, result);
     }
 
     private BigDecimal pharmacyUsed(UUID patientId, UUID hospitalId, int year, UUID excludedPrescriptionId) {

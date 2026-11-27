@@ -97,8 +97,8 @@ Or from the Railway UI: project `MediHub` → environment switcher →
 merge commit.
 
 If the SHA is older, redeploy from the Railway UI (Deployments →
-**⋯** → **Redeploy**) — Railway's `watchPatterns` filter on
-[`keycloak/prod/railway.toml`](../../keycloak/prod/railway.toml) only
+**⋯** → **Redeploy**) — Railway's `watchPatterns` filter (`KEYCLOAK_BUILD` in
+[`.railway/railway.ts`](../../.railway/railway.ts)) only
 fires on changes inside `keycloak/**`, so a `realm-export.json` edit
 *will* trigger a build automatically; a non-keycloak commit on the
 branch will not. Either way, the new image is built but the **realm

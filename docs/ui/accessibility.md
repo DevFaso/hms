@@ -6,6 +6,9 @@
 > [hospital-portal/e2e/keyboard-nav.spec.ts](../../hospital-portal/e2e/keyboard-nav.spec.ts).
 > Together they form HMS's WCAG 2.1 AA gate.
 
+> The agreed go-live scope (which pages, which success criteria, which widths,
+> what is put off) is [docs/qa/wcag-scope.md](../qa/wcag-scope.md).
+
 ## 1. Why this matters for HMS
 
 HMS is deployed in mixed-context hospitals — public sector (Burkina Faso, Côte
@@ -190,6 +193,10 @@ Every page is contained by the shell, which provides:
 <aside>  (sidebar) — role="navigation" aria-label="Primary"
 <main id="main-content" tabindex="-1"> — role="main"
 ```
+
+A page routed beside the shell (sign-in, second factor, password reset,
+e-mail verification, privacy policy, role welcome) brings its own `<main>`:
+`scripts/wcag-journey-scope.test.mjs` fails a new one that does not.
 
 Child screens MUST NOT add a second `<main>`. Use `<section>` with an
 `aria-labelledby` heading instead.

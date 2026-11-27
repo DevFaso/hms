@@ -4106,16 +4106,49 @@
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
     </changeSet>
 
-    <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
-         malware check; the daily upload allowance is counted from it. -->
-    <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">
-        <sqlFile path="V384__upload_records.sql" relativeToChangelogFile="true"
+    <!-- V383 (insurer claims plan PR 1, QA r77 D3984): the pre-authorisation number on an invoice line, and the
+         order the line bills. -->
+    <changeSet id="V383-invoice-line-pre-authorisation" author="hms-team" runOnChange="false">
+        <sqlFile path="V383__invoice_line_pre_authorisation.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
     <changeSet id="V394-lab-culture-definition-flag" author="codex" runOnChange="false">
         <sqlFile path="V394__lab_culture_definition_flag.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="false"/>
+    </changeSet>
+    <changeSet id="V396-pharmacy-stock-controls" author="codex" runOnChange="false">
+        <sqlFile path="V396__pharmacy_stock_controls.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V397-physical-stock-counts" author="codex" runOnChange="false">
+        <sqlFile path="V397__physical_stock_counts.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V398-stock-movement-unit-snapshot" author="codex" runOnChange="false">
+        <sqlFile path="V398__stock_movement_unit_snapshot.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V399-stock-count-revisions" author="codex" runOnChange="false">
+        <sqlFile path="V399__stock_count_revisions.sql" relativeToChangelogFile="true"
+                 splitStatements="false" stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V401-stock-count-confirmation-provenance" author="codex" runOnChange="false">
+        <sqlFile path="V401__stock_count_confirmation_provenance.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V402-stock-balance-reconciliation-evidence" author="codex" runOnChange="false">
+        <sqlFile path="V402__stock_balance_reconciliation_evidence.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V403-stock-receipt-metadata" author="codex" runOnChange="false">
+        <sqlFile path="V403__stock_receipt_metadata.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
+         malware check; the daily upload allowance is counted from it. -->
+    <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V384__upload_records.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
     </changeSet>
 
 </databaseChangeLog>

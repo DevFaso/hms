@@ -13,6 +13,7 @@ not scorecard passes or proof of a dev deployment. Claude owns the dev re-test.
 | D3703 | The delivery administration namespace copied English into Spanish | Full Spanish namespace translated; copied/missing-leaf guard without a prose exemption baseline | fixed-pending-retest |
 | D3704 | Two consent labels implied a narrower effect than their shared sender categories | All three locales now say appointments/follow-up and pharmacy cover **all messages**; shared label tests. Sender behavior is unchanged | fixed-pending-retest |
 | D3705 | Verification gave neither a sent acknowledgement nor the destination | Patient/desk live status announces the masked actual destination and expiry; safe backend mask, stale-response and role-loss tests, real browser flow. Raw recipients/codes are never returned | fixed-pending-retest |
+| D1636 | Blank page for about 20 s on a slow network, then a sign-in form without its words; the same blank on a full-page navigation | Boot screen in `index.html`, slow-connection message with retry after 20 s, lazy-route loading state (70d498668); `e2e/slow-network.spec.ts` in CI: shell within 3 s with bundles and fonts stalled, lazy navigation keeps the open page, and (P5) the form never appears without labels while `fr.json` is late. No further code change was needed in P5 | fixed-pending-retest (dev, Chromium Slow 3G: /login, a patient chart, eMAR) |
 
 ## #1318 remaining required-refusal exceptions
 
