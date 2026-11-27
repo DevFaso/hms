@@ -196,6 +196,24 @@ class LabOrderEndToEndIT extends BaseIT {
         }
     }
 
+    @Test
+    void labScientistMayReadScopedInventoryAndInstrumentsButNotWrite() throws Exception {
+        for (String area : List.of("inventory", "instruments")) {
+            String path = API + "/lab/" + area + "/hospital/{hospitalId}";
+            mockMvc.perform(get(path, hospital.getId()).contextPath(API).with(signedInAs(scientist)))
+                .andExpect(status().isOk());
+            mockMvc.perform(get(path, otherHospital.getId()).contextPath(API).with(signedInAs(scientist)))
+                .andExpect(status().isForbidden());
+            mockMvc.perform(post(path, hospital.getId()).contextPath(API).with(signedInAs(scientist)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
+                .contextPath(API).with(signedInAs(scientist)).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+            .andExpect(status().isOk());
+    }
+
     @BeforeEach
     void seed() {
         wipe();

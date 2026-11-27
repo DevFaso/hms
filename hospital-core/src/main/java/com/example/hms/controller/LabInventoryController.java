@@ -37,7 +37,7 @@ public class LabInventoryController {
 
     @Operation(summary = "List inventory items for a hospital")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Page<LabInventoryItemResponseDTO>> list(
             @PathVariable UUID hospitalId,
             @ParameterObject Pageable pageable,
@@ -52,7 +52,7 @@ public class LabInventoryController {
 
     @Operation(summary = "Search inventory items for a hospital")
     @PostMapping("/hospital/{hospitalId}/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Page<LabInventoryItemResponseDTO>> search(
             @PathVariable UUID hospitalId, @ParameterObject Pageable pageable,
             @Valid @RequestBody InventorySearchRequest request,
@@ -62,7 +62,7 @@ public class LabInventoryController {
 
     @Operation(summary = "Get inventory item by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<LabInventoryItemResponseDTO> getById(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) String lang) {
