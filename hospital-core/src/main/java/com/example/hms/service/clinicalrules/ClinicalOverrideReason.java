@@ -10,6 +10,6 @@ public final class ClinicalOverrideReason {
         if (reason == null) return false;
         return reason.strip().codePoints()
             .filter(ch -> !Character.isWhitespace(ch) && !Character.isSpaceChar(ch))
-            .limit(MIN_NON_WHITESPACE).count() >= MIN_NON_WHITESPACE;
+            .count() >= MIN_NON_WHITESPACE;
     }
 }
