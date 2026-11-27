@@ -369,12 +369,12 @@ describe('PatientPickerComponent', () => {
 
   it('keeps a long selected patient name readable in a narrow picker', () => {
     const fixture = TestBed.createComponent(PatientPickerComponent);
-    fixture.componentRef.setInput('selected', mockPatient('p1', 'Pengdwend?-LongueIdentit?'));
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Pengdwendé-LongueIdentité'));
     const host = fixture.nativeElement as HTMLElement;
     host.style.width = '180px';
     fixture.detectChanges();
     const name = host.querySelector('.chip-name') as HTMLElement;
-    expect(name.textContent).toContain('Pengdwend?-LongueIdentit?');
+    expect(name.textContent).toContain('Pengdwendé-LongueIdentité');
     expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1);
     expect(name.getBoundingClientRect().height).toBeGreaterThan(20);
   });

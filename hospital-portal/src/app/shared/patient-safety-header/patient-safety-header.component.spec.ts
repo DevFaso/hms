@@ -95,13 +95,13 @@ describe('PatientSafetyHeaderComponent', () => {
     translate.setTranslation(
       'fr',
       {
-        PATIENT_SAFETY: { BLOOD_GROUP: 'Groupe sanguin', NOT_DOCUMENTED: 'Non renseign?' },
+        PATIENT_SAFETY: { BLOOD_GROUP: 'Groupe sanguin', NOT_DOCUMENTED: 'Non renseigné' },
       },
       true,
     );
     translate.use('fr');
     storyboard.getStoryboard.and.returnValue(
-      of(summary({ bloodType: null, fullName: 'Pengdwend? Yam?ogo' })),
+      of(summary({ bloodType: null, fullName: 'Pengdwendé Yaméogo' })),
     );
     const el = show('p-1');
     el.style.width = '260px';
@@ -118,7 +118,7 @@ describe('PatientSafetyHeaderComponent', () => {
       fact.getBoundingClientRect().right + 1,
     );
     expect(el.querySelector('[data-testid="patient-safety-name"]')?.textContent).toContain(
-      'Pengdwend? Yam?ogo',
+      'Pengdwendé Yaméogo',
     );
   });
 

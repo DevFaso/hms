@@ -110,14 +110,14 @@ public final class DisplayNumbers {
         if (number.isEmpty() || unit == null || unit.isBlank()) return number;
         String entered = unit.trim();
         String[] forms = switch (entered.toLowerCase(Locale.ROOT)) {
-            case "g?lule", "g?lules" -> new String[] {"g?lule", "g?lules"};
+            case "gélule", "gélules" -> new String[] {"gélule", "gélules"};
             case "gelule", "gelules" -> new String[] {"gelule", "gelules"};
-            case "comprim?", "comprim?s" -> new String[] {"comprim?", "comprim?s"};
+            case "comprimé", "comprimés" -> new String[] {"comprimé", "comprimés"};
             case "comprime", "comprimes" -> new String[] {"comprime", "comprimes"};
             case "plaquette", "plaquettes" -> new String[] {"plaquette", "plaquettes"};
             case "ampoule", "ampoules" -> new String[] {"ampoule", "ampoules"};
             case "flacon", "flacons" -> new String[] {"flacon", "flacons"};
-            case "bo?te", "bo?tes" -> new String[] {"bo?te", "bo?tes"};
+            case "boîte", "boîtes" -> new String[] {"boîte", "boîtes"};
             case "boite", "boites" -> new String[] {"boite", "boites"};
             case "capsule", "capsules" -> new String[] {"capsule", "capsules"};
             case "tablet", "tablets" -> new String[] {"tablet", "tablets"};

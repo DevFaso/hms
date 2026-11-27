@@ -161,7 +161,7 @@ class OrdonnancePdfServiceTest {
             Positions() throws java.io.IOException { }
             @Override protected void writeString(String text, java.util.List<org.apache.pdfbox.text.TextPosition> positions) {
                 int prnIndex = text.indexOf("Si besoin");
-                int quantityIndex = text.indexOf("Quantit?");
+                int quantityIndex = text.indexOf("Quantité");
                 if (prnIndex >= 0) asNeeded = positions.get(prnIndex).getXDirAdj();
                 if (quantityIndex >= 0) quantity = positions.get(quantityIndex).getXDirAdj();
             }
@@ -178,8 +178,8 @@ class OrdonnancePdfServiceTest {
     @Test
     void printedQuantityUsesTheCountedUnitPlural() throws Exception {
         rx.setQuantity(new BigDecimal("21"));
-        rx.setQuantityUnit("g?lule");
-        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("21 g?lules");
+        rx.setQuantityUnit("gélule");
+        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("21 gélules");
     }
 
     @Test
