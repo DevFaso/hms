@@ -134,6 +134,35 @@ class RestrictedVisitScopeTest {
         }
 
         @Test
+        @DisplayName("a dispensing the acting hospital handed out is shown there, its withheld prescription still is not")
+        void dispensedHereIsShownHere() {
+            RestrictedVisitScope atActing = RestrictedVisitScope.of(List.of(restricted), actingId);
+            Prescription withheld = prescriptionIn(restricted);
+            PharmacyFill dispensedHere = fillOf(withheld);
+            dispensedHere.setHospital(hospital(actingId));
+            PharmacyFill dispensedAtTheRecordingHospital = fillOf(withheld);
+            dispensedAtTheRecordingHospital.setHospital(recordingHospital);
+
+            assertThat(atActing.admits(dispensedHere)).isTrue();
+            assertThat(atActing.admits(withheld)).as("the prescription stays withheld").isFalse();
+            assertThat(atActing.admits(dispensedAtTheRecordingHospital)).isFalse();
+            assertThat(scope.admits(dispensedHere)).as("a scope that knows no acting hospital").isFalse();
+        }
+
+        @Test
+        @DisplayName("a lab order or result the acting hospital performed for a withheld visit stays withheld")
+        void performedHereForAWithheldVisitStaysWithheld() {
+            RestrictedVisitScope atActing = RestrictedVisitScope.of(List.of(restricted), actingId);
+            LabOrder performedHere = labOrderIn(restricted);
+            performedHere.setHospital(recordingHospital);
+            performedHere.setPerformingHospital(hospital(actingId));
+            LabResult result = resultOf(performedHere);
+
+            assertThat(atActing.admits(performedHere)).isFalse();
+            assertThat(atActing.admits(result)).isFalse();
+        }
+
+        @Test
         @DisplayName("a lab order and its result")
         void labOrderAndResult() {
             assertThat(scope.admits(labOrderIn(restricted))).isFalse();

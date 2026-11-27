@@ -88,7 +88,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // QA D1537: a draft thrown away before anyone signed it is no course the patient took.
         // A prescription, and the dispensing that fills it, follow the restriction of the visit it was written in.
         RestrictedVisitScope restricted =
-            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId), hospitalId);
         List<Prescription> prescriptions = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
             NeverSentRule.prescriptionsReadableHere(
                 fetchPrescriptions(patientId, readable, restricted, startDate, endDate), hospitalId));
@@ -203,7 +203,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         RestrictedVisitScope restricted =
-            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId), hospitalId);
         List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readable)
             .stream().filter(restricted::admits).toList();
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,

@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -34,8 +35,9 @@ import java.util.Optional;
  * the request; the interceptor then writes no row, and counts no
  * break-the-glass read.
  *
- * <p>Empty means: no body, an empty collection, array or map, a page or
- * slice without content, an empty {@link Optional}, an empty JSON container,
+ * <p>Empty means: no body, an empty collection, array or map, a page with
+ * no row at all (a page past the end that still counts rows is an answer),
+ * a slice without content, an empty {@link Optional}, an empty JSON container,
  * or an {@link ApiResponseWrapper} around one of these. Anything else,
  * a record, a count, a text, is an answer. No collaborators, so a
  * {@code @WebMvcTest} slice builds it as it is.
@@ -81,8 +83,12 @@ public class PatientReadAnswerProbe implements ResponseBodyAdvice<Object> {
         if (body instanceof Map<?, ?> map) {
             return map.isEmpty();
         }
-        if (body instanceof Slice<?> page) {
-            return !page.hasContent();
+        if (body instanceof Page<?> page) {
+            // A page past the end still tells how many rows there are: a count is an answer.
+            return !page.hasContent() && page.getTotalElements() == 0;
+        }
+        if (body instanceof Slice<?> slice) {
+            return !slice.hasContent();
         }
         if (body instanceof JsonNode node) {
             return node.isNull() || node.isMissingNode() || ((node.isArray() || node.isObject()) && node.isEmpty());

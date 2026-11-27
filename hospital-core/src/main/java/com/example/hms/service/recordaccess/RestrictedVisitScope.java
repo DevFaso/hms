@@ -37,10 +37,20 @@ import java.util.UUID;
  * acting hospital ({@link RecordAccessPolicy#withheldVisits}), and answers,
  * type by type, whether a row may be shown.
  *
- * <p>A row of the acting hospital is never withheld (the rule is about what
- * crosses a hospital boundary), and a live break-the-glass session unlocks
- * the visits and what hangs off them together: in both cases the visit is
- * simply not in the scope.
+ * <p>The acting hospital's own visits are never withheld (the rule is about
+ * what crosses a hospital boundary), and a live break-the-glass session
+ * unlocks the visits and what hangs off them together: in both cases the
+ * visit is simply not in the scope. A row is judged by its visit, not by the
+ * hospital that holds it, with one exception:
+ * <ul>
+ *   <li>a dispensing the acting hospital handed out is always shown there
+ *       ({@link #of(Collection, UUID)}): its clinicians must see a drug they
+ *       gave, even when the prescription it fills is withheld;</li>
+ *   <li>a lab order or result the acting hospital performed for another
+ *       hospital's withheld visit stays withheld: it is part of that visit's
+ *       record, and the performing lab works it through its own queues, not
+ *       through the patient's shared views.</li>
+ * </ul>
  *
  * <p>A vital sign names no visit. It is withheld when it was taken at the
  * hospital of a withheld visit on a day that visit covers, the rule
@@ -55,13 +65,16 @@ public final class RestrictedVisitScope {
     /** Matches no row: what a query is given when nothing is withheld, since an empty {@code NOT IN} is not portable. */
     private static final UUID NO_VISIT = new UUID(0L, 0L);
 
-    private static final RestrictedVisitScope NONE = new RestrictedVisitScope(List.of());
+    private static final RestrictedVisitScope NONE = new RestrictedVisitScope(List.of(), null);
 
     private final List<Encounter> visits;
     private final Set<UUID> visitIds;
+    /** The hospital the read is made at, when known: what it dispensed itself is never withheld from it. */
+    private final UUID actingHospitalId;
 
-    private RestrictedVisitScope(List<Encounter> visits) {
+    private RestrictedVisitScope(List<Encounter> visits, UUID actingHospitalId) {
         this.visits = List.copyOf(visits);
+        this.actingHospitalId = actingHospitalId;
         Set<UUID> ids = new HashSet<>();
         for (Encounter visit : visits) {
             if (visit.getId() != null) {
@@ -78,10 +91,18 @@ public final class RestrictedVisitScope {
 
     /** @param withheldVisits the answer of {@link RecordAccessPolicy#withheldVisits} for this read */
     public static RestrictedVisitScope of(Collection<Encounter> withheldVisits) {
+        return of(withheldVisits, null);
+    }
+
+    /**
+     * @param withheldVisits   the answer of {@link RecordAccessPolicy#withheldVisits} for this read
+     * @param actingHospitalId the hospital the read is made at: a dispensing it handed out is shown
+     */
+    public static RestrictedVisitScope of(Collection<Encounter> withheldVisits, UUID actingHospitalId) {
         if (withheldVisits == null || withheldVisits.isEmpty()) {
             return NONE;
         }
-        return new RestrictedVisitScope(withheldVisits.stream().filter(Objects::nonNull).toList());
+        return new RestrictedVisitScope(withheldVisits.stream().filter(Objects::nonNull).toList(), actingHospitalId);
     }
 
     public boolean isEmpty() {
@@ -106,9 +127,19 @@ public final class RestrictedVisitScope {
         return prescription == null || admits(prescription.getEncounter());
     }
 
-    /** A dispensing follows the prescription it fills; one with no prescription names no visit. */
+    /**
+     * A dispensing follows the prescription it fills; one with no prescription
+     * names no visit. One the acting hospital handed out is always shown there.
+     */
     public boolean admits(PharmacyFill fill) {
-        return fill == null || admits(fill.getPrescription());
+        if (fill == null) {
+            return true;
+        }
+        if (actingHospitalId != null && fill.getHospital() != null
+                && actingHospitalId.equals(fill.getHospital().getId())) {
+            return true;
+        }
+        return admits(fill.getPrescription());
     }
 
     public boolean admits(LabOrder order) {

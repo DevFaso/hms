@@ -416,9 +416,10 @@ public class PatientEverythingService {
         Page<com.example.hms.model.PatientVitalSign> vitals = vitalSignRepository
             .findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
                 ctx.patientId(), ctx.readable(), ctx.pageRequest());
-        ctx.notePageOverflow(vitals);
         List<com.example.hms.model.PatientVitalSign> shownVitals =
             vitals.getContent().stream().filter(ctx.restricted()::admits).toList();
+        // The next page is the query's: a withheld row still takes its place on this one.
+        ctx.notePageOverflow(vitals);
         ctx.account(shownVitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
         shownVitals.forEach(v -> {
             if (ctx.passesSinceFilter(v.getUpdatedAt())) {
@@ -428,9 +429,9 @@ public class PatientEverythingService {
         Page<com.example.hms.model.LabResult> labResults = labResultRepository
             .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
                 ctx.patientId(), ctx.readable(), ctx.pageRequest());
-        ctx.notePageOverflow(labResults);
         List<com.example.hms.model.LabResult> shownResults =
             labResults.getContent().stream().filter(ctx.restricted()::admits).toList();
+        ctx.notePageOverflow(labResults);
         ctx.account(shownResults.stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());

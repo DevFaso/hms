@@ -241,6 +241,8 @@ class RestrictedVisitCoverageGuardTest {
             "patient-wide only with no hospital (global view); with one, that hospital's weighing"),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getLatestSnapshot",
             "patient-wide only with no hospital (global view); with one, that hospital's latest row"),
+        Map.entry("service/PrescriptionServiceImpl.java#patientRows",
+            "patient-wide only with no hospital (global view); with one, sentRows applies the scope"),
         Map.entry("service/LabResultServiceImpl.java#readLabResultsPage",
             "findAllForReader runs only with no hospital (global view); a hospital reads what it handles"),
         // Writes: nothing is handed to a reader.
@@ -255,9 +257,13 @@ class RestrictedVisitCoverageGuardTest {
     private static final Pattern OPENS_A_CHART = Pattern.compile("\\bpatientChartAccess\\s*\\.\\s*require\\s*\\(");
     private static final Pattern APPLIES_THE_SCOPE = Pattern.compile(
         "RestrictedVisitScope\\s*\\.\\s*of\\s*\\(\\s*recordAccessPolicy\\s*\\.\\s*withheldVisits\\s*\\(");
-    /** The scope at work in a method: built there, handed to it, or the timeline's own form of the same rule. */
+    /**
+     * The scope applied in a method: a call of it (its filter, or the visit ids it hands a query), or the
+     * timeline's own form of the same rule. Naming the scope is not enough; it must be called.
+     */
     private static final Pattern SCOPED_HERE = Pattern.compile(
-        "\\bRestrictedVisitScope\\b|\\brestricted\\b|\\bwithheld\\s*\\.\\s*admit\\s*\\(");
+        "\\brestricted(?:\\s*\\(\\s*\\))?\\s*(?:::\\s*admits\\b|\\.\\s*(?:admits|admitsVisit|visitIdsForQuery)\\s*\\()"
+            + "|\\bwithheld\\s*\\.\\s*admit\\s*\\(");
     private static final Pattern FIELD = Pattern.compile("(?:[\\w.]+\\.)?(\\w+Repository)\\s+(\\w+)\\s*[;,)]");
     private static final Pattern CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\s*\\(");
     /** A repository read, by the first word of its name. */
@@ -435,7 +441,7 @@ class RestrictedVisitCoverageGuardTest {
             List<Member> members = membersOf(text);
             Set<String> scopingHelpers = new TreeSet<>();
             for (Member member : members) {
-                if (APPLIES_THE_SCOPE.matcher(text.substring(member.open(), member.close())).find()) {
+                if (SCOPED_HERE.matcher(text.substring(member.open(), member.close())).find()) {
                     scopingHelpers.add(member.name());
                 }
             }

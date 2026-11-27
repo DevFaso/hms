@@ -132,6 +132,7 @@ class RestrictedVisitSharedReadIT extends BaseIT {
     @Autowired private ProcedureOrderRepository procedureOrderRepository;
     @Autowired private PatientVitalSignRepository vitalSignRepository;
     @Autowired private com.example.hms.repository.ImmunizationRepository immunizationRepository;
+    @Autowired private com.example.hms.repository.PharmacyFillRepository pharmacyFillRepository;
 
     private Organization organization;
     private Hospital hospitalA;
@@ -198,6 +199,7 @@ class RestrictedVisitSharedReadIT extends BaseIT {
         HospitalContextHolder.clear();
         // What this class made and the shared wipe does not know, children first.
         immunizationRepository.deleteAllInBatch();
+        pharmacyFillRepository.deleteAllInBatch();
         prescriptionRepository.deleteAllByIdInBatch(prescriptionIds);
         imagingOrderRepository.deleteAllByIdInBatch(imagingOrderIds);
         procedureOrderRepository.deleteAllByIdInBatch(procedureOrderIds);
@@ -286,6 +288,31 @@ class RestrictedVisitSharedReadIT extends BaseIT {
             .param("endDate", LocalDate.now().plusDays(7).toString())
             .with(acting(doctorB))).andExpect(status().isOk()).andReturn());
         assertShared(upcoming, "upcoming immunizations", PLAIN_VACCINE, RESTRICTED_VACCINE);
+    }
+
+    @Test
+    @DisplayName("at hospital B, a drug B dispensed on a restricted prescription of A stays in B's fills and timeline;"
+        + " the prescription stays withheld")
+    void aDrugDispensedAtBStaysVisibleAtB() throws Exception {
+        UUID id = patient.getId();
+        UUID b = hospitalB.getId();
+        UUID fillId = pharmacyFillRepository.save(com.example.hms.model.medication.PharmacyFill.builder()
+            .patient(patient).hospital(hospitalB).prescription(restrictedPrescription)
+            .medicationName(RESTRICTED_MEDICINE).fillDate(LocalDate.now().minusDays(9))
+            .quantityDispensed(BigDecimal.TEN).daysSupply(10).build()).getId();
+
+        String fills = bodyOf(mockMvc.perform(get(API + "/medication-history/patient/{id}/pharmacy-fills", id)
+            .param("hospitalId", b.toString()).with(acting(doctorB))).andExpect(status().isOk()).andReturn());
+        assertThat(fills).as("B's own dispensing is in B's fill list").contains(fillId.toString());
+
+        String timeline = bodyOf(mockMvc.perform(get(API + "/medication-history/patient/{id}/timeline", id)
+            .param("hospitalId", b.toString()).with(acting(doctorB))).andExpect(status().isOk()).andReturn());
+        assertThat(timeline).as("B's own dispensing is on B's timeline").contains(fillId.toString());
+        assertThat(timeline).as("the restricted prescription is not")
+            .doesNotContain("\"prescriptionId\":\"" + restrictedPrescription.getId());
+
+        mockMvc.perform(get(API + "/prescriptions/{id}", restrictedPrescription.getId()).with(acting(doctorB)))
+            .andExpect(status().isNotFound());
     }
 
     @Test

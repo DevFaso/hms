@@ -182,6 +182,8 @@ class PatientAccessReturnedDataDispatchTest {
         assertThat(PatientReadAnswerProbe.returnsNothing(0)).isFalse();
         assertThat(PatientReadAnswerProbe.returnsNothing(List.of("x"))).isFalse();
         assertThat(PatientReadAnswerProbe.returnsNothing(new PageImpl<>(List.of("x")))).isFalse();
+        assertThat(PatientReadAnswerProbe.returnsNothing(new PageImpl<>(List.of(), PageRequest.of(5, 20), 30)))
+            .as("a page past the end that still counts rows").isFalse();
         assertThat(PatientReadAnswerProbe.returnsNothing(JsonNodeFactory.instance.objectNode().put("id", "x"))).isFalse();
     }
 
