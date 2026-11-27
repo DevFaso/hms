@@ -227,11 +227,11 @@ public class ImmunizationServiceImpl implements ImmunizationService {
      * global view keeps every row.
      */
     private List<PatientImmunization> sharedHere(UUID patientId, List<PatientImmunization> rows) {
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        UUID actingHospitalId = ctx.pinnedHospitalId();
+        UUID actingHospitalId = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
         if (actingHospitalId == null) {
             return rows;
         }
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
         RestrictedVisitScope restricted =
