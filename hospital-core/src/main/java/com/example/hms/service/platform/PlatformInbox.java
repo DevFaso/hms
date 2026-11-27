@@ -109,18 +109,18 @@ public class PlatformInbox {
         try {
             administrators = userRepository.findActivePlatformAdministrators();
         } catch (RuntimeException ex) {
-            throw new PlatformInboxUnavailableException("platformRequest.notFiled", ex);
+            throw PlatformInboxUnavailableException.notFiled(ex);
         }
         if (administrators.isEmpty()) {
             log.warn("Platform inbox: request {} not filed, no active platform administrator", requestId);
-            throw new PlatformInboxUnavailableException("platformRequest.noRecipient");
+            throw PlatformInboxUnavailableException.noRecipient();
         }
         int filed = fileTo(administrators, hospitalId, InBasketItemType.MESSAGE, InBasketPriority.NORMAL, requestId,
             PLATFORM_REQUEST,
             "inbox.platform.request.title", new Object[] {text(hospitalName), subject},
             null, null, message, requesterName);
         if (filed == 0) {
-            throw new PlatformInboxUnavailableException("platformRequest.notFiled");
+            throw PlatformInboxUnavailableException.notFiled(null);
         }
     }
 

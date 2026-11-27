@@ -922,7 +922,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handlePlatformInboxUnavailable(
             PlatformInboxUnavailableException ex, WebRequest request) {
         log.warn("Platform inbox unavailable at path {}: {}", logPath(request), ex.getMessageKey());
-        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+        return buildErrorResponse(ex.getStatus(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(RoiAuditUnavailableException.class)

@@ -3901,7 +3901,7 @@
     "EXPORT_CSV": "Export (CSV)",
     "EXPORT_FILE": "costs-per-hospital",
     "PERIOD": "Period shown: {{ from }} to {{ to }}",
-    "RATE": "Rate applied: {{ rate }} per recorded event (provisional rate, set by the platform operator).",
+    "RATE": "Rate applied: {{ amount }} per recorded event (provisional rate, set by the platform operator).",
     "NO_RATE": "No rate is configured: the amount is not computed. Ask the platform operator to set the rate per event.",
     "TOTAL": "Total"
   },

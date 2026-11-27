@@ -311,8 +311,9 @@
           <ol class="attempt-list" data-test="detail-attempts">
             @for (a of d.attempts; track a.id) {
               <li [class.current]="a.id === d.id">
-                <span class="attempt-when">{{ a.lastAttemptedAt | serverTime | dateTime }}</span>
-                <span class="status-badge" [attr.data-status]="a.status">
+                <span class="attempt-when">{{ a.lastAttemptedAt | serverTime | dateTime }}</span>{{
+                  ' '
+                }}<span class="status-badge" [attr.data-status]="a.status">
                   {{ a.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
                 </span>
                 @if (a.errorMessage) {

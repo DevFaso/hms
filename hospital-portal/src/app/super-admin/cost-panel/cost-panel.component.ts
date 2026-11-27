@@ -17,6 +17,7 @@ import {
   ChargebackService,
 } from '../../services/chargeback.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { currentLocale } from '../../shared/i18n/app-locale';
 
@@ -46,6 +47,7 @@ interface WindowState {
     DecimalPipe,
     DatePipe,
     CfaPipe,
+    ServerTimePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -86,15 +88,17 @@ interface WindowState {
         <button type="submit" class="btn-primary" [disabled]="loading()" data-testid="cost-reload">
           {{ loading() ? ('COST_PANEL.LOADING' | translate) : ('COST_PANEL.REFRESH' | translate) }}
         </button>
-        <button
-          type="button"
-          class="btn-secondary"
-          [disabled]="loading() || rows().length === 0"
-          (click)="exportCsv()"
-          data-testid="cost-export"
-        >
-          {{ 'COST_PANEL.EXPORT_CSV' | translate }}
-        </button>
+        @if (rows().length > 0) {
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="loading()"
+            (click)="exportCsv()"
+            data-testid="cost-export"
+          >
+            {{ 'COST_PANEL.EXPORT_CSV' | translate }}
+          </button>
+        }
       </form>
 
       @if (featureDisabled()) {
@@ -116,14 +120,16 @@ interface WindowState {
               'COST_PANEL.PERIOD'
                 | translate
                   : {
-                      from: (r.from | date: 'mediumDate'),
-                      to: (r.to | date: 'mediumDate'),
+                      from: (r.from | serverTime | date: 'mediumDate'),
+                      to: (r.to | serverTime | date: 'mediumDate'),
                     }
             }}
           </p>
           <p class="cost-panel__rate" data-testid="cost-rate">
             @if (r.ratePerAuditEvent > 0) {
-              {{ 'COST_PANEL.RATE' | translate: { rate: (r.ratePerAuditEvent | cfa: r.currency) } }}
+              {{
+                'COST_PANEL.RATE' | translate: { amount: (r.ratePerAuditEvent | cfa: r.currency) }
+              }}
             } @else {
               {{ 'COST_PANEL.NO_RATE' | translate }}
             }

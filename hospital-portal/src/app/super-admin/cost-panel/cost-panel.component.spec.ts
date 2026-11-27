@@ -159,9 +159,7 @@ describe('CostPanelComponent', () => {
     svc.report.and.returnValue(of({ ...sample, rows: [], totalAuditEvents: 0, totalAmount: 0 }));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="cost-empty"]')).not.toBeNull();
-    const button = fixture.nativeElement.querySelector(
-      '[data-testid="cost-export"]',
-    ) as HTMLButtonElement;
-    expect(button.disabled).toBeTrue();
+    // Nothing to export: no button at all, rather than one greyed out with no reason.
+    expect(fixture.nativeElement.querySelector('[data-testid="cost-export"]')).toBeNull();
   });
 });

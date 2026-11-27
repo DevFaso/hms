@@ -3901,7 +3901,7 @@
     "EXPORT_CSV": "Exporter (CSV)",
     "EXPORT_FILE": "couts-par-etablissement",
     "PERIOD": "Période affichée : du {{ from }} au {{ to }}",
-    "RATE": "Tarif appliqué : {{ rate }} par événement enregistré (tarif provisoire, réglable par l’exploitant de la plateforme).",
+    "RATE": "Tarif appliqué : {{ amount }} par événement enregistré (tarif provisoire, réglable par l’exploitant de la plateforme).",
     "NO_RATE": "Aucun tarif n’est configuré : le montant n’est pas calculé. Demandez à l’exploitant de la plateforme de régler le tarif par événement.",
     "TOTAL": "Total de la période"
   },
