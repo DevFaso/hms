@@ -2194,7 +2194,7 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.DISPENSE_RELEASED_UNPRICED',
-    re: /^Fill handed over with no selling price; pricing task filed$/,
+    re: /^Fill handed over with no selling price; price roles notified$/,
     params: [],
   },
   {

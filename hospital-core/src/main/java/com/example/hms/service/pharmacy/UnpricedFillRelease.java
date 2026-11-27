@@ -78,10 +78,11 @@ public class UnpricedFillRelease {
                             UUID actorId) {
         UUID pharmacyId = pharmacy != null ? pharmacy.getId() : null;
         UUID hospitalId = pharmacy != null && pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
-        if (pharmacyId == null || hospitalId == null) {
+        UUID medicationId = medication != null ? medication.getId() : null;
+        if (pharmacyId == null || hospitalId == null || medicationId == null) {
             return;
         }
-        UUID subject = referenceOf(pharmacyId, medication != null ? medication.getId() : null);
+        UUID subject = referenceOf(pharmacyId, medicationId);
         Object[] args = {Objects.toString(medicationName, "—"), Objects.toString(pharmacy.getName(), "—")};
         TransactionCallbacks.afterCommit(() -> {
             try {

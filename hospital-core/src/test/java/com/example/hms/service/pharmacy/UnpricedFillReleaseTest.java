@@ -103,10 +103,12 @@ class UnpricedFillReleaseTest {
             .thenReturn(List.of(user(UUID.randomUUID(), "aminata.magasin")));
         doThrow(new IllegalStateException("down")).when(notifications)
             .createNotification(any(), any(), any(), any(), any());
-        assertThatCode(() -> release.priceNeeded(pharmacy, null, null, pharmacist)).doesNotThrowAnyException();
+        MedicationCatalogItem syrup = new MedicationCatalogItem();
+        syrup.setId(UUID.randomUUID());
+        assertThatCode(() -> release.priceNeeded(pharmacy, syrup, null, pharmacist)).doesNotThrowAnyException();
 
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenThrow(new IllegalStateException("db"));
-        assertThatCode(() -> release.priceNeeded(pharmacy, null, null, pharmacist)).doesNotThrowAnyException();
+        assertThatCode(() -> release.priceNeeded(pharmacy, syrup, null, pharmacist)).doesNotThrowAnyException();
     }
 
     @Test
@@ -114,6 +116,8 @@ class UnpricedFillReleaseTest {
     void noHospitalNoNotice() {
         release.priceNeeded(null, null, "x", pharmacist);
         release.priceNeeded(Pharmacy.builder().name("x").build(), null, "x", pharmacist);
+        // Review of #1380 (F5): no medicine, no subject (it could never be cleared).
+        release.priceNeeded(pharmacy(), null, "x", pharmacist);
         verifyNoInteractions(assignments, notifications);
     }
 

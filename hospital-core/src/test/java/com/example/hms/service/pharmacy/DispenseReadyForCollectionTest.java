@@ -959,6 +959,29 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("review of #1380 (F5): a prepared fill with no catalogue item is never released unpriced, even on "
+                + "an open stay")
+        void aFillWithNoCatalogueItemIsNeverReleased() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            Dispense d = preparedFill();
+            d.setMedicationCatalogItem(null);
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            DispenseBillingDeferralService gate = mock(DispenseBillingDeferralService.class);
+            org.mockito.Mockito.lenient().when(gate.chargedToOpenStay(prescription, hospitalId)).thenReturn(true);
+            service.setBillingDeferrals(gate);
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .extracting("messageKey").isEqualTo(FillPriceGate.NO_PRICE_KEY);
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(gate, never()).admit(any(), any(), any(), any(), any(), any(), any());
+            verifyNoInteractions(pricingTask);
+        }
+
+        @Test
         @DisplayName("review of #1380 (F3): an outpatient unpriced fill with no urgency override stays refused, "
                 + "with the gate wired; nothing is logged")
         void anOutpatientUnpricedFillStaysRefused() {

@@ -625,7 +625,9 @@ public class DispenseServiceImpl implements DispenseService {
         // Review of #1380 (F3): a missing price never blocks care. On a logged urgency override or an open stay the
         // fill leaves NOT_PRICED, and the price roles are asked to price it; otherwise it waits for the price.
         String urgencyReason = request != null ? request.getBillingUrgencyReason() : null;
-        boolean unpricedRelease = FillPriceGate.standingOf(dispense.getPharmacy(), dispense.getMedicationCatalogItem(),
+        // Review of #1380 (F5): a fill with no catalogue item is never released unpriced (it could never be charged).
+        boolean unpricedRelease = dispense.getMedicationCatalogItem() != null
+                && FillPriceGate.standingOf(dispense.getPharmacy(), dispense.getMedicationCatalogItem(),
                 inventoryItemRepository) == FillPriceGate.Standing.UNPRICED
                 && unpricedFillReleasable(prescription, dispense.getPharmacy(), urgencyReason);
         if (!unpricedRelease) {
@@ -1276,6 +1278,13 @@ public class DispenseServiceImpl implements DispenseService {
             catalogItem = medicationCatalogItemRepository.findById(prescription.getMedicationCatalogItemId())
                     .orElse(null);
         }
+        // Review of #1380 (F5): a fill with no lot, no product named and an order linked to no catalogue item has
+        // nothing to take stock from, price or ever charge. It is never released unpriced: the pharmacist names the
+        // product (or its lot), which brings back the item's lot rule. Develop refused it as dispense.lot.required.
+        if (stockLot == null && catalogItem == null) {
+            throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId",
+                    "dispense.productRequired");
+        }
         // QA D138: stock kept in lots is filled from a lot. A fill with no lot used to be accepted as DISPENSED with
         // no stock movement at all, so the shelf and the ledger drifted apart. Review of #1380 (F2): the rule is the
         // item's, not the pharmacy's: a dispensary that only priced an item (it keeps no lots of it) still fills it
@@ -1330,7 +1339,7 @@ public class DispenseServiceImpl implements DispenseService {
     /** Review of #1380 (F3): the unpriced fill left; it is audited and the price roles get a task to price it. */
     private void afterUnpricedRelease(Dispense fill, User actor) {
         logAudit(AuditEventType.DISPENSE_RELEASED_UNPRICED,
-                "Fill handed over with no selling price; pricing task filed", fill.getId().toString());
+                "Fill handed over with no selling price; price roles notified", fill.getId().toString());
         if (unpricedFillRelease != null) {
             unpricedFillRelease.priceNeeded(fill.getPharmacy(), fill.getMedicationCatalogItem(),
                     fill.getMedicationName(), actor != null ? actor.getId() : null);

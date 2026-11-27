@@ -756,6 +756,42 @@ class DispenseServiceImplTest {
             org.mockito.Mockito.verifyNoInteractions(pricingTask);
         }
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+        @DisplayName("review of #1380 (F5): an unlinked order filled with no lot and no product, on an urgency reason "
+                + "or an open stay, is refused: the pharmacist names the product; nothing moves or is logged")
+        void anUnlinkedOrderIsNeverReleasedUnpriced(boolean onOpenStay) {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setMedicationCatalogItemId(null);
+            prescription.setMedicationCatalogItemId(null);
+            if (!onOpenStay) {
+                dto.setBillingUrgencyReason("Crise d'asthme, nuit");
+            }
+            lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            lenient().when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+            // The dispensary keeps lots of the drug (D138); the order names no catalogue item to find them by.
+            lenient().when(inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacyId)).thenReturn(true);
+            lenient().when(stockLotRepository.existsByInventoryItemId(any())).thenReturn(true);
+            DispenseBillingDeferralService gate = mock(DispenseBillingDeferralService.class);
+            lenient().when(gate.chargedToOpenStay(any(), any())).thenReturn(onOpenStay);
+            service.setBillingDeferrals(gate);
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("medicationCatalogItemId", "dispense.productRequired");
+            verify(dispenseRepository, never()).save(any());
+            verify(gate, never()).admit(any(), any(), any(), any(), any(), any(), any());
+            org.mockito.Mockito.verifyNoInteractions(pricingTask);
+        }
+
         /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */
         private com.example.hms.repository.PatientAllergyRepository allergiesOnRecord(
                 com.example.hms.model.PatientAllergy... allergies) {
