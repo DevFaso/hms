@@ -160,6 +160,36 @@ public class LabResultReleaseNotifier {
         });
     }
 
+    static final String ORDER_VOIDED_MESSAGE_KEY = "lab.order.voided.notification";
+    static final String ORDER_CANCELLED_MESSAGE_KEY = "lab.order.cancelled.notification";
+
+    /**
+     * QA D4149 (r81): an order was declared entered in error (its results leave every list) or was
+     * cancelled, and its prescriber learned it only by not finding it. Tell the ordering clinician, with
+     * the reason kept on the order; nothing when they did it themselves. Call it inside the transaction
+     * that withdrew the order: the names are read here, the notice is written after the commit.
+     */
+    public void prescriberOrderWithdrawn(LabOrder order, boolean voided, UUID actorUserId) {
+        User clinician = order != null && order.getOrderingStaff() != null ? order.getOrderingStaff().getUser() : null;
+        if (clinician == null || clinician.getUsername() == null || clinician.getUsername().isBlank()
+                || (actorUserId != null && actorUserId.equals(clinician.getId()))) {
+            return;
+        }
+        UUID orderId = order.getId();
+        String username = clinician.getUsername();
+        String messageKey = voided ? ORDER_VOIDED_MESSAGE_KEY : ORDER_CANCELLED_MESSAGE_KEY;
+        Object[] args = {testNameOf(order), patientNameOf(order), order.getCancellationReason()};
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                ownTransaction().executeWithoutResult(status ->
+                    notificationService.createNotification(messageKey, args, username, NOTIFICATION_TYPE));
+            } catch (RuntimeException ex) {
+                log.warn("Withdrawal notification not written for lab order {}: {}", orderId,
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
+
     /** The value as the clinician reads it: the staff language's number format, then the unit. */
     public static String valueOf(LabResult result) {
         // QA D1095: the definition's unit when none was typed.

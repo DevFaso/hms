@@ -875,6 +875,24 @@
                 <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
               }
               @if (requestAntibody(); as known) {
+                <!-- QA D4151: a severe reaction on record is said before blood is asked for again. -->
+                @if (known.severeTransfusionReaction) {
+                  <span class="warn-inline" role="alert" data-testid="request-severe-reaction">
+                    {{
+                      'BLOOD_GROUP.SEVERE_REACTION'
+                        | translate
+                          : {
+                              type:
+                                'TRANSFUSION.REACTION_' +
+                                  (known.severeTransfusionReactionType ?? 'OTHER') | translate,
+                              date:
+                                (known.severeTransfusionReactionAt
+                                  | serverTime
+                                  | date: 'shortDate') ?? '',
+                            }
+                    }}
+                  </span>
+                }
                 <!-- V380: read with or without a grouping here: a patient this hospital never typed still shows it. -->
                 @if (known.rhdPositiveExposed) {
                   <span class="warn-inline" role="alert" data-testid="request-rhd-exposed">

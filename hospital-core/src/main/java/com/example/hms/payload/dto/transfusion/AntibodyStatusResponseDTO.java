@@ -51,6 +51,14 @@ public class AntibodyStatusResponseDTO {
     /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
     private Boolean rhdPositiveExposureConfirmed;
 
+    /**
+     * QA D4151 (r81): a severe or life-threatening transfusion reaction is on record for this patient at the
+     * acting hospital, with its type and onset: the new-request form warns before blood is asked for again.
+     */
+    private boolean severeTransfusionReaction;
+    private com.example.hms.enums.TransfusionReactionType severeTransfusionReactionType;
+    private LocalDateTime severeTransfusionReactionAt;
+
     @Data
     @Builder
     @NoArgsConstructor

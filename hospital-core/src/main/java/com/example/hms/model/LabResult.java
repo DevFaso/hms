@@ -283,6 +283,10 @@ public class LabResult extends BaseEntity {
     @Column(name = "superseded_by_result_id")
     private UUID supersededByResultId;
 
+    /** QA D4143 (V467): why this result corrects the one it supersedes. Null on a result that corrects nothing. */
+    @Column(name = "correction_reason", length = 500)
+    private String correctionReason;
+
     @Column(name = "signed_at")
     private LocalDateTime signedAt;
 

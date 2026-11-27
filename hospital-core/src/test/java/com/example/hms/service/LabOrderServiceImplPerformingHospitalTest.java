@@ -87,6 +87,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
 
     @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
+    /** QA D4149: a cancellation tells the prescriber. */
+    @Mock private com.example.hms.service.lab.LabResultReleaseNotifier resultReleaseNotifier;
 
     @InjectMocks
     private LabOrderServiceImpl service;

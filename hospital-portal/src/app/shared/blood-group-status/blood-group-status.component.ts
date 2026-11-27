@@ -51,6 +51,10 @@ export class BloodGroupStatusComponent {
   protected readonly rhdExposed = computed(
     () => this.showAntibodies() && this.status()?.rhdPositiveExposed === true,
   );
+  /** QA D4151: a severe transfusion reaction on record, shown where the antibody flag is. */
+  protected readonly severeReaction = computed(
+    () => this.showAntibodies() && this.status()?.severeTransfusionReaction === true,
+  );
   /** The bag was hung: an issued bag nobody recorded giving is shown as unconfirmed. */
   protected readonly rhdExposureConfirmed = computed(
     () => this.status()?.rhdPositiveExposureConfirmed === true,

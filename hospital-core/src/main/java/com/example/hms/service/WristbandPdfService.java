@@ -110,13 +110,44 @@ public class WristbandPdfService {
             ? specimen.getBarcodeValue()
             : specimen.getAccessionNumber();
 
+        // QA D4177 (r81): the label carried the patient's name alone. A tube is matched by eye on two
+        // identifiers (the name, then the date of birth and the record number at the ordering hospital) and
+        // says which test it is for, with its priority when it is not routine.
+        com.example.hms.model.LabOrder order = specimen.getLabOrder();
+        String birthLine = t.get("pdf.wristband.dob",
+            patient != null && patient.getDateOfBirth() != null ? t.fmt(patient.getDateOfBirth()) : DASH);
+        String recordLine = t.get("pdf.wristband.mrn", specimenRecordNumber(patient, order));
+        String testLine = specimenTest(order);
+
+        // Six lines on a 79 pt label: each identifier on its own line, so none is cut to make room for another.
         return renderLabel(cs -> {
-            writeText(cs, 10, 8, LABEL_HEIGHT - 16, safe(specimen.getAccessionNumber()));
-            writeFitted(cs, 8, 8, LABEL_HEIGHT - 30, patientLine);
-            writeFitted(cs, 8, 8, LABEL_HEIGHT - 42,
+            writeText(cs, 10, 8, LABEL_HEIGHT - 13, safe(specimen.getAccessionNumber()));
+            writeFitted(cs, 8, 8, LABEL_HEIGHT - 24, patientLine);
+            writeFitted(cs, 7, 8, LABEL_HEIGHT - 34, birthLine);
+            writeFitted(cs, 7, 8, LABEL_HEIGHT - 44, recordLine);
+            writeFitted(cs, 8, 8, LABEL_HEIGHT - 55, testLine);
+            writeFitted(cs, 7, 8, LABEL_HEIGHT - 66,
                 safe(specimen.getSpecimenType())
                     + (specimen.getCollectedAt() != null ? "  " + t.fmt(specimen.getCollectedAt()) : ""));
         }, qrPayload);
+    }
+
+    /** The patient's record number at the hospital that ordered the test, or a dash. */
+    private static String specimenRecordNumber(Patient patient, com.example.hms.model.LabOrder order) {
+        UUID orderingHospitalId = order != null && order.getHospital() != null ? order.getHospital().getId() : null;
+        String mrn = patient != null && orderingHospitalId != null ? patient.getMrnForHospital(orderingHospitalId) : null;
+        return mrn != null ? mrn : DASH;
+    }
+
+    /** The test a tube is for, and its priority when it is not routine. */
+    private static String specimenTest(com.example.hms.model.LabOrder order) {
+        if (order == null || order.getLabTestDefinition() == null) {
+            return DASH;
+        }
+        String test = safe(order.getLabTestDefinition().getName());
+        String priority = order.getPriority();
+        boolean routine = priority == null || priority.isBlank() || "ROUTINE".equalsIgnoreCase(priority.trim());
+        return routine ? test : test + "  [" + priority.trim().toUpperCase(java.util.Locale.ROOT) + "]";
     }
 
     /**

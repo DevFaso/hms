@@ -226,6 +226,10 @@ public class LabResultServiceImpl implements LabResultService {
         // interface account's normal state; a null acting hospital then means
         // "no scope to judge against", which the helpers below already handle.
         UUID actingHospitalId = unscopedIngest ? null : roleValidator.requireActiveHospitalId();
+        // QA D4150: the result of an order sent to another laboratory is entered there. A message from an
+        // analyzer is judged by the hospital that sent it (whoever relays it), a typed result by where it is typed.
+        requireEnteredByPerformingLab(labOrder,
+            ingested && senderHospitalId != null ? senderHospitalId : actingHospitalId);
 
         // Who may record THIS test's result. Role alone cannot answer it: a
         // nurse recording a bedside glucose is doing their job, and the same
@@ -333,9 +337,11 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         LabResult superseded = null;
+        String correctionReason = null;
         if (!ingested) {
             superseded = requireSupersedable(request.getSupersedesResultId(), lockedOrder);
             requireNoLiveResult(superseded, lockedOrder);
+            correctionReason = requireCorrectionReason(superseded, request.getCorrectionReason());
         }
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         if (!ingested) {
@@ -360,6 +366,8 @@ public class LabResultServiceImpl implements LabResultService {
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
         }
+        // QA D4143: the reason of a correction, and of nothing else, whatever a client sent.
+        result.setCorrectionReason(correctionReason);
         LabResult saved = labResultRepository.save(result);
         // The released row is NOT marked superseded here: an unreleased (or
         // later deleted) correction must not withdraw the value clinicians
@@ -695,6 +703,7 @@ public class LabResultServiceImpl implements LabResultService {
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(toTrendPoints(trend));
         addDetailContext(response, labResult.getLabOrder());
+        addSupersededValue(response, labResult);
         return response;
     }
 
@@ -924,6 +933,8 @@ public class LabResultServiceImpl implements LabResultService {
         if (!labOrder.isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
+        // QA D4150: nor is it edited by the laboratory that sent the order out.
+        requireEnteredByPerformingLab(labOrder, activeHospitalId);
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
         // r63: a panel's values are checked per component and summarised; a single value as before.
         java.util.List<com.example.hms.model.LabResultComponent> panelValues =
@@ -1145,6 +1156,42 @@ public class LabResultServiceImpl implements LabResultService {
             && !requestedPatientId.equals(labOrder.getPatient().getId())) {
             throw new com.example.hms.exception.FieldBusinessException("patientId", "labresult.patientMismatch");
         }
+    }
+
+    /**
+     * QA D4143 (r81): a correction of a released result says why. A culture report and a blood grouping both
+     * ask for the reason of a correction; a corrected creatinine carried none, and the clinician who had acted
+     * on the first value had nothing to read. Null for a result that corrects nothing.
+     */
+    static String requireCorrectionReason(LabResult superseded, String reason) {
+        if (superseded == null) {
+            return null;
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException("correctionReason",
+                "labresult.correction.reasonRequired");
+        }
+        return reason.trim();
+    }
+
+    /**
+     * QA D4143: the value a correction replaced, read for the single-result read of the correction. The
+     * replaced result stays on record (marked superseded) and no list shows it; this is where its value is read.
+     */
+    private void addSupersededValue(LabResultResponseDTO response, LabResult correction) {
+        UUID supersededId = correction.getSupersedesResultId();
+        if (supersededId == null) {
+            return;
+        }
+        labResultRepository.findById(supersededId)
+            .filter(old -> old.getLabOrder() != null && correction.getLabOrder() != null
+                && Objects.equals(old.getLabOrder().getId(), correction.getLabOrder().getId()))
+            .ifPresent(old -> {
+                response.setSupersededResultValue(old.getResultValue());
+                response.setSupersededResultUnit(LabResultMapper.unitOrTestUnit(old.getResultUnit(),
+                    old.getLabOrder().getLabTestDefinition()));
+                response.setSupersededReleasedAt(old.getReleasedAt());
+            });
     }
 
     /**
@@ -1461,6 +1508,19 @@ public class LabResultServiceImpl implements LabResultService {
         } catch (RuntimeException ex) {
             LOG.warn("Cross-hospital disclosure accounting failed for a performing-laboratory result read at {}: {}",
                 actingHospitalId, ex.getMessage());
+        }
+    }
+
+    /**
+     * QA D4150 (r81): entering a result, like releasing it, is the running laboratory's work. The ordering
+     * hospital's laboratory typed the value of an order it had sent out: the value then sat in the performing
+     * laboratory's validation queue as if it were theirs, and their own entry was refused as a second result.
+     * A caller with no hospital scope (a super-admin in global view) is not judged here.
+     */
+    static void requireEnteredByPerformingLab(LabOrder labOrder, UUID enteringHospitalId) {
+        if (enteringHospitalId != null && labOrder != null && labOrder.isPerformedExternally()
+                && !labOrder.isPerformedAt(enteringHospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException("labOrderId", "lab.result.entryOtherLab");
         }
     }
 

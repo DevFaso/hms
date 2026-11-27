@@ -256,6 +256,55 @@ describe('MicrobiologyComponent', () => {
     expect(microServiceSpy.create).toHaveBeenCalledTimes(1);
   });
 
+  it('QA D4176: the culture form offers only open orders of a culture test, with code and date', () => {
+    const order = (over: Record<string, unknown>) =>
+      ({
+        id: 'o',
+        labOrderCode: 'LAB-000025',
+        patientFullName: 'Boukary BTest',
+        labTestName: 'ECBU',
+        orderDatetime: '2026-11-27T05:20:00',
+        status: 'RECEIVED',
+        labTestCulture: true,
+        ...over,
+      }) as never;
+    labServiceSpy.listOrders.and.returnValue(
+      of([
+        order({ id: 'culture-open' }),
+        order({ id: 'culture-done', status: 'COMPLETED' }),
+        order({ id: 'culture-void', status: 'ENTERED_IN_ERROR' }),
+        order({ id: 'glycaemia', labTestName: 'Glycémie à jeun', labTestCulture: false }),
+        order({ id: 'old-server', labTestName: 'Kaliémie', labTestCulture: undefined }),
+      ]),
+    );
+    fixture.detectChanges();
+    component.openCreateModal();
+    fixture.detectChanges();
+
+    expect(component.orders().map((o) => o.id)).toEqual(['culture-open']);
+    const el: HTMLElement = fixture.nativeElement;
+    const options = Array.from(el.querySelectorAll('#create-order option')).slice(1);
+    expect(options.length).toBe(1);
+    expect(options[0].textContent).toContain('LAB-000025');
+    expect(options[0].textContent).toContain('27/11/2026');
+    expect(options[0].textContent).toContain('Boukary BTest — ECBU');
+    expect(el.querySelector('[data-testid="create-order-hint"]')?.textContent).toContain(
+      'MICRO.ORDERS_CULTURE_ONLY',
+    );
+  });
+
+  it('QA D4176: with no open culture order the form says so', () => {
+    labServiceSpy.listOrders.and.returnValue(of([]));
+    fixture.detectChanges();
+    component.openCreateModal();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="create-order-hint"]')?.textContent).toContain(
+      'MICRO.ORDERS_NONE_OPEN',
+    );
+  });
+
   it('adds a susceptibility row with the chosen interpretation', () => {
     microServiceSpy.list.and.returnValue(
       of(

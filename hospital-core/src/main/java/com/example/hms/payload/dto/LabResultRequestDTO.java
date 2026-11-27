@@ -86,6 +86,13 @@ public class LabResultRequestDTO {
      */
     private UUID supersedesResultId;
 
+    /**
+     * QA D4143: why the released result is corrected. Required with {@link #supersedesResultId}; ignored on a
+     * result that corrects nothing and on the ingest path.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String correctionReason;
+
     /** r63 (NFS panels): one value per component of a panel test; ignored on the ingest path. */
     @jakarta.validation.Valid
     @jakarta.validation.constraints.Size(max = 60)

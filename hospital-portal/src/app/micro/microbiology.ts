@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { LabOrderResponse, LabService } from '../services/lab.service';
+import { shortOrderCode } from '../shared/lab/order-code';
 import {
   GROWTH_RESULTS,
   INTERPRETATIONS,
@@ -37,6 +38,17 @@ import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+
+/**
+ * QA D4176 (r81): the culture form listed every lab order in scope (a potassium, a blood count, orders
+ * already completed), and the server then refused the ones that are not cultures. Only an open order
+ * of a culture definition takes a new culture report.
+ */
+const CLOSED_TO_A_NEW_CULTURE = new Set(['COMPLETED', 'CANCELLED', 'ENTERED_IN_ERROR']);
+
+export function takesNewCulture(order: LabOrderResponse): boolean {
+  return order.labTestCulture === true && !CLOSED_TO_A_NEW_CULTURE.has(order.status);
+}
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -254,7 +266,7 @@ export class MicrobiologyComponent implements OnInit {
     // QA D1347: every order in scope, not the 100 newest.
     this.labService.listOrders().subscribe({
       next: (orders) => {
-        this.orders.set(orders);
+        this.orders.set(orders.filter(takesNewCulture));
         this.ordersLoading.set(false);
       },
       error: () => {
@@ -533,4 +545,7 @@ export class MicrobiologyComponent implements OnInit {
     const test = order.labTestName || order.labTestCode || '—';
     return `${patient} — ${test}`;
   }
+
+  /** QA D4176: the order's own number, which tells two orders of one patient for the same test apart. */
+  readonly shortOrderCode = shortOrderCode;
 }

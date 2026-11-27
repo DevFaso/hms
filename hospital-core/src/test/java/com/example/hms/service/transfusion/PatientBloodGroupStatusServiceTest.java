@@ -211,6 +211,40 @@ class PatientBloodGroupStatusServiceTest {
     }
 
     @Test
+    @DisplayName("QA D4151: a severe transfusion reaction on record is on the chart's safety line, a mild one is not")
+    void severeReactionOnRecord() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.repository.TransfusionReactionRepository> reactionsProvider = mock(ObjectProvider.class);
+        com.example.hms.repository.TransfusionReactionRepository reactions =
+            mock(com.example.hms.repository.TransfusionReactionRepository.class);
+        when(reactionsProvider.getIfAvailable()).thenReturn(reactions);
+        service.setReactions(reactionsProvider);
+        when(repository.findCurrentWithHospital(any(), any())).thenReturn(Optional.empty());
+        LocalDateTime onset = LocalDateTime.of(2026, 11, 27, 5, 37);
+        com.example.hms.model.TransfusionReaction haemolytic = new com.example.hms.model.TransfusionReaction();
+        haemolytic.setReactionType(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        haemolytic.setSeverity(com.example.hms.enums.TransfusionReactionSeverity.SEVERE);
+        haemolytic.setOnsetAt(onset);
+        // Only the severities that stay on the record are asked for: a mild or moderate reaction is not a safety line.
+        when(reactions.findFirstByPatient_IdAndHospital_IdAndSeverityInOrderByOnsetAtDesc(patient.getId(), hospitalId,
+            java.util.EnumSet.of(com.example.hms.enums.TransfusionReactionSeverity.SEVERE,
+                com.example.hms.enums.TransfusionReactionSeverity.LIFE_THREATENING))).thenReturn(Optional.of(haemolytic));
+
+        BloodGroupStatusDTO status = service.withAntibodies(patient, hospitalId);
+
+        assertThat(status.getSevereTransfusionReaction()).isTrue();
+        assertThat(status.getSevereTransfusionReactionType())
+            .isEqualTo(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        assertThat(status.getSevereTransfusionReactionAt()).isEqualTo(onset);
+
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        assertThat(service.withAntibodies(other, hospitalId).getSevereTransfusionReaction()).isFalse();
+        // A list read does not look: null, never « none ».
+        assertThat(service.of(patient, hospitalId).getSevereTransfusionReaction()).isNull();
+    }
+
+    @Test
     @DisplayName("Rex P2: a proxy's copy keeps the value and the disagreement, drops the provenance and the antibody")
     void forProxy() {
         BloodGroupStatusDTO full = BloodGroupStatusDTO.builder().declared("A+").confirmed("B+").discrepancy(true)

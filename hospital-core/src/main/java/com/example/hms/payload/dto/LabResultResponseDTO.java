@@ -110,6 +110,15 @@ public class LabResultResponseDTO {
     private String supersedesResultId;
     /** D81: set on a released result once a correction replaced it; the correction is the current value. */
     private String supersededByResultId;
+    /** QA D4143: why this result corrects the one it supersedes. */
+    private String correctionReason;
+    /**
+     * QA D4143: the value this correction replaced, as it had been released (value, unit, when), so the
+     * clinician reads the old value beside the new one. Set on the single-result read of a correction.
+     */
+    private String supersededResultValue;
+    private String supersededResultUnit;
+    private LocalDateTime supersededReleasedAt;
     /** The user who entered the result (its assignment's user), so a client can ask for the self-release confirmation up front. */
     private String enteredByUserId;
     private LocalDateTime signedAt;

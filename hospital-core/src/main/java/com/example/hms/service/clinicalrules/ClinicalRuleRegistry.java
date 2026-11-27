@@ -157,6 +157,9 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
             "service.lab.CriticalResultEscalationSettingsService"),
+        // QA D4147 (r81): the 1-3s rejection rule of internal quality control.
+        rule(ClinicalRuleSetKey.LAB_QC_REJECTION, "2026-11-27.1",
+            "service.lab.LabQcAcceptanceRule"),
         // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
         rule(ClinicalRuleSetKey.DISPENSED_PRODUCT_SUBSTITUTION, "2026-11-25.1",
             "service.pharmacy.DispensedProductMatch", "service.pharmacy.DispenseVerificationService"),

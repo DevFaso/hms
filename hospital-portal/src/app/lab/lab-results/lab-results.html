@@ -529,6 +529,27 @@
                 <span class="field-label">{{ 'LAB_RESULTS.CORRECTED' | translate }}</span>
                 <span class="field-value">{{ 'LAB_RESULTS.CORRECTED_HINT' | translate }}</span>
               </div>
+              <!-- QA D4143: the value this result replaced, and why. -->
+              @if (r.supersededResultValue) {
+                <div class="detail-field" data-testid="detail-replaced-value">
+                  <span class="field-label">{{ 'LAB_RESULTS.REPLACED_VALUE' | translate }}</span>
+                  <span class="field-value"
+                    >{{ r.supersededResultValue | labValue: r.supersededResultUnit }}
+                    @if (r.supersededReleasedAt) {
+                      <span class="cell-secondary">{{
+                        'LAB_RESULTS.REPLACED_RELEASED_AT'
+                          | translate: { date: (r.supersededReleasedAt | serverTime | dateTime) }
+                      }}</span>
+                    }
+                  </span>
+                </div>
+              }
+              @if (r.correctionReason) {
+                <div class="detail-field" data-testid="detail-correction-reason">
+                  <span class="field-label">{{ 'LAB_RESULTS.CORRECTION_REASON' | translate }}</span>
+                  <span class="field-value">{{ r.correctionReason }}</span>
+                </div>
+              }
             }
             @if (r.releasedAt) {
               <div class="detail-field">
@@ -811,6 +832,22 @@
                     }
             }}
           </p>
+          <!-- QA D4143: a correction says why; the clinician reads it beside the replaced value. -->
+          <div class="field">
+            <label for="lr-correctionReason"
+              >{{ 'LAB_RESULTS.CORRECTION_REASON' | translate }} *</label
+            >
+            <textarea
+              required
+              id="lr-correctionReason"
+              data-testid="lr-correction-reason"
+              data-server-field="correctionReason"
+              rows="2"
+              maxlength="500"
+              [(ngModel)]="form.correctionReason"
+              [placeholder]="'LAB_RESULTS.CORRECTION_REASON_PLACEHOLDER' | translate"
+            ></textarea>
+          </div>
         } @else if (!editing()) {
           <div class="form-row">
             <div class="field">
@@ -984,9 +1021,15 @@
           [appSubmitGuard]="
             (!editing() && !form.labOrderId) ||
             (isPanelEntry() ? !hasPanelValue() : !form.resultValue) ||
-            !form.resultDate
+            !form.resultDate ||
+            correctionReasonMissing()
           "
-          [submitGuardFields]="['lr-orderId', 'lr-resultValue', 'lr-resultDate']"
+          [submitGuardFields]="[
+            'lr-orderId',
+            'lr-resultValue',
+            'lr-resultDate',
+            'lr-correctionReason',
+          ]"
         >
           {{
             saving()

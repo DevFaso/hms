@@ -202,6 +202,17 @@ public class TransfusionServiceImpl implements TransfusionService {
             status.setRhdPositiveExposedHospitalName(exposure.hospitalName());
             status.setRhdPositiveExposureConfirmed(exposure.confirmed());
         }
+        // QA D4151: a severe reaction on record warns whoever asks for blood again.
+        if (status != null) {
+            reactionRepository.findFirstByPatient_IdAndHospital_IdAndSeverityInOrderByOnsetAtDesc(patient.getId(),
+                    hospitalId, java.util.EnumSet.of(com.example.hms.enums.TransfusionReactionSeverity.SEVERE,
+                        com.example.hms.enums.TransfusionReactionSeverity.LIFE_THREATENING))
+                .ifPresent(reaction -> {
+                    status.setSevereTransfusionReaction(true);
+                    status.setSevereTransfusionReactionType(reaction.getReactionType());
+                    status.setSevereTransfusionReactionAt(reaction.getOnsetAt());
+                });
+        }
         return status;
     }
 

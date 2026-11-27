@@ -77,6 +77,10 @@ export interface AntibodyStatusResponse {
   rhdPositiveExposedHospitalName?: string | null;
   /** The bag was given (true), or is out with no administration on record (false). */
   rhdPositiveExposureConfirmed?: boolean | null;
+  /** QA D4151: a severe or life-threatening transfusion reaction is on record at this hospital. */
+  severeTransfusionReaction?: boolean;
+  severeTransfusionReactionType?: TransfusionReactionType | null;
+  severeTransfusionReactionAt?: string | null;
 }
 
 export interface AntibodyWorkupRequest {

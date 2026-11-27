@@ -82,19 +82,26 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             .requireValue(expectedValue, "expectedValue", "lab.qc.expectedRequired")
             .orThrow();
 
+        java.math.BigDecimal targetMean = target != null ? target.getTargetMean() : null;
+        java.math.BigDecimal targetSd = target != null ? target.getTargetSd() : null;
+        String sdFlag = LabQcStatistics.sdFlag(request.getMeasuredValue(), targetMean, targetSd);
+
         // r63 D2304: the operator accepts or rejects the run. Without a decision
         // (an API caller predating it) the legacy +/-10% computation stands.
+        // QA D4147 (r81, rule set LAB_QC_REJECTION): a control beyond 3 SD of the director's target is out by rule
+        // (LabQcAcceptanceRule). It is never stored as accepted, whoever decides and whatever the
+        // legacy computation says; the run is recorded as rejected and holds the test's results.
+        com.example.hms.service.lab.LabQcAcceptanceRule.requireAcceptable(request.getAccepted(), sdFlag);
         boolean passed;
         if (request.getAccepted() != null) {
             passed = request.getAccepted();
         } else {
             double measured = request.getMeasuredValue().doubleValue();
             double expected = expectedValue.doubleValue();
-            passed = expected != 0 && Math.abs((measured - expected) / expected) <= 0.10;
+            passed = expected != 0 && Math.abs((measured - expected) / expected) <= 0.10
+                && !com.example.hms.service.lab.LabQcAcceptanceRule.rejectedByRule(sdFlag);
         }
 
-        java.math.BigDecimal targetMean = target != null ? target.getTargetMean() : null;
-        java.math.BigDecimal targetSd = target != null ? target.getTargetSd() : null;
         UUID operatorId = roleValidator.getCurrentUserId();
         LabQcEvent event = LabQcEvent.builder()
             .hospitalId(request.getHospitalId())
@@ -111,7 +118,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             .lotNumber(trimToNull(request.getLotNumber()))
             .targetMean(targetMean)
             .targetSd(targetSd)
-            .sdFlag(LabQcStatistics.sdFlag(request.getMeasuredValue(), targetMean, targetSd))
+            .sdFlag(sdFlag)
             .build();
 
         return qcEventMapper.toResponseDTO(qcEventRepository.save(event));
