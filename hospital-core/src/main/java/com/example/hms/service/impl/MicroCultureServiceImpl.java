@@ -533,10 +533,28 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the report alone). */
     private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
-                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+    /**
+     * Resolved when used, never at wiring: a context without the escalation service (a test slice) gets
+     * {@code null} here and each use falls back as when the service is absent, where an optional {@code @Lazy} injection point gave a
+     * never-null proxy that failed on first use.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlertsProvider = urgentAlertsProvider;
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
         this.urgentAlerts = urgentAlerts;
+    }
+
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts() {
+        if (this.urgentAlerts != null) {
+            return this.urgentAlerts;
+        }
+        return urgentAlertsProvider == null ? null : urgentAlertsProvider.getIfAvailable();
     }
 
     /**
@@ -549,22 +567,37 @@ public class MicroCultureServiceImpl implements MicroCultureService {
      * {@code ObstetricAlertEscalationService#raiseAfterCommit}.
      */
     private void filePositiveCultureForAcknowledgement(MicroCultureResult culture) {
-        if (urgentAlerts == null || culture.getId() == null || culture.getPatient() == null
+        if (urgentAlerts() == null || culture.getId() == null || culture.getPatient() == null
                 || culture.getHospital() == null) {
             return;
         }
-        LabOrder order = culture.getLabOrder();
-        Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
-        User orderer = orderingStaff != null ? orderingStaff.getUser() : null;
-        List<String> named = orderer == null || orderer.getUsername() == null ? List.of() : List.of(orderer.getUsername());
+        List<String> named = ordererUsername(culture);
         // The item says a culture is positive and sends its reader to the report: the organisms are read there.
-        urgentAlerts.raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
+        urgentAlerts().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
                 new com.example.hms.service.escalation.UrgentAlerts.Subject(culture.getHospital().getId(),
                     culture.getPatient().getId(), culture.getPatient().getFullName()),
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
                 culture.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_POSITIVE_CULTURE,
                 null, culture.getFinalizedByUserId())
             .withNamedRecipients(named).withAlreadyNotified(named));
+    }
+
+    /**
+     * The username of the clinician who ordered the culture, or none. Read best effort, as the bell above reads
+     * it: an order whose ordering staff row is gone (or cannot be read) names nobody, and the ladder's first
+     * notice goes to the covering clinician. Saving the report never depends on it.
+     */
+    private static List<String> ordererUsername(MicroCultureResult culture) {
+        try {
+            LabOrder order = culture.getLabOrder();
+            Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
+            User orderer = orderingStaff != null ? orderingStaff.getUser() : null;
+            return orderer == null || orderer.getUsername() == null ? List.of() : List.of(orderer.getUsername());
+        } catch (RuntimeException unreadable) {
+            log.warn("Positive culture {}: ordering clinician not readable ({}); the covering clinician is told",
+                culture.getId(), unreadable.getClass().getSimpleName());
+            return List.of();
+        }
     }
 
     /**

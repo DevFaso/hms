@@ -328,6 +328,66 @@ class ObstetricAlertEscalationWorkerTest {
             com.example.hms.model.UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, NOW);
     }
 
+    @Test
+    void aSecondUrgentReadingAfterTheFirstWasAcknowledgedIsFiled_andTheAnsweredRowIsClosedWithItsAcknowledgement() {
+        // Review of #1370 (F1): the doctor acknowledged the first urgent-hypertension item; a second urgent reading
+        // came before the next sweep. It was held as a repeat, then the sweep closed the old row: nobody was told.
+        ObstetricAlertEscalation answered = row((short) 0);
+        answered.setSourceType(ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION);
+        answered.setAlertType("URGENT_HYPERTENSION");
+        when(escalationRepository.findOpenForPatient(HOSPITAL, PATIENT,
+            ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION, "URGENT_HYPERTENSION"))
+            .thenReturn(List.of(answered));
+        InBasketItem ack = new InBasketItem();
+        UUID doctor = UUID.randomUUID();
+        ack.setAcknowledgedAt(NOW.minusMinutes(3));
+        ack.setAcknowledgedBy(doctor);
+        when(inBasketItemRepository.findAcknowledgedForReference(answered.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, DOCUMENTER)).thenReturn(List.of(ack));
+        when(escalationRepository.save(any())).thenAnswer(inv -> {
+            ObstetricAlertEscalation saved = inv.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+
+        assertThat(worker.file(general(ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION,
+            "URGENT_HYPERTENSION", List.of("drA")), false)).as("the new reading is filed").isNotNull();
+        assertThat(answered.getAcknowledgedAt()).isEqualTo(NOW.minusMinutes(3));
+        assertThat(answered.getAcknowledgedBy()).isEqualTo(doctor);
+
+        // Not yet acknowledged: the new reading is still a repeat of an alert that is reminding.
+        ObstetricAlertEscalation reminding = row((short) 0);
+        when(escalationRepository.findOpenForPatient(HOSPITAL, PATIENT,
+            ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION, "URGENT_HYPERTENSION"))
+            .thenReturn(List.of(reminding));
+        assertThat(worker.file(general(ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION,
+            "URGENT_HYPERTENSION", List.of("drA")), false)).isNull();
+        assertThat(reminding.getAcknowledgedAt()).isNull();
+    }
+
+    @Test
+    void anOwedFirstNoticeIsNotSentWhenTheRecordNoLongerSupportsTheAlert() {
+        // Review of #1370 (F2): a culture corrected to no growth while its first notice was owed.
+        ObstetricAlertEscalation owed = row((short) 0);
+        owed.setFirstNoticeFiledAt(null);
+        owed.setSourceType(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE);
+        owed.setAlertType("POSITIVE_CULTURE");
+        owed.setSourceId(UUID.randomUUID());
+        when(escalationRepository.findById(owed.getId())).thenReturn(Optional.of(owed));
+        when(escalationRepository.claimFirstNotice(eq(owed.getId()), any())).thenReturn(1);
+        when(currency.noLongerUrgent(owed)).thenReturn(true);
+
+        assertThat(worker.escalateOne(owed.getId())).isFalse();
+
+        verify(notificationService, never()).createNotification(any(), any(), any(), any());
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+        verify(inBasketService, never()).createItem(any());
+        assertThat(owed.getAcknowledgedAt()).as("closed by the record").isEqualTo(NOW);
+        assertThat(owed.getAcknowledgedBy()).isNull();
+    }
+
     // ── Scorecard K4: the first notice is owed until it is delivered ───────────────────
 
     @Test
@@ -449,8 +509,8 @@ class ObstetricAlertEscalationWorkerTest {
     void aRecordsOwnAlertIsFiledOnceWhileItIsOpen() {
         ObstetricAlertEscalationService.UrgentAlert culture = general(
             ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE, "POSITIVE_CULTURE", List.of("drOrder"));
-        when(escalationRepository.existsOpenForSource(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
-            culture.sourceId())).thenReturn(true);
+        when(escalationRepository.findOpenForSource(ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE,
+            culture.sourceId())).thenReturn(List.of(row((short) 0)));
 
         assertThat(worker.file(culture, false)).isNull();
 

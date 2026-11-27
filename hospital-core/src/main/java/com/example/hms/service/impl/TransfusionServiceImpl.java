@@ -1744,10 +1744,28 @@ public class TransfusionServiceImpl implements TransfusionService {
     /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the record alone). */
     private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
-                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+    /**
+     * Resolved when used, never at wiring: a context without the escalation service (a test slice) gets
+     * {@code null} here and each use falls back as when the service is absent, where an optional {@code @Lazy} injection point gave a
+     * never-null proxy that failed on first use.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlertsProvider = urgentAlertsProvider;
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
         this.urgentAlerts = urgentAlerts;
+    }
+
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts() {
+        if (this.urgentAlerts != null) {
+            return this.urgentAlerts;
+        }
+        return urgentAlertsProvider == null ? null : urgentAlertsProvider.getIfAvailable();
     }
 
     /**
@@ -1761,7 +1779,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     private void fileSevereReactionForAcknowledgement(TransfusionReaction reaction,
                                                       TransfusionAdministration administration) {
         Patient patient = administration.getPatient();
-        if (urgentAlerts == null || reaction.getId() == null || patient == null || administration.getHospital() == null) {
+        if (urgentAlerts() == null || reaction.getId() == null || patient == null || administration.getHospital() == null) {
             return;
         }
         Staff requester = administration.getRequest() == null ? null : administration.getRequest().getRequestedBy();
@@ -1769,7 +1787,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             ? null : requester.getUser().getUsername();
         Staff reporter = reaction.getReportedBy();
         UUID reporterUserId = reporter == null || reporter.getUser() == null ? null : reporter.getUser().getId();
-        urgentAlerts.raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
+        urgentAlerts().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
                 new com.example.hms.service.escalation.UrgentAlerts.Subject(administration.getHospital().getId(),
                     patient.getId(), patient.getFullName()),
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_TRANSFUSION_REACTION,

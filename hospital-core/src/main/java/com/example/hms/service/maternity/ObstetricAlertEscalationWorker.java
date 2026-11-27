@@ -400,33 +400,24 @@ public class ObstetricAlertEscalationWorker {
             if (owed == null) {
                 return false;
             }
+            if (currency.noLongerUrgent(owed)) {
+                // Review of #1370 (F2): the record changed while the notice was owed (a culture corrected to no
+                // growth, a countersignature given): nothing is sent, and the alert is closed by the record.
+                closeNoLongerUrgent(owed, now);
+                return false;
+            }
             sendFirstNotice(owed, alertOf(owed), now);
             return true;
         }
-        if (!among(ObstetricAlertEscalationService.CLOSED_BY_RECORD_ONLY, row.getSourceType())) {
-            List<InBasketItem> acks = inBasketItemRepository.findAcknowledgedForReference(
-                row.getId(), REFERENCE_TYPE, row.getDocumentedByUserId());
-            if (!acks.isEmpty()) {
-                closeIncident(row, UrgentAlertIncident.RESOLVED_ACKNOWLEDGED, acks.get(0).getAcknowledgedBy(),
-                    acks.get(0).getAcknowledgedAt());
-                row.setAcknowledgedAt(acks.get(0).getAcknowledgedAt());
-                row.setAcknowledgedBy(acks.get(0).getAcknowledgedBy());
-                escalationRepository.save(row);
-                return false;
-            }
+        if (closedIfAcknowledged(row)) {
+            return false;
         }
         Optional<CriticalResultEscalationLadder.Step> due = stepDue(row, now);
         if (due.isEmpty()) {
             return false;
         }
         if (currency.noLongerUrgent(row)) {
-            // Closed by the record itself, not by a person: acknowledgedBy stays empty.
-            closeIncident(row, UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, now);
-            row.setAcknowledgedAt(now);
-            row.setAcknowledgedBy(null);
-            escalationRepository.save(row);
-            // The withdrawn alert's open tasks no longer point at anything that stands.
-            inBasketItemRepository.deleteOpenByReference(row.getId(), REFERENCE_TYPE);
+            closeNoLongerUrgent(row, now);
             return false;
         }
         CriticalResultEscalationLadder.Step step = due.get();
@@ -504,6 +495,16 @@ public class ObstetricAlertEscalationWorker {
             row.getLastEscalationAt(), CriticalResultEscalationLadder.Minutes.DEFAULT, now);
     }
 
+    /** Closed by the record itself, not by a person: acknowledgedBy stays empty, and its open tasks go. */
+    private void closeNoLongerUrgent(ObstetricAlertEscalation row, LocalDateTime now) {
+        closeIncident(row, UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, now);
+        row.setAcknowledgedAt(now);
+        row.setAcknowledgedBy(null);
+        escalationRepository.save(row);
+        // The withdrawn alert's open tasks no longer point at anything that stands.
+        inBasketItemRepository.deleteOpenByReference(row.getId(), REFERENCE_TYPE);
+    }
+
     private void closeIncident(ObstetricAlertEscalation row, String resolution, UUID byUserId, LocalDateTime at) {
         if (ladder != null) {
             ladder.closeIncident(UrgentAlertIncident.SOURCE_URGENT_ALERT, row.getId(), resolution, byUserId, at);
@@ -563,12 +564,48 @@ public class ObstetricAlertEscalationWorker {
      * Scorecard K4: a record's own alert (a reaction, a culture, a countersignature) is filed once while it is open.
      */
     private boolean stillEscalating(ObstetricAlertEscalationService.UrgentAlert alert) {
+        List<ObstetricAlertEscalation> open;
         if (among(ObstetricAlertEscalationService.ONE_OPEN_PER_RECORD, alert.sourceType())) {
-            return escalationRepository.existsOpenForSource(alert.sourceType(), alert.sourceId());
-        }
-        return among(ObstetricAlertEscalationService.VITAL_SET_EARLY_WARNING_SOURCES, alert.sourceType())
-            && escalationRepository.existsOpenForPatient(alert.hospitalId(), alert.patientId(), alert.sourceType(),
+            open = escalationRepository.findOpenForSource(alert.sourceType(), alert.sourceId());
+        } else if (among(ObstetricAlertEscalationService.VITAL_SET_EARLY_WARNING_SOURCES, alert.sourceType())) {
+            open = escalationRepository.findOpenForPatient(alert.hospitalId(), alert.patientId(), alert.sourceType(),
                 alert.alertType() == null ? "" : alert.alertType());
+        } else {
+            return false;
+        }
+        // Review of #1370 (F1): a row whose item was acknowledged since the last sweep is answered; it is closed
+        // now, with that acknowledgement, and holds nothing. Held on it, the new reading got no item, and the sweep
+        // then closed the old row: nobody was told of the new one.
+        boolean escalating = false;
+        for (ObstetricAlertEscalation row : open) {
+            if (!closedIfAcknowledged(row)) {
+                escalating = true;
+            }
+        }
+        return escalating;
+    }
+
+    /**
+     * Closes an alert one of whose items somebody other than its documenter acknowledged, with that
+     * acknowledgement. An alert only its record closes ({@code CLOSED_BY_RECORD_ONLY}) is never closed here.
+     *
+     * @return true when the row was closed now
+     */
+    private boolean closedIfAcknowledged(ObstetricAlertEscalation row) {
+        if (among(ObstetricAlertEscalationService.CLOSED_BY_RECORD_ONLY, row.getSourceType())) {
+            return false;
+        }
+        List<InBasketItem> acks = inBasketItemRepository.findAcknowledgedForReference(
+            row.getId(), REFERENCE_TYPE, row.getDocumentedByUserId());
+        if (acks.isEmpty()) {
+            return false;
+        }
+        closeIncident(row, UrgentAlertIncident.RESOLVED_ACKNOWLEDGED, acks.get(0).getAcknowledgedBy(),
+            acks.get(0).getAcknowledgedAt());
+        row.setAcknowledgedAt(acks.get(0).getAcknowledgedAt());
+        row.setAcknowledgedBy(acks.get(0).getAcknowledgedBy());
+        escalationRepository.save(row);
+        return true;
     }
 
     /**

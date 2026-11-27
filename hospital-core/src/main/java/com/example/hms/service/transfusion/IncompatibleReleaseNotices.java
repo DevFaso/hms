@@ -290,10 +290,28 @@ public class IncompatibleReleaseNotices {
     /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the notices alone). */
     private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setUrgentAlerts(@org.springframework.context.annotation.Lazy
-                         com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+    /**
+     * Resolved when used, never at wiring: a context without the escalation service (a test slice) gets
+     * {@code null} here and each use falls back as when the service is absent, where an optional {@code @Lazy} injection point gave a
+     * never-null proxy that failed on first use.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlertsProvider = urgentAlertsProvider;
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
         this.urgentAlerts = urgentAlerts;
+    }
+
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts() {
+        if (this.urgentAlerts != null) {
+            return this.urgentAlerts;
+        }
+        return urgentAlertsProvider == null ? null : urgentAlertsProvider.getIfAvailable();
     }
 
     /**
@@ -305,7 +323,7 @@ public class IncompatibleReleaseNotices {
      */
     private void keepEscalatingUntilSigned(UUID decisionId, UUID hospitalId, UUID patientId, String patientName,
                                            Object[] sentenceArgs, UUID issuer, List<UUID> directors) {
-        if (urgentAlerts == null || patientId == null) {
+        if (urgentAlerts() == null || patientId == null) {
             return;
         }
         List<String> named = userRepository.findAllById(directors).stream()
@@ -317,9 +335,9 @@ public class IncompatibleReleaseNotices {
                 .withNamedRecipients(named);
         if (named.isEmpty()) {
             // Nobody was told above: the ladder owes the first notice, to the médecin-chef.
-            urgentAlerts.raiseAfterCommit(alert);
+            urgentAlerts().raiseAfterCommit(alert);
         } else {
-            urgentAlerts.raiseAlreadyNotified(alert);
+            urgentAlerts().raiseAlreadyNotified(alert);
         }
     }
 
@@ -349,7 +367,7 @@ public class IncompatibleReleaseNotices {
         if (directors.isEmpty()) {
             log.error("Overdue countersignature of incompatible release decision {} has no laboratory director to go to",
                 decision.getId());
-            if (urgentAlerts == null) {
+            if (urgentAlerts() == null) {
                 return 0;
             }
         }

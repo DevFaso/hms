@@ -77,6 +77,30 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
         """)
     boolean existsOpenForSource(@Param("sourceType") String sourceType, @Param("sourceId") UUID sourceId);
 
+    /**
+     * Review of #1370: the rows {@link #existsOpenForPatient} counts. An item of one may already be acknowledged
+     * while the sweep has not closed it yet; the repeat check closes such a row rather than hold a new reading on it.
+     */
+    @Query("""
+        SELECT e FROM ObstetricAlertEscalation e
+        WHERE e.hospitalId = :hospitalId AND e.patientId = :patientId AND e.sourceType = :sourceType
+          AND COALESCE(e.alertType, '') = :alertType
+          AND e.acknowledgedAt IS NULL AND e.ladderBacklog = false
+        """)
+    java.util.List<ObstetricAlertEscalation> findOpenForPatient(@Param("hospitalId") UUID hospitalId,
+                                                                @Param("patientId") UUID patientId,
+                                                                @Param("sourceType") String sourceType,
+                                                                @Param("alertType") String alertType);
+
+    /** Review of #1370: the rows {@link #existsOpenForSource} counts (see {@link #findOpenForPatient}). */
+    @Query("""
+        SELECT e FROM ObstetricAlertEscalation e
+        WHERE e.sourceType = :sourceType AND e.sourceId = :sourceId
+          AND e.acknowledgedAt IS NULL AND e.ladderBacklog = false
+        """)
+    java.util.List<ObstetricAlertEscalation> findOpenForSource(@Param("sourceType") String sourceType,
+                                                               @Param("sourceId") UUID sourceId);
+
     /** V386: the alerts of one record that nobody has acknowledged or closed (its countersignature, once signed). */
     @Query("""
         SELECT e FROM ObstetricAlertEscalation e
