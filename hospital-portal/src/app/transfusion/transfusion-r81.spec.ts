@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { answerReasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 /**
  * QA D4141 and D4178 (r81).
@@ -272,6 +273,40 @@ describe('TransfusionComponent — r81 (D4141 second check, D4178 return of an i
 
     expect(q('unit-return-out')).toBeNull();
     expect(q('unit-awaiting-return-out')).not.toBeNull();
+  });
+
+  it('recording a return with nothing chosen is refused on the outcome', () => {
+    setUp(['ROLE_LAB_SCIENTIST']);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      component.openReturn(unit());
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="return-submit"]',
+        alsoMarked: ['return-outcome-FIT_FOR_STOCK'],
+        sent: tx.recordUnitReturn,
+      });
+      expect(marked).toEqual(['return-outcome-FIT_FOR_STOCK']);
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
+  });
+
+  it('a destroyed bag recorded without what was found is refused on the note', () => {
+    setUp(['ROLE_LAB_SCIENTIST']);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      component.openReturn(unit());
+      component.returnForm.outcome = 'UNFIT_DESTROYED';
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="return-submit"]',
+        sent: tx.recordUnitReturn,
+      });
+      expect(marked).toEqual(['return-note']);
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
   });
 
   it('a bag goes back into stock only on the laboratory’s two statements', () => {
