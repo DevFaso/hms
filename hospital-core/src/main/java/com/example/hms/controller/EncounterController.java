@@ -103,33 +103,29 @@ public class EncounterController {
         summary = "Create a new encounter",
         description = "Creates a new patient encounter. " +
             "Receptionists use this as the walk-in check-in endpoint: the hospitalId is always " +
-            "the active hospital of the request context (cannot be overridden). The initial status is the one requested " +
+            "the active hospital of the request context. The initial status is the one requested " +
             "(ARRIVED or IN_PROGRESS; the reception walk-in sends ARRIVED); with none, an EMERGENCY visit dated today " +
             "starts ARRIVED and any other visit IN_PROGRESS. " +
             "For receptionist walk-ins, omit appointmentId; supply patientId and chiefComplaint. " +
-            "Doctors, nurses, and midwives may also create encounters; their hospitalId defaults " +
-            "to the active hospital of the request context but can be overridden in the request body."
+            "Doctors, nurses, and midwives may also create encounters, at the hospital they act at: " +
+            "a hospitalId in the body is accepted only when the caller holds a role there, and the " +
+            "named clinician must be assigned to that hospital."
     )
     public ResponseEntity<EncounterResponseDTO> create(
         @Valid @RequestBody EncounterRequestDTO dto,
         Locale locale,
         Authentication auth
     ) {
-        // Enforce hospital scoping
-        UUID contextHospitalId = authUtils.currentHospitalId(auth);
+        // The visit is opened at the hospital the caller acts at. A hospital named
+        // in the body is one the caller holds a role at (resolveHospitalScope
+        // refuses any other, 403), and the request then acts, and is audited, there.
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, ROLE_RECEPTIONIST);
-        if (isReceptionist) {
-            if (contextHospitalId == null) {
-                throw new BusinessException("request.hospitalContext.required");
-            }
-            dto.setHospitalId(contextHospitalId); // receptionist cannot override
-        } else {
-            // non-receptionist: allow body value; fallback to the request context if body missing
-            if (dto.getHospitalId() == null) {
-                dto.setHospitalId(contextHospitalId);
-            }
+        UUID actingHospitalId = authUtils.resolveHospitalScope(auth, dto.getHospitalId(), true);
+        if (actingHospitalId == null) {
+            throw new BusinessException("request.hospitalContext.required");
         }
+        dto.setHospitalId(actingHospitalId);
 
         // Default status for front-desk check-in. QA D761: only there; a
         // clinician's encounter keeps its IN_PROGRESS default, and a status

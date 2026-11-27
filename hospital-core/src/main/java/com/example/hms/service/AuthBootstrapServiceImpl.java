@@ -72,7 +72,14 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
                 .distinct()
                 .toList();
 
-        UUID primaryHospitalId = permittedHospitalIds.isEmpty() ? null : permittedHospitalIds.get(0);
+        // r81: the primary hospital is one where the user works when they work somewhere; a
+        // hospital where they are only registered as a patient comes after it.
+        UUID primaryHospitalId = assignments.stream()
+                .filter(TenantRoleAssignment::active)
+                .filter(a -> a.hospitalId() != null && !isPatientRole(a.roleCode()))
+                .map(TenantRoleAssignment::hospitalId)
+                .findFirst()
+                .orElse(permittedHospitalIds.isEmpty() ? null : permittedHospitalIds.get(0));
 
         String primaryHospitalName = null;
         if (primaryHospitalId != null) {
@@ -148,5 +155,14 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
                 .patientId(patientId)
                 .lastOidcLoginAt(lastOidcLoginAt)
                 .build();
+    }
+
+    /** PATIENT, with or without the ROLE_ prefix. */
+    private static boolean isPatientRole(String roleCode) {
+        if (roleCode == null) {
+            return false;
+        }
+        String code = roleCode.trim().toUpperCase(java.util.Locale.ROOT);
+        return "ROLE_PATIENT".equals(code) || "PATIENT".equals(code);
     }
 }

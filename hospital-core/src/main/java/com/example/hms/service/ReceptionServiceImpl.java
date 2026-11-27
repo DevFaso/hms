@@ -858,7 +858,10 @@ public class ReceptionServiceImpl implements ReceptionService {
                                                    String actorUsername) {
         Hospital hospital = hospitalRepo.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+        // r81: the department and the preferred clinician are those of this hospital; any
+        // other answers as an unknown id.
         Department department = departmentRepo.findById(req.getDepartmentId())
+                .filter(d -> d.getHospital() != null && hospitalId.equals(d.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", req.getDepartmentId()));
         // Same fix as the snapshot above: a waitlist entry for a patient whose
         // first hospital is elsewhere would otherwise be impossible to create.
@@ -873,7 +876,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 registrationRepo, req.getPatientId(), hospitalId);
         requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
-                ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
+                ? staffRepo.findById(req.getPreferredProviderId())
+                    .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", req.getPreferredProviderId()))
                 : null;
 
         AppointmentWaitlist entry = AppointmentWaitlist.builder()
