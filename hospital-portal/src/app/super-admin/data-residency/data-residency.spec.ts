@@ -126,7 +126,8 @@ describe('DataResidencyComponent (MVP-9)', () => {
     const cmp = fixture.componentInstance;
     cmp.startEdit(cmp.rows()[0]);
     fixture.detectChanges();
-    const target = () => fixture.nativeElement.querySelector('[data-test=edit-organization]').textContent;
+    const target = () =>
+      fixture.nativeElement.querySelector('[data-test=edit-organization]').textContent;
     expect(target()).toContain('Alpha Clinic');
     expect(target()).toContain('ACL');
     cmp.startEdit(cmp.rows()[1]);
