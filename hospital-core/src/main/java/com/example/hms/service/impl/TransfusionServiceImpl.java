@@ -744,11 +744,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         unit.setReturnNote(note);
         BloodUnit saved = unitRepository.save(unit);
         // The « bag to recover » task is done: the laboratory has recorded what became of the bag.
-        try {
-            inBasketService.removeOpenItemsForReference(saved.getId(), UNIT_REFERENCE_TYPE);
-        } catch (RuntimeException ex) {
-            log.warn("Recover task not closed for blood unit {}: {}", saved.getId(), ex.getClass().getSimpleName());
-        }
+        inBasketService.removeOpenItemsForReference(saved.getId(), UNIT_REFERENCE_TYPE);
         return mapper.toDto(saved);
     }
 

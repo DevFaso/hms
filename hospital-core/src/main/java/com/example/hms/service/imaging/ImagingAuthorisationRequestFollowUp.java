@@ -114,12 +114,7 @@ public class ImagingAuthorisationRequestFollowUp {
         if (order == null || order.getId() == null) {
             return;
         }
-        try {
-            inBasketService.removeOpenItemsForReference(order.getId(), REFERENCE_TYPE);
-        } catch (RuntimeException ex) {
-            log.warn("Awaiting-physician task not closed for imaging request {}: {}", order.getId(),
-                ex.getClass().getSimpleName());
-        }
+        inBasketService.removeOpenItemsForReference(order.getId(), REFERENCE_TYPE);
     }
 
     /** The physicians of the requester's department here, else every physician of the hospital. */

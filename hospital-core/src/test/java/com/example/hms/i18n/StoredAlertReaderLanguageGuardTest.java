@@ -83,6 +83,7 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/safeguarding/SafeguardingReviewWorker.java", NOTICE),
         // Provisional rule 1 (2026-11-15): the billing task of an urgent study done without its pre-authorisation; keyed.
         Map.entry("service/imaging/ImagingPreAuthorisationFollowUp.java", NOTICE),
+        Map.entry("service/imaging/ImagingAuthorisationRequestFollowUp.java", NOTICE),
         // Policy rule 2 (2026-11-20): the physician's task for a newborn a midwife placed in a NICU cot; keyed.
         Map.entry("service/maternity/MidwifeNewbornCare.java", NOTICE),
         // Policy rule 6 (V345): the billing task of an urgency override or a third-party cover to check; keyed.
