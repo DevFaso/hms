@@ -195,7 +195,9 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     @Test
     @DisplayName("A's doctor cannot edit, cancel or report on B's ultrasound order: each answers as a missing id")
     void ultrasoundOrderWritesAnswerAsMissing() throws Exception {
-        String edit = json(Map.of("patientId", UUID.randomUUID(), "hospitalId", hospitalB, "scanType", UltrasoundScanType.GROWTH_SCAN));
+        // The body names the caller's own hospital and a patient registered there, so the refusal
+        // is the service's, on the row: a body naming another hospital never reaches it (below).
+        String edit = json(Map.of("patientId", registeredAtBoth.getId(), "hospitalId", hospitalA, "scanType", UltrasoundScanType.GROWTH_SCAN));
         Map<String, Function<UUID, MockHttpServletRequestBuilder>> writes = new LinkedHashMap<>();
         writes.put("update", id -> put("/ultrasound/orders/{id}", id).contentType(MediaType.APPLICATION_JSON).content(edit));
         writes.put("cancel", id -> post("/ultrasound/orders/{id}/cancel", id));
@@ -229,7 +231,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("an ultrasound order cannot be created at, or moved to, hospital B: as a missing hospital")
+    @DisplayName("an ultrasound order cannot be created at, or moved to, hospital B: refused as any hospital not held")
     void ultrasoundOrderNeverLeavesTheActingHospital() throws Exception {
         UUID missingHospital = UUID.randomUUID();
         UUID patientId = registeredAtBoth.getId();
@@ -238,13 +240,15 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
 
         MvcResult createAtB = send(post("/ultrasound/orders").contentType(MediaType.APPLICATION_JSON).content(orderAt.apply(hospitalB)));
         MvcResult createAtMissing = send(post("/ultrasound/orders").contentType(MediaType.APPLICATION_JSON).content(orderAt.apply(missingHospital)));
-        assertThat(createAtB.getResponse().getStatus()).isEqualTo(404);
+        // QA r81 D4260: a body naming a hospital the caller holds no role at is refused before the
+        // handler runs (403, as a hospitalId parameter is), the same for a real and an unknown one.
+        assertThat(createAtB.getResponse().getStatus()).isEqualTo(403);
         assertThat(errorShape(createAtB, hospitalB)).isEqualTo(errorShape(createAtMissing, missingHospital));
 
         when(ultrasoundOrderRepository.findById(rowId)).thenReturn(Optional.of(ultrasoundOrderAt(hospitalA)));
         MvcResult moveToB = send(put("/ultrasound/orders/{id}", rowId).contentType(MediaType.APPLICATION_JSON).content(orderAt.apply(hospitalB)));
         MvcResult moveToMissing = send(put("/ultrasound/orders/{id}", rowId).contentType(MediaType.APPLICATION_JSON).content(orderAt.apply(missingHospital)));
-        assertThat(moveToB.getResponse().getStatus()).isEqualTo(404);
+        assertThat(moveToB.getResponse().getStatus()).isEqualTo(403);
         assertThat(errorShape(moveToB, hospitalB)).isEqualTo(errorShape(moveToMissing, missingHospital));
         verify(ultrasoundOrderRepository, never()).save(any());
     }
@@ -295,7 +299,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a consultation cannot be requested at hospital B: as a missing hospital")
+    @DisplayName("a consultation cannot be requested at hospital B: refused as any hospital not held")
     void consultationCannotBeRequestedAtAnotherHospital() throws Exception {
         UUID missingHospital = UUID.randomUUID();
         UUID patientId = registeredAtBoth.getId();
@@ -306,7 +310,8 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
         MvcResult atB = send(post("/consultations").contentType(MediaType.APPLICATION_JSON).content(requestAt.apply(hospitalB)));
         MvcResult atMissing = send(post("/consultations").contentType(MediaType.APPLICATION_JSON).content(requestAt.apply(missingHospital)));
 
-        assertThat(atB.getResponse().getStatus()).isEqualTo(404);
+        // QA r81 D4260: refused before the handler runs, the same for a real and an unknown hospital.
+        assertThat(atB.getResponse().getStatus()).isEqualTo(403);
         assertThat(errorShape(atB, hospitalB)).isEqualTo(errorShape(atMissing, missingHospital));
         verify(consultationRepository, never()).save(any());
     }
