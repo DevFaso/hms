@@ -7,6 +7,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import fr from '../../assets/i18n/fr.json';
+import en from '../../assets/i18n/en.json';
 
 import { MaternityComponent, historyFormProblem } from './maternity';
 import {
@@ -109,6 +110,28 @@ describe('MaternityComponent — tabs', () => {
     expect(host().querySelector('.empty-state h3')?.textContent?.trim()).toBe(
       'Aucun dossier dans cette liste',
     );
+  });
+
+  it('uses singular and plural worklist counts for the selected language', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('en', en);
+    create(['ROLE_NURSE']);
+    for (const [language, count, expected] of [
+      ['fr', 0, '0 dossier'],
+      ['fr', 1, '1 dossier'],
+      ['fr', 2, '2 dossiers'],
+      ['en', 0, '0 records'],
+      ['en', 1, '1 record'],
+      ['en', 2, '2 records'],
+    ] as const) {
+      translate.use(language);
+      fixture.componentInstance.boardTotal.set(count);
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="board-record-count"]')?.textContent?.trim()).toBe(
+        expected,
+      );
+    }
   });
 
   it('shows server totals beyond the current page and never requests restricted nurse counts', () => {

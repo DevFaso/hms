@@ -12376,6 +12376,7 @@
     "WORKLIST_SPECIALIST_REFERRAL": "Derivación a especialista",
     "WORKLIST_PSYCHOSOCIAL": "Psicosocial",
     "WORKLIST_ALL": "Todos",
+    "RECORD_ONE": "record",
     "RECORDS": "registros",
     "NO_HISTORIES": "No records in this worklist",
     "NO_HISTORIES_HINT": "Los registros de esta lista aparecerán aquí.",

@@ -142,7 +142,15 @@
           </button>
         }
       </div>
-      <span class="muted">{{ boardTotal() }} {{ 'MATERNITY.RECORDS' | translate }}</span>
+      <span class="muted" data-testid="board-record-count"
+        >{{ boardTotal() }}
+        {{
+          (boardTotal() === 1 || (boardTotal() === 0 && isFrench())
+            ? 'MATERNITY.RECORD_ONE'
+            : 'MATERNITY.RECORDS'
+          ) | translate
+        }}</span
+      >
     </div>
 
     <div class="workspace-tools">

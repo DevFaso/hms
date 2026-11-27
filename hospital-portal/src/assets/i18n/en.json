@@ -12376,6 +12376,7 @@
     "WORKLIST_SPECIALIST_REFERRAL": "Specialist referral",
     "WORKLIST_PSYCHOSOCIAL": "Psychosocial",
     "WORKLIST_ALL": "All",
+    "RECORD_ONE": "record",
     "RECORDS": "records",
     "NO_HISTORIES": "No records in this worklist",
     "NO_HISTORIES_HINT": "Records matching this worklist will appear here.",

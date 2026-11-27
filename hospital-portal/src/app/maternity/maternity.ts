@@ -520,6 +520,10 @@ export class MaternityComponent implements OnInit {
     );
   }
 
+  isFrench(): boolean {
+    return (this.translate.currentLang || 'fr').toLowerCase().startsWith('fr');
+  }
+
   loadBoard(refreshCounts = true): void {
     if (!this.hospitalId || !this.canManageHistory) return;
     const hospitalId = this.hospitalId;
