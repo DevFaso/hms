@@ -87,7 +87,7 @@ class UrgentClinicalMessageGuardTest {
         sources.put("service/impl/MicroCultureServiceImpl.java", ON_THE_LADDER);
         sources.put("service/transfusion/IncompatibleReleaseNotices.java", ON_THE_LADDER);
         sources.put("service/transfusion/OPositiveReleaseNotices.java", ON_THE_LADDER);
-        sources.put("service/pharmacy/InventoryServiceImpl.java",
+        sources.put("service/pharmacy/LowStockAlertDelivery.java",
             "REORDER_ALERT: a stock level for the pharmacy's own staff, not a message about a patient");
         sources.put("service/impl/InBasketServiceImpl.java",
             "the in-basket itself: it stores and acknowledges the CRITICAL items the sources file");
