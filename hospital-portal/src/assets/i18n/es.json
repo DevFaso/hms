@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Métricas de rendimiento hospitalario",
     "TITLE": "Analítica",
     "KPI": {
+      "PERIOD": "Del {{from}} al {{to}}",
       "SECTION_HEADING": "Indicadores operativos",
       "LOADING": "Cargando indicadores…",
       "DOOR_TO_DOCTOR_LABEL": "Tiempo recepción-médico",
