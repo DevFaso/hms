@@ -12,6 +12,20 @@
 
   <div class="filter-row">
     <div class="filter-group">
+      <label class="filter-label" for="provider-search">
+        {{ 'PROVIDER.LIST.SEARCH' | translate }}
+      </label>
+      <input
+        id="provider-search"
+        type="search"
+        class="filter-select"
+        data-test="provider-search"
+        [placeholder]="'PROVIDER.LIST.SEARCH_PLACEHOLDER' | translate"
+        [ngModel]="search()"
+        (ngModelChange)="setSearch($event)"
+      />
+    </div>
+    <div class="filter-group">
       <label class="filter-label" for="provider-type-filter">
         {{ 'PROVIDER.LIST.FILTER_TYPE' | translate }}
       </label>
@@ -100,7 +114,9 @@
                 }
               </td>
               <td>
-                @if (provider.lifecycleState) {
+                @if (lifecycleLabelKey(provider); as labelKey) {
+                  {{ labelKey | translate }}
+                } @else if (provider.lifecycleState) {
                   {{ provider.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
                 }
               </td>

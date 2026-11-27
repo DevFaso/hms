@@ -35,6 +35,16 @@ export class SubscriptionService {
     return this.http.delete<void>(`${BASE}/plans/${planId}`);
   }
 
+  /** QA D4310: puts a deactivated plan back in the catalogue. */
+  reactivatePlan(planId: string): Observable<SubscriptionPlan> {
+    return this.http.post<SubscriptionPlan>(`${BASE}/plans/${planId}/reactivate`, {});
+  }
+
+  /** QA D4070: the feature keys a plan may list. */
+  listFeatureKeys(): Observable<string[]> {
+    return this.http.get<string[]>(`${BASE}/feature-keys`);
+  }
+
   listForOrganization(organizationId: string): Observable<OrganizationSubscription[]> {
     return this.http.get<OrganizationSubscription[]>(`${BASE}/organizations/${organizationId}`);
   }

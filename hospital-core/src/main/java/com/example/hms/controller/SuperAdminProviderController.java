@@ -68,9 +68,20 @@ public class SuperAdminProviderController {
     public ResponseEntity<Page<ProviderResponseDTO>> list(
         @RequestParam(name = "type", required = false) FacilityType type,
         @RequestParam(name = "status", required = false) ProviderVerificationStatus status,
+        @RequestParam(name = "search", required = false) String search,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(onboardingService.list(type, status, pageable));
+        return ResponseEntity.ok(onboardingService.list(type, status, search, pageable));
+    }
+
+    @GetMapping("/{providerId}/lifecycle-events")
+    @PreAuthorize(SUPER_ADMIN_ONLY)
+    @Operation(summary = "The onboarding and lifecycle events of a provider facility, newest first",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<List<com.example.hms.payload.dto.provider.ProviderLifecycleEventDTO>> lifecycleEvents(
+        @PathVariable UUID providerId
+    ) {
+        return ResponseEntity.ok(onboardingService.lifecycleEvents(providerId));
     }
 
     @GetMapping("/{providerId}")

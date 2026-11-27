@@ -53,6 +53,7 @@ public class OrganizationController {
 
 
     private final OrganizationRepository organizationRepository;
+    private final com.example.hms.service.OrganizationLifecycleService organizationLifecycleService;
     private final OrganizationSecurityService organizationSecurityService;
     private final OrganizationMapper organizationMapper;
     private final OrganizationSecurityPolicyMapper policyMapper;
@@ -141,6 +142,11 @@ public class OrganizationController {
         requireNameFree(requestDTO.getName(), null);
 
         Organization organization = organizationMapper.toEntity(requestDTO);
+        // QA D4317: created inactive means created suspended; the two switches never disagree.
+        if (!organization.isActive()) {
+            organization.setLifecycleState(com.example.hms.enums.OrganizationLifecycleState.SUSPENDED);
+            organization.setSuspendedAt(java.time.Instant.now());
+        }
         organization = organizationRepository.save(organization);
 
         Organization organizationWithHospitals = organizationRepository
@@ -180,6 +186,18 @@ public class OrganizationController {
             requireNameFree(requestDTO.getName(), organization.getId());
         }
 
+        // QA D4317: the form's "active" switch is a lifecycle transition, refused
+        // while a facility is still active, and applied before any other edit.
+        if (organization.isActive() != requestDTO.isActive()) {
+            if (requestDTO.isActive()) {
+                organizationLifecycleService.reactivate(id);
+            } else {
+                organizationLifecycleService.deactivate(id);
+            }
+            organization = organizationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
+        }
+
         organizationMapper.updateEntity(organization, requestDTO);
         organization = organizationRepository.save(organization);
 
@@ -205,8 +223,9 @@ public class OrganizationController {
         Organization organization = organizationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
-        organization.setActive(false);
-        organizationRepository.save(organization);
+        // QA D4317: refused while a facility is still active; otherwise
+        // suspended and inactive together, with its audit row.
+        organizationLifecycleService.deactivate(id);
         
         log.info("Soft deleted organization: {}", organization.getCode());
         return ResponseEntity.noContent().build();

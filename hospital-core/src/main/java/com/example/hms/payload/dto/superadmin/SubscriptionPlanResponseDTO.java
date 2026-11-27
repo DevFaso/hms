@@ -24,6 +24,8 @@ public class SubscriptionPlanResponseDTO {
     private int includedSeats;
     private String featureKeys;
     private boolean active;
+    /** QA D4071: how many organizations hold this plan as their active subscription. */
+    private long activeOrganizationCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

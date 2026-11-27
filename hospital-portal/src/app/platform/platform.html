@@ -100,6 +100,9 @@
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
             <span class="kpi-label">{{ 'PLATFORM.ACTIVE_RELEASES' | translate }}</span>
+            <span class="kpi-sub" data-test="planned-releases">{{
+              'PLATFORM.PLANNED_WINDOWS' | plural: s.actions.plannedReleaseWindows ?? 0
+            }}</span>
           </div>
         </div>
       </div>
@@ -475,6 +478,13 @@
             <span class="kpi-label">{{ 'PLATFORM.ACTIVE_WINDOWS' | translate }}</span>
           </div>
         </div>
+        <div class="kpi-card kpi-info kpi-sm">
+          <span class="material-icons">event_upcoming</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.plannedReleaseWindows ?? 0 }}</span>
+            <span class="kpi-label">{{ 'PLATFORM.PLANNED_WINDOWS_LABEL' | translate }}</span>
+          </div>
+        </div>
         @if (s.actions.lastReleaseWindowChangeAt) {
           <div class="kpi-card kpi-secondary kpi-sm">
             <span class="material-icons">history</span>
@@ -554,6 +564,75 @@
             @if (rel.notes) {
               <p class="release-notes">{{ rel.notes }}</p>
             }
+            <!-- QA D4082: a window can be read in full, corrected while it is ahead, and withdrawn. -->
+            @if (expandedReleaseId() === rel.id) {
+              <dl class="release-meta" [attr.data-test]="'release-detail-' + rel.id">
+                <div>
+                  <dt>{{ 'PLATFORM.ENVIRONMENT' | translate }}</dt>
+                  <dd>{{ rel.environment }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.STARTS_AT' | translate }}</dt>
+                  <dd>{{ rel.startsAt | serverTime | date: 'medium' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.ENDS_AT' | translate }}</dt>
+                  <dd>{{ rel.endsAt | serverTime | date: 'medium' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.CHANGE_FREEZE' | translate }}</dt>
+                  <dd>{{ (rel.freezeChanges ? 'COMMON.YES' : 'COMMON.NO') | translate }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.OWNER_TEAM' | translate }}</dt>
+                  <dd>{{ rel.ownerTeam || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.RELEASE_CREATED_AT' | translate }}</dt>
+                  <dd>{{ rel.createdAt | serverTime | date: 'medium' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PLATFORM.RELEASE_UPDATED_AT' | translate }}</dt>
+                  <dd>{{ rel.updatedAt | serverTime | date: 'medium' }}</dd>
+                </div>
+              </dl>
+            }
+            <div class="release-actions">
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                [attr.aria-expanded]="expandedReleaseId() === rel.id"
+                [attr.data-test]="'release-toggle-' + rel.id"
+                (click)="toggleReleaseDetail(rel)"
+              >
+                {{
+                  (expandedReleaseId() === rel.id
+                    ? 'PLATFORM.RELEASE_HIDE_DETAIL'
+                    : 'PLATFORM.RELEASE_SHOW_DETAIL'
+                  ) | translate
+                }}
+              </button>
+              @if (canEditRelease(rel)) {
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  [attr.data-test]="'release-edit-' + rel.id"
+                  (click)="openReleaseEdit(rel)"
+                >
+                  {{ 'COMMON.EDIT' | translate }}
+                </button>
+              }
+              @if (canCancelRelease(rel)) {
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm btn-danger-outline"
+                  [attr.data-test]="'release-cancel-' + rel.id"
+                  (click)="cancelRelease(rel)"
+                >
+                  {{ 'PLATFORM.CANCEL_RELEASE' | translate }}
+                </button>
+              }
+            </div>
           </div>
         }
       </div>
@@ -1378,7 +1457,12 @@
       <div class="drawer-header">
         <h2 id="platform-release-drawer-title">
           <span class="material-icons" aria-hidden="true">event</span>
-          {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
+          {{
+            (editingReleaseId()
+              ? 'PLATFORM.EDIT_RELEASE_WINDOW'
+              : 'PLATFORM.SCHEDULE_RELEASE_WINDOW'
+            ) | translate
+          }}
         </h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"

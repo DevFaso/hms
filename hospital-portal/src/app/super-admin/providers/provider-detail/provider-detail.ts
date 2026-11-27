@@ -21,6 +21,8 @@ import {
   PROVIDER_STAFF_ROLES,
   ProviderEvidence,
   ProviderResponse,
+  ProviderLifecycleEvent,
+  providerLifecycleLabelKey,
   ProviderVerificationHistoryEntry,
   evidenceOf,
   isEvidenceComplete,
@@ -105,6 +107,9 @@ export class ProviderDetailComponent implements OnInit {
   readonly provider = signal<ProviderResponse | null>(null);
   readonly history = signal<ProviderVerificationHistoryEntry[]>([]);
   readonly historyFailed = signal(false);
+  /** QA D4313: onboarding decisions, suspensions and restorations. */
+  readonly lifecycleEvents = signal<ProviderLifecycleEvent[]>([]);
+  readonly lifecycleLabelKey = providerLifecycleLabelKey;
   readonly loading = signal(true);
   readonly notFound = signal(false);
   readonly loadFailed = signal(false);
@@ -199,6 +204,10 @@ export class ProviderDetailComponent implements OnInit {
   private loadHistory(): void {
     this.historySub?.unsubscribe();
     this.historyFailed.set(false);
+    this.service.lifecycleEvents(this.providerId()).subscribe({
+      next: (rows) => this.lifecycleEvents.set(rows ?? []),
+      error: () => this.lifecycleEvents.set([]),
+    });
     this.historySub = this.service.history(this.providerId()).subscribe({
       next: (rows) => this.history.set(rows),
       error: () => {
@@ -264,6 +273,12 @@ export class ProviderDetailComponent implements OnInit {
       request,
       dialog.kind === 'reject' ? 'PROVIDER.DETAIL.REJECTED' : 'PROVIDER.DETAIL.REVOKED',
     );
+  }
+
+  /** QA D4072: a check nobody recorded is « Non vérifié », never « Non ». */
+  checkLabelKey(value: boolean | null | undefined): string {
+    if (value === true) return 'PROVIDER.COMMON.YES';
+    return value === false ? 'PROVIDER.COMMON.NO' : 'PROVIDER.COMMON.NOT_CHECKED';
   }
 
   // ── hospital lifecycle (suspend / restore / archive) ─────────────────

@@ -23,6 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.utility.MessageUtil;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -213,6 +216,57 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             ? ": " + request.getReason() : "");
         recordAudit(org, AuditEventType.TENANT_PURGE_CANCELLED, description);
         return toResponse(org);
+    }
+
+    @Override
+    public void deactivate(UUID organizationId) {
+        Organization org = loadOrThrow(organizationId);
+        if (org.getLifecycleState() != OrganizationLifecycleState.ACTIVE) {
+            // Already suspended, archived or on its way out: only the flag is aligned.
+            if (org.isActive()) {
+                org.setActive(false);
+                organizationRepository.save(org);
+                invalidateStatusCache();
+            }
+            return;
+        }
+        long activeFacilities = organizationRepository.countActiveFacilities(organizationId);
+        if (activeFacilities > 0) {
+            throw new ConflictException(
+                MessageUtil.resolveOrRaw("organization.deactivate.activeHospitals", activeFacilities));
+        }
+        String reason = MessageUtil.resolveOrRaw("organization.deactivate.reason");
+        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
+        org.setActive(false);
+        org.setSuspendedAt(Instant.now(clock));
+        org.setSuspendedBy(currentActorId());
+        org.setSuspensionReason(reason);
+        organizationRepository.save(org);
+        invalidateStatusCache();
+        recordAudit(org, AuditEventType.TENANT_SUSPENDED, "Organization suspended: " + reason);
+    }
+
+    @Override
+    public void reactivate(UUID organizationId) {
+        Organization org = loadOrThrow(organizationId);
+        OrganizationLifecycleState previous = org.getLifecycleState();
+        if (previous == OrganizationLifecycleState.ACTIVE) {
+            // A row deactivated before the two switches moved together.
+            if (!org.isActive()) {
+                org.setActive(true);
+                organizationRepository.save(org);
+                invalidateStatusCache();
+            }
+            return;
+        }
+        if (previous != OrganizationLifecycleState.SUSPENDED) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("organization.reactivate.useLifecycle"));
+        }
+        org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
+        org.setActive(true);
+        organizationRepository.save(org);
+        invalidateStatusCache();
+        recordAudit(org, AuditEventType.TENANT_RESTORED, "Organization restored from " + previous);
     }
 
     // ── helpers ────────────────────────────────────────────────────────

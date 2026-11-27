@@ -184,6 +184,9 @@ class HospitalRepositoryCallerCoverageTest {
         entry("HospitalServiceImpl#hasPriceListItem",
             "whether the hospital being edited has a price (its currency is then locked);"
                 + " an existence check by the edited hospital's own id, not a read of a destination"),
+        entry("HospitalServiceImpl#countActiveStaffAssignments",
+            "how many staff are still assigned to the hospital being deactivated (QA D4317);"
+                + " a count by the edited hospital's own id, not a read of a destination"),
         entry("HospitalServiceImpl#hasInvoice",
             "whether the hospital being edited has an invoice (its currency is then locked);"
                 + " an existence check by the edited hospital's own id, not a read of a destination"));

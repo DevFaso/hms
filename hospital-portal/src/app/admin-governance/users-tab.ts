@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
+import { PluralPipe } from '../shared/i18n/plural';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -22,7 +24,14 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-gov-users-tab',
   standalone: true,
-  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    PluralPipe,
+  ],
   templateUrl: './users-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

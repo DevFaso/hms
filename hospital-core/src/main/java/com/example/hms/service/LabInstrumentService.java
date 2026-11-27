@@ -22,4 +22,10 @@ public interface LabInstrumentService {
     LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale);
 
     void deactivate(UUID id, Locale locale);
+
+    /** QA D4314: the hospital's instruments, deactivated ones included when asked. */
+    Page<LabInstrumentResponseDTO> getByHospital(UUID hospitalId, boolean includeInactive, Pageable pageable, Locale locale);
+
+    /** QA D4314: puts a deactivated instrument back in service lists. */
+    LabInstrumentResponseDTO reactivate(UUID id, Locale locale);
 }

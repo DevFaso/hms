@@ -34,6 +34,11 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
   manufacturer: 'LAB_INSTRUMENTS.MANUFACTURER',
   modelNumber: 'LAB_INSTRUMENTS.MODEL',
   notes: 'LAB_INSTRUMENTS.NOTES',
+  installationDate: 'LAB_INSTRUMENTS.INSTALLATION_DATE',
+  lastCalibrationDate: 'LAB_INSTRUMENTS.LAST_CALIBRATION',
+  nextCalibrationDate: 'LAB_INSTRUMENTS.NEXT_CALIBRATION',
+  lastMaintenanceDate: 'LAB_INSTRUMENTS.LAST_MAINTENANCE',
+  nextMaintenanceDate: 'LAB_INSTRUMENTS.NEXT_MAINTENANCE',
 };
 
 @Component({
@@ -64,6 +69,8 @@ export class LabInstrumentsComponent implements OnInit {
   error = signal<string | null>(null);
   instruments = signal<LabInstrumentResponse[]>([]);
   totalElements = signal(0);
+  /** QA D4314: also list the deactivated instruments, to reactivate one. */
+  showInactive = signal(false);
 
   /** Whether user can create/edit/delete instruments. */
   canManage = computed(() => {
@@ -97,18 +104,20 @@ export class LabInstrumentsComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.instrumentService.getInstruments(hospitalId).subscribe({
-      next: (page) => {
-        this.instruments.set(page.content ?? []);
-        this.totalElements.set(page.totalElements ?? 0);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        console.error('Failed to load instruments', err);
-        this.error.set(this.translate.instant('LAB_INSTRUMENTS.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.instrumentService
+      .getInstruments(hospitalId, undefined, undefined, this.showInactive())
+      .subscribe({
+        next: (page) => {
+          this.instruments.set(page.content ?? []);
+          this.totalElements.set(page.totalElements ?? 0);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          console.error('Failed to load instruments', err);
+          this.error.set(this.translate.instant('LAB_INSTRUMENTS.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
   }
 
   openCreate(): void {
@@ -172,6 +181,38 @@ export class LabInstrumentsComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  toggleInactive(show: boolean): void {
+    this.showInactive.set(show);
+    this.loadInstruments();
+  }
+
+  /** QA D4314: a deactivated instrument comes back. */
+  reactivate(instrument: LabInstrumentResponse): void {
+    this.instrumentService.reactivateInstrument(instrument.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB_INSTRUMENTS.REACTIVATED'));
+        this.loadInstruments();
+      },
+      error: (err) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_INSTRUMENTS.REACTIVATE_ERROR'),
+        ),
+    });
+  }
+
+  /** A date input gives '' when emptied; the server keeps the stored date for a missing one. */
+  setDate(
+    field:
+      | 'installationDate'
+      | 'lastCalibrationDate'
+      | 'nextCalibrationDate'
+      | 'lastMaintenanceDate'
+      | 'nextMaintenanceDate',
+    value: string | null,
+  ): void {
+    this.form = { ...this.form, [field]: value ? value : undefined };
   }
 
   async deactivate(instrument: LabInstrumentResponse): Promise<void> {

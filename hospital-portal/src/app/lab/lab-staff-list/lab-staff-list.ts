@@ -10,6 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { PluralPipe } from '../../shared/i18n/plural';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { AuthService } from '../../auth/auth.service';
@@ -38,6 +39,7 @@ const ASSIGNABLE_LAB_ROLES: readonly { code: string }[] = [
     RouterModule,
     FormsModule,
     TranslateModule,
+    PluralPipe,
     RoleLabelPipe,
   ],
   templateUrl: './lab-staff-list.html',

@@ -75,6 +75,20 @@ public class SuperAdminSubscriptionController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/plans/{planId}/reactivate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Reactivate a deactivated plan so it can be assigned again")
+    public ResponseEntity<SubscriptionPlanResponseDTO> reactivatePlan(@PathVariable UUID planId) {
+        return ResponseEntity.ok(service.reactivatePlan(planId));
+    }
+
+    @GetMapping("/feature-keys")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "The feature keys a plan may list (the platform's feature-flag catalogue)")
+    public ResponseEntity<List<String>> listFeatureKeys() {
+        return ResponseEntity.ok(service.listFeatureKeyCatalogue());
+    }
+
     @GetMapping("/organizations/{organizationId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List subscriptions for an organization (every status)")

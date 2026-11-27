@@ -31,13 +31,14 @@ import { DashPipe } from '../shared/pipes/dash.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PluralPipe } from '../shared/i18n/plural';
 import { formatLabNumber } from '../lab/shared/lab-value.pipe';
 
 interface ControlTowerStat {
   key: string;
   labelKey: string;
   value: number;
-  sublabelKey?: string;
+  sublabelPlural?: string;
   subvalue?: number;
   icon: string;
   color: string;
@@ -89,6 +90,7 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
     KeyLabelPipe,
     DateTimePipe,
     ServerTimePipe,
+    PluralPipe,
     CommonModule,
     RouterLink,
     TranslateModule,
@@ -175,7 +177,7 @@ export class SuperAdminComponent implements OnInit {
         key: 'organizations',
         labelKey: 'SUPER_ADMIN.STAT.ORGANIZATIONS',
         value: s.totalOrganizations ?? 0,
-        sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
+        sublabelPlural: 'SUPER_ADMIN.STAT.ACTIVE_F',
         subvalue: s.activeOrganizations ?? 0,
         icon: 'corporate_fare',
         color: '#6366f1',
@@ -185,7 +187,7 @@ export class SuperAdminComponent implements OnInit {
         key: 'hospitals',
         labelKey: 'SUPER_ADMIN.STAT.HOSPITALS',
         value: s.totalHospitals ?? 0,
-        sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
+        sublabelPlural: 'SUPER_ADMIN.STAT.ACTIVE_M',
         subvalue: s.activeHospitals ?? 0,
         icon: 'local_hospital',
         color: '#0ea5e9',
@@ -195,7 +197,7 @@ export class SuperAdminComponent implements OnInit {
         key: 'users',
         labelKey: 'COMMON.LABEL.USERS',
         value: s.totalUsers ?? 0,
-        sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
+        sublabelPlural: 'SUPER_ADMIN.STAT.ACTIVE_M',
         subvalue: s.activeUsers ?? 0,
         icon: 'group',
         color: '#23b79c',
@@ -237,7 +239,7 @@ export class SuperAdminComponent implements OnInit {
         key: 'assignments',
         labelKey: 'SUPER_ADMIN.STAT.ASSIGNMENTS',
         value: s.totalAssignments ?? 0,
-        sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
+        sublabelPlural: 'SUPER_ADMIN.STAT.ACTIVE_F',
         subvalue: s.activeAssignments ?? 0,
         icon: 'assignment_ind',
         color: '#ef4444',

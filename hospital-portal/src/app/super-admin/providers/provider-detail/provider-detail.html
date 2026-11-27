@@ -66,7 +66,11 @@
               [class]="'status-badge ' + lifecycleBadge(p.lifecycleState)"
               data-test="lifecycle-state"
             >
-              {{ p.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
+              @if (lifecycleLabelKey(p); as labelKey) {
+                {{ labelKey | translate }}
+              } @else {
+                {{ p.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
+              }
             </span>
           }
         </div>
@@ -298,15 +302,15 @@
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.IFU_CONFIRMED' | translate }}</dt>
-          <dd>
-            {{ (p.ifuMatchesRccm ? 'PROVIDER.COMMON.YES' : 'PROVIDER.COMMON.NO') | translate }}
-          </dd>
+          <dd data-test="ifu-confirmed">{{ checkLabelKey(p.ifuMatchesRccm) | translate }}</dd>
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.CNSS_CONFIRMED' | translate }}</dt>
-          <dd>
-            {{ (p.cnssMatchesRccm ? 'PROVIDER.COMMON.YES' : 'PROVIDER.COMMON.NO') | translate }}
-          </dd>
+          <dd data-test="cnss-confirmed">{{ checkLabelKey(p.cnssMatchesRccm) | translate }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'PROVIDER.DETAIL.DECIDED_BY' | translate }}</dt>
+          <dd data-test="decided-by">{{ p.decidedByName || '—' }}</dd>
         </div>
         @if (p.evidenceNote) {
           <div class="wide">
@@ -346,8 +350,15 @@
                 <th scope="col">{{ 'PROVIDER.DETAIL.SUBMITTED_AT' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.VERIFICATION' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}</th>
-                <th scope="col">{{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}</th>
+                <th scope="col">
+                  @if (p.facilityType === 'LABORATORY') {
+                    {{ 'PROVIDER.EVIDENCE.AUTHORISATION_NUMBER' | translate }}
+                  } @else {
+                    {{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}
+                  }
+                </th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.DETAIL.DECIDED_BY' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.DECISION_REASON' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.EVIDENCE_NOTE' | translate }}</th>
               </tr>
@@ -368,6 +379,7 @@
                   <td>
                     {{ row.decidedAt ? (row.decidedAt | serverTime | dateTime) : '—' }}
                   </td>
+                  <td data-test="history-decider">{{ row.decidedByName || '—' }}</td>
                   <td data-test="history-reason">{{ row.decisionReason || '—' }}</td>
                   <td data-test="history-note">{{ row.evidenceNote || '—' }}</td>
                 </tr>
@@ -375,6 +387,28 @@
             </tbody>
           </table>
         </div>
+      }
+    </section>
+
+    <!-- QA D4313: suspensions and restorations stay on the page, with who did them. -->
+    <section class="detail-card" aria-labelledby="provider-events-title">
+      <h2 id="provider-events-title" class="card-title">
+        {{ 'PROVIDER.DETAIL.EVENTS_TITLE' | translate }}
+      </h2>
+      @if (lifecycleEvents().length === 0) {
+        <p class="card-help">{{ 'PROVIDER.DETAIL.EVENTS_EMPTY' | translate }}</p>
+      } @else {
+        <ul class="event-list" data-test="lifecycle-events">
+          @for (event of lifecycleEvents(); track $index) {
+            <li data-test="lifecycle-event">
+              <span class="event-when">
+                {{ event.occurredAt ? (event.occurredAt | serverTime | dateTime) : '—' }}
+              </span>
+              <span class="event-what">{{ 'PROVIDER.EVENT.' + event.event | translate }}</span>
+              <span class="event-who">{{ event.actorName || '—' }}</span>
+            </li>
+          }
+        </ul>
       }
     </section>
 

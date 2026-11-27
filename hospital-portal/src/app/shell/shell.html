@@ -295,7 +295,7 @@
           class="icon-btn"
           routerLink="/chat"
           (click)="closeOverlays()"
-          [attr.aria-label]="translate.instant('NAV.MESSAGES_ARIA', { count: chatUnread() })"
+          [attr.aria-label]="'NAV.MESSAGES_ARIA' | plural: chatUnread()"
         >
           <span class="material-symbols-outlined" aria-hidden="true">chat</span>
           @if (chatUnread() > 0) {
@@ -319,7 +319,7 @@
           class="icon-btn"
           data-testid="shell-bell"
           (click)="toggleNotifications()"
-          [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
+          [attr.aria-label]="'NAV.NOTIFICATIONS_ARIA' | plural: unreadCount()"
         >
           <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
           @if (unreadCount() > 0) {

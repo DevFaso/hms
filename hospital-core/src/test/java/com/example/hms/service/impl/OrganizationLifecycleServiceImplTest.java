@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -95,6 +96,54 @@ class OrganizationLifecycleServiceImplTest {
 
     private TenantLifecycleActionRequestDTO withReason(String reason) {
         return TenantLifecycleActionRequestDTO.builder().reason(reason).build();
+    }
+
+    // ── deactivate / reactivate (QA D4317) ─────────────────────────────
+
+    @Test
+    @DisplayName("QA D4317: an organization with an active facility is not deactivated, and nothing changes")
+    void deactivateRefusedWithActiveFacility() {
+        org.setActive(true);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.countActiveFacilities(orgId)).thenReturn(2L);
+
+        assertThatThrownBy(() -> service.deactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
+        verify(organizationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D4317: a deactivation moves active and the lifecycle state together, and so does the reactivation")
+    void deactivateAndReactivateKeepBothSwitchesTogether() {
+        org.setActive(true);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.countActiveFacilities(orgId)).thenReturn(0L);
+
+        service.deactivate(orgId);
+
+        assertThat(org.isActive()).isFalse();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
+        assertThat(org.getSuspendedAt()).isNotNull();
+
+        service.reactivate(orgId);
+
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("QA D4317: an archived organization is not reactivated from the list")
+    void reactivateRefusedWhenArchived() {
+        org.setActive(false);
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+
+        assertThatThrownBy(() -> service.reactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(org.isActive()).isFalse();
     }
 
     // ── suspend ────────────────────────────────────────────────────────

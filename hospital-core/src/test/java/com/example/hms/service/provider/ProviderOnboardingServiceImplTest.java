@@ -78,6 +78,8 @@ class ProviderOnboardingServiceImplTest {
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
 
     private ProviderOnboardingServiceImpl service;
     private final UUID actorId = UUID.randomUUID();
@@ -85,7 +87,8 @@ class ProviderOnboardingServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ProviderOnboardingServiceImpl(hospitalRepository, verificationRepository,
-            lifecycleStatusService, auditEventLogService, roleValidator, Clock.fixed(NOW, ZoneOffset.UTC));
+            lifecycleStatusService, auditEventLogService, roleValidator, Clock.fixed(NOW, ZoneOffset.UTC),
+            userRepository, auditEventLogRepository);
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(hospitalRepository.save(any())).thenAnswer(inv -> {
             Hospital h = inv.getArgument(0);
@@ -657,6 +660,98 @@ class ProviderOnboardingServiceImplTest {
             assertThatThrownBy(() -> service.history(id)).isInstanceOf(AccessDeniedException.class);
             verify(verificationRepository, never()).findByHospital_IdOrderByCreatedAtDescIdDesc(any());
         }
+    }
+
+    // ---------------------------------------------------------------- QA r81
+
+    /** The four registration numbers, each with the repository check that guards it and the field it names. */
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> registrationNumbers() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of("RCCM", "business.rccmNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("IFU", "business.ifuNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("CNSS", "business.cnssNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("LICENCE", "professional.licenceNumber"));
+    }
+
+    private void stubTaken(String number) {
+        switch (number) {
+            case "RCCM" -> when(verificationRepository.existsCurrentRccmElsewhere(any(), any())).thenReturn(true);
+            case "IFU" -> when(verificationRepository.existsCurrentIfuElsewhere(any(), any())).thenReturn(true);
+            case "CNSS" -> when(verificationRepository.existsCurrentCnssElsewhere(any(), any())).thenReturn(true);
+            default -> when(verificationRepository.existsCurrentLicenceElsewhere(any(), any(), any())).thenReturn(true);
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} already registered elsewhere -> refused on {1}")
+    @org.junit.jupiter.params.provider.MethodSource("registrationNumbers")
+    @DisplayName("QA D4312: a registration number another facility holds is refused at registration, resubmission and verification")
+    void registrationNumberHeldElsewhereIsRefused(String number, String field) {
+        stubTaken(number);
+
+        assertThatThrownBy(() -> service.create(createRequest(FacilityType.LABORATORY)))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+        verify(hospitalRepository, never()).saveAndFlush(any());
+
+        Hospital facility = provider();
+        ProviderVerification v = submitted(facility);
+        assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+        assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+
+        v.setStatus(ProviderVerificationStatus.REJECTED);
+        ProviderResubmitRequestDTO again = new ProviderResubmitRequestDTO();
+        again.setBusiness(business());
+        again.setProfessional(professional());
+        assertThatThrownBy(() -> service.resubmit(facility.getId(), again))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+    }
+
+    @Test
+    @DisplayName("QA D4072 / D4073: an undecided submission has no IFU/CNSS answer and waits for verification; a verified one says yes")
+    void consistencyChecksAreUnansweredUntilRecorded() {
+        Hospital facility = provider();
+        submitted(facility);
+
+        ProviderResponseDTO pending = service.get(facility.getId());
+
+        assertThat(pending.getIfuMatchesRccm()).isNull();
+        assertThat(pending.getCnssMatchesRccm()).isNull();
+        assertThat(pending.getSuspensionCause()).isEqualTo("PENDING_VERIFICATION");
+
+        ProviderResponseDTO verified = service.verify(facility.getId(), verifyRequest(true, true));
+
+        assertThat(verified.getIfuMatchesRccm()).isTrue();
+        assertThat(verified.getCnssMatchesRccm()).isTrue();
+        assertThat(verified.getSuspensionCause()).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D4074: the licence authority is shown as typed while the uniqueness key stays upper-case")
+    void authorityIsShownAsTyped() {
+        ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+        request.getProfessional().setLicenceAuthority("  Autorisation  Labo (fictive) ");
+        when(verificationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ProviderResponseDTO created = service.create(request);
+
+        assertThat(created.getProfessional().getLicenceAuthority()).isEqualTo("Autorisation Labo (fictive)");
+        ArgumentCaptor<ProviderVerification> saved = ArgumentCaptor.forClass(ProviderVerification.class);
+        verify(verificationRepository).save(saved.capture());
+        assertThat(saved.getValue().getLicenceAuthority()).isEqualTo("AUTORISATION LABO (FICTIVE)");
+    }
+
+    @Test
+    @DisplayName("QA D4075: a search reaches the search query with an escaped, lower-case pattern")
+    void searchUsesAnEscapedPattern() {
+        when(verificationRepository.searchLatestByFacilityTypes(any(), any(), any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.list(null, null, " Bobo_100% ", org.springframework.data.domain.PageRequest.of(0, 20));
+
+        verify(verificationRepository).searchLatestByFacilityTypes(any(), any(), eq("%bobo\\_100\\%%"), any());
     }
 
     // ---------------------------------------------------------------- helpers

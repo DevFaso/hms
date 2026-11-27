@@ -38,7 +38,7 @@
             </span>
           </button>
           <div class="policy-title">
-            <span class="cell-main">{{ policy.name }}</span>
+            <span class="cell-main">{{ policy.name | govName }}</span>
             <code>{{ policy.code }}</code>
             {{ ' '
             }}<span class="badge badge-info">{{
@@ -112,7 +112,7 @@
                   @for (rule of policy.rules; track rule.id) {
                     <tr>
                       <td>
-                        <div class="cell-main">{{ rule.name }}</div>
+                        <div class="cell-main">{{ rule.name | govName }}</div>
                         <div class="cell-sub">
                           <code>{{ rule.code }}</code>
                         </div>
@@ -291,7 +291,7 @@
       >
         <h2 id="policies-tab-dialog-1-title">
           {{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_RULE') | translate }}
-          — {{ rulePolicy()?.name }}
+          — {{ rulePolicy()?.name | govName }}
         </h2>
         <div class="form-row">
           <label class="form-field">

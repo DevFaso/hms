@@ -18,6 +18,7 @@ import {
   ProviderFacilityType,
   ProviderPage,
   ProviderVerificationStatus,
+  providerLifecycleLabelKey,
 } from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
@@ -48,6 +49,9 @@ export class ProviderListComponent implements OnInit {
 
   readonly typeFilter = signal<ProviderFacilityType | ''>('');
   readonly statusFilter = signal<ProviderVerificationStatus | ''>('');
+  /** QA D4075: a name, a code or a city. */
+  readonly search = signal('');
+  readonly lifecycleLabelKey = providerLifecycleLabelKey;
   readonly pageIndex = signal(0);
 
   readonly loading = signal(true);
@@ -70,11 +74,16 @@ export class ProviderListComponent implements OnInit {
     // filters the page no longer shows is dropped: the table never shows one
     // filter's rows under another's selects.
     this.listSub?.unsubscribe();
-    const filters = { type: this.typeFilter(), status: this.statusFilter() };
+    const filters = {
+      type: this.typeFilter(),
+      status: this.statusFilter(),
+      search: this.search(),
+    };
     const pageIndex = this.pageIndex();
     const current = () =>
       filters.type === this.typeFilter() &&
       filters.status === this.statusFilter() &&
+      filters.search === this.search() &&
       pageIndex === this.pageIndex();
     this.loading.set(true);
     this.errored.set(false);
@@ -95,6 +104,12 @@ export class ProviderListComponent implements OnInit {
 
   setType(type: ProviderFacilityType | ''): void {
     this.typeFilter.set(type);
+    this.pageIndex.set(0);
+    this.refresh();
+  }
+
+  setSearch(text: string): void {
+    this.search.set(text ?? '');
     this.pageIndex.set(0);
     this.refresh();
   }

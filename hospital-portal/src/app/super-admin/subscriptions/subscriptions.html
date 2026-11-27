@@ -11,9 +11,18 @@
   </div>
 
   <div class="toolbar">
-    <label class="toggle">
-      <input type="checkbox" [checked]="showActiveOnly()" (change)="toggleActiveFilter()" />
-      {{ 'SUBSCRIPTIONS.ACTIVE_ONLY' | translate }}
+    <label class="status-filter">
+      <span>{{ 'SUBSCRIPTIONS.STATUS_FILTER' | translate }}</span>
+      <select
+        class="filter-select"
+        data-test="plan-status-filter"
+        [ngModel]="statusFilter()"
+        (ngModelChange)="setStatusFilter($event)"
+      >
+        <option value="ACTIVE">{{ 'SUBSCRIPTIONS.FILTER_ACTIVE' | translate }}</option>
+        <option value="INACTIVE">{{ 'SUBSCRIPTIONS.FILTER_INACTIVE' | translate }}</option>
+        <option value="ALL">{{ 'SUBSCRIPTIONS.FILTER_ALL' | translate }}</option>
+      </select>
     </label>
     <button type="button" class="btn-primary" (click)="startCreate()">
       <span class="material-symbols-outlined">add</span>
@@ -47,21 +56,41 @@
     </div>
   } @else {
     <div class="plan-grid" data-test="plan-grid">
-      @for (plan of plans(); track plan.id) {
+      @for (plan of visiblePlans(); track plan.id) {
         <div class="plan-card" [class.inactive]="!plan.active">
           <header>
             <h2>{{ plan.name }}</h2>
-            <span class="tier-pill">{{ plan.tierCode }}</span>
+            <span
+              class="status-pill"
+              [class.off]="!plan.active"
+              [attr.data-test]="'plan-status-' + plan.id"
+            >
+              {{
+                (plan.active ? 'SUBSCRIPTIONS.STATUS_ACTIVE' : 'SUBSCRIPTIONS.STATUS_INACTIVE')
+                  | translate
+              }}
+            </span>
           </header>
+          <p class="tier-line">
+            {{ 'SUBSCRIPTIONS.TIER_CODE_LABEL' | translate }}
+            <span class="tier-pill">{{ plan.tierCode }}</span>
+          </p>
           <p class="desc">{{ plan.description || '—' }}</p>
           <ul class="meta">
             <li>
               <strong>{{ formatPrice(plan.monthlyPriceCents, plan.currency) }}</strong>
               {{ 'SUBSCRIPTIONS.PER_MONTH' | translate }}
             </li>
-            <li>{{ plan.includedSeats }} {{ 'SUBSCRIPTIONS.SEATS' | translate }}</li>
+            <li>{{ 'SUBSCRIPTIONS.SEATS_COUNT' | plural: plan.includedSeats }}</li>
+            <li [attr.data-test]="'plan-usage-' + plan.id">
+              {{ 'SUBSCRIPTIONS.USED_BY' | plural: plan.activeOrganizationCount ?? 0 }}
+            </li>
             <li class="features">
-              {{ plan.featureKeys || ('SUBSCRIPTIONS.NO_FEATURES' | translate) }}
+              @for (key of planFeatureKeys(plan); track key) {
+                <span class="feature-chip" [title]="key">{{ featureLabel(key) }}</span>
+              } @empty {
+                {{ 'SUBSCRIPTIONS.NO_FEATURES' | translate }}
+              }
             </li>
           </ul>
           <footer>
@@ -71,6 +100,15 @@
             @if (plan.active) {
               <button type="button" class="btn-ghost danger" (click)="deactivate(plan)">
                 {{ 'SUBSCRIPTIONS.DEACTIVATE' | translate }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn-ghost"
+                [attr.data-test]="'plan-reactivate-' + plan.id"
+                (click)="reactivate(plan)"
+              >
+                {{ 'SUBSCRIPTIONS.REACTIVATE' | translate }}
               </button>
             }
           </footer>
@@ -169,17 +207,42 @@
             (ngModelChange)="updateForm('includedSeats', +$event)"
           />
         </label>
-        <label class="span-2">
-          <span>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS' | translate }}</span>
-          <input
-            id="plan-feature-keys"
-            type="text"
-            data-server-field="featureKeys"
-            placeholder="{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS_PLACEHOLDER' | translate }}"
-            [ngModel]="form().featureKeys"
-            (ngModelChange)="updateForm('featureKeys', $event)"
-          />
-        </label>
+        <!-- QA D4070: only the platform's real feature keys can be chosen; nothing is typed. -->
+        <fieldset
+          class="span-2 feature-picker"
+          id="plan-feature-keys"
+          data-server-field="featureKeys"
+          data-test="plan-feature-keys"
+        >
+          <legend>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS' | translate }}</legend>
+          <p class="hint">{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS_HINT' | translate }}</p>
+          @for (key of featureCatalogue(); track key) {
+            <label class="feature-option">
+              <input
+                type="checkbox"
+                [attr.data-test]="'plan-feature-' + key"
+                [checked]="isFeatureSelected(key)"
+                (change)="toggleFeatureKey(key, $any($event.target).checked)"
+              />
+              <span>{{ featureLabel(key) }}</span>
+              <code>{{ key }}</code>
+            </label>
+          } @empty {
+            <p class="hint">{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS_NONE' | translate }}</p>
+          }
+          @for (key of unknownFeatureKeys(); track key) {
+            <label class="feature-option unknown">
+              <input
+                type="checkbox"
+                checked
+                [attr.data-test]="'plan-feature-unknown-' + key"
+                (change)="toggleFeatureKey(key, $any($event.target).checked)"
+              />
+              <code>{{ key }}</code>
+              <span>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEY_UNKNOWN' | translate }}</span>
+            </label>
+          }
+        </fieldset>
       </div>
       @if (formError()) {
         <p class="form-error" role="alert">{{ formError()! | translate }}</p>

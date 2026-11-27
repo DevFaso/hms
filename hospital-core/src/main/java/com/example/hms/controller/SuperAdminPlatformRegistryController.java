@@ -50,6 +50,34 @@ public class SuperAdminPlatformRegistryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping("/release-windows/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "One platform release window")
+    public ResponseEntity<PlatformReleaseWindowResponseDTO> getReleaseWindow(
+        @org.springframework.web.bind.annotation.PathVariable java.util.UUID id
+    ) {
+        return ResponseEntity.ok(registryService.getReleaseWindow(id));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/release-windows/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Correct a release window that has not started")
+    public ResponseEntity<PlatformReleaseWindowResponseDTO> updateReleaseWindow(
+        @org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
+        @Valid @RequestBody PlatformReleaseWindowRequestDTO request
+    ) {
+        return ResponseEntity.ok(registryService.updateReleaseWindow(id, request));
+    }
+
+    @PostMapping("/release-windows/{id}/cancel")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Cancel a release window that has not finished")
+    public ResponseEntity<PlatformReleaseWindowResponseDTO> cancelReleaseWindow(
+        @org.springframework.web.bind.annotation.PathVariable java.util.UUID id
+    ) {
+        return ResponseEntity.ok(registryService.cancelReleaseWindow(id));
+    }
+
     /** D6: the release-window list survives a reload; newest start first, capped. */
     @GetMapping("/release-windows")
     @PreAuthorize("hasRole('SUPER_ADMIN')")

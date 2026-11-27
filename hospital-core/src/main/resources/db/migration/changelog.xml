@@ -4171,4 +4171,18 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V415 (QA r81 D4074, D4312): provider facilities keep the licence authority as typed, and one
+         VERIFIED facility per CNSS number (index created only when no duplicate exists). DO block. -->
+    <changeSet id="V415-provider-licence-authority-label" author="hms-team" runOnChange="false">
+        <sqlFile path="V415__provider_licence_authority_label.sql" relativeToChangelogFile="true"
+                 splitStatements="false" stripComments="false"/>
+    </changeSet>
+
+    <!-- V416 (QA r81 D4317): an organization's active flag follows its lifecycle state; rows written
+         before the two switches moved together are aligned. -->
+    <changeSet id="V416-organization-active-follows-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V416__organization_active_follows_lifecycle.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

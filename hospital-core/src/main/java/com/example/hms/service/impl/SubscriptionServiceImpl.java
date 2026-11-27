@@ -21,7 +21,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.hms.service.FeatureFlagService;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +46,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final OrganizationSubscriptionRepository subscriptionRepository;
     private final OrganizationRepository organizationRepository;
     private final SubscriptionMapper mapper;
+    private final FeatureFlagService featureFlagService;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,7 +54,68 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         List<SubscriptionPlan> plans = activeOnly
             ? planRepository.findByActiveTrue()
             : planRepository.findAll();
-        return plans.stream().map(mapper::toDto).toList();
+        return plans.stream().map(this::toDtoWithUsage).toList();
+    }
+
+    /** QA D4071: the plan with the number of organizations it is the active subscription of. */
+    private SubscriptionPlanResponseDTO toDtoWithUsage(SubscriptionPlan plan) {
+        SubscriptionPlanResponseDTO dto = mapper.toDto(plan);
+        if (dto != null && plan.getId() != null) {
+            dto.setActiveOrganizationCount(subscriptionRepository.countByPlanIdAndStatus(
+                plan.getId(), OrganizationSubscription.Status.ACTIVE));
+        }
+        return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> listFeatureKeyCatalogue() {
+        return featureFlagService.catalogueKeys();
+    }
+
+    /**
+     * QA D4070: the keys a plan lists gate its organizations' features, so a
+     * key the platform does not have is refused on its field rather than
+     * stored: an invented or mistyped key switched modules off without a
+     * word. Each key is kept in the catalogue's own spelling, once.
+     */
+    private List<String> requireKnownFeatureKeys(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<String> catalogue = featureFlagService.catalogueKeys();
+        List<String> kept = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String key = part.trim();
+            if (key.isEmpty()) {
+                continue;
+            }
+            String known = catalogue.stream().filter(key::equalsIgnoreCase).findFirst().orElse(null);
+            if (known == null) {
+                unknown.add(key);
+            } else if (!kept.contains(known)) {
+                kept.add(known);
+            }
+        }
+        if (!unknown.isEmpty()) {
+            throw new FieldBusinessException("featureKeys", "subscription.plan.featureKeys.unknown",
+                String.join(", ", unknown));
+        }
+        return kept;
+    }
+
+    /**
+     * Both columns the gate reads: the comma-separated text and its JSON
+     * mirror (lower-cased). Catalogue keys hold no quote or backslash, so the
+     * array needs no escaping.
+     */
+    private static void applyFeatureKeys(SubscriptionPlan plan, List<String> keys) {
+        plan.setFeatureKeys(String.join(",", keys));
+        plan.setFeatureKeysJson(keys.stream()
+            .filter(key -> key.indexOf('"') < 0 && key.indexOf('\\') < 0)
+            .map(key -> '"' + key.toLowerCase(Locale.ROOT) + '"')
+            .collect(Collectors.joining(",", "[", "]")));
     }
 
     @Override
@@ -58,6 +124,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         String currency = normalizeCurrency(request.getCurrency());
         requirePriceFitsCurrency(request.getMonthlyPriceCents(), currency);
         requireTierCodeFree(request.getTierCode());
+        List<String> featureKeys = requireKnownFeatureKeys(request.getFeatureKeys());
         SubscriptionPlan plan = SubscriptionPlan.builder()
             .name(request.getName())
             .tierCode(request.getTierCode())
@@ -65,10 +132,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             .monthlyPriceCents(request.getMonthlyPriceCents())
             .currency(currency)
             .includedSeats(request.getIncludedSeats())
-            .featureKeys(request.getFeatureKeys() == null ? "" : request.getFeatureKeys())
             .active(request.getActive() == null || request.getActive())
             .build();
-        return mapper.toDto(planRepository.save(plan));
+        applyFeatureKeys(plan, featureKeys);
+        return toDtoWithUsage(planRepository.save(plan));
     }
 
     @Override
@@ -94,12 +161,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         plan.setCurrency(currency);
         plan.setIncludedSeats(request.getIncludedSeats());
         if (request.getFeatureKeys() != null) {
-            plan.setFeatureKeys(request.getFeatureKeys());
+            applyFeatureKeys(plan, requireKnownFeatureKeys(request.getFeatureKeys()));
         }
         if (request.getActive() != null) {
             plan.setActive(request.getActive());
         }
-        return mapper.toDto(planRepository.save(plan));
+        return toDtoWithUsage(planRepository.save(plan));
     }
 
     @Override
@@ -113,6 +180,18 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         requireNotInUse(plan);
         plan.setActive(false);
         planRepository.save(plan);
+    }
+
+    @Override
+    @Transactional
+    public SubscriptionPlanResponseDTO reactivatePlan(UUID planId) {
+        SubscriptionPlan plan = planRepository.findByIdForUpdate(planId)
+            .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
+        if (!plan.isActive()) {
+            plan.setActive(true);
+            plan = planRepository.save(plan);
+        }
+        return toDtoWithUsage(plan);
     }
 
     /**
@@ -196,6 +275,22 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // assignments", which only holds if we enforce it here.
         if (!plan.isActive()) {
             throw new com.example.hms.exception.FieldBusinessException("planId", "subscription.plan.inactive", plan.getTierCode());
+        }
+
+        OrganizationSubscription.BillingPeriod requestedPeriod = request.getBillingPeriod() == null
+            ? OrganizationSubscription.BillingPeriod.MONTHLY
+            : request.getBillingPeriod();
+        // QA D4311: the same plan, seats and period again is not a change; it
+        // used to end the subscription and open an identical one each time.
+        boolean unchanged = subscriptionRepository
+            .findByOrganizationIdAndStatus(organizationId, OrganizationSubscription.Status.ACTIVE)
+            .filter(existing -> existing.getPlan() != null
+                && plan.getId() != null && plan.getId().equals(existing.getPlan().getId())
+                && existing.getSeatLimit() == request.getSeatLimit()
+                && existing.getBillingPeriod() == requestedPeriod)
+            .isPresent();
+        if (unchanged) {
+            throw new FieldBusinessException("planId", "subscription.plan.alreadyAssigned", plan.getName());
         }
 
         // Cancel any existing ACTIVE subscription so the partial unique index

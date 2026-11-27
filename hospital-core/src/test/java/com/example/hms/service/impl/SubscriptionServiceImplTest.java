@@ -42,6 +42,59 @@ class SubscriptionServiceImplTest {
     private OrganizationRepository organizationRepository;
     private SubscriptionMapper mapper;
     private SubscriptionServiceImpl service;
+    private com.example.hms.service.FeatureFlagService featureFlagService;
+
+    private SubscriptionPlanRequestDTO r81Request(String featureKeys) {
+        return SubscriptionPlanRequestDTO.builder()
+            .name("R81").tierCode("R81").monthlyPriceCents(100L).currency("XOF").includedSeats(1)
+            .featureKeys(featureKeys).build();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("QA D4070: a feature key the platform does not have is refused on its field, on create and on update")
+    void unknownFeatureKeyIsRefused() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.createPlan(r81Request("ff.platform.billing, cle_bidon")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(
+                ((com.example.hms.exception.FieldBusinessException) ex).getField()).isEqualTo("featureKeys"));
+
+        SubscriptionPlan stored = plan("R81", true);
+        when(planRepository.findByIdForUpdate(stored.getId())).thenReturn(java.util.Optional.of(stored));
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.updatePlan(stored.getId(), r81Request("autre clé avec espaces")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        org.assertj.core.api.Assertions.assertThat(stored.getFeatureKeys()).isEqualTo("feature.a,feature.b");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("QA D4070: known keys are stored once, in the catalogue's spelling, in both columns the gate reads")
+    void knownFeatureKeysAreStoredInBothColumns() {
+        org.mockito.ArgumentCaptor<SubscriptionPlan> saved = org.mockito.ArgumentCaptor.forClass(SubscriptionPlan.class);
+
+        service.createPlan(r81Request(" FF.Platform.Billing ,feature.a, feature.a"));
+
+        org.mockito.Mockito.verify(planRepository).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getFeatureKeys())
+            .isEqualTo("ff.platform.billing,feature.a");
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getFeatureKeysJson())
+            .isEqualTo("[\"ff.platform.billing\",\"feature.a\"]");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("QA D4310 / D4071: a deactivated plan is reactivated, and a plan says how many organizations use it")
+    void reactivatesAndCountsUsage() {
+        SubscriptionPlan stored = plan("OLD", false);
+        when(planRepository.findByIdForUpdate(stored.getId())).thenReturn(java.util.Optional.of(stored));
+        when(subscriptionRepository.countByPlanIdAndStatus(stored.getId(), OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(3L);
+
+        var dto = service.reactivatePlan(stored.getId());
+
+        org.assertj.core.api.Assertions.assertThat(stored.isActive()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(dto.isActive()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(dto.getActiveOrganizationCount()).isEqualTo(3L);
+    }
 
     @BeforeEach
     void setUp() {
@@ -49,8 +102,11 @@ class SubscriptionServiceImplTest {
         subscriptionRepository = mock(OrganizationSubscriptionRepository.class);
         organizationRepository = mock(OrganizationRepository.class);
         mapper = new SubscriptionMapper();
+        featureFlagService = mock(com.example.hms.service.FeatureFlagService.class);
+        when(featureFlagService.catalogueKeys())
+            .thenReturn(java.util.List.of("feature.a", "feature.b", "ff.platform.billing", "a", "b", "only.this"));
         service = new SubscriptionServiceImpl(
-            planRepository, subscriptionRepository, organizationRepository, mapper);
+            planRepository, subscriptionRepository, organizationRepository, mapper, featureFlagService);
 
         when(planRepository.save(any(SubscriptionPlan.class)))
             .thenAnswer(inv -> {
@@ -325,7 +381,9 @@ class SubscriptionServiceImplTest {
             .name("Pro v3").tierCode("PRO").monthlyPriceCents(1000L).includedSeats(5).active(true).build();
 
         assertThat(service.updatePlan(p.getId(), req).getName()).isEqualTo("Pro v3");
-        verify(subscriptionRepository, never()).countByPlanIdAndStatus(any(), any());
+        // QA D4071: the answer now carries how many organizations use the plan, so the
+        // usage is counted once for the response; what must not happen is the refusal.
+        verify(subscriptionRepository, org.mockito.Mockito.atMost(1)).countByPlanIdAndStatus(any(), any());
     }
 
     @Test

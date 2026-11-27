@@ -473,13 +473,17 @@
       "LAB_RESULTS": "Lab results",
       "LAB_TEST_DEFINITIONS": "Lab test catalogue",
       "TREATMENT_PLANS": "Treatment plans",
-      "REFERRALS": "Referrals"
+      "REFERRALS": "Referrals",
+      "ACTIVE_M_ONE": "active",
+      "ACTIVE_M_OTHER": "active",
+      "ACTIVE_F_ONE": "active",
+      "ACTIVE_F_OTHER": "active"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Total integrations",
       "PENDING": "Pending integrations",
       "DISABLED": "Disabled links",
-      "RELEASES": "Active release windows"
+      "RELEASES": "Release windows in progress"
     },
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizations",
@@ -703,8 +707,8 @@
     "DISMISS": "Dismiss broadcast"
   },
   "SUBSCRIPTIONS": {
-    "DEACTIVATE_CONFIRM_BODY": "It can no longer be assigned to an organization.",
-    "DEACTIVATE_CONFIRM": "Deactivate plan {{name}}?",
+    "DEACTIVATE_CONFIRM_BODY": "It can no longer be assigned to an organization. You can reactivate it later.",
+    "DEACTIVATE_CONFIRM": "Deactivate the plan {{name}}?",
     "DEACTIVATED": "Plan {{name}} deactivated.",
     "UPDATED": "Plan {{name}} saved.",
     "CREATED": "Plan {{name}} created.",
@@ -720,7 +724,7 @@
     "PER_MONTH": "/ month",
     "SEATS": "seats included",
     "NO_FEATURES": "No feature keys",
-    "NO_PLANS": "No plans yet — create the first one.",
+    "NO_PLANS": "No plan to show for this filter.",
     "LOAD_ERROR": "Could not load plans. Try again.",
     "FORM": {
       "NAME": "Name",
@@ -729,16 +733,35 @@
       "PRICE_CENTS": "Monthly price (cents)",
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
-      "FEATURE_KEYS": "Feature keys",
+      "FEATURE_KEYS": "Included features",
       "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys",
-      "PRICE": "Monthly price ({{currency}})"
+      "PRICE": "Monthly price ({{currency}})",
+      "FEATURE_KEYS_HINT": "A subscribed organization only gets the ticked features. With none ticked, the plan restricts nothing.",
+      "FEATURE_KEYS_NONE": "The platform declares no feature for now.",
+      "FEATURE_KEY_UNKNOWN": "key unknown to the platform: untick it to save"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Name and tier code are required.",
       "SAVE_FAILED": "Save failed.",
       "DEACTIVATE_FAILED": "Deactivation failed.",
-      "WHOLE_UNITS": "This currency has no subunit: enter a whole amount."
-    }
+      "WHOLE_UNITS": "This currency has no subunit: enter a whole amount.",
+      "REACTIVATE_FAILED": "The reactivation failed."
+    },
+    "REACTIVATE": "Reactivate",
+    "REACTIVATE_CONFIRM": "Reactivate the plan {{name}}?",
+    "REACTIVATE_CONFIRM_BODY": "It can be assigned to an organization again.",
+    "REACTIVATED": "Plan {{name}} reactivated.",
+    "STATUS_FILTER": "Status",
+    "FILTER_ACTIVE": "Active plans",
+    "FILTER_INACTIVE": "Inactive plans",
+    "FILTER_ALL": "All plans",
+    "STATUS_ACTIVE": "Active",
+    "STATUS_INACTIVE": "Inactive",
+    "TIER_CODE_LABEL": "Tier code:",
+    "SEATS_COUNT_ONE": "{{count}} user seat included",
+    "SEATS_COUNT_OTHER": "{{count}} user seats included",
+    "USED_BY_ONE": "Used by {{count}} organization",
+    "USED_BY_OTHER": "Used by {{count}} organizations"
   },
   "ORG_REGION": {
     "TITLE": "Data Residency",
@@ -809,7 +832,7 @@
     },
     "DIALOG": {
       "SUSPEND": "Suspend hospital",
-      "RESTORE": "Restore hospital",
+      "RESTORE": "Restore the facility",
       "ARCHIVE": "Archive hospital",
       "SCHEDULE-PURGE": "Schedule hospital purge",
       "CANCEL-PURGE": "Cancel scheduled purge",
@@ -2219,7 +2242,9 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Insurance policy of another hospital read to verify at the desk (identity only)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Insurance policy of another hospital taken over as this hospital's own coverage (identity only)",
       "ROI_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries) under record request {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Possible duplicate kept as a separate patient"
+      "DUPLICATE_KEPT_SEPARATE": "Possible duplicate kept as a separate patient",
+      "RELEASE_WINDOW_UPDATED": "Release window updated ({{details}})",
+      "RELEASE_WINDOW_CANCELLED": "Release window cancelled ({{details}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -4732,7 +4757,9 @@
     "LAB_SCIENTIST": "Lab Scientist",
     "LAB_MANAGER": "Lab Manager",
     "LAB_DIRECTOR": "Lab Director",
-    "STAFF_COUNT": "{{count}} staff"
+    "STAFF_COUNT": "{{count}} staff",
+    "STAFF_COUNT_ONE": "{{count}} staff member",
+    "STAFF_COUNT_OTHER": "{{count}} staff members"
   },
   "LAB_TEST_CONFIG": {
     "APPROVAL_NEXT_STEP": "Continue in the lab approval queue",
@@ -5097,7 +5124,18 @@
     "SAVE_ERROR": "Failed to save instrument. Please try again.",
     "DEACTIVATED": "Instrument deactivated.",
     "DEACTIVATE_ERROR": "Failed to deactivate instrument.",
-    "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this instrument?"
+    "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this instrument?",
+    "DATES": "Calibration and maintenance",
+    "INSTALLATION_DATE": "Installation date",
+    "LAST_CALIBRATION": "Last calibration",
+    "NEXT_CALIBRATION": "Next calibration",
+    "LAST_MAINTENANCE": "Last maintenance",
+    "NEXT_MAINTENANCE": "Next maintenance",
+    "INACTIVE": "Deactivated",
+    "SHOW_INACTIVE": "Show deactivated instruments",
+    "REACTIVATE": "Reactivate",
+    "REACTIVATED": "Instrument reactivated.",
+    "REACTIVATE_ERROR": "The reactivation failed."
   },
   "LAB_OUTBOX": {
     "ORDERING_HOSPITAL": "Ordering hospital",
@@ -5193,7 +5231,19 @@
     "SAVE_ERROR": "Failed to save inventory item. Please try again.",
     "DEACTIVATED": "Inventory item deactivated.",
     "DEACTIVATE_ERROR": "Failed to deactivate inventory item.",
-    "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this item?"
+    "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this item?",
+    "LOT": "Lot",
+    "STATE_OUT": "Out of stock",
+    "STATE_LOW": "Low stock",
+    "STATE_EXPIRED": "Expired",
+    "STATE_EXPIRING": "Expires soon",
+    "FILTER": "Show",
+    "FILTER_ALL": "All items",
+    "SEARCH": "Search",
+    "SEARCH_PLACEHOLDER": "Name, code or lot",
+    "NO_MATCH": "No item matches this filter.",
+    "SHOWN_ONE": "{{count}} item shown",
+    "SHOWN_OTHER": "{{count}} items shown"
   },
   "LANG": {
     "EN": "English",
@@ -5435,7 +5485,11 @@
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
     "CLINICAL_RULES": "Clinical rules",
-    "PAYER_SHARES": "Insurer shares"
+    "PAYER_SHARES": "Insurer shares",
+    "MESSAGES_ARIA_ONE": "Messages ({{count}} unread)",
+    "MESSAGES_ARIA_OTHER": "Messages ({{count}} unread)",
+    "NOTIFICATIONS_ARIA_ONE": "Notifications ({{count}} unread)",
+    "NOTIFICATIONS_ARIA_OTHER": "Notifications ({{count}} unread)"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -6416,8 +6470,8 @@
     "ACCESS_LOGS": "Access Logs",
     "ACTIVATE": "Activate",
     "ACTIVE_CONNECTIONS": "Active Connections",
-    "ACTIVE_RELEASES": "Active Releases",
-    "ACTIVE_WINDOWS": "Active Windows",
+    "ACTIVE_RELEASES": "Releases in progress",
+    "ACTIVE_WINDOWS": "Windows in progress",
     "API_KEYS": "API Keys",
     "API_KEY_KEEP": "Leave blank to keep the current value",
     "API_KEY_REF": "API Key Reference",
@@ -6479,7 +6533,7 @@
     "FEATURE_FLAG": "Feature Flag",
     "FEATURE_TOGGLES": "Feature Toggles",
     "FREE": "Free",
-    "FREEZE_CHANGES_DURING": "Freeze changes during",
+    "FREEZE_CHANGES_DURING": "Freeze changes during the window",
     "GB": "GB",
     "HEALTHY": "Healthy",
     "HOSPITALS": "Hospitals",
@@ -6648,7 +6702,10 @@
       "STATUS_CHANGED": "Service status changed to {{status}}",
       "STATUS_CHANGE_FAILED": "Failed to change status",
       "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}}",
-      "VALIDATION_FAILED": "Please correct these fields: {{errors}}"
+      "VALIDATION_FAILED": "Please correct these fields: {{errors}}",
+      "RELEASE_UPDATED": "Release window “{{name}}” updated",
+      "RELEASE_CANCELLED": "Release window “{{name}}” cancelled",
+      "RELEASE_CANCEL_FAILED": "The window could not be cancelled."
     },
     "TOTAL_INTEGRATIONS": "Total Integrations",
     "UAT": "UAT",
@@ -6661,7 +6718,18 @@
     "VERSION": "Version",
     "VIEW_DETAILS": "View Details",
     "VIEW_DOCS": "View Docs",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "PLANNED_WINDOWS_ONE": "{{count}} planned",
+    "PLANNED_WINDOWS_OTHER": "{{count}} planned",
+    "PLANNED_WINDOWS_LABEL": "Planned windows",
+    "EDIT_RELEASE_WINDOW": "Edit the release window",
+    "CANCEL_RELEASE": "Cancel the window",
+    "CANCEL_RELEASE_CONFIRM": "Cancel the window “{{name}}”?",
+    "CANCEL_RELEASE_CONFIRM_BODY": "It stays in the list as cancelled, and its change freeze will not apply.",
+    "RELEASE_SHOW_DETAIL": "Details",
+    "RELEASE_HIDE_DETAIL": "Hide details",
+    "RELEASE_CREATED_AT": "Created",
+    "RELEASE_UPDATED_AT": "Last changed"
   },
   "PORTAL": {
     "VITALS": {
@@ -10222,7 +10290,15 @@
     "NO_DEPARTMENT_OPTION": "— No department —",
     "DEPARTMENTS_LOAD_FAILED": "The departments could not be loaded.",
     "REACTIVATE": "Reactivate",
-    "REQUIRES_ASSIGNMENT": "Manage role assignments to restore staff access"
+    "REQUIRES_ASSIGNMENT": "Manage role assignments to restore staff access",
+    "MEMBERS_COUNT_ONE": "{{count}} staff member",
+    "MEMBERS_COUNT_OTHER": "{{count}} staff members",
+    "FILTER_HOSPITAL": "Hospital",
+    "ALL_HOSPITALS": "All hospitals",
+    "FILTER_STATUS": "Status",
+    "ALL_STATUSES": "Active and deactivated",
+    "STATUS_ACTIVE": "Active",
+    "STATUS_INACTIVE": "Deactivated"
   },
   "TREATMENT": {
     "ACTIVE": "Active",
@@ -13215,7 +13291,23 @@
     "IMPACTED_CONTROLLERS": "Impacted controllers",
     "RECOMMENDED_ACTIONS": "Recommended actions",
     "SCENARIO_REQUIRED": "A scenario is required",
-    "SIM_RULES_REQUIRED": "The template has no rules to simulate"
+    "SIM_RULES_REQUIRED": "The template has no rules to simulate",
+    "AGE_DAYS_ONE": "{{count}} day",
+    "AGE_DAYS_OTHER": "{{count}} days",
+    "DEFAULT_NAME": {
+      "DEFAULT_ORG": "Default Healthcare Organization",
+      "ACCESS_CONTROL": "Default Access Control Policy",
+      "PATIENT_DATA_ACCESS": "Patient Data Access Rule",
+      "ADMIN_ENDPOINT_ACCESS": "Admin Endpoint Access Rule",
+      "DATA_PROTECTION": "Default Data Protection Policy",
+      "AUDIT_LOGGING": "Default Audit Logging Policy",
+      "AUDIT_SENSITIVE": "Audit Sensitive Operations",
+      "PASSWORD_POLICY": "Default Password Policy",
+      "PASSWORD_MIN_LENGTH": "Password Minimum Length",
+      "SESSION_MANAGEMENT": "Default Session Management Policy",
+      "SESSION_TIMEOUT": "Session Timeout",
+      "ROLE_MANAGEMENT": "Default Role Management Policy"
+    }
   },
   "EDUCATION": {
     "TITLE": "Patient Education",
@@ -14698,7 +14790,8 @@
       "NOT_FOUND_TITLE": "Provider facility not found",
       "NOT_FOUND_TEXT": "It may have been removed, or the link is wrong.",
       "NOT_AVAILABLE_TITLE": "Not available",
-      "NOT_AVAILABLE_TEXT": "This page is not available for your account at this facility. If you think it should be, contact your facility's administrator."
+      "NOT_AVAILABLE_TEXT": "This page is not available for your account at this facility. If you think it should be, contact your facility's administrator.",
+      "NOT_CHECKED": "Not checked"
     },
     "LIST": {
       "TITLE": "Provider facilities",
@@ -14715,7 +14808,9 @@
       "COL_LIFECYCLE": "Lifecycle",
       "COL_SUBMITTED": "Submitted",
       "EMPTY_TITLE": "No provider facility",
-      "EMPTY_TEXT": "No pharmacy or laboratory matches these filters."
+      "EMPTY_TEXT": "No pharmacy or laboratory matches these filters.",
+      "SEARCH": "Search",
+      "SEARCH_PLACEHOLDER": "Name, code or city"
     },
     "FORM": {
       "CREATE_TITLE": "New provider facility",
@@ -14798,7 +14893,10 @@
       "REVOKED": "Verification revoked; the facility is suspended.",
       "SUSPENDED": "Facility suspended.",
       "RESTORED": "Facility restored.",
-      "ARCHIVED": "Facility archived."
+      "ARCHIVED": "Facility archived.",
+      "DECIDED_BY": "Decided by",
+      "EVENTS_TITLE": "Facility log",
+      "EVENTS_EMPTY": "No event recorded."
     },
     "VERIFY": {
       "TITLE": "Verify the facility",
@@ -14908,6 +15006,20 @@
       "RECORD_OTHER": "Other",
       "BY_SUPPORT": "On their behalf: platform support ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Role assigned: {{role}}"
+    },
+    "LIFECYCLE_STATE": {
+      "PENDING_VERIFICATION": "Awaiting verification",
+      "REJECTED_NOT_ACTIVATED": "Not activated (submission rejected)",
+      "VERIFICATION_REVOKED": "Suspended (verification revoked)"
+    },
+    "EVENT": {
+      "PROVIDER_CREATED": "Facility registered, evidence submitted",
+      "PROVIDER_VERIFIED": "Evidence verified",
+      "PROVIDER_REJECTED": "Evidence rejected",
+      "PROVIDER_EVIDENCE_RESUBMITTED": "New evidence submitted",
+      "PROVIDER_VERIFICATION_REVOKED": "Verification revoked",
+      "HOSPITAL_SUSPENDED": "Facility suspended",
+      "HOSPITAL_RESTORED": "Facility restored"
     }
   },
   "PHARMACY_CLAIMS": {

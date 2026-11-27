@@ -38,6 +38,8 @@ export interface LabInstrumentResponse {
   nextMaintenanceDate?: string;
   maintenanceOverdue: boolean;
   calibrationOverdue: boolean;
+  /** False once deactivated (QA D4314). */
+  active?: boolean;
   notes?: string;
   createdAt: string;
   updatedAt?: string;
@@ -90,8 +92,11 @@ export class LabInstrumentService {
     hospitalId: string,
     page = 0,
     size = 20,
+    includeInactive = false,
   ): Observable<PagedResponse<LabInstrumentResponse>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    // QA D4314: deactivated instruments are listed on request, so they can be reactivated.
+    if (includeInactive) params = params.set('includeInactive', 'true');
     return this.http.get<PagedResponse<LabInstrumentResponse>>(
       `/lab/instruments/hospital/${hospitalId}`,
       { params },
@@ -114,6 +119,11 @@ export class LabInstrumentService {
 
   updateInstrument(id: string, request: LabInstrumentRequest): Observable<LabInstrumentResponse> {
     return this.http.put<LabInstrumentResponse>(`/lab/instruments/${id}`, request);
+  }
+
+  /** QA D4314: puts a deactivated instrument back in the list. */
+  reactivateInstrument(id: string): Observable<LabInstrumentResponse> {
+    return this.http.post<LabInstrumentResponse>(`/lab/instruments/${id}/reactivate`, {});
   }
 
   deactivateInstrument(id: string): Observable<void> {

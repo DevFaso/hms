@@ -71,6 +71,92 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
                                             @Param("ifu") String ifu);
 
     /**
+     * QA D4312: another facility whose CURRENT evidence (SUBMITTED or
+     * VERIFIED; V180 keeps one such row per facility) carries this RCCM
+     * number. {@code hospitalId} is null for a facility not yet saved.
+     */
+    @Query("""
+        SELECT COUNT(v) > 0 FROM ProviderVerification v
+        WHERE v.status IN (com.example.hms.enums.ProviderVerificationStatus.SUBMITTED,
+                           com.example.hms.enums.ProviderVerificationStatus.VERIFIED)
+          AND (:hospitalId IS NULL OR v.hospital.id <> :hospitalId)
+          AND v.rccmNumber = :number
+        """)
+    boolean existsCurrentRccmElsewhere(@Param("hospitalId") UUID hospitalId, @Param("number") String number);
+
+    /** QA D4312: as {@link #existsCurrentRccmElsewhere}, for the IFU number. */
+    @Query("""
+        SELECT COUNT(v) > 0 FROM ProviderVerification v
+        WHERE v.status IN (com.example.hms.enums.ProviderVerificationStatus.SUBMITTED,
+                           com.example.hms.enums.ProviderVerificationStatus.VERIFIED)
+          AND (:hospitalId IS NULL OR v.hospital.id <> :hospitalId)
+          AND v.ifuNumber = :number
+        """)
+    boolean existsCurrentIfuElsewhere(@Param("hospitalId") UUID hospitalId, @Param("number") String number);
+
+    /** QA D4312: as {@link #existsCurrentRccmElsewhere}, for the CNSS number. */
+    @Query("""
+        SELECT COUNT(v) > 0 FROM ProviderVerification v
+        WHERE v.status IN (com.example.hms.enums.ProviderVerificationStatus.SUBMITTED,
+                           com.example.hms.enums.ProviderVerificationStatus.VERIFIED)
+          AND (:hospitalId IS NULL OR v.hospital.id <> :hospitalId)
+          AND v.cnssNumber = :number
+        """)
+    boolean existsCurrentCnssElsewhere(@Param("hospitalId") UUID hospitalId, @Param("number") String number);
+
+    /** QA D4312: as {@link #existsCurrentRccmElsewhere}, for the (authority, licence) pair. */
+    @Query("""
+        SELECT COUNT(v) > 0 FROM ProviderVerification v
+        WHERE v.status IN (com.example.hms.enums.ProviderVerificationStatus.SUBMITTED,
+                           com.example.hms.enums.ProviderVerificationStatus.VERIFIED)
+          AND (:hospitalId IS NULL OR v.hospital.id <> :hospitalId)
+          AND v.licenceAuthority = :authority
+          AND v.licenceNumber = :licence
+        """)
+    boolean existsCurrentLicenceElsewhere(@Param("hospitalId") UUID hospitalId,
+                                          @Param("authority") String authority,
+                                          @Param("licence") String licence);
+
+    /**
+     * QA D4075: {@link #findLatestByFacilityTypes} narrowed to a pattern
+     * (lower-case, LIKE-escaped with a backslash, wrapped in {@code %}) on
+     * the facility's name or code, the business's legal name or its city.
+     */
+    @Query(value = """
+        SELECT v FROM ProviderVerification v JOIN FETCH v.hospital h
+        WHERE h.facilityType IN :types
+          AND (:status IS NULL OR v.status = :status)
+          AND (LOWER(CAST(h.name AS string)) LIKE :pattern ESCAPE '\\'
+               OR LOWER(CAST(h.code AS string)) LIKE :pattern ESCAPE '\\'
+               OR LOWER(v.legalName) LIKE :pattern ESCAPE '\\'
+               OR LOWER(v.addressCity) LIKE :pattern ESCAPE '\\')
+          AND NOT EXISTS (
+              SELECT 1 FROM ProviderVerification newer
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
+        ORDER BY v.createdAt DESC, v.id DESC
+        """,
+        countQuery = """
+        SELECT COUNT(v) FROM ProviderVerification v JOIN v.hospital h
+        WHERE h.facilityType IN :types
+          AND (:status IS NULL OR v.status = :status)
+          AND (LOWER(CAST(h.name AS string)) LIKE :pattern ESCAPE '\\'
+               OR LOWER(CAST(h.code AS string)) LIKE :pattern ESCAPE '\\'
+               OR LOWER(v.legalName) LIKE :pattern ESCAPE '\\'
+               OR LOWER(v.addressCity) LIKE :pattern ESCAPE '\\')
+          AND NOT EXISTS (
+              SELECT 1 FROM ProviderVerification newer
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
+        """)
+    Page<ProviderVerification> searchLatestByFacilityTypes(@Param("types") Collection<FacilityType> types,
+                                                           @Param("status") ProviderVerificationStatus status,
+                                                           @Param("pattern") String pattern,
+                                                           Pageable pageable);
+
+    /**
      * The latest verification of every provider facility of these types,
      * narrowed to one status when given. "Latest" is the row no newer row of
      * the same facility supersedes. Ordered newest first, then by id, so

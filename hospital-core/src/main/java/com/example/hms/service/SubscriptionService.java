@@ -24,6 +24,12 @@ public interface SubscriptionService {
 
     void deactivatePlan(UUID planId);
 
+    /** QA D4310: puts a deactivated plan back in the catalogue. */
+    SubscriptionPlanResponseDTO reactivatePlan(UUID planId);
+
+    /** QA D4070: the feature keys a plan may list, sorted. */
+    List<String> listFeatureKeyCatalogue();
+
     OrganizationSubscriptionResponseDTO assignPlan(
         UUID organizationId, OrganizationSubscriptionRequestDTO request);
 

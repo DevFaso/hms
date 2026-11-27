@@ -478,6 +478,35 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
                 .anyMatch(o -> key.equalsIgnoreCase(o.getFlagKey()));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> catalogueKeys() {
+        java.util.TreeSet<String> keys = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        addCatalogueKeys(keys, properties.getDefaultsOrEmpty().keySet());
+        addCatalogueKeys(keys, properties.getOverridesOrEmpty().keySet());
+        if (properties.getEnvironments() != null) {
+            for (Map<String, Boolean> env : properties.getEnvironments().values()) {
+                if (env != null) {
+                    addCatalogueKeys(keys, env.keySet());
+                }
+            }
+        }
+        for (FeatureFlagOverride override : overrideRepository.findAllByOrderByFlagKeyAsc()) {
+            if (override.getFlagKey() != null) {
+                addCatalogueKeys(keys, List.of(override.getFlagKey()));
+            }
+        }
+        return List.copyOf(keys);
+    }
+
+    private static void addCatalogueKeys(java.util.Set<String> target, java.util.Collection<String> keys) {
+        for (String key : keys) {
+            if (StringUtils.hasText(key)) {
+                target.add(key.trim());
+            }
+        }
+    }
+
     private static boolean containsIgnoreCase(java.util.Collection<String> keys, String key) {
         return keys.stream().anyMatch(k -> k != null && key.equalsIgnoreCase(k.trim()));
     }

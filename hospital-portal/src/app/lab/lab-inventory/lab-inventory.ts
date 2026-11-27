@@ -1,6 +1,6 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { LabValuePipe } from '../shared/lab-value.pipe';
+import { PluralPipe } from '../../shared/i18n/plural';
 import {
   Component,
   computed,
@@ -12,6 +12,7 @@ import {
 
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { CountUnitPipe } from '../../shared/pipes/count-unit.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabInstrumentService,
@@ -36,6 +37,36 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
   reorderThreshold: 'LAB_INVENTORY.REORDER_THRESHOLD',
 };
 
+/** QA D4077: the stock situations a line can be in; a line can be in several. */
+export type LabStockState = 'OUT' | 'LOW' | 'EXPIRED' | 'EXPIRING';
+export type LabStockFilter = 'ALL' | LabStockState;
+
+/** A lot is announced this many days before it expires. */
+export const LAB_EXPIRY_WARNING_DAYS = 14;
+
+/**
+ * QA D4077: nothing left is « Rupture », not « Stock bas »; a lot that expires within
+ * {@link LAB_EXPIRY_WARNING_DAYS} days is announced before it is « Expiré ».
+ */
+export function labStockStates(
+  item: Pick<LabInventoryItemResponse, 'quantity' | 'lowStock' | 'expired' | 'expirationDate'>,
+  today: Date = new Date(),
+): LabStockState[] {
+  const states: LabStockState[] = [];
+  if (Number(item.quantity) <= 0) states.push('OUT');
+  else if (item.lowStock) states.push('LOW');
+  if (item.expired) {
+    states.push('EXPIRED');
+  } else if (item.expirationDate) {
+    const expires = new Date(`${String(item.expirationDate).slice(0, 10)}T00:00:00`);
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((expires.getTime() - start.getTime()) / 86_400_000);
+    if (Number.isFinite(days) && days < 0) states.push('EXPIRED');
+    else if (Number.isFinite(days) && days <= LAB_EXPIRY_WARNING_DAYS) states.push('EXPIRING');
+  }
+  return states;
+}
+
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
@@ -43,8 +74,9 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
     SubmitGuardDirective,
     ModalDialogDirective,
     DatePipe,
+    CountUnitPipe,
     ServerTimePipe,
-    LabValuePipe,
+    PluralPipe,
     RouterModule,
     FormsModule,
     TranslateModule,
@@ -64,6 +96,21 @@ export class LabInventoryComponent implements OnInit {
   loading = signal(true);
   error = signal<string | null>(null);
   items = signal<LabInventoryItemResponse[]>([]);
+  /** QA D4077: which lines the table shows, and a search on the name, the code or the lot. */
+  stockFilter = signal<LabStockFilter>('ALL');
+  search = signal('');
+  visibleItems = computed(() => {
+    const filter = this.stockFilter();
+    const query = this.search().trim().toLowerCase();
+    return this.items().filter((item) => {
+      if (filter !== 'ALL' && !labStockStates(item).includes(filter)) return false;
+      if (!query) return true;
+      return [item.name, item.itemCode, item.lotNumber]
+        .filter((text): text is string => !!text)
+        .some((text) => text.toLowerCase().includes(query));
+    });
+  });
+  readonly stockStates = labStockStates;
   totalElements = signal(0);
 
   canManage = computed(() => {

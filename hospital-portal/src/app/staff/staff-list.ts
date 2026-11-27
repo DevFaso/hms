@@ -22,6 +22,7 @@ import { DepartmentLookupService } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
+import { PluralPipe } from '../shared/i18n/plural';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
@@ -60,6 +61,7 @@ function canonicalJobTitle(title: string | null | undefined): string {
     SubmitGuardDirective,
     FormsModule,
     TranslateModule,
+    PluralPipe,
     EnumLabelPipe,
     ModalDialogDirective,
   ],
@@ -90,6 +92,18 @@ export class StaffListComponent implements OnInit {
   deptFilter = '';
   employmentTypeFilter = '';
   jobTitleFilter = '';
+  /** QA D4319: a list that spans hospitals is narrowed to one, and to active or deactivated staff. */
+  hospitalFilter = '';
+  statusFilter: '' | 'ACTIVE' | 'INACTIVE' = '';
+  uniqueHospitals = computed(() =>
+    Array.from(
+      new Set(
+        this.staff()
+          .map((s) => s.hospitalName)
+          .filter((name): name is string => !!name),
+      ),
+    ).sort((a, b) => a.localeCompare(b)),
+  );
   showFilters = signal(false);
 
   hospitals = signal<HospitalResponse[]>([]);
@@ -300,6 +314,13 @@ export class StaffListComponent implements OnInit {
     const term = this.searchTerm.toLowerCase().trim();
     let result = this.staff();
 
+    if (this.hospitalFilter) {
+      result = result.filter((s) => s.hospitalName === this.hospitalFilter);
+    }
+    if (this.statusFilter) {
+      const wantActive = this.statusFilter === 'ACTIVE';
+      result = result.filter((s) => s.active === wantActive);
+    }
     if (this.deptFilter) {
       result = result.filter((s) => s.departmentName === this.deptFilter);
     }
@@ -328,6 +349,8 @@ export class StaffListComponent implements OnInit {
     this.deptFilter = '';
     this.employmentTypeFilter = '';
     this.jobTitleFilter = '';
+    this.hospitalFilter = '';
+    this.statusFilter = '';
     this.applyFilter();
   }
 

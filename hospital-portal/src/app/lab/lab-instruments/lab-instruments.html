@@ -12,6 +12,15 @@
         'LAB_INSTRUMENTS.COUNT' | translate: { count: totalElements() }
       }}</span>
       @if (canManage()) {
+        <label class="inactive-toggle">
+          <input
+            type="checkbox"
+            data-test="instruments-show-inactive"
+            [checked]="showInactive()"
+            (change)="toggleInactive($any($event.target).checked)"
+          />
+          {{ 'LAB_INSTRUMENTS.SHOW_INACTIVE' | translate }}
+        </label>
         <button class="btn-primary" (click)="openCreate()" [disabled]="loading()">
           <span class="material-symbols-outlined">add</span>
           {{ 'LAB_INSTRUMENTS.ADD' | translate }}
@@ -80,6 +89,65 @@
               <option value="RETIRED">{{ 'LAB_INSTRUMENTS.STATUS_RETIRED' | translate }}</option>
             </select>
           </label>
+          <!-- QA D4076: a calibration or a maintenance done is recorded here, and the next one planned. -->
+          <fieldset class="date-grid" data-test="instrument-dates">
+            <legend>{{ 'LAB_INSTRUMENTS.DATES' | translate }}</legend>
+            <label
+              >{{ 'LAB_INSTRUMENTS.INSTALLATION_DATE' | translate }}
+              <input
+                type="date"
+                class="filter-input"
+                name="installationDate"
+                data-server-field="installationDate"
+                [ngModel]="form.installationDate ?? ''"
+                (ngModelChange)="setDate('installationDate', $event)"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.LAST_CALIBRATION' | translate }}
+              <input
+                type="date"
+                class="filter-input"
+                name="lastCalibrationDate"
+                data-server-field="lastCalibrationDate"
+                [ngModel]="form.lastCalibrationDate ?? ''"
+                (ngModelChange)="setDate('lastCalibrationDate', $event)"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.NEXT_CALIBRATION' | translate }}
+              <input
+                type="date"
+                class="filter-input"
+                name="nextCalibrationDate"
+                data-server-field="nextCalibrationDate"
+                [ngModel]="form.nextCalibrationDate ?? ''"
+                (ngModelChange)="setDate('nextCalibrationDate', $event)"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.LAST_MAINTENANCE' | translate }}
+              <input
+                type="date"
+                class="filter-input"
+                name="lastMaintenanceDate"
+                data-server-field="lastMaintenanceDate"
+                [ngModel]="form.lastMaintenanceDate ?? ''"
+                (ngModelChange)="setDate('lastMaintenanceDate', $event)"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.NEXT_MAINTENANCE' | translate }}
+              <input
+                type="date"
+                class="filter-input"
+                name="nextMaintenanceDate"
+                data-server-field="nextMaintenanceDate"
+                [ngModel]="form.nextMaintenanceDate ?? ''"
+                (ngModelChange)="setDate('nextMaintenanceDate', $event)"
+              />
+            </label>
+          </fieldset>
           <label
             >{{ 'LAB_INSTRUMENTS.NOTES' | translate }}
             <textarea [(ngModel)]="form.notes" name="notes" rows="3"></textarea>
@@ -152,8 +220,15 @@
         </thead>
         <tbody>
           @for (instr of instruments(); track instr.id) {
-            <tr>
-              <td>{{ instr.name }}</td>
+            <tr [class.inactive-row]="instr.active === false">
+              <td>
+                {{ instr.name }}
+                @if (instr.active === false) {
+                  <span class="inactive-badge" data-test="instrument-inactive">{{
+                    'LAB_INSTRUMENTS.INACTIVE' | translate
+                  }}</span>
+                }
+              </td>
               <td>{{ instr.serialNumber }}</td>
               <td>{{ instr.manufacturer ?? '—' }}</td>
               <td>
@@ -185,22 +260,33 @@
               </td>
               @if (canManage()) {
                 <td class="actions-col">
-                  <button
-                    class="btn-icon"
-                    (click)="openEdit(instr)"
-                    title="{{ 'COMMON.EDIT' | translate }}"
-                    [attr.aria-label]="'COMMON.EDIT' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="btn-icon danger"
-                    (click)="deactivate(instr)"
-                    title="{{ 'COMMON.DELETE' | translate }}"
-                    [attr.aria-label]="'COMMON.DELETE' | translate"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (instr.active === false) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-small"
+                      data-test="instrument-reactivate"
+                      (click)="reactivate(instr)"
+                    >
+                      {{ 'LAB_INSTRUMENTS.REACTIVATE' | translate }}
+                    </button>
+                  } @else {
+                    <button
+                      class="btn-icon"
+                      (click)="openEdit(instr)"
+                      title="{{ 'COMMON.EDIT' | translate }}"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="btn-icon danger"
+                      (click)="deactivate(instr)"
+                      title="{{ 'COMMON.DELETE' | translate }}"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </td>
               }
             </tr>

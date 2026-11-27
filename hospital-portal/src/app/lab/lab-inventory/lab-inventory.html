@@ -147,6 +147,43 @@
 
   <!-- Table -->
   @if (!loading() && !error() && items().length > 0) {
+    <!-- QA D4077: find the lines that need attention. -->
+    <div class="inventory-filters" data-test="inventory-filters">
+      <label>
+        <span>{{ 'LAB_INVENTORY.SEARCH' | translate }}</span>
+        <input
+          type="search"
+          class="filter-input"
+          data-test="inventory-search"
+          [placeholder]="'LAB_INVENTORY.SEARCH_PLACEHOLDER' | translate"
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event)"
+        />
+      </label>
+      <label>
+        <span>{{ 'LAB_INVENTORY.FILTER' | translate }}</span>
+        <select
+          class="filter-select"
+          data-test="inventory-filter"
+          [ngModel]="stockFilter()"
+          (ngModelChange)="stockFilter.set($event)"
+        >
+          <option value="ALL">{{ 'LAB_INVENTORY.FILTER_ALL' | translate }}</option>
+          <option value="OUT">{{ 'LAB_INVENTORY.STATE_OUT' | translate }}</option>
+          <option value="LOW">{{ 'LAB_INVENTORY.STATE_LOW' | translate }}</option>
+          <option value="EXPIRING">{{ 'LAB_INVENTORY.STATE_EXPIRING' | translate }}</option>
+          <option value="EXPIRED">{{ 'LAB_INVENTORY.STATE_EXPIRED' | translate }}</option>
+        </select>
+      </label>
+      <span class="shown-count" aria-live="polite">{{
+        'LAB_INVENTORY.SHOWN' | plural: visibleItems().length
+      }}</span>
+    </div>
+    @if (visibleItems().length === 0) {
+      <p class="no-match" data-test="inventory-no-match">
+        {{ 'LAB_INVENTORY.NO_MATCH' | translate }}
+      </p>
+    }
     <div class="table-wrap">
       <table class="inventory-table">
         <thead>
@@ -155,6 +192,7 @@
             <th>{{ 'LAB_INVENTORY.ITEM_CODE' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.CATEGORY' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.QUANTITY' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.LOT' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.EXPIRATION' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.STOCK_STATUS' | translate }}</th>
             @if (canManage()) {
@@ -163,12 +201,13 @@
           </tr>
         </thead>
         <tbody>
-          @for (item of items(); track item.id) {
+          @for (item of visibleItems(); track item.id) {
             <tr [class.low-stock-row]="item.lowStock" [class.expired-row]="item.expired">
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
-              <td>{{ item.quantity | labValue: item.unit }}</td>
+              <td>{{ item.quantity | countUnit: item.unit }}</td>
+              <td data-test="inventory-lot">{{ item.lotNumber || '—' }}</td>
               <td>
                 {{
                   item.expirationDate
@@ -177,17 +216,16 @@
                 }}
               </td>
               <td>
-                @if (item.expired) {
-                  <span class="status-badge expired">{{
-                    'LAB_INVENTORY.EXPIRED' | translate
-                  }}</span>
-                } @else if (item.lowStock) {
-                  <span class="status-badge low-stock">{{
-                    'LAB_INVENTORY.LOW_STOCK' | translate
-                  }}</span>
-                } @else {
-                  {{ ' '
-                  }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                @for (state of stockStates(item); track state) {
+                  <span
+                    class="status-badge"
+                    [class.expired]="state === 'EXPIRED' || state === 'OUT'"
+                    [class.low-stock]="state === 'LOW' || state === 'EXPIRING'"
+                    [attr.data-test]="'stock-' + state"
+                    >{{ 'LAB_INVENTORY.STATE_' + state | translate }}</span
+                  >
+                } @empty {
+                  <span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
                 }
               </td>
               @if (canManage()) {

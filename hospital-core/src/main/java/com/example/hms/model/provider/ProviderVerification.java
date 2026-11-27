@@ -133,6 +133,14 @@ public class ProviderVerification extends BaseEntity {
     @Column(name = "licence_authority", nullable = false, length = 200)
     private String licenceAuthority;
 
+    /**
+     * QA D4074: the authority as it was typed (V415). {@link #licenceAuthority}
+     * is the upper-cased uniqueness key; this is what a screen shows. Null on
+     * rows older than V415, which show the key.
+     */
+    @Column(name = "licence_authority_label", length = 200)
+    private String licenceAuthorityLabel;
+
     @Column(name = "licence_issued_on")
     private LocalDate licenceIssuedOn;
 

@@ -47,7 +47,7 @@
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .btn-refresh {
@@ -112,7 +112,7 @@
   th {
     font-weight: 600;
     font-size: 0.8125rem;
-    color: #475569;
+    color: var(--text-secondary);
     background: #f8fafc;
   }
 }
@@ -206,4 +206,41 @@
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
+}
+
+.inventory-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    min-width: 0;
+  }
+
+  input,
+  select {
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    min-width: 200px;
+    max-width: 100%;
+  }
+
+  .shown-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-bottom: 6px;
+  }
+}
+
+.no-match {
+  color: var(--text-secondary);
+  font-size: 14px;
 }

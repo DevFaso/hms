@@ -2249,7 +2249,7 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(login)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value(
-                        "Your account has no active role yet. Ask your administrator to assign or activate one, then sign in again."));
+                        "Your account has no active role: it was deactivated or has not been set up. Ask your administrator to assign or reactivate a role, then sign in again."));
 
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
         verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());

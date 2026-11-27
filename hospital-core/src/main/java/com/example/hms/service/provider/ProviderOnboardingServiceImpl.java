@@ -8,6 +8,7 @@ import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -15,12 +16,15 @@ import com.example.hms.payload.dto.provider.ProviderAddressDTO;
 import com.example.hms.payload.dto.provider.ProviderBusinessIdentityDTO;
 import com.example.hms.payload.dto.provider.ProviderCreateRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderLifecycleEventDTO;
 import com.example.hms.payload.dto.provider.ProviderProfessionalDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
+import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -34,6 +38,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +46,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -69,6 +76,19 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     static final String MSG_LICENCE_DUPLICATE = "provider.licence.duplicate";
     static final String MSG_BUSINESS_DUPLICATE = "provider.business.duplicate";
     static final String MSG_WRONG_STATE = "provider.verification.state";
+    static final String MSG_RCCM_TAKEN = "provider.rccm.taken";
+    static final String MSG_IFU_TAKEN = "provider.ifu.taken";
+    static final String MSG_CNSS_TAKEN = "provider.cnss.taken";
+    static final String MSG_LICENCE_TAKEN = "provider.licence.taken";
+    /** The audit entity type of a lifecycle transition ({@code HospitalLifecycleServiceImpl}). */
+    private static final String LIFECYCLE_ENTITY_TYPE = "HOSPITAL";
+    private static final int MAX_LIFECYCLE_EVENTS = 200;
+    private static final int MAX_SEARCH_LENGTH = 100;
+    /** The events the facility page lists: onboarding decisions and lifecycle transitions. */
+    private static final Set<AuditEventType> LIFECYCLE_EVENTS = EnumSet.of(
+        AuditEventType.PROVIDER_CREATED, AuditEventType.PROVIDER_VERIFIED, AuditEventType.PROVIDER_REJECTED,
+        AuditEventType.PROVIDER_EVIDENCE_RESUBMITTED, AuditEventType.PROVIDER_VERIFICATION_REVOKED,
+        AuditEventType.HOSPITAL_SUSPENDED, AuditEventType.HOSPITAL_RESTORED);
 
     static final String REVOKED_REASON = "PROVIDER_VERIFICATION_REVOKED";
 
@@ -86,6 +106,8 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     private final AuditEventLogService auditEventLogService;
     private final RoleValidator roleValidator;
     private final Clock clock;
+    private final UserRepository userRepository;
+    private final AuditEventLogRepository auditEventLogRepository;
 
     @Override
     public ProviderResponseDTO create(ProviderCreateRequestDTO request) {
@@ -99,6 +121,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
             throw new ConflictException("code:" + MessageUtil.resolveOrRaw(MSG_CODE_DUPLICATE));
         }
         ProviderBusinessIdentityDTO business = request.getBusiness();
+        requireRegistrationNumbersFree(null, business, request.getProfessional());
 
         Hospital facility = Hospital.builder()
             .code(code)
@@ -131,6 +154,13 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     @Override
     @Transactional(readOnly = true)
     public Page<ProviderResponseDTO> list(FacilityType type, ProviderVerificationStatus status, Pageable pageable) {
+        return list(type, status, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProviderResponseDTO> list(FacilityType type, ProviderVerificationStatus status, String search,
+                                          Pageable pageable) {
         requireVerifiedSuperAdmin();
         Set<FacilityType> types;
         if (type == null) {
@@ -144,8 +174,51 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         // first, then id), which keeps pages stable. A client sort is not
         // honoured, so no arbitrary property reaches the query either.
         Pageable stable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        return verificationRepository.findLatestByFacilityTypes(types, status, stable)
-            .map(v -> toResponse(v.getHospital(), v));
+        String pattern = searchPattern(search);
+        Page<ProviderVerification> page = pattern == null
+            ? verificationRepository.findLatestByFacilityTypes(types, status, stable)
+            : verificationRepository.searchLatestByFacilityTypes(types, status, pattern, stable);
+        return page.map(v -> toResponse(v.getHospital(), v));
+    }
+
+    /** QA D4075: lower-case, LIKE-escaped, wrapped in {@code %}; null for no search. */
+    static String searchPattern(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.length() > MAX_SEARCH_LENGTH) {
+            trimmed = trimmed.substring(0, MAX_SEARCH_LENGTH);
+        }
+        return "%" + trimmed.toLowerCase(Locale.ROOT)
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_") + "%";
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProviderLifecycleEventDTO> lifecycleEvents(UUID providerId) {
+        requireVerifiedSuperAdmin();
+        Hospital facility = loadProvider(providerId);
+        String resourceId = facility.getId().toString();
+        PageRequest newestFirst = PageRequest.of(0, MAX_LIFECYCLE_EVENTS,
+            Sort.by(Sort.Direction.DESC, "eventTimestamp"));
+        List<AuditEventLog> rows = new ArrayList<>();
+        rows.addAll(auditEventLogRepository
+            .findByEntityTypeIgnoreCaseAndResourceId(ENTITY_TYPE, resourceId, newestFirst).getContent());
+        rows.addAll(auditEventLogRepository
+            .findByEntityTypeIgnoreCaseAndResourceId(LIFECYCLE_ENTITY_TYPE, resourceId, newestFirst).getContent());
+        return rows.stream()
+            .filter(row -> row.getEventType() != null && LIFECYCLE_EVENTS.contains(row.getEventType()))
+            .filter(row -> row.getEventTimestamp() != null)
+            .sorted(Comparator.comparing(AuditEventLog::getEventTimestamp).reversed())
+            .map(row -> ProviderLifecycleEventDTO.builder()
+                .event(row.getEventType().name())
+                .occurredAt(row.getEventTimestamp())
+                .actorName(row.getUserName())
+                .build())
+            .toList();
     }
 
     @Override
@@ -153,7 +226,8 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     public ProviderResponseDTO get(UUID providerId) {
         requireVerifiedSuperAdmin();
         Hospital facility = loadProvider(providerId);
-        return toResponse(facility, currentVerification(facility));
+        ProviderVerification current = currentVerification(facility);
+        return withDecider(toResponse(facility, current), current);
     }
 
     @Override
@@ -168,11 +242,12 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
                 .submittedAt(v.getCreatedAt())
                 .decidedAt(v.getDecidedAt())
                 .decidedByUserId(v.getDecidedByUserId())
+                .decidedByName(decidedByName(v))
                 .decisionReason(v.getDecisionReason())
                 .evidenceNote(v.getEvidenceNote())
                 .legalName(v.getLegalName())
                 .licenceNumber(v.getLicenceNumber())
-                .licenceAuthority(v.getLicenceAuthority())
+                .licenceAuthority(shownAuthority(v))
                 .build())
             .toList();
     }
@@ -201,6 +276,9 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         if (!ifu || !cnss) {
             throw new com.example.hms.exception.FieldBusinessException("ifuMatchesRccm", MSG_IDENTITY_INCONSISTENT);
         }
+        // QA D4312: the numbers as they will be verified (corrections applied)
+        // must not be another facility's current evidence, named field by field.
+        requireNumbersFree(facility.getId(), verification);
         // AC-3: one business is one facility (v1). The partial unique indexes
         // of V180 hold the same rule against a concurrent verify.
         if (verificationRepository.existsVerifiedLicenceElsewhere(
@@ -241,7 +319,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         invalidateLifecycleCache();
 
         audit(facility, AuditEventType.PROVIDER_VERIFIED, ProviderVerificationStatus.VERIFIED);
-        return toResponse(facility, verification);
+        return withDecider(toResponse(facility, verification), verification);
     }
 
     @Override
@@ -262,6 +340,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         requireVerifiedSuperAdmin();
         Hospital facility = lockProvider(providerId);
         requireStatus(currentVerification(facility), RESUBMITTABLE);
+        requireRegistrationNumbersFree(facility.getId(), request.getBusiness(), request.getProfessional());
 
         ProviderVerification next = new ProviderVerification();
         next.setHospital(facility);
@@ -303,6 +382,76 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     }
 
     // ── helpers ────────────────────────────────────────────────────────
+
+    /**
+     * QA D4312: an RCCM, IFU or CNSS number names one legal entity, and a
+     * licence one facility. A second facility carrying one of them is refused
+     * on that field. The answer says the number is already registered and
+     * nothing about the facility that holds it.
+     */
+    private void requireRegistrationNumbersFree(UUID facilityId, ProviderBusinessIdentityDTO business,
+                                                ProviderProfessionalDTO professional) {
+        ProviderVerification candidate = new ProviderVerification();
+        candidate.setRccmNumber(identifier(business.getRccmNumber()));
+        candidate.setIfuNumber(identifier(business.getIfuNumber()));
+        candidate.setCnssNumber(identifier(business.getCnssNumber()));
+        candidate.setLicenceNumber(identifier(professional.getLicenceNumber()));
+        candidate.setLicenceAuthority(identifier(professional.getLicenceAuthority()));
+        requireNumbersFree(facilityId, candidate);
+    }
+
+    private void requireNumbersFree(UUID facilityId, ProviderVerification v) {
+        if (verificationRepository.existsCurrentRccmElsewhere(facilityId, v.getRccmNumber())) {
+            throw new ConflictException("business.rccmNumber:" + MessageUtil.resolveOrRaw(MSG_RCCM_TAKEN));
+        }
+        if (verificationRepository.existsCurrentIfuElsewhere(facilityId, v.getIfuNumber())) {
+            throw new ConflictException("business.ifuNumber:" + MessageUtil.resolveOrRaw(MSG_IFU_TAKEN));
+        }
+        if (verificationRepository.existsCurrentCnssElsewhere(facilityId, v.getCnssNumber())) {
+            throw new ConflictException("business.cnssNumber:" + MessageUtil.resolveOrRaw(MSG_CNSS_TAKEN));
+        }
+        if (verificationRepository.existsCurrentLicenceElsewhere(
+                facilityId, v.getLicenceAuthority(), v.getLicenceNumber())) {
+            throw new ConflictException("professional.licenceNumber:" + MessageUtil.resolveOrRaw(MSG_LICENCE_TAKEN));
+        }
+    }
+
+    /** QA D4313: the decider's name, or null when undecided or the account no longer exists. */
+    private String decidedByName(ProviderVerification v) {
+        if (v == null || v.getDecidedByUserId() == null) {
+            return null;
+        }
+        return userRepository.findById(v.getDecidedByUserId())
+            .map(user -> {
+                String full = Stream.of(user.getFirstName(), user.getLastName())
+                    .filter(part -> part != null && !part.isBlank())
+                    .collect(Collectors.joining(" "));
+                return full.isEmpty() ? user.getUsername() : full;
+            })
+            .orElse(null);
+    }
+
+    private ProviderResponseDTO withDecider(ProviderResponseDTO dto, ProviderVerification v) {
+        dto.setDecidedByName(decidedByName(v));
+        return dto;
+    }
+
+    /** QA D4074: the authority as typed when the row has it, else the stored key. */
+    private static String shownAuthority(ProviderVerification v) {
+        return v.getLicenceAuthorityLabel() != null ? v.getLicenceAuthorityLabel() : v.getLicenceAuthority();
+    }
+
+    /** QA D4073: why the facility is suspended, as a code; null when it is not. */
+    private static String suspensionCause(Hospital facility) {
+        if (facility.getLifecycleState() != HospitalLifecycleState.SUSPENDED) {
+            return null;
+        }
+        String reason = facility.getSuspensionReason();
+        if (PENDING_VERIFICATION_REASON.equals(reason)) {
+            return "PENDING_VERIFICATION";
+        }
+        return REVOKED_REASON.equals(reason) ? "VERIFICATION_REVOKED" : "OPERATOR";
+    }
 
     private void requireVerifiedSuperAdmin() {
         if (!roleValidator.isSuperAdminFromJwtClaim()) {
@@ -431,6 +580,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         // the same single spelling as the number: "DGPML" and " dgpml " are
         // one authority, for the duplicate check and for V180's index alike.
         v.setLicenceAuthority(identifier(professional.getLicenceAuthority()));
+        v.setLicenceAuthorityLabel(professional.getLicenceAuthority().trim().replaceAll("\\s+", " "));
         v.setLicenceIssuedOn(professional.getLicenceIssuedOn());
         v.setLicenceExpiresOn(professional.getLicenceExpiresOn());
         v.setResponsibleProfessionalName(professional.getResponsibleName().trim());
@@ -513,7 +663,8 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
             .name(facility.getName())
             .email(facility.getEmail())
             .active(facility.isActive())
-            .lifecycleState(facility.getLifecycleState());
+            .lifecycleState(facility.getLifecycleState())
+            .suspensionCause(suspensionCause(facility));
         if (v == null) {
             return dto.build();
         }
@@ -542,14 +693,15 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
                 .build())
             .professional(ProviderProfessionalDTO.builder()
                 .licenceNumber(v.getLicenceNumber())
-                .licenceAuthority(v.getLicenceAuthority())
+                .licenceAuthority(shownAuthority(v))
                 .licenceIssuedOn(v.getLicenceIssuedOn())
                 .licenceExpiresOn(v.getLicenceExpiresOn())
                 .responsibleName(v.getResponsibleProfessionalName())
                 .responsibleOrdreNumber(v.getResponsibleProfessionalRegistration())
                 .build())
-            .ifuMatchesRccm(v.isIfuMatchesRccm())
-            .cnssMatchesRccm(v.isCnssMatchesRccm())
+            // QA D4072: only a recorded confirmation is an answer.
+            .ifuMatchesRccm(v.isIfuMatchesRccm() ? Boolean.TRUE : null)
+            .cnssMatchesRccm(v.isCnssMatchesRccm() ? Boolean.TRUE : null)
             .evidenceNote(v.getEvidenceNote())
             .decidedByUserId(v.getDecidedByUserId())
             .decidedAt(v.getDecidedAt())
