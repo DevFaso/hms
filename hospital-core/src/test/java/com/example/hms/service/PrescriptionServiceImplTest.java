@@ -1314,6 +1314,39 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void createPrescriptionWithSevereAllergyRefusesShortOverrideReasons() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+
+        UUID currentUser = staff.getUser().getId();
+
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Ibuprofen");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        allergy.setReaction("Anaphylaxis");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId))
+            .thenReturn(List.of(allergy));
+
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            request.setOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void createPrescriptionWithSevereAllergyAndOverrideProceeds() {
         PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
             .patientId(patientId)
