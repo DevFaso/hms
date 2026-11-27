@@ -157,6 +157,28 @@ class MedicationCatalogVersionServiceTest {
             });
     }
 
+    /** Review of #1383: a withdrawn entry put back is compared, as its twin may have entered meanwhile. */
+    @Test
+    void puttingBackAWithdrawnEntryWhoseTwinIsInTheCatalogue_isRefusedOnItsName() {
+        actingAs(admin);
+        item.setActive(false);
+        theCatalogueHolds(
+            new Object[] {itemId, "Paracétamol", "TABLET", "500", "mg", false, hospitalId},
+            new Object[] {UUID.randomUUID(), "Paracétamol", "TABLET", "500", "mg", true, hospitalId});
+        FormularySnapshot back = FormularySnapshot.of(item).withActive(true);
+
+        assertThatThrownBy(() -> service.proposeFormulary(item, back, "Remise au livret"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicate");
+        assertThat(stored).isEmpty();
+
+        // Without a twin, it is put back as before.
+        theCatalogueHolds(new Object[] {itemId, "Paracétamol", "TABLET", "500", "mg", false, hospitalId});
+        assertThat(service.proposeFormulary(item, back, "Remise au livret").getStatus())
+            .isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
+    }
+
     private void actingAs(UUID user) {
         when(roleValidator.getCurrentUserId()).thenReturn(user);
     }

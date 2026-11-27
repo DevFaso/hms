@@ -295,6 +295,51 @@ describe('StockCountComponent (QA D4183)', () => {
     expect(c.sheet()![0].state).toBe('refused');
   });
 
+  it('accepts a quantity of up to two decimals as typed, and refuses a third (review of #1383, F2)', () => {
+    const c = render(['ROLE_PHARMACIST']);
+    startSheet(c);
+    api.record.and.returnValue(of(count()));
+    const line = c.sheet()![0];
+    for (const typed of [1.1, 2.3, 0.29, 4.35]) {
+      // The same line, typed again: each value is checked on its own.
+      line.state = 'idle';
+      line.counted = typed;
+      c.saveSheet();
+      expect(line.state).withContext(String(typed)).toBe('saved');
+      expect(api.record.calls.mostRecent().args[0].countedQuantity).toBe(typed);
+    }
+    expect(toast.error).not.toHaveBeenCalled();
+
+    api.record.calls.reset();
+    line.state = 'idle';
+    line.counted = 1.234;
+    c.saveSheet();
+    expect(api.record).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('STOCK_COUNT.SHEET.INVALID_QUANTITY');
+  });
+
+  it('a recount brings the line of the outdated count back to be typed, not as already recorded (F3)', () => {
+    const c = render(['ROLE_PHARMACIST'], [count({ status: 'OUTDATED' })]);
+    startSheet(c);
+    api.record.and.returnValue(of(count()));
+    const lot = c.sheet()!.find((line) => line.stockLotId === 'l-1')!;
+    const other = c.sheet()!.find((line) => line.inventoryItemId === 'i-2')!;
+    lot.counted = 76;
+    other.counted = 12;
+    c.saveSheet();
+    expect(c.sheet()!.find((line) => line.stockLotId === 'l-1')!.state).toBe('saved');
+
+    c.recount(c.counts()[0]);
+    fixture.detectChanges();
+
+    const again = c.sheet()!.find((line) => line.stockLotId === 'l-1')!;
+    expect(again.state).toBe('idle');
+    expect(again.counted).toBeNull();
+    expect(again.clientRequestId).not.toBe(lot.clientRequestId);
+    // The other recorded lines of the sheet stay recorded.
+    expect(c.sheet()!.find((line) => line.inventoryItemId === 'i-2')!.state).toBe('saved');
+  });
+
   it('confirms an adjustment only once the box is ticked, and says when the reader counted it themselves', () => {
     const c = render(['ROLE_STORE_MANAGER'], [count({ ownCount: true })]);
     api.confirm.and.returnValue(of(count({ status: 'APPLIED', appliedAt: '2026-11-27T06:00:00' })));

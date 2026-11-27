@@ -132,9 +132,13 @@ public class MedicationCatalogVersionService {
         return savePending(version, reason);
     }
 
-    /** Whether a version changes what an entry is compared by: its name, its form, its strength. */
+    /**
+     * Whether a version is compared with the catalogue: it changes what an entry is compared by (its name, its
+     * form, its strength), or it puts a withdrawn entry back, whose twin may have been entered meanwhile.
+     */
     private static boolean changesIdentity(FormularySnapshot proposed, FormularySnapshot before) {
-        return before == null || !MedicationCatalogDuplicates.exact(proposed, before);
+        return before == null || (proposed.active() && !before.active())
+            || !MedicationCatalogDuplicates.exact(proposed, before);
     }
 
     /**

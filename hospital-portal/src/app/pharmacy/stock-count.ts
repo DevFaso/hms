@@ -498,8 +498,8 @@ export class StockCountComponent implements OnInit {
   }
 
   private validCount(line: CountSheetLine): boolean {
-    const n = Number(line.counted);
-    return Number.isFinite(n) && n >= 0 && Math.round(n * 100) === n * 100;
+    // Read on the digits as typed: 1.1 * 100 is 110.00000000000001 in binary, so a float check refused it.
+    return /^\d+(\.\d{1,2})?$/.test(String(line.counted ?? '').trim());
   }
 
   fieldId(line: CountSheetLine): string {
@@ -669,7 +669,9 @@ export class StockCountComponent implements OnInit {
     this.sheetReason.set(count.reason);
     this.sheetSearch = count.medicationName ?? '';
     this.tab.set('sheet');
-    this.loadSheet(this.sheet() ?? []);
+    // The line of this count comes back to be counted again, not as the observation it already recorded.
+    const key = count.stockLotId ? `lot:${count.stockLotId}` : `item:${count.inventoryItemId}`;
+    this.loadSheet((this.sheet() ?? []).filter((line) => line.key !== key));
   }
 
   /** Marks the fields a server refusal names (`fieldErrors`), each with the server's reason. */
