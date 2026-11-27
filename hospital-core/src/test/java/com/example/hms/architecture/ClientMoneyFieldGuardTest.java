@@ -102,6 +102,19 @@ class ClientMoneyFieldGuardTest {
         FIELDS.put("InvoiceRefundRequestDTO.amount", Treatment.bounded(
             "billing plan PR 8: at most what the invoice can give back",
             "billing/InvoiceRefundService.java", "billing.refund.exceedsRefundable"));
+        // Insurer claims plan PRs 3 and 4: what a payer remitted has no server price (the rest stays to allocate);
+        // what is put on, refused of or written off a bordereau line is bounded by what the line still expects.
+        FIELDS.put("InsurerPaymentRequestDTO.amount", Treatment.noServerPrice(
+            "a payer's remittance as the bank statement says it; never bounded by the claims, the rest stays to allocate"));
+        FIELDS.put("InsurerPaymentAllocationRequestDTO.amount", Treatment.bounded(
+            "the part of a remittance put on a bordereau line, at most what the line still expects",
+            "billing/claim/InsurerClaimSettlementService.java", "billing.insurerPayment.exceedsLine"));
+        FIELDS.put("InsurerClaimRefusalRequestDTO.amount", Treatment.bounded(
+            "what the payer refused of a bordereau line, at most what the line still expects",
+            "billing/claim/InsurerClaimSettlementService.java", "billing.claim.exceedsLine"));
+        FIELDS.put("InsurerClaimWriteOffRequestDTO.amount", Treatment.bounded(
+            "what is asked to be written off of a bordereau line, at most what the line still expects",
+            "billing/claim/InsurerClaimSettlementService.java", "billing.claim.exceedsLine"));
         FIELDS.put("StaffPaymentRequestDTO.amount", Treatment.bounded(
             "money tendered at the till, at most the invoice's balance due",
             "BillingInvoiceServiceImpl.java", "billing.payment.exceedsBalance"));

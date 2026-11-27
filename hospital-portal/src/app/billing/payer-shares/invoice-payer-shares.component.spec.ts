@@ -205,15 +205,14 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
     });
   });
 
-  it('claim and paid are offered on an open share; only paid and reject once claimed', () => {
+  it('insurer claims PR 3 (QA D3983): only an open share is refused here; a claimed one is settled on its bordereau', () => {
     render(['ROLE_ACCOUNTANT'], invoice(), [open]);
-    billing.decidePayerShare.and.returnValue(of([{ ...open, status: 'CLAIMED' }]));
-    expect(fixture.componentInstance.canClaim(open)).toBeTrue();
-    fixture.componentInstance.decide(open, 'claim');
-    expect(billing.decidePayerShare).toHaveBeenCalledWith('inv-bc2', 'share-1', 'claim', undefined);
-    const claimed = { ...open, status: 'CLAIMED' as const };
-    expect(fixture.componentInstance.canClaim(claimed)).toBeFalse();
-    expect(fixture.componentInstance.canSettle(claimed)).toBeTrue();
+    expect(fixture.componentInstance.canSettle(open)).toBeTrue();
+    expect(fixture.componentInstance.canSettle({ ...open, status: 'CLAIMED' })).toBeFalse();
+    expect(fixture.componentInstance.canSettle({ ...open, status: 'PARTIALLY_PAID' })).toBeFalse();
     expect(fixture.componentInstance.canSettle({ ...open, status: 'PAID' })).toBeFalse();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('BILLING.PAYER_SHARES.CLAIM');
+    expect(text).not.toContain('BILLING.PAYER_SHARES.MARK_PAID');
   });
 });

@@ -1,0 +1,654 @@
+<div class="page-container" data-testid="claim-batch-page">
+  <app-claims-nav current="batches" />
+
+  @if (loading()) {
+    <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed() || !batch()) {
+    <p class="muted" role="alert" data-testid="claim-batch-failed">
+      {{ 'INSURER_CLAIMS.BATCH.LOAD_FAILED' | translate }}
+    </p>
+    <a class="btn-secondary btn-sm" routerLink="/billing/bordereaux">{{
+      'INSURER_CLAIMS.BATCH.BACK' | translate
+    }}</a>
+  } @else {
+    @let b = batch()!;
+    <div class="page-header">
+      <div>
+        <h1 class="page-title" data-testid="claim-batch-title">
+          {{ b.number || ('INSURER_CLAIMS.BATCHES.DRAFT_NAME' | translate) }} ·
+          {{ b.payerName || '—' }}
+        </h1>
+        <p class="page-subtitle">
+          {{
+            'INSURER_CLAIMS.BATCH.PERIOD_LINE'
+              | translate
+                : {
+                    from: (b.periodFrom | dayMonth: undefined : true),
+                    to: (b.periodTo | dayMonth: undefined : true),
+                  }
+          }}
+        </p>
+      </div>
+      <span class="claims-status" data-testid="claim-batch-status" [attr.data-status]="b.status">{{
+        b.status | keyLabel: 'INSURER_CLAIMS.BATCH_STATUS.'
+      }}</span>
+    </div>
+
+    <section class="claims-panel" aria-labelledby="claim-batch-summary">
+      <h2 id="claim-batch-summary">{{ 'INSURER_CLAIMS.BATCH.SUMMARY' | translate }}</h2>
+      <dl class="claims-meta" data-testid="claim-batch-totals">
+        <div>
+          <dt>{{ 'INSURER_CLAIMS.BATCH.LINES' | translate }}</dt>
+          <dd>{{ b.lineCount }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'INSURER_CLAIMS.BATCH.GROSS' | translate }}</dt>
+          <dd class="claims-amount">{{ b.grossTotal ?? 0 | cfa: 'XOF' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'INSURER_CLAIMS.BATCH.PATIENT_SHARE' | translate }}</dt>
+          <dd class="claims-amount">{{ b.patientTotal ?? 0 | cfa: 'XOF' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'INSURER_CLAIMS.BATCHES.CLAIMED' | translate }}</dt>
+          <dd class="claims-amount">{{ b.claimedTotal | cfa: 'XOF' }}</dd>
+        </div>
+        @if (!isDraft()) {
+          <div>
+            <dt>{{ 'INSURER_CLAIMS.BATCHES.PAID' | translate }}</dt>
+            <dd class="claims-amount">{{ b.paidTotal | cfa: 'XOF' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'INSURER_CLAIMS.BATCH.REBILLED' | translate }}</dt>
+            <dd class="claims-amount">{{ b.rebilledTotal | cfa: 'XOF' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'INSURER_CLAIMS.BATCH.WRITTEN_OFF' | translate }}</dt>
+            <dd class="claims-amount">{{ b.writtenOffTotal | cfa: 'XOF' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}</dt>
+            <dd class="claims-amount" data-testid="claim-batch-outstanding">
+              {{ b.outstandingTotal | cfa: 'XOF' }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ 'INSURER_CLAIMS.BATCHES.SUBMITTED_ON' | translate }}</dt>
+            <dd>
+              {{ b.submittedOn | dayMonth: undefined : true }}
+              @if (b.submittedByName) {
+                <span class="muted">· {{ b.submittedByName }}</span>
+              }
+            </dd>
+          </div>
+          @if (b.payerReference) {
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.BATCH.PAYER_REFERENCE' | translate }}</dt>
+              <dd>{{ b.payerReference }}</dd>
+            </div>
+          }
+        }
+      </dl>
+      @if (b.status === 'CANCELLED' && b.cancelReason) {
+        <p class="claims-warning" data-testid="claim-batch-cancel-reason">
+          {{ 'INSURER_CLAIMS.BATCH.CANCELLED_LINE' | translate: { reason: b.cancelReason } }}
+        </p>
+      }
+      @if (b.lineCount > 0 && canBuild && b.status !== 'CANCELLED') {
+        <div class="claims-actions">
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            data-testid="claim-batch-pdf"
+            (click)="export('pdf')"
+          >
+            {{ 'INSURER_CLAIMS.BATCH.EXPORT_PDF' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            data-testid="claim-batch-csv"
+            (click)="export('csv')"
+          >
+            {{ 'INSURER_CLAIMS.BATCH.EXPORT_CSV' | translate }}
+          </button>
+        </div>
+      }
+    </section>
+
+    @if (isDraft() && canBuild) {
+      <section class="claims-panel" aria-labelledby="claim-batch-send">
+        <h2 id="claim-batch-send">{{ 'INSURER_CLAIMS.BATCH.SEND_TITLE' | translate }}</h2>
+        @if (b.warningCount) {
+          <p class="claims-warning" data-testid="claim-batch-warnings">
+            {{ 'INSURER_CLAIMS.BATCH.WARNINGS' | translate: { count: b.warningCount } }}
+          </p>
+        }
+        <form class="claims-form">
+          <div>
+            <label for="claim-submitted-on"
+              >{{ 'INSURER_CLAIMS.BATCHES.SUBMITTED_ON' | translate }} *</label
+            >
+            <input
+              appFormControl
+              type="date"
+              id="claim-submitted-on"
+              name="submittedOn"
+              required
+              [ngModel]="submittedOn()"
+              (ngModelChange)="submittedOn.set($event ?? '')"
+            />
+          </div>
+          <div>
+            <label for="claim-payer-reference">{{
+              'INSURER_CLAIMS.BATCH.PAYER_REFERENCE' | translate
+            }}</label>
+            <input
+              appFormControl
+              type="text"
+              id="claim-payer-reference"
+              name="payerReference"
+              maxlength="120"
+              [ngModel]="payerReference()"
+              (ngModelChange)="payerReference.set($event ?? '')"
+            />
+          </div>
+          <div class="claims-actions">
+            <button
+              type="button"
+              class="btn-primary btn-sm"
+              data-testid="claim-batch-submit"
+              (click)="submit()"
+              [disabled]="busy() || b.lineCount === 0"
+            >
+              {{ 'INSURER_CLAIMS.BATCH.SUBMIT' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              data-testid="claim-batch-delete"
+              [disabled]="busy()"
+              (click)="deleteDraft()"
+            >
+              {{ 'INSURER_CLAIMS.BATCH.DELETE' | translate }}
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+
+    @if (isSent() && canBuild) {
+      <section class="claims-panel" aria-labelledby="claim-batch-receipt">
+        <h2 id="claim-batch-receipt">{{ 'INSURER_CLAIMS.BATCH.RECEIPT_TITLE' | translate }}</h2>
+        <form class="claims-form" (ngSubmit)="saveReceipt()">
+          <div>
+            <label for="claim-received-on"
+              >{{ 'INSURER_CLAIMS.BATCH.RECEIVED_ON' | translate }} *</label
+            >
+            <input
+              appFormControl
+              type="date"
+              id="claim-received-on"
+              name="receivedOn"
+              required
+              data-testid="claim-received-on"
+              [attr.min]="b.submittedOn || null"
+              [ngModel]="receivedOn()"
+              (ngModelChange)="receivedOn.set($event ?? '')"
+            />
+          </div>
+          <div class="claims-actions">
+            <button
+              type="submit"
+              class="btn-secondary btn-sm"
+              data-testid="claim-receipt-save"
+              [disabled]="busy()"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+            @if (isFinance && b.status === 'SUBMITTED') {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="claim-batch-cancel"
+                (click)="cancelling.set(true)"
+              >
+                {{ 'INSURER_CLAIMS.BATCH.CANCEL' | translate }}
+              </button>
+            }
+          </div>
+        </form>
+        @if (cancelling()) {
+          <form class="claims-sub claims-form" (ngSubmit)="confirmCancel()">
+            <div class="claims-wide">
+              <label for="claim-cancel-reason"
+                >{{ 'INSURER_CLAIMS.BATCH.CANCEL_REASON' | translate }} *</label
+              >
+              <input
+                appFormControl
+                type="text"
+                id="claim-cancel-reason"
+                name="cancelReason"
+                maxlength="500"
+                required
+                [ngModel]="cancelReason()"
+                (ngModelChange)="cancelReason.set($event ?? '')"
+              />
+            </div>
+            <div class="claims-actions">
+              <button
+                type="submit"
+                class="btn-primary btn-sm"
+                data-testid="claim-batch-cancel-confirm"
+                [disabled]="busy()"
+              >
+                {{ 'INSURER_CLAIMS.BATCH.CANCEL' | translate }}
+              </button>
+              <button type="button" class="btn-secondary btn-sm" (click)="cancelling.set(false)">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+            </div>
+          </form>
+        }
+      </section>
+    }
+
+    <section class="claims-panel" aria-labelledby="claim-batch-lines">
+      <h2 id="claim-batch-lines">{{ 'INSURER_CLAIMS.BATCH.LINES_TITLE' | translate }}</h2>
+      @if (lines().length === 0) {
+        <p class="muted" data-testid="claim-batch-no-lines">
+          {{ 'INSURER_CLAIMS.BATCH.NO_LINES' | translate }}
+        </p>
+      } @else {
+        <ul class="claims-list" data-testid="claim-batch-lines">
+          @for (line of lines(); track line.id) {
+            <li class="claims-card" [attr.data-testid]="'claim-line-' + line.id">
+              <div class="claims-card-head">
+                <strong>
+                  {{ line.patientName || '—' }}
+                  @if (line.patientMrn) {
+                    <span class="muted">({{ line.patientMrn }})</span>
+                  }
+                </strong>
+                <span class="claims-amount">{{ line.claimedAmount | cfa: 'XOF' }}</span>
+              </div>
+              <dl class="claims-meta">
+                <div>
+                  <dt>{{ 'INSURER_CLAIMS.SHARES.ACT' | translate }}</dt>
+                  <dd>
+                    @if (line.actCode) {
+                      <span class="muted">{{ line.actCode }}</span>
+                    }
+                    {{ line.actLabel || '—' }}
+                    @if (line.quantity && line.quantity > 1) {
+                      <span class="muted">× {{ line.quantity }}</span>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ 'R70_MONEY.SHARES.INVOICE' | translate }}</dt>
+                  <dd>
+                    {{ line.invoiceNumber || '—' }}
+                    @if (line.serviceDate) {
+                      · {{ line.serviceDate | dayMonth: undefined : true }}
+                    }
+                  </dd>
+                </div>
+                @if (line.dischargeDate) {
+                  <div>
+                    <dt>{{ 'INSURER_CLAIMS.BATCH.DISCHARGED' | translate }}</dt>
+                    <dd>{{ line.dischargeDate | dayMonth: undefined : true }}</dd>
+                  </div>
+                }
+                <div>
+                  <dt>{{ 'INSURER_CLAIMS.SHARES.POLICY' | translate }}</dt>
+                  <dd>
+                    {{ line.policyNumber || '—' }}
+                    @if (line.subscriberName) {
+                      <span class="muted">· {{ line.subscriberName }}</span>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ 'INSURER_CLAIMS.BATCH.GROSS' | translate }}</dt>
+                  <dd>{{ line.grossAmount ?? 0 | cfa: 'XOF' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'INSURER_CLAIMS.BATCH.PATIENT_SHARE' | translate }}</dt>
+                  <dd>{{ line.patientAmount ?? 0 | cfa: 'XOF' }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'INSURER_CLAIMS.SHARES.PRE_AUTH' | translate }}</dt>
+                  <dd>
+                    {{
+                      line.preAuthorisationNumber ||
+                        ('INSURER_CLAIMS.SHARES.NO_PRE_AUTH' | translate)
+                    }}
+                  </dd>
+                </div>
+                @if (!isDraft()) {
+                  <div>
+                    <dt>{{ 'INSURER_CLAIMS.BATCHES.PAID' | translate }}</dt>
+                    <dd>{{ line.paidAmount | cfa: 'XOF' }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}</dt>
+                    <dd
+                      class="claims-amount"
+                      [attr.data-testid]="'claim-line-outstanding-' + line.id"
+                    >
+                      {{ line.outstandingAmount | cfa: 'XOF' }}
+                    </dd>
+                  </div>
+                  @if (line.rebilledAmount > 0) {
+                    <div>
+                      <dt>{{ 'INSURER_CLAIMS.BATCH.REBILLED' | translate }}</dt>
+                      <dd>{{ line.rebilledAmount | cfa: 'XOF' }}</dd>
+                    </div>
+                  }
+                  @if (line.writtenOffAmount > 0) {
+                    <div>
+                      <dt>{{ 'INSURER_CLAIMS.BATCH.WRITTEN_OFF' | translate }}</dt>
+                      <dd>{{ line.writtenOffAmount | cfa: 'XOF' }}</dd>
+                    </div>
+                  }
+                  @if (line.writeOffPendingAmount > 0) {
+                    <div>
+                      <dt>{{ 'INSURER_CLAIMS.BATCH.WRITE_OFF_PENDING' | translate }}</dt>
+                      <dd>{{ line.writeOffPendingAmount | cfa: 'XOF' }}</dd>
+                    </div>
+                  }
+                }
+              </dl>
+              @for (warning of line.warnings ?? []; track warning) {
+                <p class="claims-warning">{{ warning | keyLabel: 'INSURER_CLAIMS.WARNING.' }}</p>
+              }
+              @if (isDraft() && canBuild) {
+                <div class="claims-form">
+                  <div class="claims-wide">
+                    <label [for]="'claim-documents-' + line.id">{{
+                      'INSURER_CLAIMS.BATCH.DOCUMENTS' | translate
+                    }}</label>
+                    <input
+                      appFormControl
+                      type="text"
+                      maxlength="300"
+                      [id]="'claim-documents-' + line.id"
+                      [name]="'documents-' + line.id"
+                      [ngModel]="documents()[line.id]"
+                      (ngModelChange)="setDocuments(line, $event)"
+                      (blur)="saveDocuments(line)"
+                    />
+                  </div>
+                  <div class="claims-actions">
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [disabled]="busy()"
+                      [attr.data-testid]="'claim-line-remove-' + line.id"
+                      (click)="removeShare(line)"
+                    >
+                      {{ 'INSURER_CLAIMS.BATCH.REMOVE_SHARE' | translate }}
+                    </button>
+                  </div>
+                </div>
+              } @else if (line.attachedDocuments) {
+                <p class="claims-note">
+                  {{
+                    'INSURER_CLAIMS.BATCH.DOCUMENTS_LINE'
+                      | translate: { list: line.attachedDocuments }
+                  }}
+                </p>
+              }
+              @if (line.refusals?.length) {
+                <ul class="claims-history" [attr.data-testid]="'claim-line-refusals-' + line.id">
+                  @for (refusal of line.refusals; track refusal.id) {
+                    <li>
+                      {{
+                        'INSURER_CLAIMS.BATCH.REFUSAL_LINE'
+                          | translate
+                            : {
+                                amount: (refusal.amount | cfa: 'XOF'),
+                                reason: refusal.reason,
+                              }
+                      }}
+                      <span class="muted">
+                        · {{ refusal.reasonClass | keyLabel: 'INSURER_CLAIMS.REFUSAL_CLASS.' }} ·
+                        {{ refusal.resolution | keyLabel: 'INSURER_CLAIMS.RESOLUTION.' }}
+                        @if (refusal.writeOffStatus) {
+                          ({{
+                            refusal.writeOffStatus | keyLabel: 'INSURER_CLAIMS.WRITE_OFF_STATUS.'
+                          }})
+                        }
+                      </span>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (canAct(line) && acting()?.lineId !== line.id) {
+                <div class="claims-actions">
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [attr.data-testid]="'claim-line-refuse-' + line.id"
+                    (click)="start(line, 'refuse')"
+                  >
+                    {{ 'INSURER_CLAIMS.BATCH.REFUSE' | translate }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [attr.data-testid]="'claim-line-write-off-' + line.id"
+                    (click)="start(line, 'writeOff')"
+                  >
+                    {{ 'INSURER_CLAIMS.BATCH.ASK_WRITE_OFF' | translate }}
+                  </button>
+                </div>
+              }
+              @if (acting()?.lineId === line.id) {
+                <form
+                  class="claims-sub claims-form"
+                  data-testid="claim-action-form"
+                  (ngSubmit)="confirmAction(line)"
+                >
+                  <div>
+                    <label for="claim-action-amount"
+                      >{{ 'R70_MONEY.SHARES.AMOUNT' | translate }} *</label
+                    >
+                    <input
+                      appFormControl
+                      type="text"
+                      inputmode="numeric"
+                      id="claim-action-amount"
+                      name="amount"
+                      required
+                      [ngModel]="amount()"
+                      (ngModelChange)="amount.set($event ?? '')"
+                    />
+                  </div>
+                  @if (acting()?.mode === 'refuse') {
+                    <div>
+                      <label for="claim-action-class"
+                        >{{ 'INSURER_CLAIMS.BATCH.REFUSAL_CLASS' | translate }} *</label
+                      >
+                      <select
+                        appFormControl
+                        id="claim-action-class"
+                        name="reasonClass"
+                        required
+                        [ngModel]="reasonClass()"
+                        (ngModelChange)="setClass($event)"
+                      >
+                        @for (choice of classes; track choice) {
+                          <option [value]="choice">
+                            {{ choice | keyLabel: 'INSURER_CLAIMS.REFUSAL_CLASS.' }}
+                          </option>
+                        }
+                      </select>
+                    </div>
+                    <div>
+                      <label for="claim-action-resolution"
+                        >{{ 'INSURER_CLAIMS.BATCH.RESOLUTION' | translate }} *</label
+                      >
+                      <select
+                        appFormControl
+                        id="claim-action-resolution"
+                        name="resolution"
+                        required
+                        data-testid="claim-action-resolution"
+                        [ngModel]="resolution()"
+                        (ngModelChange)="resolution.set($event)"
+                      >
+                        @for (choice of resolutions(); track choice) {
+                          <option [value]="choice">
+                            {{ choice | keyLabel: 'INSURER_CLAIMS.RESOLUTION.' }}
+                          </option>
+                        }
+                      </select>
+                    </div>
+                  }
+                  @if (needsWriteOff()) {
+                    <div>
+                      <label for="claim-action-code"
+                        >{{ 'INSURER_CLAIMS.BATCH.WRITE_OFF_CODE' | translate }} *</label
+                      >
+                      <select
+                        appFormControl
+                        id="claim-action-code"
+                        name="writeOffReason"
+                        required
+                        [disabled]="
+                          acting()?.mode === 'refuse' && reasonClass() === 'TARIFF_REDUCTION'
+                        "
+                        [ngModel]="writeOffReason()"
+                        (ngModelChange)="writeOffReason.set($event)"
+                      >
+                        @for (choice of writeOffReasons; track choice) {
+                          <option [value]="choice">
+                            {{ choice | keyLabel: 'INSURER_CLAIMS.WRITE_OFF_REASON.' }}
+                          </option>
+                        }
+                      </select>
+                    </div>
+                    <div>
+                      <label for="claim-action-document"
+                        >{{ 'INSURER_CLAIMS.BATCH.SUPPORTING_DOCUMENT' | translate }} *</label
+                      >
+                      <input
+                        appFormControl
+                        type="text"
+                        id="claim-action-document"
+                        name="supportingDocument"
+                        maxlength="200"
+                        required
+                        [ngModel]="supportingDocument()"
+                        (ngModelChange)="supportingDocument.set($event ?? '')"
+                      />
+                    </div>
+                  }
+                  <div class="claims-wide">
+                    <label for="claim-action-reason"
+                      >{{
+                        (acting()?.mode === 'refuse'
+                          ? 'INSURER_CLAIMS.BATCH.PAYER_REASON'
+                          : 'INSURER_CLAIMS.BATCH.WRITE_OFF_REASON_TEXT'
+                        ) | translate
+                      }}
+                      *</label
+                    >
+                    <input
+                      appFormControl
+                      type="text"
+                      id="claim-action-reason"
+                      name="reason"
+                      maxlength="500"
+                      required
+                      [ngModel]="reason()"
+                      (ngModelChange)="reason.set($event ?? '')"
+                    />
+                  </div>
+                  @if (
+                    acting()?.mode === 'refuse' && !isFinance && reasonClass() === 'PATIENT_SIDE'
+                  ) {
+                    <p class="claims-note claims-wide">
+                      {{ 'INSURER_CLAIMS.BATCH.REBILL_FINANCE_ONLY' | translate }}
+                    </p>
+                  }
+                  <div class="claims-actions">
+                    <button
+                      type="submit"
+                      class="btn-primary btn-sm"
+                      data-testid="claim-action-confirm"
+                      [disabled]="busy()"
+                    >
+                      {{ 'COMMON.CONFIRM' | translate }}
+                    </button>
+                    <button type="button" class="btn-secondary btn-sm" (click)="stop()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                  </div>
+                </form>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    @if (isDraft() && canBuild) {
+      <section class="claims-panel" aria-labelledby="claim-batch-available">
+        <h2 id="claim-batch-available">{{ 'INSURER_CLAIMS.BATCH.AVAILABLE_TITLE' | translate }}</h2>
+        @if (available().length === 0) {
+          <p class="muted" data-testid="claim-batch-no-available">
+            {{ 'INSURER_CLAIMS.BATCH.NO_AVAILABLE' | translate }}
+          </p>
+        } @else {
+          <div class="claims-table-wrap">
+            <table class="claims-table" data-testid="claim-batch-available">
+              <caption class="sr-only">
+                {{
+                  'INSURER_CLAIMS.BATCH.AVAILABLE_TITLE' | translate
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'R70_MONEY.SHARES.INVOICE' | translate }}</th>
+                  <th scope="col" class="amount">{{ 'R70_MONEY.SHARES.AMOUNT' | translate }}</th>
+                  <th scope="col">
+                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (share of available(); track share.id) {
+                  <tr>
+                    <td>{{ share.patientName || '—' }}</td>
+                    <td>
+                      {{ share.invoiceNumber || '—' }}
+                      @if (share.invoiceDate) {
+                        · {{ share.invoiceDate | dayMonth: undefined : true }}
+                      }
+                    </td>
+                    <td class="amount">{{ share.amount | cfa: 'XOF' }}</td>
+                    <td>
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [disabled]="busy()"
+                        [attr.data-testid]="'claim-share-add-' + share.id"
+                        (click)="addShare(share)"
+                      >
+                        {{ 'INSURER_CLAIMS.BATCH.ADD_SHARE' | translate }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  }
+</div>

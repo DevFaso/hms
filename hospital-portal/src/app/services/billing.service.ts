@@ -73,10 +73,15 @@ export interface BillingInvoiceResponse {
 }
 
 /** Billing-money plan PR 7: the life of a payer's share of an invoice. */
-export type PayerShareStatus = 'OPEN' | 'CLAIMED' | 'PAID' | 'REJECTED' | 'CANCELLED';
+export type PayerShareStatus =
+  'OPEN' | 'CLAIMED' | 'PARTIALLY_PAID' | 'PAID' | 'WRITTEN_OFF' | 'REJECTED' | 'CANCELLED';
 
 /** Billing-money plan PR 7: the decisions recorded on a payer's share (the path segment of each). */
-export type PayerShareDecision = 'claim' | 'paid' | 'reject';
+/**
+ * Insurer claims PR 3: a share is claimed by sending its bordereau and paid by an insurer payment (amount, date,
+ * reference); the only decision left on the share itself is the payer's refusal before any claim.
+ */
+export type PayerShareDecision = 'reject';
 
 /** Billing-money plan PR 7: what one payer plan owes on an invoice (InvoicePayerShareDTO). */
 export interface InvoicePayerShare {
@@ -93,6 +98,10 @@ export interface InvoicePayerShare {
   policyNumber?: string | null;
   subscriberName?: string | null;
   subscriberRelationship?: string | null;
+  /** Insurer claims PR 3: what the payer paid, refused (re-billed to the patient) and what was written off. */
+  paidAmount?: number | null;
+  rejectedAmount?: number | null;
+  writtenOffAmount?: number | null;
 }
 
 /** Insurer claims PR 1 (G1): one act a payer pays part of, as a claim lists it (PayerShareLineDTO). */
@@ -172,6 +181,15 @@ export interface OpenPayerShare {
   subscriberRelationship?: string | null;
   coverageVerifiedAt?: string | null;
   lines?: PayerShareLine[];
+  /* Insurer claims PRs 2 and 3: how far the share is settled, and the bordereau it is on. */
+  paidAmount?: number | null;
+  rejectedAmount?: number | null;
+  writtenOffAmount?: number | null;
+  openAmount?: number | null;
+  rejectionReason?: string | null;
+  decidedAt?: string | null;
+  claimBatchId?: string | null;
+  claimBatchNumber?: string | null;
 }
 
 export interface InvoiceItemResponse {
@@ -704,7 +722,7 @@ export class BillingService {
     );
   }
 
-  /** The payer's decision on its share: sent on a bordereau, settled, or refused with its reason. */
+  /** The payer refused, with its reason, a share not yet on a sent bordereau. */
   decidePayerShare(
     invoiceId: string,
     shareId: string,
@@ -713,7 +731,7 @@ export class BillingService {
   ): Observable<InvoicePayerShare[]> {
     return this.http.post<InvoicePayerShare[]>(
       `/billing-invoices/${invoiceId}/payer-shares/${shareId}/${decision}`,
-      decision === 'reject' ? { reason } : {},
+      { reason },
     );
   }
 

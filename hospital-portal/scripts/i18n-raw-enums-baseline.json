@@ -283,7 +283,12 @@
     "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason"
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::b.cancelReason",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::refusal.reason",
+    "src/app/billing/insurer-claims/insurer-payments.component.html::row.reversalReason",
+    "src/app/billing/insurer-claims/insurer-receivables.component.html::row.reason",
+    "src/app/billing/payer-shares/payer-shares-list.component.html::row.rejectionReason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -320,6 +325,11 @@
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/staff/staff-list.html::<option>d": "QA r70 D3202: DepartmentOption.name from GET /departments/active-minimal/{hospitalId} (Department.name, a hospital admin's free text); the staff write resolves the department by that name. Not an enum.",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum."
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum.",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::b.cancelReason": "Insurer claims PR 2: InsurerClaimBatchDTO.cancelReason is the free text (500 characters) the hospital admin or accountant typed when cancelling a sent bordereau (InsurerClaimReasonRequestDTO.reason); not a wire token.",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::refusal.reason": "Insurer claims PR 3: InsurerClaimRefusalDTO.reason is the payer’s reason as the clerk typed it (InsurerClaimRefusalRequestDTO.reason, free text); its class and resolution beside it go through keyLabel.",
+    "src/app/billing/insurer-claims/insurer-payments.component.html::row.reversalReason": "Insurer claims PR 3: InsurerPaymentDTO.reversalReason is the free text the hospital admin or accountant typed when reversing an insurer payment; not a wire token.",
+    "src/app/billing/insurer-claims/insurer-receivables.component.html::row.reason": "Insurer claims PR 4: InsurerClaimWriteOffDTO.reason is the free text typed with a write-off request (its reason code beside it goes through keyLabel); not a wire token.",
+    "src/app/billing/payer-shares/payer-shares-list.component.html::row.rejectionReason": "Insurer claims PR 3 (QA D3983): OpenPayerShareDTO.rejectionReason is InvoicePayerShare.rejectionReason, the payer’s reason as typed, already shown as typed on the invoice drawer (share.rejectionReason); not a wire token."
   }
 }

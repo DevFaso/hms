@@ -1701,6 +1701,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYER_SHARE_EVENT' },
   },
   {
+    // Insurer claims PRs 2-4 (QA D3983): a bordereau, an insurer payment, a refusal or a write-off (ids only).
+    key: 'AUDIT.DESC.INSURER_CLAIM_EVENT',
+    re: /^(Insurer claim draft created|Insurer claim draft changed|Insurer claim draft deleted|Insurer claim submitted|Insurer claim receipt by the payer recorded|Insurer claim cancelled|Insurer claim exported|Insurer payment recorded|Insurer payment allocated|Insurer payment reversed|Insurer claim line refused by the payer|Refused amount re-billed to the patient|Insurer claim write-off requested|Insurer claim write-off approved|Insurer claim write-off refused|Insurer claim write-off cancelled): (?:batch|payment|line|write-off) (\S+)$/,
+    params: ['what', 'id'],
+    localise: { what: 'phrase:INSURER_CLAIM_EVENT' },
+  },
+  {
     // Insurer claims PR 1 (QA D3984): a pre-authorisation number recorded on a line, or copied from its order.
     key: 'AUDIT.DESC.PRE_AUTHORISATION_ON_LINE',
     re: /^Pre-authorisation recorded on line (\S+) of invoice (\S+)$/,

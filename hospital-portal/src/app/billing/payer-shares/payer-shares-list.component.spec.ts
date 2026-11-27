@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
@@ -64,6 +65,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     TestBed.configureTestingModule({
       imports: [PayerSharesListComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: BillingService, useValue: billing },
         {
           provide: PayerCatalogueService,
@@ -103,7 +105,11 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     render(['ROLE_CLAIMS_REVIEWER']);
 
     expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
-      jasmine.objectContaining({ statuses: ['OPEN', 'CLAIMED'], page: 0, size: 25 }),
+      jasmine.objectContaining({
+        statuses: ['OPEN', 'CLAIMED', 'PARTIALLY_PAID'],
+        page: 0,
+        size: 25,
+      }),
     );
     const card = host().querySelector('[data-testid="payer-share-share-1"]')?.textContent ?? '';
     expect(card).toContain('Mutuelle Test A');
@@ -165,11 +171,42 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     );
   });
 
-  it('the claims reviewer marks a share claimed and paid', () => {
+  it('insurer claims PR 3 (QA D3983): no « claimed » or « paid » button; an open share is only refused here', () => {
     render(['ROLE_CLAIMS_REVIEWER']);
 
-    host().querySelector<HTMLButtonElement>('[data-testid="payer-share-claim-share-1"]')!.click();
-    expect(billing.decidePayerShare).toHaveBeenCalledWith('inv-7', 'share-1', 'claim', undefined);
+    expect(host().querySelector('[data-testid="payer-share-claim-share-1"]')).toBeNull();
+    expect(host().querySelector('[data-testid="payer-share-paid-share-1"]')).toBeNull();
+    expect(host().querySelector('[data-testid="payer-share-reject-share-1"]')).not.toBeNull();
+  });
+
+  it('insurer claims PR 3 (QA D3983): a claimed share shows its bordereau, what was paid, the refusal reason and its date', () => {
+    render(
+      ['ROLE_CLAIMS_REVIEWER'],
+      [
+        {
+          ...open,
+          status: 'PARTIALLY_PAID',
+          amount: 11800,
+          paidAmount: 9000,
+          rejectedAmount: 2800,
+          openAmount: 0,
+          rejectionReason: 'Plafond atteint',
+          decidedAt: '2026-11-27T10:00:00',
+          claimBatchId: 'batch-1',
+          claimBatchNumber: 'BORD-2026-0001',
+        },
+      ],
+    );
+
+    const settlement = host().querySelector('[data-testid="payer-share-settlement-share-1"]')!;
+    expect(settlement.textContent).toContain('BORD-2026-0001');
+    expect(settlement.querySelector('a')!.getAttribute('href')).toBe('/billing/bordereaux/batch-1');
+    expect(settlement.textContent).toMatch(/9\s?000/);
+    expect(settlement.textContent).toMatch(/2\s?800/);
+    expect(host().querySelector('[data-testid="payer-share-decided-share-1"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="payer-share-refusal-share-1"]')).not.toBeNull();
+    // On a sent bordereau: refused line by line there, never whole from this list.
+    expect(host().querySelector('[data-testid="payer-share-reject-share-1"]')).toBeNull();
   });
 
   it('a refusal needs the payer reason: the empty submit is refused on the field and nothing is sent', () => {
@@ -186,7 +223,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
   it('the super-admin reads only: no decision button', () => {
     render(['ROLE_SUPER_ADMIN']);
 
-    expect(host().querySelector('[data-testid="payer-share-paid-share-1"]')).toBeNull();
+    expect(host().querySelector('[data-testid="payer-share-reject-share-1"]')).toBeNull();
   });
 
   it('review of #1353: another tab starts from its first page', () => {
@@ -195,7 +232,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-view-closed"]')!.click();
 
     expect(billing.searchHospitalPayerShares.calls.mostRecent().args[0]).toEqual(
-      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED'], page: 0 }),
+      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED', 'WRITTEN_OFF'], page: 0 }),
     );
   });
 
@@ -218,7 +255,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
     host().querySelector<HTMLButtonElement>('[data-testid="payer-shares-view-closed"]')!.click();
 
     expect(billing.searchHospitalPayerShares).toHaveBeenCalledWith(
-      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED'] }),
+      jasmine.objectContaining({ statuses: ['PAID', 'REJECTED', 'WRITTEN_OFF'] }),
     );
   });
 });

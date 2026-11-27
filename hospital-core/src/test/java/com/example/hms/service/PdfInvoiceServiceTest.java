@@ -722,6 +722,34 @@ class PdfInvoiceServiceTest {
             .doesNotContain("pdf.invoice.payerShare 5");
     }
 
+    /**
+     * Insurer claims plan PR 3 (QA D3983, the r77 case): a share of 11 800 of which the payer paid 9 000 and refused
+     * 2 800, re-billed to the patient: the invoice prints the refused part with its reason, and only that part.
+     */
+    @Test
+    void aPartlyRefusedSharePrintsTheRefusedAmountAndItsReason_D3983() throws Exception {
+        invoice.setTotalAmount(new BigDecimal("14750.00"));
+        invoice.setAmountPaid(BigDecimal.ZERO);
+        invoice.setPayerShareTotal(new BigDecimal("9000.00"));
+        var share = new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "RAMU",
+            "Formule Base", new BigDecimal("11800"), 2026, "PAID", "Plafond annuel atteint", null, null, "BC2-001",
+            null, null, new BigDecimal("9000"), new BigDecimal("2800"), BigDecimal.ZERO);
+
+        String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(), List.of(share),
+            Locale.FRENCH));
+
+        assertThat(PdfInvoiceService.refusedOf(share)).isEqualByComparingTo("2800");
+        assertThat(text).contains("pdf.invoice.payerShareRejected", "Plafond annuel atteint", "pdf.invoice.payerShare 9");
+        assertThat(text.replace('\u00a0', ' ')).contains("2 800 F CFA").doesNotContain("11 800 F CFA");
+        // A share nothing was refused of, and a cancelled one, print no refusal.
+        assertThat(PdfInvoiceService.refusedOf(new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(
+            UUID.randomUUID(), "RAMU", "Base", new BigDecimal("500"), 2026, "CLAIMED", null, null, null)))
+            .isEqualByComparingTo("0");
+        assertThat(PdfInvoiceService.refusedOf(new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(
+            UUID.randomUUID(), "RAMU", "Base", new BigDecimal("500"), 2026, "CANCELLED", null, null, null)))
+            .isEqualByComparingTo("0");
+    }
+
     /** QA D2434: each line of an invoice a payer covers prints its insurer part and its patient part. */
     @Test
     void anInsuredInvoicePrintsEachLinesSplit_D2434() throws Exception {

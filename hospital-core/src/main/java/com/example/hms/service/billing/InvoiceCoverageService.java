@@ -73,7 +73,7 @@ import java.util.stream.Collectors;
  *       refused instead.</li>
  *   <li><b>When the invoice is cancelled</b> ({@link #cancelWithInvoice}), its open share is cancelled, which frees
  *       the annual ceiling. A share already claimed or paid keeps the invoice from being cancelled.</li>
- *   <li><b>The payer's decision</b> ({@link #claim}, {@link #markPaid}, {@link #reject}): a REJECTED share, with the
+ *   <li><b>The payer's refusal before any claim</b> ({@link #reject}): a REJECTED share, with the
  *       payer's reason, moves back to the patient: the balance rises and the history keeps the original share.</li>
  * </ul>
  *
@@ -89,8 +89,8 @@ public class InvoiceCoverageService {
     private static final String AUDIT_ENTITY = "BILLING_INVOICE";
     private static final String FIELD_REASON = "reason";
     private static final int REASON_MAX = 500;
-    private static final Set<PayerShareStatus> LIVE =
-        EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED, PayerShareStatus.PAID);
+    private static final Set<PayerShareStatus> LIVE = EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED,
+        PayerShareStatus.PARTIALLY_PAID, PayerShareStatus.PAID, PayerShareStatus.WRITTEN_OFF);
 
     private final InvoicePayerShareRepository shareRepository;
     private final BillingInvoiceRepository invoiceRepository;
@@ -234,15 +234,23 @@ public class InvoiceCoverageService {
         CoverageCalculator.Result result = coverage == null
             ? new CoverageCalculator.Result(List.of(), BigDecimal.ZERO.setScale(2))
             : compute(invoice, hospitalId, lines, coverage, day);
+        if (current.getStatus() != PayerShareStatus.OPEN) {
+            // Insurer claims plan PR 2: a share on a bordereau already sent is frozen with it, line by line. A
+            // credit note that leaves each line's payer part as it is goes through; one that would move the total
+            // or the split is refused.
+            if (result.total().compareTo(current.getAmount()) == 0 && sameSplit(current, result)) {
+                return InvoiceBalance.payerShareOf(invoice);
+            }
+            throw new ConflictException(MessageUtil.resolve("billing.payerShare.lockedOnceClaimed"));
+        }
         if (result.total().compareTo(current.getAmount()) == 0) {
             // Review of #1353 (F1): the total can stand while the split moves (a ceiling filled in line order), so
-            // the share's own rows follow the lines, whatever its status: the amount owed is unchanged.
-            resplitShareLines(current, result);
+            // the share's own rows follow the lines; a draft bordereau holding the share follows them too.
+            if (resplitShareLines(current, result)) {
+                followOnDrafts(current.getId(), current, hospitalId);
+            }
             applyToLines(lines, result);
             return InvoiceBalance.payerShareOf(invoice);
-        }
-        if (current.getStatus() != PayerShareStatus.OPEN) {
-            throw new ConflictException(MessageUtil.resolve("billing.payerShare.lockedOnceClaimed"));
         }
         LocalDateTime at = LocalDateTime.now(clock);
         claimed(shareRepository.decide(current.getId(), hospitalId, EnumSet.of(PayerShareStatus.OPEN),
@@ -250,13 +258,16 @@ public class InvoiceCoverageService {
         current.setStatus(PayerShareStatus.CANCELLED);
         audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice, current.getId(),
             "Payer share replaced after a credit note");
+        InvoicePayerShare replacement = null;
         if (result.total().signum() > 0) {
-            InvoicePayerShare replacement = writeShare(invoice, hospitalId, current.getPatientInsuranceId(),
+            replacement = writeShare(invoice, hospitalId, current.getPatientInsuranceId(),
                 current.getPayerPlanId(), result.total(), day, actorId);
             writeShareLines(replacement, result);
             audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, replacement.getId(),
                 "Payer share applied after a credit note");
         }
+        // Insurer claims plan PR 2: a draft bordereau holding the old share now holds the new one, or drops it.
+        followOnDrafts(current.getId(), replacement, hospitalId);
         applyToLines(lines, result);
         invoice.setPayerShareTotal(result.total());
         return result.total();
@@ -285,6 +296,7 @@ public class InvoiceCoverageService {
             claimed(shareRepository.decide(share.getId(), hospitalId, EnumSet.of(PayerShareStatus.OPEN),
                 PayerShareStatus.CANCELLED, actorId, at, null));
             share.setStatus(PayerShareStatus.CANCELLED);
+            followOnDrafts(share.getId(), null, hospitalId);
             audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice, share.getId(),
                 "Payer share cancelled with its invoice");
         }
@@ -296,22 +308,12 @@ public class InvoiceCoverageService {
 
     /* ------------------------------------------------------- decisions */
 
-    /** The share was sent to the payer on a bordereau: OPEN to CLAIMED. */
-    @Transactional
-    public List<InvoicePayerShareDTO> claim(UUID invoiceId, UUID shareId) {
-        return decide(invoiceId, shareId, EnumSet.of(PayerShareStatus.OPEN), PayerShareStatus.CLAIMED, null);
-    }
-
-    /** The payer settled the share: OPEN or CLAIMED to PAID. */
-    @Transactional
-    public List<InvoicePayerShareDTO> markPaid(UUID invoiceId, UUID shareId) {
-        return decide(invoiceId, shareId, EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED),
-            PayerShareStatus.PAID, null);
-    }
-
     /**
-     * The payer refused the share, with its reason: OPEN or CLAIMED to REJECTED. The amount moves back to the
-     * patient (the invoice's balance rises by it); the row keeps the original amount.
+     * The payer refused the whole share before any claim was sent (the cover was wrong, the rights not valid): OPEN
+     * to REJECTED, with its reason. The amount moves back to the patient (the invoice's balance rises by it); the
+     * row keeps the original amount. Insurer claims plan PR 3: a share is claimed by sending its bordereau and paid
+     * by an insurer payment with an amount, a date and a reference, so the "claimed" and "paid" buttons are gone;
+     * a share already on a sent bordereau is refused line by line there, with the class of the payer's reason.
      */
     @Transactional
     public List<InvoicePayerShareDTO> reject(UUID invoiceId, UUID shareId, String reason) {
@@ -323,12 +325,6 @@ public class InvoiceCoverageService {
             throw new FieldBusinessException(FIELD_REASON, "billing.payerShare.reasonTooLong");
         }
         CardNumbers.requireNone(why, FIELD_REASON);
-        return decide(invoiceId, shareId, EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED),
-            PayerShareStatus.REJECTED, why);
-    }
-
-    private List<InvoicePayerShareDTO> decide(UUID invoiceId, UUID shareId, Set<PayerShareStatus> from,
-                                              PayerShareStatus to, String reason) {
         ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService, "payer share");
         UUID hospitalId = actingScopeResolver.requirePinned();
         UUID userId = roleValidator.getCurrentUserId();
@@ -340,35 +336,28 @@ public class InvoiceCoverageService {
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_NOT_FOUND, invoiceId));
         InvoicePayerShare share = shareRepository.findByIdAndInvoiceIdAndHospitalId(shareId, invoiceId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(SHARE_NOT_FOUND));
-        if (!from.contains(share.getStatus())) {
+        if (share.getStatus() != PayerShareStatus.OPEN) {
             throw new ConflictException(MessageUtil.resolve("billing.payerShare.notDecidable",
                 MessageUtil.resolve("billing.payerShare.status." + share.getStatus().name())));
         }
         LocalDateTime at = LocalDateTime.now(clock);
-        claimed(shareRepository.decide(share.getId(), hospitalId, from, to, userId, at, reason));
-        share.setStatus(to);
+        claimed(shareRepository.rejectWhole(share.getId(), hospitalId, userId, at, why));
+        share.setStatus(PayerShareStatus.REJECTED);
+        share.setRejectedAmount(share.getAmount());
         share.setDecidedBy(userId);
         share.setDecidedAt(at);
-        share.setRejectionReason(reason);
-        if (to == PayerShareStatus.REJECTED) {
-            BigDecimal left = InvoiceBalance.payerShareOf(invoice).subtract(share.getAmount()).max(BigDecimal.ZERO);
-            invoice.setPayerShareTotal(left);
-            if (left.signum() == 0) {
-                linesOf(invoice).forEach(line -> line.setPayerShareAmount(BigDecimal.ZERO));
-            }
-            // The share is the patient's again: the invoice is no longer settled by what the patient paid.
-            invoice.setStatus(InvoiceBalance.settledStatusOf(invoice));
-            invoiceRepository.save(invoice);
+        share.setRejectionReason(why);
+        // A draft bordereau no longer claims a share the payer will not pay.
+        followOnDrafts(share.getId(), null, hospitalId);
+        BigDecimal left = InvoiceBalance.payerShareOf(invoice).subtract(share.getAmount()).max(BigDecimal.ZERO);
+        invoice.setPayerShareTotal(left);
+        if (left.signum() == 0) {
+            linesOf(invoice).forEach(line -> line.setPayerShareAmount(BigDecimal.ZERO));
         }
-        // The audit row's words for the decision (the portal reads each in the reader's language).
-        switch (to) {
-            case CLAIMED -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
-                "Payer share claimed");
-            case PAID -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
-                "Payer share paid");
-            default -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
-                "Payer share rejected");
-        }
+        // The share is the patient's again: the invoice is no longer settled by what the patient paid.
+        invoice.setStatus(InvoiceBalance.settledStatusOf(invoice));
+        invoiceRepository.save(invoice);
+        audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(), "Payer share rejected");
         return readShares(invoice);
     }
 
@@ -409,7 +398,8 @@ public class InvoiceCoverageService {
                 share.getStatus().name(), share.getRejectionReason(), share.getDecidedAt(), share.getCreatedAt(),
                 coverage.map(PatientInsurance::getPolicyNumber).orElse(null),
                 coverage.map(PatientInsurance::getSubscriberName).orElse(null),
-                coverage.map(PatientInsurance::getSubscriberRelationship).orElse(null)));
+                coverage.map(PatientInsurance::getSubscriberRelationship).orElse(null),
+                share.getPaidAmount(), share.getRejectedAmount(), share.getWrittenOffAmount()));
         }
         return List.copyOf(out);
     }
@@ -486,6 +476,9 @@ public class InvoiceCoverageService {
         private final Map<UUID, String> actCodes;
         /** Per share, what it claimed of each line (V383); empty for a share written before V383. */
         private final Map<UUID, Map<UUID, BigDecimal>> claimedByShare;
+        /** Insurer claims plan PR 2: per share, the bordereau (not cancelled) it is on, and that bordereau's number. */
+        private final Map<UUID, UUID> batchByShare = new HashMap<>();
+        private final Map<UUID, String> batchNumbers = new HashMap<>();
 
         ShareNames(UUID hospitalId, List<InvoicePayerShare> shares) {
             this.hospitalId = hospitalId;
@@ -498,6 +491,16 @@ public class InvoiceCoverageService {
                 .collect(Collectors.groupingBy(com.example.hms.model.InvoicePayerShareLine::getShareId,
                     Collectors.toMap(com.example.hms.model.InvoicePayerShareLine::getInvoiceItemId,
                         com.example.hms.model.InvoicePayerShareLine::getAmount, (a, b) -> a)));
+            if (claimLineRepository != null && claimBatchRepository != null && !shareIds.isEmpty()) {
+                claimLineRepository.findByShareIdInAndHospitalIdAndReleasedFalse(shareIds, hospitalId)
+                    .forEach(line -> batchByShare.put(line.getShareId(), line.getBatchId()));
+                Set<UUID> batchIds = new java.util.HashSet<>(batchByShare.values());
+                if (!batchIds.isEmpty()) {
+                    claimBatchRepository.findByIdInAndHospitalId(batchIds, hospitalId).stream()
+                        .filter(batch -> batch.getNumber() != null)
+                        .forEach(batch -> batchNumbers.put(batch.getId(), batch.getNumber()));
+                }
+            }
             Set<UUID> invoiceIds = shares.stream().map(InvoicePayerShare::getInvoiceId).collect(Collectors.toSet());
             List<InvoiceItem> lines = invoiceIds.isEmpty() ? List.of()
                 : itemRepository.findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id(invoiceIds, hospitalId);
@@ -509,6 +512,15 @@ public class InvoiceCoverageService {
             this.actCodes = itemIds.isEmpty() ? Map.of() : priceListItemRepository.findAllById(itemIds).stream()
                 .filter(item -> hospitalId.equals(item.getHospitalId()) && item.getCode() != null)
                 .collect(Collectors.toMap(PriceListItem::getId, PriceListItem::getCode, (a, b) -> a));
+        }
+
+        UUID batchId(UUID shareId) {
+            return batchByShare.get(shareId);
+        }
+
+        String batchNumber(UUID shareId) {
+            UUID batchId = batchByShare.get(shareId);
+            return batchId != null ? batchNumbers.get(batchId) : null;
         }
 
         Optional<BillingInvoice> invoice(UUID id) {
@@ -602,6 +614,14 @@ public class InvoiceCoverageService {
             .amount(share.getAmount())
             .status(share.getStatus().name())
             .createdAt(share.getCreatedAt())
+            .paidAmount(share.getPaidAmount())
+            .rejectedAmount(share.getRejectedAmount())
+            .writtenOffAmount(share.getWrittenOffAmount())
+            .openAmount(share.getStatus().isLive() ? share.openAmount() : BigDecimal.ZERO)
+            .rejectionReason(share.getRejectionReason())
+            .decidedAt(share.getDecidedAt())
+            .claimBatchId(names.batchId(share.getId()))
+            .claimBatchNumber(names.batchNumber(share.getId()))
             .lines(names.claimedLines(share))
             .build();
     }
@@ -632,7 +652,7 @@ public class InvoiceCoverageService {
             boolean endedBefore = !share.getStatus().isLive() && share.getDecidedAt() != null
                 && !share.getDecidedAt().isAfter(at);
             if (writtenBy && !endedBefore) {
-                sum = sum.add(share.getAmount());
+                sum = sum.add(share.getAmount()).subtract(rebilledBy(share, at));
             }
         }
         return sum;
@@ -878,9 +898,19 @@ public class InvoiceCoverageService {
      * a per-invoice or annual ceiling the lines are filled in order). The share's rows are replaced by the new split
      * so « Parts assureurs » lists what the invoice lines now say; nothing is written when the split is unchanged.
      */
-    private void resplitShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+    private boolean resplitShareLines(InvoicePayerShare share, CoverageCalculator.Result result) {
+        if (shareLineRepository == null || share.getId() == null || sameSplit(share, result)) {
+            return false;
+        }
+        shareLineRepository.deleteByShareAndHospital(share.getId(), share.getHospitalId());
+        writeShareLines(share, result);
+        return true;
+    }
+
+    /** Whether the share's own rows already say what {@code result} gives each line. True when no rows are kept. */
+    private boolean sameSplit(InvoicePayerShare share, CoverageCalculator.Result result) {
         if (shareLineRepository == null || share.getId() == null) {
-            return;
+            return true;
         }
         Map<UUID, BigDecimal> stored = new HashMap<>();
         for (com.example.hms.model.InvoicePayerShareLine row
@@ -893,14 +923,49 @@ public class InvoiceCoverageService {
                 now.put(line.id(), line.share());
             }
         }
-        boolean same = stored.size() == now.size() && now.entrySet().stream()
+        return stored.size() == now.size() && now.entrySet().stream()
             .allMatch(entry -> stored.containsKey(entry.getKey())
                 && stored.get(entry.getKey()).compareTo(entry.getValue()) == 0);
-        if (same) {
-            return;
+    }
+
+    /* ------------------------------------------------- insurer claims (V455) */
+
+    private com.example.hms.service.billing.claim.InsurerClaimDraftSync claimDraftSync;
+    private com.example.hms.repository.InsurerClaimLineRepository claimLineRepository;
+    private com.example.hms.repository.InsurerClaimBatchRepository claimBatchRepository;
+    private com.example.hms.repository.InsurerClaimRefusalRepository claimRefusalRepository;
+
+    /**
+     * Insurer claims plan PRs 2 and 3: the bordereaux a share is on, and what was re-billed of it. Setter injected;
+     * a service built by hand in a unit test knows no bordereau.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setInsurerClaims(com.example.hms.service.billing.claim.InsurerClaimDraftSync claimDraftSync,
+                                 com.example.hms.repository.InsurerClaimLineRepository claimLineRepository,
+                                 com.example.hms.repository.InsurerClaimBatchRepository claimBatchRepository,
+                                 com.example.hms.repository.InsurerClaimRefusalRepository claimRefusalRepository) {
+        this.claimDraftSync = claimDraftSync;
+        this.claimLineRepository = claimLineRepository;
+        this.claimBatchRepository = claimBatchRepository;
+        this.claimRefusalRepository = claimRefusalRepository;
+    }
+
+    private void followOnDrafts(UUID previousShareId, InvoicePayerShare current, UUID hospitalId) {
+        if (claimDraftSync != null) {
+            claimDraftSync.follow(previousShareId, current, hospitalId);
         }
-        shareLineRepository.deleteByShareAndHospital(share.getId(), share.getHospitalId());
-        writeShareLines(share, result);
+    }
+
+    /**
+     * What had been re-billed to the patient of a live share by {@code at} (a refused bordereau line): that part had
+     * already left the payers' share at that moment. Zero for a share nothing was re-billed of.
+     */
+    private BigDecimal rebilledBy(InvoicePayerShare share, LocalDateTime at) {
+        if (claimRefusalRepository == null || !share.getStatus().isLive() || share.getRejectedAmount() == null
+                || share.getRejectedAmount().signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        return nonNull(claimRefusalRepository.sumRebilledOfShareBy(share.getId(), share.getHospitalId(), at));
     }
 
     private BigDecimal pharmacyUsed(UUID patientId, UUID hospitalId, int year, UUID excludedPrescriptionId) {

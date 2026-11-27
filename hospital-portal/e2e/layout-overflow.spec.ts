@@ -8,7 +8,13 @@ import { routedPages } from './helpers/routed-page-inventory';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
 import { signInAs, TEST_ID } from './helpers/role-session';
 import { registerStaffStateLayoutChecks } from './helpers/staff-state-layout';
-import { auditAtWidths, formatOffenders, heightFor, LAYOUT_WIDTHS } from './helpers/layout-audit';
+import {
+  auditAtWidths,
+  auditLayout,
+  formatOffenders,
+  heightFor,
+  LAYOUT_WIDTHS,
+} from './helpers/layout-audit';
 
 /**
  * QA D2230 / D2231 (owner screenshots 39–41, 2026-11-18): the invoice drawer
@@ -1963,4 +1969,294 @@ test.describe('r77 diagnostic worklist controls', () => {
       contentType: 'image/png',
     });
   });
+});
+
+/* ── Insurer claims (QA D3983): bordereaux, insurer payments, receivables, with rows ─────────────── */
+
+const CLAIM_BATCH_ID = '00000000-0000-0000-0000-0000000c1001';
+const CLAIM_PAYER = { id: TEST_ID, name: 'Mutuelle des Agents de la Santé du Burkina', plans: [] };
+
+function claimLine(n: number, extra: Record<string, unknown> = {}) {
+  return {
+    id: `00000000-0000-0000-0000-0000000c20${10 + n}`,
+    batchId: CLAIM_BATCH_ID,
+    batchNumber: 'BORD-2026-0001',
+    submittedOn: '2026-11-02',
+    shareId: `00000000-0000-0000-0000-0000000c30${10 + n}`,
+    invoiceId: `00000000-0000-0000-0000-0000000c40${10 + n}`,
+    invoiceItemId: `00000000-0000-0000-0000-0000000c50${10 + n}`,
+    patientName: n % 2 ? LONG_NAME : 'Kadidia Demo-Caisse',
+    patientMrn: 'MRN-CHWP-2026-000123',
+    policyNumber: 'MASB-2026-000045871-A',
+    subscriberName: 'Boukary Démo-Ouédraogo',
+    subscriberRelationship: 'Conjoint',
+    planName: 'Formule Famille Étendue',
+    invoiceNumber: `CHWF2396-2026-00000${n}`,
+    invoiceDate: '2026-10-14',
+    serviceDate: '2026-10-14',
+    dischargeDate: n === 2 ? '2026-10-19' : null,
+    actCode: 'IMG-SCAN-THX',
+    actLabel: 'Scanner thoracique avec injection de produit de contraste',
+    category: 'IMAGING',
+    quantity: 1,
+    grossAmount: 147_500,
+    patientAmount: 29_500,
+    preAuthorisationNumber: n === 3 ? null : 'BON-MASB-2026-000117',
+    attachedDocuments: 'Ordonnance, compte rendu, lettre de prise en charge',
+    claimedAmount: 118_000,
+    paidAmount: 90_000,
+    rebilledAmount: 0,
+    writtenOffAmount: 0,
+    writeOffPendingAmount: 0,
+    outstandingAmount: 28_000,
+    availableAmount: 28_000,
+    warnings: [],
+    refusals:
+      n === 1
+        ? [
+            {
+              id: '00000000-0000-0000-0000-0000000c6001',
+              claimLineId: `00000000-0000-0000-0000-0000000c2011`,
+              amount: 12_000,
+              reasonClass: 'PROVIDER_FAULT',
+              reason: 'Lettre de prise en charge absente du dossier transmis à l’organisme',
+              resolution: 'RESUBMIT',
+              recordedByName: 'Comptable Demo',
+              recordedAt: '2026-11-20T10:00:00',
+            },
+          ]
+        : [],
+    ...extra,
+  };
+}
+
+function claimBatch(extra: Record<string, unknown> = {}) {
+  return {
+    id: CLAIM_BATCH_ID,
+    number: 'BORD-2026-0001',
+    payerId: TEST_ID,
+    payerName: CLAIM_PAYER.name,
+    payerType: 'MUTUELLE',
+    status: 'PARTIALLY_SETTLED',
+    periodFrom: '2026-10-01',
+    periodTo: '2026-10-31',
+    submittedOn: '2026-11-02',
+    submittedByName: 'Facturier Demo',
+    payerReference: 'MASB/REC/2026/000981',
+    payerReceivedOn: '2026-11-05',
+    lineCount: 3,
+    fileCount: 3,
+    grossTotal: 442_500,
+    patientTotal: 88_500,
+    claimedTotal: 354_000,
+    paidTotal: 270_000,
+    rebilledTotal: 0,
+    writtenOffTotal: 0,
+    writeOffPendingTotal: 0,
+    outstandingTotal: 84_000,
+    lines: [claimLine(1), claimLine(2), claimLine(3)],
+    ...extra,
+  };
+}
+
+const CLAIM_PAGE = (rows: unknown[]) => ({
+  content: rows,
+  page: 0,
+  size: 25,
+  totalElements: rows.length,
+  totalPages: 1,
+});
+
+const AGEING_ROW = {
+  payerId: TEST_ID,
+  payerName: CLAIM_PAYER.name,
+  notClaimed: 1_250_000,
+  days0To30: 354_000,
+  days31To60: 1_875_500,
+  days61To90: 0,
+  over90Days: 12_450_000,
+  outstanding: 14_679_500,
+  writeOffPending: 28_000,
+  unallocated: 300_000,
+};
+
+const RECONCILIATION_ROW = {
+  payerId: TEST_ID,
+  payerName: CLAIM_PAYER.name,
+  batchCount: 12,
+  claimed: 24_679_500,
+  paid: 9_000_000,
+  rebilled: 500_000,
+  writtenOff: 500_000,
+  writeOffPending: 28_000,
+  outstanding: 14_679_500,
+  received: 9_300_000,
+  unallocated: 300_000,
+};
+
+const CLAIM_WRITE_OFF = {
+  id: '00000000-0000-0000-0000-0000000c7001',
+  claimLineId: '00000000-0000-0000-0000-0000000c2011',
+  batchId: CLAIM_BATCH_ID,
+  batchNumber: 'BORD-2026-0001',
+  payerName: CLAIM_PAYER.name,
+  invoiceNumber: 'CHWF2396-2026-000001',
+  patientName: LONG_NAME,
+  amount: 28_000,
+  reasonCode: 'IRRECOVERABLE_AFTER_RECOVERY',
+  reason:
+    'Organisme en liquidation : procès-verbal de carence reçu après mise en demeure restée sans effet',
+  supportingDocument: 'PV de carence n° 2026/0457 du 12/11/2026',
+  status: 'REQUESTED',
+  requestedByName: 'Facturier Demo',
+  requestedAt: '2026-11-21T09:00:00',
+  requestedByMe: false,
+};
+
+const CLAIM_PAYMENT = {
+  id: '00000000-0000-0000-0000-0000000c8001',
+  payerId: TEST_ID,
+  payerName: CLAIM_PAYER.name,
+  amount: 300_000,
+  receivedDate: '2026-11-20',
+  method: 'BANK_TRANSFER',
+  reference: 'VIR-BOA-2026-11-000457812',
+  note: 'Virement groupé couvrant les bordereaux d’octobre',
+  status: 'RECORDED',
+  allocatedAmount: 270_000,
+  unallocatedAmount: 30_000,
+  recordedByName: 'Comptable Demo',
+  recordedAt: '2026-11-20T11:00:00',
+  recordedByMe: false,
+};
+
+async function seedInsurerClaims(page: Page): Promise<void> {
+  const base = '**/api/billing-invoices/insurer-claims';
+  await page.route('**/api/billing/payers**', (r) => r.fulfill({ json: [CLAIM_PAYER] }));
+  await page.route(`${base}/batches**`, (r) =>
+    r.fulfill({
+      json: CLAIM_PAGE([
+        claimBatch({ lines: undefined }),
+        claimBatch({ id: TEST_ID, number: null, status: 'DRAFT', lines: undefined }),
+      ]),
+    }),
+  );
+  await page.route(`${base}/batches/${CLAIM_BATCH_ID}`, (r) => r.fulfill({ json: claimBatch() }));
+  await page.route(`${base}/open-lines**`, (r) =>
+    r.fulfill({ json: [claimLine(1), claimLine(2), claimLine(3)] }),
+  );
+  await page.route(`${base}/payments**`, (r) =>
+    r.fulfill({
+      json: CLAIM_PAGE([
+        CLAIM_PAYMENT,
+        {
+          ...CLAIM_PAYMENT,
+          id: TEST_ID,
+          status: 'REVERSED',
+          reversalReason: 'Saisi deux fois par erreur le même jour',
+        },
+      ]),
+    }),
+  );
+  await page.route(`${base}/write-offs**`, (r) => r.fulfill({ json: [CLAIM_WRITE_OFF] }));
+  await page.route(`${base}/reports/ageing**`, (r) =>
+    r.fulfill({ json: { asOf: '2026-11-27', rows: [AGEING_ROW], total: AGEING_ROW } }),
+  );
+  await page.route(`${base}/reports/reconciliation**`, (r) =>
+    r.fulfill({
+      json: {
+        fromDate: null,
+        toDate: '2026-11-27',
+        rows: [RECONCILIATION_ROW],
+        total: RECONCILIATION_ROW,
+      },
+    }),
+  );
+}
+
+/** The widths the insurer claims screens are checked at: a phone, a tablet and a desktop. */
+const CLAIM_WIDTHS = [1440, 768, 390] as const;
+
+const CLAIM_SCREENS: {
+  label: string;
+  route: string;
+  ready: string;
+  then?: (page: Page) => Promise<void>;
+}[] = [
+  {
+    label: 'bordereaux',
+    route: '/billing/bordereaux',
+    ready: '[data-testid="claim-batches-list"]',
+  },
+  {
+    label: 'bordereau envoyé',
+    route: `/billing/bordereaux/${CLAIM_BATCH_ID}`,
+    ready: '[data-testid="claim-batch-lines"]',
+  },
+  {
+    label: 'bordereau, refus d’une ligne',
+    route: `/billing/bordereaux/${CLAIM_BATCH_ID}`,
+    ready: '[data-testid="claim-batch-lines"]',
+    then: async (page) => {
+      await page.locator('[data-testid^="claim-line-refuse-"]').first().click();
+      await expect(page.locator('[data-testid="claim-action-form"]')).toBeVisible();
+    },
+  },
+  {
+    label: 'règlements assureurs',
+    route: '/billing/reglements-assureurs',
+    ready: '[data-testid="insurer-payments-list"]',
+  },
+  {
+    label: 'règlement, grille d’affectation',
+    route: '/billing/reglements-assureurs',
+    ready: '[data-testid="insurer-payments-list"]',
+    then: async (page) => {
+      await page.locator('[data-testid="insurer-payment-new"]').click();
+      await page.locator('#insurer-payment-payer').selectOption(TEST_ID);
+      await expect(page.locator('[data-testid="insurer-payment-grid"]')).toBeVisible();
+    },
+  },
+  {
+    label: 'créances assureurs',
+    route: '/billing/creances-assureurs',
+    ready: '[data-testid="ageing-table"]',
+  },
+];
+
+test.describe('layout overflow: insurer claims screens (D3983)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const screen of CLAIM_SCREENS) {
+    test(`fits at 390, 768 and 1440: ${screen.label}`, async ({ page }, testInfo) => {
+      await seedInsurerClaims(page);
+      await open(page, testInfo.project.use.baseURL as string, 'ROLE_ACCOUNTANT', screen.route);
+      await expect(page.locator(screen.ready)).toBeVisible();
+      if (screen.then) await screen.then(page);
+      const found: Awaited<ReturnType<typeof auditAtWidths>> = [];
+      for (const width of CLAIM_WIDTHS) {
+        await page.setViewportSize({ width, height: heightFor(width) });
+        await page.evaluate(() => {
+          const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+          if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+        });
+        await page.evaluate(
+          () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+        );
+        for (const offender of await auditLayout(page)) {
+          found.push({ where: screen.label, width, offender });
+        }
+        // The page itself never scrolls sideways.
+        const sideways = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect
+          .soft(sideways, `${screen.label} scrolls sideways at ${width}px`)
+          .toBeLessThanOrEqual(1);
+      }
+      const name = 'claims-' + screen.label.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
+      await shoot(page, name, CLAIM_WIDTHS);
+      expect(found, formatOffenders(found)).toEqual([]);
+    });
+  }
 });

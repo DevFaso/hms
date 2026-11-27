@@ -141,6 +141,9 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/billing/tarifs': 'BILLING',
   '/billing/organismes': 'BILLING',
   '/billing/parts-assureurs': 'BILLING',
+  '/billing/bordereaux': 'BILLING',
+  '/billing/reglements-assureurs': 'BILLING',
+  '/billing/creances-assureurs': 'BILLING',
 
   // ── INSIGHTS ─────────────────────────────────────────────────────────
   '/analytics': 'INSIGHTS',

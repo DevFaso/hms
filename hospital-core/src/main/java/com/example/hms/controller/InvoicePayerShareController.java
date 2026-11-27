@@ -116,23 +116,9 @@ public class InvoicePayerShareController {
         return ResponseEntity.ok(coverageService.list(invoiceId));
     }
 
-    @PostMapping("/{invoiceId}/payer-shares/{shareId}/claim")
-    @PreAuthorize(DECIDERS)
-    @Operation(summary = "Mark a payer share as sent to the payer")
-    public ResponseEntity<List<InvoicePayerShareDTO>> claim(@PathVariable UUID invoiceId, @PathVariable UUID shareId) {
-        return ResponseEntity.ok(coverageService.claim(invoiceId, shareId));
-    }
-
-    @PostMapping("/{invoiceId}/payer-shares/{shareId}/paid")
-    @PreAuthorize(DECIDERS)
-    @Operation(summary = "Mark a payer share as settled by the payer")
-    public ResponseEntity<List<InvoicePayerShareDTO>> paid(@PathVariable UUID invoiceId, @PathVariable UUID shareId) {
-        return ResponseEntity.ok(coverageService.markPaid(invoiceId, shareId));
-    }
-
     @PostMapping("/{invoiceId}/payer-shares/{shareId}/reject")
     @PreAuthorize(DECIDERS)
-    @Operation(summary = "Record that the payer refused its share, with its reason; the patient owes it again")
+    @Operation(summary = "Record that the payer refused a share not yet claimed, with its reason; the patient owes it")
     public ResponseEntity<List<InvoicePayerShareDTO>> reject(
         @PathVariable UUID invoiceId,
         @PathVariable UUID shareId,

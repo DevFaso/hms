@@ -1,0 +1,405 @@
+<div class="page-container" data-testid="insurer-payments-page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INSURER_CLAIMS.PAYMENTS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INSURER_CLAIMS.PAYMENTS.SUBTITLE' | translate }}</p>
+    </div>
+    @if (isFinance && mode() === 'idle') {
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="insurer-payment-new"
+          (click)="startRecord()"
+        >
+          {{ 'INSURER_CLAIMS.PAYMENTS.RECORD' | translate }}
+        </button>
+      </div>
+    }
+  </div>
+
+  <app-claims-nav current="payments" />
+
+  @if (!isFinance) {
+    <p class="claims-note" data-testid="insurer-payments-read-only">
+      {{ 'INSURER_CLAIMS.PAYMENTS.FINANCE_ONLY' | translate }}
+    </p>
+  }
+
+  @if (mode() !== 'idle') {
+    <section class="claims-panel" aria-labelledby="insurer-payment-form-title">
+      <h2 id="insurer-payment-form-title">
+        {{
+          (mode() === 'record'
+            ? 'INSURER_CLAIMS.PAYMENTS.RECORD'
+            : 'INSURER_CLAIMS.PAYMENTS.ALLOCATE_TITLE'
+          ) | translate
+        }}
+      </h2>
+      <form class="claims-form" data-testid="insurer-payment-form" (ngSubmit)="save()">
+        @if (mode() === 'record') {
+          <div>
+            <label for="insurer-payment-payer"
+              >{{ 'INSURER_CLAIMS.SHARES.PAYER' | translate }} *</label
+            >
+            <select
+              appFormControl
+              id="insurer-payment-payer"
+              name="payerId"
+              required
+              data-testid="insurer-payment-payer"
+              [ngModel]="payerId()"
+              (ngModelChange)="setPayer($event)"
+            >
+              <option value="">{{ 'INSURER_CLAIMS.BATCHES.CHOOSE_PAYER' | translate }}</option>
+              @for (payer of payers(); track payer.id) {
+                <option [value]="payer.id">{{ payer.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label for="insurer-payment-amount"
+              >{{ 'INSURER_CLAIMS.PAYMENTS.AMOUNT' | translate }} *</label
+            >
+            <input
+              appFormControl
+              type="text"
+              inputmode="numeric"
+              id="insurer-payment-amount"
+              name="amount"
+              required
+              data-testid="insurer-payment-amount"
+              [ngModel]="amount()"
+              (ngModelChange)="amount.set($event ?? '')"
+            />
+          </div>
+          <div>
+            <label for="insurer-payment-date"
+              >{{ 'INSURER_CLAIMS.PAYMENTS.RECEIVED_ON' | translate }} *</label
+            >
+            <input
+              appFormControl
+              type="date"
+              id="insurer-payment-date"
+              name="receivedDate"
+              required
+              data-testid="insurer-payment-date"
+              [ngModel]="receivedDate()"
+              (ngModelChange)="receivedDate.set($event ?? '')"
+            />
+          </div>
+          <div>
+            <label for="insurer-payment-method"
+              >{{ 'INSURER_CLAIMS.PAYMENTS.METHOD' | translate }} *</label
+            >
+            <select
+              appFormControl
+              id="insurer-payment-method"
+              name="method"
+              required
+              [ngModel]="method()"
+              (ngModelChange)="method.set($event)"
+            >
+              @for (choice of methods; track choice) {
+                <option [value]="choice">
+                  {{ choice | keyLabel: 'INSURER_CLAIMS.PAYMENT_METHOD.' }}
+                </option>
+              }
+            </select>
+          </div>
+          <div>
+            <label for="insurer-payment-reference"
+              >{{ 'INSURER_CLAIMS.PAYMENTS.REFERENCE' | translate }} *</label
+            >
+            <input
+              appFormControl
+              type="text"
+              id="insurer-payment-reference"
+              name="reference"
+              maxlength="120"
+              required
+              data-testid="insurer-payment-reference"
+              [ngModel]="reference()"
+              (ngModelChange)="reference.set($event ?? '')"
+            />
+          </div>
+          <div>
+            <label for="insurer-payment-note">{{
+              'INSURER_CLAIMS.PAYMENTS.NOTE' | translate
+            }}</label>
+            <input
+              appFormControl
+              type="text"
+              id="insurer-payment-note"
+              name="note"
+              maxlength="500"
+              [ngModel]="note()"
+              (ngModelChange)="note.set($event ?? '')"
+            />
+          </div>
+        } @else if (target(); as payment) {
+          <p class="claims-note claims-wide">
+            {{
+              'INSURER_CLAIMS.PAYMENTS.ALLOCATE_LINE'
+                | translate
+                  : {
+                      payer: payment.payerName ?? '',
+                      reference: payment.reference,
+                      amount: (payment.unallocatedAmount | cfa: 'XOF'),
+                    }
+            }}
+          </p>
+        }
+
+        <div class="claims-wide">
+          @if (openLines().length === 0) {
+            <p class="muted" data-testid="insurer-payment-no-lines">
+              {{
+                (mode() === 'record' && !payerId()
+                  ? 'INSURER_CLAIMS.PAYMENTS.CHOOSE_PAYER_FIRST'
+                  : 'INSURER_CLAIMS.PAYMENTS.NO_OPEN_LINES'
+                ) | translate
+              }}
+            </p>
+          } @else {
+            <div class="claims-actions">
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="insurer-payment-propose"
+                (click)="propose()"
+              >
+                {{ 'INSURER_CLAIMS.PAYMENTS.PROPOSE' | translate }}
+              </button>
+            </div>
+            <div class="claims-table-wrap">
+              <table class="claims-table" data-testid="insurer-payment-grid">
+                <caption class="sr-only">
+                  {{
+                    'INSURER_CLAIMS.PAYMENTS.GRID' | translate
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'INSURER_CLAIMS.NAV.BATCHES' | translate }}</th>
+                    <th scope="col">{{ 'R70_MONEY.SHARES.INVOICE' | translate }}</th>
+                    <th scope="col">{{ 'INSURER_CLAIMS.SHARES.ACT' | translate }}</th>
+                    <th scope="col" class="amount">
+                      {{ 'INSURER_CLAIMS.PAYMENTS.EXPECTED' | translate }}
+                    </th>
+                    <th scope="col" class="amount">
+                      {{ 'INSURER_CLAIMS.PAYMENTS.ALLOCATED' | translate }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (line of openLines(); track line.id) {
+                    <tr>
+                      <td>{{ line.batchNumber || '—' }}</td>
+                      <td>
+                        {{ line.invoiceNumber || '—' }}
+                        <div class="muted">{{ line.patientName || '—' }}</div>
+                      </td>
+                      <td>{{ line.actLabel || '—' }}</td>
+                      <td class="amount">{{ line.availableAmount | cfa: 'XOF' }}</td>
+                      <td class="amount">
+                        <label class="sr-only" [for]="'insurer-alloc-' + line.id">{{
+                          'INSURER_CLAIMS.PAYMENTS.ALLOCATED_FOR'
+                            | translate: { invoice: line.invoiceNumber ?? '' }
+                        }}</label>
+                        <input
+                          appFormControl
+                          type="text"
+                          inputmode="numeric"
+                          [id]="'insurer-alloc-' + line.id"
+                          [name]="'alloc-' + line.id"
+                          [attr.data-testid]="'insurer-alloc-' + line.id"
+                          [ngModel]="allocation()[line.id] ?? ''"
+                          (ngModelChange)="setAllocation(line, $event)"
+                        />
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          <p class="claims-amount" data-testid="insurer-payment-unallocated" aria-live="polite">
+            {{
+              'INSURER_CLAIMS.PAYMENTS.UNALLOCATED_LINE'
+                | translate
+                  : {
+                      allocated: (allocated() | cfa: 'XOF'),
+                      left: (unallocated() | cfa: 'XOF'),
+                    }
+            }}
+          </p>
+        </div>
+
+        <div class="claims-actions">
+          <button
+            type="submit"
+            class="btn-primary btn-sm"
+            data-testid="insurer-payment-save"
+            [disabled]="busy()"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+          <button type="button" class="btn-secondary btn-sm" (click)="stop()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  @if (loading()) {
+    <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="muted" role="alert" data-testid="insurer-payments-failed">
+      {{ 'INSURER_CLAIMS.PAYMENTS.LOAD_FAILED' | translate }}
+    </p>
+  } @else if (rows().length === 0) {
+    <p class="muted" data-testid="insurer-payments-empty">
+      {{ 'INSURER_CLAIMS.PAYMENTS.EMPTY' | translate }}
+    </p>
+  } @else {
+    <ul class="claims-list" data-testid="insurer-payments-list">
+      @for (row of rows(); track row.id) {
+        <li class="claims-card" [attr.data-testid]="'insurer-payment-' + row.id">
+          <div class="claims-card-head">
+            <strong>{{ row.payerName || '—' }} · {{ row.amount | cfa: 'XOF' }}</strong>
+            <span class="claims-status" [attr.data-status]="row.status">{{
+              row.status | keyLabel: 'INSURER_CLAIMS.PAYMENT_STATUS.'
+            }}</span>
+          </div>
+          <dl class="claims-meta">
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.PAYMENTS.RECEIVED_ON' | translate }}</dt>
+              <dd>{{ row.receivedDate | dayMonth: undefined : true }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.PAYMENTS.METHOD' | translate }}</dt>
+              <dd>{{ row.method | keyLabel: 'INSURER_CLAIMS.PAYMENT_METHOD.' }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.PAYMENTS.REFERENCE' | translate }}</dt>
+              <dd>{{ row.reference }}</dd>
+            </div>
+            @if (row.status === 'RECORDED') {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.PAYMENTS.ALLOCATED' | translate }}</dt>
+                <dd>{{ row.allocatedAmount | cfa: 'XOF' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.PAYMENTS.TO_ALLOCATE' | translate }}</dt>
+                <dd class="claims-amount" [attr.data-testid]="'insurer-payment-left-' + row.id">
+                  {{ row.unallocatedAmount | cfa: 'XOF' }}
+                </dd>
+              </div>
+            }
+            @if (row.recordedByName) {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.PAYMENTS.RECORDED_BY' | translate }}</dt>
+                <dd>{{ row.recordedByName }}</dd>
+              </div>
+            }
+          </dl>
+          @if (row.note) {
+            <p class="claims-note">{{ row.note }}</p>
+          }
+          @if (row.status === 'REVERSED' && row.reversalReason) {
+            <p class="claims-warning">
+              {{
+                'INSURER_CLAIMS.PAYMENTS.REVERSED_LINE' | translate: { reason: row.reversalReason }
+              }}
+            </p>
+          }
+          @if (isFinance && row.status === 'RECORDED' && mode() === 'idle') {
+            <div class="claims-actions">
+              @if (row.unallocatedAmount > 0) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [attr.data-testid]="'insurer-payment-allocate-' + row.id"
+                  (click)="startAllocate(row)"
+                >
+                  {{ 'INSURER_CLAIMS.PAYMENTS.ALLOCATE' | translate }}
+                </button>
+              }
+              @if (canReverse(row)) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [attr.data-testid]="'insurer-payment-reverse-' + row.id"
+                  (click)="startReverse(row)"
+                >
+                  {{ 'INSURER_CLAIMS.PAYMENTS.REVERSE' | translate }}
+                </button>
+              } @else {
+                <span class="muted">{{
+                  'INSURER_CLAIMS.PAYMENTS.REVERSE_BY_OTHER' | translate
+                }}</span>
+              }
+            </div>
+          }
+          @if (reversing() === row.id) {
+            <form class="claims-sub claims-form" (ngSubmit)="confirmReverse(row)">
+              <div class="claims-wide">
+                <label for="insurer-reverse-reason"
+                  >{{ 'INSURER_CLAIMS.PAYMENTS.REVERSE_REASON' | translate }} *</label
+                >
+                <input
+                  appFormControl
+                  type="text"
+                  id="insurer-reverse-reason"
+                  name="reversalReason"
+                  maxlength="500"
+                  required
+                  [ngModel]="reversalReason()"
+                  (ngModelChange)="reversalReason.set($event ?? '')"
+                />
+              </div>
+              <div class="claims-actions">
+                <button
+                  type="submit"
+                  class="btn-primary btn-sm"
+                  data-testid="insurer-payment-reverse-confirm"
+                  [disabled]="busy()"
+                >
+                  {{ 'INSURER_CLAIMS.PAYMENTS.REVERSE' | translate }}
+                </button>
+                <button type="button" class="btn-secondary btn-sm" (click)="reversing.set(null)">
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
+              </div>
+            </form>
+          }
+        </li>
+      }
+    </ul>
+    @if (totalPages() > 1) {
+      <nav class="claims-pager" [attr.aria-label]="'INSURER_CLAIMS.SHARES.PAGES' | translate">
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          [disabled]="page() === 0"
+          (click)="goTo(page() - 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.PREVIOUS' | translate }}
+        </button>
+        <span>{{
+          'INSURER_CLAIMS.SHARES.PAGE' | translate: { page: page() + 1, pages: totalPages() }
+        }}</span>
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          [disabled]="page() + 1 >= totalPages()"
+          (click)="goTo(page() + 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.NEXT' | translate }}
+        </button>
+      </nav>
+    }
+  }
+</div>

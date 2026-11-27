@@ -81,6 +81,12 @@ class RestrictedChartEnforcementGuardTest {
             "the hospital administrator's bulk export for an integration (system to system), not a chart read"),
         entry("FhirBulkExportStatusController#getStatus", "the status of that export job: counts, no record"),
         entry("HospitalClinicalRulesController#pack", "the hospital's clinical-rule sign-off pack: nobody's record"),
+        entry("InsurerClaimController#bordereauCsv",
+            "a bordereau for the payer: billing lines of many patients (act, amounts, policy), built and read by the"
+                + " hospital's claims roles; no diagnosis, no clinical note; each export is audited"),
+        entry("InsurerClaimController#bordereauPdf",
+            "a bordereau for the payer: billing lines of many patients (act, amounts, policy), built and read by the"
+                + " hospital's claims roles; no diagnosis, no clinical note; each export is audited"),
         entry("InvoiceRefundController#receipt", "a refund receipt: money"),
         entry("PrintLabelController#specimenLabel",
             "the specimen tube label (identity and accession), printed by whoever draws the sample"),
@@ -94,6 +100,7 @@ class RestrictedChartEnforcementGuardTest {
         entry("BedResponseDTO", "a bed"),
         entry("BedBoardEntryDTO#notes", "a note about the bed; the occupant carries its patientId"),
         entry("BloodUnitResponseDTO", "a blood unit in stock"),
+        entry("InsurerPaymentDTO#note", "the accountant's note on a payer's remittance: money, about no patient"),
         entry("CashSessionDTO", "a till session: money"),
         entry("ComplianceAlertDTO", "an organisation's compliance alert"),
         entry("CredentialRenewalResponseDTO", "a clinician's credential"),

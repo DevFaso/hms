@@ -173,6 +173,9 @@ class HospitalRepositoryCallerCoverageTest {
             "QA D1114/D1121: reads the hospital's time-zone id as a value to write a card time on its wall clock;"
                 + " grants, writes and lists nothing"),
         // QA r65 D2500/D2501 (track I).
+        entry("InsurerClaimAccess#findTimezoneIdById",
+            "the time-zone id of the acting hospital (already resolved and role-checked), as a value: today's date for"
+                + " a bordereau's sending date and an insurer payment's date; grants, writes and lists nothing"),
         entry("MeController#findTimezoneIdById",
             "the time-zone id of the caller's own facility (already read by id above), as a value for display"),
         entry("HospitalServiceImpl#findByCodeIgnoreCase",

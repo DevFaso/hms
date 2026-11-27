@@ -11,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -24,13 +25,12 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
-import { formatCfa } from '../../shared/i18n/app-locale';
 import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { refuseFields } from '../../shared/forms/invalid-fields';
-import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ClaimsNavComponent } from '../insurer-claims/claims-nav.component';
 
 /** The field id of a share's rejection reason. */
 export function payerShareReasonId(share: { id: string }): string {
@@ -39,10 +39,13 @@ export function payerShareReasonId(share: { id: string }): string {
 
 /**
  * QA D2706 (r70): « Parts assureurs », the hospital's insurer shares in one list. The claims reviewer had no screen
- * for them (403 on /billing; the share was reachable only through the invoice drawer). OPEN and CLAIMED shares by
- * default, the paid and refused ones on demand; the roles that decide a share (InvoicePayerShareController) mark it
- * claimed or paid, or record the payer's refusal with its reason (never a card number). The server checks every
- * step again.
+ * for them (403 on /billing; the share was reachable only through the invoice drawer). The shares still owed by
+ * default, the closed ones on demand.
+ *
+ * Insurer claims PRs 2 and 3 (QA D3983): a share is claimed by sending its bordereau and paid by an insurer payment
+ * with an amount, a date and a reference, so « Marquer réclamée » and « Marquer payée » are gone. Each row shows the
+ * bordereau it is on, what was paid, refused and written off, the payer's reason and the date of the last change.
+ * The only step left here is the payer's refusal of a share not yet claimed (the cover was wrong).
  *
  * Insurer claims PR 1 (G1, G2): filtered by payer, plan and service period, paged by the server, with the total of
  * every page; each share shows the policy number, the subscriber and the acts claimed, each with its act code and
@@ -60,6 +63,8 @@ export function payerShareReasonId(share: { id: string }): string {
     DayMonthPipe,
     KeyLabelPipe,
     EnumLabelPipe,
+    RouterLink,
+    ClaimsNavComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './payer-shares-list.component.html',
@@ -72,7 +77,6 @@ export class PayerSharesListComponent {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly confirm = inject(ConfirmService);
 
   /** The roles that decide a share (the super-admin reads only). */
   readonly canDecide = this.roleContext.hasAnyActiveRole([
@@ -165,7 +169,9 @@ export class PayerSharesListComponent {
   load(page = this.page()): void {
     const seq = ++this.request;
     const statuses: PayerShareStatus[] =
-      this.view() === 'open' ? ['OPEN', 'CLAIMED'] : ['PAID', 'REJECTED'];
+      this.view() === 'open'
+        ? ['OPEN', 'CLAIMED', 'PARTIALLY_PAID']
+        : ['PAID', 'REJECTED', 'WRITTEN_OFF'];
     this.loading.set(true);
     this.failed.set(false);
     this.billing
@@ -207,12 +213,9 @@ export class PayerSharesListComponent {
       });
   }
 
-  canClaim(row: OpenPayerShare): boolean {
+  /** The payer's refusal of a share not yet on a sent bordereau; a claimed one is refused line by line there. */
+  canReject(row: OpenPayerShare): boolean {
     return this.canDecide && row.status === 'OPEN';
-  }
-
-  canSettle(row: OpenPayerShare): boolean {
-    return this.canDecide && (row.status === 'OPEN' || row.status === 'CLAIMED');
   }
 
   startReject(row: OpenPayerShare): void {
@@ -239,16 +242,6 @@ export class PayerSharesListComponent {
       return;
     }
     this.decide(row, 'reject', reason);
-  }
-
-  /** Review of #1284: « Marquer payée » settles the share for good; it is confirmed first, naming the amount. */
-  async markPaid(row: OpenPayerShare): Promise<void> {
-    const sure = await this.confirm.ask({
-      titleKey: 'R70_MONEY.SHARES.PAID_CONFIRM',
-      params: { amount: formatCfa(row.amount, 'XOF'), payer: row.payerName ?? '' },
-      confirmKey: 'R70_MONEY.SHARES.PAID',
-    });
-    if (sure) this.decide(row, 'paid');
   }
 
   decide(row: OpenPayerShare, decision: PayerShareDecision, reason?: string): void {

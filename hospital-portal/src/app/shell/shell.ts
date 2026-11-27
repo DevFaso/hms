@@ -947,6 +947,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'outbox',
+        label: 'Claim sheets',
+        translationKey: 'NAV.CLAIM_BATCHES',
+        route: '/billing/bordereaux',
+        permission: 'View Billing',
+        // Insurer claims PR 2 (QA D3983): mirrors the /billing/bordereaux RoleGuard; its tabs lead to the
+        // insurer payments and the receivables.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_CLAIMS_REVIEWER',
+        ],
+      },
+      {
         icon: 'science',
         label: 'Laboratory',
         translationKey: 'NAV.LABORATORY',
