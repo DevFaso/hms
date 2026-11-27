@@ -13532,6 +13532,7 @@
     "NONE_YET": "No scheduled reports yet",
     "NONE_YET_HINT": "Create one to email an aggregate CSV each day, week or month.",
     "NO_RUNS": "No runs yet for this report",
+    "WEEK_LABEL": "Week {{week}}, {{year}}",
     "PERIOD_TOKEN": "Period",
     "ROWS": "Rows",
     "GENERATED_AT": "Generated",
