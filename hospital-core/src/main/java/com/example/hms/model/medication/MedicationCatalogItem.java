@@ -1,5 +1,6 @@
 package com.example.hms.model.medication;
 
+import com.example.hms.enums.MedicationCatalogVersionKind;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Hospital;
 import jakarta.persistence.Column;
@@ -23,6 +24,11 @@ import lombok.ToString;
 /**
  * Normalized medication catalog item linked to Burkina's essential-medicines list.
  * Replaces free-text medication names with structured, searchable medication data.
+ *
+ * <p>Go-live D2 (V385): what prescribing and dispensing read (the fields marked {@link ApprovedContent}) changes
+ * through an approved {@link MedicationCatalogVersion} and {@link MedicationCatalogApprovedWrite}, never in place:
+ * {@code MedicationCatalogApprovedWriteGuardTest} fails on any other caller of their setters, and on a new field
+ * that is not classified.
  */
 @Entity
 @Table(
@@ -54,41 +60,49 @@ public class MedicationCatalogItem extends BaseEntity {
     @NotBlank
     @Size(max = 500)
     @Column(name = "name_fr", nullable = false, length = 500)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String nameFr;
 
     /** International Nonproprietary Name (INN) / generic name. */
     @NotBlank
     @Size(max = 500)
     @Column(name = "generic_name", nullable = false, length = 500)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String genericName;
 
     @Size(max = 500)
     @Column(name = "brand_name", length = 500)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String brandName;
 
     /** ATC (Anatomical Therapeutic Chemical) classification code. */
     @Size(max = 20)
     @Column(name = "atc_code", length = 20)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String atcCode;
 
     /** Dosage form (tablet, capsule, syrup, injection, etc.). */
     @Size(max = 100)
     @Column(length = 100)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String form;
 
     /** Strength value (e.g. "500", "250/125"). */
     @Size(max = 100)
     @Column(length = 100)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String strength;
 
     /** Strength unit (mg, ml, g, etc.). */
     @Size(max = 50)
     @Column(name = "strength_unit", length = 50)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String strengthUnit;
 
     /** Optional RxNorm crosswalk code. */
     @Size(max = 20)
     @Column(name = "rxnorm_code", length = 20)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String rxnormCode;
 
     /**
@@ -99,11 +113,13 @@ public class MedicationCatalogItem extends BaseEntity {
      */
     @Size(max = 200)
     @Column(name = "tall_man_name", length = 200)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String tallManName;
 
     /** Route of administration (oral, IV, IM, topical, etc.). */
     @Size(max = 100)
     @Column(length = 100)
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private String route;
 
     /** Therapeutic category (antibiotic, analgesic, etc.). */
@@ -117,6 +133,7 @@ public class MedicationCatalogItem extends BaseEntity {
      * emits an advisory instead of a hard block.
      */
     @Column(name = "pediatric_max_dose_mg_per_kg", precision = 8, scale = 3)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.math.BigDecimal pediatricMaxDoseMgPerKg;
 
     /* Round 18 (QA D935, V247): the rest of a real formulary's paediatric
@@ -125,14 +142,17 @@ public class MedicationCatalogItem extends BaseEntity {
 
     /** Usual maximum per day, mg/kg/day (soft stop). */
     @Column(name = "pediatric_max_daily_mg_per_kg", precision = 8, scale = 3)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.math.BigDecimal pediatricMaxDailyMgPerKg;
 
     /** Absolute maximum per dose in mg, whatever the weight (soft stop). */
     @Column(name = "pediatric_max_single_dose_mg", precision = 10, scale = 3)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.math.BigDecimal pediatricMaxSingleDoseMg;
 
     /** Absolute maximum per day in mg, whatever the weight (HARD stop). */
     @Column(name = "pediatric_max_daily_mg", precision = 10, scale = 3)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.math.BigDecimal pediatricMaxDailyMg;
 
     /**
@@ -140,28 +160,34 @@ public class MedicationCatalogItem extends BaseEntity {
      * manual pharmacist/physician review. Null means the default, 3 months.
      */
     @Column(name = "pediatric_manual_review_under_months")
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private Integer pediatricManualReviewUnderMonths;
 
     /** Weight bands replacing the mg/kg check (artemether-lumefantrine). */
     @jakarta.persistence.Convert(converter = com.example.hms.model.converter.PediatricWeightBandConverter.class)
     @Column(name = "pediatric_weight_bands", columnDefinition = "TEXT")
     @Builder.Default
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.util.List<PediatricWeightBand> pediatricWeightBands = new java.util.ArrayList<>();
 
     /** Where the paediatric limits come from (the published reference). */
     @Column(name = "pediatric_dose_source", length = 500)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private String pediatricDoseSource;
 
     /** Default awaiting local approval, or approved by this hospital's pharmacy. */
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     @Column(name = "pediatric_dose_status", length = 40)
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private com.example.hms.enums.PediatricDoseLimitStatus pediatricDoseStatus;
 
     /** The user who last set or approved the paediatric limits. */
     @Column(name = "pediatric_dose_reviewed_by")
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.util.UUID pediatricDoseReviewedBy;
 
     @Column(name = "pediatric_dose_reviewed_at")
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
     private java.time.LocalDateTime pediatricDoseReviewedAt;
 
     /** Whether this is on Burkina's essential medicines list. */
@@ -172,6 +198,7 @@ public class MedicationCatalogItem extends BaseEntity {
     /** Whether this is a controlled substance requiring dual-approval. */
     @Column(nullable = false)
     @Builder.Default
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private boolean controlled = false;
 
     /**
@@ -188,10 +215,34 @@ public class MedicationCatalogItem extends BaseEntity {
 
     @Column(nullable = false)
     @Builder.Default
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
     private boolean active = true;
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    /**
+     * Go-live D2 (V385): the number of the formulary version in force, approved by a second person
+     * ({@link MedicationCatalogVersion}). Null: the entry predates the approval circuit, or was never through it.
+     * It is « provisoire » and keeps working exactly as before.
+     */
+    @Column(name = "formulary_approved_version")
+    @ApprovedContent(MedicationCatalogVersionKind.FORMULARY)
+    private Integer formularyApprovedVersion;
+
+    /** Go-live D2 (V385): the same for the dose limits. Null: limits no second person approved, « provisoires ». */
+    @Column(name = "dose_limit_approved_version")
+    @ApprovedContent(MedicationCatalogVersionKind.DOSE_LIMIT)
+    private Integer doseLimitApprovedVersion;
+
+    /**
+     * Withdraws the entry from prescribing at once. The one change to approved content that waits for nobody: a
+     * recalled medicine must not stay on the list until a second person is free. Putting it back is a version
+     * like any other.
+     */
+    public void deactivate() {
+        this.active = false;
+    }
 
     /**
      * Owning hospital. Optional: {@code null} marks the entry as a

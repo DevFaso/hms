@@ -75,6 +75,10 @@ class PharmacyPageEndpointRolesTest {
             // Round 18 (QA D935): the paediatric dose limits are the pharmacy's
             // (and the hospital admin's); a doctor or store manager reads them.
             Map.entry("medication-catalog#updatePediatricDosing", "canEditDosing()"),
+            // Go-live D2 (V385): the approval queue and its count are read by those who propose and those
+            // who decide (not the store manager); an entry is submitted as it stands by whoever manages it.
+            Map.entry("medication-catalog#listCatalogVersions", "canSeeApprovals()"),
+            Map.entry("medication-catalog#requestCatalogApproval", "canSubmitAsIs(hItem)"),
             Map.entry("pharmacy-registry#createPharmacy", "canManage()"),
             Map.entry("pharmacy-registry#updatePharmacy", "canManage()"),
             Map.entry("pharmacy-registry#deletePharmacy", "canManage()"),

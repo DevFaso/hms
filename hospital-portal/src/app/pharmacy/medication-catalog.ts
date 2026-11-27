@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { Observable } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
@@ -27,6 +28,9 @@ import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/in
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
+import { allRows } from '../shared/all-pages';
+import { MedicationCatalogApprovalsComponent } from './medication-catalog-approvals';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import {
   SensitivityCategory,
   sensitivityLabelKey,
@@ -35,10 +39,28 @@ import {
 /** The required fields of the medication form (QA D1306). */
 const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
 
+/**
+ * Go-live D2 (V385): the fields of an entry that prescribing and dispensing read. A change to one
+ * of them is not saved on the entry: it is sent for approval, with its reason.
+ */
+const APPROVED_FIELDS = [
+  'nameFr',
+  'genericName',
+  'brandName',
+  'atcCode',
+  'form',
+  'strength',
+  'strengthUnit',
+  'rxnormCode',
+  'route',
+] as const;
+
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
   imports: [
+    MedicationCatalogApprovalsComponent,
+    ReasonDialogComponent,
     SensitivitySelectComponent,
     DashPipe,
     SubmitGuardDirective,
@@ -91,6 +113,101 @@ export class MedicationCatalogComponent implements OnInit {
   readonly canEditDosing = computed(() =>
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN']),
   );
+
+  /**
+   * Go-live D2 (V385): who reads the approval queue and an entry's history, mirroring
+   * MedicationCatalogController (those who propose and those who decide). Which of them may
+   * approve WHICH version is the server's answer on each version, never guessed here. With the doctor
+   * equivalence, as the route guard and the server read it: a médecin-chef who holds ROLE_PHYSICIAN or
+   * ROLE_SURGEON decides dose limits, so the panel is theirs too (review of #1360).
+   */
+  readonly canSeeApprovals = computed(() =>
+    this.roleContext.hasAnyActiveRole([
+      'ROLE_PHARMACIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]),
+  );
+
+  /** The approval panel: closed until asked for, with the number of versions waiting. */
+  readonly approvalsOpen = signal(false);
+  readonly pendingApprovals = signal<number | null>(null);
+
+  toggleApprovals(): void {
+    this.approvalsOpen.update((open) => !open);
+  }
+
+  /** How many versions await approval at this hospital (the panel's label). */
+  refreshPendingApprovals(): void {
+    if (!this.canSeeApprovals()) return;
+    // Every page of the queue, counted: never one page taken for the whole (QA D1347).
+    allRows((page, size) => this.svc.listCatalogVersions('PENDING_APPROVAL', page, size)).subscribe(
+      {
+        next: (waiting) => this.pendingApprovals.set(waiting.length),
+        error: () => this.pendingApprovals.set(null),
+      },
+    );
+  }
+
+  /** A version was approved, refused or withdrawn: the entries and the count may have moved. */
+  onVersionDecided(): void {
+    this.loadItems();
+    this.refreshPendingApprovals();
+  }
+
+  // The history of one entry (go-live D2)
+  historyItem = signal<MedicationCatalogItemResponse | null>(null);
+  submittingAsIs = signal(false);
+  /** The shared reason dialog is open to submit the entry as it stands. */
+  askingAsIsReason = signal(false);
+  /** Bumped to make the history dialog read its versions again. */
+  historyRead = signal(0);
+
+  openHistory(item: MedicationCatalogItemResponse): void {
+    this.askingAsIsReason.set(false);
+    this.historyItem.set(item);
+  }
+
+  closeHistory(): void {
+    this.askingAsIsReason.set(false);
+    this.historyItem.set(null);
+  }
+
+  /**
+   * An entry nobody approved yet (it predates the approval circuit) may be submitted as it
+   * stands by whoever manages it, unless a version is already waiting.
+   */
+  canSubmitAsIs(item: MedicationCatalogItemResponse): boolean {
+    return (
+      this.canManageItem(item) &&
+      item.formularyApprovedVersion == null &&
+      !item.pendingFormularyVersionId
+    );
+  }
+
+  /** Submits the entry as it stands, with the reason the shared dialog asked for (never blank). */
+  submitAsIs(reason: string): void {
+    const item = this.historyItem();
+    if (!item) return;
+    this.submittingAsIs.set(true);
+    this.svc.requestCatalogApproval(item.id, reason).subscribe({
+      next: (updated) => {
+        this.toast.success(this.translate.instant('PHARMACY.CATALOG_APPROVAL.SUBMITTED_TOAST'));
+        this.submittingAsIs.set(false);
+        this.askingAsIsReason.set(false);
+        this.historyItem.set({ ...item, ...updated });
+        this.historyRead.update((n) => n + 1);
+        this.onVersionDecided();
+      },
+      error: (err) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CATALOG_APPROVAL.ACTION_FAILED'),
+        );
+        this.submittingAsIs.set(false);
+      },
+    });
+  }
 
   /** The dosage forms the editor offers, each with a PHARMACY.FORM_OPTION key. */
   static readonly DOSAGE_FORMS: readonly string[] = [
@@ -153,6 +270,7 @@ export class MedicationCatalogComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadItems();
+    this.refreshPendingApprovals();
   }
 
   loadItems(): void {
@@ -244,8 +362,24 @@ export class MedicationCatalogComponent implements OnInit {
       essentialList: item.essentialList ?? false,
       controlled: item.controlled ?? false,
       description: item.description ?? '',
+      changeReason: '',
     };
     this.showModal.set(true);
+  }
+
+  /**
+   * Go-live D2 (V385): whether the editor changes what prescribing and dispensing read. A new
+   * entry always does; an edit does when a name, the ATC or RxNorm code, the form, the strength,
+   * the route or the controlled flag differs from the entry in force.
+   */
+  needsApproval(): boolean {
+    const existing = this.editing();
+    if (!existing) return true;
+    const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+    return (
+      APPROVED_FIELDS.some((field) => text(this.form[field]) !== text(existing[field])) ||
+      (this.form.controlled ?? false) !== (existing.controlled ?? false)
+    );
   }
 
   closeModal(): void {
@@ -305,23 +439,36 @@ export class MedicationCatalogComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.RXNORM_FORMAT_HINT'));
       return;
     }
+    const proposes = this.needsApproval();
+    if (proposes && !(this.form.changeReason ?? '').trim()) {
+      focusFirstInvalid(root, ['changeReason']);
+      this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED'));
+      return;
+    }
     this.saving.set(true);
     const existing = this.editing();
     const body = this.withSensitivity(this.form);
-    const req$ = existing
+    // An edit answers the entry; a create answers the version awaiting approval. Neither is read here.
+    const req$: Observable<unknown> = existing
       ? this.svc.updateMedication(existing.id, body)
       : this.svc.createMedication(body);
 
     req$.subscribe({
       next: () => {
-        this.toast.success(
-          this.translate.instant(existing ? 'PHARMACY.MED_UPDATED' : 'PHARMACY.MED_CREATED'),
-        );
+        // Go-live D2 (V385): what was proposed is not in force yet, and the toast says so.
+        let saved = 'PHARMACY.MED_UPDATED';
+        if (proposes) {
+          saved = existing
+            ? 'PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_UPDATE'
+            : 'PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_CREATE';
+        }
+        this.toast.success(this.translate.instant(saved));
         this.closeModal();
         this.saving.set(false);
         this.loadItems();
+        this.refreshPendingApprovals();
       },
-      error: (err) => {
+      error: (err: unknown) => {
         const msg =
           refusalReason(err) ??
           this.translate.instant(
@@ -378,7 +525,20 @@ export class MedicationCatalogComponent implements OnInit {
       essentialList: false,
       controlled: false,
       description: '',
+      changeReason: '',
     };
+  }
+
+  /**
+   * Go-live D2 (V385): what the row says of an entry's paediatric limits. A default nobody
+   * approved here; limits one person set before the approval circuit (provisional, they judge a
+   * dose as before); or the version a second person approved.
+   */
+  doseBadgeKey(item: MedicationCatalogItemResponse): string {
+    if (item.pediatricDoseStatus !== 'APPROVED') return 'PHARMACY.DOSING.BADGE_PENDING';
+    return item.doseLimitApprovedVersion
+      ? 'PHARMACY.CATALOG_APPROVAL.DOSE_BADGE_APPROVED'
+      : 'PHARMACY.CATALOG_APPROVAL.DOSE_BADGE_PROVISIONAL';
   }
 
   /** Whether an item has any paediatric limit on file. */
@@ -401,7 +561,7 @@ export class MedicationCatalogComponent implements OnInit {
       pediatricManualReviewUnderMonths: item.pediatricManualReviewUnderMonths ?? null,
       pediatricWeightBands: (item.pediatricWeightBands ?? []).map((b) => ({ ...b })),
       pediatricDoseSource: item.pediatricDoseSource ?? null,
-      pediatricDoseStatus: item.pediatricDoseStatus ?? 'DEFAULT_PENDING_APPROVAL',
+      changeReason: '',
     };
     this.dosingItem.set(item);
   }
@@ -432,13 +592,21 @@ export class MedicationCatalogComponent implements OnInit {
   saveDosing(): void {
     const item = this.dosingItem();
     if (!item) return;
+    if (!this.dosingForm.changeReason.trim()) {
+      focusFirstInvalid(this.host.nativeElement, ['dose-reason']);
+      this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED'));
+      return;
+    }
     this.dosingSaving.set(true);
     this.svc.updatePediatricDosing(item.id, this.dosingForm).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('PHARMACY.DOSING.SAVED'));
+        this.toast.success(
+          this.translate.instant('PHARMACY.CATALOG_APPROVAL.PROPOSED_TOAST_DOSING'),
+        );
         this.dosingSaving.set(false);
         this.closeDosing();
         this.loadItems();
+        this.refreshPendingApprovals();
       },
       error: (err) => {
         this.toast.error(
@@ -458,7 +626,7 @@ export class MedicationCatalogComponent implements OnInit {
       pediatricManualReviewUnderMonths: null,
       pediatricWeightBands: [],
       pediatricDoseSource: null,
-      pediatricDoseStatus: 'DEFAULT_PENDING_APPROVAL',
+      changeReason: '',
     };
   }
 }

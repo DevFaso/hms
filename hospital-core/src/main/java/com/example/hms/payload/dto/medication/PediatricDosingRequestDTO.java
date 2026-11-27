@@ -6,7 +6,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -65,6 +64,14 @@ public class PediatricDosingRequestDTO {
     @Size(max = 500)
     private String pediatricDoseSource;
 
-    @NotNull(message = "{medicationCatalogItem.pediatricDoseStatus.required}")
+    /**
+     * Go-live D2 (V385): no longer the caller's to state. Limits are proposed, and are APPROVED when a second
+     * person approves the version; until then the entry keeps the status it has. Accepted and ignored.
+     */
     private PediatricDoseLimitStatus pediatricDoseStatus;
+
+    /** Go-live D2 (V385): why these limits are proposed. Required: the approver reads it, the history keeps it. */
+    @jakarta.validation.constraints.NotBlank(message = "{medication.catalog.version.reasonRequired}")
+    @Size(max = 1000)
+    private String changeReason;
 }

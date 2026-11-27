@@ -53,4 +53,16 @@ public class MedicationCatalogItemResponseDTO {
     private String hospitalName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * Go-live D2 (V385): the number of the formulary version in force, approved by a second person. Null: no
+     * second person approved this entry yet (it predates the approval circuit); it works as before.
+     */
+    private Integer formularyApprovedVersion;
+    /** Go-live D2 (V385): the same for the dose limits. */
+    private Integer doseLimitApprovedVersion;
+    /** Go-live D2 (V385): the formulary version awaiting a decision on this entry, if any. */
+    private UUID pendingFormularyVersionId;
+    /** Go-live D2 (V385): the dose-limit version awaiting a decision on this entry, if any. */
+    private UUID pendingDoseLimitVersionId;
 }

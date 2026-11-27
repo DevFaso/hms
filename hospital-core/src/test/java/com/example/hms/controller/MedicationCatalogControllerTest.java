@@ -49,6 +49,10 @@ class MedicationCatalogControllerTest {
     @MockitoBean
     private com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
+    /** Go-live D2 (V385): the approval circuit behind the version endpoints. */
+    @MockitoBean
+    private com.example.hms.service.formulary.MedicationCatalogVersionService versionService;
+
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID itemId = UUID.randomUUID();
 
@@ -69,20 +73,28 @@ class MedicationCatalogControllerTest {
     }
 
     @Test
-    void create_returnsCreated() throws Exception {
+    void create_returnsAcceptedWithTheVersionAwaitingApproval() throws Exception {
         MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Paracétamol")
                 .genericName("Paracetamol")
                 .hospitalId(hospitalId)
+                // Required on a creation: every new entry proposes a version (R29: refused at the edge).
+                .changeReason("Référencé à la LNME")
                 .build();
 
-        when(catalogService.create(any())).thenReturn(sampleResponse());
+        // Go-live D2 (V385): a new entry is proposed, not created: 202 and the version awaiting approval.
+        when(catalogService.create(any())).thenReturn(
+            com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO.builder()
+                .itemLabel("Paracétamol")
+                .status(com.example.hms.enums.MedicationCatalogVersionStatus.PENDING_APPROVAL)
+                .build());
 
         mockMvc.perform(post("/medication-catalog")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.nameFr").value("Paracétamol"));
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.itemLabel").value("Paracétamol"));
     }
 
     @Test
@@ -280,5 +292,80 @@ class MedicationCatalogControllerTest {
         mockMvc.perform(get("/medication-catalog/{id}", itemId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.atcCode").value("N02BE01"));
+    }
+
+    // ── Go-live D2 (V385): the approval circuit ──
+
+    private static com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO version(
+            com.example.hms.enums.MedicationCatalogVersionStatus status) {
+        return com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO.builder()
+            .id(UUID.randomUUID()).itemLabel("Paracétamol 500 mg").status(status)
+            .kind(com.example.hms.enums.MedicationCatalogVersionKind.FORMULARY).versionNumber(2).build();
+    }
+
+    @Test
+    void theQueueIsListedByStatusAndKind_andIsNotReadAsAnEntryId() throws Exception {
+        when(versionService.list(eq(com.example.hms.enums.MedicationCatalogVersionStatus.PENDING_APPROVAL),
+                eq(com.example.hms.enums.MedicationCatalogVersionKind.DOSE_LIMIT), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                version(com.example.hms.enums.MedicationCatalogVersionStatus.PENDING_APPROVAL))));
+
+        mockMvc.perform(get("/medication-catalog/versions")
+                        .param("status", "PENDING_APPROVAL").param("kind", "DOSE_LIMIT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].itemLabel").value("Paracétamol 500 mg"));
+
+        verify(catalogService, never()).getById(any(), any());
+    }
+
+    @Test
+    void anEntrysHistoryIsRead() throws Exception {
+        when(versionService.history(itemId)).thenReturn(java.util.List.of(
+            version(com.example.hms.enums.MedicationCatalogVersionStatus.APPROVED)));
+
+        mockMvc.perform(get("/medication-catalog/{id}/versions", itemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("APPROVED"))
+                .andExpect(jsonPath("$[0].versionNumber").value(2));
+    }
+
+    @Test
+    void anApprovalNeedsNoBody_andARefusalCarriesItsReason() throws Exception {
+        UUID versionId = UUID.randomUUID();
+        when(versionService.approve(versionId, null))
+            .thenReturn(version(com.example.hms.enums.MedicationCatalogVersionStatus.APPROVED));
+        when(versionService.reject(versionId, "Dosage non référencé"))
+            .thenReturn(version(com.example.hms.enums.MedicationCatalogVersionStatus.REJECTED));
+
+        mockMvc.perform(post("/medication-catalog/versions/{versionId}/approve", versionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+        mockMvc.perform(post("/medication-catalog/versions/{versionId}/reject", versionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Dosage non référencé\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+
+        verify(versionService).approve(versionId, null);
+        verify(versionService).reject(versionId, "Dosage non référencé");
+    }
+
+    @Test
+    void aVersionIsWithdrawn_andAnEntryIsSubmittedAsItStands() throws Exception {
+        UUID versionId = UUID.randomUUID();
+        when(versionService.withdraw(versionId))
+            .thenReturn(version(com.example.hms.enums.MedicationCatalogVersionStatus.WITHDRAWN));
+        when(catalogService.requestFormularyApproval(itemId, "Revue initiale")).thenReturn(sampleResponse());
+
+        mockMvc.perform(post("/medication-catalog/versions/{versionId}/withdraw", versionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WITHDRAWN"));
+        mockMvc.perform(post("/medication-catalog/{id}/approval-request", itemId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Revue initiale\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nameFr").value("Paracétamol"));
+
+        verify(catalogService).requestFormularyApproval(itemId, "Revue initiale");
     }
 }

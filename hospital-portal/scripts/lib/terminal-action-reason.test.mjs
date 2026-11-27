@@ -55,6 +55,10 @@ const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject|deac
 /** Sites that end a record legitimately without a reason, each with why. */
 const PINS = new Map([
   [
+    'services/pharmacy.service.ts::/medication-catalog/versions/{}/withdraw',
+    'the author taking back their own proposed catalogue version before any decision: it never took effect and nothing in the catalogue changes ("NOT A CLINICAL RECORD" in CancelVoidReasonGuardTest); a refusal takes its reason',
+  ],
+  [
     'reception/reception.service.ts::/recalls/{}/close',
     'closing a recall records that it was FULFILLED (the patient came back); "Annuler" is the cancel and takes a reason (QA D1157)',
   ],

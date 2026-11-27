@@ -192,6 +192,7 @@ public class ParacetamolFactsReader {
                 .pediatricMaxSingleDoseMg(i.getPediatricMaxSingleDoseMg())
                 .pediatricDoseSource(i.getPediatricDoseSource())
                 .pediatricDoseStatus(i.getPediatricDoseStatus())
+                .doseLimitApprovedVersion(i.getDoseLimitApprovedVersion())
                 .build())
             .orElse(null);
     }

@@ -79,6 +79,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MeController.myHospital#findById", LABEL + " (the caller's own facility)"),
         entry("UrgentEscalationSupport.hospital#findById", "Scorecard K4: reads the escalation minutes and the médecin-chef"
             + " of the hospital an urgent alert already belongs to (the alert row's own, never a request field); writes and lists nothing"),
+        entry("MedicationCatalogApprovalPolicy.isMedicalLead#findById", "Go-live D2 (V385): reads the médecin-chef of"
+            + " the hospital a catalogue version already belongs to (the version's own, never a request field); writes and lists nothing"),
         entry("CashSessionReports.hospitalName#findById", LABEL + " (billing plan PR 10: the acting hospital named on the till PDF)"),
         entry("CashSessionReports.journalCsv#findById", LABEL + " (billing plan PR 10: the acting hospital's clock for the journal times)"),
         entry("PatientNotificationRenderer.prepare#findById", LABEL + " (V312: the hospital named in a patient SMS / email)"),

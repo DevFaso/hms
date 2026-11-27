@@ -116,6 +116,10 @@ class PartialUniqueReleaseFlushGuardTest {
         // result no longer critical) releases the slot with saveAndFlush, and the next incident is opened by a
         // later sweep, never in the closing method.
         Map.entry("critical_result_incidents", "CriticalResultIncident"),
+        // V385 (go-live D2): one version awaiting approval and one in force per catalogue entry and kind. An
+        // approval supersedes the version in force with saveAndFlush, in its own method, before the new one is
+        // marked approved; a version is never built in a method that releases one.
+        Map.entry("medication_catalog_versions", "MedicationCatalogVersion"),
         // V386: one open incident per unresolved urgent alert.
         Map.entry("urgent_alert_incidents", "UrgentAlertIncident"));
 

@@ -1243,6 +1243,31 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Paediatric dose limits set as a default pending approval on catalog item '(.*)'$/,
     params: ['item'],
   },
+  // Go-live D2 (V385): each step of the medication catalogue approval circuit; the kind of version is a code.
+  {
+    key: 'AUDIT.DESC.CATALOG_VERSION_PROPOSED',
+    re: /^Medication catalogue (\S+) version (\S+) PROPOSED \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  {
+    key: 'AUDIT.DESC.CATALOG_VERSION_APPROVED',
+    re: /^Medication catalogue (\S+) version (\S+) APPROVED \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  {
+    key: 'AUDIT.DESC.CATALOG_VERSION_REJECTED',
+    re: /^Medication catalogue (\S+) version (\S+) REJECTED \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  {
+    key: 'AUDIT.DESC.CATALOG_VERSION_WITHDRAWN',
+    re: /^Medication catalogue (\S+) version (\S+) WITHDRAWN \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
   {
     key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
     re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,

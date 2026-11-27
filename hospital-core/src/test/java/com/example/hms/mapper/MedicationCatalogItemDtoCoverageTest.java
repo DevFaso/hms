@@ -42,7 +42,9 @@ class MedicationCatalogItemDtoCoverageTest {
      */
     private static final Map<String, String> SERVER_SET = Map.of(
         "pediatricDoseReviewedBy", "the pharmacist who set or approved the limits (the caller)",
-        "pediatricDoseReviewedAt", "when they did (the server clock)");
+        "pediatricDoseReviewedAt", "when they did (the server clock)",
+        "formularyApprovedVersion", "the approved formulary version in force, set by the approval (V385)",
+        "doseLimitApprovedVersion", "the approved dose-limit version in force, set by the approval (V385)");
 
     /**
      * Round 18 (QA D935): a column is writable through the general catalogue
@@ -86,10 +88,9 @@ class MedicationCatalogItemDtoCoverageTest {
     void thePaediatricCeilingIsReadOnTheResponseAndWrittenOnlyByThePharmacy() {
         MedicationCatalogItemMapper mapper = new MedicationCatalogItemMapper();
         assertThat(fields(MedicationCatalogItemRequestDTO.class)).doesNotContain("pediatricMaxDoseMgPerKg");
-        MedicationCatalogItem item = mapper.toEntity(MedicationCatalogItemRequestDTO.builder()
-            .nameFr("Paracétamol sirop").genericName("paracetamol").build());
-        assertThat(item.getPediatricMaxDoseMgPerKg()).isNull();
-        item.setPediatricMaxDoseMgPerKg(new BigDecimal("15.000"));
+        MedicationCatalogItem item = MedicationCatalogItem.builder()
+            .nameFr("Paracétamol sirop").genericName("paracetamol")
+            .pediatricMaxDoseMgPerKg(new BigDecimal("15.000")).build();
         assertThat(mapper.toResponseDTO(item).getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
     }
 }

@@ -9,7 +9,12 @@ import java.util.UUID;
 
 public interface MedicationCatalogItemService {
 
-    MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto);
+    /** Go-live D2 (V385): proposes the entry; it is in the catalogue once a second person approved it. */
+    com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO create(
+        MedicationCatalogItemRequestDTO dto);
+
+    /** Go-live D2 (V385): submits an entry nobody approved yet, as it stands, for its approval. */
+    MedicationCatalogItemResponseDTO requestFormularyApproval(UUID id, String reason);
 
     MedicationCatalogItemResponseDTO getById(UUID id, UUID hospitalId);
 

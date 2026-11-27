@@ -176,7 +176,10 @@ public final class ClinicalRuleRegistry {
             "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"),
         // Scorecard K4 (V386): one ladder for every urgent clinical alert: cover, médecin-chef, incident, no cap.
         rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-26.1",
-            "service.escalation.UrgentEscalationSupport"));
+            "service.escalation.UrgentEscalationSupport"),
+        // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
+        rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
+            "service.formulary.MedicationCatalogApprovalPolicy"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

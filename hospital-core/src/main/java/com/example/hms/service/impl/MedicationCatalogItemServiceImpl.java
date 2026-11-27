@@ -6,7 +6,10 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MedicationCatalogItemMapper;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.medication.DoseLimitSnapshot;
+import com.example.hms.model.medication.FormularySnapshot;
 import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.medication.MedicationCatalogVersion;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemResponseDTO;
@@ -40,9 +43,16 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     private final MedicationCatalogItemMapper mapper;
     private final AuditEventLogService auditEventLogService;
     private final RoleValidator roleValidator;
+    /** Go-live D2 (V385): what prescribing and dispensing read changes through an approved version only. */
+    private final com.example.hms.service.formulary.MedicationCatalogVersionService versionService;
 
+    /**
+     * Go-live D2 (V385): a new entry is PROPOSED here, and is in the catalogue only once a second person approved
+     * it ({@code MedicationCatalogVersionService#approve}). Nothing is written to the catalogue by this call.
+     */
     @Override
-    public MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto) {
+    public com.example.hms.payload.dto.medication.MedicationCatalogVersionResponseDTO create(
+            MedicationCatalogItemRequestDTO dto) {
         // V95 platform-catalog semantics:
         //   - super-admin: hospitalId optional. null  → global / LNME entry visible
         //                  to every tenant. non-null → tenant-specific entry attached
@@ -56,17 +66,13 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
         dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
-        MedicationCatalogItem entity = mapper.toEntity(dto);
-        entity.setHospital(hospital);
-
-        MedicationCatalogItem saved = catalogRepository.save(entity);
-        if (hospital == null) {
-            log.info("Created global medication catalog item '{}'", saved.getNameFr());
-        } else {
-            log.info("Created medication catalog item '{}' for hospital {}",
-                saved.getNameFr(), hospital.getId());
-        }
-        return mapper.toResponseDTO(saved);
+        FormularySnapshot proposed = new FormularySnapshot(dto.getNameFr(), dto.getGenericName(), dto.getBrandName(),
+            dto.getAtcCode(), dto.getForm(), dto.getStrength(), dto.getStrengthUnit(), dto.getRxnormCode(),
+            dto.getTallManName(), dto.getRoute(), dto.isControlled(), dto.isActive(), dto.getCategory(),
+            dto.isEssentialList(), dto.getDescription(), dto.getSensitivityCategory());
+        MedicationCatalogVersion version = versionService.proposeNewEntry(hospital, proposed, dto.getChangeReason());
+        log.info("Proposed new medication catalog item, version {} awaiting approval", version.getId());
+        return versionService.toDto(version);
     }
 
     /**
@@ -117,7 +123,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     public MedicationCatalogItemResponseDTO getById(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
-        return mapper.toResponseDTO(item);
+        return withPending(item);
     }
 
     @Override
@@ -125,8 +131,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     public Page<MedicationCatalogItemResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
         // hospitalId may be null (super-admin global view) — same pattern as
         // PharmacyServiceImpl.listByHospital (see comment there).
-        return catalogRepository.findActivePage(hospitalId, pageable)
-                .map(mapper::toResponseDTO);
+        return withPending(catalogRepository.findActivePage(hospitalId, pageable));
     }
 
     @Override
@@ -137,7 +142,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         Page<MedicationCatalogItem> page = hospitalId == null
                 ? catalogRepository.searchAllActive(query, pageable)
                 : catalogRepository.searchByHospital(hospitalId, query, pageable);
-        return page.map(mapper::toResponseDTO);
+        return withPending(page);
     }
 
     @Override
@@ -147,7 +152,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         Page<MedicationCatalogItem> page = hospitalId == null
                 ? catalogRepository.findByCategoryAndActiveTrue(category, pageable)
                 : catalogRepository.findByHospital_IdAndCategoryAndActiveTrue(hospitalId, category, pageable);
-        return page.map(mapper::toResponseDTO);
+        return withPending(page);
     }
 
     @Override
@@ -157,23 +162,25 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
         dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
-        existing.setNameFr(dto.getNameFr());
-        existing.setGenericName(dto.getGenericName());
-        existing.setBrandName(dto.getBrandName());
-        existing.setAtcCode(dto.getAtcCode());
-        existing.setForm(dto.getForm());
-        existing.setStrength(dto.getStrength());
-        existing.setStrengthUnit(dto.getStrengthUnit());
-        existing.setRxnormCode(dto.getRxnormCode());
-        existing.setRoute(dto.getRoute());
+        // Go-live D2 (V385): what prescribing and dispensing read (names, ATC, form, strength, route, RxNorm,
+        // controlled, putting a withdrawn entry back) is never written here. A difference becomes a version
+        // awaiting approval and the row keeps the values in force. The rest is edited directly, at once.
+        boolean withdrawn = existing.isActive() && !dto.isActive();
+        if (withdrawn) {
+            existing.deactivate();
+        }
+        FormularySnapshot live = FormularySnapshot.of(existing);
+        FormularySnapshot proposed = new FormularySnapshot(dto.getNameFr(), dto.getGenericName(), dto.getBrandName(),
+            dto.getAtcCode(), dto.getForm(), dto.getStrength(), dto.getStrengthUnit(), dto.getRxnormCode(),
+            // The editor does not carry the tall-man name: left out, it stays.
+            dto.getTallManName() != null ? dto.getTallManName() : existing.getTallManName(),
+            dto.getRoute(), dto.isControlled(), dto.isActive(), live.category(), live.essentialList(),
+            live.description(), live.sensitivityCategory());
+        if (!proposed.clinicalDifferences(live).isEmpty()) {
+            versionService.proposeFormulary(existing, proposed, dto.getChangeReason());
+        }
         existing.setCategory(dto.getCategory());
         existing.setEssentialList(dto.isEssentialList());
-        existing.setControlled(dto.isControlled());
-        // Round 18 (QA D935): the paediatric limits are no longer written here.
-        // They are the pharmacy's, set and approved through
-        // updatePediatricDosing (audited), and this full-replace edit would
-        // otherwise wipe the fields its form does not carry.
-        existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
         // Policy 2026-11-20: the tag a proxy's read obeys. Left out, it stays (this edit replaces
         // every other field); a change, or the explicit clear, is on the audit trail.
@@ -194,7 +201,52 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
                 "Medication sensitivity category changed from " + tagBefore + " to " + tagAfter,
                 saved.getId().toString());
         }
-        return mapper.toResponseDTO(saved);
+        if (withdrawn) {
+            logAudit(AuditEventType.MEDICATION_DEACTIVATED,
+                "Deactivated medication catalog item '" + saved.getNameFr() + "'", saved.getId().toString());
+        }
+        return withPending(saved);
+    }
+
+    /**
+     * Go-live D2 (V385): an entry no second person approved yet (it predates the circuit) is submitted as it
+     * stands, so that it gets its approval without a pretend change.
+     */
+    @Override
+    public MedicationCatalogItemResponseDTO requestFormularyApproval(UUID id, String reason) {
+        MedicationCatalogItem existing = requireWritable(id, null);
+        versionService.proposeFormulary(existing, FormularySnapshot.of(existing), reason);
+        return withPending(existing);
+    }
+
+    /** The entry as the API shows it, with the versions awaiting a decision on it. */
+    private MedicationCatalogItemResponseDTO withPending(MedicationCatalogItem item) {
+        MedicationCatalogItemResponseDTO dto = mapper.toResponseDTO(item);
+        if (dto != null && item.getId() != null) {
+            setPending(dto, versionService.pendingByEntry(java.util.List.of(item.getId())));
+        }
+        return dto;
+    }
+
+    private Page<MedicationCatalogItemResponseDTO> withPending(Page<MedicationCatalogItem> page) {
+        java.util.Map<UUID, java.util.Map<com.example.hms.enums.MedicationCatalogVersionKind, UUID>> pending =
+            versionService.pendingByEntry(page.getContent().stream().map(MedicationCatalogItem::getId).toList());
+        return page.map(item -> {
+            MedicationCatalogItemResponseDTO dto = mapper.toResponseDTO(item);
+            if (dto != null) {
+                setPending(dto, pending);
+            }
+            return dto;
+        });
+    }
+
+    private static void setPending(MedicationCatalogItemResponseDTO dto,
+            java.util.Map<UUID, java.util.Map<com.example.hms.enums.MedicationCatalogVersionKind, UUID>> pending) {
+        java.util.Map<com.example.hms.enums.MedicationCatalogVersionKind, UUID> mine = pending.get(dto.getId());
+        if (mine != null) {
+            dto.setPendingFormularyVersionId(mine.get(com.example.hms.enums.MedicationCatalogVersionKind.FORMULARY));
+            dto.setPendingDoseLimitVersionId(mine.get(com.example.hms.enums.MedicationCatalogVersionKind.DOSE_LIMIT));
+        }
     }
 
     /**
@@ -216,7 +268,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      */
     private MedicationCatalogItem requireWritable(UUID id, UUID requestedHospitalId) {
         boolean platformAdmin = roleValidator.isSuperAdminFromJwtClaim();
-        MedicationCatalogItem item = catalogRepository.findById(id)
+        // Go-live D2 (V385): locked, so an approval being applied to this row lands first or waits (review F1).
+        MedicationCatalogItem item = catalogRepository.findLockedById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
         UUID owner = item.getHospital() == null ? null : item.getHospital().getId();
         if (owner == null) {
@@ -243,7 +296,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = requireWritable(id, hospitalId);
-        item.setActive(false);
+        item.deactivate();
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());
 
@@ -265,27 +318,14 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
             .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
         requireConsistentPediatricLimits(dto);
 
-        item.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
-        item.setPediatricMaxDailyMgPerKg(dto.getPediatricMaxDailyMgPerKg());
-        item.setPediatricMaxSingleDoseMg(dto.getPediatricMaxSingleDoseMg());
-        item.setPediatricMaxDailyMg(dto.getPediatricMaxDailyMg());
-        item.setPediatricManualReviewUnderMonths(dto.getPediatricManualReviewUnderMonths());
-        item.setPediatricWeightBands(new java.util.ArrayList<>(
-            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands())));
-        String source = dto.getPediatricDoseSource();
-        item.setPediatricDoseSource(source == null || source.isBlank() ? null : source.trim());
-        item.setPediatricDoseStatus(dto.getPediatricDoseStatus());
-        item.setPediatricDoseReviewedBy(roleValidator.getCurrentUserId());
-        item.setPediatricDoseReviewedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
-
-        MedicationCatalogItem saved = catalogRepository.save(item);
-        logAudit(AuditEventType.MEDICATION_DOSE_LIMITS_UPDATED,
-            (dto.getPediatricDoseStatus() == com.example.hms.enums.PediatricDoseLimitStatus.APPROVED
-                ? "Paediatric dose limits approved on catalog item '"
-                : "Paediatric dose limits set as a default pending approval on catalog item '")
-                + saved.getNameFr() + "'",
-            saved.getId().toString());
-        return mapper.toResponseDTO(saved);
+        // Go-live D2 (V385): the limits are PROPOSED. The row keeps the limits in force until a different
+        // pharmacist, or the médecin-chef, approves the version; the dose check reads the row and nothing else.
+        DoseLimitSnapshot proposed = new DoseLimitSnapshot(dto.getPediatricMaxDoseMgPerKg(),
+            dto.getPediatricMaxDailyMgPerKg(), dto.getPediatricMaxSingleDoseMg(), dto.getPediatricMaxDailyMg(),
+            dto.getPediatricManualReviewUnderMonths(),
+            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands()), dto.getPediatricDoseSource());
+        versionService.proposeDoseLimits(item, proposed, dto.getChangeReason());
+        return withPending(item);
     }
 
     /** Round 18 (QA D935): limits that contradict each other are refused, field by field. */

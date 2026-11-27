@@ -26,6 +26,11 @@ export interface MedicationCatalogItemRequest {
   sensitivityCategory?: SensitivityCategory;
   /** True clears the sensitive category. */
   clearSensitivityCategory?: boolean;
+  /**
+   * Go-live D2 (V385): why the entry is created, or why what is prescribed and dispensed changes.
+   * Required whenever the request proposes a version awaiting approval.
+   */
+  changeReason?: string;
 }
 
 /** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
@@ -51,7 +56,8 @@ export interface PediatricDosingRequest {
   pediatricManualReviewUnderMonths: number | null;
   pediatricWeightBands: PediatricWeightBand[];
   pediatricDoseSource: string | null;
-  pediatricDoseStatus: PediatricDoseLimitStatus;
+  /** Go-live D2 (V385): why these limits are proposed; the approver reads it. */
+  changeReason: string;
 }
 
 export interface MedicationCatalogItemResponse {
@@ -81,12 +87,93 @@ export interface MedicationCatalogItemResponse {
   pediatricDoseSource?: string | null;
   pediatricDoseStatus?: PediatricDoseLimitStatus | null;
   pediatricDoseReviewedAt?: string | null;
+  /**
+   * Go-live D2 (V385): the approved version in force, per circuit. Null: nobody approved the entry
+   * (or its limits) as a second person yet; it works as before and is shown as provisional.
+   */
+  formularyApprovedVersion?: number | null;
+  doseLimitApprovedVersion?: number | null;
+  /** Go-live D2 (V385): the version awaiting a decision on this entry, per circuit. */
+  pendingFormularyVersionId?: string | null;
+  pendingDoseLimitVersionId?: string | null;
   active: boolean;
   description?: string;
   hospitalId?: string;
   hospitalName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/* ──────────────── Medication catalogue approvals (go-live D2, V385) ──────────────── */
+
+export type MedicationCatalogVersionKind = 'FORMULARY' | 'DOSE_LIMIT';
+export type MedicationCatalogChangeType = 'CREATE' | 'UPDATE' | 'RATIFY';
+export type MedicationCatalogVersionStatus =
+  'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED' | 'WITHDRAWN';
+
+/** A formulary entry as one version carries it. */
+export interface FormularySnapshot {
+  nameFr?: string | null;
+  genericName?: string | null;
+  brandName?: string | null;
+  atcCode?: string | null;
+  form?: string | null;
+  strength?: string | null;
+  strengthUnit?: string | null;
+  rxnormCode?: string | null;
+  tallManName?: string | null;
+  route?: string | null;
+  controlled?: boolean;
+  active?: boolean;
+  category?: string | null;
+  essentialList?: boolean;
+  description?: string | null;
+}
+
+/** The dose limits of an entry as one version carries them. */
+export interface DoseLimitSnapshot {
+  maxDoseMgPerKg?: number | null;
+  maxDailyMgPerKg?: number | null;
+  maxSingleDoseMg?: number | null;
+  maxDailyMg?: number | null;
+  manualReviewUnderMonths?: number | null;
+  weightBands?: PediatricWeightBand[];
+  source?: string | null;
+}
+
+/**
+ * One version of a catalogue entry or of its dose limits: what is proposed, what was in force,
+ * who proposed it, when and why, and who approved, refused or withdrew it.
+ */
+export interface MedicationCatalogVersion {
+  id: string;
+  hospitalId?: string | null;
+  catalogItemId?: string | null;
+  kind: MedicationCatalogVersionKind;
+  changeType: MedicationCatalogChangeType;
+  versionNumber: number;
+  status: MedicationCatalogVersionStatus;
+  itemLabel: string;
+  formulary?: FormularySnapshot | null;
+  previousFormulary?: FormularySnapshot | null;
+  doseLimits?: DoseLimitSnapshot | null;
+  previousDoseLimits?: DoseLimitSnapshot | null;
+  changedFields?: string[];
+  changeReason: string;
+  proposedById?: string;
+  proposedByName?: string | null;
+  proposedAt: string;
+  decidedById?: string | null;
+  decidedByName?: string | null;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+  /** On what authority it was decided; MEDICAL_LEAD_NO_PHARMACIST is the no-pharmacist fallback. */
+  decisionBasis?:
+    'PHARMACIST' | 'MEDICAL_LEAD' | 'MEDICAL_LEAD_NO_PHARMACIST' | 'PLATFORM_ADMIN' | null;
+  /** Whether the signed-in user may approve it: the right role here, and not their own proposal. */
+  callerMayApprove: boolean;
+  callerMayReject: boolean;
+  ownProposal: boolean;
 }
 
 /* ───────────────────────────── Pharmacy Registry ───────────────────────────── */
@@ -928,8 +1015,62 @@ export class PharmacyService {
     return this.http.get<MedicationCatalogItemResponse>(`/medication-catalog/${id}`);
   }
 
-  createMedication(req: MedicationCatalogItemRequest): Observable<MedicationCatalogItemResponse> {
-    return this.http.post<MedicationCatalogItemResponse>('/medication-catalog', req);
+  /**
+   * Go-live D2 (V385): a new entry is proposed, not created. The answer is the version awaiting
+   * approval; the entry is in the catalogue once a pharmacist other than its author approved it.
+   */
+  createMedication(req: MedicationCatalogItemRequest): Observable<MedicationCatalogVersion> {
+    return this.http.post<MedicationCatalogVersion>('/medication-catalog', req);
+  }
+
+  /** The approval queue (or every version, with no status) of the acting hospital. */
+  listCatalogVersions(
+    status: MedicationCatalogVersionStatus | null,
+    page = 0,
+    size = 50,
+  ): Observable<Page<MedicationCatalogVersion>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (status) params = params.set('status', status);
+    return this.http.get<Page<MedicationCatalogVersion>>('/medication-catalog/versions', {
+      params,
+    });
+  }
+
+  /** Every version of one entry, the latest first. */
+  catalogVersionHistory(itemId: string): Observable<MedicationCatalogVersion[]> {
+    return this.http.get<MedicationCatalogVersion[]>(`/medication-catalog/${itemId}/versions`);
+  }
+
+  approveCatalogVersion(versionId: string): Observable<MedicationCatalogVersion> {
+    return this.http.post<MedicationCatalogVersion>(
+      `/medication-catalog/versions/${versionId}/approve`,
+      {},
+    );
+  }
+
+  rejectCatalogVersion(versionId: string, reason: string): Observable<MedicationCatalogVersion> {
+    return this.http.post<MedicationCatalogVersion>(
+      `/medication-catalog/versions/${versionId}/reject`,
+      { reason },
+    );
+  }
+
+  withdrawCatalogVersion(versionId: string): Observable<MedicationCatalogVersion> {
+    return this.http.post<MedicationCatalogVersion>(
+      `/medication-catalog/versions/${versionId}/withdraw`,
+      {},
+    );
+  }
+
+  /** Submits an entry nobody approved yet, as it stands, for its approval. */
+  requestCatalogApproval(
+    itemId: string,
+    reason: string,
+  ): Observable<MedicationCatalogItemResponse> {
+    return this.http.post<MedicationCatalogItemResponse>(
+      `/medication-catalog/${itemId}/approval-request`,
+      { reason },
+    );
   }
 
   updateMedication(
@@ -943,7 +1084,10 @@ export class PharmacyService {
     return this.http.delete<void>(`/medication-catalog/${id}`);
   }
 
-  /** Round 18 (QA D935): the pharmacy sets or approves an item's paediatric dose limits. */
+  /**
+   * Round 18 (QA D935): the pharmacy sets an item's paediatric dose limits. Go-live D2 (V385):
+   * they are proposed, and in force once another pharmacist or the médecin-chef approved them.
+   */
   updatePediatricDosing(
     id: string,
     req: PediatricDosingRequest,
