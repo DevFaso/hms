@@ -27,6 +27,20 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     @Query("SELECT o FROM LabOrder o WHERE o.id = :id")
     java.util.Optional<LabOrder> findWithLockById(@Param("id") UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM LabOrder o WHERE o.id = :id AND o.hospital.id = :hospitalId")
+    java.util.Optional<LabOrder> findWithLockByIdAndHospitalId(@Param("id") UUID id,
+                                                           @Param("hospitalId") UUID hospitalId);
+
+    @Query("SELECT o.status FROM LabOrder o WHERE o.id = :id AND o.hospital.id = :hospitalId")
+    LabOrderStatus findStatusByIdAndHospitalId(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
+
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE LabOrder o SET o.status = :target, o.updatedAt = CURRENT_TIMESTAMP "
+        + "WHERE o.id = :id AND o.hospital.id = :hospitalId AND o.status = :expected")
+    int updateStatusFromInHospital(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId,
+                                  @Param("expected") LabOrderStatus expected, @Param("target") LabOrderStatus target);
+
     /**
      * Compare-and-set on the status, as a statement rather than a dirty field.
      *

@@ -198,6 +198,8 @@ final class ComputedKeys {
             new Open("the first finding of the definition validator; each finding is built with a literal key"));
         site(r, d, "com/example/hms/service/LabTestDefinitionServiceImpl.java|\"lab.definition.status.\" + status.name()",
             "LabTestDefinitionServiceImpl.java|lab.definition.status.");
+        site(r, d, "com/example/hms/service/LabTestDefinitionServiceImpl.java|\"lab.definition.nextAction.\" + definition.getApprovalStatus().name()",
+            "LabTestDefinitionServiceImpl.java|lab.definition.nextAction.");
         site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + certificate.type().name()",
             "MedicalCertificateServiceImpl.java|medicalCertificate.title.");
         site(r, d, "com/example/hms/service/MedicalCertificateServiceImpl.java|\"medicalCertificate.title.\" + c.type().name()",
@@ -345,6 +347,11 @@ final class ComputedKeys {
             new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
         r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
             new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // V381: the notices of an incompatible release; the keys are the literals set on the item.
+        r.put("com/example/hms/service/transfusion/IncompatibleReleaseNotices.java|titleKey",
+            new Open("read back from the item: the COUNTERSIGN, MONITORING, HAEMOVIGILANCE and OVERDUE title keys, all literal constants"));
+        r.put("com/example/hms/service/transfusion/IncompatibleReleaseNotices.java|bodyKey",
+            new Open("read back from the item: the COUNTERSIGN, MONITORING, HAEMOVIGILANCE (two) and OVERDUE body keys, all literal constants"));
         // V380: the notices of an O positive release; the keys are the literals set on the item (setTitleKey / setBodyKey).
         r.put("com/example/hms/service/transfusion/OPositiveReleaseNotices.java|titleKey",
             new Open("read back from the item: the REVIEW, COUNTERSIGN, FOLLOW_UP and OVERDUE title keys, all literal constants"));
@@ -561,6 +568,8 @@ final class ComputedKeys {
         r.put("IsolationServiceImpl.java|isolation.type.", enumValues("isolation.type.", IsolationPrecautionType.class));
         r.put("LabTestDefinitionServiceImpl.java|lab.definition.status.",
             enumValues("lab.definition.status.", LabTestDefinitionApprovalStatus.class));
+        r.put("LabTestDefinitionServiceImpl.java|lab.definition.nextAction.",
+            enumValues("lab.definition.nextAction.", LabTestDefinitionApprovalStatus.class));
         r.put("LaborAlertArgs.java|labor.liquor.", enumValues("labor.liquor.", LiquorColour.class));
         r.put("LaborServiceImpl.java|labor.liquor.", enumValues("labor.liquor.", LiquorColour.class));
         r.put("LaborServiceImpl.java|labor.alert.type.", enumValues("labor.alert.type.", LaborAlertType.class));

@@ -405,4 +405,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select (count(u) > 0) from User u where u.phoneNumber = :phone")
     Boolean existsByPhoneNumber(@Param("phone") String phone);
 
+
+    /** The account behind an activation link's token (the stored form: see {@code ActivationTokens}). */
+    Optional<User> findByActivationToken(String activationToken);
 }

@@ -95,14 +95,18 @@ class AccountRepository @Inject constructor(
 
         /**
          * The patient may paste either the bare token or the whole e-mailed
-         * link (`.../reset-password?token=…`, `.../verify?email=…&token=…`).
-         * Returns the named query parameter of a link, or the trimmed text
-         * itself when it is not a link.
+         * link. The link carries the token in its fragment
+         * (`.../reset-password#token=…`, `.../verify#token=…`); a link sent
+         * before carried it in the query (`...?token=…`, `...?email=…&token=…`).
+         * Returns the named parameter of a link, or the trimmed text itself
+         * when it is not a link.
          */
         fun fromLink(pasted: String, parameter: String): String? {
             val text = pasted.trim()
             if (text.isEmpty()) return null
-            if (!text.contains("://") && !text.contains("?")) return if (parameter == "token") text else null
+            if (!text.contains("://") && !text.contains("?") && !text.contains("#")) {
+                return if (parameter == "token") text else null
+            }
             return queryParameter(text, parameter)
         }
 
@@ -112,8 +116,14 @@ class AccountRepository @Inject constructor(
          * decoded, never `+` into a space (android.net.Uri would do that).
          */
         private fun queryParameter(text: String, parameter: String): String? {
-            val query = text.substringAfter('?', "").substringBefore('#')
-            return query.split('&')
+            val beforeFragment = text.substringBefore('#')
+            val query = beforeFragment.substringAfter('?', "")
+            val fragment = text.substringAfter('#', "")
+            return parameterIn(fragment, parameter) ?: parameterIn(query, parameter)
+        }
+
+        private fun parameterIn(pairs: String, parameter: String): String? {
+            return pairs.split('&')
                 .map { it.split('=', limit = 2) }
                 .firstOrNull { it.size == 2 && it[0] == parameter }
                 ?.get(1)

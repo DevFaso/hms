@@ -115,7 +115,6 @@ public class TransfusionServiceImpl implements TransfusionService {
     public static final String RELEASE_REVIEW_BODY_KEY = "transfusion.emergency.incompatible.inBasketBody";
     static final String RELEASE_REFERENCE_TYPE = "TRANSFUSION_EMERGENCY_RELEASE";
     private static final String FIELD_RELEASE_TYPE = "releaseType";
-    private static final String FIELD_AUTHORISER = "authoriserUserId";
     private static final String FIELD_COMPATIBLE = "compatible";
     private static final String FIELD_NEGATIVE_UNOBTAINABLE = "negativeUnobtainable";
     private static final int MAX_AUDIT_SHOWN_IDS = 20;
@@ -1107,8 +1106,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (release.getReleaseType() == EmergencyReleaseType.UNCROSSMATCHED) {
             throw new FieldBusinessException(FIELD_RELEASE_TYPE, "transfusion.emergency.typeNotDocumented");
         }
-        // V380: who a release names is checked below: an incompatible release by requireAnswerableAuthoriser (and at
-        // the edge, on the body), an O positive decision by the decision service, which may let it go with nobody named.
+        // V380, V381: who a release names is the decision service's to check: an O positive decision may go with
+        // nobody named, an incompatible release only on the fallback of the hospital.
         if (roleValidator.getCurrentUserId() == null) {
             // A documented release names who issued it: an actor nobody can name cannot make one.
             throw new AccessDeniedException("A documented emergency release needs an identified caller.");
@@ -1145,18 +1144,23 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new FieldBusinessException(FIELD_NEGATIVE_UNOBTAINABLE, "transfusion.emergency.negativeStatementRequired",
                 unit.getUnitNumber(), negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")));
         }
-        requireAnswerableAuthoriser(request, release);
-        // V380: whose authority an O positive bag goes out on. It refuses a false record, never a missing person.
+        // V380, V381: whose authority the bag goes out on. For an incompatible release the decision service applies
+        // the ABO block, then a named physician or the fallback of the hospital; for O positive it refuses a false
+        // record, never a missing person.
         com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.Authorisation authorisation =
             positiveAuthority.authorise(request, unit, release.getReleaseType(), release, positiveAssessmentFor(request, unit));
-        // An incompatible release names the authoriser its own rule validated above, whatever the O positive tier says.
-        // An O positive decision names who decided, and nobody while its authority is owed: never the issuer.
-        boolean ownAuthoriser = !authorisation.applies() || release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
-        UUID answerable = ownAuthoriser ? release.getAuthoriserUserId() : authorisation.answerable();
+        // An incompatible release names the authoriser its own rule validated, whatever the O positive tier says, and
+        // nobody on the fallback. An O positive decision names who decided, and nobody while its authority is owed:
+        // the issuer is never recorded as the authoriser.
+        boolean incompatibleRelease = release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE;
+        UUID positiveAnswerable = authorisation.applies() ? authorisation.answerable() : release.getAuthoriserUserId();
+        UUID answerable = incompatibleRelease ? authorisation.incompatibleAuthoriser() : positiveAnswerable;
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
         EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, authorisation, answerable, negativeShown, negativeOnHand);
-        if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
+        if (incompatibleRelease && saved.getAuthoriser() != null) {
+            // The review of a release a physician authorised. A fallback release (V381) names nobody: its critical
+            // alert and countersignature task reach the laboratory director from the decision row instead.
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
         askCrossmatchAfterwards(crossmatchAfterwards, release.getReleaseType(), request, unit);
@@ -1228,6 +1232,9 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     /** The one place the bag leaves the lab. */
     private BloodUnitResponseDTO putOut(TransfusionRequest request, BloodUnit unit) {
+        // V381, the never event: whatever path led here, a red-cell bag the ABO group of the patient excludes stays.
+        PatientBloodGroup screen = lookupScreen(request);
+        positiveAuthority.requireAboCompatible(screen != null ? screen.getAboGroup() : null, unit);
         unit.setStatus(BloodUnitStatus.ISSUED);
         unit.setRequest(request);
         BloodUnit saved = unitRepository.save(unit);
@@ -1323,23 +1330,6 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /**
-     * A serologically incompatible release names a doctor or lab director who is not the issuer and holds a live
-     * role here. Who answers for an O positive decision is the O positive decision service's rule (V380).
-     */
-    private void requireAnswerableAuthoriser(TransfusionRequest request, EmergencyReleaseRequestDTO release) {
-        if (release.getReleaseType() != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
-            return;
-        }
-        if (Objects.equals(release.getAuthoriserUserId(), roleValidator.getCurrentUserId())) {
-            throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserNotIssuer");
-        }
-        if (!assignmentRepository.existsActiveWitness(release.getAuthoriserUserId(), request.getHospital().getId(),
-                EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES)) {
-            throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserInvalid");
-        }
-    }
-
-    /**
      * The assessment for the bag going out: read only for O positive red cells. An O negative release, or any
      * other bag, reads neither the protocol nor the antibody history of a rule that does not apply to it, so
      * nothing of that rule can fail it.
@@ -1416,6 +1406,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor()).expiresOn(bag.getExpiresOn()).build()).toList())
             .units(uncrossmatchedOptions(request, decisionStep, !shown.isEmpty()))
             .positiveRule(positiveAuthority.ruleFor(assessment, hospitalId))
+            .incompatibleRule(positiveAuthority.incompatibleRule(hospitalId))
             .incompatibleUnits(incompatibleOptions(request, !shown.isEmpty()))
             .deciders(candidates(hospitalId, EmergencyReleasePolicy.O_POSITIVE_DECIDER_ROLE_CODES, null))
             .authorisers(candidates(hospitalId, EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES,
@@ -1467,6 +1458,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     private List<EmergencyReleaseOptionsDTO.IncompatibleUnit> incompatibleOptions(TransfusionRequest request,
                                                                                   boolean negativeShown) {
         LocalDate today = LocalDate.now(clock);
+        // V381: which of these bags is the least incompatible is the decision service's ranking, shown as it is.
+        com.example.hms.service.transfusion.IncompatibleReleaseDecisions.Ranking ranking = positiveAuthority.incompatibleRanking(request);
         return crossmatchRepository.findByRequest_IdOrderByPerformedAtDesc(request.getId()).stream()
             .filter(result -> !Boolean.TRUE.equals(result.getCompatible()))
             .filter(result -> {
@@ -1484,6 +1477,10 @@ public class TransfusionServiceImpl implements TransfusionService {
                     .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor())
                     .incompatibilityReason(result.getIncompatibilityReason())
                     .releasable(!heldBack && documentedReleaseAllows(request, bag))
+                    .rhdMatched(ranking.candidate(bag.getId()) != null && ranking.candidate(bag.getId()).dMatched())
+                    .rhKellMatched(result.getRhKellMatched())
+                    .antigenNegative(result.getAntigenNegative())
+                    .leastIncompatible(ranking.least(bag.getId()))
                     .statementRequired(negativeShown
                         && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType()))
                     .build();
@@ -2041,6 +2038,10 @@ public class TransfusionServiceImpl implements TransfusionService {
             Map<UUID, com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO> decisions = positiveAuthority.byRelease(
                 releases.stream().map(com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO::getId).toList());
             releases.forEach(release -> release.setPositiveDecision(decisions.get(release.getId())));
+            // V381: a release despite an incompatible crossmatch with its authority, its bag and its monitoring.
+            Map<UUID, com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> incompatible = positiveAuthority.incompatibleByRelease(
+                releases.stream().map(com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO::getId).toList());
+            releases.forEach(release -> release.setIncompatibleDecision(incompatible.get(release.getId())));
         }
         if (request.getPatient() == null || request.getHospital() == null) {
             return;
@@ -2091,6 +2092,37 @@ public class TransfusionServiceImpl implements TransfusionService {
     public com.example.hms.payload.dto.transfusion.OPositiveReleaseDecisionDTO recordPositiveFollowUp(UUID decisionId,
             com.example.hms.payload.dto.transfusion.OPositiveFollowUpRequestDTO request) {
         return positiveAuthority.recordFollowUp(decisionId, requireHospital(), request);
+    }
+
+    // ── Release despite an incompatible crossmatch (V381) ───────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO getIncompatibleProtocol() {
+        return positiveAuthority.incompatibleProtocol(requireHospital());
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO setIncompatibleProtocol(
+            com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO update) {
+        return positiveAuthority.setIncompatibleProtocol(hospitalRef(requireHospital()), update);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO> listIncompatibleReleases(boolean openOnly) {
+        return positiveAuthority.listIncompatible(requireHospital(), openOnly);
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO countersignIncompatibleRelease(UUID decisionId) {
+        return positiveAuthority.countersignIncompatible(decisionId, requireHospital());
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO recordIncompatibleMonitoring(UUID decisionId,
+            com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO request) {
+        return positiveAuthority.recordIncompatibleMonitoring(decisionId, requireHospital(), request);
     }
 
     /** 404-not-403 — a request at another hospital is indistinguishable from a missing one. */

@@ -131,7 +131,9 @@ class OPositiveReleaseAuthorityServiceTest {
             ids.forEach(id -> users.add(user(id)));
             return users;
         });
-        fixture = new OPositiveAuthorityFixture(assignmentRepository, userRepository, roleValidator, clock).activeProtocol();
+        // V381: this test is about the O positive rule; the incompatible release rule has IncompatibleReleaseDecisionsTest.
+        fixture = new OPositiveAuthorityFixture(assignmentRepository, userRepository, roleValidator, clock).activeProtocol()
+            .oPositiveRuleOnly();
         service = fixture.service;
     }
 

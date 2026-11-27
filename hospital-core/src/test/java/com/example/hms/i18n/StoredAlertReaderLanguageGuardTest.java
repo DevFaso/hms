@@ -72,6 +72,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/transfusion/PositiveAntibodyScreenService.java", NOTICE),
         // V380: the review, countersignature and follow-up tasks of an O positive release; the reader's copy is keyed.
         Map.entry("service/transfusion/OPositiveReleaseNotices.java", NOTICE),
+        // V381: the alert, monitoring and haemovigilance tasks of an incompatible release; the reader's copy is keyed.
+        Map.entry("service/transfusion/IncompatibleReleaseNotices.java", NOTICE),
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
         // QA D1802: the reconciliation task of a contradicted stillbirth certificate; the reader's copy is keyed.
         Map.entry("service/maternity/StillbirthCertificateConflicts.java", NOTICE),

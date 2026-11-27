@@ -79,7 +79,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class,
+@Import({TransfusionServiceImpl.class, com.example.hms.service.transfusion.OPositiveReleaseAuthorityService.class, com.example.hms.service.transfusion.OPositiveReleaseNotices.class, com.example.hms.service.transfusion.IncompatibleReleaseDecisions.class, com.example.hms.service.transfusion.IncompatibleReleaseNotices.class,
     com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, com.example.hms.security.EncryptionKeyHolder.class,
     TransfusionEmergencyReleasePostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
@@ -219,8 +219,147 @@ class TransfusionEmergencyReleasePostgresIT {
     }
 
     private EmergencyReleaseRequestDTO documented(UUID bagId, EmergencyReleaseType type) {
-        return EmergencyReleaseRequestDTO.builder().bloodUnitId(bagId).releaseType(type).reason(REASON)
+        EmergencyReleaseRequestDTO release = EmergencyReleaseRequestDTO.builder().bloodUnitId(bagId).releaseType(type).reason(REASON)
             .authoriserUserId(doctorUser).build();
+        if (type == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
+            // V381: every incompatible release says why this bag, and whether the patient was told.
+            release.setUnitChoiceReason("No compatible unit; the only ABO-compatible unit crossmatched");
+            release.setPatientInformation(com.example.hms.enums.PatientInformedStatus.NOT_POSSIBLE);
+        }
+        return release;
+    }
+
+    /** V381: nobody is named; the issuer states that no physician can be reached. */
+    private EmergencyReleaseRequestDTO declared(UUID bagId) {
+        EmergencyReleaseRequestDTO release = documented(bagId, EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        release.setAuthoriserUserId(null);
+        release.setPhysicianUnreachable(Boolean.TRUE);
+        release.setUnreachableReason("Dr on call phoned at 01:40 and 01:50, no answer");
+        return release;
+    }
+
+    private Object incompatibleColumn(UUID bagId, String column) {
+        return entityManager.createNativeQuery("SELECT " + column
+            + " FROM clinical.incompatible_release_decisions WHERE blood_unit_id = :id").setParameter("id", bagId).getSingleResult();
+    }
+
+    @Test
+    @DisplayName("V381 on PostgreSQL: fallback off refuses the declaration; on, the bag goes out at once with the authority owed; "
+        + "ABO stays a hard block; the constraints hold; a physician countersigns; the monitoring closes")
+    void incompatibleFallbackWalk() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.POSITIVE);
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.A, RhFactor.POSITIVE).getId();
+        UUID excludedId = bag(AboGroup.B, RhFactor.POSITIVE).getId();
+        result(requestId, bagId, false);
+        result(requestId, excludedId, false);
+
+        // Off by default: as before V381, a named physician is required.
+        assertThat(service.getIncompatibleProtocol().fallbackEnabled()).isFalse();
+        assertThat(service.emergencyReleaseOptions(requestId).getIncompatibleRule().isFallbackEnabled()).isFalse();
+        EmergencyReleaseRequestDTO declaration = declared(bagId);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, declaration)).hasMessageContaining("has not enabled");
+        assertThat(status(bagId)).isNotEqualTo("ISSUED");
+
+        // The laboratory director switches it on; nobody else can.
+        com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO on =
+            new com.example.hms.payload.dto.transfusion.IncompatibleReleaseProtocolDTO(null, Boolean.TRUE, null, null, null);
+        assertThatThrownBy(() -> service.setIncompatibleProtocol(on))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        actingAs(directorUser);
+        assertThat(service.setIncompatibleProtocol(on).fallbackEnabled()).isTrue();
+        assertThat(service.getPositiveProtocol().active()).as("the O positive protocol is not switched on by this").isFalse();
+        actingAs(techUser);
+
+        // NEVER EVENT: with the fallback on, a bag the ABO group excludes is refused all the same, declared or named.
+        EmergencyReleaseOptionsDTO options = service.emergencyReleaseOptions(requestId);
+        assertThat(options.getIncompatibleRule().isFallbackEnabled()).isTrue();
+        assertThat(options.getIncompatibleRule().isCallerMayDeclare()).isTrue();
+        assertThat(options.getIncompatibleUnits()).filteredOn(EmergencyReleaseOptionsDTO.IncompatibleUnit::isLeastIncompatible)
+            .extracting(EmergencyReleaseOptionsDTO.IncompatibleUnit::getId).containsExactly(bagId);
+        EmergencyReleaseRequestDTO excludedDeclared = declared(excludedId);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, excludedDeclared)).hasMessageContaining("group excludes");
+        EmergencyReleaseRequestDTO excludedNamed = documented(excludedId, EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, excludedNamed)).hasMessageContaining("group excludes");
+        assertThat(status(excludedId)).isNotEqualTo("ISSUED");
+
+        // NEVER BLOCKS: the declaration releases in the same submit, whatever the in-basket does.
+        clearInvocations(inBasketService, auditEventLogService);
+        service.emergencyRelease(requestId, declared(bagId));
+        assertThat(status(bagId)).isEqualTo("ISSUED");
+        assertThat(incompatibleColumn(bagId, "decision_basis")).isEqualTo("AUTHORITY_PENDING");
+        assertThat(incompatibleColumn(bagId, "authoriser_user_id")).isNull();
+        assertThat(incompatibleColumn(bagId, "declarer_role")).isEqualTo("ROLE_LAB_TECHNICIAN");
+        assertThat(incompatibleColumn(bagId, "antibody_status")).isEqualTo("ANTIBODY_ON_RECORD");
+        assertThat(incompatibleColumn(bagId, "abo_compatible")).isEqualTo(Boolean.TRUE);
+        assertThat(incompatibleColumn(bagId, "least_incompatible")).isEqualTo(Boolean.TRUE);
+        assertThat(incompatibleColumn(bagId, "countersign_due_at")).isNotNull();
+        assertThat(incompatibleColumn(bagId, "notices_filed_at")).as("delivered after the commit, in their own transaction").isNotNull();
+        assertThat((String) incompatibleColumn(bagId, "unreachable_reason")).as("encrypted at rest").doesNotContain("phoned");
+        assertThat(entityManager.createNativeQuery(
+                "SELECT authoriser_user_id FROM clinical.emergency_blood_releases WHERE blood_unit_id = :id")
+            .setParameter("id", bagId).getSingleResult()).as("the issuer is never recorded as the authoriser").isNull();
+        ArgumentCaptor<CreateInBasketItemRequest> filed = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService, org.mockito.Mockito.atLeastOnce()).createItem(filed.capture());
+        assertThat(filed.getAllValues()).filteredOn(item -> "TRANSFUSION_INCOMPATIBLE_COUNTERSIGN".equals(item.getReferenceType()))
+            .as("the critical alert: the laboratory director and the requesting physician, never the issuer")
+            .allSatisfy(item -> assertThat(item.getPriority()).isEqualTo(InBasketPriority.CRITICAL))
+            .extracting(CreateInBasketItemRequest::getRecipientUserId).containsExactlyInAnyOrder(directorUser, doctorUser);
+        assertThat(filed.getAllValues()).extracting(CreateInBasketItemRequest::getReferenceType)
+            .contains("TRANSFUSION_INCOMPATIBLE_MONITORING", "TRANSFUSION_INCOMPATIBLE_HAEMOVIGILANCE");
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+
+        // The database holds the rule, whatever the code does.
+        for (String forbidden : List.of(
+                "UPDATE clinical.incompatible_release_decisions SET abo_compatible = FALSE WHERE blood_unit_id = :id",
+                "UPDATE clinical.incompatible_release_decisions SET fallback_enabled = FALSE WHERE blood_unit_id = :id",
+                "UPDATE clinical.incompatible_release_decisions SET countersign_due_at = NULL WHERE blood_unit_id = :id",
+                "UPDATE clinical.incompatible_release_decisions SET countersigned_by_user_id = issued_by_user_id,"
+                    + " countersigned_at = now() WHERE blood_unit_id = :id",
+                "UPDATE clinical.incompatible_release_decisions SET decision_basis = 'NAMED_PHYSICIAN' WHERE blood_unit_id = :id")) {
+            TransactionTemplate attempt = new TransactionTemplate(transactionManager);
+            assertThatThrownBy(() -> attempt.executeWithoutResult(status ->
+                entityManager.createNativeQuery(forbidden).setParameter("id", bagId).executeUpdate()))
+                .as(forbidden).isInstanceOf(RuntimeException.class);
+        }
+
+        // The decision a physician takes afterwards: never the issuer, never a nurse.
+        TransfusionRequestResponseDTO detail = service.getRequest(requestId);
+        com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO owed =
+            detail.getEmergencyReleases().get(0).getIncompatibleDecision();
+        assertThat(owed.isFallback()).isTrue();
+        assertThat(owed.getAuthorityTiming()).isEqualTo("PENDING");
+        assertThat(owed.getUnreachableReason()).isEqualTo("Dr on call phoned at 01:40 and 01:50, no answer");
+        assertThat(service.listIncompatibleReleases(true)).extracting(
+            com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO::getId).containsExactly(owed.getId());
+        UUID decisionId = owed.getId();
+        assertThatThrownBy(() -> service.countersignIncompatibleRelease(decisionId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        actingAs(nurseUser);
+        assertThatThrownBy(() -> service.countersignIncompatibleRelease(decisionId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        actingAs(doctorUser);
+        assertThat(service.countersignIncompatibleRelease(decisionId).getAuthorityTiming()).isEqualTo("AFTER_ISSUE");
+
+        // The monitoring: checks before the bag hangs, the outcome only once it did.
+        actingAs(nurseUser);
+        service.recordIncompatibleMonitoring(decisionId, com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO.builder()
+            .checksDone(List.of(com.example.hms.enums.IncompatibleMonitoringCheck.BEDSIDE_ABO_CHECK)).build());
+        com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO noReaction =
+            com.example.hms.payload.dto.transfusion.IncompatibleMonitoringRequestDTO.builder()
+                .outcome(com.example.hms.enums.IncompatibleMonitoringOutcome.NO_REACTION).patientInformed(Boolean.TRUE).build();
+        assertThatThrownBy(() -> service.recordIncompatibleMonitoring(decisionId, noReaction)).hasMessageContaining("not on record");
+        hang(requestId, bagId);
+        actingAs(nurseUser);
+        com.example.hms.payload.dto.transfusion.IncompatibleReleaseDecisionDTO closed =
+            service.recordIncompatibleMonitoring(decisionId, noReaction);
+        assertThat(closed.getMonitoringOutcome()).isEqualTo(com.example.hms.enums.IncompatibleMonitoringOutcome.NO_REACTION);
+        assertThat(closed.getMonitoringChecksDone()).containsExactly(com.example.hms.enums.IncompatibleMonitoringCheck.BEDSIDE_ABO_CHECK);
+        assertThat(closed.getPatientInformedAt()).isNotNull();
+        actingAs(techUser);
+        assertThat(service.listIncompatibleReleases(true)).isEmpty();
+        assertThat(service.listIncompatibleReleases(false)).hasSize(1);
     }
 
     private TransfusionAdministrationResponseDTO hang(UUID requestId, UUID bagId) {
@@ -340,9 +479,18 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThat(items.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
         assertThat(items.getValue().getBodyArgs()[2].toString()).contains("ROLE_DOCTOR");
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.EMERGENCY_BLOOD_RELEASED);
-        assertThat(audit.getValue().getEventDescription()).contains("serologically incompatible").doesNotContain("haemorrhage");
+        // V381: the release, and the decision it went out on (codes only, no narrative).
+        verify(auditEventLogService, times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(AuditEventRequestDTO::getEventType)
+            .containsExactlyInAnyOrder(AuditEventType.EMERGENCY_BLOOD_RELEASED, AuditEventType.INCOMPATIBLE_RELEASE_DECIDED);
+        assertThat(audit.getAllValues()).filteredOn(event -> event.getEventType() == AuditEventType.EMERGENCY_BLOOD_RELEASED)
+            .singleElement().satisfies(event ->
+                assertThat(event.getEventDescription()).contains("serologically incompatible").doesNotContain("haemorrhage"));
+        assertThat(audit.getAllValues()).allSatisfy(event -> assertThat(String.valueOf(event.getDetails()))
+            .doesNotContain("haemorrhage").doesNotContain("No compatible unit"));
+        assertThat(incompatibleColumn(bagId, "decision_basis")).as("the normal path: a physician named before the issue")
+            .isEqualTo("NAMED_PHYSICIAN");
+        assertThat(incompatibleColumn(bagId, "countersign_due_at")).isNull();
 
         hang(requestId, bagId);
 

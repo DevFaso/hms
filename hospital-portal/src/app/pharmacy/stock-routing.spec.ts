@@ -1,10 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LOCALE_ID, signal } from '@angular/core';
-import { registerLocaleData } from '@angular/common';
+import { Location, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
@@ -25,8 +25,12 @@ describe('StockRoutingComponent', () => {
   const hasHospitalScope = signal(true);
   /** QA D2120: the routing actions are the pharmacy's; a writable signal so a test can flip it. */
   const canAct = signal(true);
+  const isSuperAdmin = signal(false);
   const roleContextStub = {
     hasHospitalScope,
+    isSuperAdmin,
+    globalView: () => true,
+    selectedHospitalId: () => null,
     hasAnyActiveRole: () => canAct(),
   } as unknown as RoleContextService;
 
@@ -123,6 +127,7 @@ describe('StockRoutingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
         { provide: PrintLabelService, useValue: printSvc },
@@ -139,9 +144,55 @@ describe('StockRoutingComponent', () => {
 
     hasHospitalScope.set(true);
     canAct.set(true);
+    isSuperAdmin.set(false);
     fixture = TestBed.createComponent(StockRoutingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('prevents a previous stock read from landing after a hospital change', () => {
+    const previous = new Subject<any>();
+    pharmacySvc.checkStock.and.returnValue(previous);
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    component.onScopeChange();
+    previous.next(stockCheckResponse);
+    previous.complete();
+    expect(component.stockResult()).toBeNull();
+    expect(component.prescriptionId).toBe('');
+    expect(component.checking()).toBeFalse();
+    expect(component.scopeChanged()).toBeTrue();
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not open a previous hospital copy after a scope change', () => {
+    const copy = new Subject<Blob>();
+    pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(copy);
+    component.prescriptionId = 'rx-1';
+    component.reprintCopy();
+    expect(component.printingCopy()).toBeTrue();
+    component.onScopeChange();
+    copy.next(new Blob(['pdf']));
+    copy.complete();
+    expect(printSvc.openForPrint).not.toHaveBeenCalled();
+  });
+
+  it('offers hospital switching only after an in-flight action finishes', () => {
+    isSuperAdmin.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).not.toBeNull();
+    component.saving.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PHARMACY_WORKSPACE.SCOPE_LOCKED');
+    component.saving.set(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).not.toBeNull();
+    component.selectedPartner.set(stockCheckResponse.data.partnerPharmacies[0] as any);
+    component.showPartnerForm.set(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PHARMACY_WORKSPACE.SCOPE_LOCKED');
   });
 
   it('P-05: should auto-check stock when navigated with :prescriptionId param', async () => {
@@ -152,6 +203,7 @@ describe('StockRoutingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
         { provide: PrintLabelService, useValue: printSvc },
@@ -187,6 +239,28 @@ describe('StockRoutingComponent', () => {
     pending.next(stockCheckResponse);
     f.detectChanges();
     expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step']);
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    const replace = spyOn(TestBed.inject(Location), 'replaceState');
+    c.onScopeChange();
+    expect(c.prescriptionId).toBe('');
+    expect(navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing'], {
+      queryParams: { scopeChanged: '1' },
+    });
+    navigate.and.resolveTo(false);
+    c.onScopeChange();
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledWith('/pharmacy/stock-routing', 'scopeChanged=1');
+
+    let finishNavigation!: (value: boolean) => void;
+    navigate.and.returnValue(new Promise<boolean>((resolve) => (finishNavigation = resolve)));
+    c.onScopeChange();
+    const callsBeforeDestroy = replace.calls.count();
+    const queueCallsBeforeDestroy = pharmacySvc.getDispenseWorkQueue.calls.count();
+    f.destroy();
+    finishNavigation(false);
+    await Promise.resolve();
+    expect(replace.calls.count()).toBe(callsBeforeDestroy);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(queueCallsBeforeDestroy);
   });
 
   it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {

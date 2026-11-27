@@ -124,7 +124,24 @@ public class PhiTextEncryptionBackfill {
             "SELECT id, supersede_reason AS val FROM clinical.fetal_death_events"
                 + " WHERE supersede_reason IS NOT NULL AND supersede_reason <> '' AND supersede_reason NOT LIKE 'gcm1:%' LIMIT 500",
             "UPDATE clinical.fetal_death_events SET supersede_reason = ?"
-                + " WHERE id = ? AND supersede_reason NOT LIKE 'gcm1:%'"));
+                + " WHERE id = ? AND supersede_reason NOT LIKE 'gcm1:%'"),
+        // V387 (scorecard K4): the in-app notification body.
+        new Target("security.notifications.message",
+            "SELECT id, message AS val FROM security.notifications"
+                + " WHERE message IS NOT NULL AND message <> '' AND message NOT LIKE 'gcm1:%' LIMIT 500",
+            "UPDATE security.notifications SET message = ?"
+                + " WHERE id = ? AND message NOT LIKE 'gcm1:%'"));
+
+    /**
+     * V387: the notification's arguments, a JSON array before and the sealed document of
+     * {@code SealedJsonListConverter} after. Its statements use PostgreSQL's jsonb functions, so it runs on
+     * PostgreSQL only (a local H2 database holds no rows from before).
+     */
+    private static final Target JSONB_TARGET = new Target("security.notifications.message_args",
+        "SELECT id, CAST(message_args AS TEXT) AS val FROM security.notifications"
+            + " WHERE message_args IS NOT NULL AND jsonb_typeof(message_args) = 'array' LIMIT 500",
+        "UPDATE security.notifications SET message_args = jsonb_build_object('sealed', CAST(? AS TEXT))"
+            + " WHERE id = ? AND jsonb_typeof(message_args) = 'array'");
 
     /** Rows per transaction; the SELECTs' literal LIMIT says the same. */
     static final int BATCH_SIZE = 500;
@@ -148,7 +165,11 @@ public class PhiTextEncryptionBackfill {
             log.info("PHI text encryption backfill skipped: no encryption key configured");
             return;
         }
-        for (Target target : TARGETS) {
+        List<Target> targets = new java.util.ArrayList<>(TARGETS);
+        if (onPostgres()) {
+            targets.add(JSONB_TARGET);
+        }
+        for (Target target : targets) {
             try {
                 int updated = backfillTarget(target);
                 if (updated > 0) {
@@ -158,6 +179,17 @@ public class PhiTextEncryptionBackfill {
                 log.error("PHI text encryption backfill failed for {}: {}",
                     target.label(), ex.getMessage(), ex);
             }
+        }
+    }
+
+    private boolean onPostgres() {
+        try {
+            return Boolean.TRUE.equals(jdbcTemplate.execute(
+                (org.springframework.jdbc.core.ConnectionCallback<Boolean>) connection ->
+                    "PostgreSQL".equalsIgnoreCase(connection.getMetaData().getDatabaseProductName())));
+        } catch (RuntimeException ex) {
+            log.warn("PHI text encryption backfill: database product not read ({})", ex.getClass().getSimpleName());
+            return false;
         }
     }
 

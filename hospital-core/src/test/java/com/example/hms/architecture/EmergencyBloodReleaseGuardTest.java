@@ -77,7 +77,9 @@ class EmergencyBloodReleaseGuardTest {
         String issue = method(source, "public BloodUnitResponseDTO issueUnit(");
         String release = method(source, "public BloodUnitResponseDTO emergencyRelease(");
         assertThat(issue).contains("issuableUnit(").contains("recordRelease(");
-        assertThat(release).contains("issuableUnit(").contains("recordRelease(").contains("requireAnswerableAuthoriser(")
+        // V381: who authorises an incompatible release is the decision service's rule (IncompatibleReleaseAuthorityGuardTest).
+        assertThat(release).contains("issuableUnit(").contains("recordRelease(").contains("positiveAuthority.authorise(")
+            .doesNotContain("requireAnswerableAuthoriser(")
             .contains("requireIncompatibleReleaseAllowed(").contains("requireOPositiveDecisionAllowed(")
             .contains("fileReleaseReviewAfterCommit(");
     }

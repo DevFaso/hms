@@ -1,4 +1,4 @@
-import { allRowsOfArrays } from '../shared/all-pages';
+import { ALL_PAGES_SIZE, allRowsOfArrays } from '../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,6 +13,18 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { serverInstant } from '../shared/date-utils';
 import { FormsModule } from '@angular/forms';
+import {
+  concatMap,
+  defer,
+  from,
+  Observable,
+  of,
+  reduce,
+  Subscription,
+  switchMap,
+  throwError,
+} from 'rxjs';
+import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -62,6 +74,7 @@ const DEACTIVATION_REASON_FIELD = 'reg-deactivation-reason';
 })
 export class RegistrationsComponent implements OnInit {
   private readonly registrationService = inject(RegistrationService);
+  private readonly hospitalService = inject(HospitalService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -69,8 +82,10 @@ export class RegistrationsComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
+  readonly globalScope = this.roleContext.globalView;
   private readonly destroyRef = inject(DestroyRef);
   private listRequest = 0;
+  private listSubscription?: Subscription;
   readonly searchTerm = signal('');
   readonly stayFilter = signal<PatientStayStatus | ''>('');
   readonly sortOrder = signal<'name' | 'newest'>('name');
@@ -89,6 +104,7 @@ export class RegistrationsComponent implements OnInit {
           (!term ||
             [
               r.patientFullName,
+              r.hospitalName,
               r.patientUsername,
               r.mri,
               r.registrationCode,
@@ -177,11 +193,12 @@ export class RegistrationsComponent implements OnInit {
   /** RCPT-CLIN: the desk neither reads the discharge note nor writes it; the server keeps the stored one. */
   readonly frontDeskOnly = isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
 
-  readonly canManage = this.roleContext.hasAnyActiveRole([
-    'ROLE_RECEPTIONIST',
-    'ROLE_HOSPITAL_ADMIN',
-  ]);
+  readonly canManage =
+    !this.globalScope() &&
+    this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN']);
   /** Cross-tenant summary — backend excludes RECEPTIONIST. */
+  readonly canCreate = this.canManage || this.roleContext.isSuperAdmin();
+  readonly networkHospitals = signal<HospitalResponse[]>([]);
   readonly canSeeMultiHospital = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_DOCTOR',
@@ -232,33 +249,77 @@ export class RegistrationsComponent implements OnInit {
 
   load(): void {
     const request = ++this.listRequest;
+    this.listSubscription?.unsubscribe();
     this.loading.set(true);
     this.loadError.set(false);
     const filter = this.activeFilter();
-    // QA D1347: every registration of the desk (all pages), not the first 200.
-    allRowsOfArrays((page, size) =>
+    // Keep each request on the existing masked, hospital-scoped endpoint. A
+    // failed hospital fails the whole load, so the counts never imply a
+    // complete network when one of the desks was unavailable.
+    const readHospital = (hospitalId: string | undefined) =>
+      allRowsOfArrays((page, size) =>
+        this.registrationService.list({
+          hospitalId,
+          active: filter === 'all' ? undefined : filter === 'active',
+          page,
+          size,
+        }),
+      );
+    const rows = this.globalScope()
+      ? this.hospitalService.list().pipe(
+          switchMap((hospitals) => {
+            this.networkHospitals.set(hospitals);
+            return from(hospitals).pipe(
+              concatMap((hospital) =>
+                this.readHospitalSnapshot(hospital.id, filter, ALL_PAGES_SIZE),
+              ),
+              reduce((all, next) => all.concat(next), [] as HospitalRegistration[]),
+            );
+          }),
+        )
+      : readHospital(this.hospitalId ?? undefined);
+    this.listSubscription = rows.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (registrations) => {
+        if (request !== this.listRequest) return;
+        this.registrations.set(registrations ?? []);
+        this.loading.set(false);
+      },
+      error: () => {
+        if (request !== this.listRequest) return;
+        this.registrations.set([]);
+        this.loadError.set(true);
+        this.loading.set(false);
+        this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
+      },
+    });
+  }
+
+  /**
+   * Re-read a growing prefix rather than appending offset pages. A registration
+   * can leave the desk between requests; appending offsets could silently skip
+   * the next row while still presenting the network count as complete. The
+   * last response is one hospital snapshot. The explicit ceiling fails closed.
+   */
+  private readHospitalSnapshot(
+    hospitalId: string,
+    filter: ActiveFilter,
+    size: number,
+  ): Observable<HospitalRegistration[]> {
+    const ceiling = 40001;
+    return defer(() =>
       this.registrationService.list({
-        hospitalId: this.hospitalId ?? undefined,
+        hospitalId,
         active: filter === 'all' ? undefined : filter === 'active',
-        page,
+        page: 0,
         size,
       }),
-    )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (registrations) => {
-          if (request !== this.listRequest) return;
-          this.registrations.set(registrations ?? []);
-          this.loading.set(false);
-        },
-        error: () => {
-          if (request !== this.listRequest) return;
-          this.registrations.set([]);
-          this.loadError.set(true);
-          this.loading.set(false);
-          this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
-        },
-      });
+    ).pipe(
+      switchMap((rows) => {
+        if ((rows?.length ?? 0) < size) return of(rows ?? []);
+        if (size === ceiling) return throwError(() => new Error('Registration desk exceeds limit'));
+        return this.readHospitalSnapshot(hospitalId, filter, Math.min(size * 2, ceiling));
+      }),
+    );
   }
 
   toggleMultiHospital(): void {
@@ -339,6 +400,12 @@ export class RegistrationsComponent implements OnInit {
 
   submitForm(): void {
     const editing = this.editingRegistration();
+    if (!editing && this.globalScope() && !this.form.hospitalId) {
+      const message = this.translate.instant('REGISTRATIONS.HOSPITAL_REQUIRED');
+      refuseFields(this.host.nativeElement, ['reg-hospital'], ['reg-hospital'], message);
+      this.toast.error(message);
+      return;
+    }
     if (!editing && !this.form.patientId) {
       const message = this.translate.instant('REGISTRATIONS.PATIENT_REQUIRED');
       refuseFields(this.host.nativeElement, ['reg-patient'], ['reg-patient'], message);
@@ -357,13 +424,18 @@ export class RegistrationsComponent implements OnInit {
       this.toast.error(message);
       return;
     }
-    refuseFields(this.host.nativeElement, [], ['reg-patient', DEACTIVATION_REASON_FIELD], '');
+    refuseFields(
+      this.host.nativeElement,
+      [],
+      ['reg-hospital', 'reg-patient', DEACTIVATION_REASON_FIELD],
+      '',
+    );
     this.formSaving.set(true);
     const op = editing
       ? this.registrationService.update(editing.id, this.form)
       : this.registrationService.create({
           ...this.form,
-          hospitalId: this.hospitalId ?? undefined,
+          hospitalId: this.globalScope() ? this.form.hospitalId : (this.hospitalId ?? undefined),
         });
     op.subscribe({
       next: (saved) => {
@@ -372,9 +444,16 @@ export class RegistrationsComponent implements OnInit {
         );
         this.formSaving.set(false);
         this.closeFormModal();
-        this.registrations.update((list) =>
-          editing ? list.map((r) => (r.id === saved.id ? saved : r)) : [saved, ...list],
-        );
+        this.registrations.update((list) => {
+          const filter = this.activeFilter();
+          const matches = filter === 'all' || saved.active === (filter === 'active');
+          if (editing) {
+            return matches
+              ? list.map((r) => (r.id === saved.id ? saved : r))
+              : list.filter((r) => r.id !== saved.id);
+          }
+          return matches ? [saved, ...list] : list;
+        });
       },
       error: (err: { status?: number }) => {
         this.toast.error(

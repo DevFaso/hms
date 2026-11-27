@@ -309,6 +309,12 @@ public enum AuditEventType {
     O_POSITIVE_FOLLOW_UP_RECORDED,
     O_POSITIVE_COUNTERSIGN_OVERDUE,
 
+    // Release despite an incompatible crossmatch (V381). Past tense; each row carries ids and codes only.
+    INCOMPATIBLE_RELEASE_DECIDED,
+    INCOMPATIBLE_RELEASE_COUNTERSIGNED,
+    INCOMPATIBLE_RELEASE_MONITORING_RECORDED,
+    INCOMPATIBLE_COUNTERSIGN_OVERDUE,
+
     // QA D1538 (round 40): an obstetric order or referral placed as an emergency for a patient the
     // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
     // the recorded sex and age at the time; the order itself is flagged for review.
@@ -387,6 +393,11 @@ public enum AuditEventType {
     CLINICAL_RULE_SIGNED_OFF,
     /** V356: a rule set's sign-off revoked at a hospital; it reads « provisoire » again (ids, key and version only). */
     CLINICAL_RULE_SIGNOFF_REVOKED,
+    /**
+     * V382: audit rows past the retention period removed by {@code support.purge_expired_audit_rows}, the only
+     * delete the audit tables accept. Written by the database function itself (counts and cutoff only).
+     */
+    AUDIT_RETENTION_PURGED,
 
     OTHER
 }

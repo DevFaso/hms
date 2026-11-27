@@ -566,6 +566,19 @@
             />
           </div>
           <div class="form-group">
+            <label class="checkbox-label" for="defCulture">
+              <input
+                id="defCulture"
+                type="checkbox"
+                [(ngModel)]="defForm.culture"
+                [disabled]="clinicalFieldsLocked()"
+                aria-describedby="defCultureHint"
+              />
+              {{ 'LAB_TEST_CONFIG.CULTURE' | translate }}
+            </label>
+            <small id="defCultureHint">{{ 'LAB_TEST_CONFIG.CULTURE_HINT' | translate }}</small>
+          </div>
+          <div class="form-group">
             <label for="defTurnaround">{{ 'LAB_TEST_CONFIG.TURNAROUND_TIME' | translate }}</label>
             <input
               id="defTurnaround"

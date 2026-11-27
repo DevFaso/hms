@@ -64,7 +64,7 @@ class DirectPatientMessageContractTest {
                 invoice.setTotalAmount(new BigDecimal("1250"));invoice.setAmountPaid(BigDecimal.ZERO);
                 when(invoices.findByIdWithRefs(f.subjectId)).thenReturn(Optional.of(invoice));
                 when(roles.requireActiveHospitalId()).thenReturn(f.hospital.getId());
-                var sender=new InvoiceEmailService(invoices,items,new PdfInvoiceService(f.messages),f.gate,f.locales,f.messages,roles,mock(InvoiceAdjustmentRepository.class));
+                var sender=new InvoiceEmailService(invoices,items,new PdfInvoiceService(f.messages),f.gate,f.locales,f.messages,roles,mock(InvoiceAdjustmentRepository.class),new com.example.hms.service.billing.InvoiceMailRecipients(mock(com.example.hms.repository.PatientGuarantorRepository.class)));
                 var request=new EmailInvoiceRequest(List.of(f.patient.getEmail()),List.of(),List.of(),null,"de",false);
                 send=()->sender.emailInvoice(f.subjectId,request);
             }

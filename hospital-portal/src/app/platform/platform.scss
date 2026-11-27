@@ -461,7 +461,7 @@
 /* ── Automation Grid ── */
 .automation-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 16px;
 }
 
@@ -526,8 +526,9 @@
 
 .metric {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   padding: 8px 12px;
   background: #f8fafc;
   border-radius: 8px;
@@ -1094,7 +1095,14 @@
 }
 
 .detail-item {
-  label {
+  span,
+  a {
+    font-size: 0.85rem;
+    color: #1e293b;
+    word-break: break-word;
+  }
+
+  .detail-label {
     display: block;
     font-size: 0.72rem;
     font-weight: 600;
@@ -1102,13 +1110,6 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 4px;
-  }
-
-  span,
-  a {
-    font-size: 0.85rem;
-    color: #1e293b;
-    word-break: break-word;
   }
 }
 
@@ -1258,6 +1259,7 @@ textarea.form-input {
 
 .form-check {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
 

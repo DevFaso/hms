@@ -655,6 +655,32 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Emergency O positive release protocol changed$/,
   },
   {
+    // V381: the decision behind a release despite an incompatible crossmatch; the basis is in the details.
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_DECIDED',
+    re: /^Incompatible release decision recorded for blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_COUNTERSIGNED',
+    re: /^Incompatible release countersigned: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_RELEASE_MONITORING_RECORDED',
+    re: /^Incompatible release monitoring recorded: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    key: 'AUDIT.DESC.INCOMPATIBLE_COUNTERSIGN_OVERDUE',
+    re: /^Incompatible release countersignature overdue, escalated to the laboratory director: decision (\S+)$/,
+    params: ['decision'],
+  },
+  {
+    // V381: a hospital's fallback for an incompatible release changed (the values are in the details).
+    key: 'AUDIT.DESC.INCOMPATIBLE_PROTOCOL_CHANGED',
+    re: /^Incompatible release fallback setting changed$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],
@@ -2174,6 +2200,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.CLINICAL_RULE_SIGNOFF_REVOKED',
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
+  },
+  // V382: the retention purge of the audit tables records itself (counts and cutoff in details).
+  {
+    key: 'AUDIT.DESC.AUDIT_RETENTION_PURGED',
+    re: /^Audit rows past the retention period removed$/,
+    params: [],
   },
   // QA r70 D3206: the desk showed or re-sent a patient's portal activation (never the code).
   {

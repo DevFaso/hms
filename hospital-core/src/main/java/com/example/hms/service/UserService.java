@@ -53,6 +53,11 @@ public interface UserService {
 
     boolean verifyEmail(String email, String token);
 
+
+    /** As {@link #verifyEmail}, by the token alone (the mailed link carries no address). */
+
+    boolean verifyEmailByToken(String token);
+
     // ✅ Admin/staff/hospital-specific registration
     UserResponseDTO createUserWithRolesAndHospital(@Valid AdminSignupRequest adminSignupRequest);
 

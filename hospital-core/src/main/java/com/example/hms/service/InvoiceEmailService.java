@@ -12,6 +12,7 @@ import com.example.hms.utility.RoleValidator;
 import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.service.billing.InvoiceMailRecipients;
 import com.example.hms.service.notification.PatientMessageGate;
 import com.example.hms.utility.DisplayDates;
 import com.example.hms.utility.InvoiceBalance;
@@ -42,6 +43,9 @@ public class InvoiceEmailService {
     /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
     private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
+    /** Scorecard K4: who the invoice may be mailed to (the patient, a guarantor on file, or a reasoned exception). */
+    private final InvoiceMailRecipients recipientPolicy;
+
     /** Billing-money plan PR 7: the payers' shares on the mailed paper. Optional so hand-built tests keep working. */
     private com.example.hms.service.billing.InvoiceCoverageService coverageService;
 
@@ -70,6 +74,10 @@ public class InvoiceEmailService {
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BusinessException("billing.invoice.cancelledLocked");
         }
+
+        // Scorecard K4: the patient's own address, a guarantor's on file, or another address with a reason;
+        // a small number of them. Decided before anything is composed.
+        List<InvoiceMailRecipients.Recipient> recipients = recipientPolicy.classify(invoice, req);
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
 
@@ -102,6 +110,37 @@ public class InvoiceEmailService {
         if (!sent) {
             throw new BusinessException("billing.invoice.emailOptedOut");
         }
+        auditRecipients(invoice, recipients, req);
+    }
+
+    /**
+     * The trace of a sent invoice, on the request's own audit row ({@code WriteAuditInterceptor}: who, where,
+     * when, which route): a release of a copy ({@code DATA_EXPORT}) of this invoice, for this patient, to these
+     * recipients. Each address is masked; the invoice, the patient and a guarantor are ids; the clerk's reason
+     * is kept when an address was on no file. Never the subject, the note or a name.
+     */
+    private void auditRecipients(BillingInvoice invoice, List<InvoiceMailRecipients.Recipient> recipients,
+                                 EmailInvoiceRequest req) {
+        List<java.util.Map<String, Object>> sentTo = new java.util.ArrayList<>();
+        boolean reasoned = false;
+        for (InvoiceMailRecipients.Recipient recipient : recipients) {
+            java.util.Map<String, Object> one = new java.util.LinkedHashMap<>();
+            one.put("recipient", recipient.masked());
+            one.put("recipientKind", recipient.kind().name());
+            if (recipient.guarantorId() != null) {
+                one.put("guarantorId", recipient.guarantorId().toString());
+            }
+            sentTo.add(one);
+            reasoned = reasoned || recipient.kind() == InvoiceMailRecipients.Kind.OTHER;
+        }
+        java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("invoiceEmailRecipients", sentTo);
+        details.put("attachment", req.attachPdf());
+        if (reasoned) {
+            details.put("reason", req.reason().strip());
+        }
+        com.example.hms.security.audit.WriteAuditDetail.describe(com.example.hms.enums.AuditEventType.DATA_EXPORT,
+            invoice.getId(), invoice.getPatient() != null ? invoice.getPatient().getId() : null, details);
     }
 
     /**

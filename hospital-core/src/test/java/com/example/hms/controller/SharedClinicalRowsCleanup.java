@@ -38,8 +38,29 @@ final class SharedClinicalRowsCleanup {
     private SharedClinicalRowsCleanup() {
     }
 
+    /**
+     * The audit table is append-only on PostgreSQL (V382). A subclass run on PostgreSQL
+     * (AppointmentBookingEndpointPostgresIT) wipes it with the trigger switched off around the wipe,
+     * in its own throwaway container; on H2 there is no trigger.
+     */
+    private static void wipeAuditRows(ApplicationContext context) {
+        org.springframework.jdbc.core.JdbcTemplate jdbc = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        Boolean postgres = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) connection ->
+            connection.getMetaData().getDatabaseProductName().toLowerCase(java.util.Locale.ROOT).contains("postgres"));
+        if (!Boolean.TRUE.equals(postgres)) {
+            context.getBean(AuditEventLogRepository.class).deleteAllInBatch();
+            return;
+        }
+        jdbc.execute("ALTER TABLE support.audit_event_logs DISABLE TRIGGER trg_audit_append_only");
+        try {
+            jdbc.update("DELETE FROM support.audit_event_logs");
+        } finally {
+            jdbc.execute("ALTER TABLE support.audit_event_logs ENABLE TRIGGER trg_audit_append_only");
+        }
+    }
+
     static void deleteAll(ApplicationContext context) {
-        context.getBean(AuditEventLogRepository.class).deleteAllInBatch();
+        wipeAuditRows(context);
         context.getBean(NotificationRepository.class).deleteAll();
         // A released result files an in-basket RESULT row for the ordering
         // clinician (QA D178), which pins the user through fk_inbasket_recipient.
@@ -54,6 +75,12 @@ final class SharedClinicalRowsCleanup {
         // restriction), so the repository wipe above cannot see them; they
         // would pin their order through fk_labresult_order.
         context.getBean(org.springframework.jdbc.core.JdbcTemplate.class).update("DELETE FROM lab.lab_results");
+        // Culture reports pin their order/specimen; include hidden entered-in-error rows in this test-only wipe.
+        org.springframework.jdbc.core.JdbcTemplate cultureRows = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        cultureRows.update("DELETE FROM lab.micro_susceptibilities");
+        cultureRows.update("DELETE FROM lab.micro_isolates");
+        cultureRows.update("DELETE FROM lab.micro_culture_corrections");
+        cultureRows.update("DELETE FROM lab.micro_culture_results");
         context.getBean(LabSpecimenRepository.class).deleteAll();
         context.getBean(LabOrderRepository.class).deleteAll();
         context.getBean(LabTestDefinitionRepository.class).deleteAll();

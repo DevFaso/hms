@@ -719,6 +719,36 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("K4: the registrar's and the hospital's copies say where the code went (masked), never the code")
+    void k4_theRegistrarsAndTheHospitalsCopiesCarryNoCode() {
+        role.setName("ROLE_PATIENT");
+        role.setCode("ROLE_PATIENT");
+        assignee.setPhoneNumber("+22670123456");
+        hospital.setPhoneNumber("+22625300000");
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setPhoneNumber("+22699999999");
+        assignment.setRegisteredBy(registrar);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId());
+
+        // The person activated gets the code; the two copies get the masked number it went to.
+        org.mockito.ArgumentCaptor<Object[]> own = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(messageSource).getMessage(eq("sms.activation.patient"), own.capture(), anyString(), any());
+        assertThat(own.getValue()).contains(VALID_PIN);
+        for (String copy : java.util.List.of("sms.activation.registrar", "sms.activation.hospital")) {
+            org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+            verify(messageSource).getMessage(eq(copy), args.capture(), anyString(), any());
+            assertThat(args.getValue()).as(copy).doesNotContain(VALID_PIN).contains("+226*****56");
+            assertThat(java.util.Arrays.toString(args.getValue())).as(copy)
+                .doesNotContain(VALID_PIN, "+22670123456", "Doe");
+        }
+        verify(smsService).send("+22699999999", "sms.activation.registrar");
+        verify(smsService).send("+22625300000", "sms.activation.hospital");
+    }
+
+    @Test
     void qaD1840_aPlatformWideAssignmentIsWordedAsSuchNeverAsTheScopeCode() {
         // A super-admin's assignment has no hospital: the mail and both SMS name
         // the platform, and no message is composed with the scope code GLOBAL.

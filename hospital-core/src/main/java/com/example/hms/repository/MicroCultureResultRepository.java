@@ -46,6 +46,9 @@ public interface MicroCultureResultRepository extends JpaRepository<MicroCulture
 
     List<MicroCultureResult> findByLabOrder_IdOrderByCreatedAtDesc(UUID labOrderId);
 
+    List<MicroCultureResult> findByLabOrder_IdAndHospital_IdOrderByCreatedAtDesc(UUID labOrderId, UUID hospitalId);
+
+
     /** FHIR DiagnosticReport search (Tier 2 item 42): one patient's cultures, tenant-scoped. */
     org.springframework.data.domain.Page<MicroCultureResult>
         findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(

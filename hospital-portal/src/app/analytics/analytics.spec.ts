@@ -7,6 +7,7 @@ import { of, throwError } from 'rxjs';
 
 import { AnalyticsComponent } from './analytics';
 import { DashboardService, PlatformAnalytics } from '../services/dashboard.service';
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 
 /**
  * The eight stat cards carried their English inline (`label: 'Total
@@ -128,6 +129,22 @@ describe('AnalyticsComponent', () => {
       'SCHEDULED',
       'COMPLETED',
     ]);
+  });
+
+  it('renders trend dates in the selected language without shifting the day', () => {
+    const previous = localStorage.getItem('lang');
+    try {
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+      expect(component.shortDate('2026-11-25')).toBe('25/11');
+      localStorage.setItem('lang', 'en');
+      resetStoredLangForTests();
+      expect(component.shortDate('2026-11-25')).toBe('11/25');
+    } finally {
+      if (previous === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previous);
+      resetStoredLangForTests();
+    }
   });
 
   it('renders no cards when the analytics call fails', () => {

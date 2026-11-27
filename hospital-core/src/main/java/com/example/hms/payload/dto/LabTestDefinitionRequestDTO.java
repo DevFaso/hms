@@ -39,6 +39,8 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 100)
     private String category;
 
+    private Boolean culture;
+
     @Size(max = 2048)
     private String description;
 
