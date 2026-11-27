@@ -29,6 +29,15 @@ export interface AllergyReviewState {
   reviewedAt?: string | null;
   plan?: string | null;
   rationale?: string | null;
+  /**
+   * QA D3945: a review is on record but no longer answers the conflict (the allergy or the order changed
+   * after it): what it decided, whose it was, when, and why it no longer counts. Absent otherwise.
+   */
+  voidedDecision?: 'CONTINUE' | 'STOP' | null;
+  voidedReviewedByName?: string | null;
+  voidedReviewedAt?: string | null;
+  voidReason?: 'ALLERGY_CHANGED' | 'ALLERGY_OR_ORDER_CHANGED' | null;
+  voidReasonText?: string | null;
 }
 
 /** What the server held: its sentence (awaiting review, who was notified, or the prescriber's STOP) and the card(s). */

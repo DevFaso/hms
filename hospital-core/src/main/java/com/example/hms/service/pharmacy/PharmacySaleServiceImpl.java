@@ -114,6 +114,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 ? pharmacyRepository.findByIdAndHospital_Id(dto.getPharmacyId(), activeHospitalId)
                 : pharmacyRepository.findLockedByIdAndHospitalId(dto.getPharmacyId(), activeHospitalId))
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+        // QA D4182 (r81): the counter sale is a till of one of the hospital's own stores.
+        PharmacyStores.requireOwnStore(pharmacy, "pharmacyId");
         PharmacySale keyed = findKeyedSale(activeHospitalId, pharmacy, dto);
         if (keyed != null) {
             return mapper.toResponseDTO(keyed);
@@ -167,6 +169,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         // Billing plan PR 10 (QA D2672): a counter sale is money in the pharmacist's till today; a closed till
         // refuses it and nothing is written.
         sale.setCashSessionId(stampPharmacyTill(activeHospitalId, soldBy != null ? soldBy.getId() : null));
+        // QA D4186 (r81): the sale's receipt number, allocated once, so the day list names it and a reprint shows
+        // the number first printed. Last before the save: a refusal above burns no number.
+        sale.setReceiptNumber(allocateReceiptNumber(hospital));
 
         PharmacySale saved = saveKeyed(sale);
         // QA D2670 (r65): the sale takes its stock in the same transaction; a lot emptied meanwhile refuses the
@@ -175,6 +180,27 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         log.info("Recorded pharmacy sale {} ({} lines, total {})",
                 saved.getId(), saved.getLines().size(), saved.getTotalAmount());
         return mapper.toResponseDTO(saved);
+    }
+
+    /** QA D4186: the receipt counter. Setter-injected so hand-built test instances keep working. */
+    private PharmacyReceiptNumberAllocator receiptNumberAllocator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setReceiptNumberAllocator(PharmacyReceiptNumberAllocator receiptNumberAllocator) {
+        this.receiptNumberAllocator = receiptNumberAllocator;
+    }
+
+    /** The first allocation of a year can lose the counter-row insert race, and is retried once. */
+    private String allocateReceiptNumber(Hospital hospital) {
+        if (receiptNumberAllocator == null) {
+            return null;
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        try {
+            return receiptNumberAllocator.next(hospital, today);
+        } catch (org.springframework.dao.DataIntegrityViolationException firstOfYearRace) {
+            return receiptNumberAllocator.next(hospital, today);
+        }
     }
 
     /** One requested line as the server prices and counts it. */

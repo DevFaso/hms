@@ -134,7 +134,7 @@ describe('DispensingComponent', () => {
 
   beforeEach(async () => {
     pharmacySvc = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
@@ -155,7 +155,7 @@ describe('DispensingComponent', () => {
     deferralSvc = jasmine.createSpyObj('BillingDeferralService', ['counter', 'request', 'list']);
     deferralSvc.counter.and.returnValue(of({ data: { onOpenStay: false, open: [] } }) as never);
 
-    pharmacySvc.listPharmacies.and.returnValue(of(mockPharmacies as any));
+    pharmacySvc.listStores.and.returnValue(of(mockPharmacies as any));
     pharmacySvc.getDispenseWorkQueue.and.returnValue(of(mockWorkQueue as any));
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
@@ -222,7 +222,7 @@ describe('DispensingComponent', () => {
   });
 
   it('should load pharmacies on init', () => {
-    expect(pharmacySvc.listPharmacies).toHaveBeenCalled();
+    expect(pharmacySvc.listStores).toHaveBeenCalled();
     expect(component.pharmacies().length).toBe(1);
   });
 
@@ -1486,7 +1486,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
 
   async function render(refill: Record<string, unknown> | undefined) {
     pharmacySvc = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
@@ -1503,7 +1503,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     // The component only loads the work queue once a pharmacy is selected,
     // so an empty pharmacy list would leave the queue permanently unrendered.
-    pharmacySvc.listPharmacies.and.returnValue(
+    pharmacySvc.listStores.and.returnValue(
       of({
         content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
         totalElements: 1,
@@ -1654,7 +1654,7 @@ describe('DispensingComponent — clarification control on the work queue', () =
 
   async function render(roles: string[], overrides: Record<string, unknown> = {}) {
     pharmacySvc = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
@@ -1669,7 +1669,7 @@ describe('DispensingComponent — clarification control on the work queue', () =
       of({ data: { readyForCollectionEnabled: false } }) as never,
     );
     pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
-    pharmacySvc.listPharmacies.and.returnValue(
+    pharmacySvc.listStores.and.returnValue(
       of({
         content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
         totalElements: 1,
@@ -1898,7 +1898,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
   async function render(rowOverrides: Record<string, unknown> = {}, claimsOn = true) {
     pharmacySvc = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
@@ -1924,7 +1924,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       }) as never,
     );
     pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
-    pharmacySvc.listPharmacies.and.returnValue(
+    pharmacySvc.listStores.and.returnValue(
       of({
         content: [
           { id: 'ph-1', name: 'Main Pharmacy' },

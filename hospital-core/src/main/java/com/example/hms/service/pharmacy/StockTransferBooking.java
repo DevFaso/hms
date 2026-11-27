@@ -34,6 +34,7 @@ public class StockTransferBooking {
     private final StockTransactionRepository transactions;
     private final EntityManager entityManager;
     private final FefoLotPolicy fefoLotPolicy;
+    private final PharmacyPriceHistory priceHistory;
 
     public record Route(Pharmacy destination, StockTransaction originalReceipt, String fefoOverrideReason) {
         public Route(Pharmacy destination, StockTransaction originalReceipt) {
@@ -96,6 +97,8 @@ public class StockTransferBooking {
                 throw refused("stockTransaction.transfer.destinationUnavailable");
             }
             if (id.equals(destinationId)) {
+                // QA D4182 (r81): hospital stock moves between the hospital's own stores only.
+                PharmacyStores.requireOwnStore(locked, "referenceId");
                 destination = locked;
             }
         }
@@ -122,7 +125,7 @@ public class StockTransferBooking {
     }
 
     private void receive(Pharmacy destination, StockTransaction source) {
-        InventoryItem item = destinationItem(destination, source.getInventoryItem());
+        InventoryItem item = destinationItem(destination, source.getInventoryItem(), source);
         WholeUnitQuantity.require(item, source.getQuantity(), WholeUnitQuantity.DEFAULT_KEY);
         StockLot lot = destinationLot(item, source);
         if (items.incrementOnHand(item.getId(), source.getQuantity(), LocalDateTime.now()) != 1) {
@@ -144,7 +147,7 @@ public class StockTransferBooking {
         transactions.save(receipt);
     }
 
-    private InventoryItem destinationItem(Pharmacy destination, InventoryItem source) {
+    private InventoryItem destinationItem(Pharmacy destination, InventoryItem source, StockTransaction movement) {
         InventoryItem item = items.findByPharmacyIdAndMedicationCatalogItemId(
             destination.getId(), source.getMedicationCatalogItem().getId()).orElse(null);
         if (item == null) {
@@ -154,10 +157,15 @@ public class StockTransferBooking {
                 // Do not split stock or silently substitute a differently classified catalogue row.
                 throw new FieldBusinessException("referenceId", "stock.inventory.duplicate");
             }
+            // QA D4181 (r81): the item a transfer creates is sold as its source is: same unit, same pack size,
+            // same selling price (or the same documented free-of-charge reason). It used to arrive with no price,
+            // and a fill from it was charged nothing.
             item = InventoryItem.builder().pharmacy(destination).medicationCatalogItem(source.getMedicationCatalogItem())
                 .unit(source.getUnit()).unitsPerPack(source.getUnitsPerPack()).packUnit(source.getPackUnit())
-                .packSizeSetAt(source.getPackSizeSetAt()).build();
-            return items.saveAndFlush(item);
+                .packSizeSetAt(source.getPackSizeSetAt()).freeOfChargeReason(source.getFreeOfChargeReason()).build();
+            item = items.saveAndFlush(item);
+            carryPrice(item, source, movement);
+            return item;
         }
         item = lockItem(item.getId());
         // The transfer is in the source's stock units; a different pack size needs an explicit conversion first.
@@ -165,7 +173,30 @@ public class StockTransferBooking {
                 || !Objects.equals(item.getUnitsPerPack(), source.getUnitsPerPack())) {
             throw refused("stockTransaction.transfer.unitsDiffer");
         }
+        // An item the destination holds but never priced takes the source's price; a price it set stays its own.
+        carryPrice(item, source, movement);
         return item;
+    }
+
+    /** The reason kept in the price history when a transfer gives its destination item the source's price. */
+    static final String TRANSFER_PRICE_REASON = "Prix repris de la pharmacie d'origine du transfert";
+
+    /**
+     * QA D4181 (r81): gives {@code item} the selling price of {@code source} when it has none of its own and is
+     * not documented as free, and keeps the change in the price history under the person who moved the stock.
+     */
+    private void carryPrice(InventoryItem item, InventoryItem source, StockTransaction movement) {
+        BigDecimal price = PharmacyListPrice.of(source).orElse(null);
+        if (price == null || PharmacyListPrice.isFree(item) || PharmacyListPrice.of(item).isPresent()) {
+            return;
+        }
+        BigDecimal before = item.getUnitPrice();
+        item.setUnitPrice(price);
+        items.saveAndFlush(item);
+        UUID movedBy = movement.getPerformedByUser() != null ? movement.getPerformedByUser().getId() : null;
+        if (movedBy != null) {
+            priceHistory.keep(item, before, price, TRANSFER_PRICE_REASON, movedBy, LocalDateTime.now());
+        }
     }
 
     private StockLot destinationLot(InventoryItem item, StockTransaction source) {

@@ -58,6 +58,9 @@ import {
 } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
+import { PatientIdLineComponent } from '../shared/patient-id-line/patient-id-line.component';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PluralKeyPipe } from '../shared/pipes/plural-key.pipe';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
@@ -197,6 +200,9 @@ import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.compo
     SubmitGuardDirective,
     ServerTimePipe,
     PersonNamePipe,
+    PatientIdLineComponent,
+    DateTimePipe,
+    PluralKeyPipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -489,7 +495,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   private loadPharmacies(): void {
     // QA D1347: every pharmacy (all pages), not the first 100.
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);

@@ -158,7 +158,7 @@ export class GoodsReceiptComponent implements OnInit {
   loadPharmacies(): void {
     this.pharmacyFailed.set(false);
     // Keep the upstream complete pharmacy selector (QA D1347).
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);

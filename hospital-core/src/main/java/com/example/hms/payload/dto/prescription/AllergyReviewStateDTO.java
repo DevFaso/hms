@@ -42,4 +42,19 @@ public class AllergyReviewStateDTO {
     private String plan;
     /** The prescriber's rationale; null unless the reader may see it. */
     private String rationale;
+
+    /**
+     * QA D3945 (r77, r81): a review is on record but no longer answers the conflict (the allergy record or the
+     * order changed after it), so the gates hold again. The screen used to say only "awaiting review", as if no
+     * prescriber had ever looked. These say that a review existed, whose, when, what it decided and why it no
+     * longer counts. All null when no review was ever recorded, or while the review on record is current.
+     */
+    private State voidedDecision;
+    /** The prescriber of the review that no longer counts. */
+    private String voidedReviewedByName;
+    private LocalDateTime voidedReviewedAt;
+    /** Why it no longer counts: {@code ALLERGY_CHANGED} or {@code ALLERGY_OR_ORDER_CHANGED}. */
+    private String voidReason;
+    /** {@link #voidReason} as a sentence in the reader's language, for a screen that shows the server's text. */
+    private String voidReasonText;
 }

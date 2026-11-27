@@ -235,6 +235,12 @@ export interface InventoryItemRequest {
   unitPrice?: number | null;
   /** Review of #1239: why the price changes; required by the server when it does (price history). */
   priceChangeReason?: string;
+  /**
+   * QA D4181 (r81): true documents the item as handed over at no charge (with `freeOfChargeReason`), false
+   * withdraws that (with `priceChangeReason`); absent leaves it as it is. Store manager or administrator.
+   */
+  freeOfCharge?: boolean;
+  freeOfChargeReason?: string;
   active?: boolean;
 }
 
@@ -250,6 +256,9 @@ export interface InventoryItemResponse {
   reorderQuantity: number;
   unit?: string;
   unitPrice?: number | null;
+  /** QA D4181 (r81): documented as handed over at no charge at this pharmacy, and why. */
+  freeOfCharge?: boolean;
+  freeOfChargeReason?: string | null;
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
@@ -570,6 +579,9 @@ export interface DispenseResponse {
   patientId: string;
   /** The patient as a person reads them (QA D102); on every dispense read since QA D1058. */
   patientName?: string;
+  /** QA D4185 (r81): the record number at the dispensing hospital, and the date of birth. */
+  patientMrn?: string | null;
+  patientDateOfBirth?: string | null;
   /** The pharmacy name; GET /pharmacy/dispense/{id} only (QA D102). */
   pharmacyName?: string;
   pharmacyId: string;
@@ -584,7 +596,10 @@ export interface DispenseResponse {
   medicationName: string;
   quantityRequested: number;
   quantityDispensed: number;
-  /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
+  /**
+   * QA D264: what the dispense costs; null when the pharmacy has not priced the medication. Sent by
+   * GET /pharmacy/dispense/{id} and, since QA D4186, on the unpaid rows of the pharmacy's list.
+   */
   chargeAmount?: number | null;
   /**
    * QA D3408 (r70): the insurer share of this fill (a live claim, or a third-party cover approved by the
@@ -737,6 +752,9 @@ export interface WorkQueuePrescription {
     firstName?: string;
     middleName?: string;
     lastName?: string;
+    /** QA D4185 (r81): the record number at the order's hospital, and the date of birth. */
+    mrn?: string | null;
+    dateOfBirth?: string | null;
   };
   staff?: {
     id: string;
@@ -937,15 +955,20 @@ export interface PharmacyReceiptDetails {
   medicationName?: string | null;
   quantity?: number | null;
   unit?: string | null;
-  /** Sent only while the price read is the price charged (the payment being recorded). */
+  /** QA D4186: the prices kept on the payment when it was taken; absent on a payment older than that. */
   unitPrice?: number | null;
   lineTotal?: number | null;
   insurerShare?: number | null;
   patientMrn?: string | null;
+  /** QA D4186: the patient, read from the payment, so a receipt reopened later still names them. */
+  patientName?: string | null;
+  patientDateOfBirth?: string | null;
   cashierName?: string | null;
   pharmacyName?: string | null;
   pharmacyAddress?: string | null;
   pharmacyPhone?: string | null;
+  /** QA D4186: true on a later read of the payment (history, reprint): the receipt is a « Duplicata ». */
+  duplicate?: boolean;
 }
 
 /* ───────────────────────────── Pharmacy Claims (T-47/T-48/T-49) ───────────────────────────── */
@@ -971,6 +994,9 @@ export interface PharmacyClaimResponse {
   patientId: string;
   /** QA D992 class: shown instead of a slice of the patient id. */
   patientName?: string | null;
+  /** QA D4185 (r81): the record number at the claim's hospital, and the date of birth. */
+  patientMrn?: string | null;
+  patientDateOfBirth?: string | null;
   hospitalId: string;
   coverageReference?: string;
   claimStatus: PharmacyClaimStatus;
@@ -1100,8 +1126,23 @@ export class PharmacyService {
 
   // ── Pharmacy Registry ──
 
+  /**
+   * The whole registry: the hospital's own pharmacies AND the partner and community pharmacies an order
+   * can be sent to. Only the registry page lists it. A store picker calls `listStores`
+   * (QA D4182, `scripts/lib/r81-pharmacy-dispensing.test.mjs`).
+   */
   listPharmacies(page = 0, size = 20): Observable<Page<PharmacyResponse>> {
     const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<Page<PharmacyResponse>>('/pharmacy-registry', { params });
+  }
+
+  /**
+   * QA D4182 (r81): the hospital's own stores, the list behind every store picker (dispensing, inventory,
+   * goods receipt, adjustments and transfers, controlled register, checkout, counter sale). A partner
+   * pharmacy is another business: it holds no hospital stock and has no till of the hospital.
+   */
+  listStores(page = 0, size = 20): Observable<Page<PharmacyResponse>> {
+    const params = new HttpParams().set('page', page).set('size', size).set('storesOnly', true);
     return this.http.get<Page<PharmacyResponse>>('/pharmacy-registry', { params });
   }
 
@@ -1715,6 +1756,22 @@ export class PharmacyService {
 
   getPayment(id: string): Observable<ApiResponse<PharmacyPaymentResponse>> {
     return this.http.get<ApiResponse<PharmacyPaymentResponse>>(`/pharmacy/payments/${id}`);
+  }
+
+  /**
+   * QA D4186 (r81): the payments taken for fills of one pharmacy, newest first, each with its receipt as
+   * first charged: the history a receipt is reopened and reprinted from.
+   */
+  listPaymentsByPharmacy(
+    pharmacyId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      `/pharmacy/payments/pharmacy/${pharmacyId}`,
+      { params },
+    );
   }
 
   listPaymentsByDispense(

@@ -1644,6 +1644,83 @@ class InventoryServiceImplTest {
     }
 
     @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D4181: a pharmacist cannot declare an item free of charge; nothing is saved or kept")
+    void aPharmacistCannotDeclareAnItemFree() {
+        stubPricedItem(false);
+        InventoryItemRequestDTO dto = buildItemRequest();
+        dto.setQuantityOnHand(null);
+        dto.setFreeOfCharge(true);
+        dto.setFreeOfChargeReason("Programme national");
+
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field", "messageKey").containsExactly("freeOfCharge", "pharmacy.price.roleRequired");
+        verify(inventoryItemRepository, never()).save(any());
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+        assertThat(inventoryItem.getFreeOfChargeReason()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D4181: the store manager documents an item as free with a reason, kept in the price history; withdrawing it needs a reason too")
+    void theStoreManagerDocumentsAFreeItem() {
+        stubPricedItem(true);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+        InventoryItemRequestDTO dto = buildItemRequest();
+        dto.setQuantityOnHand(null);
+        dto.setFreeOfCharge(true);
+
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, dto))
+                .extracting("field", "messageKey")
+                .containsExactly("freeOfChargeReason", "pharmacy.price.freeReasonRequired");
+
+        dto.setFreeOfChargeReason("  Programme national de lutte contre le paludisme ");
+        service.updateInventoryItem(inventoryItemId, dto);
+
+        assertThat(inventoryItem.getFreeOfChargeReason()).isEqualTo("Programme national de lutte contre le paludisme");
+        assertThat(PharmacyListPrice.isFree(inventoryItem)).isTrue();
+        assertThat(PharmacyListPrice.of(inventoryItem)).as("a free item has no selling price").isEmpty();
+        verify(priceHistory).keep(eq(inventoryItem),
+                org.mockito.ArgumentMatchers.argThat(old -> old.compareTo(new BigDecimal("250")) == 0),
+                org.mockito.ArgumentMatchers.isNull(),
+                eq(InventoryServiceImpl.FREE_OF_CHARGE_PREFIX + "Programme national de lutte contre le paludisme"),
+                eq(userId), any());
+
+        InventoryItemRequestDTO withdraw = buildItemRequest();
+        withdraw.setQuantityOnHand(null);
+        withdraw.setFreeOfCharge(false);
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, withdraw))
+                .extracting("field", "messageKey").containsExactly("priceChangeReason", "pharmacy.price.reasonRequired");
+        withdraw.setPriceChangeReason("Fin du programme");
+        service.updateInventoryItem(inventoryItemId, withdraw);
+        assertThat(inventoryItem.getFreeOfChargeReason()).isNull();
+        assertThat(PharmacyListPrice.of(inventoryItem)).contains(new BigDecimal("250"));
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D4182: no inventory item is created in a partner pharmacy, and no goods are received into one")
+    void aPartnerPharmacyHoldsNoHospitalStock() {
+        pharmacy.setPharmacyType(com.example.hms.enums.PharmacyType.PARTNER_PHARMACY);
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        InventoryItemRequestDTO dto = buildItemRequest();
+        dto.setQuantityOnHand(null);
+
+        assertThatThrownBy(() -> service.createInventoryItem(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field", "messageKey").containsExactly("pharmacyId", PharmacyStores.NOT_OWN_STORE_KEY);
+        verify(inventoryItemRepository, never()).save(any());
+
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        com.example.hms.payload.dto.pharmacy.StockLotRequestDTO receipt =
+                com.example.hms.payload.dto.pharmacy.StockLotRequestDTO.builder().inventoryItemId(inventoryItemId)
+                        .lotNumber("L1").initialQuantity(BigDecimal.TEN).build();
+        assertThatThrownBy(() -> service.receiveStock(receipt))
+                .extracting("messageKey").isEqualTo(PharmacyStores.NOT_OWN_STORE_KEY);
+        verify(inventoryItemRepository, never()).lockById(any());
+        verify(stockLotRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("QA D2674: a pack size already set is never changed (the stock would be converted twice)")
     void setPackSizeOnlyOnce() {
         inventoryItem.setUnitsPerPack(10);

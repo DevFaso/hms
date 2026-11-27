@@ -278,6 +278,8 @@
     "src/app/billing/cash-session/cash-supervisor.component.html::line.reason",
     "src/app/patients/family-release/family-release.component.html::release.reason",
     "src/app/pharmacy/billing-deferrals.html::r.reason",
+    "src/app/pharmacy/dispensing.html::pay.freeOfChargeReason",
+    "src/app/pharmacy/inventory-dashboard.html::item.freeOfChargeReason",
     "src/app/clinical-rules/clinical-rules.component.html::signoff.revokeReason",
     "src/app/staff/staff-list.html::<option>d",
     "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType",
@@ -286,6 +288,8 @@
     "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason"
   ],
   "reasons": {
+    "src/app/pharmacy/dispensing.html::pay.freeOfChargeReason": "QA D4181: DispensePaymentStatusDTO.freeOfChargeReason is InventoryItem.freeOfChargeReason, the free text (max 500) the store manager or administrator typed in the inventory reason dialog (InventoryItemRequestDTO.freeOfChargeReason, InventoryServiceImpl.freeOfChargeChangeOf); not an enum.",
+    "src/app/pharmacy/inventory-dashboard.html::item.freeOfChargeReason": "QA D4181: InventoryItemResponseDTO.freeOfChargeReason is the free text (max 500) typed in the inventory reason dialog and stored on InventoryItem.freeOfChargeReason by InventoryServiceImpl.applyFreeOfCharge; not an enum.",
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",

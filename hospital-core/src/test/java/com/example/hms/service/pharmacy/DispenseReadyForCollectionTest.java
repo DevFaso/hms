@@ -221,6 +221,14 @@ class DispenseReadyForCollectionTest {
                 .barcodeValue(LotBarcode.mint())
                 .build();
         stockLot.setId(stockLotId);
+        // QA D4181 (r81): a fill leaves only from an item that is priced or documented as free. The fixture's
+        // item is documented free (no charge, as these tests assumed of an unpriced item); a test about money
+        // prices it and withdraws the reason.
+        inventoryItem.setFreeOfChargeReason("Programme national (fixture)");
+        org.mockito.Mockito.lenient().when(inventoryItemRepository
+                .findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(inventoryItem));
+        org.mockito.Mockito.lenient().when(medicationCatalogItemRepository.findById(catalogItem.getId()))
+                .thenReturn(Optional.of(inventoryItem.getMedicationCatalogItem()));
         stockMovesLikeTheDatabase();
     }
 
@@ -265,6 +273,8 @@ class DispenseReadyForCollectionTest {
                 .prescriptionId(prescriptionId)
                 .patientId(patientId)
                 .pharmacyId(pharmacyId)
+                // QA D4181 (r81): the product the fill is priced on (the lot's, when a lot is named).
+                .medicationCatalogItemId(inventoryItem.getMedicationCatalogItem().getId())
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
@@ -648,6 +658,7 @@ class DispenseReadyForCollectionTest {
                 .stockLot(stockLot)
                 .dispensedByUser(user)
                 .preparedByUser(user)
+                .medicationCatalogItem(inventoryItem.getMedicationCatalogItem())
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
@@ -698,6 +709,7 @@ class DispenseReadyForCollectionTest {
         Dispense d = preparedFill();
         d.setMedicationCatalogItem(inventoryItem.getMedicationCatalogItem());
         inventoryItem.setUnitPrice(new BigDecimal("100"));
+        inventoryItem.setFreeOfChargeReason(null);
         when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId,
                 inventoryItem.getMedicationCatalogItem().getId())).thenReturn(Optional.of(inventoryItem));
         return d;
@@ -760,6 +772,129 @@ class DispenseReadyForCollectionTest {
                 .claimStatus(status).amount(new BigDecimal(amount)).vouchedBy(vouchedBy)
                 .secondVouchedBy(secondVouchedBy).build();
         when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(java.util.List.of(claim));
+    }
+
+    @Nested
+    @DisplayName("QA D4181 (r81): a fill from a store whose item has no selling price is refused, never free")
+    class UnpricedStore {
+
+        /**
+         * The round's scenario: a medicine sold 900 F at the main pharmacy was transferred to the second store,
+         * whose item took no price. The fixture's item becomes that item: no price, no free reason.
+         */
+        private void theSecondStoreHoldsTheSyrupWithNoPrice() {
+            pharmacy.setName("Réserve de service Médecine");
+            inventoryItem.setUnitPrice(null);
+            inventoryItem.setFreeOfChargeReason(null);
+        }
+
+        private void stubValidationUpToTheLot() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+        }
+
+        @Test
+        @DisplayName("preparing the 900 F syrup from the unpriced second store is refused: no stock moves, no fill is written")
+        void preparingFromAnUnpricedStoreIsRefused() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            stubValidationUpToTheLot();
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("pharmacyId", FillPriceGate.NO_PRICE_KEY);
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).decrementOnHand(any(), any(), any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the refusal tells the pharmacist, in French, who sets the price")
+        void theRefusalSaysWhoSetsThePrice() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            stubValidationUpToTheLot();
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .hasMessageContaining("n’a pas de prix de vente à « Réserve de service Médecine »")
+                    .hasMessageContaining("responsable du magasin")
+                    .hasMessageContaining("fixer le prix de vente");
+        }
+
+        @Test
+        @DisplayName("the one-step fill is refused the same way")
+        void theOneStepFillIsRefusedToo() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            stubValidationUpToTheLot();
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .extracting("messageKey").isEqualTo(FillPriceGate.NO_PRICE_KEY);
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a fill prepared before the rule, from an item still unpriced, is not handed over; it says NOT_PRICED, not « rien à encaisser »")
+        void anUnpricedPreparedFillIsNotHandedOver() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo(FillPriceGate.NO_PRICE_KEY);
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+
+            var status = service.getPaymentStatus(dispenseId);
+            assertThat(status.getStatus()).isEqualTo("NOT_PRICED");
+            assertThat(status.getPriceStanding()).isEqualTo("UNPRICED");
+        }
+
+        @Test
+        @DisplayName("once the store's item is priced 900 F the same fill is owed 9 000 F and waits for its payment")
+        void oncePricedTheFillIsOwed() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            inventoryItem.setUnitPrice(new BigDecimal("900"));
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+            assertThat(service.getPaymentStatus(dispenseId).getDue()).isEqualByComparingTo("9000");
+        }
+
+        @Test
+        @DisplayName("an item the store documented as free is handed over with nothing to pay, and the status carries the reason")
+        void aDocumentedFreeItemIsHandedOver() {
+            inventoryItem.setUnitPrice(null);
+            inventoryItem.setFreeOfChargeReason("Gratuité des soins des enfants de moins de 5 ans");
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+            var status = service.getPaymentStatus(dispenseId);
+            assertThat(status.getStatus()).isEqualTo("NO_CHARGE");
+            assertThat(status.getFreeOfChargeReason()).isEqualTo("Gratuité des soins des enfants de moins de 5 ans");
+        }
     }
 
     @Nested
@@ -1086,8 +1221,14 @@ class DispenseReadyForCollectionTest {
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("COVERED");
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("PAID");
+            // QA D4181 (r81): no price is no longer "nothing to collect": the fill is NOT_PRICED and cannot leave;
+            // only an item documented as free reads NO_CHARGE, with its reason.
             inventoryItem.setUnitPrice(null);
-            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("NO_CHARGE");
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("NOT_PRICED");
+            inventoryItem.setFreeOfChargeReason("Programme national de lutte contre le paludisme");
+            var free = service.getPaymentStatus(dispenseId);
+            assertThat(free.getStatus()).isEqualTo("NO_CHARGE");
+            assertThat(free.getFreeOfChargeReason()).isEqualTo("Programme national de lutte contre le paludisme");
         }
 
         @Test

@@ -61,12 +61,12 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     priceSetter: (roles: string[]) => boolean = () => true,
   ) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'getReorderAlertsByPharmacy',
       'updateInventoryItem',
     ]);
-    svc.listPharmacies.and.returnValue(
+    svc.listStores.and.returnValue(
       of({ content: [{ id: 'ph-1', name: 'Pharmacie centrale' }] }) as never,
     );
     svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
@@ -227,10 +227,10 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
 describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
   function create(role: string) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getReorderAlertsByPharmacy',
     ]);
-    svc.listPharmacies.and.returnValue(of({ content: [] }) as never);
+    svc.listStores.and.returnValue(of({ content: [] }) as never);
     svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],

@@ -363,6 +363,7 @@ public class CurrentAllergyRecheck {
         Optional<Stop> stop = stop(rx.getId(), medicationName, items, allergies);
         if (stop.isPresent()) {
             review = reviewState(rx, reviewToken(rx, stop.get()), showPlan);
+            describeVoidedReview(review, rx, stop.get());
             cards.add(cardFor(stop.get(), medicationName, review));
         }
         CrossReactivityAdvisory.card(medicationName, allergies).ifPresent(cards::add);
@@ -418,6 +419,56 @@ public class CurrentAllergyRecheck {
             .plan(showPlan && continued ? rx.getAllergyReviewPlan() : null)
             .rationale(showPlan ? rx.getAllergyReviewRationale() : null)
             .build();
+    }
+
+    /** The review on record no longer answers the conflict because the allergy record changed after it. */
+    public static final String VOID_ALLERGY_CHANGED = "ALLERGY_CHANGED";
+    /** The review on record no longer answers the conflict: the allergies or the order changed after it. */
+    public static final String VOID_ALLERGY_OR_ORDER_CHANGED = "ALLERGY_OR_ORDER_CHANGED";
+
+    /**
+     * QA D3945: why the review on record does not answer the conflict the order meets now, or null when no review
+     * is on record or the one on record is current. The token is a digest, so what changed is read from the
+     * allergy's own timestamp: changed after the review, it is the allergy; otherwise the allergies or the order
+     * (drug, dose, route, frequency).
+     */
+    public static String voidReasonOf(Prescription rx, String token, Stop stop) {
+        if (rx == null || rx.getAllergyReviewDecision() == null || decisionFor(rx, token) != null) {
+            return null;
+        }
+        LocalDateTime reviewedAt = rx.getAllergyReviewedAt();
+        PatientAllergy allergy = stop != null ? stop.allergy() : null;
+        LocalDateTime changedAt = allergy == null ? null
+            : allergy.getUpdatedAt() != null ? allergy.getUpdatedAt() : allergy.getCreatedAt();
+        return reviewedAt != null && changedAt != null && changedAt.isAfter(reviewedAt)
+            ? VOID_ALLERGY_CHANGED : VOID_ALLERGY_OR_ORDER_CHANGED;
+    }
+
+    /** {@link #voidReasonOf} as a sentence in the reader's language. */
+    public static String voidReasonText(String voidReason) {
+        if (voidReason == null) {
+            return null;
+        }
+        return VOID_ALLERGY_CHANGED.equals(voidReason)
+            ? MessageUtil.resolveOrRaw("allergy.recheck.voided.ALLERGY_CHANGED")
+            : MessageUtil.resolveOrRaw("allergy.recheck.voided.ALLERGY_OR_ORDER_CHANGED");
+    }
+
+    /** QA D3945: on a state that awaits review, the review that existed and why it no longer counts. */
+    static void describeVoidedReview(AllergyReviewStateDTO state, Prescription rx, Stop stop) {
+        if (state == null || state.getState() != AllergyReviewStateDTO.State.AWAITING_REVIEW) {
+            return;
+        }
+        String reason = voidReasonOf(rx, reviewToken(rx, stop), stop);
+        if (reason == null) {
+            return;
+        }
+        state.setVoidedDecision(rx.getAllergyReviewDecision() == AllergyReviewDecision.CONTINUE
+            ? AllergyReviewStateDTO.State.CONTINUE : AllergyReviewStateDTO.State.STOP);
+        state.setVoidedReviewedByName(reviewerName(rx.getAllergyReviewedBy()));
+        state.setVoidedReviewedAt(rx.getAllergyReviewedAt());
+        state.setVoidReason(reason);
+        state.setVoidReasonText(voidReasonText(reason));
     }
 
     /** The reviewer's name as the screens show it, or null. */
@@ -699,7 +750,7 @@ public class CurrentAllergyRecheck {
      */
     static CdsCard cardFor(Stop stop, String medicationName, AllergyReviewStateDTO review) {
         if (review == null || review.getState() == AllergyReviewStateDTO.State.AWAITING_REVIEW) {
-            return stop.card();
+            return review == null || review.getVoidReasonText() == null ? stop.card() : voidedCard(stop, review);
         }
         boolean continued = review.getState() == AllergyReviewStateDTO.State.CONTINUE;
         String who = review.getReviewedByName() != null
@@ -723,6 +774,22 @@ public class CurrentAllergyRecheck {
             : MessageUtil.resolveOrRaw("allergy.recheck.detail.stopped");
         CdsCard card = stop.card();
         return new CdsCard(summary, detail,
+            card.indicator(), card.source(), card.links(), card.suggestions(), card.selectionBehavior(),
+            card.uuid(), card.hardStop(), card.reviewRequired(), card.reasonAtSignature(), card.exceptionKey());
+    }
+
+    /**
+     * QA D3945: the awaiting-review card of a conflict whose earlier review no longer counts: the same card, its
+     * detail saying that a review existed (whose, when) and why a new one is needed. Never the plan or rationale.
+     */
+    private static CdsCard voidedCard(Stop stop, AllergyReviewStateDTO review) {
+        String who = review.getVoidedReviewedByName() != null
+            ? MessageUtil.resolveOrRaw("allergy.recheck.reviewerName", review.getVoidedReviewedByName())
+            : MessageUtil.resolveOrRaw("allergy.recheck.reviewerUnknown");
+        String detail = MessageUtil.resolveOrRaw("allergy.recheck.detail.voided", who,
+            DisplayDates.shortDateTime(review.getVoidedReviewedAt()), review.getVoidReasonText());
+        CdsCard card = stop.card();
+        return new CdsCard(card.summary(), detail + " " + card.detail(),
             card.indicator(), card.source(), card.links(), card.suggestions(), card.selectionBehavior(),
             card.uuid(), card.hardStop(), card.reviewRequired(), card.reasonAtSignature(), card.exceptionKey());
     }

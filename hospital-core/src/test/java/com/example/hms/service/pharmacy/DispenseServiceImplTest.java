@@ -226,6 +226,14 @@ class DispenseServiceImplTest {
                 .barcodeValue(LotBarcode.mint())
                 .build();
         stockLot.setId(stockLotId);
+        // QA D4181 (r81): a fill leaves only from an item that is priced or documented as free. The fixture's
+        // item is documented free (no charge, as these tests assumed of an unpriced item); a test about money
+        // prices it and withdraws the reason.
+        inventoryItem.setFreeOfChargeReason("Programme national (fixture)");
+        org.mockito.Mockito.lenient().when(inventoryItemRepository
+                .findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(inventoryItem));
+        org.mockito.Mockito.lenient().when(medicationCatalogItemRepository.findById(catalogItem.getId()))
+                .thenReturn(Optional.of(inventoryItem.getMedicationCatalogItem()));
         stockMovesLikeTheDatabase();
     }
 
@@ -270,6 +278,8 @@ class DispenseServiceImplTest {
                 .patientId(patientId)
                 .pharmacyId(pharmacyId)
                 .dispensedBy(userId)
+                // QA D4181 (r81): the product the fill is priced on (the lot's, when a lot is named).
+                .medicationCatalogItemId(catalogItem.getId())
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
@@ -578,6 +588,7 @@ class DispenseServiceImplTest {
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
             entity.setMedicationCatalogItem(catalogItem);
             inventoryItem.setUnitPrice(new BigDecimal("100"));
+            inventoryItem.setFreeOfChargeReason(null);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
@@ -3706,6 +3717,8 @@ class DispenseServiceImplTest {
         @DisplayName("QA D3940: a substitution names the product dispensed (a lot, or the item when stock is not in lots)")
         void aSubstitutionWithNoProductIsRefused() {
             DispenseRequestDTO dto = buildRequest();
+            // The fixture's request names its product (QA D4181); this one is about a fill that names none.
+            dto.setMedicationCatalogItemId(null);
             dto.setSubstitution(true);
             dto.setSubstitutionReason("Rupture");
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

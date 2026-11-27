@@ -37,6 +37,24 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
         """)
     Page<Pharmacy> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
+    /**
+     * QA D4182 (r81): the hospital's own stores, the list behind every store picker. Partner and community
+     * pharmacies are in the registry too, and are never offered where stock is held, moved or sold.
+     */
+    @Query(value = """
+        SELECT p FROM Pharmacy p
+        WHERE p.active = true
+          AND p.pharmacyType = com.example.hms.enums.PharmacyType.HOSPITAL_DISPENSARY
+          AND (:hospitalId IS NULL OR p.hospital.id = :hospitalId)
+        ORDER BY LOWER(p.name)
+        """, countQuery = """
+        SELECT COUNT(p) FROM Pharmacy p
+        WHERE p.active = true
+          AND p.pharmacyType = com.example.hms.enums.PharmacyType.HOSPITAL_DISPENSARY
+          AND (:hospitalId IS NULL OR p.hospital.id = :hospitalId)
+        """)
+    Page<Pharmacy> findActiveStoresPage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
     List<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId);
 
     List<Pharmacy> findByHospitalIdAndActiveTrueOrderByNameAsc(UUID hospitalId);

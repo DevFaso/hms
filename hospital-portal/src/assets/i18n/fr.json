@@ -11157,9 +11157,9 @@
     "NO_TRANSACTIONS": "Aucune transaction",
     "OFFLINE_PENDING_MANY": "dispensations en attente de synchronisation",
     "OFFLINE_PENDING_ONE": "dispensation en attente de synchronisation",
-    "OFFLINE_SYNCED": "{{count}} dispensation(s) synchronisée(s)",
-    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispensation(s) synchronisée(s) — {{failed}} en attente",
-    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — {{count}} dispensation(s) restent en file d'attente",
+    "OFFLINE_SYNCED": "Dispensations synchronisées : {{count}}",
+    "OFFLINE_SYNCED_WITH_PENDING": "Dispensations synchronisées : {{count}} — en attente : {{failed}}",
+    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — dispensations encore en file d'attente : {{count}}",
     "OFFLINE_SYNC_NOW": "Synchroniser maintenant",
     "ON_FORMULARY": "Au formulaire",
     "OUT_OF_STOCK": "En rupture de stock",
@@ -11246,7 +11246,8 @@
     "REFILL": "Renouvellement",
     "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait",
     "REFILL_NONE": "Première délivrance",
-    "REFILL_REMAINING": "{{count}} renouvellement(s) restant(s)",
+    "REFILL_REMAINING": "{{count}} renouvellements restants",
+    "REFILL_REMAINING_ONE": "{{count}} renouvellement restant",
     "REGION": "Région",
     "REGISTRY_SUBTITLE": "Gérer les pharmacies enregistrées",
     "REGISTRY_TITLE": "Registre des pharmacies",
@@ -14982,6 +14983,57 @@
       "SIGNATURE": "Signature et cachet :"
     }
   },
+  "PATIENT_ID_LINE": {
+    "MRN": "N° de dossier {{mrn}}",
+    "BORN": "Date de naissance : {{date}}"
+  },
+  "R81_DISPENSING": {
+    "CHECKOUT": {
+      "SEARCH": "Rechercher une délivrance",
+      "SEARCH_PLACEHOLDER": "Nom du patient, n° de dossier ou médicament",
+      "FILLS_SHOWN": "{{count}} délivrances à encaisser",
+      "FILLS_SHOWN_ONE": "{{count}} délivrance à encaisser",
+      "NOT_PRICED": "prix non fixé"
+    },
+    "RECEIPT": {
+      "DUPLICATE": "Duplicata",
+      "VOIDED": "Paiement annulé : ce reçu n’est plus valable.",
+      "PRICE_NOT_KEPT": "Non conservé pour ce paiement",
+      "CLOSE": "Fermer le reçu",
+      "PRINT": "Imprimer le reçu"
+    },
+    "HISTORY": {
+      "TITLE": "Reçus et paiements",
+      "HINT": "Les paiements encaissés dans cette pharmacie, du plus récent au plus ancien. Rouvrez un reçu pour le relire ou le réimprimer : il est marqué « Duplicata » et garde les prix facturés à l’origine.",
+      "REFRESH": "Actualiser",
+      "LOAD_FAILED": "Les paiements n’ont pas pu être chargés.",
+      "EMPTY": "Aucun paiement enregistré dans cette pharmacie.",
+      "SEARCH": "Rechercher un reçu",
+      "SEARCH_PLACEHOLDER": "N° de reçu, patient, n° de dossier ou médicament",
+      "SHOWN": "{{count}} reçus affichés",
+      "SHOWN_ONE": "{{count}} reçu affiché",
+      "COL_RECEIPT": "N° de reçu",
+      "COL_AMOUNT": "Montant payé",
+      "VOIDED": "Annulé",
+      "OPEN": "Rouvrir le reçu",
+      "OPEN_NAMED": "Rouvrir le reçu {{number}}",
+      "MORE": "Charger les paiements plus anciens",
+      "OPEN_FAILED": "Le reçu n’a pas pu être rouvert."
+    },
+    "FREE": {
+      "BADGE": "Gratuit",
+      "UNPRICED": "Prix à fixer",
+      "DECLARE": "Déclarer gratuit",
+      "WITHDRAW": "Retirer la gratuité",
+      "DECLARE_TITLE": "Déclarer ce médicament gratuit",
+      "WITHDRAW_TITLE": "Retirer la gratuité de ce médicament",
+      "DECLARE_HINT": "Le médicament sera remis sans paiement dans cette pharmacie. Indiquez le motif (programme national, don) : il est conservé dans l’historique des prix.",
+      "WITHDRAW_HINT": "Le médicament sera de nouveau vendu à son prix de vente ; sans prix, sa délivrance sera refusée. Indiquez le motif.",
+      "DECLARED": "Médicament déclaré gratuit.",
+      "WITHDRAWN": "Gratuité retirée.",
+      "FAILED": "La modification n’a pas pu être enregistrée."
+    }
+  },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",
     "SUBTITLE": "Historique de vos paiements de pharmacie",
@@ -15402,6 +15454,7 @@
     "LOADED_MOVEMENTS": "mouvements chargés pour ce filtre",
     "STOCK_HINT": "Consultez le lot, le motif et l’auteur de chaque mouvement.",
     "LOADED_QUEUE": "ordonnances sur cette page de la file",
+    "LOADED_QUEUE_ONE": "ordonnance sur cette page de la file",
     "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
     "ROUTING_DECISION": "Choisir une orientation",
     "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
@@ -15452,7 +15505,11 @@
     "DECISION_CONTINUE": "poursuivre",
     "DECISION_STOP": "arrêter",
     "PLAN": "Conduite à tenir",
-    "RATIONALE": "Justification"
+    "RATIONALE": "Justification",
+    "VOIDED_BY": "Une revue antérieure du Dr {{name}} ({{at}} : {{decision}}) figure au dossier ; elle ne s’applique plus.",
+    "VOIDED_BY_UNKNOWN": "Une revue antérieure du prescripteur ({{at}} : {{decision}}) figure au dossier ; elle ne s’applique plus.",
+    "VOID_ALLERGY_CHANGED": "L’allergie du patient a été modifiée après cette revue : une nouvelle revue est nécessaire.",
+    "VOID_ALLERGY_OR_ORDER_CHANGED": "Les allergies du patient ou la prescription (médicament, dose, voie ou fréquence) ont changé après cette revue : une nouvelle revue est nécessaire."
   },
   "ALLERGY_REVIEW": {
     "OPEN": "Revoir le conflit allergique",
@@ -15850,11 +15907,12 @@
       "CLAIMED": "Pris en charge (assurance)",
       "DUE": "Reste à payer",
       "STATUS": {
-        "NO_CHARGE": "Aucun prix fixé : rien à encaisser.",
+        "NO_CHARGE": "Délivrance gratuite : rien à encaisser.",
         "PAID": "Payée.",
         "COVERED": "Couverte (paiement et prise en charge).",
         "DEFERRED": "Déjà marquée « à facturer ».",
-        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou choisissez ci-dessous sur quelle base elle sort."
+        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou choisissez ci-dessous sur quelle base elle sort.",
+        "NOT_PRICED": "Ce médicament n’a pas de prix de vente dans cette pharmacie : la remise est refusée. Demandez au responsable du magasin ou à un administrateur de fixer son prix dans l’inventaire, ou de le déclarer gratuit avec un motif."
       },
       "DEFER_LABEL": "Remettre « à facturer » : motif",
       "DEFER_HINT": "Par exemple : patient hospitalisé, sur la facture du séjour. Réservé au pharmacien ou à l’administrateur ; la délivrance apparaît dans le rapprochement du jour.",
@@ -15863,7 +15921,8 @@
       "CLAIM_GAP": {
         "OWN_VOUCHER": "Une prise en charge a été envoyée pour cette délivrance, mais vous êtes la seule personne à en répondre : une autre personne de la facturation ou de la comptabilité doit la confirmer, ou une autre personne remet la délivrance.",
         "NO_VOUCHER": "Une prise en charge a été envoyée pour cette délivrance, mais personne de la facturation ou de la comptabilité ne l’a encore confirmée : elle ne couvre pas la délivrance."
-      }
+      },
+      "FREE_REASON": "Motif de la gratuité : {{reason}}"
     },
     "PACK": {
       "TITLE": "Conditionnement : {{name}}",

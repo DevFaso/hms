@@ -532,6 +532,9 @@ export interface AllergyConflict {
   reviewedAt?: string | null;
   /** The recorded review answers this very conflict. */
   reviewCurrent: boolean;
+  /** QA D3945: when a review is on record and no longer current, why (a code and the server's sentence). */
+  voidReason?: 'ALLERGY_CHANGED' | 'ALLERGY_OR_ORDER_CHANGED' | null;
+  voidReasonText?: string | null;
 }
 
 export interface AllergyConflictReview {

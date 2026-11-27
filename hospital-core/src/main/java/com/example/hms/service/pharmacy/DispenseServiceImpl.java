@@ -615,6 +615,9 @@ public class DispenseServiceImpl implements DispenseService {
         User handedOverBy = resolveCurrentUser();
         // QA D2675 (r65), policy rule 6: a fill leaves the counter paid, covered by a claim, free, on the account of
         // an open stay, on a deferral somebody else approved, or on a logged urgency override.
+        // QA D4181 (r81): "nothing owed" is only true of a fill that has a price or a documented free reason;
+        // one prepared before its pharmacy priced the item waits for that price.
+        FillPriceGate.require(dispense, inventoryItemRepository);
         FillSettlement settlement = settlementOf(dispense, handedOverBy.getId());
         com.example.hms.model.pharmacy.DispenseBillingDeferral deferral =
                 requirePaidCoveredOrDeferred(settlement, dispense, prescription, request, handedOverBy);
@@ -896,9 +899,12 @@ public class DispenseServiceImpl implements DispenseService {
         }
         // For the caller: the dialog shows what the gate will ask of the person about to hand the fill over.
         FillSettlement settlement = settlementOf(dispense, roleValidator.getCurrentUserId());
+        // QA D4181 (r81): a fill with no charge says why: documented free, or not priced (and then it cannot leave).
+        FillPriceGate.Standing standing = FillPriceGate.standingOf(dispense.getPharmacy(),
+                dispense.getMedicationCatalogItem(), inventoryItemRepository);
         String status;
         if (settlement.charge().signum() <= 0) {
-            status = "NO_CHARGE";
+            status = standing == FillPriceGate.Standing.FREE ? "NO_CHARGE" : "NOT_PRICED";
         } else if (settlement.paid().compareTo(settlement.charge()) >= 0) {
             status = "PAID";
         } else if (settlement.due().signum() <= 0) {
@@ -919,10 +925,20 @@ public class DispenseServiceImpl implements DispenseService {
                 .status(status)
                 .billingDeferredReason(dispense.getBillingDeferredReason())
                 .billingDeferredAt(dispense.getBillingDeferredAt())
+                .priceStanding(standing.name())
+                .freeOfChargeReason(freeOfChargeReasonOf(dispense, standing))
                 .claimCoverGap(claimCoverGapOf(dispense, settlement))
                 .onOpenStay(billingDeferrals != null && dispense.getPrescription() != null
                         && billingDeferrals.chargedToOpenStay(dispense.getPrescription(), hospitalId))
                 .build();
+    }
+
+    private String freeOfChargeReasonOf(Dispense dispense, FillPriceGate.Standing standing) {
+        if (standing != FillPriceGate.Standing.FREE) {
+            return null;
+        }
+        return inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(dispense.getPharmacy().getId(),
+                dispense.getMedicationCatalogItem().getId()).map(InventoryItem::getFreeOfChargeReason).orElse(null);
     }
 
     /** QA D2931 (r66): why a claim sent for a fill with money due does not cover it for the caller, or null. */
@@ -1244,6 +1260,8 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "dispense.lot.required");
         }
         recordFefoOverride(dto, stockLot);
+        // QA D4181 (r81): sold at this pharmacy's price or documented there as free, before any stock moves.
+        FillPriceGate.require(pharmacy, catalogItem, dto.getMedicationName(), inventoryItemRepository);
 
         return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification, allergyAck);
     }
@@ -1910,6 +1928,10 @@ public class DispenseServiceImpl implements DispenseService {
         return page.map(d -> {
             DispenseResponseDTO dto = dispenseMapper.toResponseDTO(d);
             dto.setPaid(paid.contains(d.getId()));
+            // QA D4186 (r81): the checkout's picker shows what each fill still to pay costs.
+            if (!paid.contains(d.getId()) && d.getStatus() != DispenseStatus.CANCELLED) {
+                dto.setChargeAmount(DispenseCharge.of(d, inventoryItemRepository).orElse(null));
+            }
             return dto;
         });
     }
@@ -2490,6 +2512,10 @@ public class DispenseServiceImpl implements DispenseService {
                     .firstName(p.getPatient().getFirstName())
                     .middleName(p.getPatient().getMiddleName())
                     .lastName(p.getPatient().getLastName())
+                    // QA D4185 (r81): the record number at the order's hospital, and the date of birth.
+                    .mrn(com.example.hms.mapper.pharmacy.PatientIdentityLine.mrnOf(p.getPatient(),
+                            p.getHospital() != null ? p.getHospital().getId() : null))
+                    .dateOfBirth(com.example.hms.mapper.pharmacy.PatientIdentityLine.dateOfBirthOf(p.getPatient()))
                     .build();
         }
         WorkQueuePrescriptionDTO.Staff staff = null;

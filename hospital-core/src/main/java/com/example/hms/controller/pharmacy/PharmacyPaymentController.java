@@ -76,6 +76,19 @@ public class PharmacyPaymentController {
                 pharmacyPaymentService.listByDispense(dispenseId, pageable)));
     }
 
+    @GetMapping("/pharmacy/{pharmacyId}")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Payment history of a pharmacy",
+            description = "QA D4186: the payments taken for fills of one pharmacy of the acting hospital, newest "
+                    + "first, each with its receipt as first charged, to reopen and reprint it")
+    @ApiResponse(responseCode = "200", description = "Payments retrieved")
+    public ResponseEntity<ApiResponseWrapper<Page<PharmacyPaymentResponseDTO>>> listByPharmacy(
+            @PathVariable UUID pharmacyId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                pharmacyPaymentService.listByPharmacy(pharmacyId, pageable)));
+    }
+
     // PATIENT role intentionally excluded: PATIENT callers use the patient-portal `/me` flow
     // which resolves the patient ID from the JWT, preventing IDOR via arbitrary {patientId}.
     @GetMapping("/patient/{patientId}")

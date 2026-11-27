@@ -12,6 +12,7 @@ import {
   Component,
   ElementRef,
   OnInit,
+  computed,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -31,6 +32,9 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PluralKeyPipe } from '../shared/pipes/plural-key.pipe';
+import { PatientIdLineComponent } from '../shared/patient-id-line/patient-id-line.component';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
 import {
@@ -44,7 +48,9 @@ import {
 const CHECKOUT_FIELDS = ['amount', 'operator', 'ref'];
 
 /**
- * T-43 / T-44: pharmacy checkout and French printable receipt.
+ * T-43 / T-44: pharmacy checkout and printable receipt. QA D4186 (r81): the fill picker is searched and
+ * shows each amount, and the payments of the pharmacy are listed below so a receipt is reopened and
+ * reprinted as first charged.
  *
  * Pharmacist picks the dispense from the pharmacy's recent fills (QA D416:
  * no more typing a dispense UUID), selects payment method (Espèces / Mobile Money / Assurance),
@@ -54,6 +60,14 @@ const CHECKOUT_FIELDS = ['amount', 'operator', 'ref'];
  */
 /** The fill picker, refused when blank (QA D1306). */
 const DISPENSE_PICK_IDS = ['dispenseId'];
+
+/** QA D4186: how many payments one page of the receipt history loads. */
+const HISTORY_PAGE_SIZE = 20;
+
+/** Lower case, without accents: « Kaboré » is found by « kabore ». */
+function folded(text: string | null | undefined): string {
+  return (text ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
 
 /**
  * What the pharmacy checkout takes. QA D1611 (round 44): never INSURANCE. It
@@ -82,6 +96,9 @@ import { PhonePipe } from '../shared/pipes/phone.pipe';
     CfaPipe,
     CountUnitPipe,
     PhonePipe,
+    DateTimePipe,
+    PluralKeyPipe,
+    PatientIdLineComponent,
   ],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -119,6 +136,48 @@ export class PharmacyCheckoutComponent implements OnInit {
   dispense = signal<DispenseResponse | null>(null);
   receipt = signal<PharmacyPaymentResponse | null>(null);
 
+  /**
+   * QA D4186 (r81): the fill was chosen in one long drop-down with no search and no amount. What the
+   * cashier types narrows the list by the patient's name, the record number or the medication.
+   */
+  readonly dispenseSearch = signal('');
+  readonly shownDispenses = computed(() => {
+    const term = folded(this.dispenseSearch().trim());
+    const picked = this.dispenseId;
+    return this.dispenses().filter(
+      (d) =>
+        !term ||
+        d.id === picked ||
+        folded(`${d.patientName ?? ''} ${d.patientMrn ?? ''} ${d.medicationName ?? ''}`).includes(
+          term,
+        ),
+    );
+  });
+
+  /**
+   * QA D4186 (r81): a paid receipt could not be opened again: after « Nouveau paiement » or a reload the paid
+   * fill left the picker and no page showed it. The pharmacy's payments, newest first, each reopened and
+   * reprinted as first charged (a « Duplicata »).
+   */
+  readonly history = signal<PharmacyPaymentResponse[]>([]);
+  readonly historyLoading = signal(false);
+  readonly historyFailed = signal(false);
+  readonly historyMore = signal(false);
+  readonly historySearch = signal('');
+  private historyPage = 0;
+  readonly shownHistory = computed(() => {
+    const term = folded(this.historySearch().trim());
+    return this.history().filter(
+      (p) =>
+        !term ||
+        folded(
+          `${p.receiptNumber ?? ''} ${p.receipt?.patientName ?? ''} ${p.receipt?.patientMrn ?? ''} ${
+            p.receipt?.medicationName ?? ''
+          } ${p.referenceNumber ?? ''}`,
+        ).includes(term),
+    );
+  });
+
   readonly methods = PHARMACY_CHECKOUT_METHODS;
 
   ngOnInit(): void {
@@ -127,7 +186,7 @@ export class PharmacyCheckoutComponent implements OnInit {
 
   private loadPharmacies(): void {
     // QA D1347: every pharmacy (all pages), not the first 100.
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         if (list.length > 0) {
@@ -142,7 +201,64 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.selectedPharmacyId.set(id);
     this.dispenseId = '';
     this.dispense.set(null);
+    this.dispenseSearch.set('');
+    this.historySearch.set('');
     this.loadDispenses();
+    this.loadHistory();
+  }
+
+  /** QA D4186: the first page of the pharmacy's payments (newest first), or the next one. */
+  loadHistory(more = false): void {
+    const pharmacyId = this.selectedPharmacyId();
+    if (!pharmacyId) {
+      this.history.set([]);
+      return;
+    }
+    const page = more ? this.historyPage + 1 : 0;
+    this.historyLoading.set(true);
+    this.historyFailed.set(false);
+    this.svc.listPaymentsByPharmacy(pharmacyId, page, HISTORY_PAGE_SIZE).subscribe({
+      next: (res) => {
+        if (pharmacyId !== this.selectedPharmacyId()) return;
+        const rows = res?.data?.content ?? [];
+        this.historyPage = page;
+        this.history.set(more ? [...this.history(), ...rows] : rows);
+        this.historyMore.set(page + 1 < (res?.data?.totalPages ?? 0));
+        this.historyLoading.set(false);
+      },
+      error: () => {
+        if (pharmacyId !== this.selectedPharmacyId()) return;
+        this.historyFailed.set(true);
+        this.historyLoading.set(false);
+      },
+    });
+  }
+
+  /**
+   * QA D4186: opens a payment of the history as its receipt. Read again from the server, so the lines are
+   * the ones kept when it was taken; the answer is marked as a duplicate.
+   */
+  reopenReceipt(payment: PharmacyPaymentResponse): void {
+    this.loading.set(true);
+    this.svc.getPayment(payment.id).subscribe({
+      next: (res) => {
+        this.dispenseId = '';
+        this.dispense.set(null);
+        this.receipt.set(res?.data ?? payment);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('R81_DISPENSING.HISTORY.OPEN_FAILED'),
+        );
+        this.loading.set(false);
+      },
+    });
+  }
+
+  /** QA D4186: a receipt read again later is a duplicate; the answer to a payment just taken is not. */
+  isDuplicate(receipt: PharmacyPaymentResponse): boolean {
+    return receipt.receipt?.duplicate === true;
   }
 
   /**
@@ -339,6 +455,8 @@ export class PharmacyCheckoutComponent implements OnInit {
 
   reset(): void {
     this.loadDispenses();
+    this.loadHistory();
+    this.dispenseSearch.set('');
     this.dispenseId = '';
     this.amount = null;
     this.paymentMethod = 'CASH';
