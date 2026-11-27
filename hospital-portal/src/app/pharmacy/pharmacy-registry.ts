@@ -96,6 +96,10 @@ export class PharmacyRegistryComponent implements OnInit {
     return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
+  hospitalName(hospitalId: string): string | undefined {
+    return this.hospitals().find((hospital) => hospital.id === hospitalId)?.name;
+  }
+
   loadPharmacies(): void {
     this.loading.set(true);
     const obs = this.searchTerm.trim()

@@ -4,6 +4,8 @@ import { Subject, of, throwError } from 'rxjs';
 import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { roleContextStub } from '../../testing/role-context.stub';
+import { HospitalService } from '../../services/hospital.service';
 import {
   expectEmptySubmitRefusal,
   expectFieldsMarked,
@@ -48,6 +50,54 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
 
   beforeEach(() => {
     service = jasmine.createSpyObj('NursingNoteService', ['listRecent']);
+  });
+
+  it('chooses a hospital for notes without changing the chart scope or accepting stale notes', () => {
+    const role = roleContextStub({
+      superAdmin: true,
+      hospitalId: null,
+      roles: ['ROLE_SUPER_ADMIN'],
+    });
+    const previous = new Subject<NursingNote[]>();
+    const hospitals = jasmine.createSpyObj('HospitalService', ['searchHospitals']);
+    hospitals.searchHospitals.and.returnValue(of([{ id: 'h1', name: 'First' }]));
+    service.listRecent.and.returnValues(previous, of([dar]));
+    TestBed.configureTestingModule({
+      imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: NursingNoteService, useValue: service },
+        { provide: RoleContextService, useValue: role },
+        { provide: HospitalService, useValue: hospitals },
+      ],
+    });
+    const fixture = TestBed.createComponent(NursingNotesPanelComponent);
+    const panel = fixture.componentInstance;
+    panel.patientId = 'p1';
+    panel.ngOnChanges();
+    fixture.detectChanges();
+    expect(service.listRecent).not.toHaveBeenCalled();
+    (
+      fixture.nativeElement.querySelector('.nursing-notes__scope button') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="hospital-typeahead-option-h1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    panel.selectLocalHospital({ id: 'h2', name: 'Second' } as never);
+    previous.next([older]);
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1');
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h2');
+    expect(panel.notes().map((note) => note.id)).toEqual(['n1']);
+    role.set({ roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'] });
+    expect(panel.canAddend({ ...dar, hospitalId: 'h2' })).toBeFalse();
+    expect(role.effectiveHospitalIdForRequest()).toBeNull();
+    panel.patientId = 'p2';
+    panel.ngOnChanges();
+    expect(panel.localHospital()).toBeNull();
+    expect(panel.notes()).toEqual([]);
   });
 
   it('QA D1076 class: names the note template instead of printing its code', () => {
@@ -106,6 +156,12 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'NURSING_NOTES.LOAD_FAILED',
     );
+    service.listRecent.and.returnValue(of([dar]));
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button')!.click();
+    fixture.detectChanges();
+    expect(service.listRecent).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.failed()).toBeFalse();
+    expect(fixture.componentInstance.notes().map((note) => note.id)).toEqual(['n1']);
   });
 });
 

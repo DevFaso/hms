@@ -578,106 +578,112 @@
               </div>
             }
 
-            <!-- Hospital -->
-            <div class="field">
-              <label for="hospitalId"
-                >{{ 'ENCOUNTERS.HOSPITAL' | translate
-                }}{{ organisationRegistrar && !editing() ? ' *' : '' }}</label
-              >
-              @if (editing()) {
-                <div class="locked-field" data-testid="edit-staff-hospital">
-                  <span class="material-symbols-outlined locked-icon" aria-hidden="true"
-                    >local_hospital</span
-                  >
-                  {{ editStaffHospitalName() ?? '—' }}
-                </div>
-              } @else if (hospitalLocked) {
-                <div class="locked-field">
-                  <span class="material-symbols-outlined locked-icon" aria-hidden="true"
-                    >local_hospital</span
-                  >
-                  {{ lockedHospitalName }}
-                </div>
-              } @else {
-                <select
-                  id="hospitalId"
-                  [(ngModel)]="createForm.hospitalId"
-                  (ngModelChange)="loadRegistrationDepartments($event)"
-                  name="hospitalId"
-                  [attr.aria-required]="organisationRegistrar || null"
-                  [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
-                >
-                  <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
-                  @for (h of availableHospitals(); track h.id) {
-                    <option [value]="h.id">{{ h.name }}</option>
-                  }
-                </select>
-                @if (organisationRegistrar) {
-                  <span id="hospitalIdScope" class="hint-text" data-testid="register-org-scope">
-                    {{ 'PLATFORM_SETUP.ORG_ADMIN.REGISTER_SCOPE' | translate }}
-                  </span>
-                }
-              }
-            </div>
-
-            <!-- QA r70 D3202: the department is chosen here, from the hospital's own list. -->
-            @if (!editing() && createForm.hospitalId) {
+            @if (editing()?.profileType !== 'PATIENT') {
+              <!-- Hospital -->
               <div class="field">
-                <label for="departmentId">{{ 'USERS.DEPARTMENT' | translate }}</label>
-                <select id="departmentId" [(ngModel)]="createForm.departmentId" name="departmentId">
-                  <option [ngValue]="undefined">
-                    {{ 'STAFF.NO_DEPARTMENT_OPTION' | translate }}
-                  </option>
-                  @for (d of registrationDepartments(); track d.id) {
-                    <option [ngValue]="d.id">{{ d.name }}</option>
-                  }
-                </select>
-                @if (registrationDepartmentsFailed()) {
-                  <span class="hint-text" role="alert">{{
-                    'STAFF.DEPARTMENTS_LOAD_FAILED' | translate
-                  }}</span>
+                <label for="hospitalId"
+                  >{{ 'ENCOUNTERS.HOSPITAL' | translate
+                  }}{{ organisationRegistrar && !editing() ? ' *' : '' }}</label
+                >
+                @if (editing()) {
+                  <div class="locked-field" data-testid="edit-staff-hospital">
+                    <span class="material-symbols-outlined locked-icon" aria-hidden="true"
+                      >local_hospital</span
+                    >
+                    {{ editStaffHospitalName() ?? '—' }}
+                  </div>
+                } @else if (hospitalLocked) {
+                  <div class="locked-field">
+                    <span class="material-symbols-outlined locked-icon" aria-hidden="true"
+                      >local_hospital</span
+                    >
+                    {{ lockedHospitalName }}
+                  </div>
                 } @else {
-                  <span class="hint-text">{{ 'USERS.DEPARTMENT_HINT' | translate }}</span>
+                  <select
+                    id="hospitalId"
+                    [(ngModel)]="createForm.hospitalId"
+                    (ngModelChange)="loadRegistrationDepartments($event)"
+                    name="hospitalId"
+                    [attr.aria-required]="organisationRegistrar || null"
+                    [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
+                  >
+                    <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
+                    @for (h of availableHospitals(); track h.id) {
+                      <option [value]="h.id">{{ h.name }}</option>
+                    }
+                  </select>
+                  @if (organisationRegistrar) {
+                    <span id="hospitalIdScope" class="hint-text" data-testid="register-org-scope">
+                      {{ 'PLATFORM_SETUP.ORG_ADMIN.REGISTER_SCOPE' | translate }}
+                    </span>
+                  }
                 }
               </div>
-            }
 
-            <!-- Job Title & Employment Type -->
-            <div class="field-row">
-              <div class="field">
-                <label for="jobTitle">{{ 'USERS.JOB_TITLE' | translate }}</label>
-                <select
-                  id="jobTitle"
-                  [(ngModel)]="createForm.jobTitle"
-                  name="jobTitle"
-                  [disabled]="!!editing()"
-                >
-                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
-                  @for (jt of jobTitles; track jt) {
-                    <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
+              <!-- QA r70 D3202: the department is chosen here, from the hospital's own list. -->
+              @if (!editing() && createForm.hospitalId) {
+                <div class="field">
+                  <label for="departmentId">{{ 'USERS.DEPARTMENT' | translate }}</label>
+                  <select
+                    id="departmentId"
+                    [(ngModel)]="createForm.departmentId"
+                    name="departmentId"
+                  >
+                    <option [ngValue]="undefined">
+                      {{ 'STAFF.NO_DEPARTMENT_OPTION' | translate }}
+                    </option>
+                    @for (d of registrationDepartments(); track d.id) {
+                      <option [ngValue]="d.id">{{ d.name }}</option>
+                    }
+                  </select>
+                  @if (registrationDepartmentsFailed()) {
+                    <span class="hint-text" role="alert">{{
+                      'STAFF.DEPARTMENTS_LOAD_FAILED' | translate
+                    }}</span>
+                  } @else {
+                    <span class="hint-text">{{ 'USERS.DEPARTMENT_HINT' | translate }}</span>
                   }
-                </select>
-              </div>
-              <div class="field">
-                <label for="employmentType">{{ 'USERS.EMPLOYMENT_TYPE' | translate }}</label>
-                <select
-                  id="employmentType"
-                  [(ngModel)]="createForm.employmentType"
-                  name="employmentType"
-                  [disabled]="!!editing()"
-                >
-                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
-                  @for (et of employmentTypes; track et) {
-                    <option [value]="et">{{ et | enumLabel: 'employmentType' }}</option>
-                  }
-                </select>
-              </div>
-            </div>
+                </div>
+              }
 
-            @if (editing()) {
-              <span class="hint-text" data-testid="staff-fields-hint">{{
-                'USERS.STAFF_FIELDS_EDIT_HINT' | translate
-              }}</span>
+              <!-- Job Title & Employment Type -->
+              <div class="field-row">
+                <div class="field">
+                  <label for="jobTitle">{{ 'USERS.JOB_TITLE' | translate }}</label>
+                  <select
+                    id="jobTitle"
+                    [(ngModel)]="createForm.jobTitle"
+                    name="jobTitle"
+                    [disabled]="!!editing()"
+                  >
+                    <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
+                    @for (jt of jobTitles; track jt) {
+                      <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="employmentType">{{ 'USERS.EMPLOYMENT_TYPE' | translate }}</label>
+                  <select
+                    id="employmentType"
+                    [(ngModel)]="createForm.employmentType"
+                    name="employmentType"
+                    [disabled]="!!editing()"
+                  >
+                    <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
+                    @for (et of employmentTypes; track et) {
+                      <option [value]="et">{{ et | enumLabel: 'employmentType' }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+
+              @if (editing()) {
+                <span class="hint-text" data-testid="staff-fields-hint">{{
+                  'USERS.STAFF_FIELDS_EDIT_HINT' | translate
+                }}</span>
+              }
             }
 
             <!-- Specialization: physicians only (QA D195) -->

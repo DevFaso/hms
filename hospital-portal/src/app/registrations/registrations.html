@@ -16,8 +16,13 @@
           {{ 'REGISTRATIONS.MULTI_HOSPITAL' | translate }}
         </button>
       }
-      @if (canManage) {
-        <button type="button" class="btn-primary" (click)="openCreate()">
+      @if (canCreate) {
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="registration-open-create"
+          (click)="openCreate()"
+        >
           <span class="material-symbols-outlined">add</span>
           {{ 'REGISTRATIONS.NEW' | translate }}
         </button>
@@ -192,6 +197,9 @@
         <table>
           <thead>
             <tr>
+              @if (globalScope()) {
+                <th scope="col">{{ 'REGISTRATIONS.HOSPITAL' | translate }}</th>
+              }
               <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
               <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
               <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
@@ -206,6 +214,9 @@
           <tbody>
             @for (r of pagedRows(); track r.id) {
               <tr class="data-row">
+                @if (globalScope()) {
+                  <td data-testid="registration-hospital">{{ r.hospitalName || '—' }}</td>
+                }
                 <td>
                   <span class="patient-name">{{
                     r.patientFullName || r.patientUsername || '—'
@@ -369,14 +380,40 @@
       </div>
       <div class="modal-body">
         @if (!editingRegistration()) {
+          @if (globalScope()) {
+            <div class="field">
+              <label for="reg-hospital">{{ 'REGISTRATIONS.HOSPITAL' | translate }} *</label>
+              @if (loading() || loadError()) {
+                <p role="status">
+                  {{ (loading() ? 'COMMON.LOADING' : 'REGISTRATIONS.LOAD_ERROR') | translate }}
+                </p>
+              }
+              <select
+                id="reg-hospital"
+                required
+                [(ngModel)]="form.hospitalId"
+                (ngModelChange)="onFormPatientPicked(null)"
+              >
+                <option [ngValue]="undefined">{{ 'COMMON.SELECT' | translate }}</option>
+                @for (hospital of networkHospitals(); track hospital.id) {
+                  <option [ngValue]="hospital.id">{{ hospital.name }}</option>
+                }
+              </select>
+            </div>
+          }
           <div class="field">
             <label for="reg-patient">{{ 'REGISTRATIONS.PATIENT' | translate }} *</label>
-            <app-patient-picker
-              required
-              inputId="reg-patient"
-              [selected]="formPatient()"
-              (selectedChange)="onFormPatientPicked($event)"
-            />
+            @if (!globalScope() || form.hospitalId) {
+              <app-patient-picker
+                required
+                inputId="reg-patient"
+                [hospitalId]="globalScope() ? (form.hospitalId ?? null) : null"
+                [selected]="formPatient()"
+                (selectedChange)="onFormPatientPicked($event)"
+              />
+            } @else {
+              <p>{{ 'REGISTRATIONS.HOSPITAL_REQUIRED' | translate }}</p>
+            }
           </div>
         } @else {
           <p class="muted">
@@ -450,10 +487,11 @@
           class="btn-primary"
           [disabled]="formSaving()"
           [appSubmitGuard]="
+            (!editingRegistration() && globalScope() && !form.hospitalId) ||
             (!editingRegistration() && !form.patientId) ||
             (endsTheRegistration && !form.deactivationReason?.trim())
           "
-          [submitGuardFields]="['reg-patient', 'reg-deactivation-reason']"
+          [submitGuardFields]="['reg-hospital', 'reg-patient', 'reg-deactivation-reason']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}

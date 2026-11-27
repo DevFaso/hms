@@ -17,6 +17,7 @@ describe('KpiCardsComponent', () => {
     translate.setTranslation('fr', {
       ANALYTICS: {
         KPI: {
+          PERIOD: 'Du {{from}} au {{to}}',
           NO_DATA_IN_WINDOW: 'Aucune donnée sur la période',
           NO_APPOINTMENTS_IN_WINDOW: 'Aucun rendez-vous sur la période',
           SAMPLE_SIZE: '{{count}} mesures',
@@ -45,6 +46,8 @@ describe('KpiCardsComponent', () => {
       noShowRate: { totalAppointments: 0, noShowCount: 0 },
     });
 
+    expect(el.querySelector('[data-testid=kpi-period]')?.textContent).toContain('1 oct. 2026');
+    expect(el.querySelector('[data-testid=kpi-period]')?.textContent).toContain('30 oct. 2026');
     expect(subtitles(el)).toEqual([
       'Aucune donnée sur la période',
       'Aucune donnée sur la période',

@@ -1,26 +1,37 @@
 package com.example.hms.utility;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.util.UriComponentsBuilder;
+
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@DisplayName("Account links carry one token, in the fragment (K4)")
 class ActivationLinksTest {
 
     @Test
-    void aPlusInTheAddressSurvivesTheRoundTrip() {
-        String link = ActivationLinks.build("https://dev.e-keneya.com", "a+b@example.com", "t-1");
+    void theActivationLinkCarriesTheTokenInItsFragmentAndNoAddress() {
+        String link = ActivationLinks.activation("https://dev.e-keneya.com", "t-1_AbC");
 
-        assertThat(link).isEqualTo("https://dev.e-keneya.com/verify?email=a%2Bb%40example.com&token=t-1");
-        // What the server reads back from the query: the address as typed.
-        var params = UriComponentsBuilder.fromUriString(link).build(true).getQueryParams();
-        assertThat(java.net.URLDecoder.decode(params.getFirst("email"), java.nio.charset.StandardCharsets.UTF_8))
-                .isEqualTo("a+b@example.com");
+        assertThat(link).isEqualTo("https://dev.e-keneya.com/verify#token=t-1_AbC");
+        URI uri = URI.create(link);
+        assertThat(uri.getQuery()).isNull();
+        assertThat(uri.getPath()).isEqualTo("/verify");
+        assertThat(uri.getFragment()).isEqualTo("token=t-1_AbC");
+        assertThat(link).doesNotContain("@", "email");
     }
 
     @Test
-    void aPlainAddressAndTokenAreUnchangedButEncoded() {
-        assertThat(ActivationLinks.build("https://x", "awa@example.com", "abc-123"))
-                .isEqualTo("https://x/verify?email=awa%40example.com&token=abc-123");
+    void theResetLinkCarriesTheTokenInItsFragment() {
+        String link = ActivationLinks.passwordReset("https://x", "abc-123");
+
+        assertThat(link).isEqualTo("https://x/reset-password#token=abc-123");
+        assertThat(URI.create(link).getQuery()).isNull();
+    }
+
+    @Test
+    void aTokenIsEncodedSoTheFragmentHoldsOnlyIt() {
+        assertThat(ActivationLinks.activation("https://x", "a&b=c#d")).isEqualTo("https://x/verify#token=a%26b%3Dc%23d");
     }
 }

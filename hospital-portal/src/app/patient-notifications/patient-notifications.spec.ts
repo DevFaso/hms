@@ -90,6 +90,16 @@ describe('PatientNotificationsComponent', () => {
     expect(host.querySelector('[data-testid="pn-count-SENT"]')?.textContent).toContain('12');
   });
 
+  it('allows keyboard users to focus the named table scroller when there are no row actions', () => {
+    setup(pageOf([delivery({ status: 'SKIPPED', retryable: false })]));
+    const region = fixture.nativeElement.querySelector('.table-wrap') as HTMLElement;
+    expect(region.getAttribute('role')).toBe('region');
+    expect(region.getAttribute('aria-label')).toBeTruthy();
+    expect(region.tabIndex).toBe(0);
+    region.focus();
+    expect(document.activeElement).toBe(region);
+  });
+
   it('lists FAILED sends by default, with every status counted', () => {
     setup(pageOf([delivery({})]));
 

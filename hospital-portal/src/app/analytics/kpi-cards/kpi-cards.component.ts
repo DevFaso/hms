@@ -12,7 +12,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
 import { KpiSparklineComponent } from './kpi-sparkline.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
-import { localDateString } from '../../shared/date-utils';
+import { localDateString, serverDateOrInstant } from '../../shared/date-utils';
 
 interface KpiSub {
   key: string;
@@ -131,6 +131,14 @@ export class KpiCardsComponent implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  formatWindowDate(value: string): string {
+    return new Intl.DateTimeFormat(currentLocale(), {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(serverDateOrInstant(value));
   }
 
   private toIsoDate(d: Date): string {

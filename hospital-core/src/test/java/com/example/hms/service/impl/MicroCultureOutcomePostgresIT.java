@@ -93,6 +93,7 @@ class MicroCultureOutcomePostgresIT {
     }
 
     @Autowired private MicroCultureService service;
+    @Autowired private com.example.hms.repository.LabResultRepository resultRepository;
     @Autowired private PlatformTransactionManager transactionManager;
     @PersistenceContext private EntityManager entityManager;
 
@@ -135,8 +136,8 @@ class MicroCultureOutcomePostgresIT {
                 .setParameter("phone", "+226 71 " + tag).executeUpdate();
             UUID definition = UUID.randomUUID();
             entityManager.createNativeQuery("""
-                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, created_at, updated_at)
-                VALUES (:id, :code, 'Blood culture', true, now(), now())
+                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, culture, approval_status, created_at, updated_at)
+                VALUES (:id, :code, 'Blood culture', true, true, 'ACTIVE', now(), now())
                 """).setParameter("id", definition).setParameter("code", "CX9" + tag).executeUpdate();
             entityManager.createNativeQuery("""
                 INSERT INTO lab.lab_orders (id, hospital_id, patient_id, lab_test_definition_id, ordering_staff_id,
@@ -155,6 +156,165 @@ class MicroCultureOutcomePostgresIT {
                 """).setParameter("id", culture).setParameter("o", order).setParameter("p", patient)
                 .setParameter("h", hospital).executeUpdate();
         });
+    }
+
+    @Test
+    void draftCultureVersionIsRefusedButHistoricalRetiredVersionCanStillBeResulted() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE lab.lab_test_definitions SET approval_status = 'DRAFT' WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :id)")
+                .setParameter("id", order).executeUpdate());
+        var request = com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build();
+        assertThatThrownBy(() -> service.createCulture(hospital, null, request))
+            .hasFieldOrPropertyWithValue("messageKey", "micro.culture.orderDefinitionUnapproved");
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE lab.lab_test_definitions SET approval_status = 'RETIRED', is_active = false WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :id)")
+                .setParameter("id", order).executeUpdate());
+        assertThat(service.createCulture(hospital, null, request).getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
+    }
+
+    /** Move an open order after another transaction has already loaded it. */
+    private void replaceOrderDefinitionInIndependentTransaction() {
+        var independent = new TransactionTemplate(transactionManager);
+        independent.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        independent.executeWithoutResult(status -> {
+            UUID definition = UUID.randomUUID();
+            entityManager.createNativeQuery("""
+                INSERT INTO lab.lab_test_definitions (id, test_code, name, is_active, culture, approval_status, created_at, updated_at)
+                VALUES (:id, :code, 'Creatinine', true, false, 'ACTIVE', now(), now())
+                """).setParameter("id", definition).setParameter("code", "CREAT-" + definition).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET lab_test_definition_id = :definition WHERE id = :id")
+                .setParameter("definition", definition).setParameter("id", order).executeUpdate();
+        });
+    }
+
+    @Test
+    void creationChecksTheDefinitionCommittedBeforeTheOrderLock() {
+        var request = com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build();
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var stale = entityManager.find(com.example.hms.model.LabOrder.class, order);
+            assertThat(stale.getLabTestDefinition().isCulture()).isTrue();
+            replaceOrderDefinitionInIndependentTransaction();
+            service.createCulture(hospital, null, request);
+        })).hasFieldOrPropertyWithValue("messageKey", "micro.culture.cultureOrderRequired");
+    }
+
+    @Test
+    void finalizationDoesNotCompleteAnOrderWhoseCommittedDefinitionChanged() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var stale = entityManager.find(com.example.hms.model.LabOrder.class, order);
+            assertThat(stale.getLabTestDefinition().isCulture()).isTrue();
+            replaceOrderDefinitionInIndependentTransaction();
+            assertThat(service.finalizeCulture(culture, hospital, null).getStatus()).isEqualTo(MicroCultureStatus.FINAL);
+        });
+        String persisted = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(persisted).isEqualTo("RECEIVED");
+    }
+
+    @Test
+    void onlyCultureOrdersCountPendingCultureReportsAsOutstandingWork() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate());
+        assertThat(resultRepository.countPendingCulturesForOrder(order)).isEqualTo(1);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE lab.lab_test_definitions SET culture = false WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :id)")
+                .setParameter("id", order).executeUpdate());
+        assertThat(resultRepository.countPendingCulturesForOrder(order)).isZero();
+    }
+
+    @Test
+    void creatinineOrderCannotCreateACultureEvenWithAMicrobiologyCategory() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("""
+                UPDATE lab.lab_test_definitions SET name = 'Creatinine', category = 'Microbiology', culture = false
+                WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :order)
+                """).setParameter("order", order).executeUpdate());
+
+        assertThatThrownBy(() -> service.createCulture(hospital, null,
+            com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("micro.culture.cultureOrderRequired");
+
+        Long count = new TransactionTemplate(transactionManager).execute(status ->
+            ((Number) entityManager.createNativeQuery(
+                "SELECT count(*) FROM lab.micro_culture_results WHERE lab_order_id = :order")
+                .setParameter("order", order).getSingleResult()).longValue());
+        assertThat(count).as("the refused request creates no second report").isEqualTo(1L);
+    }
+
+    @Test
+    void anotherPreliminaryCultureReopensAFinishedOrderUntilItTooIsFinalized() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        service.finalizeCulture(culture, hospital, null);
+        var created = service.createCulture(hospital, null,
+            com.example.hms.payload.dto.MicroCultureRequestDTO.builder().labOrderId(order).build());
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(created.getStatus()).isEqualTo(com.example.hms.enums.MicroCultureStatus.PRELIMINARY);
+        assertThat(result).isEqualTo("RESULTED");
+    }
+
+    @Test
+    void d3905_aFinalCultureLeavesTheInAnalysisWorklist() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        service.finalizeCulture(culture, hospital, null);
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(result).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void legacyCultureOnCreatinineOrderDoesNotCloseTheOrder() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET status = 'RECEIVED' WHERE id = :id")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.lab_test_definitions SET culture = false, name = 'Creatinine', category = 'Microbiology' WHERE id = (SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = :id)")
+                .setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        assertThat(service.finalizeCulture(culture, hospital, null).getStatus()).isEqualTo(MicroCultureStatus.FINAL);
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.lab_orders WHERE id = :id")
+                .setParameter("id", order).getSingleResult());
+        assertThat(result).isEqualTo("RECEIVED");
+    }
+
+    @Test
+    void mismatchedLinkedOrderHospitalRefusesFinalizationAndRollsBackReport() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.lab_orders SET hospital_id = :foreign, status = 'RECEIVED' WHERE id = :id")
+                .setParameter("foreign", UUID.randomUUID()).setParameter("id", order).executeUpdate();
+            entityManager.createNativeQuery("UPDATE lab.micro_culture_results SET status = 'PRELIMINARY', growth_result = 'NO_GROWTH' WHERE id = :id")
+                .setParameter("id", culture).executeUpdate();
+        });
+        assertThatThrownBy(() -> service.finalizeCulture(culture, hospital, null))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        String result = new TransactionTemplate(transactionManager).execute(status ->
+            (String) entityManager.createNativeQuery("SELECT status FROM lab.micro_culture_results WHERE id = :id")
+                .setParameter("id", culture).getSingleResult());
+        assertThat(result).isEqualTo("PRELIMINARY");
     }
 
     private UUID isolate(int number, String organism) {

@@ -342,6 +342,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /auth/password/confirm", "state: the sample token is no live reset link"),
         Map.entry("POST /auth/password/reset-password", "state: the sample token is no live reset link"),
         Map.entry("POST /auth/reset-password", "state: the sample token is no live reset link"),
+        // Scorecard K4: the activation link carries its token alone; a sample token names no live link.
+        Map.entry("POST /auth/verify-email", "state: the sample token is no live activation link"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("PUT /high-risk-care-plans/{planId}", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("POST /high-risk-care-plans/{planId}/care-team-notes", "role: limited to the care team or the patient"),

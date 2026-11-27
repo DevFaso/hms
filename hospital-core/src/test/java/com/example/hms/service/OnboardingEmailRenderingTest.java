@@ -159,6 +159,19 @@ class OnboardingEmailRenderingTest {
     }
 
     @Test
+    @DisplayName("K4: the copies in every language state that a code was sent and where, and hold no code")
+    void k4_theCopiesInEveryLanguage() {
+        for (Locale l : java.util.List.of(Locale.ENGLISH, Locale.FRENCH, Locale.of("es"))) {
+            String registrarCopy = messages.getMessage("sms.activation.registrar",
+                new Object[] {"Awa T.", "Patient(e)", "CHU Test", "+226*****56"}, l);
+            String hospitalCopy = messages.getMessage("sms.activation.hospital",
+                new Object[] {"Awa T.", "Patient(e)", "+226*****56"}, l);
+            assertThat(registrarCopy).contains("Awa T.", "CHU Test", "+226*****56").doesNotContainPattern("\\d{6}");
+            assertThat(hospitalCopy).contains("Awa T.", "+226*****56").doesNotContainPattern("\\d{6}");
+        }
+    }
+
+    @Test
     @DisplayName("role labels resolve in EN/FR/ES and an unknown role is humanised")
     void roleLabelsInEveryLanguage() {
         assertThat(service.roleLabel(Locale.FRENCH, "ROLE_DOCTOR")).isEqualTo("Médecin");

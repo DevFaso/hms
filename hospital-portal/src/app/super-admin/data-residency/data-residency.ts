@@ -21,6 +21,8 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 interface EditState {
   organizationId: string;
+  organizationName: string;
+  organizationCode: string;
   region: OrganizationRegion;
   reason: string;
   busy: boolean;
@@ -105,6 +107,8 @@ export class DataResidencyComponent implements OnInit {
   startEdit(row: OrganizationRegionRow): void {
     this.editing.set({
       organizationId: row.organizationId,
+      organizationName: row.organizationName,
+      organizationCode: row.organizationCode,
       region: row.region,
       reason: '',
       busy: false,

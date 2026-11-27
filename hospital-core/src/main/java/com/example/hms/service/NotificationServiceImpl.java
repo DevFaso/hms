@@ -71,15 +71,38 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
         public Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable requested) {
             Pageable pageable = newestFirst(requested);
-            if (read != null && search != null && !search.isEmpty()) {
-                return notificationRepository.findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(username, read, search, pageable);
+            if (search != null && !search.isEmpty()) {
+                return searched(username, read, search, pageable);
             } else if (read != null) {
                 return notificationRepository.findByRecipientUsernameAndRead(username, read, pageable);
-            } else if (search != null && !search.isEmpty()) {
-                return notificationRepository.findByRecipientUsernameAndMessageContainingIgnoreCase(username, search, pageable);
             } else {
                 return notificationRepository.findByRecipientUsername(username, pageable);
             }
+    }
+
+    /** The search filter looks at the recipient's newest rows, this many at most. */
+    static final int SEARCH_SCAN_LIMIT = 2000;
+
+    /**
+     * The search filter. The body is encrypted at rest, so the database cannot match it: the recipient's own
+     * newest rows are read (decrypted on the way) and matched here, case ignored, then paged.
+     */
+    private Page<Notification> searched(String username, Boolean read, String search, Pageable pageable) {
+        Pageable scan = org.springframework.data.domain.PageRequest.of(0, SEARCH_SCAN_LIMIT, NEWEST_FIRST);
+        List<Notification> rows = (read != null
+            ? notificationRepository.findByRecipientUsernameAndRead(username, read, scan)
+            : notificationRepository.findByRecipientUsername(username, scan)).getContent();
+        String needle = search.toLowerCase(java.util.Locale.ROOT);
+        List<Notification> hits = rows.stream()
+            .filter(row -> row.getMessage() != null
+                && row.getMessage().toLowerCase(java.util.Locale.ROOT).contains(needle))
+            .toList();
+        if (pageable.isUnpaged()) {
+            return new org.springframework.data.domain.PageImpl<>(hits, pageable, hits.size());
+        }
+        int from = (int) Math.min(pageable.getOffset(), hits.size());
+        int to = Math.min(from + pageable.getPageSize(), hits.size());
+        return new org.springframework.data.domain.PageImpl<>(hits.subList(from, to), pageable, hits.size());
     }
 
     @Override

@@ -3,6 +3,15 @@
     {{ 'ANALYTICS.KPI.SECTION_HEADING' | translate }}
   </h3>
 
+  @if (dashboard(); as data) {
+    <p class="kpi-cards__period" data-testid="kpi-period">
+      {{
+        'ANALYTICS.KPI.PERIOD'
+          | translate: { from: formatWindowDate(data.from), to: formatWindowDate(data.to) }
+      }}
+    </p>
+  }
+
   @if (loading()) {
     <div class="kpi-cards__loading" role="status" aria-live="polite">
       {{ 'ANALYTICS.KPI.LOADING' | translate }}

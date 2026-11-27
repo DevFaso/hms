@@ -364,9 +364,11 @@ class LabOrderServiceImplTest {
     }
 
     /** D48: a DRAFT definition (and anything not ACTIVE) cannot be ordered. */
-    @Test
-    void createLabOrderRefusesADefinitionThatIsNotActive() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void createLabOrderRefusesADefinitionThatIsNotActive(boolean culture) {
         mockCommonLookups();
+        labTestDefinition.setCulture(culture);
         for (com.example.hms.enums.LabTestDefinitionApprovalStatus status : com.example.hms.enums.LabTestDefinitionApprovalStatus.values()) {
             if (status == com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE) {
                 continue;

@@ -58,6 +58,9 @@ class EmailVerificationActivationIT extends BaseIT {
     private User account;
     private UserRoleHospitalAssignment patientRow;
 
+    /** What the mailed link carries; the account keeps only its hash. */
+    private String linkToken;
+
     @BeforeEach
     void setUp() {
         SharedClinicalRowsCleanup.deleteAll(applicationContext);
@@ -69,10 +72,12 @@ class EmailVerificationActivationIT extends BaseIT {
             .organization(organization).build());
 
         String suffix = nextId();
+        linkToken = "tok-" + suffix;
         account = userRepository.save(User.builder().username("r16pat" + suffix).passwordHash("hashed")
             .email("r16pat" + suffix + "@example.test").firstName("Mariam").lastName("Sawadogo" + suffix)
             .phoneNumber("+22677" + suffix).isActive(false)
-            .activationToken("tok-" + suffix).activationTokenExpiresAt(LocalDateTime.now().plusHours(4))
+            .activationToken(com.example.hms.utility.ActivationTokens.storedForms("tok-" + suffix).get(0))
+            .activationTokenExpiresAt(LocalDateTime.now().plusHours(4))
             .build());
         patientRow = assignmentRepository.save(UserRoleHospitalAssignment.builder()
             .assignmentCode("R16-" + nextId()).description("r16").user(account).hospital(hospital)
@@ -90,7 +95,7 @@ class EmailVerificationActivationIT extends BaseIT {
     void theLinkActivatesTheAccountAndThePatientRole() throws Exception {
         mockMvc.perform(get(API + "/auth/verify-email").contextPath(API)
                 .param("email", account.getEmail())
-                .param("token", account.getActivationToken()))
+                .param("token", linkToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.verified").value(true));
 

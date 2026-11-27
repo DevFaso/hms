@@ -94,6 +94,45 @@ export class ReportsComponent implements OnInit {
   ];
   readonly periods: ReportPeriod[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
 
+  /** Render known report tokens without changing the identifier sent to the server. */
+  periodLabel(token: string, period: ReportPeriod): string {
+    const language = this.translate.currentLang || 'fr';
+    const locale = language === 'en' || language === 'es' ? language : 'fr';
+    if (period === 'MONTHLY' && /^\d{6}$/.test(token)) {
+      const year = Number(token.slice(0, 4));
+      const month = Number(token.slice(4));
+      if (year < 100 || month < 1 || month > 12) return token;
+      return new Intl.DateTimeFormat(locale, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(`${token.slice(0, 4)}-${token.slice(4)}-01T00:00:00Z`));
+    }
+    if (period === 'DAILY' && /^\d{4}-\d{2}-\d{2}$/.test(token)) {
+      const date = new Date(`${token}T00:00:00Z`);
+      if (
+        !Number.isFinite(date.getTime()) ||
+        date.getUTCFullYear() !== Number(token.slice(0, 4)) ||
+        date.getUTCMonth() + 1 !== Number(token.slice(5, 7)) ||
+        date.getUTCDate() !== Number(token.slice(8, 10))
+      )
+        return token;
+      return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+    }
+    if (period === 'WEEKLY') {
+      const week = /^(\d{4})-W(\d{2})$/.exec(token);
+      if (!week) return token;
+      const year = Number(week[1]);
+      const number = Number(week[2]);
+      if (year < 100 || number < 1 || number > 53) return token;
+      const firstDay = new Date(`${week[1]}-01-01T00:00:00Z`).getUTCDay();
+      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      if (number === 53 && firstDay !== 4 && !(firstDay === 3 && leap)) return token;
+      return this.translate.instant('REPORTS.WEEK_LABEL', { week: number, year: week[1] });
+    }
+    return token;
+  }
+
   ngOnInit(): void {
     this.load();
   }

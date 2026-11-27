@@ -224,6 +224,7 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
       expect(fixture.componentInstance.canLookup).toBe(shown);
       expect(el.querySelector('.lookup-panel') !== null).toBe(shown);
       expect(el.querySelector('#lookup-id') !== null).toBe(shown);
+      expect(el.querySelector('[data-testid="empty-lookup-help"]') !== null).toBe(shown);
     });
   }
 });
