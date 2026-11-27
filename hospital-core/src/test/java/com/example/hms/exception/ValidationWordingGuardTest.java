@@ -74,9 +74,9 @@ class ValidationWordingGuardTest {
                 assertThat((String) fields.get("reason")).contains(required).doesNotContain("ne doit pas");
                 assertThat((String) fields.get("hospitalId")).contains(required);
                 assertThat((String) fields.get("quantity")).contains(minimum, "1");
-                assertThat((String) fields.get("maximum")).contains("10", locale.equals(Locale.FRENCH) ? "inf?rieur ou ?gal" : "at most");
-                assertThat((String) fields.get("above")).contains(locale.equals(Locale.FRENCH) || "es".equals(locale.getLanguage()) ? "2,5" : "2.5", locale.equals(Locale.FRENCH) ? "sup?rieur ?" : "greater than");
-                assertThat((String) fields.get("below")).contains(locale.equals(Locale.FRENCH) || "es".equals(locale.getLanguage()) ? "4,5" : "4.5", locale.equals(Locale.FRENCH) ? "inf?rieur ?" : "less than");
+                assertThat((String) fields.get("maximum")).contains("10", locale.equals(Locale.FRENCH) ? "inférieur ou égal" : "at most");
+                assertThat((String) fields.get("above")).contains(locale.equals(Locale.FRENCH) || "es".equals(locale.getLanguage()) ? "2,5" : "2.5", locale.equals(Locale.FRENCH) ? "supérieur à" : "greater than");
+                assertThat((String) fields.get("below")).contains(locale.equals(Locale.FRENCH) || "es".equals(locale.getLanguage()) ? "4,5" : "4.5", locale.equals(Locale.FRENCH) ? "inférieur à" : "less than");
                 assertThat(fields.get("name")).isEqualTo("custom instruction");
                 var binding = new BeanPropertyBindingResult(input, "body");
                 new SpringValidatorAdapter(validator).validate(input, binding);
