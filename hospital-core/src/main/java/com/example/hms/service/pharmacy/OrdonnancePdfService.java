@@ -304,7 +304,7 @@ public class OrdonnancePdfService {
         pdf.field("   " + label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 10f);
         if (rx.getQuantity() != null) {
             pdf.field("   " + label(locale, "pdf.ordonnance.quantity"),
-                    joinNonBlank(" ", com.example.hms.utility.DisplayNumbers.quantity(rx.getQuantity(), locale), rx.getQuantityUnit()), 10f);
+                    com.example.hms.utility.DisplayNumbers.countedUnit(rx.getQuantity(), rx.getQuantityUnit(), locale), 10f);
         }
         if (rx.getRefillsAllowed() != null && rx.getRefillsAllowed() > 0) {
             pdf.field("   " + label(locale, "pdf.ordonnance.refills"), String.valueOf(rx.getRefillsAllowed()), 10f);

@@ -151,6 +151,13 @@ class OrdonnancePdfServiceTest {
     }
 
     @Test
+    void printedQuantityUsesTheCountedUnitPlural() throws Exception {
+        rx.setQuantity(new BigDecimal("21"));
+        rx.setQuantityUnit("g?lule");
+        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("21 g?lules");
+    }
+
+    @Test
     void knownSpecialtyIsTranslatedAndChildAgeUsesThePrescriptionDate() throws Exception {
         staff.setSpecialization("GENERAL_PRACTICE");
         patient.setDateOfBirth(LocalDate.of(2024, 11, 21));

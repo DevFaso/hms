@@ -104,6 +104,38 @@ public final class DisplayNumbers {
         return quantity(value, requestLocale());
     }
 
+    /** A count with a known counted unit; measurement units and unknown text stay as entered. */
+    public static String countedUnit(@Nullable BigDecimal value, @Nullable String unit, Locale locale) {
+        String number = quantity(value, locale);
+        if (number.isEmpty() || unit == null || unit.isBlank()) return number;
+        String entered = unit.trim();
+        String[] forms = switch (entered.toLowerCase(Locale.ROOT)) {
+            case "g?lule", "g?lules" -> new String[] {"g?lule", "g?lules"};
+            case "gelule", "gelules" -> new String[] {"gelule", "gelules"};
+            case "comprim?", "comprim?s" -> new String[] {"comprim?", "comprim?s"};
+            case "comprime", "comprimes" -> new String[] {"comprime", "comprimes"};
+            case "plaquette", "plaquettes" -> new String[] {"plaquette", "plaquettes"};
+            case "ampoule", "ampoules" -> new String[] {"ampoule", "ampoules"};
+            case "flacon", "flacons" -> new String[] {"flacon", "flacons"};
+            case "bo?te", "bo?tes" -> new String[] {"bo?te", "bo?tes"};
+            case "boite", "boites" -> new String[] {"boite", "boites"};
+            case "capsule", "capsules" -> new String[] {"capsule", "capsules"};
+            case "tablet", "tablets" -> new String[] {"tablet", "tablets"};
+            case "vial", "vials" -> new String[] {"vial", "vials"};
+            case "box", "boxes" -> new String[] {"box", "boxes"};
+            default -> null;
+        };
+        if (forms == null) return number + " " + entered;
+        BigDecimal magnitude = value.abs();
+        boolean plural = "fr".equals(locale.getLanguage())
+            ? magnitude.compareTo(BigDecimal.valueOf(2)) >= 0
+            : magnitude.compareTo(BigDecimal.ONE) != 0;
+        String form = forms[plural ? 1 : 0];
+        if (entered.equals(entered.toUpperCase(Locale.ROOT))) form = form.toUpperCase(Locale.ROOT);
+        else if (Character.isUpperCase(entered.codePointAt(0))) form = form.substring(0, 1).toUpperCase(Locale.ROOT) + form.substring(1);
+        return number + " " + form;
+    }
+
     /** A vital such as a temperature or a weight, at most {@code maxFractionDigits} decimals; "" for null. */
     public static String measure(@Nullable Number value, int maxFractionDigits, Locale locale) {
         if (value == null) {
