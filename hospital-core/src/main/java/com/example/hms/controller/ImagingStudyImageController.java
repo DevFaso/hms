@@ -8,8 +8,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -61,6 +59,7 @@ public class ImagingStudyImageController {
     private final ImagingStudyImageService imageService;
 
     @PostMapping(value = "/orders/{orderId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @com.example.hms.upload.UploadPolicy(com.example.hms.upload.UploadKind.IMAGING_IMAGE)
     @PreAuthorize(WRITE_ROLES)
     @Operation(summary = "Attach a key image to an imaging study",
         description = "JPEG, PNG, WebP or PDF, content-checked, 10 MB at most. With reportId the image "
@@ -90,14 +89,10 @@ public class ImagingStudyImageController {
         description = "Authenticated streaming, shown inline, never cached; every read is audited.")
     public ResponseEntity<Resource> content(@PathVariable UUID imageId) {
         ImagingStudyImageService.ImageContent content = imageService.readContent(imageId);
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(content.contentType()))
+        // The imaging viewer: a raster image or a PDF by content, shown in the page.
+        return com.example.hms.upload.UploadResponses.viewer(content.contentType(),
+                "imaging-image-" + content.imageId() + extensionOf(content.contentType()))
             .cacheControl(CacheControl.noStore())
-            .header("X-Content-Type-Options", "nosniff")
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
-                .filename("imaging-image-" + content.imageId() + extensionOf(content.contentType()))
-                .build()
-                .toString())
             .body(new StoredObjectResource(content.object()));
     }
 

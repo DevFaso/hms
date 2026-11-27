@@ -130,10 +130,8 @@ public class ChatController {
             org.springframework.security.core.Authentication authentication) {
         ChatMessageService.ChatAttachmentPayload payload =
             chatMessageService.downloadAttachment(attachmentId, authentication.getName());
-        return ResponseEntity.ok()
-            .contentType(org.springframework.http.MediaType.parseMediaType(payload.contentType()))
-            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
+        return com.example.hms.upload.UploadResponses.attachment(payload.contentType(), payload.displayName())
+            .cacheControl(org.springframework.http.CacheControl.noStore())
             .body(payload.resource());
     }
 

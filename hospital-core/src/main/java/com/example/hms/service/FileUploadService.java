@@ -6,6 +6,12 @@ import com.example.hms.service.support.UrlPathNormalizer;
 import com.example.hms.storage.FileStorage;
 import com.example.hms.storage.StorageKeys;
 import com.example.hms.storage.StoredObject;
+import com.example.hms.upload.UploadAdmission;
+import com.example.hms.upload.UploadAdmission.VettedUpload;
+import com.example.hms.upload.UploadKind;
+import com.example.hms.upload.UploadLedger;
+import com.example.hms.upload.UploadRefusedException;
+import com.example.hms.upload.UploadScanStatus;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,10 +28,8 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -35,6 +39,11 @@ import java.util.UUID;
  * The keys are the paths the files always had under the upload root
  * ({@code "<subdirectory>/<name>"}), so the references stored on existing
  * rows keep resolving whichever store is used.
+ *
+ * <p>Every file is checked by {@link UploadAdmission} (size, type by content,
+ * name matching content) and stored with the type its content showed; each
+ * stored file is recorded in the {@link UploadLedger}, which holds the state
+ * of its malware check, and a file whose check is not clean is not opened.
  */
 @Slf4j
 @Service
@@ -45,10 +54,21 @@ public class FileUploadService {
     public static final String PROFILE_IMAGES_PATH = "profile-images";
     private static final String MSG_FILE_NO_LONGER_AVAILABLE = "file.noLongerAvailable";
 
-    private final FileStorage storage;
+    private static final String MSG_UPLOAD_BLOCKED = "file.upload.blocked";
 
-    public FileUploadService(FileStorage storage) {
+    private final FileStorage storage;
+    /** Null only in a unit test that builds the service on a bare store. */
+    private final UploadLedger ledger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public FileUploadService(FileStorage storage, UploadLedger ledger) {
         this.storage = storage;
+        this.ledger = ledger;
+    }
+
+    /** For tests of the storage paths alone: no upload record, no malware check. */
+    FileUploadService(FileStorage storage) {
+        this(storage, null);
     }
 
     /**
@@ -138,18 +158,11 @@ public class FileUploadService {
         return maxUploadLabel(org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }
     private static final String EXT_JPEG = ".jpeg";
-    private static final String EXT_TIFF = ".tiff";
-    private static final String EXT_DOCX = ".docx";
     private static final String MIME_PNG = "image/png";
     private static final String MIME_JPEG = "image/jpeg";
     private static final String MIME_PDF = "application/pdf";
     private static final String MIME_WEBP = "image/webp";
     private static final String EXT_WEBP = ".webp";
-    private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
-    private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
-        ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
-        EXT_DOCX
-    );
 
     /**
      * Upload a profile image for a user
@@ -160,10 +173,8 @@ public class FileUploadService {
      * @throws IOException if upload fails
      */
     public String uploadProfileImage(MultipartFile file, UUID userId) throws IOException {
-        validateImageFile(file);
-
-        String originalFilename = file.getOriginalFilename();
-        String extension = getFileExtension(originalFilename);
+        VettedUpload vetted = vet(file, UploadKind.PROFILE_IMAGE);
+        String extension = vetted.extension();
         // Random suffix: profile images are the one class still served
         // without a token (avatars render via <img src> on web + both mobile
         // apps, which cannot carry a bearer token), so the filename must
@@ -171,10 +182,7 @@ public class FileUploadService {
         String filename = userId + "_profile_" + System.currentTimeMillis()
             + "_" + UUID.randomUUID() + extension;
 
-        try (InputStream in = file.getInputStream()) {
-            storage.put(storageKey(PROFILE_IMAGES_PATH, filename), in, file.getSize(),
-                imageContentTypeFor(extension));
-        }
+        storeUpload(PROFILE_IMAGES_PATH, filename, file, vetted, UploadKind.PROFILE_IMAGE, userId);
 
         log.info("Profile image uploaded successfully for user {}", userId);
 
@@ -211,33 +219,33 @@ public class FileUploadService {
     }
 
     public StoredFileDescriptor uploadReferralAttachment(MultipartFile file, UUID uploaderId) throws IOException {
-        validateAttachmentFile(file);
+        VettedUpload vetted = vet(file, UploadKind.REFERRAL_ATTACHMENT);
 
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
-        String extension = getFileExtension(file.getOriginalFilename());
-        String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "attachment");
+        String filename = buildAttachmentFilename(sanitizedBaseName, vetted.extension(), uploaderId, "attachment");
 
-        storeUpload("referral-attachments", filename, file, contentTypeFor(extension));
+        storeUpload("referral-attachments", filename, file, vetted, UploadKind.REFERRAL_ATTACHMENT, uploaderId);
 
         String relativePath = "/uploads/referral-attachments/" + filename;
         return new StoredFileDescriptor(
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            contentTypeFor(extension),
+            vetted.mediaType(),
             file.getSize(),
             null
         );
     }
 
     public StoredFileDescriptor uploadChartAttachment(MultipartFile file, UUID uploaderId) throws IOException {
-        validateAttachmentFile(file);
+        VettedUpload vetted = vet(file, UploadKind.CHART_ATTACHMENT);
 
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
-        String extension = getFileExtension(file.getOriginalFilename());
-        String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "chart_attachment");
+        String filename = buildAttachmentFilename(sanitizedBaseName, vetted.extension(), uploaderId,
+            "chart_attachment");
 
-        String checksum = storeUpload("chart-attachments", filename, file, contentTypeFor(extension));
+        String checksum = storeUpload("chart-attachments", filename, file, vetted, UploadKind.CHART_ATTACHMENT,
+            uploaderId);
 
         String relativePath = "/uploads/chart-attachments/" + filename;
         long sizeBytes = file.getSize();
@@ -246,7 +254,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            contentTypeFor(extension),
+            vetted.mediaType(),
             sizeBytes,
             checksum
         );
@@ -262,10 +270,14 @@ public class FileUploadService {
      * The caller closes the returned object.
      *
      * @throws ResourceNotFoundException when the key is not under the
-     *         required subdirectory or the file is no longer stored
+     *         required subdirectory, the file is no longer stored, or its
+     *         malware check is pending or refused it
      */
     public StoredObject openStoredFile(String storageKey, String requiredSubdirectory) {
         String key = keyOfStoredReference(storageKey, requiredSubdirectory);
+        if (ledger != null) {
+            ledger.requireServable(key);
+        }
         Optional<StoredObject> stored;
         try {
             stored = storage.get(key);
@@ -312,11 +324,29 @@ public class FileUploadService {
     }
 
     /**
-     * Stream an upload into the store under {@code subdir/filename}, hashing
-     * it on the way through; returns the SHA-256 (hex).
+     * The shared check of an upload ({@link UploadAdmission}); its refusal
+     * reaches the caller as the {@code IllegalArgumentException} the upload
+     * endpoints answer with a 400.
      */
-    private String storeUpload(String subdirectory, String filename, MultipartFile file, String contentType)
-            throws IOException {
+    private static VettedUpload vet(MultipartFile file, UploadKind kind) {
+        try {
+            return UploadAdmission.vet(file, kind);
+        } catch (UploadRefusedException refused) {
+            throw new IllegalArgumentException(refused.getMessage(), refused);
+        }
+    }
+
+    /**
+     * Stream a checked upload into the store under {@code subdir/filename}
+     * with the type its content showed, hashing it on the way through, then
+     * record it (and its malware check); returns the SHA-256 (hex).
+     *
+     * @throws IllegalArgumentException when the malware check refused the
+     *         file: it is kept, unserved, and the upload is not linked
+     */
+    private String storeUpload(String subdirectory, String filename, MultipartFile file, VettedUpload vetted,
+                               UploadKind kind, UUID uploaderId) throws IOException {
+        String contentType = vetted.mediaType();
         String key;
         try {
             key = storageKey(subdirectory, filename);
@@ -328,7 +358,16 @@ public class FileUploadService {
              DigestInputStream digestStream = new DigestInputStream(in, digest)) {
             storage.put(key, digestStream, file.getSize(), contentType);
         }
-        return HexFormat.of().formatHex(digest.digest());
+        String sha256 = HexFormat.of().formatHex(digest.digest());
+        if (ledger != null) {
+            UploadScanStatus status = ledger.record(new UploadLedger.StoredUpload(
+                key, kind, contentType, file.getSize(), sha256, uploaderId, null));
+            if (status == UploadScanStatus.INFECTED) {
+                throw new IllegalArgumentException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_UPLOAD_BLOCKED));
+            }
+        }
+        return sha256;
     }
 
     private String buildAttachmentFilename(String sanitizedBaseName, String extension, UUID uploaderId, String fallbackBaseName) {
@@ -347,113 +386,6 @@ public class FileUploadService {
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException("SHA-256 digest algorithm is not available", ex);
         }
-    }
-
-    /**
-     * Validate that the uploaded file is a valid image
-     */
-    private void validateImageFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
-        }
-
-        // Check file size (max 5MB)
-        long maxSize = 5L * 1024 * 1024; // 5MB
-        if (file.getSize() > maxSize) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.tooLarge"));
-        }
-
-        // Check content type
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.required"));
-        }
-
-        // Check allowed extensions
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.name.required"));
-        }
-
-        String extension = getFileExtension(originalFilename).toLowerCase();
-        if (!extension.matches("\\.(jpg|jpeg|png|gif|webp)$")) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.unsupported"));
-        }
-    }
-
-    private void validateAttachmentFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
-        }
-
-        if (file.getSize() > MAX_REFERRAL_ATTACHMENT_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.tooLarge", maxUploadLabel()));
-        }
-
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.unsupported"));
-        }
-        requireContentMatchesExtension(file, extension);
-    }
-
-    /**
-     * QA D540: the extension and the declared Content-Type are the client's
-     * claim. The first bytes must be what the extension says (a PDF starts with
-     * "%PDF-", a PNG with its signature...), and a text or RTF file must not be
-     * markup a browser would run. HTML declared as a PDF is refused.
-     */
-    static void requireContentMatchesExtension(MultipartFile file, String extension) {
-        byte[] head;
-        try (java.io.InputStream in = file.getInputStream()) {
-            head = in.readNBytes(512);
-        } catch (IOException ex) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.unreadable"), ex);
-        }
-        if (!contentMatches(head, extension)) {
-            throw new IllegalArgumentException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("file.contentMismatch", extension));
-        }
-    }
-
-    static boolean contentMatches(byte[] head, String extension) {
-        return switch (extension) {
-            case ".pdf" -> startsWith(head, "%PDF-".getBytes(StandardCharsets.US_ASCII));
-            case ".png" -> startsWith(head, new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
-            case ".jpg", EXT_JPEG -> startsWith(head, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
-            case ".gif" -> startsWith(head, "GIF87a".getBytes(StandardCharsets.US_ASCII))
-                || startsWith(head, "GIF89a".getBytes(StandardCharsets.US_ASCII));
-            case ".bmp" -> startsWith(head, "BM".getBytes(StandardCharsets.US_ASCII));
-            case EXT_TIFF -> startsWith(head, new byte[] {'I', 'I', 0x2A, 0x00})
-                || startsWith(head, new byte[] {'M', 'M', 0x00, 0x2A});
-            case ".doc" -> startsWith(head, new byte[] {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0,
-                (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1});
-            case EXT_DOCX -> startsWith(head, new byte[] {'P', 'K', 0x03, 0x04});
-            case ".rtf" -> startsWith(head, "{\\rtf".getBytes(StandardCharsets.US_ASCII));
-            case ".txt" -> !looksLikeMarkup(head);
-            // RIFF container, then "WEBP" at offset 8.
-            case EXT_WEBP -> startsWith(head, "RIFF".getBytes(StandardCharsets.US_ASCII))
-                && head.length >= 12 && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P';
-            default -> false;
-        };
-    }
-
-    private static boolean startsWith(byte[] head, byte[] magic) {
-        if (head.length < magic.length) {
-            return false;
-        }
-        for (int i = 0; i < magic.length; i++) {
-            if (head[i] != magic[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean looksLikeMarkup(byte[] head) {
-        String text = new String(head, StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT);
-        return text.contains("<html") || text.contains("<script") || text.contains("<!doctype")
-            || text.contains("<svg") || text.contains("<iframe") || text.contains("<body");
     }
 
     /**
@@ -526,7 +458,6 @@ public class FileUploadService {
         }
     }
 
-    private static final long MAX_PATIENT_DOCUMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final String PATIENT_DOCUMENTS_PATH = "patient-documents";
 
     /**
@@ -539,13 +470,13 @@ public class FileUploadService {
      * @throws IOException if the file cannot be stored
      */
     public StoredFileDescriptor uploadPatientDocument(MultipartFile file, UUID userId) throws IOException {
-        validatePatientDocumentFile(file);
+        VettedUpload vetted = vet(file, UploadKind.PATIENT_DOCUMENT);
 
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
-        String extension = getFileExtension(file.getOriginalFilename());
-        String filename = buildAttachmentFilename(sanitizedBaseName, extension, userId, "patient_doc");
+        String filename = buildAttachmentFilename(sanitizedBaseName, vetted.extension(), userId, "patient_doc");
 
-        String checksum = storeUpload(PATIENT_DOCUMENTS_PATH, filename, file, contentTypeFor(extension));
+        String checksum = storeUpload(PATIENT_DOCUMENTS_PATH, filename, file, vetted, UploadKind.PATIENT_DOCUMENT,
+            userId);
 
         String relativePath = patientDocumentRelativePath(filename);
         long sizeBytes = file.getSize();
@@ -554,7 +485,7 @@ public class FileUploadService {
                 relativePath,
                 buildPublicUrl(relativePath),
                 determineDisplayName(file, filename),
-                contentTypeFor(extension),
+                vetted.mediaType(),
                 sizeBytes,
                 checksum
         );
@@ -578,39 +509,6 @@ public class FileUploadService {
         String relativePath = patientDocumentRelativePath(filename);
         return new StoredFileDescriptor(relativePath, buildPublicUrl(relativePath), baseName + ".pdf",
             MIME_PDF, content.length, checksum);
-    }
-
-    private void validatePatientDocumentFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
-        }
-
-        if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.tooLarge", maxUploadLabel()));
-        }
-
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.unsupported"));
-        }
-        requireContentMatchesExtension(file, extension);
-    }
-
-    /** QA D540: the stored type follows the checked extension, not the client's header. */
-    static String contentTypeFor(String extension) {
-        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
-            case ".pdf" -> MIME_PDF;
-            case ".png" -> MIME_PNG;
-            case ".jpg", EXT_JPEG -> MIME_JPEG;
-            case ".gif" -> "image/gif";
-            case ".bmp" -> "image/bmp";
-            case EXT_TIFF -> "image/tiff";
-            case ".txt" -> "text/plain";
-            case ".rtf" -> "application/rtf";
-            case ".doc" -> "application/msword";
-            case EXT_DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            default -> "application/octet-stream";
-        };
     }
 
     /**
@@ -646,18 +544,6 @@ public class FileUploadService {
     private static final long MAX_CHAT_PHOTO_SIZE = 10L * 1024 * 1024; // 10 MB
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
-    private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", EXT_JPEG, ".png", EXT_WEBP
-    );
-    private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
-        MIME_JPEG, MIME_PNG, MIME_WEBP
-    );
-    private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
-        ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
-    );
-    private static final Set<String> ALLOWED_CHAT_AUDIO_MIME = Set.of(
-        "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/aac", "audio/x-m4a"
-    );
 
     /**
      * Upload a single chat-attachment for a low-bandwidth telehealth consult.
@@ -669,14 +555,17 @@ public class FileUploadService {
     public StoredFileDescriptor uploadChatAttachment(MultipartFile file,
                                                       ChatAttachmentKind kind,
                                                       UUID uploaderId) throws IOException {
-        validateChatAttachment(file, kind);
+        if (kind == null) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
+        }
+        UploadKind uploadKind = kind == ChatAttachmentKind.AUDIO ? UploadKind.CHAT_AUDIO : UploadKind.CHAT_PHOTO;
+        VettedUpload vetted = vet(file, uploadKind);
 
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
-        String extension = getFileExtension(file.getOriginalFilename());
-        String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId,
+        String filename = buildAttachmentFilename(sanitizedBaseName, vetted.extension(), uploaderId,
             kind == ChatAttachmentKind.AUDIO ? "voice_memo" : "photo");
 
-        String checksum = storeUpload(CHAT_ATTACHMENTS_PATH, filename, file, file.getContentType());
+        String checksum = storeUpload(CHAT_ATTACHMENTS_PATH, filename, file, vetted, uploadKind, uploaderId);
 
         String relativePath = relativeUploadPath(CHAT_ATTACHMENTS_PATH, filename);
         long sizeBytes = file.getSize();
@@ -685,7 +574,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            file.getContentType(),
+            vetted.mediaType(),
             sizeBytes,
             checksum
         );
@@ -742,6 +631,10 @@ public class FileUploadService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindMismatch"));
         }
 
+        if (ledger != null) {
+            // A file whose malware check is pending or refused it is not linked to a message.
+            ledger.requireServable(key);
+        }
         Optional<StoredObject> stored = storage.get(key);
         if (stored.isEmpty()) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.notFound"));
@@ -781,8 +674,8 @@ public class FileUploadService {
     }
 
     private ChatAttachmentKind deriveChatAttachmentKindFromExtension(String extension) {
-        if (ALLOWED_CHAT_PHOTO_EXTENSIONS.contains(extension)) return ChatAttachmentKind.PHOTO;
-        if (ALLOWED_CHAT_AUDIO_EXTENSIONS.contains(extension)) return ChatAttachmentKind.AUDIO;
+        if (UploadKind.CHAT_PHOTO.acceptsExtension(extension)) return ChatAttachmentKind.PHOTO;
+        if (UploadKind.CHAT_AUDIO.acceptsExtension(extension)) return ChatAttachmentKind.AUDIO;
         return null;
     }
 
@@ -800,48 +693,6 @@ public class FileUploadService {
         };
     }
 
-    private void validateChatAttachment(MultipartFile file, ChatAttachmentKind kind) {
-        if (kind == null) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
-        }
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
-        }
-        if (kind == ChatAttachmentKind.AUDIO) {
-            validateChatAudio(file);
-        } else {
-            validateChatPhoto(file);
-        }
-    }
-
-    private void validateChatPhoto(MultipartFile file) {
-        if (file.getSize() > MAX_CHAT_PHOTO_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.tooLarge"));
-        }
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if (!ALLOWED_CHAT_PHOTO_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.unsupported"));
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CHAT_PHOTO_MIME.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.contentTypeUnsupported"));
-        }
-    }
-
-    private void validateChatAudio(MultipartFile file) {
-        if (file.getSize() > MAX_CHAT_AUDIO_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.voice.tooLarge"));
-        }
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if (!ALLOWED_CHAT_AUDIO_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.audio.unsupported"));
-        }
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CHAT_AUDIO_MIME.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.audio.contentTypeUnsupported"));
-        }
-    }
-
     // ---------------------------------------------------------------------
     // V316 (owner 2026-11-19): key images on an imaging study. JPEG, PNG,
     // WebP or a machine-exported PDF, content-sniffed, the same 10 MB limit
@@ -852,8 +703,6 @@ public class FileUploadService {
     // imaging image endpoint.
     // ---------------------------------------------------------------------
     public static final String IMAGING_IMAGES_PATH = "imaging-images";
-    private static final Set<String> ALLOWED_IMAGING_IMAGE_EXTENSIONS = Set.of(
-        ".jpg", EXT_JPEG, ".png", EXT_WEBP, ".pdf");
 
     /**
      * Validate and store one imaging key image.
@@ -863,35 +712,11 @@ public class FileUploadService {
      *         {@link #openStoredFile} and {@link #deleteStoredFile} read back
      */
     public StoredFileDescriptor uploadImagingImage(MultipartFile file) throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
-        }
-        if (file.getSize() > MAX_UPLOAD_BYTES) {
-            throw new IllegalArgumentException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.tooLarge", maxUploadLabel()));
-        }
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase(java.util.Locale.ROOT);
-        if (!ALLOWED_IMAGING_IMAGE_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.unsupported"));
-        }
-        requireContentMatchesExtension(file, extension);
-        String contentType = imagingImageContentTypeFor(extension);
+        VettedUpload vetted = vet(file, UploadKind.IMAGING_IMAGE);
+        String extension = vetted.extension();
         String filename = UUID.randomUUID() + (EXT_JPEG.equals(extension) ? ".jpg" : extension);
-        String checksum = storeUpload(IMAGING_IMAGES_PATH, filename, file, contentType);
+        String checksum = storeUpload(IMAGING_IMAGES_PATH, filename, file, vetted, UploadKind.IMAGING_IMAGE, null);
         return new StoredFileDescriptor(relativeUploadPath(IMAGING_IMAGES_PATH, filename), null,
-            null, contentType, file.getSize(), checksum);
-    }
-
-    /** The type an imaging key image is stored and served with, from its checked extension. */
-    static String imagingImageContentTypeFor(String extension) {
-        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
-            case ".jpg", EXT_JPEG -> MIME_JPEG;
-            case ".png" -> MIME_PNG;
-            case EXT_WEBP -> MIME_WEBP;
-            case ".pdf" -> MIME_PDF;
-            default -> throw new IllegalArgumentException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.unsupported"));
-        };
+            null, vetted.mediaType(), file.getSize(), checksum);
     }
 }

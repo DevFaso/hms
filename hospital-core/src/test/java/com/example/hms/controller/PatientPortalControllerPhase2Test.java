@@ -885,7 +885,8 @@ class PatientPortalControllerPhase2Test {
     class DocumentUploadValidation {
 
         private org.springframework.mock.web.MockMultipartFile file() {
-            return new org.springframework.mock.web.MockMultipartFile("file", "scan.pdf", "application/pdf", new byte[] {1});
+            return new org.springframework.mock.web.MockMultipartFile("file", "scan.pdf", "application/pdf",
+                com.example.hms.testsupport.UploadSamples.pdf());
         }
 
         @Test

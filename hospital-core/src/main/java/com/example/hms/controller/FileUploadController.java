@@ -8,6 +8,8 @@ import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.referral.ReferralAttachmentUploadResponseDTO;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.UserService;
+import com.example.hms.upload.UploadKind;
+import com.example.hms.upload.UploadPolicy;
 import io.swagger.v3.oas.annotations.Operation;
 
 import java.io.IOException;
@@ -46,6 +48,7 @@ public class FileUploadController {
 
     @Operation(summary = "Upload profile image", description = "Upload a profile image for the authenticated user")
     @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @UploadPolicy(UploadKind.PROFILE_IMAGE)
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Object> uploadProfileImage(
             @RequestParam("file") MultipartFile file,
@@ -128,6 +131,7 @@ public class FileUploadController {
         description = "Upload supporting documentation for OB-GYN referrals"
     )
     @PostMapping(value = "/referral-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @UploadPolicy(UploadKind.REFERRAL_ATTACHMENT)
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'MIDWIFE','DOCTOR','NURSE')")
     public ResponseEntity<Object> uploadReferralAttachment(
         @RequestParam("file") MultipartFile file,
@@ -169,6 +173,7 @@ public class FileUploadController {
         description = "Upload supplemental documents for patient chart updates"
     )
     @PostMapping(value = "/chart-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @UploadPolicy(UploadKind.CHART_ATTACHMENT)
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     public ResponseEntity<Object> uploadChartAttachment(
         @RequestParam("file") MultipartFile file,
@@ -221,6 +226,7 @@ public class FileUploadController {
             + "(≤5 MB, Opus/AAC/MP3) to be linked on the next chat send. Restricted to chat-capable roles."
     )
     @PostMapping(value = "/chat-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @UploadPolicy(UploadKind.CHAT_ATTACHMENT)
     @PreAuthorize(CHAT_ATTACHMENT_ROLES)
     public ResponseEntity<Object> uploadChatAttachment(
         @RequestParam(value = "file") MultipartFile file,

@@ -92,6 +92,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
         if (file == null || file.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("file", "catalog.import.required");
         }
+        com.example.hms.upload.UploadAdmission.vet(file, com.example.hms.upload.UploadKind.CSV_IMPORT);
 
         ReferenceCatalog catalog = catalogRepository.findById(catalogId)
             .orElseThrow(() -> new ResourceNotFoundException("referenceCatalog.notFound", catalogId));

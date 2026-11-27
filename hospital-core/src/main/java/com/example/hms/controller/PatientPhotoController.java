@@ -3,6 +3,9 @@ package com.example.hms.controller;
 import com.example.hms.security.chart.RestrictedChartPolicy;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.service.PatientPhotoService;
+import com.example.hms.upload.UploadKind;
+import com.example.hms.upload.UploadPolicy;
+import com.example.hms.upload.UploadResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,9 +60,10 @@ public class PatientPhotoController {
     private final ControllerAuthUtils authUtils;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @UploadPolicy(UploadKind.PATIENT_PHOTO)
     @PreAuthorize(WRITE_ROLES)
     @Operation(summary = "Upload or replace the patient photo",
-        description = "Max 5 MB, image types only. Replacing deletes the previous file.",
+        description = "Max 5 MB; JPEG, PNG, GIF or WebP by content. Replacing deletes the previous file.",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<Map<String, LocalDateTime>> upload(
         @PathVariable UUID patientId,
@@ -85,10 +89,10 @@ public class PatientPhotoController {
         authUtils.requireAuth(auth);
         UUID scope = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
         PatientPhotoService.PhotoPayload payload = patientPhotoService.load(patientId, scope);
-        return ResponseEntity.ok()
+        // The header photo: a raster image by its own bytes, shown in the page.
+        return UploadResponses.viewer(payload.contentType(), "patient-photo")
             // Private: browsers may keep it, shared proxies must not.
             .cacheControl(CacheControl.noStore())
-            .contentType(MediaType.parseMediaType(payload.contentType()))
             .body(payload.bytes());
     }
 
