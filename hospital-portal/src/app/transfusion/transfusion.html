@@ -254,7 +254,7 @@
                 </td>
                 <td>
                   <!-- QA D4178: a bag that is out comes back through a recorded return, never a write-off. -->
-                  @if (canLab && isOutOfTheLab(u)) {
+                  @if (canRecordReturn(u)) {
                     <button
                       type="button"
                       class="action-link"
@@ -266,12 +266,7 @@
                       <span class="material-symbols-outlined">assignment_return</span>
                     </button>
                   }
-                  @if (
-                    canStock &&
-                    u.status !== 'TRANSFUSED' &&
-                    u.status !== 'DISCARDED' &&
-                    !isOutOfTheLab(u)
-                  ) {
+                  @if (canDiscard(u)) {
                     <button
                       class="action-link delete"
                       (click)="discardUnit(u)"
@@ -2255,6 +2250,7 @@
           data-testid="return-submit"
           (click)="submitReturn()"
           [disabled]="returnBusy()"
+          submitGuardRequired
           [appSubmitGuard]="returnIncomplete()"
           [submitGuardFields]="returnMissingFields()"
         >

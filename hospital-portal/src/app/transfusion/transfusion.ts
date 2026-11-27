@@ -816,6 +816,21 @@ export class TransfusionComponent implements OnInit {
     return unit.status === 'ISSUED';
   }
 
+  /** The laboratory records the return of a bag that is out. */
+  canRecordReturn(unit: BloodUnitResponse): boolean {
+    return this.canLab && this.isOutOfTheLab(unit);
+  }
+
+  /** A bag still in the laboratory's stock can be written off; one that is out cannot. */
+  canDiscard(unit: BloodUnitResponse): boolean {
+    return (
+      this.canStock &&
+      unit.status !== 'TRANSFUSED' &&
+      unit.status !== 'DISCARDED' &&
+      !this.isOutOfTheLab(unit)
+    );
+  }
+
   returningUnit = signal<BloodUnitResponse | null>(null);
   returnBusy = signal(false);
   returnForm: {

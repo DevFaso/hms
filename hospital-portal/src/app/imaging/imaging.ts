@@ -566,13 +566,15 @@ export class ImagingComponent implements OnInit {
 
   /** Whoever asked withdraws her own request while it waits. */
   canWithdrawRequest(o: ImagingOrderResponse): boolean {
-    const me = this.auth.getUserProfile()?.id;
     return (
       this.awaitsPhysician(o) &&
+      isOrderCancellable(o.status) &&
       !this.canAuthoriseRequest(o) &&
       this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderWithdraw')) &&
-      !!me &&
-      (o.requestedByUserId ?? o.orderingProviderUserId) === me
+      this.authorship.isAuthor(
+        { authorUserId: o.requestedByUserId ?? o.orderingProviderUserId },
+        false,
+      )
     );
   }
 
