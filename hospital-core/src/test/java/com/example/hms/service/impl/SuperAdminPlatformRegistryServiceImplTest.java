@@ -190,6 +190,37 @@ class SuperAdminPlatformRegistryServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D4082: a window is read by id; an edit ending before it starts or named like another is refused; a second cancel changes nothing")
+    void aWindowIsReadAndItsEditAndCancelSayWhyNot() {
+        PlatformReleaseWindow ahead = persisted(request("Ahead",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        UUID id = ahead.getId();
+        when(platformReleaseWindowRepository.findById(id)).thenReturn(Optional.of(ahead));
+
+        assertThat(service.getReleaseWindow(id).getName()).isEqualTo("Ahead");
+
+        PlatformReleaseWindowRequestDTO backwards = request("Ahead",
+            LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(2));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateReleaseWindow(id, backwards))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("endsAt");
+
+        PlatformReleaseWindowRequestDTO twin = request("Taken",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3));
+        when(platformReleaseWindowRepository.existsByNameAndEnvironmentAndIdNot("Taken", twin.getEnvironment(), id))
+            .thenReturn(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateReleaseWindow(id, twin))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        ahead.setStatus(PlatformReleaseStatus.CANCELLED);
+        ahead.setCancelReason("Doublon");
+        PlatformReleaseWindowResponseDTO again = service.cancelReleaseWindow(id, "Autre motif");
+        assertThat(again.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
+        assertThat(again.getCancelReason()).isEqualTo("Doublon");
+        org.mockito.Mockito.verify(platformReleaseWindowRepository, org.mockito.Mockito.never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("QA D4082: a release window is not cancelled without a reason, and nothing is written")
     void cancelReleaseWindowNeedsAReason() {
         PlatformReleaseWindow ahead = persisted(request("Kept",

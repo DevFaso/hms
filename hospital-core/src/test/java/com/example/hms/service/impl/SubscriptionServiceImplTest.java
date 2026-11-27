@@ -516,6 +516,37 @@ class SubscriptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D4311: assigning the plan, seats and period an organization already has is refused on planId, and nothing is written")
+    void assignTheSamePlanAgainIsRefused() {
+        Organization o = org("Korle Bu");
+        SubscriptionPlan p = plan("PRO", true);
+        OrganizationSubscription existing = OrganizationSubscription.builder()
+            .organization(o).plan(p).seatLimit(10)
+            .status(OrganizationSubscription.Status.ACTIVE)
+            .billingPeriod(OrganizationSubscription.BillingPeriod.MONTHLY)
+            .build();
+        when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            o.getId(), OrganizationSubscription.Status.ACTIVE)).thenReturn(Optional.of(existing));
+        OrganizationSubscriptionRequestDTO req = OrganizationSubscriptionRequestDTO.builder()
+            .planId(p.getId()).seatLimit(10).build();
+        UUID orgId = o.getId();
+
+        assertThatThrownBy(() -> service.assignPlan(orgId, req))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("planId");
+        assertThat(existing.getStatus()).isEqualTo(OrganizationSubscription.Status.ACTIVE);
+        verify(subscriptionRepository, never()).save(any(OrganizationSubscription.class));
+    }
+
+    @Test
+    @DisplayName("QA D4070: the plan picker lists the platform's catalogue")
+    void featureKeyCatalogueIsThePlatforms() {
+        assertThat(service.listFeatureKeyCatalogue()).isEqualTo(featureFlagService.catalogueKeys());
+    }
+
+    @Test
     @DisplayName("assignPlan defaults billingPeriod to MONTHLY when null")
     void assignDefaultsBillingPeriod() {
         Organization o = org("Korle Bu");

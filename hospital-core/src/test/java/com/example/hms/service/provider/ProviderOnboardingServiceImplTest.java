@@ -633,6 +633,60 @@ class ProviderOnboardingServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D4313: a decision names its decider, by full name or else by username; an undecided one names nobody")
+        void namesTheDecider() {
+            Hospital facility = provider();
+            UUID named = UUID.randomUUID();
+            UUID usernameOnly = UUID.randomUUID();
+            ProviderVerification byName = submitted(facility);
+            byName.setDecidedByUserId(named);
+            ProviderVerification byUsername = submitted(facility);
+            byUsername.setDecidedByUserId(usernameOnly);
+            ProviderVerification undecided = submitted(facility);
+            com.example.hms.model.User full = new com.example.hms.model.User();
+            full.setFirstName("Awa");
+            full.setLastName("Traoré");
+            full.setUsername("awa.t");
+            com.example.hms.model.User bare = new com.example.hms.model.User();
+            bare.setFirstName(" ");
+            bare.setUsername("verifier2");
+            when(userRepository.findById(named)).thenReturn(Optional.of(full));
+            when(userRepository.findById(usernameOnly)).thenReturn(Optional.of(bare));
+            when(verificationRepository.findByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()))
+                .thenReturn(List.of(byName, byUsername, undecided));
+
+            assertThat(service.history(facility.getId()))
+                .extracting(ProviderVerificationHistoryEntryDTO::getDecidedByName)
+                .containsExactly("Awa Traoré", "verifier2", null);
+        }
+
+        @Test
+        @DisplayName("QA D4313: the facility log lists its onboarding and lifecycle events, newest first, and nothing else")
+        void lifecycleEventsNewestFirst() {
+            Hospital facility = provider();
+            java.time.LocalDateTime t0 = java.time.LocalDateTime.of(2026, 11, 1, 9, 0);
+            com.example.hms.model.AuditEventLog created = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PROVIDER_CREATED).eventTimestamp(t0).userName("Awa").build();
+            com.example.hms.model.AuditEventLog suspended = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.HOSPITAL_SUSPENDED).eventTimestamp(t0.plusDays(2))
+                .userName("Issa").build();
+            com.example.hms.model.AuditEventLog unrelated = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PROVIDER_CREATED).eventTimestamp(null).build();
+            com.example.hms.model.AuditEventLog untyped = com.example.hms.model.AuditEventLog.builder()
+                .eventTimestamp(t0.plusDays(5)).build();
+            when(auditEventLogRepository.findByEntityTypeIgnoreCaseAndResourceId(
+                    org.mockito.ArgumentMatchers.eq("PROVIDER_FACILITY"), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(created, unrelated)));
+            when(auditEventLogRepository.findByEntityTypeIgnoreCaseAndResourceId(
+                    org.mockito.ArgumentMatchers.eq("HOSPITAL"), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(suspended, untyped)));
+
+            assertThat(service.lifecycleEvents(facility.getId()))
+                .extracting(e -> e.getEvent() + "@" + e.getActorName())
+                .containsExactly("HOSPITAL_SUSPENDED@Issa", "PROVIDER_CREATED@Awa");
+        }
+
+        @Test
         @DisplayName("a hospital id answers exactly as an unknown id, and nothing is read")
         void hospitalIdIsNotAProvider() {
             Hospital hospital = new Hospital();
@@ -660,6 +714,15 @@ class ProviderOnboardingServiceImplTest {
             assertThatThrownBy(() -> service.history(id)).isInstanceOf(AccessDeniedException.class);
             verify(verificationRepository, never()).findByHospital_IdOrderByCreatedAtDescIdDesc(any());
         }
+    }
+
+    @Test
+    @DisplayName("QA D4075: a search term is capped at 100 characters and LIKE-escaped")
+    void searchPatternIsCapped() {
+        String pattern = ProviderOnboardingServiceImpl.searchPattern("  " + "a".repeat(150) + "  ");
+        assertThat(pattern).isEqualTo("%" + "a".repeat(100) + "%");
+        assertThat(ProviderOnboardingServiceImpl.searchPattern("50%_x\\")).isEqualTo("%50\\%\\_x\\\\%");
+        assertThat(ProviderOnboardingServiceImpl.searchPattern("  ")).isNull();
     }
 
     // ---------------------------------------------------------------- QA r81

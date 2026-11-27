@@ -132,6 +132,22 @@ class OrganizationLifecycleServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D4317: deactivating an organization already out of ACTIVE only aligns its flag, and never touches its state")
+    void deactivateOnlyAlignsTheFlagOutsideActive() {
+        org.setActive(true);
+        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+
+        service.deactivate(orgId);
+        assertThat(org.isActive()).isFalse();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
+        verify(organizationRepository).save(org);
+
+        service.deactivate(orgId);
+        verify(organizationRepository, times(1)).save(org);
+    }
+
+    @Test
     @DisplayName("QA D4317: a suspended or archived organization is not reactivated from an edit; a legacy flag is aligned")
     void reactivateOnlyAlignsAnActiveLifecycle() {
         org.setActive(false);
