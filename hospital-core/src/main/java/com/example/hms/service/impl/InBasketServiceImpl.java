@@ -67,9 +67,37 @@ public class InBasketServiceImpl implements InBasketService {
     public Page<InBasketItemDTO> getItems(UUID userId, UUID hospitalId,
                                            InBasketItemType type, InBasketItemStatus status,
                                            Pageable pageable) {
-        return inBasketItemRepository
+        Page<InBasketItemDTO> page = inBasketItemRepository
                 .findByRecipientFiltered(userId, hospitalId, type, status, pageable)
                 .map(inBasketMapper::toDto);
+        nameOtherAcknowledgers(page.getContent(), userId);
+        return page;
+    }
+
+    /**
+     * QA D4104 (r81): an item somebody else acknowledged (one acknowledgement answers an urgent alert for all its
+     * recipients) says who did. The reader's own acknowledgements carry no name.
+     */
+    private void nameOtherAcknowledgers(java.util.List<InBasketItemDTO> items, UUID readerId) {
+        java.util.Set<UUID> others = new java.util.LinkedHashSet<>();
+        for (InBasketItemDTO item : items) {
+            if (item != null && item.getAcknowledgedBy() != null && !item.getAcknowledgedBy().equals(readerId)) {
+                others.add(item.getAcknowledgedBy());
+            }
+        }
+        if (others.isEmpty()) {
+            return;
+        }
+        java.util.Map<UUID, String> names = new java.util.HashMap<>();
+        for (User user : userRepository.findAllById(others)) {
+            names.put(user.getId(), com.example.hms.service.escalation.UrgentAlertReaders.displayName(user));
+        }
+        for (InBasketItemDTO item : items) {
+            if (item != null && item.getAcknowledgedBy() != null && !item.getAcknowledgedBy().equals(readerId)) {
+                item.setAcknowledgedByOther(true);
+                item.setAcknowledgedByName(names.get(item.getAcknowledgedBy()));
+            }
+        }
     }
 
     @Override
@@ -147,6 +175,7 @@ public class InBasketServiceImpl implements InBasketService {
             item.setReadAt(LocalDateTime.now());
         }
         item = inBasketItemRepository.save(item);
+        closeUrgentAlertForEveryRecipient(item);
 
         log.info("In-Basket item {} acknowledged by user {}", itemId, userId);
         // K4: the write-audit row of this acknowledgement names the item and its patient (ids only); who and
@@ -154,6 +183,33 @@ public class InBasketServiceImpl implements InBasketService {
         com.example.hms.security.audit.WriteAuditDetail.describe((com.example.hms.enums.AuditEventType) null,
                 item.getId(), item.getPatient() != null ? item.getPatient().getId() : null);
         return inBasketMapper.toDto(item);
+    }
+
+    /**
+     * QA D4104 (r81): the urgent-alert ladder (setter-injected through a provider: the ladder files its items
+     * through this service, so neither is built for the other). Absent, an acknowledgement closes its own item
+     * only, and the sweep closes the alert as before.
+     */
+    private org.springframework.beans.factory.ObjectProvider<
+            com.example.hms.service.maternity.ObstetricAlertEscalationWorker> urgentAlertLadder;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertLadder(org.springframework.beans.factory.ObjectProvider<
+            com.example.hms.service.maternity.ObstetricAlertEscalationWorker> urgentAlertLadder) {
+        this.urgentAlertLadder = urgentAlertLadder;
+    }
+
+    /** One acknowledgement answers an urgent alert of the ladder for every recipient of it. */
+    private void closeUrgentAlertForEveryRecipient(InBasketItem item) {
+        if (urgentAlertLadder == null || item.getReferenceId() == null
+                || !com.example.hms.service.maternity.ObstetricAlertEscalationWorker.REFERENCE_TYPE
+                    .equals(item.getReferenceType())) {
+            return;
+        }
+        com.example.hms.service.maternity.ObstetricAlertEscalationWorker ladder = urgentAlertLadder.getIfAvailable();
+        if (ladder != null) {
+            ladder.itemAcknowledged(item.getReferenceId());
+        }
     }
 
     @Override

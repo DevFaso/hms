@@ -39,6 +39,18 @@
       {{ 'inBasket.all' | translate }}
       <span class="tab-count">{{ summary().totalUnread }}</span>
     </button>
+    <!-- QA D4100 (r81): the urgent items still to acknowledge, one tap away, with their count. -->
+    <button
+      class="filter-tab filter-tab-critical"
+      data-testid="in-basket-critical-filter"
+      [class.active]="activeFilter() === 'CRITICAL'"
+      [attr.aria-pressed]="activeFilter() === 'CRITICAL'"
+      (click)="setFilter('CRITICAL')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">emergency</span>
+      {{ 'inBasket.critical' | translate }}
+      <span class="tab-count" data-testid="in-basket-critical-count">{{ criticalOpen() }}</span>
+    </button>
     <button
       class="filter-tab"
       [class.active]="activeFilter() === 'RESULT'"
@@ -150,6 +162,20 @@
               </span>
               @if (item.body) {
                 <span class="item-body">{{ item.body }}</span>
+              }
+              @if (item.status === 'ACKNOWLEDGED' && item.acknowledgedByOther) {
+                <!-- QA D4104 (r81): one acknowledgement answers the alert for every recipient. -->
+                <span class="item-acknowledged-by" data-testid="in-basket-acknowledged-by">{{
+                  (item.acknowledgedByName
+                    ? 'inBasket.acknowledgedBy'
+                    : 'inBasket.acknowledgedBySomebody'
+                  )
+                    | translate
+                      : {
+                          name: item.acknowledgedByName ?? '',
+                          time: formatDate(item.acknowledgedAt),
+                        }
+                }}</span>
               }
               {{ ' '
               }}<span class="item-meta">

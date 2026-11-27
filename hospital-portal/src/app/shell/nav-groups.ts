@@ -163,6 +163,8 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/admin/integrations/dhis2': 'ADMINISTRATION',
   '/admin-governance': 'ADMINISTRATION',
   '/break-glass-review': 'ADMINISTRATION',
+  // QA D4102 (r81): the register of unresolved urgent alerts.
+  '/urgent-alerts/incidents': 'ADMINISTRATION',
   '/feature-flags': 'ADMINISTRATION',
   // The same entry resolves to one path or the other depending on whether the
   // active role is super admin, so both spellings need a home.

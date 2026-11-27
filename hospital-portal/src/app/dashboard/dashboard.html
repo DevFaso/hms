@@ -180,6 +180,9 @@
     </div>
   </header>
 
+  <!-- QA D4101 (r81): the urgent alerts waiting on the reader, first on every clinician's dashboard. -->
+  <app-urgent-alerts-banner mode="summary" />
+
   <!-- Critical alert banner -->
   @if (criticalAlerts().length > 0) {
     <div class="critical-banner">
@@ -1728,17 +1731,17 @@
       </a>
       <div
         class="stat-card stat-card-critical-tier"
-        [class.stat-card-zero]="unacknowledgedAlerts().length === 0"
-        [class.stat-card-alert]="unacknowledgedAlerts().length > 0"
+        [class.stat-card-zero]="alertsWaiting() === 0"
+        [class.stat-card-alert]="alertsWaiting() > 0"
+        data-testid="dashboard-alerts-tile"
       >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">notification_important</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ unacknowledgedAlerts().length }}</span><span
-            class="stat-label"
-            >{{ 'DASHBOARD.ALERTS' | translate }}</span
-          >
+          <span class="stat-value">{{ alertsWaiting() }}</span><span class="stat-label">{{
+            'DASHBOARD.ALERTS' | translate
+          }}</span>
         </div>
       </div>
       <a

@@ -19,4 +19,25 @@ public interface UrgentAlertIncidentRepository extends JpaRepository<UrgentAlert
 
     /** The open incidents of one kind of source, so a source acknowledged since can close its own. */
     List<UrgentAlertIncident> findBySourceTypeAndResolvedAtIsNull(String sourceType);
+
+    /**
+     * QA D4102 (r81): whether an incident is already open for another urgent alert of the same patient at the
+     * hospital. The administrators are flagged once for a patient's unanswered alerts, not once per alert.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT COUNT(i) > 0 FROM UrgentAlertIncident i, com.example.hms.model.labor.ObstetricAlertEscalation e
+        WHERE i.sourceType = 'URGENT_ALERT' AND i.sourceId = e.id AND i.resolvedAt IS NULL
+          AND e.hospitalId = :hospitalId AND e.patientId = :patientId
+        """)
+    boolean existsOpenForPatient(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                                 @org.springframework.data.repository.query.Param("patientId") UUID patientId);
+
+    /** QA D4102: the register of a hospital: every open incident, and those opened since {@code since}. */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT i FROM UrgentAlertIncident i
+        WHERE i.hospitalId = :hospitalId AND (i.resolvedAt IS NULL OR i.openedAt >= :since)
+        ORDER BY i.openedAt DESC
+        """)
+    List<UrgentAlertIncident> findRegister(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                                           @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since);
 }

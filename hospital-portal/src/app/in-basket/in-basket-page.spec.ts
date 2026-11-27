@@ -10,6 +10,8 @@ import { DashboardService } from '../services/dashboard.service';
 import { InBasketService } from '../services/in-basket.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { UrgentAlertsService } from '../services/urgent-alerts.service';
+import { urgentAlertsStub } from '../testing/urgent-alerts.stub';
 
 describe('InBasketPageComponent', () => {
   let fixture: ComponentFixture<InBasketPageComponent>;
@@ -47,6 +49,12 @@ describe('InBasketPageComponent', () => {
         { provide: DashboardService, useValue: dashboardService },
         { provide: InBasketService, useValue: inBasketService },
         {
+          provide: UrgentAlertsService,
+          useValue: urgentAlertsStub({
+            mine: { toAcknowledge: 2, oldestRaisedAt: '2026-11-27T05:20:52', items: [] },
+          }),
+        },
+        {
           provide: RoleContextService,
           useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles }),
         },
@@ -77,6 +85,28 @@ describe('InBasketPageComponent', () => {
     setup(['ROLE_NURSE']);
     expect(fixture.nativeElement.querySelector('h1')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('app-in-basket-panel .panel-title')).toBeNull();
+  });
+
+  /* ── QA D4100 (r81): the urgent alerts first ── */
+
+  it('puts the urgent alerts to acknowledge above the laboratory results and the item list', () => {
+    setup(['ROLE_DOCTOR']);
+
+    const page: HTMLElement = fixture.nativeElement.querySelector('.in-basket-page');
+    const order = Array.from(page.children).map((child) => child.tagName.toLowerCase());
+    const banner = order.indexOf('app-urgent-alerts-banner');
+    expect(banner).toBeGreaterThan(-1);
+    expect(banner).toBeLessThan(order.indexOf('app-lab-results-inbox'));
+    expect(banner).toBeLessThan(order.indexOf('app-in-basket-panel'));
+    expect(page.querySelector('[data-testid="urgent-alerts-count"]')).not.toBeNull();
+  });
+
+  it('shows the urgent alerts to a nurse and a midwife too (the same component, no results table)', () => {
+    setup(['ROLE_MIDWIFE']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="urgent-alerts-banner"]'),
+    ).not.toBeNull();
   });
 
   /* ── B7: the lab-results category and its gate ── */

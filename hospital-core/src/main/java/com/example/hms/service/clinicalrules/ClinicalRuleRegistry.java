@@ -175,8 +175,10 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-26.2",
             "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"),
         // Scorecard K4 (V386): one ladder for every urgent clinical alert: cover, médecin-chef, incident, no cap.
-        rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-26.1",
-            "service.escalation.UrgentEscalationSupport"),
+        // QA D4103 (r81, 2026-11-27.1): an alert raised from a vital set closes on a later reading the raising rule
+        // no longer judges urgent, as an adult's NEWS2 already did.
+        rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-27.1",
+            "service.escalation.UrgentEscalationSupport", "service.vitals.VitalSetAlertCurrency"),
         // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
         rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
             "service.formulary.MedicationCatalogApprovalPolicy"));

@@ -193,7 +193,10 @@ class EarlyWarningEscalationGuardTest {
         assertThat(filed.getAllValues()).allSatisfy(alert -> {
             assertThat(alert.sourceType()).isEqualTo(ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN);
             assertThat(alert.sourceId()).isEqualTo(vital.getId());
-            assertThat(alert.alertMessageKey()).startsWith("newborn.alert.msg.");
+            // QA D4105: the rule's sentence travels inside the sentence that adds the measured value.
+            assertThat(alert.alertMessageKey())
+                .isEqualTo(com.example.hms.service.escalation.UrgentAlertReading.WITH_READING_KEY);
+            assertThat(com.example.hms.service.escalation.UrgentAlertReading.ruleKey(alert.alertMessageKey(), alert.alertMessageArgs())).startsWith("newborn.alert.msg.");
             assertThat(alert.alreadyNotified()).contains("dr_a");
         });
     }

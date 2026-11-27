@@ -479,8 +479,10 @@ public class ObstetricAlertEscalationWorker {
             // From the last step on the alert is on the register of incidents; the administrators are flagged
             // once, when it opens, with no clinical text.
             if (unresolved) {
+                // QA D4102: one flag to the administrators per patient with unanswered alerts, not one per alert.
+                boolean firstOfPatient = !ladder.incidentOpenForPatient(row.getHospitalId(), row.getPatientId());
                 ladder.openIncident(UrgentAlertIncident.SOURCE_URGENT_ALERT, row.getId(), row.getHospitalId(), now,
-                    minutes, delivery.reached());
+                    minutes, delivery.reached(), firstOfPatient);
             }
         }
         if (delivery.reached() == 0) {
@@ -610,7 +612,29 @@ public class ObstetricAlertEscalationWorker {
         row.setAcknowledgedAt(acks.get(0).getAcknowledgedAt());
         row.setAcknowledgedBy(acks.get(0).getAcknowledgedBy());
         escalationRepository.save(row);
+        // QA D4104: the alert is answered for everybody; the other readers' copies say by whom and when.
+        inBasketItemRepository.acknowledgeOpenByReference(row.getId(), REFERENCE_TYPE,
+            acks.get(0).getAcknowledgedBy(), acks.get(0).getAcknowledgedAt());
         return true;
+    }
+
+    /**
+     * QA D4104 (r81): an item of this alert has just been acknowledged, in the caller's transaction. The alert is
+     * closed now and not at the next sweep, and every other recipient's copy is marked acknowledged with the same
+     * person and time. Nothing happens for the documenter's own acknowledgement, for an alert only its record
+     * closes, or for one already closed.
+     *
+     * @return true when the alert was closed now
+     */
+    @Transactional
+    public boolean itemAcknowledged(UUID escalationId) {
+        if (escalationId == null) {
+            return false;
+        }
+        return escalationRepository.findById(escalationId)
+            .filter(row -> row.getAcknowledgedAt() == null)
+            .map(this::closedIfAcknowledged)
+            .orElse(false);
     }
 
     /**

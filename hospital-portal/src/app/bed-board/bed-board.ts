@@ -36,6 +36,9 @@ import { roleSatisfies } from '../core/role-equivalence';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { UrgentAlertMarkComponent } from '../shared/urgent-alerts/urgent-alert-mark.component';
+import { URGENT_ALERT_READER_ROLES } from '../shared/urgent-alerts/urgent-alert-age';
+import { UrgentAlertsService } from '../services/urgent-alerts.service';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -71,6 +74,7 @@ import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.com
     TranslateModule,
     EnumLabelPipe,
     ModalDialogDirective,
+    UrgentAlertMarkComponent,
   ],
   templateUrl: './bed-board.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -85,6 +89,7 @@ export class BedBoardComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly urgentAlerts = inject(UrgentAlertsService);
 
   private readonly translate = inject(TranslateService);
   private readonly hospitalService = inject(HospitalService);
@@ -422,6 +427,18 @@ export class BedBoardComponent implements OnInit {
     }
     this.loadBoard();
     this.loadPendingTransfers();
+    this.loadUrgentAlertMarks();
+  }
+
+  /**
+   * QA D4101 (r81): the patients with an urgent alert nobody has acknowledged; their bed card carries the mark.
+   * Read for the roles such an alert is filed to, and never in the network view (no single hospital there).
+   */
+  loadUrgentAlertMarks(): void {
+    if (this.isNetworkView()) return;
+    if (!this.roleContext.hasAnyActiveRole(URGENT_ALERT_READER_ROLES)) return;
+    this.urgentAlerts.resetMarks();
+    this.urgentAlerts.refreshMarks();
   }
 
   loadPendingTransfers(): void {

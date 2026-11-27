@@ -5435,7 +5435,8 @@
     "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie",
     "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
     "CLINICAL_RULES": "Règles cliniques",
-    "PAYER_SHARES": "Parts assureurs"
+    "PAYER_SHARES": "Parts assureurs",
+    "URGENT_INCIDENTS": "Alertes urgentes non résolues"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -10695,7 +10696,9 @@
       "readBackRequired": "Relecture requise",
       "readBackAt": "Relu le {{at}}",
       "followUp": "Demander un suivi"
-    }
+    },
+    "acknowledgedBy": "Acquittée par {{name}} · {{time}}",
+    "acknowledgedBySomebody": "Acquittée par un autre membre de l’équipe · {{time}}"
   },
   "common": {
     "loading": "Chargement…"
@@ -16859,5 +16862,55 @@
     "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
     "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
     "EXPORT": "Télécharger la copie approuvée (PDF)"
+  },
+  "URGENT_ALERTS": {
+    "REGION": "Alertes urgentes à acquitter",
+    "TO_ACK_ONE": "{{count}} alerte urgente à acquitter",
+    "TO_ACK_MANY": "{{count}} alertes urgentes à acquitter",
+    "DOCUMENTED_ONE": "{{count}} alerte que vous avez documentée attend encore un acquittement",
+    "DOCUMENTED_MANY": "{{count}} alertes que vous avez documentées attendent encore un acquittement",
+    "OLDEST": "La plus ancienne attend depuis {{age}}",
+    "OPEN_IN_BASKET": "Ouvrir la boîte de réception",
+    "ACKNOWLEDGE": "Acquitter",
+    "AGE_MINUTES": "{{minutes}} min",
+    "AGE_HOURS": "{{hours}} h {{minutes}} min",
+    "MARK_ONE": "{{count}} alerte urgente non acquittée, en attente depuis {{age}}",
+    "MARK_MANY": "{{count}} alertes urgentes non acquittées, la plus ancienne en attente depuis {{age}}"
+  },
+  "URGENT_INCIDENTS": {
+    "TITLE": "Alertes urgentes non résolues",
+    "SUBTITLE": "Les alertes cliniques urgentes que personne n’a acquittées à la dernière étape de l’escalade : quand, depuis combien de temps, les étapes franchies, qui a acquitté et quand chacune a été close.",
+    "REFRESH": "Actualiser",
+    "RETRY": "Réessayer",
+    "LOAD_FAILED": "Le registre n’a pas pu être chargé.",
+    "OPEN_ONE": "{{count}} incident ouvert",
+    "OPEN_MANY": "{{count}} incidents ouverts",
+    "FILTER": "Incidents affichés",
+    "FILTER_OPEN": "Ouverts",
+    "FILTER_ALL": "Ouverts et clos (30 jours)",
+    "EMPTY_OPEN": "Aucun incident ouvert.",
+    "EMPTY_ALL": "Aucun incident sur les 30 derniers jours.",
+    "CASE": "Dossier {{number}}",
+    "STATUS_OPEN": "Ouvert",
+    "STATUS_CLOSED": "Clos",
+    "ALERTS_ONE": "{{count}} alerte",
+    "ALERTS_MANY": "{{count}} alertes",
+    "SOURCE": "Source",
+    "OPENED_AT": "Incident ouvert",
+    "UNACKNOWLEDGED_FOR": "non acquittée depuis {{minutes}} min à ce moment",
+    "STEPS": "Étapes franchies",
+    "STEPS_UNKNOWN": "Non enregistrées pour cette source",
+    "STEP_COVER": "clinicien de couverture prévenu",
+    "STEP_LEAD": "médecin-chef prévenu",
+    "STEP_INCIDENT": "incident ouvert",
+    "REMINDERS_ONE": "{{count}} rappel depuis",
+    "REMINDERS_MANY": "{{count}} rappels depuis",
+    "TOLD_ONE": "{{count}} clinicien prévenu",
+    "TOLD_MANY": "{{count}} cliniciens prévenus",
+    "CLOSED": "Clôture",
+    "NOT_CLOSED": "Toujours ouvert",
+    "RESOLVED_BY_RECORD": "un relevé ultérieur ne justifie plus l’alerte",
+    "ACKNOWLEDGED_BY": "acquittée par {{name}}",
+    "ACKNOWLEDGED": "acquittée"
   }
 }

@@ -252,7 +252,7 @@ class ObstetricAlertEscalationWorkerTest {
             org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && Long.valueOf(2880L).equals(a[3])),
             eq("drA"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT), eq(r.getId()),
-            eq(HOSPITAL), eq(NOW), eq(2880L), eq(3));
+            eq(HOSPITAL), eq(NOW), eq(2880L), eq(3), eq(true));
     }
 
     @Test
@@ -281,7 +281,7 @@ class ObstetricAlertEscalationWorkerTest {
         // The clinician the step adds gets the staff SMS: initials, nothing clinical.
         verify(ladder).smsAfterCommit(eq(java.util.Set.of("drCover")), eq("AT"), eq(r.getId()));
         verify(ladder, never()).openIncident(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(),
-            org.mockito.ArgumentMatchers.anyInt());
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
 
         // The last step: « non résolue », with the médecin-chef, and the incident.
         when(ladder.due(org.mockito.ArgumentMatchers.anyInt(), any(), any(), any(), any()))
@@ -297,7 +297,75 @@ class ObstetricAlertEscalationWorkerTest {
         verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.UNRESOLVED_KEY),
             org.mockito.ArgumentMatchers.any(), eq("drChef"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT), eq(last.getId()),
-            eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(), eq(5));
+            eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(), eq(5), eq(true));
+    }
+
+    @Test
+    void theAdministratorsAreNotFlaggedAgainForAnotherAlertOfTheSamePatient() {
+        // QA D4102: eighteen alerts of one mother and her baby were eighteen identical flags.
+        com.example.hms.service.escalation.UrgentEscalationSupport ladder =
+            ladder(com.example.hms.service.lab.CriticalResultEscalationLadder.Step.UNRESOLVED);
+        ObstetricAlertEscalation second = row((short) 2);
+        when(escalationRepository.findById(second.getId())).thenReturn(Optional.of(second));
+        when(escalationRepository.claimRound(eq(second.getId()), eq((short) 2), eq((short) 3), any())).thenReturn(1);
+        when(ladder.incidentOpenForPatient(HOSPITAL, second.getPatientId())).thenReturn(true);
+
+        assertThat(worker.escalateOne(second.getId())).isTrue();
+
+        // The incident is on the register all the same; only the flag is not repeated.
+        verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT),
+            eq(second.getId()), eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(),
+            org.mockito.ArgumentMatchers.anyInt(), eq(false));
+    }
+
+    @Test
+    void oneAcknowledgementMarksEveryOtherRecipientsCopyAcknowledged() {
+        // QA D4104: the nurse acknowledged; the doctor's copy stayed CRITIQUE, unread, with an active tick.
+        ObstetricAlertEscalation acked = row((short) 1);
+        when(escalationRepository.findById(acked.getId())).thenReturn(Optional.of(acked));
+        InBasketItem ack = new InBasketItem();
+        UUID nurse = UUID.randomUUID();
+        ack.setAcknowledgedAt(NOW.minusMinutes(3));
+        ack.setAcknowledgedBy(nurse);
+        when(inBasketItemRepository.findAcknowledgedForReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, DOCUMENTER)).thenReturn(List.of(ack));
+
+        assertThat(worker.itemAcknowledged(acked.getId())).isTrue();
+
+        assertThat(acked.getAcknowledgedBy()).isEqualTo(nurse);
+        assertThat(acked.getAcknowledgedAt()).isEqualTo(NOW.minusMinutes(3));
+        verify(inBasketItemRepository).acknowledgeOpenByReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, nurse, NOW.minusMinutes(3));
+    }
+
+    @Test
+    void theSweepMarksTheOtherCopiesTooWhenItFindsTheAcknowledgement() {
+        ObstetricAlertEscalation acked = row((short) 1);
+        when(escalationRepository.findById(acked.getId())).thenReturn(Optional.of(acked));
+        InBasketItem ack = new InBasketItem();
+        UUID by = UUID.randomUUID();
+        ack.setAcknowledgedAt(NOW.minusMinutes(1));
+        ack.setAcknowledgedBy(by);
+        when(inBasketItemRepository.findAcknowledgedForReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, DOCUMENTER)).thenReturn(List.of(ack));
+
+        assertThat(worker.escalateOne(acked.getId())).isFalse();
+
+        verify(inBasketItemRepository).acknowledgeOpenByReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, by, NOW.minusMinutes(1));
+    }
+
+    @Test
+    void anAlertOnlyItsRecordClosesKeepsEveryCopyOpenAfterAnAcknowledgement() {
+        // A countersignature past its deadline: « seen » by one reader closes nothing for the others.
+        ObstetricAlertEscalation overdue = row((short) 1);
+        overdue.setSourceType(ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN);
+        when(escalationRepository.findById(overdue.getId())).thenReturn(Optional.of(overdue));
+
+        assertThat(worker.itemAcknowledged(overdue.getId())).isFalse();
+
+        verify(inBasketItemRepository, never()).acknowledgeOpenByReference(any(), any(), any(), any());
+        assertThat(overdue.getAcknowledgedAt()).isNull();
     }
 
     @Test

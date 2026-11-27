@@ -133,6 +133,45 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("referenceId") UUID referenceId,
         @Param("referenceType") String referenceType);
 
+    /**
+     * QA D4104 (r81): one acknowledgement answers an urgent alert for everybody it was filed to. The other
+     * recipients' copies still open are marked acknowledged with that same person and time, so no reader is left
+     * with an active item for an alert somebody already took.
+     *
+     * <p>Flushed before it runs, never cleared after: it is called inside a clinical write (a new reading that
+     * repeats an acknowledged alert), whose own entities must stay managed.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE InBasketItem i
+           SET i.status = com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED,
+               i.acknowledgedAt = :at, i.acknowledgedBy = :by, i.updatedAt = :at
+         WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+           AND i.status <> com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED
+        """)
+    int acknowledgeOpenByReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType,
+        @Param("by") UUID by,
+        @Param("at") java.time.LocalDateTime at);
+
+    /**
+     * QA D4101 (r81): the caller's items still to acknowledge for urgent alerts of the ladder that are still open
+     * at the hospital, the oldest alert first.
+     */
+    @Query("""
+        SELECT i FROM InBasketItem i, com.example.hms.model.labor.ObstetricAlertEscalation e
+        WHERE e.id = i.referenceId AND i.referenceType = :referenceType
+          AND i.recipientUser.id = :userId
+          AND i.status <> com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED
+          AND e.hospitalId = :hospitalId AND e.acknowledgedAt IS NULL AND e.ladderBacklog = false
+        ORDER BY e.createdAt ASC
+        """)
+    List<InBasketItem> findOpenUrgentAlertItems(
+        @Param("userId") UUID userId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("referenceType") String referenceType);
+
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
         UUID referenceId, String referenceType, UUID recipientUserId);

@@ -5435,7 +5435,8 @@
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
     "CLINICAL_RULES": "Reglas clínicas",
-    "PAYER_SHARES": "Partes de aseguradoras"
+    "PAYER_SHARES": "Partes de aseguradoras",
+    "URGENT_INCIDENTS": "Alertas urgentes no resueltas"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -10695,7 +10696,9 @@
       "readBackRequired": "Relectura requerida",
       "readBackAt": "Releído el {{at}}",
       "followUp": "Solicitar seguimiento"
-    }
+    },
+    "acknowledgedBy": "Confirmada por {{name}} · {{time}}",
+    "acknowledgedBySomebody": "Confirmada por otro miembro del equipo · {{time}}"
   },
   "common": {
     "loading": "Cargando…"
@@ -16859,5 +16862,55 @@
     "COMPLETE_CORRECTION": "Completar revisión de la corrección",
     "CORRECTION_HINT": "Revise la corrección en el proceso autorizado del expediente y explique el resultado. Esta decisión no sustituye datos clínicos.",
     "EXPORT": "Descargar copia aprobada (PDF)"
+  },
+  "URGENT_ALERTS": {
+    "REGION": "Alertas urgentes por confirmar",
+    "TO_ACK_ONE": "{{count}} alerta urgente por confirmar",
+    "TO_ACK_MANY": "{{count}} alertas urgentes por confirmar",
+    "DOCUMENTED_ONE": "{{count}} alerta que usted documentó sigue esperando una confirmación",
+    "DOCUMENTED_MANY": "{{count}} alertas que usted documentó siguen esperando una confirmación",
+    "OLDEST": "La más antigua espera desde hace {{age}}",
+    "OPEN_IN_BASKET": "Abrir la bandeja de entrada",
+    "ACKNOWLEDGE": "Confirmar",
+    "AGE_MINUTES": "{{minutes}} min",
+    "AGE_HOURS": "{{hours}} h {{minutes}} min",
+    "MARK_ONE": "{{count}} alerta urgente sin confirmar, en espera desde hace {{age}}",
+    "MARK_MANY": "{{count}} alertas urgentes sin confirmar, la más antigua en espera desde hace {{age}}"
+  },
+  "URGENT_INCIDENTS": {
+    "TITLE": "Alertas urgentes no resueltas",
+    "SUBTITLE": "Las alertas clínicas urgentes que nadie confirmó en el último paso de la escalada: cuándo, durante cuánto tiempo, los pasos dados, quién confirmó y cuándo se cerró cada una.",
+    "REFRESH": "Actualizar",
+    "RETRY": "Reintentar",
+    "LOAD_FAILED": "No se pudo cargar el registro.",
+    "OPEN_ONE": "{{count}} incidente abierto",
+    "OPEN_MANY": "{{count}} incidentes abiertos",
+    "FILTER": "Incidentes mostrados",
+    "FILTER_OPEN": "Abiertos",
+    "FILTER_ALL": "Abiertos y cerrados (30 días)",
+    "EMPTY_OPEN": "Ningún incidente abierto.",
+    "EMPTY_ALL": "Ningún incidente en los últimos 30 días.",
+    "CASE": "Caso {{number}}",
+    "STATUS_OPEN": "Abierto",
+    "STATUS_CLOSED": "Cerrado",
+    "ALERTS_ONE": "{{count}} alerta",
+    "ALERTS_MANY": "{{count}} alertas",
+    "SOURCE": "Origen",
+    "OPENED_AT": "Incidente abierto",
+    "UNACKNOWLEDGED_FOR": "sin confirmar desde hacía {{minutes}} min en ese momento",
+    "STEPS": "Pasos dados",
+    "STEPS_UNKNOWN": "No registrados para este origen",
+    "STEP_COVER": "médico de cobertura avisado",
+    "STEP_LEAD": "jefe médico avisado",
+    "STEP_INCIDENT": "incidente abierto",
+    "REMINDERS_ONE": "{{count}} recordatorio desde entonces",
+    "REMINDERS_MANY": "{{count}} recordatorios desde entonces",
+    "TOLD_ONE": "{{count}} clínico avisado",
+    "TOLD_MANY": "{{count}} clínicos avisados",
+    "CLOSED": "Cierre",
+    "NOT_CLOSED": "Sigue abierto",
+    "RESOLVED_BY_RECORD": "una lectura posterior ya no justifica la alerta",
+    "ACKNOWLEDGED_BY": "confirmada por {{name}}",
+    "ACKNOWLEDGED": "confirmada"
   }
 }

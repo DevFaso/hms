@@ -153,6 +153,24 @@ public class UrgentEscalationSupport {
      */
     public boolean openIncident(String sourceType, UUID sourceId, UUID hospitalId, LocalDateTime now, long minutes,
                                 int told) {
+        return openIncident(sourceType, sourceId, hospitalId, now, minutes, told, true);
+    }
+
+    /**
+     * QA D4102 (r81): whether an incident is already open for another urgent alert of this patient at the
+     * hospital. One mother and her baby raised eighteen alerts in a morning, and the administrators got eighteen
+     * identical flags: the incidents are all on the register, the flag is sent for the first of them.
+     */
+    public boolean incidentOpenForPatient(UUID hospitalId, UUID patientId) {
+        return hospitalId != null && patientId != null && incidents.existsOpenForPatient(hospitalId, patientId);
+    }
+
+    /**
+     * {@link #openIncident(String, UUID, UUID, LocalDateTime, long, int)}, saying whether the administrators are
+     * flagged for it: false when they already hold the flag of an open incident about the same patient.
+     */
+    public boolean openIncident(String sourceType, UUID sourceId, UUID hospitalId, LocalDateTime now, long minutes,
+                                int told, boolean flagAdministrators) {
         if (sourceType == null || sourceId == null || hospitalId == null
                 || incidents.findBySourceTypeAndSourceIdAndResolvedAtIsNull(sourceType, sourceId).isPresent()) {
             return false;
@@ -167,6 +185,9 @@ public class UrgentEscalationSupport {
             .build());
         log.error("Urgent alert {} {} unresolved after {} minutes at hospital {}: incident opened",
             sourceType, sourceId, minutes, hospitalId);
+        if (!flagAdministrators) {
+            return true;
+        }
         for (String administrator : recipients.administrators(hospitalId)) {
             notificationService.createNotification(ADMIN_FLAG_KEY, new Object[]{minutes}, administrator, ADMIN_FLAG_TYPE);
         }

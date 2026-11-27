@@ -409,3 +409,53 @@ button:focus-visible {
     animation: none;
   }
 }
+
+/* QA D4100 (r81): the « Critique » filter, and who acknowledged an alert answered for everybody (D4104). */
+.filter-tab-critical .material-symbols-outlined {
+  color: #b91c1c;
+}
+
+.filter-tab-critical.active .material-symbols-outlined {
+  color: inherit;
+}
+
+.item-acknowledged-by {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #065f46;
+}
+
+/*
+ * QA D3866, D4112: at phone width the tab row was cut after « Prescriptions », and an item's text was squeezed to
+ * a 39 px column beside its actions. The tabs wrap, and an item's actions go under its text.
+ */
+@media (max-width: 480px) {
+  .filter-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .basket-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .item-body {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .item-title {
+    overflow-wrap: anywhere;
+  }
+
+  .item-meta {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .item-actions {
+    justify-content: flex-end;
+    padding: 0 12px 12px 16px;
+  }
+}

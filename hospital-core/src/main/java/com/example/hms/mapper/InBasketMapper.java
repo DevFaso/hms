@@ -54,6 +54,7 @@ public class InBasketMapper {
                 .createdAt(item.getCreatedAt())
                 .readAt(item.getReadAt())
                 .acknowledgedAt(item.getAcknowledgedAt())
+                .acknowledgedBy(item.getAcknowledgedBy())
                 .build();
     }
 

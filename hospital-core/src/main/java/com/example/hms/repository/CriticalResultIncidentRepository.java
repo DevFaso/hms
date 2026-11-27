@@ -17,4 +17,13 @@ public interface CriticalResultIncidentRepository extends JpaRepository<Critical
     List<CriticalResultIncident> findByLabResultIdOrderByOpenedAtDesc(UUID labResultId);
 
     List<CriticalResultIncident> findByHospitalIdOrderByOpenedAtDesc(UUID hospitalId);
+
+    /** QA D4102 (r81): the register of a hospital: every open incident, and those opened since {@code since}. */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT i FROM CriticalResultIncident i
+        WHERE i.hospitalId = :hospitalId AND (i.resolvedAt IS NULL OR i.openedAt >= :since)
+        ORDER BY i.openedAt DESC
+        """)
+    List<CriticalResultIncident> findRegister(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                                              @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since);
 }

@@ -33,4 +33,11 @@ public class InBasketItemDTO {
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
     private LocalDateTime acknowledgedAt;
+
+    /** QA D4104: who acknowledged it; another person than the reader when the alert was answered for everybody. */
+    private UUID acknowledgedBy;
+    /** QA D4104: true when somebody other than the reader acknowledged it. */
+    private boolean acknowledgedByOther;
+    /** QA D4104: that person's name, when it is not the reader. */
+    private String acknowledgedByName;
 }

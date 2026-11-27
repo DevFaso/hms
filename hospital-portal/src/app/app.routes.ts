@@ -1375,6 +1375,20 @@ export const routes: Routes = [
           import('./clinical-rules/clinical-rules.component').then((m) => m.ClinicalRulesComponent),
       },
 
+      // QA D4102 (r81): the register of unresolved urgent alerts. The server keeps, among the doctors, the
+      // médecin-chef only, and gives an administrator no patient.
+      {
+        path: 'urgent-alerts/incidents',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SURGEON'],
+        },
+        loadComponent: () =>
+          import('./urgent-alerts/urgent-incident-register.component').then(
+            (m) => m.UrgentIncidentRegisterComponent,
+          ),
+      },
+
       // Consultations
       {
         path: 'consultations',
