@@ -63,6 +63,8 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO reactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            instrument.getHospital(), INSTRUMENT_NOT_FOUND_KEY, id);
         requireOwnInstrument(instrument, id);
         if (!instrument.isActive()) {
             instrument.setActive(true);

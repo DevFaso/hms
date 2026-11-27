@@ -89,4 +89,24 @@ class SuperAdminProviderControllerTest {
         assertThat(controller.revoke(id, decision).getBody()).isSameAs(dto);
         assertThat(controller.resubmit(id, resubmit).getBody()).isSameAs(dto);
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D4075: a search with nothing typed is refused on `term`; the list without a term is the GET")
+    void searchNeedsATerm() {
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            jakarta.validation.Validator validator = factory.getValidator();
+            for (String blank : new String[] {null, "", "  "}) {
+                com.example.hms.payload.dto.provider.ProviderSearchRequestDTO body =
+                    new com.example.hms.payload.dto.provider.ProviderSearchRequestDTO();
+                body.setTerm(blank);
+                assertThat(validator.validate(body))
+                    .extracting(v -> v.getPropertyPath().toString())
+                    .containsExactly("term");
+            }
+            com.example.hms.payload.dto.provider.ProviderSearchRequestDTO typed =
+                new com.example.hms.payload.dto.provider.ProviderSearchRequestDTO();
+            typed.setTerm("Kalo");
+            assertThat(validator.validate(typed)).isEmpty();
+        }
+    }
 }

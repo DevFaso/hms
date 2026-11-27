@@ -80,12 +80,10 @@ public class SuperAdminProviderController {
     @Operation(summary = "Search provider facilities by name, code or city",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<Page<ProviderResponseDTO>> search(
-        @Valid @RequestBody(required = false) com.example.hms.payload.dto.provider.ProviderSearchRequestDTO request,
+        @Valid @RequestBody com.example.hms.payload.dto.provider.ProviderSearchRequestDTO request,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        com.example.hms.payload.dto.provider.ProviderSearchRequestDTO body = request == null
-            ? new com.example.hms.payload.dto.provider.ProviderSearchRequestDTO() : request;
-        return ResponseEntity.ok(onboardingService.list(body.getType(), body.getStatus(), body.getTerm(), pageable));
+        return ResponseEntity.ok(onboardingService.list(request.getType(), request.getStatus(), request.getTerm(), pageable));
     }
 
     @GetMapping("/{providerId}/lifecycle-events")
