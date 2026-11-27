@@ -109,6 +109,34 @@ class LabInstrumentServiceImplTest {
     }
 
     @Test
+    void partialUpdateChecksExistingDatesInBothDirections() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        instrument.setLastCalibrationDate(today.minusDays(2));
+        instrument.setNextCalibrationDate(today.plusDays(2));
+        instrument.setLastMaintenanceDate(today.minusDays(2));
+        instrument.setNextMaintenanceDate(today.plusDays(2));
+        requestDto.setNextCalibrationDate(today.minusDays(3));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextCalibrationDate(null);
+        instrument.setNextCalibrationDate(today.minusDays(2));
+        requestDto.setLastCalibrationDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setLastCalibrationDate(null);
+        requestDto.setNextMaintenanceDate(today.minusDays(3));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextMaintenanceDate(null);
+        instrument.setNextMaintenanceDate(today.minusDays(2));
+        requestDto.setLastMaintenanceDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(instrumentRepository, never()).save(any());
+    }
+
+    @Test
     void plannedServiceDatesAfterLastServiceAreAccepted() {
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
         requestDto.setInstallationDate(today.minusDays(10));

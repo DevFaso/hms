@@ -79,6 +79,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
         validateDates(dto);
+        validateEffectivePairs(instrument, dto);
 
         // Check serial number uniqueness if changed
         if (dto.getSerialNumber() != null
@@ -113,6 +114,19 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         requireNotFuture(dto.getLastMaintenanceDate(), today, "lastMaintenanceDate");
         requireOrdered(dto.getLastCalibrationDate(), dto.getNextCalibrationDate(), "nextCalibrationDate");
         requireOrdered(dto.getLastMaintenanceDate(), dto.getNextMaintenanceDate(), "nextMaintenanceDate");
+    }
+
+    private static void validateEffectivePairs(LabInstrument existing, LabInstrumentRequestDTO dto) {
+        if (dto.getLastCalibrationDate() != null || dto.getNextCalibrationDate() != null) {
+            requireOrdered(dto.getLastCalibrationDate() != null ? dto.getLastCalibrationDate() : existing.getLastCalibrationDate(),
+                dto.getNextCalibrationDate() != null ? dto.getNextCalibrationDate() : existing.getNextCalibrationDate(),
+                "nextCalibrationDate");
+        }
+        if (dto.getLastMaintenanceDate() != null || dto.getNextMaintenanceDate() != null) {
+            requireOrdered(dto.getLastMaintenanceDate() != null ? dto.getLastMaintenanceDate() : existing.getLastMaintenanceDate(),
+                dto.getNextMaintenanceDate() != null ? dto.getNextMaintenanceDate() : existing.getNextMaintenanceDate(),
+                "nextMaintenanceDate");
+        }
     }
 
     private static void requireNotFuture(java.time.LocalDate date, java.time.LocalDate today, String field) {
