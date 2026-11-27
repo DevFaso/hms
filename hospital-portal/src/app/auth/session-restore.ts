@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 import { ssoTabState } from '../core/browser-storage';
+import { IdleService } from '../core/idle.service';
 
 export { SESSION_RESTORE_HEADER } from './session-lifetime';
 
@@ -31,7 +32,9 @@ interface CredentialStatus {
  * Any of these failing ends the restore locally (no server sign-out): routes
  * open only after a complete restore, otherwise on the sign-in page.
  *
- * The idle lock is untouched: a tab locked before the reload stays locked.
+ * The idle lock is the server's: the refresh answer says when the session's
+ * screen is locked, and the tab shows its lock screen whatever its own storage
+ * remembers. The two calls below are among the few a locked session may make.
  * When the cookie is refused the tab's state is cleared locally and the guards
  * send the user to the sign-in page (with the page they asked for as
  * `returnUrl`).
@@ -48,6 +51,7 @@ export function restoreSessionOnStartup(): Promise<void> {
   if (!auth.hasTabSession() || auth.getToken() || ssoTabState()) return Promise.resolve();
   const sessionScope = inject(SessionScopeService);
   const http = inject(HttpClient);
+  const idle = inject(IdleService);
 
   return firstValueFrom(refreshWithSupersededRetry(auth, true))
     .then(async (tokens) => {
@@ -56,6 +60,8 @@ export function restoreSessionOnStartup(): Promise<void> {
         throw new Error('another account');
       }
       auth.setToken(tokens.accessToken);
+      // The server holds the lock: a tab whose storage no longer says so is locked all the same.
+      if (tokens.sessionLocked) idle.lockFromServer();
       // Fail closed: without the credential status or the session bootstrap
       // the forced changes and the scope are unknown, so the tab signs in again
       // rather than opening routes without them.

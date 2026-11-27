@@ -16,6 +16,7 @@ import java.util.Locale;
 @RestController
 @RequestMapping("/auth/username")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class UsernameReminderController {
 
     private final UsernameReminderService usernameReminderService;
@@ -27,17 +28,43 @@ public class UsernameReminderController {
         HttpServletRequest request
     ) {
         String ip = clientIp(request);
-        usernameReminderService.sendReminder(dto.getIdentifier().trim(), locale, ip);
+        String identifier = dto.getIdentifier().trim();
+        // The account work runs after the answer has gone: the answer, and the
+        // time it takes, are the same whether or not the identifier names an
+        // account. A full queue drops the request (the person can ask again).
+        try {
+            worker.execute(() -> remindQuietly(identifier, locale, ip));
+        } catch (java.util.concurrent.RejectedExecutionException full) {
+            log.warn("Username reminder dropped: the reminder queue is full");
+        }
         return ResponseEntity.noContent().build();
     }
 
-    private static String clientIp(HttpServletRequest request) {
-        String h = request.getHeader("X-Forwarded-For");
-        if (h != null && !h.isBlank()) {
-            int i = h.indexOf(',');
-            return i > 0 ? h.substring(0, i).trim() : h.trim();
+    private void remindQuietly(String identifier, Locale locale, String ip) {
+        try {
+            usernameReminderService.sendReminder(identifier, locale, ip);
+        } catch (RuntimeException ex) {
+            log.warn("Username reminder failed: {}", ex.getClass().getSimpleName());
         }
-        h = request.getHeader("X-Real-IP");
-        return (h != null && !h.isBlank()) ? h.trim() : request.getRemoteAddr();
+    }
+
+    /** Two daemon workers and a bounded queue, private to this controller. */
+    private final java.util.concurrent.Executor worker = newWorker();
+
+    private static java.util.concurrent.Executor newWorker() {
+        java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
+            2, 2, 60L, java.util.concurrent.TimeUnit.SECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(200),
+            runnable -> {
+                Thread thread = new Thread(runnable, "username-reminder");
+                thread.setDaemon(true);
+                return thread;
+            });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        return com.example.hms.security.ClientAddress.of(request);
     }
 }

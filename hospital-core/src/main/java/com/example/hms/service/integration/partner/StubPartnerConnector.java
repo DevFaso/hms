@@ -2,6 +2,7 @@ package com.example.hms.service.integration.partner;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.service.integration.health.IntegrationDiagnosticText;
 import com.example.hms.service.integration.health.IntegrationHealthRecorder;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.integration.probe.IntegrationConnectivityProbe;
@@ -58,9 +59,14 @@ public abstract class StubPartnerConnector implements IntegrationConnectivityPro
         log.debug("[PARTNER-STUB] Probe for {} returning stub-mode failure", integrationId());
         recordStubMessage(null, IntegrationMessageDirection.OUTBOUND,
             "PROBE", IntegrationMessageStatus.FAILED,
-            "Stub-mode probe — partner protocol not yet wired");
-        return Probe.failed("Connector in stub mode — partner protocol not yet wired. "
-            + "Drop in a real " + integrationId() + " adapter to enable Test connection.");
+            IntegrationDiagnosticText.NOT_CONNECTED);
+        return Probe.failed(IntegrationDiagnosticText.NOT_CONNECTED);
+    }
+
+    /** No partner is connected behind this connector: the console says « not configured ». */
+    @Override
+    public boolean stub() {
+        return true;
     }
 
     @Override

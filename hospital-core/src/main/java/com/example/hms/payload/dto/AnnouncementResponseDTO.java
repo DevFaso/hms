@@ -15,4 +15,9 @@ public class AnnouncementResponseDTO {
     private UUID id;
     private String text;
     private LocalDateTime date;
+    /**
+     * A platform announcement (no hospital): listed at every hospital, written and
+     * changed only by a platform administrator in global view.
+     */
+    private boolean platformWide;
 }

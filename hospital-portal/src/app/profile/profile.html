@@ -1291,10 +1291,20 @@
                           {{ describeActivity(event) }}
                         </p>
                         <div class="timeline-meta">
-                          @if (event.ipAddress) {
-                            <span class="meta-tag">
-                              <span class="material-symbols-outlined">language</span>
-                              {{ event.ipAddress }}
+                          @if (activityDevice(event); as device) {
+                            <span class="meta-tag" data-testid="activity-device">
+                              <span class="material-symbols-outlined" aria-hidden="true"
+                                >devices</span
+                              >
+                              {{ device }}
+                            </span>
+                          }
+                          @if (activityAddress(event); as address) {
+                            <span class="meta-tag" data-testid="activity-address">
+                              <span class="material-symbols-outlined" aria-hidden="true"
+                                >language</span
+                              >
+                              {{ address }}
                             </span>
                           }
                           @if (event.hospitalName) {

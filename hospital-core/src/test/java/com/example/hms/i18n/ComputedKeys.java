@@ -291,6 +291,21 @@ final class ComputedKeys {
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         site(r, d, "com/example/hms/service/emar/MedicationRoutes.java|\"medication.route.\" + code",
             "MedicationRoutes.java|medication.route.");
+        // r81 (D4300, D4303, D4078, D4308): integration diagnostics and delivery causes.
+        r.put("com/example/hms/service/integration/health/IntegrationDiagnosticText.java|key",
+            new Open("a stored integration diagnostic re-read for its reader; written with the literal keys of this class"));
+        r.put("com/example/hms/service/webhook/WebhookDeliveryError.java|String key = \"webhook.delivery.error.\" + name()",
+            enumValues("webhook.delivery.error.", com.example.hms.service.webhook.WebhookDeliveryError.class));
+        r.put("com/example/hms/service/integration/InstrumentOutboxErrorText.java|\"instrument.outbox.error.\" + cause",
+            values("instrument.outbox.error.", java.util.List.of("ORDER_CANCELLED", "ORDER_ENTERED_IN_ERROR",
+                "NEGATIVE_ACK", "TIMEOUT", "HOST_NOT_FOUND", "CONNECTION_REFUSED", "UNREACHABLE")));
+        r.put("com/example/hms/service/impl/SuperAdminIntegrationHealthServiceImpl.java|\"integration.connector.\" + connectorId + \".displayName\"",
+            values("integration.connector.", java.util.List.of("partner.nhis.displayName", "partner.nhia.displayName",
+                "partner.cnamgs.displayName", "partner.mutuelle.displayName")));
+        r.put("com/example/hms/service/platform/PlatformInbox.java|String nameKey = \"integration.connector.\" + integrationId + \".displayName\"",
+            new Open("a connector's name when the bundle has one, else its identifier; the names are checked at the console's site"));
+        r.put("com/example/hms/service/platform/PlatformInbox.java|nestedKey",
+            new Open("the key argument of an inbox title, rendered for the stored fallback copy; resolved only when the bundle has it"));
         r.put("com/example/hms/service/i18n/NotificationLocalizer.java|k",
             new Open("a stored notification key re-rendered for its reader; written with literal keys"));
         r.put("com/example/hms/service/i18n/NotificationLocalizer.java|notification.getMessageKey()",

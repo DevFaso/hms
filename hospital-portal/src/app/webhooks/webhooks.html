@@ -209,6 +209,7 @@
                               <th>{{ 'WEBHOOKS.EVENT' | translate }}</th>
                               <th>{{ 'WEBHOOKS.STATUS' | translate }}</th>
                               <th>{{ 'WEBHOOKS.ATTEMPTS' | translate }}</th>
+                              <th>{{ 'WEBHOOKS.LAST_ATTEMPT_AT' | translate }}</th>
                               <th>{{ 'WEBHOOKS.LAST_ERROR' | translate }}</th>
                               <th>{{ 'WEBHOOKS.SENT_AT' | translate }}</th>
                             </tr>
@@ -227,7 +228,17 @@
                                   </span>
                                 </td>
                                 <td>{{ d.attempts }}</td>
-                                <td class="error-cell">{{ d.lastError || '—' }}</td>
+                                <!-- QA D4078: when it was last tried, and why it failed in words. -->
+                                <td data-testid="delivery-last-attempt">
+                                  {{
+                                    d.lastAttemptAt
+                                      ? (d.lastAttemptAt | serverTime | date: 'short')
+                                      : '—'
+                                  }}
+                                </td>
+                                <td class="error-cell" data-testid="delivery-error">
+                                  {{ d.lastError || '—' }}
+                                </td>
                                 <td>
                                   {{ d.sentAt ? (d.sentAt | serverTime | date: 'short') : '—' }}
                                 </td>

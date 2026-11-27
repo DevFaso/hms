@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -2402,10 +2403,14 @@ public class LabResultServiceImpl implements LabResultService {
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
         readable.add(actingHospitalId);
+        // A result follows the restriction of the visit its order was placed in.
+        RestrictedVisitScope restricted = RestrictedVisitScope.of(
+            recordAccessPolicy.withheldVisits(currentPrincipalUserId(), patientId, actingHospitalId));
         List<LabResult> readableRows = labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
                 readable, actingHospitalId, false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
+            .filter(restricted::admits)
             .toList();
         // QA D211: outside the laboratory an unreleased value is not a result
         // yet, in a trend any more than on its own. QA D741: nor is a released

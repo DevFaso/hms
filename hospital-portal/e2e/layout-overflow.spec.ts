@@ -889,7 +889,7 @@ const FRONT_DESK: {
         grantorName: LONG_NAME,
         proxyUserId: TEST_ID,
         proxyUsername: 'boureima.demo.ouedraogo',
-        proxyDisplayName: 'Boureima Démo-Ouédraogo',
+        proxyDisplayName: 'boureima.demo.ouedraogo',
         relationship: 'SPOUSE',
         status: 'ACTIVE',
         permissions: 'APPOINTMENTS,LAB_RESULTS,MEDICATIONS',
@@ -968,7 +968,9 @@ test.describe('layout overflow: front desk and ward lists (D2241 / D2242 / D2246
       if (c.then) await c.then(page);
       // The seeded rows are on screen (an empty list has no actions to lose).
       if (c.rows !== false) {
-        await expect(page.getByText(/Démo-Ouédraogo|MRN-CHWP|sawadogo/i).first()).toBeVisible();
+        await expect(
+          page.getByText(/Démo-Ouédraogo|MRN-CHWP|sawadogo|boureima\.demo/i).first(),
+        ).toBeVisible();
       }
       const found = await auditAtWidths(page, c.label ?? c.route);
       await shoot(page, `list-${(c.label ?? c.route).replace(/\W+/g, '-')}`, [1024, 768, 390]);

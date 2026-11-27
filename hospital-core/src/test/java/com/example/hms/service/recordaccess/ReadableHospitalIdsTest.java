@@ -62,7 +62,8 @@ class ReadableHospitalIdsTest {
     @BeforeEach
     void setUp() {
         policy = new RecordAccessPolicyImpl(hospitalRepository, optOutRepository, staffRepository,
-            resolver, registrationRepository, breakGlassGate, patientRepository);
+            resolver, registrationRepository, breakGlassGate, patientRepository,
+            org.mockito.Mockito.mock(com.example.hms.repository.EncounterRepository.class), new SensitivityClassifierImpl());
 
         Hospital acting = hospital(actingId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
         other = hospital(otherId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);

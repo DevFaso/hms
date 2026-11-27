@@ -58,7 +58,10 @@ class StubPartnerConnectorTest {
 
         assertThat(probe.ok()).isFalse();
         assertThat(probe.latencyMs()).isZero();
-        assertThat(probe.message()).contains("stub mode").contains("partner.nhis");
+        // QA D4303: a diagnostic key, read in the reader's language - not an English sentence.
+        assertThat(probe.message()).isEqualTo(
+            com.example.hms.service.integration.health.IntegrationDiagnosticText.NOT_CONNECTED);
+        assertThat(nhis.stub()).isTrue();
         // Probes are pure — no health-recorder interaction (the action
         // service records the probe outcome on the caller's behalf).
         verifyNoInteractions(recorder);

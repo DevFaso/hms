@@ -218,8 +218,8 @@ class NurseTaskServiceImplTest {
         lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
-        lenient().when(announcementRepository.findByHospital_IdOrderByDateDesc(any(), any(Pageable.class)))
-            .thenReturn(Page.empty());
+        lenient().when(announcementRepository.findVisibleAtHospital(any(), any(Pageable.class)))
+            .thenReturn(List.of());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
     }
@@ -1743,8 +1743,8 @@ class NurseTaskServiceImplTest {
         Announcement a1 = Announcement.builder().id(UUID.randomUUID()).text("Code Blue drill at 14:00").date(now.minusMinutes(30)).build();
         Announcement a2 = Announcement.builder().id(UUID.randomUUID()).text("PPE supply update").date(now.minusHours(1)).build();
 
-        when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(a1, a2)));
+        when(announcementRepository.findVisibleAtHospital(eq(hospitalId), any(Pageable.class)))
+            .thenReturn(List.of(a1, a2));
 
         List<NurseAnnouncementDTO> result = service.getAnnouncements(hospitalId, 5);
 
@@ -1787,7 +1787,7 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(3L);
+        when(announcementRepository.countVisibleAtHospital(hospitalId)).thenReturn(3L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1831,7 +1831,7 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(overdueRx));
-        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
+        when(announcementRepository.countVisibleAtHospital(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1877,7 +1877,7 @@ class NurseTaskServiceImplTest {
         when(prn.isAsNeeded()).thenReturn(true);
         lenient().when(prn.getPrnMinIntervalHours()).thenReturn(6);
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prn));
-        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
+        when(announcementRepository.countVisibleAtHospital(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);

@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { ImpersonationService } from '../services/impersonation.service';
+import { AuthService } from '../auth/auth.service';
+import { personName } from '../shared/pipes/person-name.pipe';
 
 @Component({
   selector: 'app-impersonation-banner',
@@ -16,11 +18,29 @@ import { ImpersonationService } from '../services/impersonation.service';
 export class ImpersonationBannerComponent {
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
 
   readonly busy = signal(false);
 
   readonly active = computed(() => this.impersonation.active());
   readonly visible = computed(() => this.active()?.impersonating === true);
+
+  /** The person acted for, by name: the profile shown is theirs while the session lasts. */
+  readonly targetName = computed(() => {
+    const profile = this.auth.currentProfile();
+    const username = this.active()?.targetUsername ?? '';
+    const sameAccount = !!profile && (!username || profile.username === username);
+    const name = sameAccount ? personName(profile) : '';
+    return name || username;
+  });
+
+  /** The super-admin who opened the session, by name when their own profile is held. */
+  readonly impersonatorName = computed(() => {
+    this.active();
+    const own = this.auth.heldProfile();
+    const name = personName(own);
+    return name || (this.active()?.impersonatorUsername ?? '');
+  });
 
   // MVP-4b — countdown bridge from the service.
   readonly remainingMs = computed(() => this.impersonation.remainingMs());

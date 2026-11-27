@@ -707,4 +707,91 @@ class AuditEventLogServiceImplTest {
         // One batch attempt plus one attempt per event on the replay.
         verify(transactionManager, times(3)).getTransaction(any());
     }
+
+    // ─── r81 D4263: a staff account's sign-in rows reach its hospital's audit log ───
+
+    private org.mockito.ArgumentCaptor<com.example.hms.model.AuditEventLog> saved() {
+        org.mockito.ArgumentCaptor<com.example.hms.model.AuditEventLog> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.AuditEventLog.class);
+        org.mockito.Mockito.verify(auditRepository).save(captor.capture());
+        return captor;
+    }
+
+    private AuditEventRequestDTO signInRow(User account, AuditEventType type) {
+        return AuditEventRequestDTO.builder()
+            .userId(account.getId())
+            .eventType(type)
+            .eventDescription("Signed in with the password")
+            .entityType("USER")
+            .resourceId(account.getId().toString())
+            .ipAddress("41.203.10.7")
+            .status(AuditStatus.SUCCESS)
+            .build();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} of a staff account is filed under its assignment")
+    @org.junit.jupiter.params.provider.EnumSource(value = AuditEventType.class,
+        names = {"LOGIN", "LOGOUT", "LOGIN_FAILURE", "ACCOUNT_LOCKED", "MFA_FAILURE"})
+    void aStaffSignInRowIsFiledAtItsHospital_D4263(AuditEventType type) {
+        User nurse = new User();
+        nurse.setId(UUID.randomUUID());
+        nurse.setUsername("awa.nurse");
+        UserRoleHospitalAssignment row = assignmentOf(nurse, UUID.randomUUID(), "Hospital A");
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode("ROLE_NURSE");
+        row.setRole(role);
+        row.setActive(true);
+        when(userRepository.findById(nurse.getId())).thenReturn(Optional.of(nurse));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(nurse.getId())).thenReturn(List.of(row));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        auditService.logEvent(signInRow(nurse, type));
+
+        com.example.hms.model.AuditEventLog written = saved().getValue();
+        assertThat(written.getAssignment()).isSameAs(row);
+        assertThat(written.getIpAddress()).isEqualTo("41.203.10.7");
+    }
+
+    @Test
+    @DisplayName("D4263: a patient-only account's sign-in row is filed at no hospital")
+    void aPatientSignInRowIsFiledAtNoHospital_D4263() {
+        User patient = new User();
+        patient.setId(UUID.randomUUID());
+        patient.setUsername("awa.patient");
+        UserRoleHospitalAssignment row = assignmentOf(patient, UUID.randomUUID(), "Hospital A");
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode("ROLE_PATIENT");
+        row.setRole(role);
+        row.setActive(true);
+        when(userRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(patient.getId())).thenReturn(List.of(row));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        auditService.logEvent(signInRow(patient, AuditEventType.LOGIN));
+
+        com.example.hms.model.AuditEventLog written = saved().getValue();
+        assertThat(written.getAssignment()).isNull();
+        assertThat(written.getHospitalId()).isNull();
+    }
+
+    @Test
+    @DisplayName("D4273: a person's own activity leaves out the session's housekeeping rows")
+    void ownActivityLeavesOutTokenRows_D4273() {
+        UUID userId = UUID.randomUUID();
+        org.springframework.data.domain.Pageable page = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(auditRepository.findOwnActivity(org.mockito.ArgumentMatchers.eq(userId), any(),
+            org.mockito.ArgumentMatchers.eq(page))).thenReturn(org.springframework.data.domain.Page.empty());
+
+        auditService.getOwnActivity(userId, page);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<AuditEventType>> hidden =
+            org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        org.mockito.Mockito.verify(auditRepository).findOwnActivity(
+            org.mockito.ArgumentMatchers.eq(userId), hidden.capture(), org.mockito.ArgumentMatchers.eq(page));
+        assertThat(hidden.getValue())
+            .contains(AuditEventType.TOKEN_REFRESH, AuditEventType.TOKEN_REVOKED)
+            .doesNotContain(AuditEventType.LOGIN, AuditEventType.LOGOUT, AuditEventType.LOGIN_FAILURE,
+                AuditEventType.PASSWORD_CHANGED);
+    }
 }
