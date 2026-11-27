@@ -254,6 +254,91 @@ class KeycloakHospitalContextFilterTest {
                 .isEmpty();
     }
 
+    // ── r81 D4262: a locked screen holds every token of its session signed in before the lock ──
+
+    private void lockedSince(String lockKey, long lockedAt) {
+        var store = new com.example.hms.security.InMemoryTokenBlacklistService();
+        store.lockSession(lockKey, lockedAt, lockedAt + 172_800_000L);
+        // As the container hands it: the one store switched on.
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.security.TokenBlacklistService> stores = mock(ObjectProvider.class);
+        when(stores.getIfAvailable()).thenReturn(store);
+        filter.useTokenBlacklistService(stores);
+    }
+
+    private static void signInAt(String subject, String sid, Instant authTime) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sub", subject);
+        if (sid != null) {
+            claims.put("sid", sid);
+        }
+        claims.put("preferred_username", "dr.alice");
+        claims.put("appUserId", USER_ID.toString());
+        if (authTime != null) {
+            claims.put("auth_time", authTime);
+        }
+        Instant now = Instant.now();
+        Jwt jwt = new Jwt("token", now, now.plusSeconds(60), Map.of("alg", "RS256"), claims);
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+            jwt, List.<GrantedAuthority>of(new SimpleGrantedAuthority("ROLE_DOCTOR")), "dr.alice"));
+    }
+
+    private MockHttpServletRequest api(String method, String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, "/api" + path);
+        request.setContextPath("/api");
+        return request;
+    }
+
+    @Test
+    @DisplayName("a token of the locked session signed in before the lock, or with no sign-in time, is refused everything but the way out")
+    void aLockHoldsEveryTokenOfItsSessionSignedInBeforeIt() throws Exception {
+        holds(assignment(HOSPITAL_A, "ROLE_DOCTOR"));
+        long lockedAt = System.currentTimeMillis();
+        lockedSince("oidc:sid:kc-session-1", lockedAt);
+
+        for (Instant authTime : new Instant[] {Instant.ofEpochMilli(lockedAt - 60_000), null}) {
+            signInAt("kc-user-1", "kc-session-1", authTime);
+            MockHttpServletResponse refused = new MockHttpServletResponse();
+            assertThat(run(api("GET", "/patients"), refused)).as("the chain did not run").isNull();
+            assertThat(refused.getStatus()).isEqualTo(403);
+            assertThat(refused.getContentAsString()).contains("\"code\":\"session_locked\"");
+
+            signInAt("kc-user-1", "kc-session-1", authTime);
+            MockHttpServletResponse wayOut = new MockHttpServletResponse();
+            assertThat(run(api("POST", "/auth/session/unlock"), wayOut)).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("a token with no provider session is held by the person's lock")
+    void aTokenWithNoSessionIsHeldByThePersonsLock() throws Exception {
+        holds(assignment(HOSPITAL_A, "ROLE_DOCTOR"));
+        long lockedAt = System.currentTimeMillis();
+        lockedSince("oidc:sub:kc-user-1", lockedAt);
+
+        signInAt("kc-user-1", null, Instant.ofEpochMilli(lockedAt - 60_000));
+        MockHttpServletResponse refused = new MockHttpServletResponse();
+        assertThat(run(api("GET", "/patients"), refused)).isNull();
+        assertThat(refused.getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("a sign-in after the lock is let through; the person's other session and another person are untouched")
+    void aSignInAfterTheLockIsLetThrough() throws Exception {
+        holds(assignment(HOSPITAL_A, "ROLE_DOCTOR"));
+        long lockedAt = System.currentTimeMillis() - 60_000;
+        lockedSince("oidc:sid:kc-session-1", lockedAt);
+
+        signInAt("kc-user-1", "kc-session-1", Instant.ofEpochMilli(lockedAt + 5_000));
+        assertThat(run(api("GET", "/patients"), new MockHttpServletResponse())).isNotNull();
+
+        signInAt("kc-user-1", "kc-session-2", Instant.ofEpochMilli(lockedAt - 60_000));
+        assertThat(run(api("GET", "/patients"), new MockHttpServletResponse())).isNotNull();
+
+        signInAt("kc-user-2", "kc-session-3", Instant.ofEpochMilli(lockedAt - 60_000));
+        assertThat(run(api("GET", "/patients"), new MockHttpServletResponse())).isNotNull();
+    }
+
     private HospitalContext run(MockHttpServletRequest request, MockHttpServletResponse response) throws Exception {
         AtomicReference<HospitalContext> seen = new AtomicReference<>();
         filter.doFilter(request, response, (req, resp) -> seen.set(HospitalContextHolder.getContextOrEmpty()));

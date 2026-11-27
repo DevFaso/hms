@@ -103,6 +103,9 @@ export class Login implements OnInit, AfterViewInit {
   forgotPasswordEmail = '';
   forgotPasswordLoading = false;
   forgotPasswordSuccess = '';
+  forgotUsernameIdentifier = '';
+  forgotUsernameLoading = false;
+  forgotUsernameAck = '';
 
   /** Forgot-username state */
   forgotUsernameMode = false;
@@ -624,11 +627,36 @@ export class Login implements OnInit, AfterViewInit {
     this.forgotPasswordMode = false;
     this.resendActivationMode = false;
     this.error = '';
+    this.forgotUsernameIdentifier = '';
+    this.forgotUsernameAck = '';
   }
 
   closeForgotUsername(): void {
     this.forgotUsernameMode = false;
+    this.forgotUsernameAck = '';
     this.error = '';
+  }
+
+  /**
+   * Sends the username to the account's own e-mail address or phone. One
+   * answer whatever happens: it never says whether an account matched.
+   */
+  submitForgotUsername(): void {
+    if (!this.isBrowser || this.forgotUsernameLoading) return;
+    const identifier = this.forgotUsernameIdentifier.trim();
+    if (!identifier) {
+      const message = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
+      refuseFields(this.hostEl.nativeElement, ['fu-identifier'], ['fu-identifier'], message);
+      return;
+    }
+    this.forgotUsernameLoading = true;
+    const acknowledge = (): void => {
+      this.forgotUsernameLoading = false;
+      this.forgotUsernameAck = this.translate.instant('LOGIN.FU_ACK');
+    };
+    this.http
+      .post<void>('/auth/username/reminder', { identifier })
+      .subscribe({ next: acknowledge, error: acknowledge });
   }
 
   // ─── Resend activation e-mail ───────────────────────────────────────────────

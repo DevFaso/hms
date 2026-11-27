@@ -953,6 +953,14 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
     }
 
+    /** Review of QA D4308: a request nobody received is said so, never answered as filed. */
+    @ExceptionHandler(PlatformInboxUnavailableException.class)
+    public ResponseEntity<Object> handlePlatformInboxUnavailable(
+            PlatformInboxUnavailableException ex, WebRequest request) {
+        log.warn("Platform inbox unavailable at path {}: {}", logPath(request), ex.getMessageKey());
+        return buildErrorResponse(ex.getStatus(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(RoiAuditUnavailableException.class)
     public ResponseEntity<Object> handleRoiAuditUnavailable(
             RoiAuditUnavailableException ex, WebRequest request) {

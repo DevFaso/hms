@@ -21,4 +21,12 @@ public interface IntegrationConnectivityProbe {
     String integrationId();
 
     Probe probe();
+
+    /**
+     * QA D4300: true while the connector is a placeholder with no partner behind
+     * it. The console lists it as « not configured » rather than « enabled ».
+     */
+    default boolean stub() {
+        return false;
+    }
 }

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.Hospital;
@@ -286,8 +287,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59b — results follow the patient across the readable
-            // hospitals (lab rows carry no sensitivity tag, V158); every
-            // foreign row surfaced is accounted.
+            // hospitals. A lab row carries no sensitivity tag of its own
+            // (V158): it follows the restriction of the visit its order was
+            // placed in, in the query. Every foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             // #751 on the staff path: a result is readable where its order is
@@ -295,8 +297,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             // performed for another hospital. (Portal already returned above,
             // reading every row the patient has from every hospital,
             // unscoped.)
-            results = labResultRepository
-                .findPatientResultsReadableAt(patient.getId(), readable, hospital.getId(), false, pageable);
+            RestrictedVisitScope restricted = RestrictedVisitScope.of(
+                recordAccessPolicy.withheldVisits(requesterUserId, patient.getId(), hospital.getId()));
+            results = restricted.isEmpty()
+                ? labResultRepository
+                .findPatientResultsReadableAt(patient.getId(), readable, hospital.getId(), false, pageable)
+                : labResultRepository.findPatientResultsReadableOutsideVisits(
+                    patient.getId(), readable, hospital.getId(), restricted.visitIdsForQuery(), pageable);
         } else {
             // A staff read with no hospital scope. This used to fall through to
             // the patient-only query below, which returns EVERY hospital's rows

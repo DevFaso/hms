@@ -359,3 +359,17 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
+
+/* QA D4303: the reason of a failed test or call, written out. */
+.probe-detail {
+  flex-basis: 100%;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.last-error {
+  display: block;
+  color: var(--text-muted, #475569);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}

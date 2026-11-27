@@ -3,6 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { AuthService } from './auth.service';
+import { IdleService } from '../core/idle.service';
 import { SESSION_RESTORE_HEADER, restoreSessionOnStartup } from './session-restore';
 import { SSO_TAB_KEY, TAB_SESSION_KEY, tabBindingFor } from '../core/browser-storage';
 
@@ -175,5 +176,25 @@ describe('restoreSessionOnStartup — the session after a reload comes from the 
     http.expectNone((r) => r.url.endsWith('/api/auth/logout'));
     expect(auth.getToken()).toBeNull();
     expect(auth.hasTabSession()).toBeFalse();
+  });
+  it('a session the server holds locked shows the lock screen though the tab forgot it (r81 D4262)', async () => {
+    const idle = TestBed.inject(IdleService);
+    await bindTo('u1');
+    expect(sessionStorage.getItem('hms_idle_locked')).toBeNull();
+
+    const done = run();
+    http
+      .expectOne((r) => isRefresh(r.url))
+      .flush({ accessToken: tokenFor('u1'), sessionLocked: true });
+    await settle();
+    http.expectOne((r) => r.url.endsWith('/auth/credentials/me')).flush({});
+    await settle();
+    http.expectOne((r) => r.url.endsWith('auth/session/bootstrap')).flush(bootstrap);
+    await done;
+
+    expect(idle.locked()).toBeTrue();
+    expect(idle.contentHidden()).toBeTrue();
+    expect(sessionStorage.getItem('hms_idle_locked')).toBe('true');
+    idle.release();
   });
 });

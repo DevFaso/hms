@@ -100,7 +100,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     ]);
     impersonationStub.refreshActive.and.returnValue(of(null) as never);
 
-    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop']);
+    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop', 'release']);
 
     TestBed.configureTestingModule({
       imports: [ShellComponent, TranslateModule.forRoot()],
@@ -1214,7 +1214,7 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
       'refreshActive',
     ]);
     impersonationStub.refreshActive.and.returnValue(of(null) as never);
-    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop']);
+    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop', 'release']);
 
     TestBed.configureTestingModule({
       imports: [ShellComponent, TranslateModule.forRoot()],
@@ -1416,9 +1416,15 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     Object.defineProperty(impersonationStub, 'nearingExpiry', { value: () => false });
     Object.defineProperty(impersonationStub, 'remainingMs', { value: () => 0 });
 
-    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop']);
+    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', [
+      'start',
+      'stop',
+      'release',
+      'ensureServerLock',
+    ]);
     // idle.locked() decides whether the lock screen paints over the shell.
-    Object.defineProperty(idleStub, 'locked', { value: () => false });
+    Object.defineProperty(idleStub, 'locked', { value: () => screenLocked() });
+    Object.defineProperty(idleStub, 'contentHidden', { value: () => screenLocked() });
 
     const broadcastStub = jasmine.createSpyObj<EmergencyBroadcastService>(
       'EmergencyBroadcastService',
@@ -1455,6 +1461,10 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     return TestBed.createComponent(ShellComponent);
   }
 
+  /** What the idle stub reports: the screen is locked and the page behind it hidden. */
+  const screenLocked = signal(false);
+  afterEach(() => screenLocked.set(false));
+
   function broadcastSpy(): jasmine.SpyObj<EmergencyBroadcastService> {
     return TestBed.inject(EmergencyBroadcastService) as jasmine.SpyObj<EmergencyBroadcastService>;
   }
@@ -1464,6 +1474,33 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     TestBed.inject(RoleContextService).markSessionResolved();
     fixture.detectChanges();
     expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  // r81 D4262: while the screen is locked, the shell's page is not in the document.
+  it('takes the whole page out of the document while the screen is locked, and puts it back', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    fixture.detectChanges();
+    const main = host.querySelector('#main-content');
+    expect(main).not.toBeNull();
+    expect(host.querySelector('app-lock-screen')).toBeNull();
+
+    screenLocked.set(true);
+    fixture.detectChanges();
+
+    expect(host.querySelector('#main-content')).toBeNull();
+    expect(host.querySelector('.sidebar')).toBeNull();
+    expect(host.querySelector('.toast-container')).toBeNull();
+    expect(host.querySelector('app-lock-screen')).not.toBeNull();
+    // Nothing but the lock screen is left to read.
+    const lockText = host.querySelector<HTMLElement>('app-lock-screen')!.innerText.trim();
+    expect(host.innerText.trim()).toBe(lockText);
+
+    screenLocked.set(false);
+    fixture.detectChanges();
+    expect(host.querySelector('#main-content')).toBe(main);
+    fixture.destroy();
   });
 
   // QA D1125 (D1004 class, round 20): the bell panel and the profile menu

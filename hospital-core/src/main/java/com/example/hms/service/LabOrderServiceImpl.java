@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.BusinessException;
@@ -976,12 +977,16 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (hospitalId != null) {
             // E9 #59b — lab orders follow the patient: the acting hospital plus
             // every hospital the policy lets this caller read for this patient.
-            // Lab orders carry no sensitivity tag (V158), so every foreign row
-            // travels; each one surfaced is accounted.
+            // A lab order carries no sensitivity tag of its own (V158): it
+            // follows the restriction of the visit it was placed in. Each
+            // row surfaced is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
             // B1: plus the orders this hospital's laboratory performs for others.
-            List<LabOrder> orders = labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, readable, hospitalId);
+            List<LabOrder> orders = labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, readable, hospitalId)
+                .stream().filter(restricted::admits).toList();
             // Every row is accounted against the hospital it belongs to — the
             // ordering one — including the orders this laboratory performs.
             // The accounting asks whose record was surfaced where, not whether

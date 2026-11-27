@@ -54,6 +54,12 @@ import org.springframework.web.servlet.HandlerMapping;
  * <ul>
  *   <li><b>Failed reads.</b> A 403 or a 404 disclosed nothing. Recording them
  *       would put attempts on a page the patient reads as disclosures.</li>
+ *   <li><b>Reads that returned nothing.</b> A list endpoint answers a reader
+ *       who has nothing to read with {@code 200} and an empty list, an empty
+ *       page or no content. That showed nothing of the record either:
+ *       {@link PatientReadAnswerProbe} marks such an answer and no row is
+ *       written for it. The audit keeps no row for a refused or an empty
+ *       read, so the patient's page has no « attempts » list.</li>
  *   <li><b>Writes.</b> This answers "who looked", and a write already leaves
  *       its own trail in the record it changed.</li>
  *   <li><b>Patients reading their own record.</b> Self-access is not a
@@ -80,6 +86,10 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
     private static final String PATIENT_ID_VAR = "patientId";
     private static final String ID_VAR = "id";
     private static final String PATIENT_ROLE = "ROLE_PATIENT";
+
+    /** Set to {@code TRUE} by {@link PatientReadAnswerProbe} on a read whose answer carried nothing. */
+    public static final String NOTHING_RETURNED_ATTRIBUTE =
+        PatientAccessAuditInterceptor.class.getName() + ".nothingReturned";
 
     /**
      * Resolved lazily rather than injected directly so that a {@code @WebMvcTest}
@@ -152,7 +162,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
 
     private void recordIfPatientRead(HttpServletRequest request, HttpServletResponse response,
                                      Object handler, Exception ex) {
-        if (ex != null || !isSuccessfulRead(request, response)) {
+        if (ex != null || !isSuccessfulRead(request, response) || returnedNothing(request, response)) {
             return;
         }
         if (!(handler instanceof HandlerMethod handlerMethod)) {
@@ -209,7 +219,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             .userId(actorId)
             .userName(principal.getUsername())
             .roleName(roleNameOf(assignment, auth))
-            .ipAddress(request.getRemoteAddr())
+            .ipAddress(com.example.hms.security.ClientAddress.of(request))
             .eventDescription("Patient record viewed")
             .build());
     }
@@ -229,6 +239,12 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             log.warn("[PATIENT-ACCESS] Failed to count a break-the-glass read for {}: {}",
                 pattern, failure.getMessage());
         }
+    }
+
+    /** No content, or an answer the probe found empty: nothing of the record was shown. */
+    private static boolean returnedNothing(HttpServletRequest request, HttpServletResponse response) {
+        return response.getStatus() == HttpServletResponse.SC_NO_CONTENT
+            || Boolean.TRUE.equals(request.getAttribute(NOTHING_RETURNED_ATTRIBUTE));
     }
 
     private boolean isSuccessfulRead(HttpServletRequest request, HttpServletResponse response) {

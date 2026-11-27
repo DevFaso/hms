@@ -220,7 +220,10 @@ describe('IntegrationHealthComponent', () => {
     service.getInventory.and.returnValue(of(fakeSummary()));
     service.probe.and.returnValue(
       of(
-        fakeProbeResult({ ok: false, message: 'Probe threw IllegalStateException: partner down' }),
+        fakeProbeResult({
+          ok: false,
+          message: 'Aucun partenaire n’est encore raccordé à ce connecteur.',
+        }),
       ),
     );
 
@@ -231,9 +234,11 @@ describe('IntegrationHealthComponent', () => {
 
     const status = el.querySelector('.action-status.fail') as HTMLElement;
     expect(status.textContent).toContain('INTEGRATION_HEALTH.ACTION.FAIL');
-    expect(status.textContent).not.toContain('partner down');
+    // QA D4303: the server now sends the reason in the reader's language; it is written out.
     const detail = el.querySelector('[data-test="probe-detail-eligibility"]') as HTMLElement;
-    expect(detail.getAttribute('title')).toBe('Probe threw IllegalStateException: partner down');
+    expect(detail.textContent?.trim()).toBe(
+      'Aucun partenaire n’est encore raccordé à ce connecteur.',
+    );
   });
 
   it('QA D851: a refused action shows the server reason, not the generic text', () => {

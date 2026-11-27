@@ -138,18 +138,15 @@
                     ({{ result.latencyMs }} ms)
                   }
                 } @else {
-                  <!-- The probe's own text is the connector's English diagnostic:
-                       the label stays in the reader's language, the detail is a tooltip
-                       (as lastErrorMessage in the history table). -->
+                  <!-- QA D4303: the server sends the reason in the reader's language,
+                       so it is written out (a tooltip cannot be read on a phone). -->
                   {{ 'INTEGRATION_HEALTH.ACTION.FAIL' | translate }}
                   @if (result.message) {
                     <span
-                      class="err-tooltip"
-                      [title]="result.message"
+                      class="probe-detail"
                       [attr.data-test]="'probe-detail-' + row.integrationId"
+                      >{{ result.message }}</span
                     >
-                      <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                    </span>
                   }
                 }
               </span>
@@ -225,9 +222,7 @@
                               : '—'
                           }}
                           @if (org.lastErrorMessage) {
-                            <span class="err-tooltip" [title]="org.lastErrorMessage">
-                              <span class="material-symbols-outlined" aria-hidden="true">info</span>
-                            </span>
+                            <span class="last-error">{{ org.lastErrorMessage }}</span>
                           }
                         </td>
                         <td>{{ org.successCount24h }}</td>
