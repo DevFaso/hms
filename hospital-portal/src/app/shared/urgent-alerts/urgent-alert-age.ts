@@ -1,6 +1,4 @@
-import { ServerTimePipe } from '../pipes/server-time.pipe';
-
-const SERVER_TIME = new ServerTimePipe();
+import { serverInstant } from '../date-utils';
 
 /** The roles an urgent alert of the escalation ladder is filed to (GET /urgent-alerts/mine and /patients). */
 export const URGENT_ALERT_READER_ROLES = [
@@ -27,7 +25,7 @@ export function urgentAlertAge(
   now: Date,
 ): UrgentAlertAge | null {
   if (!raisedAt) return null;
-  const raised = new Date(SERVER_TIME.transform(raisedAt) as string).getTime();
+  const raised = serverInstant(raisedAt).getTime();
   if (Number.isNaN(raised)) return null;
   const total = Math.max(0, Math.floor((now.getTime() - raised) / 60000));
   const hours = Math.floor(total / 60);

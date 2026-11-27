@@ -18,10 +18,9 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { refusalReason } from '../refusal-reason';
 import { currentLocale } from '../i18n/app-locale';
-import { ServerTimePipe } from '../pipes/server-time.pipe';
+import { serverInstant } from '../date-utils';
 import { URGENT_ALERT_READER_ROLES, urgentAlertAge } from './urgent-alert-age';
 
-const SERVER_TIME = new ServerTimePipe();
 /** The alerts are read again this often while a screen stays open. */
 const REFRESH_MS = 60_000;
 
@@ -85,7 +84,8 @@ const REFRESH_MS = 60_000;
               <li class="ua-item">
                 <div class="ua-item-text">
                   <span class="ua-item-title">{{ item.title }}</span>
-                  <span class="ua-item-meta">
+                  {{ ' '
+                  }}<span class="ua-item-meta">
                     @if (item.patientName) {
                       <span>{{ item.patientName }}</span>
                     }
@@ -274,7 +274,7 @@ export class UrgentAlertsBannerComponent {
 
   formatDate(iso: string | null): string {
     if (!iso) return '';
-    return new Date(SERVER_TIME.transform(iso) as string).toLocaleString(currentLocale(), {
+    return serverInstant(iso).toLocaleString(currentLocale(), {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
