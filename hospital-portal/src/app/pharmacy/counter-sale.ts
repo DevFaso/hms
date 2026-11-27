@@ -44,6 +44,7 @@ import {
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { earlierLotWithStock, fefoFirstLot } from './fefo-lots';
 
@@ -107,7 +108,15 @@ type LotsState = 'loading' | 'failed' | 'ready';
 @Component({
   selector: 'app-counter-sale',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe, CountUnitPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ServerTimePipe,
+    CountUnitPipe,
+    DateTimePipe,
+  ],
   templateUrl: './counter-sale.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './counter-sale.scss',
@@ -156,6 +165,11 @@ export class CounterSaleComponent implements OnInit {
    */
   readonly unsettledRequest = signal<CounterSaleRequest | null>(null);
   receipt = signal<CounterSaleResponse | null>(null);
+  /**
+   * QA D4186 (r81): the receipt on screen is a sale of the day list opened again (a « Duplicata »), not the
+   * sale just recorded. Its lines are the sale's own: the prices charged then, never today's list price.
+   */
+  readonly receiptDuplicate = signal(false);
   /** QA D2430: one key per open sale form, resent on every press until « Nouvelle vente ». */
   clientRequestId: string | undefined = newPaymentRequestKey();
 
@@ -191,7 +205,7 @@ export class CounterSaleComponent implements OnInit {
 
   loadPharmacies(): void {
     this.pharmacyFailed.set(false);
-    allRows((page, size) => this.pharmacySvc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.pharmacySvc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
@@ -485,6 +499,7 @@ export class CounterSaleComponent implements OnInit {
         next: (sale) => {
           this.saving.set(false);
           this.unsettledRequest.set(null);
+          this.receiptDuplicate.set(false);
           this.receipt.set(sale);
           this.toast.success(this.translate.instant('PHARMACY_SALE.SAVED'));
           this.lotsByItem.set({});
@@ -611,9 +626,30 @@ export class CounterSaleComponent implements OnInit {
     return this.lineQtyId(line);
   }
 
+  /**
+   * QA D4186 (r81): a sale of the day list opened again as its receipt, to read or reprint it. The basket
+   * being built is kept: closing the duplicate comes back to it.
+   */
+  reopenSale(sale: CounterSaleResponse): void {
+    this.receiptDuplicate.set(true);
+    this.receipt.set(sale);
+  }
+
+  /** Closes a reopened receipt without touching the basket. */
+  closeReceipt(): void {
+    this.receipt.set(null);
+    this.receiptDuplicate.set(false);
+  }
+
+  /** QA D4186: the receipt on screen, on paper. */
+  printReceipt(): void {
+    window.print();
+  }
+
   /** « Nouvelle vente »: an empty basket and a new request key. */
   newSale(): void {
     this.receipt.set(null);
+    this.receiptDuplicate.set(false);
     this.lines.set([]);
     this.paymentMethod = 'CASH';
     this.mobileMoneyOperator = null;

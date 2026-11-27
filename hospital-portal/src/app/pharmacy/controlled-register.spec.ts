@@ -46,12 +46,12 @@ describe('ControlledRegisterComponent (QA D967)', () => {
 
   beforeEach(async () => {
     svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'getControlledRegister',
       'exportControlledRegister',
     ]);
-    svc.listPharmacies.and.returnValue(
+    svc.listStores.and.returnValue(
       of({ content: [{ id: 'ph-1', name: 'Pharmacie centrale' }] }) as never,
     );
     svc.listInventoryByPharmacy.and.returnValue(

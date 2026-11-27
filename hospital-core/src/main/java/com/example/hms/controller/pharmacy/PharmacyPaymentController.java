@@ -49,6 +49,8 @@ public class PharmacyPaymentController {
     @ApiResponse(responseCode = "201", description = "Payment recorded")
     @ApiResponse(responseCode = "400", description = "Invalid request or provider error")
     @ApiResponse(responseCode = "404", description = "Dispense, patient, or hospital not found")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the dispense); the service refuses any other")
     public ResponseEntity<ApiResponseWrapper<PharmacyPaymentResponseDTO>> create(
             @Valid @RequestBody PharmacyPaymentRequestDTO dto) {
         PharmacyPaymentResponseDTO created = pharmacyPaymentService.createPayment(dto);
@@ -74,6 +76,19 @@ public class PharmacyPaymentController {
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 pharmacyPaymentService.listByDispense(dispenseId, pageable)));
+    }
+
+    @GetMapping("/pharmacy/{pharmacyId}")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Payment history of a pharmacy",
+            description = "QA D4186: the payments taken for fills of one pharmacy of the acting hospital, newest "
+                    + "first, each with its receipt as first charged, to reopen and reprint it")
+    @ApiResponse(responseCode = "200", description = "Payments retrieved")
+    public ResponseEntity<ApiResponseWrapper<Page<PharmacyPaymentResponseDTO>>> listByPharmacy(
+            @PathVariable UUID pharmacyId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                pharmacyPaymentService.listByPharmacy(pharmacyId, pageable)));
     }
 
     // PATIENT role intentionally excluded: PATIENT callers use the patient-portal `/me` flow

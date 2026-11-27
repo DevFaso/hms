@@ -54,6 +54,8 @@ export interface CounterSaleLineResponse {
 
 export interface CounterSaleResponse {
   id: string;
+  /** QA D4186 (r81): the readable receipt number; absent on a sale recorded before it was allocated. */
+  receiptNumber?: string | null;
   pharmacyId: string;
   pharmacyName?: string | null;
   hospitalId: string;

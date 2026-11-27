@@ -21,6 +21,8 @@ import java.util.UUID;
 public class PharmacySaleResponseDTO {
 
     private UUID id;
+    /** QA D4186 (r81): the readable receipt number; null on a sale recorded before it was allocated. */
+    private String receiptNumber;
     private UUID pharmacyId;
     private String pharmacyName;
     private UUID hospitalId;

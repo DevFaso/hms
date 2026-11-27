@@ -30,6 +30,8 @@ class StockTransferBookingTest {
     @Mock StockTransactionRepository transactions;
     @Mock EntityManager entityManager;
     @Mock FefoLotPolicy fefoLotPolicy;
+    @Mock PharmacyPriceHistory priceHistory;
+    @Mock com.example.hms.service.AuditEventLogService auditEventLogService;
     @InjectMocks StockTransferBooking booking;
     private Pharmacy source;
     private Pharmacy destination;
@@ -89,6 +91,130 @@ class StockTransferBookingTest {
         assertThat(received.getStockLot().getInitialQuantity()).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(received.getStockLot().getRemainingQuantity()).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(destinationItem.getUnitPrice()).isEqualByComparingTo("375");
+    }
+
+    /** QA D4181 (r81): the syrup sold 900 F at the main pharmacy, moved to a store that never held it. */
+    private void theSyrupMovesToAStoreThatNeverHeldIt() {
+        sourceItem.setUnitPrice(new BigDecimal("900"));
+        sourceItem.setUnit("flacon");
+        User mover = new User();
+        mover.setId(UUID.randomUUID());
+        outgoing.setPerformedByUser(mover);
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
+            .thenReturn(Optional.empty());
+        lenient().when(items.findAllWithCatalogItemByPharmacyId(destination.getId())).thenReturn(List.of());
+        when(items.saveAndFlush(any())).thenAnswer(call -> {
+            InventoryItem saved = call.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+        when(lots.findSameLot(any(), eq(sourceLot.getLotNumber()), eq(sourceLot.getExpiryDate()))).thenReturn(List.of());
+        when(lots.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(items.incrementOnHand(any(), eq(BigDecimal.TEN), any())).thenReturn(1);
+    }
+
+    @Test
+    void theItemATransferCreatesIsSoldAtItsSourcePriceAndUnit() {
+        theSyrupMovesToAStoreThatNeverHeldIt();
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        ArgumentCaptor<StockTransaction> ledger = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(transactions).save(ledger.capture());
+        InventoryItem created = ledger.getValue().getInventoryItem();
+        assertThat(created.getPharmacy()).isSameAs(destination);
+        assertThat(created.getUnit()).isEqualTo("flacon");
+        assertThat(created.getUnitPrice()).as("the destination item is priced as its source").isEqualByComparingTo("900");
+        assertThat(PharmacyListPrice.of(created)).contains(new BigDecimal("900"));
+        verify(priceHistory).keep(eq(created), isNull(), eq(new BigDecimal("900")),
+            eq(StockTransferBooking.TRANSFER_PRICE_REASON), eq(outgoing.getPerformedByUser().getId()), any());
+        // Review of #1380 (F4): the same audit event as a price set on the item form.
+        verify(auditEventLogService).logEvent(argThat(event ->
+            event.getEventType() == com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED
+                && created.getId().toString().equals(event.getResourceId())));
+    }
+
+    @Test
+    void aFailedAuditNeverUndoesTheTransfer() {
+        // Review of #1380 (F4): the audit of a copied price is written beside the movement, never instead of it.
+        theSyrupMovesToAStoreThatNeverHeldIt();
+        doThrow(new IllegalStateException("audit down")).when(auditEventLogService).logEvent(any());
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        verify(transactions).save(any(StockTransaction.class));
+    }
+
+    @Test
+    void aPriceOfZeroSetOnPurposeIsNeverOverwritten() {
+        // Review of #1380 (F1): the store manager set the item at B from 500 to 0, with a reason in the history.
+        sourceItem.setUnitPrice(new BigDecimal("500"));
+        destinationItem.setUnitPrice(BigDecimal.ZERO);
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
+            .thenReturn(Optional.of(destinationItem));
+        when(lots.findSameLot(destinationItem.getId(), sourceLot.getLotNumber(), sourceLot.getExpiryDate())).thenReturn(List.of());
+        when(lots.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(items.incrementOnHand(eq(destinationItem.getId()), eq(BigDecimal.TEN), any())).thenReturn(1);
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        assertThat(destinationItem.getUnitPrice()).as("0 is the store's own price").isEqualByComparingTo("0");
+        verifyNoInteractions(priceHistory, auditEventLogService);
+        verify(items, never()).saveAndFlush(destinationItem);
+    }
+
+    @Test
+    void aDestinationItemWithNoPriceTakesTheSourcePriceAndAPricedOneKeepsItsOwn() {
+        sourceItem.setUnitPrice(new BigDecimal("900"));
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
+            .thenReturn(Optional.of(destinationItem));
+        when(lots.findSameLot(destinationItem.getId(), sourceLot.getLotNumber(), sourceLot.getExpiryDate())).thenReturn(List.of());
+        when(lots.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(items.incrementOnHand(eq(destinationItem.getId()), eq(BigDecimal.TEN), any())).thenReturn(1);
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+        assertThat(destinationItem.getUnitPrice()).isEqualByComparingTo("900");
+
+        destinationItem.setUnitPrice(new BigDecimal("375"));
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+        assertThat(destinationItem.getUnitPrice()).as("a store's own price is never overwritten").isEqualByComparingTo("375");
+    }
+
+    @Test
+    void anItemDocumentedAsFreeStaysFreeAtItsDestination() {
+        theSyrupMovesToAStoreThatNeverHeldIt();
+        sourceItem.setFreeOfChargeReason("Programme national");
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        ArgumentCaptor<StockTransaction> ledger = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(transactions).save(ledger.capture());
+        InventoryItem created = ledger.getValue().getInventoryItem();
+        assertThat(created.getFreeOfChargeReason()).isEqualTo("Programme national");
+        assertThat(created.getUnitPrice()).as("a free item takes no price").isNull();
+        // Review of #1380 (F4): the copied free-of-charge reason is kept in the history and audited.
+        verify(priceHistory).keep(eq(created), isNull(), isNull(),
+            eq(StockTransferBooking.TRANSFER_FREE_REASON_PREFIX + "Programme national"),
+            eq(outgoing.getPerformedByUser().getId()), any());
+        verify(auditEventLogService).logEvent(argThat(event ->
+            event.getEventType() == com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED
+                && created.getId().toString().equals(event.getResourceId())));
+    }
+
+    @Test
+    void aPartnerPharmacyIsNotADestination() {
+        destination.setPharmacyType(com.example.hms.enums.PharmacyType.PARTNER_PHARMACY);
+        // Lenient: the stores are locked in id order, so the refusal may come before the source is read.
+        lenient().when(pharmacies.findLockedByIdAndHospitalId(source.getId(), source.getHospital().getId())).thenReturn(Optional.of(source));
+        lenient().when(pharmacies.findLockedByIdAndHospitalId(destination.getId(), source.getHospital().getId())).thenReturn(Optional.of(destination));
+        StockTransactionRequestDTO request = StockTransactionRequestDTO.builder()
+            .transactionType(StockTransactionType.TRANSFER).referenceId(destination.getId()).build();
+
+        assertThatThrownBy(() -> booking.prepare(request, sourceItem))
+            .extracting("messageKey").isEqualTo(PharmacyStores.NOT_OWN_STORE_KEY);
+        verifyNoInteractions(items, lots, transactions);
     }
 
     @Test

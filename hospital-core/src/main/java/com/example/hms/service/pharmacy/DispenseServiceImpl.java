@@ -444,9 +444,11 @@ public class DispenseServiceImpl implements DispenseService {
         // on a row that does not exist yet. With a charge it passes the gate of a hand-over (policy rule 6): the
         // account of an open stay, a deferral somebody else approved, or a logged urgency override. The refusal
         // rolls the stock movement back.
-        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral = requireFreeOrDeferred(dispense, prescription,
-                new DispenseBillingDeferralService.Choice(dto.getBillingDeferralId(), dto.getBillingUrgencyReason()),
-                fill.actors().dispensedBy());
+        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral = fill.unpricedRelease()
+                ? releaseUnpriced(dispense, prescription, dto.getBillingUrgencyReason(), fill.actors().dispensedBy())
+                : requireFreeOrDeferred(dispense, prescription,
+                        new DispenseBillingDeferralService.Choice(dto.getBillingDeferralId(), dto.getBillingUrgencyReason()),
+                        fill.actors().dispensedBy());
         if (deferral != null) {
             billingDeferrals.stamp(dispense, deferral, fill.actors().dispensedBy().getId(), dispense.getDispensedAt(),
                     DispenseCharge.of(dispense, inventoryItemRepository).orElse(BigDecimal.ZERO));
@@ -457,6 +459,9 @@ public class DispenseServiceImpl implements DispenseService {
         auditAllergyAcknowledged(fill.allergyAck(), prescription, saved.getId());
         if (deferral != null) {
             billingDeferrals.executed(deferral, saved, prescription);
+        }
+        if (fill.unpricedRelease()) {
+            afterUnpricedRelease(saved, fill.actors().dispensedBy());
         }
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
@@ -615,9 +620,23 @@ public class DispenseServiceImpl implements DispenseService {
         User handedOverBy = resolveCurrentUser();
         // QA D2675 (r65), policy rule 6: a fill leaves the counter paid, covered by a claim, free, on the account of
         // an open stay, on a deferral somebody else approved, or on a logged urgency override.
+        // QA D4181 (r81): "nothing owed" is only true of a fill that has a price or a documented free reason;
+        // one prepared before its pharmacy priced the item waits for that price.
+        // Review of #1380 (F3): a missing price never blocks care. On a logged urgency override or an open stay the
+        // fill leaves NOT_PRICED, and the price roles are asked to price it; otherwise it waits for the price.
+        String urgencyReason = request != null ? request.getBillingUrgencyReason() : null;
+        // Review of #1380 (F5): a fill with no catalogue item is never released unpriced (it could never be charged).
+        boolean unpricedRelease = dispense.getMedicationCatalogItem() != null
+                && FillPriceGate.standingOf(dispense.getPharmacy(), dispense.getMedicationCatalogItem(),
+                inventoryItemRepository) == FillPriceGate.Standing.UNPRICED
+                && unpricedFillReleasable(prescription, dispense.getPharmacy(), urgencyReason);
+        if (!unpricedRelease) {
+            FillPriceGate.require(dispense, inventoryItemRepository);
+        }
         FillSettlement settlement = settlementOf(dispense, handedOverBy.getId());
-        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral =
-                requirePaidCoveredOrDeferred(settlement, dispense, prescription, request, handedOverBy);
+        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral = unpricedRelease
+                ? releaseUnpriced(dispense, prescription, urgencyReason, handedOverBy)
+                : requirePaidCoveredOrDeferred(settlement, dispense, prescription, request, handedOverBy);
         int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
                 mergedVerificationStatus(dispense, patientScan),
                 patientScan != null ? patientScan : dispense.getPatientScanValue(),
@@ -654,6 +673,9 @@ public class DispenseServiceImpl implements DispenseService {
         logAudit(AuditEventType.DISPENSE_HANDED_OVER,
                 "Prepared fill handed over, prescription " + prescription.getId(),
                 dispense.getId().toString());
+        if (unpricedRelease) {
+            afterUnpricedRelease(dispense, handedOverBy);
+        }
         return dispenseMapper.toResponseDTO(dispense);
     }
 
@@ -896,9 +918,12 @@ public class DispenseServiceImpl implements DispenseService {
         }
         // For the caller: the dialog shows what the gate will ask of the person about to hand the fill over.
         FillSettlement settlement = settlementOf(dispense, roleValidator.getCurrentUserId());
+        // QA D4181 (r81): a fill with no charge says why: documented free, or not priced (and then it cannot leave).
+        FillPriceGate.Standing standing = FillPriceGate.standingOf(dispense.getPharmacy(),
+                dispense.getMedicationCatalogItem(), inventoryItemRepository);
         String status;
         if (settlement.charge().signum() <= 0) {
-            status = "NO_CHARGE";
+            status = standing == FillPriceGate.Standing.FREE ? "NO_CHARGE" : "NOT_PRICED";
         } else if (settlement.paid().compareTo(settlement.charge()) >= 0) {
             status = "PAID";
         } else if (settlement.due().signum() <= 0) {
@@ -919,10 +944,20 @@ public class DispenseServiceImpl implements DispenseService {
                 .status(status)
                 .billingDeferredReason(dispense.getBillingDeferredReason())
                 .billingDeferredAt(dispense.getBillingDeferredAt())
+                .priceStanding(standing.name())
+                .freeOfChargeReason(freeOfChargeReasonOf(dispense, standing))
                 .claimCoverGap(claimCoverGapOf(dispense, settlement))
                 .onOpenStay(billingDeferrals != null && dispense.getPrescription() != null
                         && billingDeferrals.chargedToOpenStay(dispense.getPrescription(), hospitalId))
                 .build();
+    }
+
+    private String freeOfChargeReasonOf(Dispense dispense, FillPriceGate.Standing standing) {
+        if (standing != FillPriceGate.Standing.FREE) {
+            return null;
+        }
+        return inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(dispense.getPharmacy().getId(),
+                dispense.getMedicationCatalogItem().getId()).map(InventoryItem::getFreeOfChargeReason).orElse(null);
     }
 
     /** QA D2931 (r66): why a claim sent for a fill with money due does not cover it for the caller, or null. */
@@ -1244,15 +1279,86 @@ public class DispenseServiceImpl implements DispenseService {
             DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());
         }
         requireWholeUnitsOfFill(dto, stockLot, prescription);
-        // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
-        // fill with no lot used to be accepted as DISPENSED with no stock
-        // movement at all, so the shelf and the ledger drifted apart.
-        if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
+        // QA D4181 (r81): a fill that names no product is the order's own item (a dispensary that keeps no lots).
+        // It is priced on that item and saved with it: with none, it had no charge at all.
+        if (catalogItem == null && prescription.getMedicationCatalogItemId() != null) {
+            catalogItem = medicationCatalogItemRepository.findById(prescription.getMedicationCatalogItemId())
+                    .orElse(null);
+        }
+        // Review of #1380 (F5): a fill with no lot, no product named and an order linked to no catalogue item has
+        // nothing to take stock from, price or ever charge. It is never released unpriced: the pharmacist names the
+        // product (or its lot), which brings back the item's lot rule. Develop refused it as dispense.lot.required.
+        if (stockLot == null && catalogItem == null) {
+            throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId",
+                    "dispense.productRequired");
+        }
+        // QA D138: stock kept in lots is filled from a lot. A fill with no lot used to be accepted as DISPENSED with
+        // no stock movement at all, so the shelf and the ledger drifted apart. Review of #1380 (F2): the rule is the
+        // item's, not the pharmacy's: a dispensary that only priced an item (it keeps no lots of it) still fills it
+        // without a lot.
+        if (stockLot == null && keepsLots(pharmacy, catalogItem)) {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "dispense.lot.required");
         }
         recordFefoOverride(dto, stockLot);
+        // Sold at this pharmacy's price or documented there as free, before any stock moves. Review of #1380 (F3):
+        // an unpriced fill passes only on a logged urgency override or an open stay (UnpricedFillRelease).
+        boolean unpricedRelease = FillPriceGate.standingOf(pharmacy, catalogItem, inventoryItemRepository)
+                == FillPriceGate.Standing.UNPRICED
+                && unpricedFillReleasable(prescription, pharmacy, dto.getBillingUrgencyReason());
+        if (!unpricedRelease) {
+            FillPriceGate.require(pharmacy, catalogItem, dto.getMedicationName(), inventoryItemRepository);
+        }
 
-        return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification, allergyAck);
+        return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification, allergyAck,
+                unpricedRelease);
+    }
+
+    /** Review of #1380 (F2): whether this pharmacy keeps {@code medication} in lots (any lot of its item). */
+    private boolean keepsLots(Pharmacy pharmacy, MedicationCatalogItem medication) {
+        if (pharmacy == null || pharmacy.getId() == null || medication == null || medication.getId() == null) {
+            return false;
+        }
+        return inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(), medication.getId())
+                .map(item -> item.getId() != null && stockLotRepository.existsByInventoryItemId(item.getId()))
+                .orElse(false);
+    }
+
+    /** Review of #1380 (F3): an unpriced fill may leave on a logged urgency override, or on an open stay. */
+    private boolean unpricedFillReleasable(Prescription prescription, Pharmacy pharmacy, String urgencyReason) {
+        UUID hospitalId = pharmacy != null && pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
+        boolean onStay = billingDeferrals != null && prescription != null && hospitalId != null
+                && billingDeferrals.chargedToOpenStay(prescription, hospitalId);
+        return UnpricedFillRelease.releasable(urgencyReason, onStay);
+    }
+
+    /**
+     * Review of #1380 (F3): logs how an unpriced fill leaves: on the account of the open stay, or on the urgency
+     * override, through the same gate as an unpaid fill, with nothing due (the item has no price). Never on an
+     * approved deferral: those are granted on an amount.
+     */
+    private com.example.hms.model.pharmacy.DispenseBillingDeferral releaseUnpriced(Dispense fill,
+            Prescription prescription, String urgencyReason, User actor) {
+        return requireDeferral(fill, prescription, new DispenseBillingDeferralService.Choice(null, urgencyReason),
+                BigDecimal.ZERO, actor, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(BigDecimal.ZERO, BigDecimal.ZERO));
+    }
+
+    /** Review of #1380 (F3): the unpriced fill left; it is audited and the price roles get a task to price it. */
+    private void afterUnpricedRelease(Dispense fill, User actor) {
+        logAudit(AuditEventType.DISPENSE_RELEASED_UNPRICED,
+                "Fill handed over with no selling price; price roles notified", fill.getId().toString());
+        if (unpricedFillRelease != null) {
+            unpricedFillRelease.priceNeeded(fill.getPharmacy(), fill.getMedicationCatalogItem(),
+                    fill.getMedicationName(), actor != null ? actor.getId() : null);
+        }
+    }
+
+    /** Review of #1380 (F3): the pricing task of an unpriced fill. A unit test built by hand may omit it. */
+    private UnpricedFillRelease unpricedFillRelease;
+
+    @Autowired(required = false)
+    public void setUnpricedFillRelease(UnpricedFillRelease unpricedFillRelease) {
+        this.unpricedFillRelease = unpricedFillRelease;
     }
 
     /**
@@ -1322,7 +1428,8 @@ public class DispenseServiceImpl implements DispenseService {
     private record FillContext(Prescription prescription, Patient patient, Pharmacy pharmacy,
                                ActorPair actors, MedicationCatalogItem catalogItem, StockLot stockLot,
                                DispenseVerificationResult verification,
-                               com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck) {
+                               com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck,
+                               boolean unpricedRelease) {
         DispenseMapper.DispenseContext mapperContext() {
             return new DispenseMapper.DispenseContext(prescription, patient, pharmacy, stockLot,
                     actors.dispensedBy(), actors.verifiedBy(), catalogItem);
@@ -1917,6 +2024,10 @@ public class DispenseServiceImpl implements DispenseService {
         return page.map(d -> {
             DispenseResponseDTO dto = dispenseMapper.toResponseDTO(d);
             dto.setPaid(paid.contains(d.getId()));
+            // QA D4186 (r81): the checkout's picker shows what each fill still to pay costs.
+            if (!paid.contains(d.getId()) && d.getStatus() != DispenseStatus.CANCELLED) {
+                dto.setChargeAmount(DispenseCharge.of(d, inventoryItemRepository).orElse(null));
+            }
             return dto;
         });
     }
@@ -2497,6 +2608,10 @@ public class DispenseServiceImpl implements DispenseService {
                     .firstName(p.getPatient().getFirstName())
                     .middleName(p.getPatient().getMiddleName())
                     .lastName(p.getPatient().getLastName())
+                    // QA D4185 (r81): the record number at the order's hospital, and the date of birth.
+                    .mrn(com.example.hms.mapper.pharmacy.PatientIdentityLine.mrnOf(p.getPatient(),
+                            p.getHospital() != null ? p.getHospital().getId() : null))
+                    .dateOfBirth(com.example.hms.mapper.pharmacy.PatientIdentityLine.dateOfBirthOf(p.getPatient()))
                     .build();
         }
         WorkQueuePrescriptionDTO.Staff staff = null;

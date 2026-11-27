@@ -161,8 +161,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         // Billing plan PR 11 (QA D2430): the same checkout sent again after its answer was lost.
         PharmacyPayment keyed = findKeyedPayment(hospitalId, dispense, dto);
-        // A replay answers with a payment recorded earlier: the list price read now may not be the price it
-        // charged, so its receipt prints no price line (and no insurer share), as every later read does.
+        // A replay answers with a payment recorded earlier: its receipt prints the prices kept on that payment
+        // (QA D4186), never the list price read now.
         if (keyed != null) {
             return toReceiptResponse(keyed, false);
         }
@@ -214,6 +214,12 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         entity.setReceiptNumber(allocateReceiptNumber(hospital));
         entity.setClientRequestId(dto.getClientRequestId());
         entity.setCashSessionId(cashSessionId);
+        // QA D4186 (r81): the price charged is kept on the payment, so its receipt reprints as first printed.
+        PharmacyReceiptDetails.Charged charged = PharmacyReceiptDetails.chargedOf(entity, inventoryItemRepository, true);
+        if (charged != null) {
+            entity.setChargedUnitPrice(charged.unitPrice());
+            entity.setChargedLineTotal(charged.lineTotal());
+        }
         PharmacyPayment saved = saveKeyed(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
@@ -288,11 +294,36 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
      * price charged, the unit price. Lists stay plain: a price lookup per row is not a list's job.
      */
     private PharmacyPaymentResponseDTO toReceiptResponse(PharmacyPayment payment, boolean withPrices) {
+        return toReceiptResponse(payment, withPrices, false);
+    }
+
+    /** QA D4186 (r81): {@code duplicate} marks a receipt opened again from the history (« Duplicata »). */
+    private PharmacyPaymentResponseDTO toReceiptResponse(PharmacyPayment payment, boolean withPrices,
+                                                         boolean duplicate) {
         PharmacyPaymentResponseDTO dto = toResponse(payment);
         if (dto != null) {
-            dto.setReceipt(PharmacyReceiptDetails.of(payment, inventoryItemRepository, withPrices));
+            dto.setReceipt(PharmacyReceiptDetails.of(payment, inventoryItemRepository, withPrices, duplicate));
         }
         return dto;
+    }
+
+    /**
+     * QA D4186 (r81): the payments taken for fills of one of the hospital's pharmacies, newest first: the history
+     * a paid receipt is reopened and reprinted from. Each row carries its receipt (patient, record number,
+     * medication, the prices kept when it was taken), marked as a duplicate. The query is scoped to the acting
+     * hospital: a pharmacy of another hospital lists nothing.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PharmacyPaymentResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException("pharmacy.payment.hospitalRequired");
+        }
+        Pageable newestFirst = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(),
+                Math.min(Math.max(pageable.getPageSize(), 1), 100));
+        return paymentRepository.findHistoryForPharmacy(hospitalId, pharmacyId, newestFirst)
+                .map(payment -> toReceiptResponse(payment, false, true));
     }
 
     /**
@@ -323,7 +354,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
-        return toReceiptResponse(entity, false);
+        // QA D4186 (r81): a payment read again is a reprint.
+        return toReceiptResponse(entity, false, true);
     }
 
     @Override

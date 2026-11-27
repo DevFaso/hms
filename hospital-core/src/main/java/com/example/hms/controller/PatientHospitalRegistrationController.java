@@ -61,6 +61,8 @@ public class PatientHospitalRegistrationController {
     @ApiResponse(responseCode = "404", description = "Patient or hospital not found",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = MessageResponse.class)))
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "linking a patient registered at another hospital of the organisation is what this does; the service bounds whom the desk may link")
     public ResponseEntity<PatientHospitalRegistrationResponseDTO> registerPatient(
         @Valid @RequestBody PatientHospitalRegistrationRequestDTO dto,
         Locale locale

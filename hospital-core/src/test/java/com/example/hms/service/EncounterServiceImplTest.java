@@ -2673,6 +2673,45 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        @DisplayName("createEncounter refuses a hospital other than the acting one, however the request names it")
+        void createRefusesAnotherHospitalNamedByCode() {
+            UUID patientId = UUID.randomUUID();
+            UUID staffId = UUID.randomUUID();
+            Hospital other = new Hospital();
+            other.setId(OTHER_HOSPITAL);
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setId(patientId);
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(staffRepository.findById(staffId)).thenReturn(Optional.of(new com.example.hms.model.Staff()));
+            when(hospitalRepository.findClinicalByNameOrCodeOrEmail("OTHER")).thenReturn(Optional.of(other));
+            when(hospitalRepository.findClinicalById(OTHER_HOSPITAL)).thenReturn(Optional.of(other));
+            com.example.hms.payload.dto.EncounterRequestDTO request =
+                new com.example.hms.payload.dto.EncounterRequestDTO();
+            request.setPatientId(patientId);
+            request.setStaffId(staffId);
+            request.setHospitalIdentifier("OTHER");
+            request.setDepartmentId(UUID.randomUUID());
+            request.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+
+            com.example.hms.security.context.HospitalContextHolder.clear();
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .principalUserId(UUID.randomUUID())
+                    .permittedHospitalIds(java.util.Set.of(CALLER_HOSPITAL))
+                    .activeHospitalId(CALLER_HOSPITAL)
+                    .build());
+            try {
+                assertThatThrownBy(() -> service.createEncounter(request, Locale.ENGLISH))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining(OTHER_HOSPITAL.toString());
+            } finally {
+                com.example.hms.security.context.HospitalContextHolder.clear();
+            }
+            verify(encounterRepository, never()).save(any());
+            verify(patientHospitalRegistrationRepository, never()).existsByPatientIdAndHospitalId(any(), any());
+        }
+
+        @Test
         @DisplayName("submitTriage refuses an encounter belonging to another hospital")
         void submitTriageRefusesForeignEncounter() {
             Encounter foreign = encounterAt(OTHER_HOSPITAL);

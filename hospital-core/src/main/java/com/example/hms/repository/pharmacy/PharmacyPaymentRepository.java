@@ -54,6 +54,15 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
             @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
             @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to);
 
+    /** QA D4186 (r81): every payment (voided ones too) taken for fills of one pharmacy of the hospital, newest first. */
+    @org.springframework.data.jpa.repository.Query(value = "SELECT p FROM PharmacyPayment p "
+         + "WHERE p.hospital.id = :hospitalId AND p.dispense.pharmacy.id = :pharmacyId ORDER BY p.createdAt DESC",
+        countQuery = "SELECT COUNT(p) FROM PharmacyPayment p "
+         + "WHERE p.hospital.id = :hospitalId AND p.dispense.pharmacy.id = :pharmacyId")
+    Page<PharmacyPayment> findHistoryForPharmacy(
+            @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+            @org.springframework.data.repository.query.Param("pharmacyId") UUID pharmacyId, Pageable pageable);
+
     /** QA D843: whether a dispense already carries a POSTED payment. */
     boolean existsByDispense_IdAndStatus(UUID dispenseId, com.example.hms.enums.PharmacyPaymentStatus status);
 

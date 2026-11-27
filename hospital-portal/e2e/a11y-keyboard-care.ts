@@ -172,6 +172,9 @@ for (const unitPrice of [0, 125]) {
                 quantityOnHand: 10,
                 unit: 'comprimé',
                 unitPrice,
+                // Review of #1380 (F3): an item with no price is documented free (an unpriced one asks for an
+                // urgency reason).
+                ...(unitPrice ? {} : { freeOfChargeReason: 'cdx synthetic free item' }),
                 active: true,
               },
             ],
