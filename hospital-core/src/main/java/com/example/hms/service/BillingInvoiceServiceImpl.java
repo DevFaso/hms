@@ -1594,8 +1594,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // Review of #1276 (QA D2523): the lines that stood when this money was received; a folded copay's own line.
         List<com.example.hms.model.InvoiceItem> paidFor = folded ? foldedCopayLines(invoice, row)
             : PdfInvoiceService.linesWhenReceived(invoice.getInvoiceItems(), row);
+        // Insurer claims plan PR 1 (QA D2712): who covered the bill then, under which plan and policy.
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> sharesThen = coverageService != null
+            ? coverageService.sharesStandingAt(invoice, receivedAt(row)) : List.of();
         byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, totalThen,
-            payerShareThen, folded, receivedBy != null ? cashierName(receivedBy) : null, paidFor, effectiveLocale);
+            payerShareThen, folded, receivedBy != null ? cashierName(receivedBy) : null, paidFor, sharesThen,
+            effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
     }
 

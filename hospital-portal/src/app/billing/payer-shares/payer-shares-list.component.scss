@@ -123,3 +123,83 @@
     min-width: 0;
   }
 }
+
+/* Insurer claims PR 1 (G2): the filters wrap at phone width. */
+.share-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.share-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1 1 160px;
+
+  select,
+  input {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+.share-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.share-warning {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+/* G1: the acts claimed, scrolled inside the card rather than the page. */
+.share-acts-wrap {
+  margin-top: 0.6rem;
+  overflow-x: auto;
+}
+
+.share-acts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+
+  th,
+  td {
+    padding: 0.3rem 0.4rem;
+    border-top: 1px solid var(--border-color, #e4e7ec);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--text-secondary, #5b6472);
+  }
+
+  .amount {
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
+.act-code {
+  font-family: monospace;
+  margin-right: 0.25rem;
+}
+
+.share-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}

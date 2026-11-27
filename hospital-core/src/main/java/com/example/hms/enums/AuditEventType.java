@@ -145,6 +145,11 @@ public enum AuditEventType {
     PAYER_SHARE_DECIDED,
     /** Billing-money plan PR 7: a payer share cancelled with its invoice, or replaced after a credit note (ids only). */
     PAYER_SHARE_CANCELLED,
+    /**
+     * Insurer claims plan PR 1 (V383, QA D3984): an insurer's pre-authorisation number recorded on an invoice line or
+     * an imaging order, or copied from the order onto its lines (ids and counts only, never the number).
+     */
+    PRE_AUTHORISATION_RECORDED,
     /** Billing-money plan PR 4: a price-list CSV file applied (import id and row counts only). */
     PRICE_LIST_IMPORTED,
     /** Billing-money plan PR 3 (D-2): a tariff price overridden on a draft line, with a reason (ids only). */

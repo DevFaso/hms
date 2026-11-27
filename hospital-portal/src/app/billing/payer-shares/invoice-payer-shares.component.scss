@@ -83,3 +83,10 @@
   color: var(--color-text-muted, var(--text-secondary));
   margin: 0.25rem 0 0;
 }
+
+.payer-shares-policy {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #5b6472);
+  overflow-wrap: anywhere;
+}

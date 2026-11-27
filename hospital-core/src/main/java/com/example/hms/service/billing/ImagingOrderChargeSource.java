@@ -42,9 +42,12 @@ public class ImagingOrderChargeSource implements VisitChargeSource {
         for (ImagingOrder order : orders) {
             String study = order.getStudyType();
             if (study != null && !study.isBlank()) {
+                // Insurer claims plan PR 1 (V383, QA D3984): the line names its order and carries the
+                // pre-authorisation number already recorded on it; one recorded later is copied onto the line.
                 lines.add(tariffOf(order, study, visit).map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
                     .orElseGet(() -> VisitCharge.of(study.trim(), ItemCategory.SERVICE, 1,
-                        visit.prices().sameName(study))));
+                        visit.prices().sameName(study)))
+                    .forOrder(order.getId(), order.getAuthorizationNumber()));
             }
         }
         return lines;

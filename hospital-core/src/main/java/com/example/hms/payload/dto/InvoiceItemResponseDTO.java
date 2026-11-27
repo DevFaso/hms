@@ -63,4 +63,10 @@ public class InvoiceItemResponseDTO {
     /** QA D2437: the payer's part is an estimate (a draft): it is fixed only when the invoice is issued. */
     private boolean payerShareEstimated;
 
+    /** Insurer claims plan PR 1 (QA D3984): the insurer's pre-authorisation number of the act; null when none. */
+    private String preAuthorisationNumber;
+    private LocalDateTime preAuthorisationRecordedAt;
+    /** The kind of order the line bills (IMAGING_ORDER, PROCEDURE_ORDER), when it was posted at checkout. */
+    private String sourceOrderType;
+
 }

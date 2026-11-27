@@ -2157,6 +2157,8 @@
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
+      "PRE_AUTHORISATION_ON_LINE": "Número de autorización previa registrado en la línea {{line}} de la factura {{invoice}}",
+      "PRE_AUTHORISATION_COPIED": "Número de autorización previa copiado de la solicitud {{order}} a {{count}} línea(s) de factura",
       "PACS_SETTINGS_CHANGED": "Configuración de conexión PACS modificada",
       "IMAGING_STUDY_VIEWED": "Estudio de imagen abierto en el visor ({{count}} imágenes)",
       "MFA_RESET_BY_ADMIN": "Verificación en dos pasos restablecida por un administrador: {{reason}}",
@@ -7840,6 +7842,7 @@
         "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
         "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
         "PAYER_SHARE_CANCELLED": "Insurer share cancelled",
+        "PRE_AUTHORISATION_RECORDED": "Número de autorización previa registrado",
         "MFA_RESET": "Verificación en dos pasos restablecida",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Opciones de SMS / correo del paciente modificadas",
         "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
@@ -16590,6 +16593,44 @@
     "RESENT": "Activación enviada de nuevo.",
     "RESENT_NOWHERE": "La activación no se pudo enviar: muestre el código y entréguelo en persona.",
     "RESEND_FAILED": "No se pudo volver a enviar la activación."
+  },
+  "INSURER_CLAIMS": {
+    "SHARES": {
+      "FILTERS": "Filtrar las partes del asegurador",
+      "PAYER": "Pagador",
+      "ALL_PAYERS": "Todos los pagadores",
+      "ALL_PLANS": "Todos los planes",
+      "FROM": "Atención desde",
+      "TO": "Atención hasta",
+      "APPLY": "Aplicar",
+      "CLEAR": "Borrar",
+      "PERIOD_REVERSED": "El fin del periodo es anterior a su inicio.",
+      "POLICY": "N.º de póliza",
+      "POLICY_VALUE": "N.º de póliza {{number}}",
+      "SUBSCRIBER": "Asegurado principal",
+      "SUBSCRIBER_VALUE": "Asegurado principal: {{name}}",
+      "UNVERIFIED": "Cobertura nunca verificada en recepción: verifique los derechos del paciente antes de reclamar.",
+      "ACTS": "Actos reclamados",
+      "ACT": "Acto",
+      "PRE_AUTH": "Autorización previa",
+      "NO_PRE_AUTH": "Ninguna",
+      "PAYER_PART": "Parte del asegurador",
+      "PAGES": "Páginas de las partes del asegurador",
+      "PAGE": "Página {{page}} de {{pages}}",
+      "PREVIOUS": "Anterior",
+      "NEXT": "Siguiente"
+    },
+    "LINE": {
+      "VALUE": "N.º de autorización previa {{number}}",
+      "RECORD": "Registrar el n.º de autorización previa",
+      "CORRECT": "Corregir el n.º de autorización previa",
+      "LABEL": "Número de autorización previa (asegurador)",
+      "REQUIRED": "Introduzca el número de autorización previa dado por el asegurador.",
+      "CHARACTERS": "Solo letras, cifras, espacios y . / _ # : - (120 caracteres como máximo).",
+      "SAVED": "Número de autorización previa registrado.",
+      "SAVED_WITH_ORDER": "Número de autorización previa registrado en el acto y en su solicitud de imagen.",
+      "FAILED": "No se pudo registrar el número de autorización previa."
+    }
   },
   "R70_MONEY": {
     "DEFERRAL": {

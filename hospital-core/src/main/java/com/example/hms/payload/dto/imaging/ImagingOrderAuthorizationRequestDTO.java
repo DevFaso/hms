@@ -22,6 +22,7 @@ public class ImagingOrderAuthorizationRequestDTO {
 
     @NotBlank
     @Size(max = 120)
+    @com.example.hms.validation.NoCardNumber
     @Schema(description = "The pre-authorisation number", requiredMode = Schema.RequiredMode.REQUIRED)
     private String authorizationNumber;
 }
