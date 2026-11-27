@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
@@ -70,25 +71,17 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * gave the table a {@code hospital_id}; the rows written before it carry
  * none and are shown only to a verified super-admin in global view.
  *
- * <p>Scoped to the readable set, but <b>with no sensitivity test</b>: active
- * medications, recent vitals, latest labs, pending orders and legacy diagnoses.
- * {@code SensitivityClassifier} has {@code effectiveCategory} overloads for
- * {@code Encounter}, {@code Admission}, {@code Consultation},
- * {@code PatientProblem} and {@code NursingNote} only, so there is nothing to
- * pass {@code CrossHospitalRows.maySurface} for a {@code Prescription},
- * {@code PatientVitalSign}, {@code LabResult}, {@code LabOrder} or a legacy
- * {@code PatientDiagnosis}. The
- * consequence, stated plainly because the omission is invisible at the call
- * site: a foreign row in a sensitive category (HIV, behavioural health,
- * substance use, reproductive health) is <b>withheld</b> when it is an
- * encounter or a problem and <b>surfaces</b> when it is a prescription, a
- * vital, a lab result or an order. That is pre-existing — building those
- * overloads is its own change — but it is not a guarantee this class makes,
- * and nothing here should be read as one.
+ * <p>Scoped to the readable set and following the visit they were recorded
+ * in ({@link RestrictedVisitScope}): active medications, recent vitals, latest
+ * labs and pending orders. A row recorded at another hospital in a visit that
+ * hospital restricted is withheld with the visit, and unlocked with it.
  *
- * <p>Scoped AND sensitivity-tested: encounters (and the notes and care team
- * derived from them) and the {@code patient_problems} half of the active
- * diagnoses.
+ * <p>Scoped to the readable set only: the legacy {@code PatientDiagnosis}
+ * rows, which name no visit and carry no category.
+ *
+ * <p>Scoped AND sensitivity-tested on their own category: encounters (and the
+ * notes and care team derived from them) and the {@code patient_problems}
+ * half of the active diagnoses.
  */
 @Slf4j
 @Service
@@ -223,6 +216,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         // hospital are their own disclosure reason, never counted in both.
         Map<String, Long> performedHereReach = new HashMap<>();
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
+        // What a visit produced follows the visit: withheld with it, unlocked with it.
+        RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
                 .name(patient.getFullName())
@@ -238,10 +234,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 // QA D504: the diagnoses, medications, vitals and labs below are narrowed the same way.
                 .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
-                .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
-                .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
-                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach, performedHereReach))
-                .pendingOrders(buildPendingOrders(patientId, hospitalId, readable, reach))
+                .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach, restricted))
+                .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach, restricted))
+                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach, performedHereReach, restricted))
+                .pendingOrders(buildPendingOrders(patientId, hospitalId, readable, reach, restricted))
                 .recentNotes(buildRecentNotes(encounters))
                 .careTeam(buildCareTeam(encounters))
                 .build();
@@ -357,8 +353,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // sees them on their own record through the portal. The hospital
             // is never derived from diagnosedBy: that is the subject's, and
             // scope is the caller's.
-            // No sensitivity test: SensitivityClassifier has no overload for a
-            // diagnosis row, the same stated gap as medications and labs.
+            // A legacy diagnosis row names no visit and carries no category.
             List<PatientDiagnosis> legacy = new ArrayList<>(patientDiagnosisRepository
                     .findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(
                             patientId, DIAGNOSIS_STATUS_ACTIVE, readable));
@@ -404,7 +399,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private List<PatientSnapshotDTO.MedicationItem> buildActiveMedications(UUID patientId, UUID hospitalId,
-                                                                          Set<UUID> readable, Map<String, Long> reach) {
+                                                                          Set<UUID> readable, Map<String, Long> reach,
+                                                                          RestrictedVisitScope restricted) {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
@@ -422,6 +418,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable,
                             org.springframework.data.domain.Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt")))
                     .getContent(), hospitalId).stream()
+                    .filter(restricted::admits)
                     .filter(rx -> com.example.hms.service.MedicationCourseStatus.isActive(rx, closedStays))
                     .toList();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
@@ -437,11 +434,17 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private List<PatientSnapshotDTO.VitalItem> buildRecentVitals(UUID patientId, UUID hospitalId,
-                                                                Set<UUID> readable, Map<String, Long> reach) {
+                                                                Set<UUID> readable, Map<String, Long> reach,
+                                                                RestrictedVisitScope restricted) {
         List<PatientSnapshotDTO.VitalItem> vitals = new ArrayList<>();
         try {
+            // A vital sign names no visit: it is judged by the day and the
+            // hospital it was taken at, so the latest five are cut after it.
+            org.springframework.data.domain.Pageable window = restricted.isEmpty()
+                    ? PageRequest.of(0, 5) : org.springframework.data.domain.Pageable.unpaged();
             List<PatientVitalSign> rows = patientVitalSignRepository
-                    .findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, PageRequest.of(0, 5));
+                    .findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, window)
+                    .stream().filter(restricted::admits).limit(5).toList();
             account(reach, hospitalId, rows.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
             rows.forEach(v -> vitals.add(PatientSnapshotDTO.VitalItem.builder()
                             .type("VITALS")
@@ -462,7 +465,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
 
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,
                                                             Set<UUID> readable, Map<String, Long> reach,
-                                                            Map<String, Long> performedHereReach) {
+                                                            Map<String, Long> performedHereReach,
+                                                            RestrictedVisitScope restricted) {
         List<PatientSnapshotDTO.LabItem> labs = new ArrayList<>();
         try {
             // Paged at the DB so the patient's full lab history is never loaded
@@ -473,9 +477,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // as on the other staff lab views.
             // QA D740/D741: released, current results only — a snapshot shows
             // values, and an unreleased or superseded one is not a result.
+            PageRequest latest = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
+            // A result follows its order's visit: with a visit withheld, the latest ten are cut after it.
+            org.springframework.data.domain.Pageable window = restricted.isEmpty()
+                    ? latest : org.springframework.data.domain.Pageable.unpaged(latest.getSort());
             List<LabResult> rows = ClinicalLabResultView.releasedAndCurrent(
-                    labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
-                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id"))));
+                    labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, window)
+                    .stream().filter(restricted::admits).limit(10).toList());
             account(reach, hospitalId, rows.stream()
                     .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
@@ -546,11 +554,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private List<PatientSnapshotDTO.OrderItem> buildPendingOrders(UUID patientId, UUID hospitalId,
-                                                                 Set<UUID> readable, Map<String, Long> reach) {
+                                                                 Set<UUID> readable, Map<String, Long> reach,
+                                                                 RestrictedVisitScope restricted) {
         List<PatientSnapshotDTO.OrderItem> pendingOrders = new ArrayList<>();
         try {
             List<com.example.hms.model.LabOrder> rows =
-                    labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+                    labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable)
+                            .stream().filter(restricted::admits).toList();
             account(reach, hospitalId, rows.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList());
             rows.stream()
                     .filter(o -> o.getStatus() == com.example.hms.enums.LabOrderStatus.PENDING

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ImmunizationMapper;
 import com.example.hms.model.Encounter;
@@ -126,7 +127,11 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         } else {
             UUID requesterUserId = ctx.getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-            immunizations = immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, readable);
+            // A vaccination given during a visit follows that visit's restriction.
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+            immunizations = immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, readable)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
                 "Cross-hospital immunization read on the treatment relationship");
@@ -199,8 +204,11 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         } else {
             UUID requesterUserId = ctx.getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
             immunizations = immunizationRepository
-                .findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(patientId, readable, vaccineCode);
+                .findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(patientId, readable, vaccineCode)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
                 "Cross-hospital immunization read on the treatment relationship");
@@ -209,6 +217,33 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
                 .toList();
+    }
+
+    /**
+     * What a reader at the acting hospital may see of the patient's doses, as
+     * {@link #getImmunizationsByPatientId} reads them: the rows of the
+     * hospitals the policy opens, less a dose given in a visit withheld from
+     * this hospital; every foreign row shown is accounted. A super-admin in
+     * global view keeps every row.
+     */
+    private List<PatientImmunization> sharedHere(UUID patientId, List<PatientImmunization> rows) {
+        UUID actingHospitalId = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (actingHospitalId == null) {
+            return rows;
+        }
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+        List<PatientImmunization> shown = rows.stream()
+            .filter(row -> readable.contains(CrossHospitalReachRecorder.hospitalIdOf(row.getHospital())))
+            .filter(restricted::admits)
+            .toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(shown.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital immunization read on the treatment relationship");
+        return shown;
     }
 
     @Override
@@ -220,7 +255,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> overdueImmunizations = immunizationRepository.findOverdueImmunizations(patientId);
+        List<PatientImmunization> overdueImmunizations =
+                sharedHere(patientId, immunizationRepository.findOverdueImmunizations(patientId));
         
         return overdueImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
@@ -236,8 +272,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> upcomingImmunizations = 
-                immunizationRepository.findUpcomingDueDates(patientId, startDate, endDate);
+        List<PatientImmunization> upcomingImmunizations =
+                sharedHere(patientId, immunizationRepository.findUpcomingDueDates(patientId, startDate, endDate));
         
         return upcomingImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
@@ -253,8 +289,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> needingReminders = 
-                immunizationRepository.findImmunizationsNeedingReminders(patientId, reminderDate);
+        List<PatientImmunization> needingReminders =
+                sharedHere(patientId, immunizationRepository.findImmunizationsNeedingReminders(patientId, reminderDate));
         
         return needingReminders.stream()
                 .map(immunizationMapper::toResponseDTO)
