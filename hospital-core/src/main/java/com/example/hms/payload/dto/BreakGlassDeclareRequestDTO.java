@@ -2,7 +2,6 @@ package com.example.hms.payload.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -29,8 +28,8 @@ public class BreakGlassDeclareRequestDTO {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
-    @NotBlank
-    @Size(min = 10, max = 1024)
+    @com.example.hms.validation.ClinicalOverrideReasonRequired
+    @Size(max = 1024)
     @Schema(description = "Clinical justification (logged + reviewable). Min 10 characters to discourage no-op declarations.",
             example = "Patient unconscious, no proxy reachable; need allergy/med history for emergency intubation.",
             requiredMode = Schema.RequiredMode.REQUIRED)

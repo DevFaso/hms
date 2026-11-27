@@ -670,7 +670,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         boolean tied = heldForException(cards);
         String token = tied ? doseExceptionToken(prescription, signer, cards) : null;
         String reason = request == null || request.getAllergyOverrideReason() == null
-            ? "" : request.getAllergyOverrideReason().trim();
+            ? "" : com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getAllergyOverrideReason());
         boolean sufficient = com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason);
         boolean stale = tied && sufficient && !tokenMatches(request, token);
         if (!sufficient || stale) {
@@ -825,7 +825,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         CdsCard card = stop.get().card().withExceptionKey(ALLERGY_KEY_PREFIX + token);
         String allergen = com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(stop.get().allergy());
         String reason = request == null || request.getAllergyOverrideReason() == null
-            ? "" : request.getAllergyOverrideReason().trim();
+            ? "" : com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getAllergyOverrideReason());
         if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
             throw new CdsCriticalBlockException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("clinical.override.reasonMin"),
@@ -1100,7 +1100,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private String requireUrgentReason(Prescription prescription, List<CdsCard> cards, Staff signer,
                                        com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
         String token = doseExceptionToken(prescription, signer, cards);
-        String reason = request.getAllergyOverrideReason() == null ? "" : request.getAllergyOverrideReason().trim();
+        String reason = request.getAllergyOverrideReason() == null ? "" : com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getAllergyOverrideReason());
         boolean sufficient = com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason);
         boolean stale = sufficient && !tokenMatches(request, token);
         if (!sufficient || stale) {
@@ -3223,7 +3223,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         // A hard safety stop: an allergy recorded at ANY hospital counts.
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
-        String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
+        String reason = request.getOverrideReason() != null ? com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getOverrideReason()) : "";
         Optional<CdsCard> block = allergyBlock(medicationName, allergyItems(medicationName, catalogItem, hospitalId),
             allergies);
         if (block.isEmpty()) {
@@ -3338,7 +3338,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 || advisories.stream().noneMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL)) {
             return null;
         }
-        String reason = request.getOverrideReason() == null ? "" : request.getOverrideReason().trim();
+        String reason = request.getOverrideReason() == null ? "" : com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getOverrideReason());
         return reason.isEmpty() ? null : reason;
     }
 

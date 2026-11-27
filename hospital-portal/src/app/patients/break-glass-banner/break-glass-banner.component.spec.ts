@@ -120,6 +120,33 @@ describe('BreakGlassBannerComponent', () => {
     expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
   });
 
+  it('refuses padded short reasons and allows ten non-whitespace characters', () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    bgSpy.declare.and.returnValue(of(liveSession));
+    setInputs('p1');
+    expect(fixture.componentInstance.openDeclare()).toBeTrue();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('#bgReason') as HTMLTextAreaElement;
+    const submit = fixture.nativeElement.querySelector(
+      '.bg-modal__actions .bg-banner__btn--danger',
+    ) as HTMLButtonElement;
+    for (const reason of ['ok', '          ', '123456789   ']) {
+      input.value = reason;
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      submit.click();
+      expect(bgSpy.declare).not.toHaveBeenCalled();
+    }
+    input.value = '12345 67890';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    submit.click();
+    expect(bgSpy.declare).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ reason: '12345 67890' }),
+    );
+  });
+
   it('shows the prompt button when clinician has no active session', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));

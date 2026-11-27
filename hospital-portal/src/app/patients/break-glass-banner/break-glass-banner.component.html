@@ -68,7 +68,9 @@
         [ngModel]="reason()"
         (ngModelChange)="reason.set($event)"
         [placeholder]="'BREAK_GLASS.REASON_PLACEHOLDER' | translate"
+        aria-describedby="bg-reason-hint"
       ></textarea>
+      <small id="bg-reason-hint">{{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}</small>
 
       <label class="bg-modal__label" for="bgTtl">
         {{ 'BREAK_GLASS.TTL_LABEL' | translate }}

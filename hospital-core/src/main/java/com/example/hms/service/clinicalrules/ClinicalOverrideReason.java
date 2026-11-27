@@ -7,10 +7,25 @@ public final class ClinicalOverrideReason {
 
     private ClinicalOverrideReason() { }
 
+    private static boolean whitespace(int ch) {
+        return Character.isWhitespace(ch) || Character.isSpaceChar(ch) || ch == 0xfeff;
+    }
+
+    public static String trim(String reason) {
+        if (reason == null) return null;
+        int start = 0;
+        int end = reason.length();
+        while (start < end && whitespace(reason.codePointAt(start))) {
+            start += Character.charCount(reason.codePointAt(start));
+        }
+        while (end > start && whitespace(reason.codePointBefore(end))) {
+            end -= Character.charCount(reason.codePointBefore(end));
+        }
+        return reason.substring(start, end);
+    }
+
     public static boolean isSufficient(String reason) {
         if (reason == null) return false;
-        return reason.strip().codePoints()
-            .filter(ch -> !Character.isWhitespace(ch) && !Character.isSpaceChar(ch))
-            .count() >= MIN_NON_WHITESPACE;
+        return trim(reason).codePoints().filter(ch -> !whitespace(ch)).count() >= MIN_NON_WHITESPACE;
     }
 }
