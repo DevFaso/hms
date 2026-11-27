@@ -758,6 +758,12 @@ public class SecurityConfig {
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN,
                         ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                // QA D4223 (round 81): who pays for a patient is read by the cashier and the accountant too (who
+                // to bill, who an invoice may be mailed to), in their own hospital; the rest of GET /patients/**
+                // stays closed to them. Mirrors PatientGuarantorController.READ_ROLES; the writes keep their gate.
+                .requestMatchers(HttpMethod.GET, API_PATIENTS + "/*/guarantors")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_DOCTOR, ROLE_MIDWIFE,
+                    ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
@@ -1002,6 +1008,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES + "/*/payer-shares/*/*")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER)
 
+                // QA D4222 / D4223 (round 81): the addresses an invoice may be mailed to, for those who may mail
+                // it (the POST below), not for every reader of invoices. Before the broader GET pattern.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/email-recipients")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
 

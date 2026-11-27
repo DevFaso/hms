@@ -277,6 +277,12 @@ final class ComputedKeys {
         // TRANSFUSION_PRODUCT link is a PriceListSystemKey / BloodProductType name (PriceListLinks#normalise).
         r.put("com/example/hms/service/billing/PriceListLinks.java|\"billing.priceList.systemKey.\" + storedKey",
             enumValues("billing.priceList.systemKey.", com.example.hms.enums.PriceListSystemKey.class));
+        // QA D4222: the refusal of an invoice e-mail, one text per reason the message gate gives
+        // (InvoiceEmailService#refusalKey, a switch with no default; InvoiceMailRefusalReasonsTest).
+        r.put("com/example/hms/service/InvoiceEmailService.java|refusalKey(r)",
+            values("", List.of("billing.invoice.emailOptedOut", "billing.invoice.emailUnverified")));
+        r.put("com/example/hms/service/InvoiceEmailService.java|refusalKey(refused.get())",
+            values("", List.of("billing.invoice.emailOptedOut", "billing.invoice.emailUnverified")));
         // Billing-money plan PR 7: a payer share that cannot take a decision names its status.
         r.put("com/example/hms/service/billing/InvoiceCoverageService.java|\"billing.payerShare.status.\" + share.getStatus().name()",
             enumValues("billing.payerShare.status.", com.example.hms.enums.PayerShareStatus.class));

@@ -59,6 +59,16 @@ public class BedDaysChargeSource implements VisitChargeSource {
         }
         int days = (int) Math.max(1, ChronoUnit.DAYS.between(in, out));
         // PR 3: the hospital's bed-day tariff first, else its service named for a stay.
+        // QA D4221 (class): a stay in observation of under 24 hours takes the hospital's observation tariff, once,
+        // when its price list has one; else the bed-day tariff as before.
+        if (admission.getAdmissionType() == com.example.hms.enums.AdmissionType.OBSERVATION
+                && underADay(admission, visit)) {
+            Optional<TariffResolver.Tariff> observation =
+                visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.BED_DAY_OBSERVATION.name());
+            if (observation.isPresent()) {
+                return List.of(VisitCharge.tariffed(observation.get(), ItemCategory.SERVICE, 1));
+            }
+        }
         Optional<TariffResolver.Tariff> tariff =
             visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.BED_DAY.name());
         if (tariff.isPresent()) {
@@ -71,5 +81,12 @@ public class BedDaysChargeSource implements VisitChargeSource {
             return List.of(VisitCharge.of(stay.get().getName(), ItemCategory.SERVICE, days, stay));
         }
         return List.of(VisitCharge.worded(BillingText.of(BED_DAYS_CODE), ItemCategory.SERVICE, days, stay));
+    }
+
+    /** Whether the stay lasted under 24 hours, from the admission to the discharge (else to the checkout). */
+    private static boolean underADay(Admission admission, Visit visit) {
+        java.time.LocalDateTime out = admission.getActualDischargeDateTime() != null
+            ? admission.getActualDischargeDateTime() : visit.checkedOutAt();
+        return out != null && java.time.Duration.between(admission.getAdmissionDateTime(), out).toHours() < 24;
     }
 }

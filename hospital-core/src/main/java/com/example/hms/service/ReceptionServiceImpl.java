@@ -852,14 +852,32 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
     }
 
+    /**
+     * QA D4225 (round 81): a department named in a desk request is one of the acting hospital. Any other id, known
+     * elsewhere or not, is the same « not found ».
+     */
+    private Department departmentOfHospital(UUID departmentId, UUID hospitalId) {
+        return departmentRepo.findById(departmentId)
+                .filter(d -> d.getHospital() != null && hospitalId != null
+                        && hospitalId.equals(d.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+    }
+
+    /** QA D4225: a clinician named in a desk request is an active member of the acting hospital's staff. */
+    private Staff clinicianOfHospital(UUID staffId, UUID hospitalId) {
+        return staffRepo.findByIdAndActiveTrue(staffId)
+                .filter(s -> s.getHospital() != null && hospitalId != null
+                        && hospitalId.equals(s.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", staffId));
+    }
+
     @Override
     @Transactional
     public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
                                                    String actorUsername) {
         Hospital hospital = hospitalRepo.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-        Department department = departmentRepo.findById(req.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", req.getDepartmentId()));
+        Department department = departmentOfHospital(req.getDepartmentId(), hospitalId);
         // Same fix as the snapshot above: a waitlist entry for a patient whose
         // first hospital is elsewhere would otherwise be impossible to create.
         Patient patient = patientRepo.findByIdUnscoped(req.getPatientId())
@@ -873,8 +891,14 @@ public class ReceptionServiceImpl implements ReceptionService {
                 registrationRepo, req.getPatientId(), hospitalId);
         requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
-                ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
+                ? clinicianOfHospital(req.getPreferredProviderId(), hospitalId)
                 : null;
+        // QA D4229 (round 81): one open request per patient and department; the desk added the same one twice.
+        if (waitlistRepo.existsByHospital_IdAndPatient_IdAndDepartment_IdAndStatusIn(hospitalId, patient.getId(),
+                department.getId(), List.of(WAITLIST_STATUS_WAITING, WAITLIST_STATUS_OFFERED))) {
+            throw new com.example.hms.exception.FieldBusinessException("departmentId", "waitlist.entry.alreadyOpen",
+                department.getName());
+        }
 
         AppointmentWaitlist entry = AppointmentWaitlist.builder()
                 .hospital(hospital)

@@ -440,6 +440,16 @@ export class EnumLabelService implements OnDestroy {
       BED_DAY: 'Bed day',
       DELIVERY_VAGINAL: 'Vaginal delivery',
       DELIVERY_CAESAREAN: 'Caesarean section',
+      CONSULTATION_EMERGENCY: 'Emergency consultation (day)',
+      CONSULTATION_EMERGENCY_NIGHT: 'Emergency consultation (night and Sunday)',
+      CONSULTATION_FOLLOW_UP: 'Follow-up consultation',
+      CONSULTATION_PRENATAL: 'Antenatal consultation',
+      CONSULTATION_POSTNATAL: 'Postnatal consultation',
+      CONSULTATION_PAEDIATRICS: 'Paediatric consultation',
+      CONSULTATION_GYNAECOLOGY: 'Gynaecology and obstetrics consultation',
+      CONSULTATION_SURGERY: 'Surgery consultation',
+      CONSULTATION_INTERNAL_MEDICINE: 'Internal medicine consultation',
+      BED_DAY_OBSERVATION: 'Observation stay (under 24 hours)',
     },
     /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
      * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */

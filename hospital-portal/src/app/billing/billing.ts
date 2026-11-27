@@ -19,6 +19,7 @@ import {
   BillingInvoiceRequest,
   InvoiceItemCategory,
   InvoiceItemResponse,
+  InvoiceMailRecipientOptions,
   InvoiceStatus,
   INVOICE_ITEM_CATEGORIES,
   INVOICE_ADJUSTMENT_TYPES,
@@ -82,12 +83,19 @@ import {
 } from '../shared/mobile-money-operator';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
+/** QA D4223: an address as the server compares it (case and outer spaces ignored). */
+function normalisedEmail(address: string): string {
+  return address.trim().toLowerCase();
+}
+
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
 const CANCEL_REASON_ID = 'bill-cancel-reason';
 /** The invoice e-mail's address fields (QA D1179), marked when an address is refused. */
 const EMAIL_TO_ID = 'email-to';
 const EMAIL_CC_ID = 'email-cc';
-const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
+/** QA D4223 (round 81): why the invoice goes to an address that is on no file. */
+const EMAIL_REASON_ID = 'email-reason';
+const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID, EMAIL_REASON_ID];
 /** QA D1306 class: the payment form's fields a refusal marks or clears. */
 const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-reference'];
 
@@ -407,6 +415,35 @@ export class BillingComponent implements OnInit {
   emailMessage = signal('');
   emailAttachPdf = signal(true);
   emailSending = signal(false);
+  /** QA D4223 (round 81): the reason for an address that is on no file. */
+  emailReason = signal('');
+  /**
+   * QA D4222 / D4223: the addresses the hospital holds for the invoice; null
+   * while they load, and when they could not be read (the server then judges
+   * the addresses typed, as before).
+   */
+  emailOptions = signal<InvoiceMailRecipientOptions | null>(null);
+  emailOptionsLoading = signal(false);
+  /** The typed addresses (To and Cc) that are on no file: they need the reason. */
+  readonly emailOffFile = computed(() => {
+    const options = this.emailOptions();
+    if (!options) return [];
+    const onFile = new Set(
+      [options.patient?.address, ...options.guarantors.map((g) => g.address)]
+        .filter((a): a is string => !!a)
+        .map(normalisedEmail),
+    );
+    return [...emailAddresses(this.emailTo()), ...emailAddresses(this.emailCc())].filter(
+      (a) => !onFile.has(normalisedEmail(a)),
+    );
+  });
+  /** How many distinct addresses the send would reach, To and Cc together. */
+  readonly emailRecipientCount = computed(
+    () =>
+      new Set(
+        [...emailAddresses(this.emailTo()), ...emailAddresses(this.emailCc())].map(normalisedEmail),
+      ).size,
+  );
 
   /* ── Payment modal ── */
   showPaymentModal = signal(false);
@@ -1484,11 +1521,55 @@ export class BillingComponent implements OnInit {
 
   openEmail(inv: BillingInvoiceResponse): void {
     this.emailInv.set(inv);
-    this.emailTo.set(inv.patientEmail ?? '');
+    // QA D4222 (round 81): the patient's address is not typed in before the
+    // server says a send to it would go through. It used to be pre-filled
+    // even when it was unverified, so the default action always failed.
+    this.emailTo.set('');
     this.emailCc.set('');
     this.emailMessage.set('');
+    this.emailReason.set('');
     this.emailAttachPdf.set(true);
+    this.emailOptions.set(null);
+    this.emailOptionsLoading.set(true);
     this.showEmailModal.set(true);
+    this.billingService.emailRecipients(inv.id).subscribe({
+      next: (options) => {
+        if (this.emailInv()?.id !== inv.id) return;
+        this.emailOptions.set(options);
+        this.emailOptionsLoading.set(false);
+        if (options.patient?.usable && !this.emailTo().trim()) {
+          this.emailTo.set(options.patient.address);
+        }
+      },
+      error: () => {
+        if (this.emailInv()?.id !== inv.id) return;
+        this.emailOptionsLoading.set(false);
+      },
+    });
+  }
+
+  /** QA D4223: whether an address on file is already among the recipients. */
+  emailHasRecipient(address: string): boolean {
+    const wanted = normalisedEmail(address);
+    return [...emailAddresses(this.emailTo()), ...emailAddresses(this.emailCc())].some(
+      (a) => normalisedEmail(a) === wanted,
+    );
+  }
+
+  /** QA D4223: adds an address on file to « À », or takes it back out of « À » and « Cc ». */
+  toggleEmailRecipient(address: string): void {
+    const wanted = normalisedEmail(address);
+    if (this.emailHasRecipient(address)) {
+      const without = (value: string) =>
+        emailAddresses(value)
+          .filter((a) => normalisedEmail(a) !== wanted)
+          .join(', ');
+      this.emailTo.set(without(this.emailTo()));
+      this.emailCc.set(without(this.emailCc()));
+      return;
+    }
+    const to = emailAddresses(this.emailTo());
+    this.emailTo.set([...to, address].join(', '));
   }
 
   closeEmail(): void {
@@ -1518,6 +1599,36 @@ export class BillingComponent implements OnInit {
       );
       return;
     }
+    const options = this.emailOptions();
+    // QA D4222: the patient's own address, when a send to it is sure to be
+    // refused, is refused here with the server's reason (unverified, or
+    // e-mails turned off), before anything is sent.
+    const own = options?.patient;
+    if (own && !own.usable && this.emailHasRecipient(own.address)) {
+      this.refuseEmail(
+        [EMAIL_TO_ID],
+        own.refusalMessage ?? this.translate.instant('BILLING.EMAIL_PATIENT_REFUSED'),
+      );
+      return;
+    }
+    if (options && this.emailRecipientCount() > options.maxRecipients) {
+      this.refuseEmail(
+        [EMAIL_TO_ID],
+        this.translate.instant('BILLING.EMAIL_TOO_MANY', { max: options.maxRecipients }),
+      );
+      return;
+    }
+    // QA D4223: an address on no file needs the reason the server asks for.
+    const reason = this.emailReason().trim();
+    if (this.emailOffFile().length > 0 && !reason) {
+      this.refuseEmail(
+        [EMAIL_REASON_ID],
+        this.translate.instant('BILLING.EMAIL_REASON_REQUIRED', {
+          addresses: this.emailOffFile().join(', '),
+        }),
+      );
+      return;
+    }
     refuseFields(this.host.nativeElement, [], EMAIL_FIELD_IDS, '');
     this.emailSending.set(true);
     this.billingService
@@ -1527,6 +1638,9 @@ export class BillingComponent implements OnInit {
         message: this.emailMessage().trim() || undefined,
         locale: this.translate.currentLang || 'fr',
         attachPdf: this.emailAttachPdf(),
+        // Sent only for an address on no file (or when the list on file could
+        // not be read and the clerk typed one): the server ignores it otherwise.
+        reason: reason && (this.emailOffFile().length > 0 || !options) ? reason : undefined,
       })
       .subscribe({
         next: () => {

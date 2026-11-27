@@ -121,8 +121,10 @@ public final class ClinicalRuleRegistry {
             "service.impl.RefillApprovalServiceImpl", "service.pharmacy.RenewalAlertRouting"),
         rule(ClinicalRuleSetKey.DEFERRED_BILLING, DATE_2026_11_20,
             "service.pharmacy.DispenseBillingDeferralService"),
-        rule(ClinicalRuleSetKey.CONSULTATION_FEE, DATE_2026_11_20,
-            "service.billing.ConsultationChargeSource"),
+        // 2026-11-27 (.1), QA D4221: the consultation is billed the tariff of its kind (emergency by day or by
+        // night, follow-up, antenatal, postnatal, a specialty) when the price list has one; else the default.
+        rule(ClinicalRuleSetKey.CONSULTATION_FEE, "2026-11-27.1",
+            "service.billing.ConsultationChargeSource", "service.billing.ConsultationTariffContext"),
         rule(ClinicalRuleSetKey.EMERGENCY_EPISODE_CONSULTATION, DATE_2026_11_20,
             "service.billing.EmergencyEpisodeConsultation"),
         rule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING, DATE_2026_11_20,
