@@ -1,6 +1,8 @@
 package com.example.hms.upload;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.repository.UploadRecordRepository;
+import com.example.hms.security.HmsRoles;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.ActingScopeResolver;
@@ -135,16 +137,24 @@ public class UploadLimiter {
     }
 
     /** An account that holds the patient role and no other. */
+    /**
+     * Whether the caller's only HMS role is the patient's. Authorities that are not HMS roles (Keycloak's stock
+     * realm roles on the OIDC path: offline access, UMA, the realm's default roles) are not another role.
+     */
     private static boolean isPatientOnly(Authentication authentication) {
-        if (authentication == null || authentication.getAuthorities().isEmpty()) {
+        if (authentication == null) {
             return false;
         }
+        boolean patient = false;
         for (GrantedAuthority authority : authentication.getAuthorities()) {
-            if (!"ROLE_PATIENT".equals(authority.getAuthority())) {
+            String role = authority.getAuthority();
+            if (SecurityConstants.ROLE_PATIENT.equals(role)) {
+                patient = true;
+            } else if (HmsRoles.isHmsRole(role)) {
                 return false;
             }
         }
-        return true;
+        return patient;
     }
 
     private Bucket bucketOf(String caller) {

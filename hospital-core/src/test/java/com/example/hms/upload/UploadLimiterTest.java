@@ -48,10 +48,14 @@ class UploadLimiterTest {
     }
 
     private void actAs(String role, UUID activeHospital) {
+        actAs(activeHospital, role);
+    }
+
+    private void actAs(UUID activeHospital, String... roles) {
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(userId).principalUsername("m16").activeHospitalId(activeHospital).build());
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-            "m16", "unused", List.of(new SimpleGrantedAuthority(role))));
+            "m16", "unused", java.util.Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList()));
     }
 
     private void refused(UploadLimiter limiter, int files, long bytes, String key) {
@@ -105,6 +109,32 @@ class UploadLimiterTest {
 
         when(records.countByUserSince(eq(userId), any())).thenReturn(0L);
         refused(limiter(true), 1, 4 * MB + 1, "file.upload.quota.userBytes");
+    }
+
+    @Test
+    @DisplayName("a patient signed in through Keycloak keeps the patient allowance: its stock realm roles are not HMS roles")
+    void patientWithKeycloakDefaultRoles() {
+        actAs(null, "ROLE_PATIENT", "ROLE_OFFLINE_ACCESS", "ROLE_UMA_AUTHORIZATION", "ROLE_DEFAULT-ROLES-HMS");
+        when(records.countByUserSince(eq(userId), any())).thenReturn(2L);
+        refused(limiter(true), 1, 1, "file.upload.quota.userFiles");
+
+        when(records.countByUserSince(eq(userId), any())).thenReturn(0L);
+        refused(limiter(true), 1, 4 * MB + 1, "file.upload.quota.userBytes");
+    }
+
+    @Test
+    @DisplayName("staff keep the user allowance, with or without the patient role or Keycloak's stock roles")
+    void staffKeepTheUserAllowance() {
+        when(records.countByUserSince(eq(userId), any())).thenReturn(4L);
+        when(records.bytesByUserSince(eq(userId), any())).thenReturn(10 * MB);
+        for (String[] roles : new String[][] {
+            {"ROLE_NURSE", "ROLE_OFFLINE_ACCESS", "ROLE_UMA_AUTHORIZATION", "ROLE_DEFAULT-ROLES-HMS"},
+            {"ROLE_PATIENT", "ROLE_DOCTOR", "ROLE_OFFLINE_ACCESS"},
+            {"ROLE_OFFLINE_ACCESS"}}) {
+            actAs(hospitalId, roles);
+            assertThatCode(() -> limiter(true).admit(1, 10 * MB)).as("%s", (Object) roles)
+                .doesNotThrowAnyException();
+        }
     }
 
     @Test

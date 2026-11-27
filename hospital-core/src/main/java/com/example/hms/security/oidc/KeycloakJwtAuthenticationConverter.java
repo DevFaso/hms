@@ -1,6 +1,7 @@
 package com.example.hms.security.oidc;
 
 import com.example.hms.config.SecurityConstants;
+import com.example.hms.security.HmsRoles;
 import com.example.hms.security.RoleExpansion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,11 +13,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,7 +75,7 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
     private static final int MAX_LOGGED_NAME_LENGTH = 64;
 
     /** Every {@code ROLE_*} constant in {@link SecurityConstants}, plus {@link RoleExpansion#ROLE_PHYSICIAN}. */
-    private static final Set<String> KNOWN_HMS_ROLES = knownHmsRoles();
+    private static final Set<String> KNOWN_HMS_ROLES = HmsRoles.all();
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
@@ -133,25 +131,6 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
     private static String forLog(String value) {
         String safe = UNSAFE_LOG_CHARS.matcher(value).replaceAll("?");
         return safe.length() > MAX_LOGGED_NAME_LENGTH ? safe.substring(0, MAX_LOGGED_NAME_LENGTH) : safe;
-    }
-
-    private static Set<String> knownHmsRoles() {
-        Set<String> roles = new HashSet<>();
-        for (Field field : SecurityConstants.class.getFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class
-                && field.getName().startsWith(ROLE_PREFIX)) {
-                try {
-                    String value = (String) field.get(null);
-                    if (value != null && value.startsWith(ROLE_PREFIX) && value.length() > ROLE_PREFIX.length()) {
-                        roles.add(value);
-                    }
-                } catch (IllegalAccessException e) {
-                    throw new IllegalStateException("SecurityConstants." + field.getName() + " is not readable", e);
-                }
-            }
-        }
-        roles.add(RoleExpansion.ROLE_PHYSICIAN);
-        return Set.copyOf(roles);
     }
 
     private List<String> rolesFromClaim(Object claim) {
