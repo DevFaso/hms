@@ -172,14 +172,13 @@
                 }
               </td>
               <td>
+                {{
+                  instr.nextMaintenanceDate
+                    ? (instr.nextMaintenanceDate | serverTime | date: 'dd/MM/yyyy')
+                    : '—'
+                }}
                 @if (instr.maintenanceOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextMaintenanceDate
-                      ? (instr.nextMaintenanceDate | serverTime | date: 'dd/MM/yyyy')
-                      : '—'
-                  }}
                 }
               </td>
               @if (canManage()) {

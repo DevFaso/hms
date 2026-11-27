@@ -145,7 +145,7 @@ public class StaffSchedulingController {
         return ResponseEntity.ok(schedulingService.bulkScheduleShifts(request, locale));
     }
 
-    @Operation(summary = "Cancel a pending leave request")
+    @Operation(summary = "Cancel a pending leave, or withdraw an approved one (one under way ends yesterday)")
     @PatchMapping("/leaves/{leaveId}/cancel")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_STAFF','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<StaffLeaveResponseDTO> cancelLeave(

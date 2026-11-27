@@ -67,6 +67,9 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
      * Critical findings whose first alert has gone out and which nobody has
      * acknowledged since (Tier 2 item 27).
      *
+     * <p>QA r81 D4157: only the latest version of a report escalates. A corrected
+     * version raises its own alert; the version it replaced leaves the ladder.
+     *
      * <p>Mirrors {@code LabResultRepository.findCriticalAwaitingEscalation}.
      * Two details matter and are the reason that query looks the way it does:
      *
@@ -83,7 +86,8 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
         "SELECT r FROM ImagingReport r WHERE r.criticalResultFlaggedAt IS NOT NULL "
         + "AND r.criticalResultAcknowledgedAt IS NULL "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
-        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
+        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff) "
+        + "AND (r.latestVersion IS NULL OR r.latestVersion = true)")
     List<ImagingReport> findCriticalAwaitingEscalation(
         @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
 

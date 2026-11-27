@@ -36,7 +36,7 @@ import java.util.UUID;
  * sends, so it never fired.
  *
  * <p>A new order is a possible duplicate when the same patient already has an
- * ACTIVE order of the same test (same definition id, or the same test code,
+ * ACTIVE or recently resulted order ({@link #WARNED}) of the same test (same definition id, or the same test code,
  * so a new version of the test still matches) at the SAME hospital, placed
  * within {@link #WINDOW}. It WARNS and never blocks: the order is placed,
  * its response carries the matches (the imaging order's shape), and the
@@ -63,6 +63,17 @@ public class LabOrderDuplicateCheck {
         LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.COLLECTED,
         LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS));
 
+    /**
+     * QA r81 D4165: the orders the warning names. An active order, and also one
+     * already resulted within the window: the same test completed minutes ago is
+     * as much a possible duplicate as one still running. A cancelled or voided
+     * order is not.
+     */
+    public static final Set<LabOrderStatus> WARNED = Collections.unmodifiableSet(EnumSet.of(
+        LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.COLLECTED,
+        LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS,
+        LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED));
+
     /*
      * The window is measured on the order's placement time (createdAt, set by
      * the server's local clock in BaseEntity), so the cutoff uses that clock too.
@@ -76,7 +87,7 @@ public class LabOrderDuplicateCheck {
     private final AuditEventLogService auditEventLogService;
 
     /**
-     * The active orders the (not yet saved, or just saved) order may duplicate,
+     * The active or resulted orders the (not yet saved, or just saved) order may duplicate,
      * newest first. Empty when the order lacks a patient, hospital or test.
      */
     public List<LabOrder> find(LabOrder order) {
@@ -96,7 +107,7 @@ public class LabOrderDuplicateCheck {
 
     /**
      * The same question before an order exists (the portal's preview): the
-     * active orders of this test for this patient at this hospital, newest first.
+     * active or resulted orders of this test for this patient at this hospital, newest first.
      */
     public List<LabOrder> find(UUID patientId, UUID hospitalId, UUID definitionId, String testCode, UUID excludeOrderId) {
         if (patientId == null || hospitalId == null || definitionId == null) {
@@ -104,7 +115,7 @@ public class LabOrderDuplicateCheck {
         }
         String code = testCode != null ? testCode.trim().toUpperCase(java.util.Locale.ROOT) : "";
         List<LabOrder> matches = labOrderRepository.findActiveSameTestSince(
-            patientId, hospitalId, definitionId, code, ACTIVE, LocalDateTime.now(ZoneId.systemDefault()).minus(WINDOW),
+            patientId, hospitalId, definitionId, code, WARNED, LocalDateTime.now(ZoneId.systemDefault()).minus(WINDOW),
             excludeOrderId != null ? excludeOrderId : NO_ORDER);
         return matches != null ? matches : List.of();
     }

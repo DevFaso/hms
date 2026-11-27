@@ -2057,8 +2057,8 @@
       "PRO_RESPONSE": "Patient questionnaire answers recorded ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Questionnaire safety alert acknowledged",
       "LAB_CORRECTION": "Correction: result {{correction}} replaces released result {{original}}",
-      "LAB_DUPLICATE_ACKNOWLEDGED": "Duplicate warning acknowledged (\"Order anyway\"): lab order {{order}} placed while active order {{earlier}} of the same test is open",
-      "LAB_DUPLICATE_UNACKNOWLEDGED": "Duplicate warning not acknowledged: lab order {{order}} placed while active order {{earlier}} of the same test is open",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Duplicate warning acknowledged (\"Order anyway\"): lab order {{order}} placed while recent order {{earlier}} of the same test exists",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Duplicate warning not acknowledged: lab order {{order}} placed while recent order {{earlier}} of the same test exists",
       "LAB_AUTOVERIFICATION": "Automatic validation (analyser flag N) via {{source}}",
       "HL7_ORU_INGESTED": "Lab result message (ORU^R01) received via {{source}}",
       "HL7_ADT": "Admission message (ADT^{{type}}): {{what}} — {{details}}",
@@ -4568,10 +4568,10 @@
     "EXISTING_SPECIMENS": "This order already has {{count}} specimen(s). Check the list before collecting another.",
     "DUPLICATE": {
       "TITLE": "Possible duplicate order",
-      "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
+      "BODY": "This patient already has an order for the same test here, placed in the last 24 hours, still active or already resulted. Check that a new order is really needed.",
       "BACK": "Back to the order",
       "ORDER_ANYWAY": "Order anyway",
-      "PLACED_ANYWAY": "The order was placed, but this patient already had an active order for the same test here: {{codes}}. Check that every one of them is needed."
+      "PLACED_ANYWAY": "The order was placed, but this patient already had a recent order for the same test here: {{codes}}. Check that every one of them is needed."
     },
     "ABNORMAL": "Abnormal",
     "ACCESSION": "Accession #",
@@ -13514,6 +13514,9 @@
     "LATE_ENTRY": "late entry"
   },
   "MICRO": {
+    "OTHER_REPORTS_EARLIER_MANY": "This order also has earlier reports:",
+    "OTHER_REPORTS_EARLIER": "This order also has an earlier report:",
+    "OTHER_REPORTS_LATER": "A later report exists for this order: read it before relying on this one.",
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "Remove this susceptibility result?",
     "ISOLATE_REMOVE_CONFIRM": "Remove this isolate and its susceptibilities?",
     "CORRECTION_HISTORY": "Correction history",
@@ -14714,7 +14717,7 @@
     "BACK_TO_SIGN_IN": "Back to sign-in"
   },
   "LAB_OPS": {
-    "AGING": "Aging (>24h)",
+    "AGING": "Orders open more than 24 h",
     "AVG_TAT_TODAY": "Avg TAT (Today)",
     "AVG_TAT_WEEK": "Avg TAT (Week)",
     "CANCELLED_TODAY": "Cancelled Today",

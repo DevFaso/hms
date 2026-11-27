@@ -2057,8 +2057,8 @@
       "PRO_RESPONSE": "Réponses au questionnaire patient enregistrées ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerte de sécurité du questionnaire prise en compte",
       "LAB_CORRECTION": "Correction : le résultat {{correction}} remplace le résultat publié {{original}}",
-      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
-      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "LAB_AUTOVERIFICATION": "Validation automatique (indicateur N de l’automate) via {{source}}",
       "HL7_ORU_INGESTED": "Message de résultat (ORU^R01) reçu via {{source}}",
       "HL7_ADT": "Message d’admission (ADT^{{type}}) : {{what}} — {{details}}",
@@ -4568,10 +4568,10 @@
     "EXISTING_SPECIMENS": "Cette demande possède déjà {{count}} prélèvement(s). Vérifiez la liste avant d’en recueillir un autre.",
     "DUPLICATE": {
       "TITLE": "Demande possiblement en double",
-      "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
+      "BODY": "Ce patient a déjà, ici, une demande du même examen passée dans les dernières 24 heures, en cours ou déjà rendue. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
       "BACK": "Revenir à la demande",
       "ORDER_ANYWAY": "Commander quand même",
-      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que chacune est nécessaire."
+      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà, ici, une demande récente du même examen : {{codes}}. Vérifiez que chacune est nécessaire."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",
@@ -5124,10 +5124,10 @@
     "STATUS": "Statut",
     "STATUS_ACTIVE": "Actif",
     "STATUS_MAINTENANCE": "Maintenance",
-    "STATUS_CALIBRATION_DUE": "Calibration requise",
+    "STATUS_CALIBRATION_DUE": "Étalonnage requis",
     "STATUS_OUT_OF_SERVICE": "Hors service",
     "STATUS_RETIRED": "Retiré",
-    "CALIBRATION": "Prochaine calibration",
+    "CALIBRATION": "Prochain étalonnage",
     "MAINTENANCE": "Prochaine maintenance",
     "NOTES": "Notes",
     "ACTIONS": "Actions",
@@ -13514,6 +13514,9 @@
     "LATE_ENTRY": "saisie tardive"
   },
   "MICRO": {
+    "OTHER_REPORTS_EARLIER_MANY": "Cette demande a aussi des comptes rendus plus anciens :",
+    "OTHER_REPORTS_EARLIER": "Cette demande a aussi un compte rendu plus ancien :",
+    "OTHER_REPORTS_LATER": "Un compte rendu plus récent existe pour cette demande : lisez-le avant de vous fier à celui-ci.",
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "Retirer ce résultat d'antibiogramme ?",
     "ISOLATE_REMOVE_CONFIRM": "Retirer cet isolat et ses antibiogrammes ?",
     "CORRECTION_HISTORY": "Historique des corrections",
@@ -14714,7 +14717,7 @@
     "BACK_TO_SIGN_IN": "Retour à la connexion"
   },
   "LAB_OPS": {
-    "AGING": "Ancienneté (>24h)",
+    "AGING": "Demandes ouvertes depuis plus de 24 h",
     "AVG_TAT_TODAY": "Délai moyen (jour)",
     "AVG_TAT_WEEK": "Délai moyen (semaine)",
     "CANCELLED_TODAY": "Annulées aujourd'hui",

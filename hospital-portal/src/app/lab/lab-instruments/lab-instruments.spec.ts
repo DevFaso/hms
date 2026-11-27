@@ -98,7 +98,7 @@ describe('LabInstrumentsComponent', () => {
     expect(component.totalElements()).toBe(2);
   });
 
-  it('shows the next calibration date even when it is overdue', () => {
+  it('shows the next calibration and maintenance dates even when they are overdue', () => {
     fixture.detectChanges();
     flushInstruments({
       ...PAGED,
@@ -107,6 +107,7 @@ describe('LabInstrumentsComponent', () => {
           nextCalibrationDate: '2025-03-15',
           nextMaintenanceDate: '2025-04-21',
           calibrationOverdue: true,
+          maintenanceOverdue: true,
         }),
       ],
     });

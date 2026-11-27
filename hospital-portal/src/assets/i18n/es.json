@@ -2057,8 +2057,8 @@
       "PRO_RESPONSE": "Respuestas al cuestionario del paciente registradas ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerta de seguridad del cuestionario reconocida",
       "LAB_CORRECTION": "Corrección: el resultado {{correction}} sustituye al resultado publicado {{original}}",
-      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerta de duplicado aceptada («Ordenar de todos modos»): orden {{order}} realizada mientras la orden {{earlier}} de la misma prueba está activa",
-      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerta de duplicado no aceptada: orden {{order}} realizada mientras la orden {{earlier}} de la misma prueba está activa",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerta de duplicado aceptada («Ordenar de todos modos»): orden {{order}} realizada mientras existe la orden reciente {{earlier}} de la misma prueba",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerta de duplicado no aceptada: orden {{order}} realizada mientras existe la orden reciente {{earlier}} de la misma prueba",
       "LAB_AUTOVERIFICATION": "Validación automática (indicador N del analizador) vía {{source}}",
       "HL7_ORU_INGESTED": "Mensaje de resultado (ORU^R01) recibido vía {{source}}",
       "HL7_ADT": "Mensaje de admisión (ADT^{{type}}): {{what}} — {{details}}",
@@ -4568,10 +4568,10 @@
     "EXISTING_SPECIMENS": "Esta solicitud ya tiene {{count}} muestra(s). Compruebe la lista antes de recoger otra.",
     "DUPLICATE": {
       "TITLE": "Posible orden duplicada",
-      "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
+      "BODY": "Este paciente ya tiene aquí una orden de la misma prueba realizada en las últimas 24 horas, activa o ya con resultado. Compruebe que una nueva orden sea realmente necesaria.",
       "BACK": "Volver a la orden",
       "ORDER_ANYWAY": "Ordenar de todos modos",
-      "PLACED_ANYWAY": "La orden se realizó, pero este paciente ya tenía una orden activa de la misma prueba aquí: {{codes}}. Compruebe que todas sean necesarias."
+      "PLACED_ANYWAY": "La orden se realizó, pero este paciente ya tenía aquí una orden reciente de la misma prueba: {{codes}}. Compruebe que todas sean necesarias."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N.º de registro",
@@ -13514,6 +13514,9 @@
     "LATE_ENTRY": "registro tardío"
   },
   "MICRO": {
+    "OTHER_REPORTS_EARLIER_MANY": "Esta solicitud también tiene informes anteriores:",
+    "OTHER_REPORTS_EARLIER": "Esta solicitud también tiene un informe anterior:",
+    "OTHER_REPORTS_LATER": "Existe un informe más reciente para esta solicitud: léalo antes de fiarse de este.",
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "¿Retirar este resultado de antibiograma?",
     "ISOLATE_REMOVE_CONFIRM": "¿Retirar este aislado y sus antibiogramas?",
     "CORRECTION_HISTORY": "Historial de correcciones",
@@ -14714,7 +14717,7 @@
     "BACK_TO_SIGN_IN": "Volver al inicio de sesión"
   },
   "LAB_OPS": {
-    "AGING": "Antigüedad (>24h)",
+    "AGING": "Solicitudes abiertas más de 24 h",
     "AVG_TAT_TODAY": "Tiempo medio (hoy)",
     "AVG_TAT_WEEK": "Tiempo medio (semana)",
     "CANCELLED_TODAY": "Canceladas hoy",

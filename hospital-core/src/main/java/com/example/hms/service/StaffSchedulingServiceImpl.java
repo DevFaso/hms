@@ -401,14 +401,28 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         StaffLeaveRequest leave = loadLeave(leaveId, effectiveLocale);
         ensureLeaveCancellationPermissions(leave, effectiveLocale);
 
-        if (leave.getStatus() != StaffLeaveStatus.PENDING) {
+        if (leave.getStatus() != StaffLeaveStatus.PENDING && leave.getStatus() != StaffLeaveStatus.APPROVED) {
             throw new BusinessRuleException(message("schedule.leave.cancel.onlyPending", effectiveLocale));
         }
-        leave.setStatus(StaffLeaveStatus.CANCELLED);
-        leave.setReviewedBy(getCurrentUser(effectiveLocale));
-        leave.setReviewedAt(LocalDateTime.now(clock));
+        // QA r81 D4179: an approved leave can be withdrawn too. One not started yet
+        // (or starting today) is cancelled; one under way ends yesterday, so the person
+        // counts as present again from today (critical results stop going to the cover).
+        LocalDate today = LocalDate.now(clock);
+        if (leave.getStatus() == StaffLeaveStatus.APPROVED && leave.getEndDate() != null
+                && leave.getEndDate().isBefore(today)) {
+            throw new BusinessRuleException(message("schedule.leave.cancel.ended", effectiveLocale));
+        }
+        boolean endEarly = leave.getStatus() == StaffLeaveStatus.APPROVED
+            && leave.getStartDate() != null && leave.getStartDate().isBefore(today);
+        if (endEarly) {
+            leave.setEndDate(today.minusDays(1));
+        } else {
+            leave.setStatus(StaffLeaveStatus.CANCELLED);
+            leave.setReviewedBy(getCurrentUser(effectiveLocale));
+            leave.setReviewedAt(LocalDateTime.now(clock));
+        }
         StaffLeaveRequest saved = leaveRepository.save(leave);
-        log.info("[leave] cancelled leaveId={}", leaveId);
+        log.info("[leave] {} leaveId={}", endEarly ? "ended early" : "cancelled", leaveId);
         return mapper.toLeaveDto(saved);
     }
 
