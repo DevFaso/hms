@@ -7982,6 +7982,7 @@
         "REORDER_ALERT": "Alerte de réapprovisionnement",
         "SEVERE_HYPERTENSION": "Hypertension sévère",
         "PHARMACY_BILLING_DEFERRAL": "Paiement différé en pharmacie",
+        "PHARMACY_PRICE_NEEDED": "Prix de vente à fixer",
         "MEWS_ESCALATION": "Alerte précoce maternelle (MEWS)"
       },
       "ORGANIZATION_TYPE": {

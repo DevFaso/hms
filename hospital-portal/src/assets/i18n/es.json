@@ -8016,6 +8016,7 @@
         "REORDER_ALERT": "Alerta de reabastecimiento",
         "SEVERE_HYPERTENSION": "Hipertensión grave",
         "PHARMACY_BILLING_DEFERRAL": "Deferred pharmacy billing",
+        "PHARMACY_PRICE_NEEDED": "Precio de venta por fijar",
         "MEWS_ESCALATION": "Alerta temprana materna (MEWS)"
       },
       "ORGANIZATION_TYPE": {
