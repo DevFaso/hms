@@ -177,7 +177,7 @@
                 } @else {
                   {{
                     instr.nextMaintenanceDate
-                      ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                      ? (instr.nextMaintenanceDate | serverTime | date: 'dd/MM/yyyy')
                       : '—'
                   }}
                 }

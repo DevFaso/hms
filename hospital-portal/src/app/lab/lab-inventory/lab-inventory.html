@@ -189,7 +189,7 @@
               <td>
                 {{
                   item.expirationDate
-                    ? (item.expirationDate | serverTime | date: 'mediumDate')
+                    ? (item.expirationDate | serverTime | date: 'dd/MM/yyyy')
                     : '—'
                 }}
               </td>

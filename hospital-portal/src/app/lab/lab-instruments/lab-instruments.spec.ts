@@ -102,11 +102,18 @@ describe('LabInstrumentsComponent', () => {
     fixture.detectChanges();
     flushInstruments({
       ...PAGED,
-      content: [mockInstrument({ nextCalibrationDate: '2025-03-15', calibrationOverdue: true })],
+      content: [
+        mockInstrument({
+          nextCalibrationDate: '2025-03-15',
+          nextMaintenanceDate: '2025-04-21',
+          calibrationOverdue: true,
+        }),
+      ],
     });
     fixture.detectChanges();
     const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr')!;
     expect(row.textContent).toContain('15/03/2025');
+    expect(row.textContent).toContain('21/04/2025');
     expect(row.textContent).toContain('LAB_INSTRUMENTS.OVERDUE');
   });
 

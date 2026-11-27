@@ -179,6 +179,15 @@ describe('LabInventoryComponent', () => {
     req.flush(PAGED);
   });
 
+  it('shows expiration dates in day/month/year order', () => {
+    fixture.detectChanges();
+    flushItems({ ...PAGED, content: [mockItem({ expirationDate: '2025-03-15' })] });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('tbody tr')!.textContent).toContain(
+      '15/03/2025',
+    );
+  });
+
   it('should show loading state initially', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeTrue();
