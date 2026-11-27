@@ -183,11 +183,11 @@ class LabOrderEndToEndIT extends BaseIT {
             assertThat(second.getContent()).extracting(LabInventoryItem::getItemCode).containsExactly("MATCH-B");
             assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "foreign", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
             mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
-                    .contextPath(API).with(signedInAs(labManager)).with(csrf())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
                 .andExpect(status().isOk());
             mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", otherHospital.getId())
-                    .contextPath(API).with(signedInAs(labManager)).with(csrf())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
                 .andExpect(status().isForbidden());
         } finally {
@@ -200,19 +200,19 @@ class LabOrderEndToEndIT extends BaseIT {
     void labScientistMayReadScopedInventoryAndInstrumentsButNotWrite() throws Exception {
         for (String area : List.of("inventory", "instruments")) {
             String path = API + "/lab/" + area + "/hospital/{hospitalId}";
-            mockMvc.perform(get(path, hospital.getId()).contextPath(API).with(signedInAs(scientist)))
+            mockMvc.perform(get(path, hospital.getId()).contextPath(API).with(scopedAs(scientist)))
                 .andExpect(status().isOk());
-            mockMvc.perform(get(path, otherHospital.getId()).contextPath(API).with(signedInAs(scientist)))
+            mockMvc.perform(get(path, otherHospital.getId()).contextPath(API).with(scopedAs(scientist)))
                 .andExpect(status().isForbidden());
             String body = area.equals("inventory")
                 ? "{\"name\":\"Test\",\"itemCode\":\"X\",\"quantity\":1,\"reorderThreshold\":0}"
                 : "{\"name\":\"Test\",\"serialNumber\":\"X\"}";
-            mockMvc.perform(post(path, hospital.getId()).contextPath(API).with(signedInAs(scientist)).with(csrf())
+            mockMvc.perform(post(path, hospital.getId()).contextPath(API).with(scopedAs(scientist)).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         }
         mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
-                .contextPath(API).with(signedInAs(scientist)).with(csrf())
+                .contextPath(API).with(scopedAs(scientist)).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
             .andExpect(status().isOk());
     }
@@ -1215,6 +1215,17 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     /** A signed-in user as the JWT filter builds one; the hospital scope resolves from their single assignment. */
+    private RequestPostProcessor scopedAs(Actor actor) {
+        return request -> {
+            HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actor.user().getId())
+                .activeHospitalId(hospital.getId())
+                .permittedHospitalIds(java.util.Set.of(hospital.getId()))
+                .build());
+            return signedInAs(actor).postProcessRequest(request);
+        };
+    }
+
     private static RequestPostProcessor signedInAs(Actor actor) {
         CustomUserDetails details = new CustomUserDetails(actor.user().getId(), actor.user().getUsername(), "n/a", true,
             List.of(new SimpleGrantedAuthority(actor.role())));
