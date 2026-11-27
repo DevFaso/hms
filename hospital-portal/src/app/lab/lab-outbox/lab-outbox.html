@@ -52,6 +52,12 @@
     </div>
   }
 
+  @if (actionError()) {
+    <p class="state-error" role="alert" data-testid="outbox-action-error">
+      {{ 'LAB_OUTBOX.HOSPITAL_REQUIRED' | translate }}
+    </p>
+  }
+
   <div class="filter-bar">
     <label for="outbox-status-filter">{{ 'LAB_OUTBOX.FILTER_STATUS' | translate }}</label>
     <select
@@ -87,6 +93,7 @@
       <table class="outbox-table">
         <thead>
           <tr>
+            <th>{{ 'LAB_OUTBOX.ORDERING_HOSPITAL' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_TYPE' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_STATUS' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_ATTEMPTS' | translate }}</th>
@@ -99,6 +106,7 @@
         <tbody>
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'outbox-row-' + row.id">
+              <td>{{ row.orderingHospitalName || '?' }}</td>
               <td class="type-cell">
                 <span class="mono">{{ row.messageType }}</span>
                 @if (resultStatusKey(row.resultStatus); as rsKey) {

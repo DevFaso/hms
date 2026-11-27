@@ -969,11 +969,24 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
     top: 0;
     height: 100vh;
     transform: translateX(-100%);
-    transition: transform 0.25s ease;
+    // P5: a closed drawer is off screen, so it must also leave the Tab order
+    // and the accessibility tree. Moved aside only, its toggle and every menu
+    // link took focus where nobody could see it (SC 2.4.3, 2.4.7): a keyboard
+    // user on a phone or tablet pressed Tab some forty times before reaching
+    // the page. `visibility` waits for the slide-out to end, and is restored
+    // at once on opening so the drawer can take focus as it slides in.
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0s linear 0.25s;
     width: $sidebar-width;
 
     .shell:not(.collapsed) & {
       transform: translateX(0);
+      visibility: visible;
+      transition:
+        transform 0.25s ease,
+        visibility 0s;
     }
   }
 

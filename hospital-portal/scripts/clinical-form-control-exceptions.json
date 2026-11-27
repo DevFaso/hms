@@ -735,12 +735,12 @@
     "evidence": [".range-picker input[type=date]"],
     "control": "input"
   },
-  "src/app/mfa/mfa-challenge.html::input::e4d4caf31bf01ee61bcf::0": {
+  "src/app/mfa/mfa-challenge.html::input::c46b056cba94608a4227::0": {
     "reason": "Existing module-specific control styling supplies padding via .totp-input. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".totp-input"],
     "control": "mfa-challenge-code"
   },
-  "src/app/mfa/mfa-enroll.html::input::de8c8c6f0c3108fb3f5b::0": {
+  "src/app/mfa/mfa-enroll.html::input::77a40504524418441469::0": {
     "reason": "Existing module-specific control styling supplies padding via .totp-input. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".totp-input"],
     "control": "mfa-enroll-code"
@@ -1051,17 +1051,17 @@
     "evidence": [".form-card input,\n.form-card select,\n.form-card textarea"],
     "control": "oncall-notes"
   },
-  "src/app/onboarding/role-welcome/role-welcome.html::input::0c88a00d79f545feb6f7::0": {
+  "src/app/onboarding/role-welcome/role-welcome.html::input::8f56ab87fab3b53c5f79::0": {
     "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
     "evidence": [".rw-input"],
     "control": "rw-phone"
   },
-  "src/app/onboarding/role-welcome/role-welcome.html::input::3b13c871ba3979a2a1aa::0": {
+  "src/app/onboarding/role-welcome/role-welcome.html::input::29c4ac09a6aa2dbcadd2::0": {
     "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
     "evidence": [".rw-input"],
     "control": "rw-phone-code"
   },
-  "src/app/onboarding/role-welcome/role-welcome.html::input::dfee7797e4bb17c5989f::0": {
+  "src/app/onboarding/role-welcome/role-welcome.html::input::54f92d8c0859731cd3ed::0": {
     "reason": "The rw-digit is one fixed-size cell in a segmented one-time-code entry, with its own border, font and focus styling. Full-width text-field styling would break the code group.",
     "evidence": [".rw-digit"],
     "control": "input"
@@ -1871,12 +1871,12 @@
     "evidence": [".care-search input"],
     "control": "input"
   },
-  "src/app/reset-password/reset-password.html::input::9d97cdae1956c6b6d06a::0": {
+  "src/app/reset-password/reset-password.html::input::63ae385c079c93799632::0": {
     "reason": "Existing module-specific control styling supplies padding via .rp-input-wrapper input. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".rp-input-wrapper input"],
     "control": "newPassword"
   },
-  "src/app/reset-password/reset-password.html::input::da9eb293da55a9e80615::0": {
+  "src/app/reset-password/reset-password.html::input::0cdcb5e8930527f7122d::0": {
     "reason": "Existing module-specific control styling supplies padding via .rp-input-wrapper input. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".rp-input-wrapper input"],
     "control": "confirmPassword"
@@ -2044,7 +2044,7 @@
     "evidence": [".search-bar input", ".search-bar input"],
     "control": "input"
   },
-  "src/app/verify-email/verify-email.html::input::cf2c6a430fad05f83985::0": {
+  "src/app/verify-email/verify-email.html::input::83be05d9ec81f357cb8d::0": {
     "reason": "The resend form reuses reset-password.scss: rp-input-wrapper owns the icon layout and its input padding/border. Preserve the shared authentication design rather than introducing a second skin.",
     "evidence": [".rp-input-wrapper input"],
     "control": "verify-email"

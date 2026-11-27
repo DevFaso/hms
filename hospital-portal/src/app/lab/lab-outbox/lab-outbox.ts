@@ -23,6 +23,7 @@ import {
 } from '../../services/instrument-outbox.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
@@ -63,10 +64,12 @@ export class LabOutboxComponent implements OnInit {
   private readonly outboxService = inject(InstrumentOutboxService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
 
   loading = signal(true);
   error = signal<string | null>(null);
+  actionError = signal(false);
   page = signal<OutboxPage | null>(null);
   transport = signal<OutboxTransport | null>(null);
 
@@ -79,6 +82,7 @@ export class LabOutboxComponent implements OnInit {
 
   detail = signal<{ message: OutboxMessage; siblings: OutboxMessage[] } | null>(null);
   detailLoading = signal(false);
+  private detailRequest = 0;
 
   /** Display-only reading of the open message; null = show the raw text only. */
   detailSummary = computed(() => {
@@ -172,21 +176,36 @@ export class LabOutboxComponent implements OnInit {
   }
 
   openDetail(row: OutboxMessage): void {
+    const request = ++this.detailRequest;
+    this.actionError.set(false);
+    const global = this.roleContext.isSuperAdmin() && this.roleContext.globalView();
+    if (global && !row.orderingHospitalId) {
+      this.detail.set(null);
+      this.detailLoading.set(false);
+      this.actionError.set(true);
+      return;
+    }
+    const hospitalId = global ? row.orderingHospitalId || undefined : undefined;
     this.detailLoading.set(true);
     this.detail.set(null);
     forkJoin({
-      message: this.outboxService.getMessage(row.id),
+      message: hospitalId
+        ? this.outboxService.getMessage(row.id, hospitalId)
+        : this.outboxService.getMessage(row.id),
       siblings: row.labOrderId
-        ? this.outboxService
-            .getMessagesForOrder(row.labOrderId)
-            .pipe(catchError(() => of([] as OutboxMessage[])))
+        ? (hospitalId
+            ? this.outboxService.getMessagesForOrder(row.labOrderId, hospitalId)
+            : this.outboxService.getMessagesForOrder(row.labOrderId)
+          ).pipe(catchError(() => of([] as OutboxMessage[])))
         : of([] as OutboxMessage[]),
     }).subscribe({
       next: ({ message, siblings }) => {
+        if (request !== this.detailRequest) return;
         this.detail.set({ message, siblings: siblings.filter((s) => s.id !== message.id) });
         this.detailLoading.set(false);
       },
       error: (err) => {
+        if (request !== this.detailRequest) return;
         console.error('Failed to load outbox message', err);
         this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
         this.detailLoading.set(false);
@@ -210,18 +229,29 @@ export class LabOutboxComponent implements OnInit {
   }
 
   closeDetail(): void {
+    this.detailRequest++;
     this.detail.set(null);
     this.detailLoading.set(false);
   }
 
   retry(row: OutboxMessage): void {
+    this.actionError.set(false);
     if (this.retryingId()) {
       return;
     }
+    const global = this.roleContext.isSuperAdmin() && this.roleContext.globalView();
+    if (global && !row.orderingHospitalId) {
+      this.actionError.set(true);
+      return;
+    }
+    const hospitalId = global ? row.orderingHospitalId || undefined : undefined;
     // Set the in-flight guard BEFORE dispatching — a guard read after the
     // service call has fired guards nothing (the #443 lesson).
     this.retryingId.set(row.id);
-    this.outboxService.retry(row.id).subscribe({
+    const request = hospitalId
+      ? this.outboxService.retry(row.id, hospitalId)
+      : this.outboxService.retry(row.id);
+    request.subscribe({
       next: () => {
         this.toast.success(this.translate.instant('LAB_OUTBOX.RETRIED'));
         this.retryingId.set(null);
