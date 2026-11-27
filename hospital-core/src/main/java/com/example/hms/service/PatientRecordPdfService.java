@@ -103,8 +103,11 @@ public class PatientRecordPdfService {
             : storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId);
         // QA D1380: the printed record carries every row of every section. It
         // asked for 200 per section and the chart review silently cut it at 100.
+        // QA D4270 review: the patient's own copy prints only what the portal releases to the patient (signed notes,
+        // released results and imaging reads); the staff release view would print the care team's unsigned work.
         ChartReviewDTO chart = requestId == null
             ? chartReviewService.getCompleteChartReview(patientId, hospitalId)
+            : selfService ? chartReviewService.getPatientReleaseChart(patientId, hospitalId)
             : chartReviewService.getHospitalReleaseChart(patientId, hospitalId);
 
         byte[] pdf = write(storyboard, chart, requestId == null ? patient.getAllergies() : null, labels, requestId != null);

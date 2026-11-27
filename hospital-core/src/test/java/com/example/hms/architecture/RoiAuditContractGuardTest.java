@@ -69,9 +69,9 @@ class RoiAuditContractGuardTest {
         // QA D4270: the annotation names who may ask; the service decides per request (an administrator only
         // for a request they approved; nothing past the collection period; the patient only their own request).
         assertThat(source("service/roi/RoiRequestService.java"))
-            .contains("if (!roleValidator.hasAnyAuthority(COPY_COLLECTING_ROLES))",
+            .contains("roleValidator.isSuperAdminActingAt(hospitalId)",
+                "roleValidator.collectsReleaseCopies(caller, hospitalId)",
                 "!caller.equals(request.getDecisionActorUserId())",
-                "{\"DOCTOR\", \"NURSE\", \"MIDWIFE\", \"RECEPTIONIST\", \"SUPER_ADMIN\"}",
                 "patient.getId().equals(row.getPatientId())",
                 "row.getRequesterType() == RoiRequesterType.PATIENT",
                 "LocalDate.now(clock).isAfter(until)");

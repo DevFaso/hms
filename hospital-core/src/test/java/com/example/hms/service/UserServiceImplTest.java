@@ -3286,6 +3286,37 @@ class UserServiceImplTest {
             return com.example.hms.utility.ActivationTokens.storedForms(token).get(0);
         }
 
+        /** QA D4269 review: the mailed link is an activation like the code; under 13 it switches nothing on. */
+        @org.junit.jupiter.api.Test
+        void aChildUnder13sLinkActivatesNothing_D4269() {
+            User u = pending();
+            UUID patientId = UUID.randomUUID();
+            com.example.hms.model.Patient child = new com.example.hms.model.Patient();
+            child.setId(patientId);
+            child.setDateOfBirth(java.time.LocalDate.now().minusYears(9));
+            when(patientRepository.findIdsByUserId(u.getId())).thenReturn(List.of(patientId));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(child));
+            userService.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+                auditEventLogService, java.time.Clock.systemDefaultZone()));
+            when(userRepository.findByActivationToken(k4bStored("tok-1"))).thenReturn(Optional.of(u));
+
+            assertThatThrownBy(() -> userService.verifyEmailByToken("tok-1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+            assertThatThrownBy(() -> userService.verifyEmail("apatient@example.com", "tok-1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(u.isActive()).isFalse();
+            assertThat(u.getActivationToken()).isNotNull();
+            verify(userRepository, never()).save(any(User.class));
+            verify(assignmentRepository, never()).save(any());
+
+            // From 13 the same link activates.
+            child.setDateOfBirth(java.time.LocalDate.now().minusYears(13));
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of());
+            assertThat(userService.verifyEmailByToken("tok-1")).isTrue();
+            assertThat(u.isActive()).isTrue();
+        }
+
         @org.junit.jupiter.api.Test
         @DisplayName("K4: the mailed link activates by its token alone, and the token is single use")
         void theTokenAloneActivatesOnce() {

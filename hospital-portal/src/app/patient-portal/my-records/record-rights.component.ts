@@ -144,7 +144,7 @@ import { blobRefusalReason } from '../../shared/blob-refusal';
               @if (request.copyAvailableUntil) {
                 <p>
                   {{ 'RECORD_RIGHTS.DOWNLOAD_UNTIL' | translate }}
-                  {{ request.copyAvailableUntil | date: 'mediumDate' }}
+                  {{ request.copyAvailableUntil | serverTime | date: 'mediumDate' }}
                 </p>
               }
             } @else if (request.copyDownloadable === false) {

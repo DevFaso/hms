@@ -1736,8 +1736,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (minorPortalRights == null || holder == null || holder.getId() == null || !isPatientRole(assignment)) {
             return;
         }
-        com.example.hms.service.support.LinkedPatientLookup.linkedPatient(patientRepository, holder.getId())
-            .ifPresent(minorPortalRights::requireActivatable);
+        // QA D4269 review: every linked row is read; a tenant carrying duplicate rows (V113) is not skipped.
+        for (java.util.UUID patientId : patientRepository.findIdsByUserId(holder.getId())) {
+            patientRepository.findByIdUnscoped(patientId).ifPresent(minorPortalRights::requireActivatable);
+        }
     }
 
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {

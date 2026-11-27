@@ -343,9 +343,9 @@ export class RoiComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * QA D4270: the approved copy of this row can be produced by this user. The clinicians and the records desk
-   * for any approved full copy of the hospital; a hospital administrator only for a request they approved
-   * (RoiRequestService.copyForExport decides the same). Not once the collection period is over.
+   * QA D4270: the approved copy of this row can be produced by this user. The clinicians for any approved full
+   * copy of the hospital; a hospital administrator only for a request they approved (RoiRequestService.copyForExport
+   * decides the same). Not reception: the copy is the whole chart. Not once the collection period is over.
    */
   canExportRow(row: RoiRequest): boolean {
     if (!this.canExport() || !this.isApprovedFullCopy(row) || row.copyDownloadable === false)
@@ -372,7 +372,6 @@ export class RoiComponent implements OnInit, OnDestroy {
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_RECEPTIONIST',
     'ROLE_SUPER_ADMIN',
   ];
 

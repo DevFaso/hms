@@ -298,9 +298,10 @@ public class RoiRequestService {
      * Resolve the PDF's patient only after the request's hospital, the caller's part in the release, the kind, the
      * release decision and its collection period all match.
      *
-     * <p>QA D4270: who collects an approved copy at the hospital. The clinical roles as before; the records desk
-     * (reception), which hands the copy over; and the hospital administrator who approved THIS request. Another
-     * administrator is refused: approving a release is what entitles an administrator to produce it.
+     * <p>QA D4270: who collects an approved copy at the hospital. The clinical roles as before, held AT the
+     * request's hospital (a role held at another hospital does not count); the verified super-admin acting there;
+     * and the hospital administrator who approved THIS request. Another administrator is refused: approving a release
+     * is what entitles an administrator to produce it. Reception is refused: it reads no clinical content.
      */
     @Transactional(readOnly = true)
     public ApprovedCopy copyForExport(UUID requestId) {
@@ -308,8 +309,10 @@ public class RoiRequestService {
         RoiRequest request = roiRepository.findById(requestId)
             .filter(row -> row.getHospital() != null && hospitalId.equals(row.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
-        if (!roleValidator.hasAnyAuthority(COPY_COLLECTING_ROLES)) {
-            UUID caller = roleValidator.getCurrentUserId();
+        UUID caller = roleValidator.getCurrentUserId();
+        boolean collects = roleValidator.isSuperAdminActingAt(hospitalId)
+            || (caller != null && roleValidator.collectsReleaseCopies(caller, hospitalId));
+        if (!collects) {
             if (caller == null || !caller.equals(request.getDecisionActorUserId())) {
                 throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                     com.example.hms.utility.MessageUtil.resolveOrRaw("roi.request.copyApproverOnly"));
@@ -336,9 +339,6 @@ public class RoiRequestService {
         requireCollectable(request);
         return new ApprovedCopy(request.getPatientId(), request.getId(), request.getHospital().getId(), true);
     }
-
-    /** The staff roles that collect any approved copy of their hospital; an administrator only the ones they approved. */
-    static final String[] COPY_COLLECTING_ROLES = {"DOCTOR", "NURSE", "MIDWIFE", "RECEPTIONIST", "SUPER_ADMIN"};
 
     private void requireCollectable(RoiRequest request) {
         if (!isApprovedFullCopy(request)) {

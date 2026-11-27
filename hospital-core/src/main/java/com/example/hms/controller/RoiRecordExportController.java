@@ -18,8 +18,9 @@ import java.util.UUID;
  * The record released under an approved release-of-information request, as the hospital-owned release view (never
  * the caller's treatment view), with the chart export's redaction.
  *
- * <p>QA D4270: an approved copy is collected by the patient who asked for it (« Mes documents »), by the records
- * desk that hands it over, by the clinicians, and by the hospital administrator who approved it. The service
+ * <p>QA D4270: an approved copy is collected by the patient who asked for it (« Mes documents »), by the clinicians,
+ * and by the hospital administrator who approved it; reception reads no clinical content and hands over a copy
+ * produced by one of them. The service
  * decides per request ({@link RoiRequestService#copyForExport}, {@link RoiRequestService#copyForSelf}): the
  * annotations here only name the roles that may ask. Every download is audited, and nothing is returned when the
  * audit row cannot be written.
@@ -28,9 +29,13 @@ import java.util.UUID;
 @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.NONE,
     reason = "the record released under an approved release-of-information request")
 public class RoiRecordExportController {
-    /** The staff who may ask for an approved copy; an administrator only for a request they approved (service). */
+    /**
+     * The staff who may ask for an approved copy; an administrator only for a request they approved, and every role
+     * held at the hospital the request belongs to (service). Reception reads no clinical content (owner rule
+     * 2026-11-06): the desk hands over a copy a clinician or the approving administrator produced.
+     */
     static final String COPY_ROLES = "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
-        + "'ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
     private final RoiRequestService requests;
     private final PatientRecordPdfService pdf;

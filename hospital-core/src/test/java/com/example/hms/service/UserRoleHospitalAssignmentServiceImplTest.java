@@ -2368,7 +2368,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         UUID patientId = pendingPatientInvitation();
         com.example.hms.model.Patient patient = patientRepository.findByIdUnscoped(patientId).orElseThrow();
         patient.setDateOfBirth(dateOfBirth);
-        lenient().when(patientRepository.findByUserId(assignee.getId())).thenReturn(Optional.of(patient));
+        lenient().when(patientRepository.findIdsByUserId(assignee.getId())).thenReturn(List.of(patientId));
         service.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
             auditEventLogService, java.time.Clock.systemDefaultZone()));
         return patient;

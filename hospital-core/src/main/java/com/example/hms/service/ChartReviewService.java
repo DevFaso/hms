@@ -54,6 +54,12 @@ public interface ChartReviewService {
     /** Hospital-owned rows for an approved disclosure; never treatment reach or break-glass. */
     ChartReviewDTO getHospitalReleaseChart(UUID patientId, UUID hospitalId);
 
+    /**
+     * QA D4270 review: the release chart as the patient's own copy. Only what the portal releases to the patient:
+     * signed notes, released results, and imaging reads released to the patient (D1910).
+     */
+    ChartReviewDTO getPatientReleaseChart(UUID patientId, UUID hospitalId);
+
     /** QA D1380: the tab a page is asked for. */
     enum ChartReviewSection { TIMELINE, ENCOUNTERS, NOTES, RESULTS, MEDICATIONS, IMAGING, PROCEDURES }
 }

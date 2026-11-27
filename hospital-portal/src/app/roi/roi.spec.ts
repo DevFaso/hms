@@ -117,15 +117,18 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it('QA D4270: the records desk and the clinicians produce any approved copy of the hospital', () => {
+  it('QA D4270: the clinicians produce any approved copy of the hospital; reception does not', () => {
     const approved = request({ status: 'FULFILLED', scopeDescription: 'FULL_RECORD' });
-    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']) {
+    for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']) {
       heldRoles = [role];
       expect(component.canExportRow(approved)).withContext(role).toBeTrue();
     }
-    heldRoles = ['ROLE_ACCOUNTANT'];
-    expect(component.canExportRow(approved)).toBeFalse();
-    heldRoles = ['ROLE_RECEPTIONIST'];
+    // The copy is the whole chart: the desk reads no clinical content (owner rule 2026-11-06).
+    for (const role of ['ROLE_ACCOUNTANT', 'ROLE_RECEPTIONIST']) {
+      heldRoles = [role];
+      expect(component.canExportRow(approved)).withContext(role).toBeFalse();
+    }
+    heldRoles = ['ROLE_DOCTOR'];
     expect(
       component.canExportRow(request({ status: 'DENIED', scopeDescription: 'FULL_RECORD' })),
     ).toBeFalse();
@@ -156,7 +159,7 @@ describe('RoiComponent', () => {
   });
 
   it('QA D4270: a copy whose collection period is over is said expired and not offered', () => {
-    heldRoles = ['ROLE_RECEPTIONIST'];
+    heldRoles = ['ROLE_DOCTOR'];
     const expired = request({
       status: 'FULFILLED',
       scopeDescription: 'FULL_RECORD',

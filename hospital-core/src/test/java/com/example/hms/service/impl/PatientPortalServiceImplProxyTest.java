@@ -533,6 +533,33 @@ class PatientPortalServiceImplProxyTest {
         }
 
         @Test
+        @DisplayName("review: a grant that lapsed at 18 does not block giving the same person access again")
+        void aLapsedGrantDoesNotBlockGivingItAgain() {
+            signedInBorn(java.time.LocalDate.now().minusYears(18).minusDays(5));
+            PatientProxy lapsed = buildGrant("ALL", null);
+            lapsed.setCreatedAt(LocalDateTime.now().minusYears(1));
+            when(userRepository.findByUsername("caregiver.sam")).thenReturn(Optional.of(proxyUser));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.of(lapsed));
+            when(patientProxyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.grantProxy(auth, fullAccess());
+
+            assertThat(lapsed.getStatus()).isEqualTo(ProxyStatus.EXPIRED);
+            verify(patientProxyRepository, times(2)).save(any());
+
+            // A live grant to the same person is still a duplicate.
+            PatientProxy live = buildGrant("ALL", null);
+            live.setCreatedAt(LocalDateTime.now().minusDays(1));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.of(live));
+            ProxyGrantRequestDTO again = fullAccess();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.grantProxy(auth, again))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(live.getStatus()).isEqualTo(ProxyStatus.ACTIVE);
+        }
+
+        @Test
         @DisplayName("at 13-14 a grant is not withdrawn alone; at 15-17 it is, except a verified parent's")
         void withdrawingByAge() {
             signedInBorn(java.time.LocalDate.now().minusYears(14));

@@ -229,7 +229,8 @@ class PatientRecordPdfServiceTest {
         HospitalContextHolder.clear();
         stubCommonPath();
         when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
-        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
+        // QA D4270 review: the patient's own copy reads the patient release view, never the staff release view.
+        when(chartReviewService.getPatientReleaseChart(patientId, hospitalId)).thenReturn(chart());
         UUID requestId = UUID.randomUUID();
         when(auditEventLogService.logEvent(any())).thenReturn(
             com.example.hms.payload.dto.AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
@@ -243,6 +244,7 @@ class PatientRecordPdfServiceTest {
         assertThat(audit.getValue().getResourceId()).isEqualTo(requestId.toString());
         assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
         verify(storyboardService, never()).getStoryboard(any(), any());
+        verify(chartReviewService, never()).getHospitalReleaseChart(any(), any());
         verify(chartReviewService, never()).getCompleteChartReview(any(), any());
     }
 

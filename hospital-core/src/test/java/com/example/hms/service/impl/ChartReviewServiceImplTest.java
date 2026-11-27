@@ -260,8 +260,9 @@ class ChartReviewServiceImplTest {
         var repository = mock(com.example.hms.repository.RoiRequestRepository.class);
         var roles = mock(com.example.hms.utility.RoleValidator.class);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
-        // QA D4270: a clinician, one of the roles that collect any approved copy of the hospital.
-        when(roles.hasAnyAuthority(any(String[].class))).thenReturn(true);
+        // QA D4270: a clinician AT the request's hospital, one of the roles that collect any approved copy there.
+        when(roles.getCurrentUserId()).thenReturn(readerId);
+        when(roles.collectsReleaseCopies(readerId, HOSPITAL_ID)).thenReturn(true);
         var request = com.example.hms.model.RoiRequest.builder().hospital(hospital).patientId(PATIENT_ID)
             .requesterType(com.example.hms.enums.RoiRequesterType.THIRD_PARTY)
             .requesterName("Approved third party").scopeDescription("FULL_RECORD")
@@ -835,6 +836,57 @@ class ChartReviewServiceImplTest {
                 .filteredOn(e -> e.getSection() == Section.IMAGING)
                 .extracting("summary").containsExactly("Conclusion signée");
         }
+    }
+
+    /**
+     * QA D4270 review: the patient's own approved copy carries what the portal releases to the patient: a signed
+     * note, never an unsigned one; a released lab result, never a pending one; and an imaging read only once it is
+     * released to the patient (D1910), never a preliminary unsigned read. The staff release view keeps them all.
+     */
+    @Test
+    void thePatientsOwnCopyCarriesOnlySignedNotesAndReleasedReads_D4270() {
+        LocalDateTime now = LocalDateTime.now();
+        Encounter signedVisit = encounter(EncounterStatus.COMPLETED, now.minusDays(2));
+        Encounter openVisit = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(1));
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(signedVisit, openVisit)));
+        EncounterNote signed = note(signedVisit, now.minusDays(2));
+        EncounterNote unsigned = note(openVisit, now.minusHours(1));
+        unsigned.setSignedAt(null);
+        when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of(signed, unsigned));
+
+        LabResult released = labResult(now.minusDays(1), AbnormalFlag.NORMAL, "Hémoglobine", "HB");
+        LabResult pending = labResult(now.minusHours(2), AbnormalFlag.NORMAL, "Glycémie", "GLU");
+        pending.setReleased(false);
+        released.getLabOrder().setHospital(hospital);
+        pending.getLabOrder().setHospital(hospital);
+        when(labResultRepo.findPatientResultsReadableAt(any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(released, pending));
+
+        ImagingOrder img = imagingOrder(now.minusDays(1), ImagingModality.XRAY, "Thorax");
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+            any(UUID.class), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(img)));
+        ImagingReport preliminary = imagingReport(img, "Lecture préliminaire");
+        preliminary.setReportStatus(ImagingReportStatus.PRELIMINARY);
+        preliminary.setReportVersion(1);
+        when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(preliminary));
+
+        ChartReviewDTO staff = service.getHospitalReleaseChart(PATIENT_ID, HOSPITAL_ID);
+        assertThat(staff.getNotes()).hasSize(2);
+        assertThat(staff.getResults()).hasSize(2);
+        assertThat(staff.getImaging().get(0).getReportImpression()).isEqualTo("Lecture préliminaire");
+
+        ChartReviewDTO own = service.getPatientReleaseChart(PATIENT_ID, HOSPITAL_ID);
+        assertThat(own.getNotes()).singleElement().satisfies(n -> assertThat(n.getId()).isEqualTo(signed.getId()));
+        assertThat(own.getResults()).extracting(ChartReviewDTO.ResultEntryDTO::getId).containsExactly(released.getId());
+        assertThat(own.getImaging().get(0).getReports()).isNull();
+        assertThat(own.getImaging().get(0).getReportImpression()).isNull();
+
+        // Once the radiologist signs, the read is released to the patient and printed.
+        preliminary.setReportStatus(ImagingReportStatus.FINAL);
+        preliminary.setSignedAt(now);
+        assertThat(service.getPatientReleaseChart(PATIENT_ID, HOSPITAL_ID).getImaging().get(0).getReportImpression())
+            .isEqualTo("Lecture préliminaire");
     }
 
     /** Rex on #1169: with nothing signed, a draft (or a void) is not shown. */

@@ -104,20 +104,27 @@ public class ChartReviewServiceImpl implements ChartReviewService {
                                          ChartReviewSection section, int page) {
         int size = clampLimit(limit);
         int safePage = Math.max(page, 0);
-        return assemble(patientId, hospitalId, section, (long) safePage * size, size, safePage, false);
+        return assemble(patientId, hospitalId, section, (long) safePage * size, size, safePage, false, false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ChartReviewDTO getCompleteChartReview(UUID patientId, UUID hospitalId) {
-        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, false);
+        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, false, false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ChartReviewDTO getHospitalReleaseChart(UUID patientId, UUID hospitalId) {
         java.util.Objects.requireNonNull(hospitalId, "release hospital");
-        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, true);
+        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, true, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChartReviewDTO getPatientReleaseChart(UUID patientId, UUID hospitalId) {
+        java.util.Objects.requireNonNull(hospitalId, "release hospital");
+        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, true, true);
     }
 
     /**
@@ -130,7 +137,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
      * returned are accounted as surfaced from another hospital.
      */
     private ChartReviewDTO assemble(UUID patientId, UUID hospitalId, ChartReviewSection section,
-                                    long offset, int size, int page, boolean release) {
+                                    long offset, int size, int page, boolean release, boolean patientCopy) {
         // Resolves unscoped then authorizes against the registration table —
         // the tenant-scoped findById used to 404 every cross-hospital patient
         // whose chart header had just loaded fine. See PatientChartAccess.
@@ -158,11 +165,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, sources, unlocked);
         List<NoteEntryDTO> notes = new ArrayList<>(loadNotes(encounters));
         notes.addAll(loadNursingNotes(patient.getId(), readable, sources, unlocked, hospitalId));
+        // QA D4270 review: the patient's own copy carries a note once its author signed it, as the portal does.
+        if (patientCopy) {
+            notes.removeIf(n -> !n.isSigned());
+        }
         notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(NoteEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())));
-        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources, release);
+        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources, release, patientCopy);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, sources);
-        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, sources);
+        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, sources, patientCopy);
         List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), readable, sources);
         List<TimelineEventDTO> timeline = buildTimeline(encounters, notes, results, medications, imaging, procedures);
 
@@ -403,7 +414,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                             RowSources sources, boolean release) {
+                                             RowSources sources, boolean release, boolean patientCopy) {
         // QA D1380: every result, counted; id breaks resultDate ties, so a
         // page boundary is the same on every read.
         Pageable page = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "resultDate", "id"));
@@ -420,6 +431,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // A laboratory's treatment right to foreign orders is not disclosure authority.
         if (release) {
             source = source.stream().filter(r -> hospitalId.equals(orderingHospitalIdOf(r))).toList();
+        }
+        // QA D4270 review: the patient's own copy carries a result once the laboratory released it.
+        if (patientCopy) {
+            source = source.stream().filter(LabResult::isReleased).toList();
         }
         for (LabResult r : source) {
             if (CrossHospitalReachRecorder.isPerformedHere(r, hospitalId)) {
@@ -462,7 +477,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                              RowSources sources) {
+                                              RowSources sources, boolean patientCopy) {
         // QA D1380: every imaging order, counted.
         Pageable page = Pageable.unpaged();
         // QA D652: less another hospital's never-sent DRAFTs (NeverSentRule).
@@ -482,7 +497,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         Map<UUID, Integer> imageCounts = imageCountsOf(orders);
         return orders.stream()
             .map(o -> toImagingDto(o, latestByOrderId.get(o.getId()), historyByOrderId.get(o.getId()),
-                imageCounts.get(o.getId())))
+                imageCounts.get(o.getId()), patientCopy))
             .sorted(Comparator.comparing(ImagingEntryDTO::getOrderedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(ImagingEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
@@ -580,6 +595,14 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // Nothing signed yet: the latest read shared with the care team, never a draft or a void.
         return latest != null && !UNSHOWN_IMAGING_REPORTS.contains(latest.getReportStatus())
             ? List.of(latest) : List.of();
+    }
+
+    /**
+     * QA D4270 review: what the patient's own copy shows of a study's reports: only reads released to the patient
+     * ({@link ImagingReport#isReleasedToPatient()}, the D1910 rule). The care team's unsigned read is never printed.
+     */
+    static List<ImagingReport> patientShownImagingReports(ImagingReport latest, List<ImagingReport> history) {
+        return shownImagingReports(latest, history).stream().filter(ImagingReport::isReleasedToPatient).toList();
     }
 
     /** Never on the chart: a draft, and a voided or rejected report. */
@@ -859,12 +882,13 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest, List<ImagingReport> history,
-                                         Integer imageCount) {
+                                         Integer imageCount, boolean patientCopy) {
         // QA D1926 (r53): the appointment's time, when one was typed, is kept.
         java.time.LocalTime time = wallTime(o.getScheduledTime());
         LocalDateTime scheduledFor = o.getScheduledDate() != null
             ? o.getScheduledDate().atTime(time != null ? time : java.time.LocalTime.MIDNIGHT) : null;
-        List<ImagingReport> shown = shownImagingReports(latest, history);
+        List<ImagingReport> shown = patientCopy
+            ? patientShownImagingReports(latest, history) : shownImagingReports(latest, history);
         ImagingReport conclusion = conclusionReport(shown);
         return ImagingEntryDTO.builder()
             .id(o.getId())

@@ -1938,11 +1938,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new BusinessException("portal.proxy.self");
         }
 
-        // Prevent duplicate active proxy
+        // Prevent duplicate active proxy. QA D4269 review: a grant that has ended (its date passed, or given during
+        // minority and lapsed at 18) opens nothing and does not block a new one: it is closed as expired here.
         patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
-            throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
+            if (!isProxyExpired(existing)) {
+                throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
+            }
+            existing.setStatus(ProxyStatus.EXPIRED);
+            patientProxyRepository.save(existing);
         });
 
         // QA D1464: told "access granted" while the row was born EXPIRED and the grantee had nothing.

@@ -115,17 +115,19 @@ class RoiRequestServiceTest {
         org.mockito.Mockito.lenient().when(auditService.logRequiredEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
     }
 
+    private final UUID clinician = UUID.randomUUID();
+
     private void asClinicianAtHospital() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        // A clinician or the records desk: one of the roles that collect any approved copy (QA D4270).
-        org.mockito.Mockito.lenient().when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
+        // A doctor, nurse or midwife assigned at the request's hospital: collects any approved copy (QA D4270).
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(clinician);
+        org.mockito.Mockito.lenient().when(roleValidator.collectsReleaseCopies(clinician, hospitalId)).thenReturn(true);
     }
 
     /** A hospital administrator: none of the collecting roles, so only the requests they approved. */
     private UUID asHospitalAdminAtHospital() {
         UUID admin = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        org.mockito.Mockito.lenient().when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
         org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(admin);
         return admin;
     }
@@ -150,6 +152,28 @@ class RoiRequestServiceTest {
         row.setDecisionActorUserId(admin);
         assertThat(service.copyForExport(row.getId()))
             .isEqualTo(new RoiRequestService.ApprovedCopy(patientId, row.getId(), hospitalId));
+    }
+
+    /**
+     * QA D4270 review: the collecting role is read AT the request's hospital. A nurse at another hospital who is
+     * anything else here (a receptionist, an administrator who did not approve) is refused; reception never
+     * collects a copy (it reads no clinical content); the verified super-admin acting there does.
+     */
+    @Test
+    void theCollectingRoleIsReadAtTheRequestsHospital_D4270() {
+        UUID caller = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(caller);
+        RoiRequest row = approvedFullCopy(NOW.minusDays(1));
+        row.setDecisionActorUserId(UUID.randomUUID());
+        // A clinical role held only elsewhere: the hospital-scoped check answers false here.
+        when(roleValidator.collectsReleaseCopies(caller, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.copyForExport(row.getId()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.mockito.Mockito.verify(roleValidator, org.mockito.Mockito.never()).hasAnyAuthority(any(String[].class));
+
+        when(roleValidator.isSuperAdminActingAt(hospitalId)).thenReturn(true);
+        assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
     }
 
     @Test

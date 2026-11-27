@@ -30,7 +30,9 @@ class RoiRecordExportControllerTest {
     static class MethodSecurity { }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_PATIENT", "ROLE_ACCOUNTANT", "ROLE_PHARMACIST", "ROLE_BILLING_SPECIALIST"})
+    // QA D4270 review: reception reads no clinical content (owner rule 2026-11-06); the full record copy is one.
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_PATIENT", "ROLE_ACCOUNTANT", "ROLE_PHARMACIST",
+        "ROLE_BILLING_SPECIALIST", "ROLE_RECEPTIONIST"})
     void aRoleWithNoPartInAReleaseCannotAskForTheStaffCopy(String role) throws Exception {
         var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
             "limited", "ignored", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role)));
@@ -88,7 +90,7 @@ class RoiRecordExportControllerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_SUPER_ADMIN",
-        "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN"})
+        "ROLE_HOSPITAL_ADMIN"})
     void approvedCopyUsesExistingRedactedPdfAndAuditsBeforeReturningUncacheableBytes(String role) throws Exception {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("clinical", "ignored",
