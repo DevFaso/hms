@@ -92,13 +92,12 @@ export class MorbidityComponent implements OnInit {
 
   /** Localize the display while retaining yyyy-MM for the API and navigation. */
   monthLabel(): string {
-    const [year, month] = this.month().split('-').map(Number);
     const locale = this.translate.currentLang || 'fr';
     return new Intl.DateTimeFormat(locale, {
       month: 'long',
       year: 'numeric',
       timeZone: 'UTC',
-    }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }).format(new Date(`${this.month()}-01T00:00:00Z`));
   }
 
   /** Grand total across the ranked rows, for the summary line. */
