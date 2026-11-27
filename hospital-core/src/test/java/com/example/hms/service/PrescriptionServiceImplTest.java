@@ -5168,7 +5168,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy alert");
+            .hasMessageContaining("10");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -7530,7 +7530,7 @@ class PrescriptionServiceImplTest {
             com.example.hms.cdshooks.CdsCriticalBlockException.class,
             () -> prescriptionService.signPrescription(id, cr01_urgent(null, null), Locale.ENGLISH));
 
-        prescriptionService.signPrescription(id, cr01_urgent("Sepsis", asked.getCards().get(0).exceptionKey()), Locale.ENGLISH);
+        prescriptionService.signPrescription(id, cr01_urgent("Sepsis, urgent care", asked.getCards().get(0).exceptionKey()), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
     }
@@ -7598,12 +7598,12 @@ class PrescriptionServiceImplTest {
         prescriptionService.setUrgentReviewBasket(basket);
 
         String token = cr02_tokenOfARefusal(rx);
-        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonAlone = cr02_exception("Décision", null);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonAlone = cr02_exception("Décision clinique", null);
         assertThatThrownBy(() -> prescriptionService.signPrescription(id, reasonAlone, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
 
-        prescriptionService.signPrescription(id, cr02_exception("Décision", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(id, cr02_exception("Décision clinique", token), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getOverrideReason()).contains("Décision");
@@ -7620,7 +7620,7 @@ class PrescriptionServiceImplTest {
         UUID id = rx.getId();
         String token = cr02_tokenOfARefusal(rx);
         cr02_findings(paed_aboveLimit("paedAbove:mgPerKg:25.0:15"));
-        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale = cr02_exception("Décision", token);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale = cr02_exception("Décision clinique", token);
 
         assertThatThrownBy(() -> prescriptionService.signPrescription(id, stale, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
@@ -7728,7 +7728,7 @@ class PrescriptionServiceImplTest {
         cr02_mapsTheSave();
         prescriptionService.setUrgentReviewBasket(basket);
         String token = cr02_tokenOfARefusal(rx);
-        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise, seul sur place", token), Locale.ENGLISH);
         return rx;
     }
 
@@ -7829,7 +7829,7 @@ class PrescriptionServiceImplTest {
         prescriptionService.setUrgentReviewBasket(basket);
         String token = cr02_tokenOfARefusal(rx);
 
-        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise, seul sur place", token), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();

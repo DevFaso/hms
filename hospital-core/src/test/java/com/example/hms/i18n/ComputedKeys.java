@@ -246,8 +246,6 @@ final class ComputedKeys {
             "PrenatalSchedulingServiceImpl.java|prenatal.schedule.recommendation.");
         site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.notes.\" + recommendationKey(type)",
             "PrenatalSchedulingServiceImpl.java|prenatal.schedule.notes.");
-        r.put("com/example/hms/service/PrescriptionServiceImpl.java|block.get().summary()",
-            new Open("the allergy CDS card summary is already rendered by the rule that raised it; CdsCriticalBlockException shows it as written"));
         r.put("com/example/hms/service/PrescriptionServiceImpl.java|item.getBodyKey()",
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
         site(r, d, "com/example/hms/service/PrescriptionServiceImpl.java|\"cds.severity.\" + severityStr",

@@ -3233,7 +3233,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             patient.getId(), request.getForceOverride());
         if (!Boolean.TRUE.equals(request.getForceOverride())) {
             // Sent as a critical CDS card so the prescribing screen shows the alert.
-            throw new CdsCriticalBlockException(block.get().summary(), List.of(block.get()));
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.allergy.detail"), List.of(block.get()));
         }
         if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
             throw new CdsCriticalBlockException(
