@@ -92,6 +92,23 @@ describe('LabOpsDashboardComponent', () => {
     expect(cards[2].value).toBe('46 min'); // 45.7 rounded
   });
 
+  it('counts every open stage in the in-progress card', () => {
+    fixture.detectChanges();
+    flushSummary({
+      ...MOCK_SUMMARY,
+      statusOrdered: 8,
+      statusPending: 0,
+      statusCollected: 0,
+      statusReceived: 3,
+      statusInProgress: 0,
+      statusResulted: 1,
+      statusVerified: 0,
+    });
+    fixture.detectChanges();
+
+    expect(component.statCards().find((c) => c.key === 'in_progress')?.value).toBe(12);
+  });
+
   it('should show N/A for TAT when null', () => {
     fixture.detectChanges();
     flushSummary({ ...MOCK_SUMMARY, avgTurnaroundMinutesToday: null });
