@@ -113,9 +113,10 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
     public Object afterBodyRead(@NonNull Object body, @NonNull HttpInputMessage inputMessage,
                                 @NonNull MethodParameter parameter, @NonNull Type targetType,
                                 @NonNull Class<? extends HttpMessageConverter<?>> converterType) {
-        HospitalContext context = HospitalContextHolder.getContext().orElse(null);
-        if (context == null || context.isSuperAdmin()
-            || ActingScopeResolver.scopeOf(context) instanceof ActingScope.PatientOwned) {
+        HospitalContext tenant = HospitalContextHolder.getContext().orElse(null);
+        ActingScopeResolver resolver = resolverProvider.getIfAvailable();
+        if (tenant == null || resolver == null || resolver.isVerifiedSuperAdmin()
+            || ActingScopeResolver.scopeOf(tenant) instanceof ActingScope.PatientOwned) {
             return body;
         }
         NamedIds named = new NamedIds();
@@ -126,7 +127,7 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
         Method handler = parameter.getMethod();
         if (!named.hospitalIds.isEmpty() && !isHospitalExempt(handler, parameter.getContainingClass())) {
             for (UUID hospitalId : named.hospitalIds) {
-                actAt(hospitalId);
+                actAt(resolver, hospitalId);
             }
         }
         // Read again: the body's hospital may just have become the acting one.
@@ -153,10 +154,9 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
        The hospital
        --------------------------------------------------------------------- */
 
-    private void actAt(UUID hospitalId) {
+    private void actAt(ActingScopeResolver resolver, UUID hospitalId) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        ActingScopeResolver resolver = resolverProvider.getIfAvailable();
-        if (resolver == null || hospitalId.equals(context.pinnedHospitalId())) {
+        if (hospitalId.equals(ActingScopeResolver.pinnedHospitalIdOf(context))) {
             return;
         }
         if (!context.getPermittedHospitalIds().contains(hospitalId)) {

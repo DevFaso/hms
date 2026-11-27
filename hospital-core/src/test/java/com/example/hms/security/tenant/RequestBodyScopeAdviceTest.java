@@ -131,7 +131,7 @@ class RequestBodyScopeAdviceTest {
         when(access.organisationHospitalIds()).thenReturn(Set.of(OWN, FOREIGN));
 
         assertThatCode(() -> read("plain", body(FOREIGN, null, null))).doesNotThrowAnyException();
-        assertThat(HospitalContextHolder.getContextOrEmpty().pinnedHospitalId()).isEqualTo(OWN);
+        assertThat(ActingScopeResolver.pinnedHospitalIdOf(HospitalContextHolder.getContextOrEmpty())).isEqualTo(OWN);
     }
 
     @Test
@@ -224,12 +224,15 @@ class RequestBodyScopeAdviceTest {
         assertThatCode(() -> read("plain", foreign)).doesNotThrowAnyException();
 
         HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(CALLER).superAdmin(true).build());
+        when(resolver.isVerifiedSuperAdmin()).thenReturn(true);
         assertThatCode(() -> read("plain", foreign)).doesNotThrowAnyException();
+        when(resolver.isVerifiedSuperAdmin()).thenReturn(false);
 
         HospitalContextHolder.clear();
         HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(CALLER).patientOwned(true).build());
         assertThatCode(() -> read("plain", foreign)).doesNotThrowAnyException();
-        verifyNoInteractions(resolver, registrations, staff, policy);
+        verify(resolver, never()).narrowTo(any());
+        verifyNoInteractions(registrations, staff, policy);
 
         // A pharmacy: the patient and the staff are its services' to bound; the hospital is still measured.
         HospitalContextHolder.clear();
