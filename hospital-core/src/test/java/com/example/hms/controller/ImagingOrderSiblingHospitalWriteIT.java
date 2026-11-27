@@ -161,7 +161,9 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     @Test
     @DisplayName("A's doctor cannot edit A2's order: answered exactly as a missing id")
     void updateOfSiblingOrderAnswersLikeMissing() throws Exception {
-        String body = objectMapper.writeValueAsString(updateRequest(hospitalA2.getId(), "Edited from A"));
+        // The body names the caller's own hospital, so the refusal is the service's, on the row:
+        // a body naming a hospital the caller does not hold never reaches it (QA r81 D4260, below).
+        String body = objectMapper.writeValueAsString(updateRequest(hospitalA.getId(), "Edited from A"));
         assertSameAsMissing(id -> put(API + "/imaging/orders/{id}", id)
             .contentType(MediaType.APPLICATION_JSON).content(body));
 
@@ -194,20 +196,22 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("an order at A cannot be moved to A2: answered exactly as a missing hospital")
+    @DisplayName("an order at A cannot be moved to A2: refused exactly as an unknown hospital is")
     void orderCannotBeMovedToAnotherHospital() throws Exception {
         MvcResult toSibling = mockMvc.perform(put(API + "/imaging/orders/{id}", orderAtA.getId())
                 .with(acting(doctorA, hospitalA))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest(hospitalA2.getId(), "Moved"))))
-            .andExpect(status().isNotFound())
+            // QA r81 D4260: a body naming a hospital the caller holds no role at is refused before
+            // the handler runs (403, as a hospitalId parameter is), a real one as an unknown one.
+            .andExpect(status().isForbidden())
             .andReturn();
         UUID missingHospital = UUID.randomUUID();
         MvcResult toMissing = mockMvc.perform(put(API + "/imaging/orders/{id}", orderAtA.getId())
                 .with(acting(doctorA, hospitalA))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest(missingHospital, "Moved"))))
-            .andExpect(status().isNotFound())
+            .andExpect(status().isForbidden())
             .andReturn();
         assertThat(message(toSibling).replace(hospitalA2.getId().toString(), "<id>"))
             .isEqualTo(message(toMissing).replace(missingHospital.toString(), "<id>"));
@@ -226,7 +230,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
                 .with(acting(doctorA, hospitalA))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isForbidden());
         assertThat(imagingOrderRepository.count()).isEqualTo(2);
     }
 

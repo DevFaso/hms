@@ -19,6 +19,17 @@ import java.util.UUID;
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     /**
+     * Where a staff record belongs and whose it is: one row of
+     * {@code [hospital id, user id]}, none for an unknown id. Ids only, so a
+     * caller can measure a staff id against its own hospital without loading
+     * the record.
+     */
+    @org.springframework.data.jpa.repository.Query(
+        "select h.id, u.id from Staff s join s.hospital h left join s.user u where s.id = :staffId")
+    java.util.List<Object[]> findHospitalIdAndUserIdById(
+        @org.springframework.data.repository.query.Param("staffId") UUID staffId);
+
+    /**
      * QA D282: the staff row with a write lock held to the end of the
      * transaction, so two shift submissions for the same person run one after
      * the other and the second one's overlap check sees the first one's shift.

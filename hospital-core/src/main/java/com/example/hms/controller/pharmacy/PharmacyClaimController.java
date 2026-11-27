@@ -68,6 +68,8 @@ public class PharmacyClaimController {
     @PreAuthorize(CLAIMS_ROLES)
     @Operation(summary = "Create pharmacy claim")
     @ApiResponse(responseCode = "201", description = "Claim draft created")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the dispense); the service refuses any other")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> create(
             @Valid @RequestBody PharmacyClaimRequestDTO dto) {
         PharmacyClaimResponseDTO created = claimService.createClaim(dto);

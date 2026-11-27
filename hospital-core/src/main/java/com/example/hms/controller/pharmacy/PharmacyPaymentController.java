@@ -49,6 +49,8 @@ public class PharmacyPaymentController {
     @ApiResponse(responseCode = "201", description = "Payment recorded")
     @ApiResponse(responseCode = "400", description = "Invalid request or provider error")
     @ApiResponse(responseCode = "404", description = "Dispense, patient, or hospital not found")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the dispense); the service refuses any other")
     public ResponseEntity<ApiResponseWrapper<PharmacyPaymentResponseDTO>> create(
             @Valid @RequestBody PharmacyPaymentRequestDTO dto) {
         PharmacyPaymentResponseDTO created = pharmacyPaymentService.createPayment(dto);
