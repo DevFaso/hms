@@ -1310,7 +1310,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy warning");
+            .hasMessageContaining("Allergy alert");
     }
 
     @Test
@@ -1873,7 +1873,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy warning");
+            .hasMessageContaining("Allergy alert");
     }
 
     @Test
@@ -1905,7 +1905,7 @@ class PrescriptionServiceImplTest {
         // QA D83: any documented allergy that matches needs an explicit override.
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy warning");
+            .hasMessageContaining("Allergy alert");
         assertThat(mappedEntity.getOverrideReason()).isNull();
         assertThat(responseDTO).isNotNull();
     }
@@ -1939,7 +1939,7 @@ class PrescriptionServiceImplTest {
         // QA D83: any documented allergy that matches needs an explicit override.
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy warning");
+            .hasMessageContaining("Allergy alert");
         assertThat(mappedEntity.getOverrideReason()).isNull();
         assertThat(responseDTO).isNotNull();
     }
