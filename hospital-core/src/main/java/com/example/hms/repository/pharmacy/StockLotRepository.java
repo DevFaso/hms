@@ -23,12 +23,18 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** D3946: external goods receipt cannot create a second identity for an existing batch. */
+    @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+        + "AND UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string)))")
+    boolean existsLotNumberForItem(@Param("inventoryItemId") UUID inventoryItemId,
+                                  @Param("lotNumber") String lotNumber);
+
     /** QA D2674 (r65): every lot of an item, shortest-dated first. */
     List<StockLot> findAllByInventoryItemIdOrderByExpiryDateAsc(UUID inventoryItemId);
 
     /** QA D315: whether this lot number was already received for the item with another expiry. */
     @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
-         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate <> :expiryDate")
+         + "AND UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string))) AND s.expiryDate <> :expiryDate")
     boolean existsOtherExpiryForLot(@Param("inventoryItemId") UUID inventoryItemId,
                                     @Param("lotNumber") String lotNumber,
                                     @Param("expiryDate") LocalDate expiryDate);
@@ -38,7 +44,7 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
      * expiry; a second delivery of the same batch adds to it.
      */
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
-         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate = :expiryDate")
+         + "AND UPPER(TRIM(s.lotNumber)) = UPPER(TRIM(CAST(:lotNumber AS string))) AND s.expiryDate = :expiryDate")
     List<StockLot> findSameLot(@Param("inventoryItemId") UUID inventoryItemId,
                                @Param("lotNumber") String lotNumber,
                                @Param("expiryDate") LocalDate expiryDate);

@@ -182,6 +182,28 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    void d3948_aMobileMoneySaleNeedsAReferenceWithOrWithoutAnIdempotencyKey() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        for (boolean keyed : new boolean[]{false, true}) {
+            for (String reference : new String[]{null, "   "}) {
+                PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+                dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+                dto.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
+                dto.setReferenceNumber(reference);
+                if (keyed) dto.setClientRequestId(UUID.randomUUID());
+
+                assertThatThrownBy(() -> service.createSale(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("referenceNumber", "pharmacy.payment.mobileMoneyReferenceRequired");
+            }
+        }
+        verify(saleRepository, never()).save(any());
+        verify(stockTransactionRepository, never()).save(any());
+        verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("createSale: rejects when request has no lines")
     void rejectsEmptyLines() {
         PharmacySaleRequestDTO dto = request(List.of());

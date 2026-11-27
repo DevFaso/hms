@@ -107,6 +107,7 @@ class SuperAdminClinicalWriteGuardTest {
         Map.entry("PatientEducationController#updateResource", "education content library"),
         Map.entry("Hl7InboundController", "integration adapter intake"),
         Map.entry("InventoryController", "pharmacy stock"),
+        Map.entry("StockCountController", "physical stock count and inventory adjustment, no clinical act"),
         Map.entry("StockTransactionController", "pharmacy stock"),
         Map.entry("TransfusionController#receiveUnit", "blood-bank stock receipt"),
         Map.entry("TransfusionController#discardUnit", "blood-bank stock disposal"),

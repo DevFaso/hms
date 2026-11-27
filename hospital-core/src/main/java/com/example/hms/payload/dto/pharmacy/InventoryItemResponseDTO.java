@@ -25,6 +25,7 @@ public class InventoryItemResponseDTO {
     private String medicationName;
     private String medicationCode;
     private BigDecimal quantityOnHand;
+    private Long stockRevision;
     private BigDecimal reorderThreshold;
     private BigDecimal reorderQuantity;
     private BigDecimal unitPrice;
