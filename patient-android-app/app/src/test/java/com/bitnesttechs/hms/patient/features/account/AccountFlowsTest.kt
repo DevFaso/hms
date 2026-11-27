@@ -61,6 +61,14 @@ class AccountFlowsTest {
         assertNull(AccountRepository.fromLink("https://e-keneya.com/reset-password", "token"))
     }
 
+    @Test
+    fun `a link that carries the token in its fragment yields the token`() {
+        assertEquals("abc-123_x", AccountRepository.fromLink("https://e-keneya.com/reset-password#token=abc-123_x", "token"))
+        assertEquals("tok", AccountRepository.fromLink("https://dev.e-keneya.com/verify#token=tok", "token"))
+        assertNull(AccountRepository.fromLink("https://dev.e-keneya.com/verify#token=tok", "email"))
+        assertNull(AccountRepository.fromLink("https://e-keneya.com/reset-password#", "token"))
+    }
+
     // ── Forgot password ────────────────────────────────────────────────────
 
     @Test

@@ -1638,6 +1638,35 @@ class AuthControllerTest {
     }
 
     @Test
+    void verifyEmail_theLinksTokenAloneIsExchangedByPost() throws Exception {
+        when(userService.verifyEmailByToken("tok-1")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"tok-1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified").value(true));
+
+        verify(userService).verifyEmailByToken("tok-1");
+        verify(userService, never()).verifyEmail(any(), any());
+    }
+
+    @Test
+    void verifyEmail_aRefusedTokenIsA400AndABodyWithoutOneIsRefused() throws Exception {
+        when(userService.verifyEmailByToken("spent")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"spent\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.verified").value(false));
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void verifyEmail_aRefusedLinkIsA400() throws Exception {
         when(userService.verifyEmail("apatient@example.com", "wrong-token")).thenReturn(false);
 

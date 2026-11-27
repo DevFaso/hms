@@ -4090,6 +4090,13 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V387 (scorecard K4): the in-app notification body is stored encrypted like the clinical text columns;
+         the column is widened to TEXT for the stored form. No row is rewritten by the migration. -->
+    <changeSet id="V387-notification-message-encrypted-at-rest" author="hms-team" runOnChange="false">
+        <sqlFile path="V387__notification_message_encrypted_at_rest.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
         <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="false"/>

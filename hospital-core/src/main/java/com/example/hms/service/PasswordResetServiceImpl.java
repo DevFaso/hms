@@ -177,7 +177,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             .expiration(LocalDateTime.now(clock).plusHours(2))
             .ipAddress(requestIp)
             .build());
-        String resetLink = frontendBaseUrl + "/reset-password?token=" + rawToken;
+        String resetLink = com.example.hms.utility.ActivationLinks.passwordReset(frontendBaseUrl, rawToken);
         String body = messageSource.getMessage("sms.passwordReset.link", new Object[]{resetLink},
             locale == null ? Locale.FRENCH : locale);
         final UUID requesterId = user.getId();
@@ -247,7 +247,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         tokenRepository.save(resetToken);
 
-        String resetLink = frontendBaseUrl + "/reset-password?token=" + rawToken;
+        String resetLink = com.example.hms.utility.ActivationLinks.passwordReset(frontendBaseUrl, rawToken);
         try {
             emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
         } catch (RuntimeException ex) {
