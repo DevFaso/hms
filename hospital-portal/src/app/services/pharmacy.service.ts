@@ -268,6 +268,19 @@ export interface InventoryItemResponse {
 export interface StockWitnessCandidate {
   userId: string;
   displayName: string;
+  /** QA D2679: what the witness types to confirm; UNAVAILABLE when their account has neither factor. */
+  confirmationMethod?: 'TOTP' | 'PASSWORD' | 'UNAVAILABLE';
+  /** QA D2679: the hospital administrator, listed only when no pharmacy colleague can witness. */
+  fallback?: boolean;
+}
+
+/** QA D2679: a witness's own confirmation, good for the caller's controlled movements until `expiresAt`. */
+export interface WitnessConfirmation {
+  witnessedBy: string;
+  displayName?: string | null;
+  method: 'TOTP' | 'PASSWORD';
+  confirmedAt: string;
+  expiresAt: string;
 }
 
 export interface StockLotRequest {
@@ -915,6 +928,24 @@ export interface PharmacyPaymentResponse {
   voidReason?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** QA D2310: the receipt's lines, read on the server; on the checkout's answer and a single payment read. */
+  receipt?: PharmacyReceiptDetails | null;
+}
+
+/** QA D2310: quantity, unit price, record number, cashier and pharmacy of a pharmacy receipt. */
+export interface PharmacyReceiptDetails {
+  medicationName?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  /** Sent only while the price read is the price charged (the payment being recorded). */
+  unitPrice?: number | null;
+  lineTotal?: number | null;
+  insurerShare?: number | null;
+  patientMrn?: string | null;
+  cashierName?: string | null;
+  pharmacyName?: string | null;
+  pharmacyAddress?: string | null;
+  pharmacyPhone?: string | null;
 }
 
 /* ───────────────────────────── Pharmacy Claims (T-47/T-48/T-49) ───────────────────────────── */
@@ -1235,6 +1266,20 @@ export class PharmacyService {
     );
   }
 
+  /**
+   * QA D2679: the witness confirms with their own password, or the code of their authenticator. The secret
+   * is posted in the body of this one call, checked and dropped by the server; nothing else carries it.
+   */
+  confirmWitness(
+    witnessedBy: string,
+    secret: string,
+  ): Observable<ApiResponse<WitnessConfirmation>> {
+    return this.http.post<ApiResponse<WitnessConfirmation>>(
+      '/pharmacy/stock-transactions/witness-confirmations',
+      { witnessedBy, secret },
+    );
+  }
+
   /** QA D967: the controlled-drug register (dates are ISO YYYY-MM-DD). */
   getControlledRegister(
     pharmacyId: string,
@@ -1374,11 +1419,22 @@ export class PharmacyService {
     size = 20,
     claim: QueueClaimFilter = 'ALL',
     sort?: string[],
+    search?: string,
   ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (claim !== 'ALL') params = params.set('claim', claim);
     for (const key of sort ?? []) {
       params = params.append('sort', key);
+    }
+    // QA D2319: the queue's search box (a patient's name, their record number, a medication). The typed
+    // term is posted in the body, never put in the URL; the claim filter and the paging stay in the query.
+    const term = search?.trim();
+    if (term) {
+      return this.http.post<ApiResponse<Page<WorkQueuePrescription>>>(
+        '/pharmacy/dispense/work-queue/term-search',
+        { search: term },
+        { params },
+      );
     }
     return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
       '/pharmacy/dispense/work-queue',

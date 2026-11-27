@@ -177,6 +177,78 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     expect(c).toBeTruthy();
   });
 
+  it('QA D2310: the receipt prints quantity, unit price, record number, cashier and the pharmacy', () => {
+    create(375, false);
+    const fixture = TestBed.createComponent(PharmacyCheckoutComponent);
+    const view = fixture.componentInstance;
+    view.receipt.set({
+      id: 'pay-1',
+      receiptNumber: 'CHWF2396-PH-2026-000003',
+      dispenseId: 'd-1',
+      patientId: 'p-1',
+      hospitalId: 'h-1',
+      paymentMethod: 'CASH',
+      amount: 75,
+      currency: 'XOF',
+      receipt: {
+        medicationName: 'Paracétamol 500 mg',
+        quantity: 15,
+        unit: 'comprimé',
+        unitPrice: 25,
+        lineTotal: 375,
+        insurerShare: 300,
+        patientMrn: 'CHW-000123',
+        cashierName: 'Awa Traoré',
+        pharmacyName: 'Pharmacie du CHU',
+        pharmacyAddress: 'Avenue Kwame Nkrumah, Ouagadougou',
+        pharmacyPhone: '+22625300000',
+      },
+    } as never);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const text = (testId: string): string =>
+      host.querySelector(`[data-testid="${testId}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ??
+      '';
+
+    expect(text('receipt-quantity')).toContain('15');
+    expect(text('receipt-unit-price')).toContain('25');
+    expect(text('receipt-line-total')).toContain('375');
+    expect(text('receipt-insurer-share')).toContain('300');
+    expect(text('receipt-mrn')).toBe('CHW-000123');
+    expect(text('receipt-cashier')).toBe('Awa Traoré');
+    expect(text('receipt-pharmacy')).toContain('Pharmacie du CHU');
+    expect(text('receipt-pharmacy')).toContain('Avenue Kwame Nkrumah, Ouagadougou');
+    // What the patient paid stays the total of the receipt.
+    expect(host.querySelector('.total-row .amount')?.textContent).toContain('75');
+  });
+
+  it('QA D2310: a receipt the server sent no lines for prints no empty line', () => {
+    create(375, false);
+    const fixture = TestBed.createComponent(PharmacyCheckoutComponent);
+    fixture.componentInstance.receipt.set({
+      id: 'pay-2',
+      receiptNumber: 'CHWF2396-PH-2026-000004',
+      dispenseId: 'd-1',
+      patientId: 'p-1',
+      hospitalId: 'h-1',
+      paymentMethod: 'CASH',
+      amount: 375,
+    } as never);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    for (const testId of [
+      'receipt-unit-price',
+      'receipt-line-total',
+      'receipt-insurer-share',
+      'receipt-mrn',
+      'receipt-cashier',
+    ]) {
+      expect(host.querySelector(`[data-testid="${testId}"]`))
+        .withContext(testId)
+        .toBeNull();
+    }
+  });
+
   it('QA D1058: the fill picker names the patient before the medicine', () => {
     create(3600, false);
     const fixture = TestBed.createComponent(PharmacyCheckoutComponent);

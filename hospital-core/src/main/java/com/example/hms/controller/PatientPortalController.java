@@ -779,6 +779,7 @@ public class PatientPortalController {
     @Operation(summary = "Upload a personal document",
             description = "Accepts PDF, JPG, PNG, TIFF, DOC, DOCX — max 10 MB; notes up to 2048 characters")
     @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @com.example.hms.upload.UploadPolicy(com.example.hms.upload.UploadKind.PATIENT_DOCUMENT)
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> uploadDocument(
             Authentication auth,
@@ -860,10 +861,8 @@ public class PatientPortalController {
     public ResponseEntity<org.springframework.core.io.Resource> downloadDocument(
             Authentication auth, @PathVariable UUID documentId) {
         PatientDocumentService.DocumentPayload payload = documentService.downloadDocument(auth, documentId);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(payload.contentType()))
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
+        return com.example.hms.upload.UploadResponses.attachment(payload.contentType(), payload.displayName())
+                .cacheControl(org.springframework.http.CacheControl.noStore())
                 .body(payload.resource());
     }
 

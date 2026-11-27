@@ -4104,6 +4104,13 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V388 (QA D2679): the witness of a controlled-drug movement confirms with their own password or
+         authenticator code; one row per confirmation (ids, method, times), read by the witness rule. -->
+    <changeSet id="V388-stock-witness-confirmations" author="hms-team" runOnChange="false">
+        <sqlFile path="V388__stock_witness_confirmations.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V395-stock-transfer-counterpart-lookup" author="codex" runOnChange="false">
         <sqlFile path="V395__stock_transfer_counterpart_lookup.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="false"/>
@@ -4111,6 +4118,12 @@
 
     <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
+    </changeSet>
+    <!-- V386 (scorecard K4): one escalation ladder for every urgent clinical alert: the owed first notice, no
+         round cap, the new sources, and the register of unresolved alerts. -->
+    <changeSet id="V386-urgent-alert-escalation-ladder" author="hms-team" runOnChange="false">
+        <sqlFile path="V386__urgent_alert_escalation_ladder.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
     </changeSet>
 
     <!-- V383 (insurer claims plan PR 1, QA r77 D3984): the pre-authorisation number on an invoice line, and the
@@ -4149,6 +4162,13 @@
     </changeSet>
     <changeSet id="V403-stock-receipt-metadata" author="codex" runOnChange="false">
         <sqlFile path="V403__stock_receipt_metadata.sql" relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
+         malware check; the daily upload allowance is counted from it. -->
+    <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V384__upload_records.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
     </changeSet>
 
 </databaseChangeLog>

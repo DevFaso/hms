@@ -12,9 +12,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -80,14 +77,10 @@ public class PatientImagingPortalController {
     }
 
     private static ResponseEntity<Resource> image(ImagingStudyImageService.ImageContent content) {
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(content.contentType()))
+        // The imaging viewer: a raster image or a PDF by content, shown in the page.
+        return com.example.hms.upload.UploadResponses.viewer(content.contentType(),
+                "imaging-image-" + content.imageId() + extensionOf(content.contentType()))
             .cacheControl(CacheControl.noStore())
-            .header("X-Content-Type-Options", "nosniff")
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
-                .filename("imaging-image-" + content.imageId() + extensionOf(content.contentType()))
-                .build()
-                .toString())
             .body(new StoredObjectResource(content.object()));
     }
 

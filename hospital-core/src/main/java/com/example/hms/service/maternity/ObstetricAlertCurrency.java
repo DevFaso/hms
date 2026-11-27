@@ -78,8 +78,47 @@ public class ObstetricAlertCurrency {
             case ObstetricAlertEscalationService.SOURCE_POSTPARTUM -> postpartumResolved(row);
             case ObstetricAlertEscalationService.SOURCE_DELIVERY -> deliveryResolved(row);
             case ObstetricAlertEscalationService.SOURCE_NEWS2 -> news2Resolved(row);
+            case ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE -> cultureNoLongerPositive(row);
+            case ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN -> oPositiveCountersigned(row);
+            case ObstetricAlertEscalationService.SOURCE_INCOMPATIBLE_COUNTERSIGN -> incompatibleCountersigned(row);
             default -> false;
         };
+    }
+
+    /**
+     * Scorecard K4: the records behind the alerts that are not obstetric (setter-injected; absent, the alert
+     * stands). A severe transfusion reaction and an adult's urgent hypertension have nothing here: only a person
+     * closes them.
+     */
+    private com.example.hms.repository.MicroCultureResultRepository cultureRepository;
+    private com.example.hms.repository.OPositiveReleaseDecisionRepository oPositiveDecisions;
+    private com.example.hms.repository.IncompatibleReleaseDecisionRepository incompatibleDecisions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUrgentAlertRecords(com.example.hms.repository.MicroCultureResultRepository cultureRepository,
+                               com.example.hms.repository.OPositiveReleaseDecisionRepository oPositiveDecisions,
+                               com.example.hms.repository.IncompatibleReleaseDecisionRepository incompatibleDecisions) {
+        this.cultureRepository = cultureRepository;
+        this.oPositiveDecisions = oPositiveDecisions;
+        this.incompatibleDecisions = incompatibleDecisions;
+    }
+
+    /** A culture corrected to something other than growth no longer has a positive to acknowledge. */
+    private boolean cultureNoLongerPositive(ObstetricAlertEscalation row) {
+        return cultureRepository != null && cultureRepository.findById(row.getSourceId())
+            .map(culture -> culture.getGrowthResult() != com.example.hms.enums.MicroGrowthResult.GROWTH)
+            .orElse(false);
+    }
+
+    /** An overdue countersignature stands until the release is countersigned, and not a moment longer. */
+    private boolean oPositiveCountersigned(ObstetricAlertEscalation row) {
+        return oPositiveDecisions != null && oPositiveDecisions.findById(row.getSourceId())
+            .map(decision -> !decision.countersignOwed()).orElse(false);
+    }
+
+    private boolean incompatibleCountersigned(ObstetricAlertEscalation row) {
+        return incompatibleDecisions != null && incompatibleDecisions.findById(row.getSourceId())
+            .map(decision -> !decision.countersignOwed()).orElse(false);
     }
 
     /** QA D3862: the vital sets, read for a HIGH NEWS2 (setter-injected; absent, the alert stands). */

@@ -223,6 +223,37 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
     }
 
     @Override
+    @Transactional
+    public boolean endForImpersonator(UUID impersonatorUserId, String reason) {
+        ImpersonationSessionTracker.ImpersonationSessionInfo info =
+            sessionTracker.get(impersonatorUserId).orElse(null);
+        if (info == null) {
+            return false;
+        }
+        User actor = userRepository.findById(info.impersonatorUserId()).orElse(null);
+        User target = userRepository.findById(info.targetUserId()).orElse(null);
+        if (actor != null && target != null) {
+            emitBoundaryAudit(actor, target, AuditEventType.IMPERSONATION_ENDED,
+                "Ended impersonation of " + target.getUsername() + " (" + reason + ")");
+        } else {
+            log.warn("[IMPERSONATION] Ending a tracked session whose actor or target could not be resolved (actor={}, target={})",
+                info.impersonatorUserId(), info.targetUserId());
+        }
+        // The impersonation token is in no one's hands to present here: blacklist
+        // it by the JTI recorded at start, so a copy cannot outlive the session.
+        String jti = info.impersonationTokenJti();
+        if (jti != null && !jti.isBlank()) {
+            try {
+                tokenBlacklistService.blacklist(jti, info.expiresAt().toEpochMilli());
+            } catch (RuntimeException ex) {
+                log.warn("[IMPERSONATION] Failed to blacklist the tracked impersonation token — {}", ex.getMessage());
+            }
+        }
+        sessionTracker.unregister(impersonatorUserId);
+        return true;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ImpersonationActiveResponseDTO getActive() {
         ImpersonationContext ctx = ImpersonationContextHolder.get().orElse(null);

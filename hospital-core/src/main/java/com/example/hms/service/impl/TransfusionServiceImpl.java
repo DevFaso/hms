@@ -1736,8 +1736,51 @@ public class TransfusionServiceImpl implements TransfusionService {
             log.warn("SEVERE transfusion reaction {} on administration {} for patient {}",
                 request.getReactionType(), administrationId,
                 administration.getPatient() != null ? administration.getPatient().getId() : null);
+            fileSevereReactionForAcknowledgement(saved, administration);
         }
         return mapper.toDto(saved);
+    }
+
+    /** Scorecard K4: the urgent-alert escalation (setter-injected; absent in a unit test of the record alone). */
+    private final com.example.hms.service.escalation.UrgentAlertsAccess urgentAlerts =
+        new com.example.hms.service.escalation.UrgentAlertsAccess();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setUrgentAlertsProvider(org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationService> urgentAlertsProvider) {
+        this.urgentAlerts.useProvider(urgentAlertsProvider);
+    }
+
+    /** A unit test's escalation service, used in place of the context's. */
+    void setUrgentAlerts(com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts) {
+        this.urgentAlerts.useService(urgentAlerts);
+    }
+
+    /**
+     * Scorecard K4: a severe transfusion reaction is an urgent alert to acknowledge. Its row is written here,
+     * with the reaction: from this commit the first notice is owed (a CRITICAL item
+     * for the clinician who asked for the blood and the covering physician, the haemovigilance task for the
+     * laboratory director), delivered after the commit and again by the sweep if that fails, then escalated on the
+     * one ladder until somebody other than the person who reported it acknowledges. Not caught: see
+     * {@code ObstetricAlertEscalationService#raiseAfterCommit}.
+     */
+    private void fileSevereReactionForAcknowledgement(TransfusionReaction reaction,
+                                                      TransfusionAdministration administration) {
+        Patient patient = administration.getPatient();
+        if (urgentAlerts.get() == null || reaction.getId() == null || patient == null || administration.getHospital() == null) {
+            return;
+        }
+        Staff requester = administration.getRequest() == null ? null : administration.getRequest().getRequestedBy();
+        String requesterUsername = requester == null || requester.getUser() == null
+            ? null : requester.getUser().getUsername();
+        Staff reporter = reaction.getReportedBy();
+        UUID reporterUserId = reporter == null || reporter.getUser() == null ? null : reporter.getUser().getId();
+        urgentAlerts.get().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.of(
+                new com.example.hms.service.escalation.UrgentAlerts.Subject(administration.getHospital().getId(),
+                    patient.getId(), patient.getFullName()),
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_TRANSFUSION_REACTION,
+                reaction.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_SEVERE_TRANSFUSION_REACTION,
+                null, reporterUserId)
+            .withNamedRecipients(requesterUsername == null ? List.of() : List.of(requesterUsername)));
     }
 
     @Override

@@ -14,9 +14,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -111,17 +107,10 @@ public class PatientDocumentStaffController {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PatientDocumentService.DocumentPayload payload =
             documentService.downloadForPatient(hospitalId, patientId, documentId);
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(payload.contentType()))
+        // The display name is the patient's own file name: quotes, backslashes, control
+        // characters and non-ASCII all reach here, and UploadResponses keeps them out of the header.
+        return com.example.hms.upload.UploadResponses.attachment(payload.contentType(), payload.displayName())
             .cacheControl(CacheControl.noStore())
-            // The display name is the patient's own file name: quotes, backslashes,
-            // control characters and non-ASCII all reach here. Spring's builder
-            // emits the RFC 5987 form (filename*=UTF-8''…) so none of it can break
-            // the header or the response.
-            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                .filename(payload.displayName(), StandardCharsets.UTF_8)
-                .build()
-                .toString())
             .body(payload.resource());
     }
 }

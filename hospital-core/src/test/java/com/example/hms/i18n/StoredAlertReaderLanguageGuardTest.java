@@ -63,6 +63,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/impl/PostpartumCareServiceImpl.java", ALERT + "; the escalation reason is never returned"),
         // QA D3304: the stored copy of a maternal early-warning alert; each reader's item is rendered from its keys.
         Map.entry("service/vitals/MaternalEarlyWarningService.java", ALERT),
+        Map.entry("service/escalation/UrgentAlerts.java", NOTICE),
+        Map.entry("service/escalation/UrgentEscalationSupport.java", "an SMS: the recipient's phone has no session"),
         // QA D3862: the stored copy of a HIGH NEWS2 or an URGENT newborn vital-set alert; the reader's is keyed.
         Map.entry("service/vitals/News2EscalationService.java", ALERT),
         Map.entry("service/vitals/VitalSignJudgement.java", ALERT),

@@ -69,8 +69,15 @@ class PatientPhotoServiceImplTest {
         when(patientRepository.save(any(Patient.class))).thenAnswer(i -> i.getArgument(0));
     }
 
+    /** A JPEG by its signature, ending with the given bytes; empty stays empty. */
     private MockMultipartFile jpeg(String name, byte[] bytes) {
-        return new MockMultipartFile("file", name, "image/jpeg", bytes);
+        if (bytes.length == 0) {
+            return new MockMultipartFile("file", name, "image/jpeg", bytes);
+        }
+        byte[] signature = com.example.hms.testsupport.UploadSamples.jpeg();
+        byte[] content = java.util.Arrays.copyOf(signature, signature.length + bytes.length);
+        System.arraycopy(bytes, 0, content, signature.length, bytes.length);
+        return new MockMultipartFile("file", name, "image/jpeg", content);
     }
 
     @Test
@@ -131,11 +138,11 @@ class PatientPhotoServiceImplTest {
     @Test
     void uploadRefusesNonImageContent() {
         MockMultipartFile pdf =
-            new MockMultipartFile("file", "doc.pdf", "application/pdf", new byte[] {1});
+            new MockMultipartFile("file", "doc.pdf", "image/jpeg", com.example.hms.testsupport.UploadSamples.pdf());
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, pdf))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("patient.photo.imageOnly");
+            .hasMessageContaining("patient.photo.typeUnsupported");
     }
 
     @Test
@@ -164,7 +171,7 @@ class PatientPhotoServiceImplTest {
 
         PatientPhotoService.PhotoPayload payload = service.load(patientId, hospitalId);
 
-        assertThat(payload.bytes()).containsExactly(9, 9, 9);
+        assertThat(payload.bytes()).endsWith(new byte[] {9, 9, 9});
         assertThat(payload.contentType()).isEqualTo("image/jpeg");
     }
 
@@ -253,5 +260,88 @@ class PatientPhotoServiceImplTest {
         assertThat(patient.getPhotoContentType()).isNull();
         assertThat(patient.getPhotoUpdatedAt()).isNull();
         assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(storedFile))).isFalse();
+    }
+
+    // ── Type by content, the upload record, quarantine ────────────────────
+
+    @Test
+    void anSvgIsRefusedAsItselfAndDressedAsAnImage() {
+        byte[] svg = com.example.hms.testsupport.UploadSamples.svg();
+
+        assertThatThrownBy(() -> service.upload(patientId, hospitalId,
+                new MockMultipartFile("file", "face.svg", "image/svg+xml", svg)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "patient.photo.typeUnsupported");
+        assertThatThrownBy(() -> service.upload(patientId, hospitalId,
+                new MockMultipartFile("file", "face.png", "image/png", svg)))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "file.contentMismatch");
+        assertThat(patient.getPhotoFilePath()).isNull();
+    }
+
+    @Test
+    void theStoredTypeIsTheOneTheContentShowsNotTheDeclaredOne() {
+        service.upload(patientId, hospitalId, new MockMultipartFile("file", "face.png", "image/svg+xml",
+            com.example.hms.testsupport.UploadSamples.png()));
+
+        assertThat(patient.getPhotoContentType()).isEqualTo("image/png");
+        assertThat(service.load(patientId, hospitalId).contentType()).isEqualTo("image/png");
+    }
+
+    @Test
+    void aStoredSvgIsNeverServed() throws Exception {
+        // A row written before the content check: an SVG, with the type its client declared.
+        Files.createDirectories(tempDir.resolve("patient-photos"));
+        Files.write(tempDir.resolve("patient-photos").resolve("legacy_photo.svg"),
+            com.example.hms.testsupport.UploadSamples.svg());
+        patient.setPhotoFilePath("legacy_photo.svg");
+        patient.setPhotoContentType("image/svg+xml");
+
+        assertThatThrownBy(() -> service.load(patientId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "patientPhoto.notFound");
+    }
+
+    @Test
+    void aLegacyRowIsServedWithTheTypeOfItsBytes() throws Exception {
+        Files.createDirectories(tempDir.resolve("patient-photos"));
+        Files.write(tempDir.resolve("patient-photos").resolve("legacy_photo.jpg"),
+            com.example.hms.testsupport.UploadSamples.png());
+        patient.setPhotoFilePath("legacy_photo.jpg");
+        patient.setPhotoContentType("text/html");
+
+        assertThat(service.load(patientId, hospitalId).contentType()).isEqualTo("image/png");
+    }
+
+    @Test
+    void thePhotoIsRecordedForItsHospitalAndAnInfectedOneIsRefused() {
+        com.example.hms.upload.UploadLedger ledger = org.mockito.Mockito.mock(com.example.hms.upload.UploadLedger.class);
+        PatientPhotoServiceImpl recorded = new PatientPhotoServiceImpl(patientRepository,
+            new com.example.hms.storage.LocalFileStorage(tempDir), ledger);
+        when(ledger.record(any())).thenReturn(com.example.hms.upload.UploadScanStatus.CLEAN);
+
+        recorded.upload(patientId, hospitalId, jpeg("face.jpg", new byte[] {1}));
+
+        org.mockito.ArgumentCaptor<com.example.hms.upload.UploadLedger.StoredUpload> upload =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.upload.UploadLedger.StoredUpload.class);
+        org.mockito.Mockito.verify(ledger).record(upload.capture());
+        assertThat(upload.getValue().kind()).isEqualTo(com.example.hms.upload.UploadKind.PATIENT_PHOTO);
+        assertThat(upload.getValue().contentType()).isEqualTo("image/jpeg");
+        assertThat(upload.getValue().hospitalId()).isEqualTo(hospitalId);
+        assertThat(upload.getValue().storageKey()).isEqualTo("patient-photos/" + patient.getPhotoFilePath());
+        String kept = patient.getPhotoFilePath();
+
+        when(ledger.record(any())).thenReturn(com.example.hms.upload.UploadScanStatus.INFECTED);
+        assertThatThrownBy(() -> recorded.upload(patientId, hospitalId, jpeg("bad.jpg", new byte[] {2})))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "file.upload.blocked");
+        // The patient keeps the photo they had.
+        assertThat(patient.getPhotoFilePath()).isEqualTo(kept);
+
+        org.mockito.Mockito.doThrow(new ResourceNotFoundException("file.upload.pendingCheck"))
+            .when(ledger).requireServable("patient-photos/" + kept);
+        assertThatThrownBy(() -> recorded.load(patientId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "file.upload.pendingCheck");
     }
 }

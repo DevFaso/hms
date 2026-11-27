@@ -43,4 +43,6 @@ public class PharmacyPaymentResponseDTO {
     private String voidReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** QA D2310: the receipt's lines; on the checkout's answer and a single payment read, not on lists. */
+    private PharmacyReceiptDetailsDTO receipt;
 }

@@ -38,7 +38,8 @@ import {
   VerifierCandidate,
   VitalUrgencyLevel,
 } from '../services/transfusion.service';
-import { PatientResponse } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
+import { takeBloodRequestPatient } from '../shared/blood-request-handoff';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
@@ -96,6 +97,7 @@ export class TransfusionComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly authorship = inject(AuthorshipService);
   private readonly transfusion = inject(TransfusionService);
+  private readonly patients = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -373,6 +375,31 @@ export class TransfusionComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadRequests();
+    this.openRequestHandedOver();
+  }
+
+  /**
+   * QA D3220: « Demander du sang » on the labour card, the post-partum watch or the prescription dialog
+   * lands here with its patient in the navigation state. The request form opens with that patient picked
+   * (their group, type and screen and antibody flag read as for a patient picked by hand); a patient that
+   * cannot be read leaves the form open for the picker, never a silent nothing.
+   */
+  private openRequestHandedOver(): void {
+    const patientId = takeBloodRequestPatient();
+    if (!patientId || !this.canRequest) return;
+    this.openNewRequest();
+    this.patients
+      .getById(patientId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (patient) => {
+          if (this.showRequestModal() && !this.requestForm.patientId) this.onPatientPicked(patient);
+        },
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.HANDOVER_PATIENT_FAILED'),
+          ),
+      });
   }
 
   setTab(tab: Tab): void {

@@ -34,7 +34,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
@@ -168,8 +167,9 @@ class EarlyWarningEscalationCircleTest {
 
     @Test
     void aRepeatedHighReadingFilesNothingWhileTheFirstAlertIsStillReminding() {
-        when(escalationRepository.existsOpenForPatient(eq(HOSPITAL), eq(PATIENT),
-            eq(ObstetricAlertEscalationService.SOURCE_NEWS2), eq("NEWS2_HIGH"), anyShort())).thenReturn(true);
+        when(escalationRepository.findOpenForPatient(eq(HOSPITAL), eq(PATIENT),
+            eq(ObstetricAlertEscalationService.SOURCE_NEWS2), eq("NEWS2_HIGH")))
+            .thenReturn(java.util.List.of(new com.example.hms.model.labor.ObstetricAlertEscalation()));
 
         assertThat(worker.raise(news2(Set.of("dr_a")))).isNull();
 
@@ -182,7 +182,8 @@ class EarlyWarningEscalationCircleTest {
         ObstetricAlertEscalationService.UrgentAlert partograph = new ObstetricAlertEscalationService.UrgentAlert(
             HOSPITAL, PATIENT, "Awa", ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, UUID.randomUUID(),
             "FETAL_HEART_RATE", "FHR", "FHR 100", RECORDER, "text");
-        when(escalationRepository.existsOpenForPatient(any(), any(), any(), any(), anyShort())).thenReturn(true);
+        when(escalationRepository.findOpenForPatient(any(), any(), any(), any()))
+            .thenReturn(java.util.List.of(new com.example.hms.model.labor.ObstetricAlertEscalation()));
 
         assertThat(worker.raise(partograph)).isNotNull();
     }

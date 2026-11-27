@@ -286,6 +286,60 @@ describe('MySharingComponent', () => {
     fixture.detectChanges();
 
     expect(el('released-to-family')).toBeNull();
+    expect(el('family-access-read')).toBeNull();
+  });
+
+  it('QA D3451 (r77): a relative’s read through family access says who, how related and which part', () => {
+    disclosureResponse = () =>
+      of(
+        accounting(
+          [
+            entry({
+              id: 'fam-1',
+              actor: 'Mariam Ouédraogo',
+              actorRole: 'PATIENT',
+              eventType: 'PATIENT_ACCESS',
+              entityType: 'FamilyAccess',
+              description: 'Record read through family access (MEDICATIONS)',
+              category: 'FAMILY_ACCESS',
+              externalDisclosure: true,
+              recipientRelationship: 'PARENT',
+              accessedSection: 'MEDICATIONS',
+            }),
+          ],
+          { externalDisclosures: 1, countsByCategory: { FAMILY_ACCESS: 1 } },
+        ),
+      );
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('.portal-list-item')!;
+    expect(row.classList).toContain('pli-external');
+    expect(row.querySelector('.pli-title')?.textContent).toContain('Mariam Ouédraogo');
+    expect(row.querySelector('.pli-category')?.textContent).toContain(
+      'PORTAL.SHARING.CATEGORY.FAMILY_ACCESS',
+    );
+    const read = el('family-access-read')!;
+    expect(read.textContent).toContain('R70_PRIVACY.FAMILY_SECTION_READ');
+    expect(component.familySectionLabelKey(component.accessLog()[0])).toBe(
+      'R70_PRIVACY.FAMILY_SECTION_MEDICATIONS',
+    );
+    // A relative is not shown under an account role, nor with the audit screen's wording.
+    expect(row.querySelector('.pli-sub')?.textContent).not.toContain('PATIENT');
+    expect(row.textContent).not.toContain('Record read through');
+    expect(el('released-to-family')).toBeNull();
+  });
+
+  it('QA D3451 (r77): an unknown part of the record is not printed as a code', () => {
+    disclosureResponse = () =>
+      of(
+        accounting([
+          entry({ category: 'FAMILY_ACCESS', externalDisclosure: true, accessedSection: 'X_NEW' }),
+        ]),
+      );
+    fixture.detectChanges();
+
+    expect(component.familySectionLabelKey(component.accessLog()[0])).toBeNull();
+    expect(el('family-access-read')!.textContent).not.toContain('X_NEW');
   });
 
   it('shows a failure state instead of telling the patient nobody looked', () => {

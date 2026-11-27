@@ -201,8 +201,14 @@ class PharmacyPaymentServiceImplTest {
         when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispenseId)).thenReturn(Optional.of(prior));
         lenient().when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
         when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+        prior.setDispense(dispense);
 
-        assertThat(service.createPayment(dto)).isNotNull();
+        PharmacyPaymentResponseDTO answer = service.createPayment(dto);
+        assertThat(answer).isNotNull();
+        // Review F2: a replay found without a key prints no price line either (no time window bounds it).
+        assertThat(answer.getReceipt()).isNotNull();
+        assertThat(answer.getReceipt().getUnitPrice()).isNull();
+        assertThat(answer.getReceipt().getInsurerShare()).isNull();
         verify(paymentRepository, never()).save(any());
     }
 
@@ -1013,7 +1019,13 @@ class PharmacyPaymentServiceImplTest {
         when(paymentRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(prior));
         when(paymentMapper.toResponseDTO(prior)).thenReturn(PharmacyPaymentResponseDTO.builder().build());
 
-        assertThat(service.createPayment(dto)).isNotNull();
+        PharmacyPaymentResponseDTO answer = service.createPayment(dto);
+        assertThat(answer).isNotNull();
+        // An earlier payment: today's list price may not be what it charged, so no price line and no insurer share.
+        assertThat(answer.getReceipt()).isNotNull();
+        assertThat(answer.getReceipt().getUnitPrice()).isNull();
+        assertThat(answer.getReceipt().getLineTotal()).isNull();
+        assertThat(answer.getReceipt().getInsurerShare()).isNull();
         verify(paymentRepository, never()).save(any());
         verify(paymentRepository, never()).saveAndFlush(any());
         verify(mobileMoneyGateway, never()).charge(any());

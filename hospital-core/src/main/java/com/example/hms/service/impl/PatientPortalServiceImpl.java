@@ -269,6 +269,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** Policy 2026-11-20: carries the verified grant of a proxy read to the filter. */
     private final com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope;
 
+    /** QA D3451 (proxy-read part): the audit row of a read through family access; null in a hand-built test. */
+    private com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setProxyReadAudit(com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit) {
+        this.proxyReadAudit = proxyReadAudit;
+    }
+
     /**
      * QA D985: booking or cancelling the visit a recall asks for moves the
      * recall. Setter-injected (null in constructor-built unit tests).
@@ -2010,6 +2018,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // tuberculosis scope, a verified parent of a minor, a released result). Entered here only.
         proxyReadScope.enter(new com.example.hms.service.recordaccess.ProxyReadContext(proxy.getId(), patientId,
             proxy.getRelationship(), proxy.getRelationshipVerifiedAt() != null, perms));
+
+        // QA D3451 (proxy-read part): every read a grant allows is on the patient's « Qui a consulté mon
+        // dossier ». Here, the one gate of every proxy read, so no proxy endpoint can read unrecorded.
+        if (proxyReadAudit != null) {
+            proxyReadAudit.record(proxy.getId(), proxy.getRelationship(), patientId, userId, requiredPermission);
+        }
 
         // QA D1212 (round 23): the grant is the patient's, not a hospital's. A
         // grantor registered only at another hospital than the proxy's was

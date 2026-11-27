@@ -35,6 +35,12 @@
 
 @if (patient()) {
   @if (section() === 'mother') {
+    <!-- QA D3220: the mother's blood group, allergies and « Demander du sang » beside the haemorrhage watch. -->
+    <app-patient-safety-header
+      [patientId]="patient()!.id"
+      [showName]="false"
+      [bloodRequest]="true"
+    />
     @if (schedule(); as s) {
       <div class="view-section action-form schedule-banner">
         <p>

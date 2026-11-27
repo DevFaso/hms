@@ -1077,7 +1077,11 @@
           </div>
           <!-- QA D3867: the allergies (with severity) and the latest weight (dated) before the order is written,
                not only in the server's refusal after « Créer ». -->
-          <app-patient-safety-header [patientId]="form.patientId || null" [showName]="false" />
+          <app-patient-safety-header
+            [patientId]="form.patientId || null"
+            [showName]="false"
+            [bloodRequest]="true"
+          />
           <div class="field">
             <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
             <!-- QA D922/D935: picking a catalogue item sends its id, so the

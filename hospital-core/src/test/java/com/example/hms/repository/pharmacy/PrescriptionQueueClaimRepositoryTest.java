@@ -262,4 +262,110 @@ class PrescriptionQueueClaimRepositoryTest {
         assertThat(ids(mine)).containsExactly(mineActive.getId());
         assertThat(mine.getTotalElements()).isEqualTo(1);
     }
+
+    // ── QA D2319: the queue's search box ──
+
+    /** A second patient of the hospital, with one queue row, and the first patient's record numbers. */
+    private Prescription searchFixture() {
+        Patient managed = em.find(Patient.class, patient.getId());
+        em.persist(com.example.hms.model.PatientHospitalRegistration.builder()
+                .patient(managed).hospital(em.find(Hospital.class, hospital.getId()))
+                .mrn("HQC1-000042").registrationDate(LocalDate.now()).build());
+        em.persist(com.example.hms.model.PatientHospitalRegistration.builder()
+                .patient(managed).hospital(em.find(Hospital.class, otherHospital.getId()))
+                .mrn("OTHER-777").registrationDate(LocalDate.now()).build());
+        User secondUser = em.persist(user("second"));
+        Patient second = em.persist(Patient.builder()
+                .firstName("Moussa").lastName("Kaboré").dateOfBirth(LocalDate.of(1980, 1, 2)).gender("M")
+                .address("Second address").city("Ouagadougou").country("Burkina Faso")
+                .phoneNumberPrimary("+22678000002").email("moussa@patient.test")
+                .organizationId(managed.getOrganizationId()).hospitalId(hospital.getId()).user(secondUser).build());
+        Staff staff = em.find(Staff.class, doctorStaff.getId());
+        UserRoleHospitalAssignment assignment = em.find(UserRoleHospitalAssignment.class, doctorAssignment.getId());
+        Encounter secondEncounter = em.persist(Encounter.builder()
+                .patient(second).staff(staff).hospital(em.find(Hospital.class, hospital.getId())).assignment(assignment)
+                .encounterType(EncounterType.CONSULTATION).encounterDate(LocalDateTime.now())
+                .code("ENC-QC-2").build());
+        Prescription secondRx = em.persist(Prescription.builder()
+                .patient(second).staff(staff)
+                .encounter(secondEncounter).hospital(em.find(Hospital.class, hospital.getId()))
+                .assignment(assignment)
+                .medicationName("Métronidazole").quantity(BigDecimal.TEN).status(PrescriptionStatus.SIGNED).build());
+        em.flush();
+        em.clear();
+        return secondRx;
+    }
+
+    private static String pattern(String typed) {
+        return com.example.hms.utility.PatientMatchKeys.nameContainsPattern(typed);
+    }
+
+    @Test
+    @DisplayName("D2319: a patient's name finds their rows anywhere in the queue, accents and order ignored")
+    void searchByPatientName() {
+        Prescription secondRx = searchFixture();
+
+        assertThat(ids(prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE, pattern("kabore"),
+                PageRequest.of(0, 50)))).containsExactly(secondRx.getId());
+        assertThat(ids(prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE, pattern("Kaboré Moussa"),
+                PageRequest.of(0, 50)))).containsExactly(secondRx.getId());
+        Page<Prescription> first = prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE,
+                pattern("aminata"), PageRequest.of(0, 2));
+        // Her queue rows only (the withdrawn one is not in the queue), counted across the pages.
+        assertThat(first.getTotalElements()).isEqualTo(5);
+        assertThat(first.getContent()).hasSize(2);
+        assertThat(ids(first)).doesNotContain(secondRx.getId(), withdrawnMine.getId());
+    }
+
+    @Test
+    @DisplayName("D2319: the record number searched is the one at THIS hospital")
+    void searchByRecordNumberAtThisHospital() {
+        Prescription secondRx = searchFixture();
+
+        Page<Prescription> byMrn = prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE,
+                pattern("hqc1-000042"), PageRequest.of(0, 50));
+        assertThat(byMrn.getTotalElements()).isEqualTo(5);
+        assertThat(ids(byMrn)).contains(mineActive.getId(), unclaimed.getId()).doesNotContain(secondRx.getId());
+        // Her number at another hospital identifies no one here.
+        assertThat(prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE, pattern("OTHER-777"),
+                PageRequest.of(0, 50)).getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("D2319: the search never leaves the caller's hospital")
+    void searchIsHospitalScoped() {
+        searchFixture();
+
+        assertThat(prescriptionRepository.searchWorkQueue(otherHospital.getId(), QUEUE, pattern("aminata"),
+                PageRequest.of(0, 50)).getTotalElements()).isZero();
+        assertThat(prescriptionRepository.searchWorkQueue(otherHospital.getId(), QUEUE, pattern("OTHER-777"),
+                PageRequest.of(0, 50)).getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("D2319: a medication is searched too, and a term that matches nothing finds nothing")
+    void searchByMedication() {
+        Prescription secondRx = searchFixture();
+
+        assertThat(ids(prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE, pattern("metronidazole"),
+                PageRequest.of(0, 50)))).containsExactly(secondRx.getId());
+        assertThat(prescriptionRepository.searchWorkQueue(hospital.getId(), QUEUE, pattern("zzz-nobody"),
+                PageRequest.of(0, 50)).getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("D2319: the search keeps the claim filter (mine, unclaimed)")
+    void searchKeepsTheClaimFilter() {
+        Prescription secondRx = searchFixture();
+
+        Page<Prescription> mine = prescriptionRepository.searchWorkQueueClaimedBy(hospital.getId(), QUEUE,
+                pattern("aminata"), me.getId(), activeAfter, PageRequest.of(0, 50));
+        assertThat(ids(mine)).containsExactly(mineActive.getId());
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+        Page<Prescription> free = prescriptionRepository.searchWorkQueueUnclaimed(hospital.getId(), QUEUE,
+                pattern("aminata"), activeAfter, PageRequest.of(0, 50));
+        assertThat(ids(free)).containsExactlyInAnyOrder(mineExpired.getId(), unclaimed.getId());
+        assertThat(ids(prescriptionRepository.searchWorkQueueUnclaimed(hospital.getId(), QUEUE, pattern("moussa"),
+                activeAfter, PageRequest.of(0, 50)))).containsExactly(secondRx.getId());
+    }
 }

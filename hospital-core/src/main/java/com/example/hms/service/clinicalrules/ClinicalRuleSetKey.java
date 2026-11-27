@@ -60,7 +60,9 @@ public enum ClinicalRuleSetKey {
     /** QA D3862 (r77): who acknowledges an adult HIGH NEWS2, and who the reminders reach. */
     NEWS2_ESCALATION(ClinicalRuleArea.VITALS),
     /** Go-live D2 (V385): who approves a formulary entry and a dose limit, and that nobody approves their own. */
-    CATALOGUE_CHANGE_APPROVAL(ClinicalRuleArea.PRESCRIBING);
+    CATALOGUE_CHANGE_APPROVAL(ClinicalRuleArea.PRESCRIBING),
+    /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
+    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS);
 
     private final ClinicalRuleArea area;
 

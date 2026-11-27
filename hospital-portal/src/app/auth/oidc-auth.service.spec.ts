@@ -6,6 +6,7 @@ import { OAuthService } from 'angular-oauth2-oidc';
 import { AuthService } from './auth.service';
 import { OidcAuthService } from './oidc-auth.service';
 import { environment } from '../../environments/environment';
+import { SSO_TAB_KEY, TAB_SESSION_KEY, tabBindingFor } from '../core/browser-storage';
 
 describe('OidcAuthService — KC-2b PKCE driver', () => {
   let oauthMock: jasmine.SpyObj<OAuthService>;
@@ -85,6 +86,93 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
     expect(profile?.roles).toEqual(['ROLE_DOCTOR', 'ROLE_STAFF', 'ROLE_PATIENT']);
     expect(oauthMock.setupAutomaticSilentRefresh).toHaveBeenCalled();
     expect(service.authenticated()).toBeTrue();
+  });
+
+  describe('a reload of a tab signed in by SSO (its tokens were in memory only)', () => {
+    const claims = {
+      sub: 'kc-user-1',
+      preferred_username: 'dev.doctor',
+      realm_access: { roles: ['DOCTOR'] },
+    };
+    const kcToken = (sub: string) => {
+      const b64 = (v: string) =>
+        btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+      return `${b64('{"alg":"none"}')}.${b64(JSON.stringify({ sub, exp: 9999999999 }))}.sig`;
+    };
+
+    beforeEach(async () => {
+      environment.oidc.enabled = true;
+      sessionStorage.setItem(TAB_SESSION_KEY, await tabBindingFor('kc-user-1'));
+    });
+
+    it('an SSO sign-in marks the tab, so a reload never asks the native refresh cookie', async () => {
+      sessionStorage.removeItem(TAB_SESSION_KEY);
+      oauthMock.hasValidAccessToken.and.returnValue(true);
+      oauthMock.getAccessToken.and.returnValue(kcToken('kc-user-1'));
+      oauthMock.getIdentityClaims.and.returnValue(claims);
+
+      await service.initialize();
+
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBe('bound');
+    });
+
+    it('goes back to the identity provider once to get the session again', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'bound');
+
+      void service.initialize();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(oauthMock.initCodeFlow).toHaveBeenCalledTimes(1);
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBe('restoring');
+      expect(auth.hasTabSession()).toBeTrue();
+    });
+
+    it('back from the provider with the same account, the tab is restored and bound again', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'restoring');
+      oauthMock.hasValidAccessToken.and.returnValue(true);
+      oauthMock.getAccessToken.and.returnValue(kcToken('kc-user-1'));
+      oauthMock.getIdentityClaims.and.returnValue(claims);
+
+      await service.initialize();
+
+      expect(auth.getToken()).toBe(kcToken('kc-user-1'));
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBe('bound');
+      expect(service.authenticated()).toBeTrue();
+      expect(oauthMock.initCodeFlow).not.toHaveBeenCalled();
+    });
+
+    it('back from the provider as another account, the tab is ended locally', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'restoring');
+      oauthMock.hasValidAccessToken.and.returnValue(true);
+      oauthMock.getAccessToken.and.returnValue(kcToken('kc-someone-else'));
+      oauthMock.getIdentityClaims.and.returnValue({ ...claims, sub: 'kc-someone-else' });
+
+      await service.initialize();
+
+      expect(auth.getToken()).toBeNull();
+      expect(auth.hasTabSession()).toBeFalse();
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBeNull();
+    });
+
+    it('back from the provider without a token, the tab signs in again (no second round trip)', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'restoring');
+
+      await service.initialize();
+
+      expect(oauthMock.initCodeFlow).not.toHaveBeenCalled();
+      expect(auth.hasTabSession()).toBeFalse();
+      expect(sessionStorage.getItem(SSO_TAB_KEY)).toBeNull();
+    });
+
+    it('the provider unreachable on a reload, the tab signs in again', async () => {
+      sessionStorage.setItem(SSO_TAB_KEY, 'bound');
+      oauthMock.loadDiscoveryDocumentAndTryLogin.and.rejectWith(new Error('issuer unreachable'));
+
+      await service.initialize();
+
+      expect(oauthMock.initCodeFlow).not.toHaveBeenCalled();
+      expect(auth.hasTabSession()).toBeFalse();
+    });
   });
 
   it('initialize tolerates discovery failure without throwing', async () => {

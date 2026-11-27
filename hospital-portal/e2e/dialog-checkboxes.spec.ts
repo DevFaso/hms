@@ -8,6 +8,8 @@
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 
+import { seedTabSession } from './helpers/tab-session';
+
 const json = (body: unknown) => ({
   status: 200,
   contentType: 'application/json',
@@ -47,8 +49,8 @@ async function signIn(page: Page, role: string): Promise<void> {
     base64url({ sub: 'clinician', roles: [role], iat: 1700000000, exp: 9999999999 }),
     'fake-signature-for-e2e-testing',
   ].join('.');
-  await page.addInitScript((value) => localStorage.setItem('auth_token', value), token);
   await page.route('**/api/**', (route) => route.fulfill(json({ content: [], totalElements: 0 })));
+  await seedTabSession(page, token);
   await page.route('**/api/auth/session/bootstrap', (route) =>
     route.fulfill(json({ roles: [role], permittedHospitalIds: ['h1'], primaryHospitalId: 'h1' })),
   );

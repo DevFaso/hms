@@ -60,6 +60,9 @@
           <dd data-testid="patient-safety-blood-group">
             <app-blood-group-status [status]="p.bloodGroup" [declared]="p.bloodType" />
           </dd>
+          @if (bloodRequest()) {
+            <app-blood-request-link [patientId]="patientId()" />
+          }
         </div>
         <div class="psh-fact psh-fact-allergies" [class.psh-fact-alert]="hasSevereAllergy()">
           <dt>{{ 'PATIENT_SAFETY.ALLERGIES' | translate }}</dt>

@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,9 +41,13 @@ public class ProfileImageController {
     private static final Duration CACHE_PERIOD = Duration.ofHours(1);
 
     private final FileStorage storage;
+    /** Through a provider: a controller slice test has no ledger bean. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.upload.UploadLedger> ledger;
 
-    public ProfileImageController(FileStorage storage) {
+    public ProfileImageController(FileStorage storage,
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.upload.UploadLedger> ledger) {
         this.storage = storage;
+        this.ledger = ledger;
     }
 
     @GetMapping("/uploads/" + FileUploadService.PROFILE_IMAGES_PATH + "/{fileName}")
@@ -59,14 +62,19 @@ public class ProfileImageController {
         if (contentType == null) {
             return ResponseEntity.notFound().build();
         }
-        Optional<StoredObject> stored = storage.get(FileUploadService.PROFILE_IMAGES_PATH + "/" + fileName);
+        String key = FileUploadService.PROFILE_IMAGES_PATH + "/" + fileName;
+        com.example.hms.upload.UploadLedger checks = ledger.getIfAvailable();
+        if (checks != null) {
+            // Not served while its malware check is pending, nor once it is refused.
+            checks.requireServable(key);
+        }
+        Optional<StoredObject> stored = storage.get(key);
         if (stored.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(contentType))
+        // An avatar: a raster image by its checked extension, shown in the page.
+        return com.example.hms.upload.UploadResponses.viewer(contentType, fileName)
             .cacheControl(CacheControl.maxAge(CACHE_PERIOD))
-            .header("X-Content-Type-Options", "nosniff")
             .body(new StoredObjectResource(stored.get()));
     }
 }

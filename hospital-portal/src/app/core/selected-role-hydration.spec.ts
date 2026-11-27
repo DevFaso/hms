@@ -32,7 +32,7 @@ describe('D1973: selected internal roles survive real session hydration', () => 
       const http = TestBed.inject(HttpTestingController);
       const router = TestBed.inject(Router);
       const token = `e30.${btoa(JSON.stringify({ roles: [role], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
-      auth.setToken(token, false);
+      auth.setToken(token);
       context.setRoles(['ROLE_SUPER_ADMIN']);
       context.markSuperAdminGlobalDefaults();
       context.setRoles(auth.getRoles());
@@ -87,7 +87,7 @@ describe('D1973: selected internal roles survive real session hydration', () => 
       const session = TestBed.inject(SessionScopeService);
       const http = TestBed.inject(HttpTestingController);
       const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_DOCTOR'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
-      auth.setToken(token, false);
+      auth.setToken(token);
       context.setRoles(auth.getRoles());
       session.hydrate().subscribe();
       http.expectOne('auth/session/bootstrap').flush({
@@ -118,7 +118,7 @@ describe('D1973: selected internal roles survive real session hydration', () => 
     const session = TestBed.inject(SessionScopeService);
     const http = TestBed.inject(HttpTestingController);
     const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_SURGEON'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
-    auth.setToken(token, false);
+    auth.setToken(token);
     context.setRoles(auth.getRoles());
     session.hydrate().subscribe();
     http.expectOne('auth/session/bootstrap').flush({
@@ -146,7 +146,7 @@ describe('D1973: selected internal roles survive real session hydration', () => 
       const session = TestBed.inject(SessionScopeService);
       const http = TestBed.inject(HttpTestingController);
       const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_HOSPITAL_ADMIN'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
-      auth.setToken(token, false);
+      auth.setToken(token);
       context.setRoles(auth.getRoles());
       session.hydrate().subscribe();
       http.expectOne('auth/session/bootstrap').flush({

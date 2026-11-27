@@ -8,6 +8,7 @@ import { MfaService } from '../auth/mfa.service';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { clearIdleLock } from '../core/browser-storage';
 
 const CODE_FIELD_IDS = ['mfa-challenge-code'];
 
@@ -83,9 +84,11 @@ export class MfaChallengeComponent {
         }
 
         // Successful MFA — same flow as normal login completion
-        this.auth.setToken(token, true);
+        this.auth.setToken(token);
+        // A fresh sign-in never lands on a previous lock screen.
+        clearIdleLock();
         if (res.refreshToken) {
-          this.auth.setRefreshToken(res.refreshToken, true);
+          this.auth.setRefreshToken(res.refreshToken);
         }
 
         // E9 #55b: the live session decides the hospital scope; the MFA body
@@ -137,7 +140,12 @@ export class MfaChallengeComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? this.translate.instant('MFA.CHALLENGE_WRONG_CODE'));
+        // QA D2401: a refused code keeps the user on the challenge. The reason is said in the banner and
+        // under the field, the spent code is cleared and the field takes the focus for the next one.
+        const message = err?.error?.message ?? this.translate.instant('MFA.CHALLENGE_WRONG_CODE');
+        this.error.set(message);
+        this.code = '';
+        refuseFields(this.host.nativeElement, CODE_FIELD_IDS, CODE_FIELD_IDS, message);
       },
     });
   }

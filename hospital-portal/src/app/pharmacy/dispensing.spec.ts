@@ -231,6 +231,48 @@ describe('DispensingComponent', () => {
     expect(component.workQueue().length).toBe(1);
   });
 
+  it('QA D2319: the queue search reads the whole queue for the term, from the first page', () => {
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '#queueSearch',
+    )!;
+    expect(box).withContext('the queue has a search box').not.toBeNull();
+    component.queuePage = 1;
+    pharmacySvc.getDispenseWorkQueue.calls.reset();
+    component.queueSearch = '  Kaboré ';
+
+    component.runQueueSearch();
+
+    expect(component.queuePage).toBe(0);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.mostRecent().args).toEqual([
+      0,
+      20,
+      'ALL',
+      undefined,
+      'Kaboré',
+    ]);
+    expect(component.queueSearchApplied()).toBe('Kaboré');
+  });
+
+  it('QA D2319: a search with no match says so, with the term, not « nothing to dispense »', () => {
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: [], totalPages: 0 } }) as never,
+    );
+    component.queueSearch = 'zzz';
+    component.runQueueSearch();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="queue-search-empty"]')!.textContent).toContain(
+      'PHARMACY.QUEUE_SEARCH_EMPTY',
+    );
+
+    // Clearing the box reads the queue itself again.
+    pharmacySvc.getDispenseWorkQueue.calls.reset();
+    component.clearQueueSearch();
+    expect(pharmacySvc.getDispenseWorkQueue.calls.mostRecent().args).toEqual([0, 20, 'ALL']);
+    expect(component.queueSearchApplied()).toBe('');
+  });
+
   it('should open dispense form when prescription selected', () => {
     const rx = mockWorkQueue.data.content[0];
     component.selectPrescription(rx);

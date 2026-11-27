@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/test-fixtures';
+import { fakeToken, seedTabSession } from './helpers/tab-session';
 const HOME = '00000000-0000-0000-0000-000000000101';
 const TARGET = '00000000-0000-0000-0000-000000000202';
 const profile = {
@@ -17,15 +18,12 @@ const hospitals = [
 test.describe('super-admin workspaces', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(
-      ({ profile }) => {
-        const payload = btoa(
-          JSON.stringify({ sub: profile.username, roles: profile.roles, exp: 9999999999 }),
-        );
-        localStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.scope-test-signature`);
-        localStorage.setItem('user_profile', JSON.stringify(profile));
-      },
-      { profile },
+    await seedTabSession(
+      page,
+      fakeToken(
+        { sub: profile.username, roles: profile.roles, exp: 9999999999 },
+        'scope-test-signature',
+      ),
     );
     await page.route('**/api/auth/session/bootstrap', (route) =>
       route.fulfill({

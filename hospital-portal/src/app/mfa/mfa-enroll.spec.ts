@@ -84,7 +84,7 @@ describe('MfaEnrollComponent', () => {
 
   it('keeps the temporary MFA token for the enrolment calls', () => {
     create('mfa-1');
-    expect(auth.setToken).toHaveBeenCalledWith('mfa-1', false);
+    expect(auth.setToken).toHaveBeenCalledWith('mfa-1');
     expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(text('h1')).toBe('Activer la double authentification');
   });

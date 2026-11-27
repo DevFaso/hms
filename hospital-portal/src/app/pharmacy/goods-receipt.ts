@@ -37,10 +37,12 @@ const RECENT_LOTS_SORT = ['receivedDate,desc', 'createdAt,desc'] as const;
 /** Every field the receipt form may refuse (QA D1306). */
 const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grQtyIn', 'grWitness', 'grCost'];
 
+import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.component';
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
   imports: [
+    WitnessConfirmComponent,
     DashPipe,
     SubmitGuardDirective,
     ServerTimePipe,

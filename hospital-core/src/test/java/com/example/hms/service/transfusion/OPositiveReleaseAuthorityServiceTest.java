@@ -1212,6 +1212,32 @@ class OPositiveReleaseAuthorityServiceTest {
     }
 
     @Test
+    @DisplayName("K4: an overdue countersignature goes on the escalation ladder until it is signed; with no director the médecin-chef starts it")
+    void anOverdueCountersignatureGoesOnTheLadder() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService urgentAlerts = org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        fixture.notices.setUrgentAlerts(urgentAlerts);
+        OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);
+        when(fixture.patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+
+        assertThat(fixture.notices.escalateOverdueCountersign(decision.getId())).isEqualTo(1);
+
+        ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> filed = ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(urgentAlerts).raiseAlreadyNotified(filed.capture());
+        assertThat(filed.getValue().sourceType()).isEqualTo(com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN);
+        assertThat(filed.getValue().sourceId()).isEqualTo(decision.getId());
+        assertThat(filed.getValue().patientId()).isEqualTo(patient.getId());
+        assertThat(filed.getValue().namedRecipients()).containsExactly("u-" + director);
+
+        OPositiveReleaseDecision orphan = release(request(), naming(doctor), null, false);
+        roles.remove(director);
+        fixture.notices.escalateOverdueCountersign(orphan.getId());
+        assertThat(orphan.getCountersignEscalatedAt()).as("the ladder owes the notice now").isEqualTo(NOW);
+        verify(urgentAlerts).raiseAfterCommit(filed.capture());
+        assertThat(filed.getValue().sourceId()).isEqualTo(orphan.getId());
+        assertThat(filed.getValue().namedRecipients()).isEmpty();
+    }
+
+    @Test
     @DisplayName("an alert that cannot be delivered fails the row's transaction: the mark is not kept and the next sweep tries again")
     void anUndeliveredEscalationIsNotMarkedAsTold() {
         OPositiveReleaseDecision decision = release(request(), naming(doctor), null, false);

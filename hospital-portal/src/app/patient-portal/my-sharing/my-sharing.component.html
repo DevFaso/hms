@@ -197,6 +197,9 @@
                 @case ('RELEASED_TO_FAMILY') {
                   family_restroom
                 }
+                @case ('FAMILY_ACCESS') {
+                  family_restroom
+                }
                 @default {
                   visibility
                 }
@@ -208,7 +211,8 @@
             {{ ' '
             }}<span class="pli-sub">
               <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
-              @if (entry.actorRole) {
+              <!-- QA D3451 (r77): a relative is named by their relationship below, not by an account role. -->
+              @if (entry.actorRole && entry.category !== 'FAMILY_ACCESS') {
                 · {{ entry.actorRole | enumLabel: 'role' }}
               }
               @if (entry.hospitalName) {
@@ -231,6 +235,25 @@
                   ·
                   {{
                     'R70_PRIVACY.RESULT_CATEGORY' | translate: { category: categoryKey | translate }
+                  }}
+                }
+              </span>
+            }
+            @if (entry.category === 'FAMILY_ACCESS') {
+              <!-- QA D3451 (r77): a relative read part of the record through family access: how they are
+                   related and which part, never what it held. -->
+              {{ ' '
+              }}<span class="pli-sub pli-release" data-testid="family-access-read">
+                @if (entry.recipientRelationship) {
+                  {{ entry.recipientRelationship | enumLabel: 'relationship' }}
+                }
+                @if (familySectionLabelKey(entry); as sectionKey) {
+                  @if (entry.recipientRelationship) {
+                    ·
+                  }
+                  {{
+                    'R70_PRIVACY.FAMILY_SECTION_READ'
+                      | translate: { section: sectionKey | translate }
                   }}
                 }
               </span>

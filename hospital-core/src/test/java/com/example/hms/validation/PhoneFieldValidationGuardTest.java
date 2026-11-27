@@ -56,7 +56,9 @@ class PhoneFieldValidationGuardTest {
         Map.entry("PatientLookupRequestDTO", "search criteria of a read-only patient lookup; nothing is stored"),
         Map.entry("DuplicateCandidateRequestDTO", "search criteria of the read-only duplicate check"),
         Map.entry("RegistrationMatchRequestDTO", "search criteria of the read-only registration match"),
-        Map.entry("PhoneQueryDTO", "a lookup key of a read-only search by phone; nothing is stored"));
+        Map.entry("PhoneQueryDTO", "a lookup key of a read-only search by phone; nothing is stored"),
+        Map.entry("PharmacyReceiptDetailsDTO", "the receipt lines nested in PharmacyPaymentResponseDTO, read on the"
+            + " server from the payment's pharmacy; never bound from a request"));
 
     /**
      * Writes whose service already applies the STRICTER facility phone rule

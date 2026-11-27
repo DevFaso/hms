@@ -34,6 +34,15 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
  * hospitals, keep their own hospital's access, and see every access and
  * disclosure below, emergency ones first.
  */
+/** QA D3451 (r77): the parts of a record a family-access grant opens, as ProxyReadAudit names them. */
+const FAMILY_SECTION_KEYS: Readonly<Record<string, string>> = {
+  APPOINTMENTS: 'R70_PRIVACY.FAMILY_SECTION_APPOINTMENTS',
+  MEDICATIONS: 'R70_PRIVACY.FAMILY_SECTION_MEDICATIONS',
+  LAB_RESULTS: 'R70_PRIVACY.FAMILY_SECTION_LAB_RESULTS',
+  BILLING: 'R70_PRIVACY.FAMILY_SECTION_BILLING',
+  RECORDS: 'R70_PRIVACY.FAMILY_SECTION_RECORDS',
+};
+
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
@@ -147,6 +156,14 @@ export class MySharingComponent implements OnInit {
    */
   resultCategoryLabelKey(entry: AccessLogEntry): string | null {
     return entry.resultCategory ? `SENSITIVITY_TAG.CATEGORY_${entry.resultCategory}` : null;
+  }
+
+  /**
+   * QA D3451 (r77): the part of the record a relative opened through family access, in words. An unknown
+   * part is not shown rather than shown as a code.
+   */
+  familySectionLabelKey(entry: AccessLogEntry): string | null {
+    return (entry.accessedSection && FAMILY_SECTION_KEYS[entry.accessedSection]) || null;
   }
 
   /** Emergency overrides across the whole history, or 0 if unknown. */

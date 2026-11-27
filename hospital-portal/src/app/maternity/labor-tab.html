@@ -126,6 +126,11 @@
   <!-- ══ Active episode ══ -->
   @if (activeEpisode(); as episode) {
     <div class="view-section action-form">
+      <!-- QA D3220 (owner priority): her blood group (confirmed or declared), her allergies and « Demander du
+           sang » on the labour and delivery card, where a haemorrhage is seen. -->
+      @if (patient(); as p) {
+        <app-patient-safety-header [patientId]="p.id" [showName]="false" [bloodRequest]="true" />
+      }
       <!-- QA D2594 (r65): the woman in labour has a stay and a bed, so the ward sees her. -->
       @if (!activeEpisodeForeign() && patient(); as p) {
         <app-maternity-stay
@@ -405,6 +410,12 @@
               class="risk-badge {{ alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate' }}"
               >{{ alert.message }}</span
             >
+          </p>
+        }
+        <!-- QA D3220: the request for blood sits next to the delivery's alerts (the haemorrhage one). -->
+        @if (record.alerts?.length && patient(); as p) {
+          <p data-testid="delivery-blood-request">
+            <app-blood-request-link [patientId]="p.id" />
           </p>
         }
       </div>

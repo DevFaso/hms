@@ -6,6 +6,7 @@ import { environment } from '../../environments/environment';
 import { AuthService, LoginUserProfile } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
+import { markSsoTab, ssoTabState } from '../core/browser-storage';
 
 /**
  * KC-2b — Keycloak / OIDC Authorization Code + PKCE driver for the portal.
@@ -111,14 +112,35 @@ export class OidcAuthService {
       // rather than letting users click into a 502.
       console.warn('[OidcAuthService] discovery / token exchange failed', error);
       this.discoveryFailed.set(true);
+      // An SSO tab reloaded while the provider is unreachable cannot get its session back.
+      if (ssoTabState()) this.auth.endLocalSession();
       this.ready.set(true);
       return;
     }
 
+    const sso = ssoTabState();
     if (this.oauth.hasValidAccessToken()) {
+      // Back from a reload's round trip: only the account this tab signed in as is restored.
+      if (
+        sso === 'restoring' &&
+        !(await this.auth.isTokenForThisTab(this.oauth.getAccessToken()))
+      ) {
+        this.auth.endLocalSession();
+        this.ready.set(true);
+        return;
+      }
       this.hydrateLegacyAuthFromOidc();
       this.oauth.setupAutomaticSilentRefresh();
       this.authenticated.set(true);
+    } else if (sso === 'bound' && this.auth.hasTabSession()) {
+      // A reload of a tab signed in by SSO: its tokens were in memory and it has no
+      // refresh cookie, so the session comes back from the identity provider (whose own
+      // session answers without a prompt). Once only: a return without a token signs in again.
+      markSsoTab('restoring');
+      this.oauth.initCodeFlow();
+      return new Promise<void>(() => undefined); // the page is leaving for the provider
+    } else if (sso) {
+      this.auth.endLocalSession();
     }
 
     this.ready.set(true);
@@ -152,10 +174,11 @@ export class OidcAuthService {
     const accessToken = this.oauth.getAccessToken();
     if (!accessToken) return;
 
-    // Default false — token lives in sessionStorage and dies with the tab.
-    // Opt in via `environment.oidc.remember = true` for trusted workstations.
-    const remember = environment.oidc?.remember === true;
-    this.auth.setToken(accessToken, remember);
+    // The token lives in memory only. This also runs on a reload, so the idle
+    // lock is left as it is. The tab is marked SSO: a reload restores it through
+    // the identity provider, never through the native refresh cookie.
+    this.auth.setToken(accessToken);
+    markSsoTab('bound');
 
     const claims = this.oauth.getIdentityClaims() as Record<string, unknown> | null;
     if (!claims) return;

@@ -1280,6 +1280,19 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['reason'],
     localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },
+  // QA D2679: the witness of a controlled-drug movement confirmed with their own factor, or was refused.
+  {
+    key: 'AUDIT.DESC.WITNESS_CONFIRMED',
+    re: /^Controlled-drug movement witness confirmed by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.WITNESS_CONFIRMATION_REFUSED',
+    re: /^Controlled-drug movement witness confirmation refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
   {
     // QA D1563 / D1555: a nurse or a pharmacist acknowledged a documented allergy, with a reason
     // (rows written before Policy 4, which replaced that release by the prescriber's review).
@@ -2087,6 +2100,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Sensitive result \((\S+)\) released to a verified parent or guardian$/,
     params: ['category'],
     localise: { category: 'enum' },
+  },
+  // QA D3451 (r77): a read of part of the record through a family-access grant (the section only).
+  {
+    key: 'AUDIT.DESC.FAMILY_ACCESS_READ',
+    re: /^Record read through family access \((\S*)\)$/,
+    params: ['section'],
   },
   // Policy 2026-11-20: staff verified that the holder of a family-access grant is the parent or guardian.
   {

@@ -145,6 +145,13 @@ final class ComputedKeys {
             "PrescriptionStatus.java|cds.enum.");
         site(r, d, "com/example/hms/enums/RoutingDecisionStatus.java|\"stock.routing.statusLabel.\" + name()",
             "RoutingDecisionStatus.java|stock.routing.statusLabel.");
+        // The size and type refusals of an upload path: one pair of keys per UploadKind.
+        r.put("com/example/hms/upload/UploadAdmission.java|kind.tooLargeKey()",
+            values("", java.util.Arrays.stream(com.example.hms.upload.UploadKind.values())
+                .map(com.example.hms.upload.UploadKind::tooLargeKey).toList()));
+        r.put("com/example/hms/upload/UploadAdmission.java|kind.unsupportedKey()",
+            values("", java.util.Arrays.stream(com.example.hms.upload.UploadKind.values())
+                .map(com.example.hms.upload.UploadKind::unsupportedKey).toList()));
         r.put("com/example/hms/exception/GlobalExceptionHandler.java|reason",
             new Open("an exception message passed through: a key a thrower chose, resolved if it is one, else shown as written"));
         r.put("com/example/hms/exception/GlobalExceptionHandler.java|message",
@@ -438,6 +445,14 @@ final class ComputedKeys {
             new Open("an obstetric alert message key stored on the escalation row (labor/newborn/postpartum alert codes, registered)"));
         site(r, d, "com/example/hms/service/maternity/ObstetricAlertEscalationWorker.java|typePrefix(sourceType) + \"type.\" + alertType",
             "ObstetricAlertEscalationWorker.java|type.");
+        // K4: the urgent alerts that are not obstetric: their type label, and the sentence of their type.
+        r.put("com/example/hms/service/escalation/UrgentAlerts.java|TYPE_PREFIX + alertType",
+            values("urgentAlert.type.", com.example.hms.service.escalation.UrgentAlerts.TYPES));
+        r.put("com/example/hms/service/escalation/UrgentAlerts.java|MESSAGE_PREFIX + alertType",
+            values("urgentAlert.msg.", com.example.hms.service.escalation.UrgentAlerts.TYPES_WITH_OWN_SENTENCE));
+        // K4: an adult's urgent hypertension filed for acknowledgement, with the sentence of its own rule.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #2",
+            severeHypertensionMessages());
         r.put("com/example/hms/service/maternity/ObstetricAlertText.java|keyPrefix + code",
             new Open("prefix + code: the *.alert.msg. and *.alert.trigger. keys, enumerated at the services' entries"));
         r.put("com/example/hms/service/orderset/OrderSetItemPrnRules.java|refusal.key()",
@@ -583,7 +598,9 @@ final class ComputedKeys {
             enumValues("newborn.alert.type.", NewbornAlertType.class),
             enumValues("postpartum.alert.type.", PostpartumAlertType.class),
             values("maternalWarning.alert.type.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")),
-            values("news2.alert.type.", List.of("NEWS2_HIGH"))));
+            values("news2.alert.type.", List.of("NEWS2_HIGH")),
+            // K4: the sources that are not obstetric (UrgentAlerts.TYPES).
+            values("urgentAlert.type.", com.example.hms.service.escalation.UrgentAlerts.TYPES)));
         r.put("MedicalCertificateServiceImpl.java|medicalCertificate.title.",
             enumValues("medicalCertificate.title.", MedicalCertificateType.class));
         r.put("PdfInvoiceService.java|pdf.invoice.adjustment.",

@@ -927,7 +927,9 @@ export type DisclosureCategory =
   | 'COPY_RELEASED'
   | 'IDENTITY_CHANGE'
   /** QA D3451 (r70): a clinician released one of the patient's results to a parent or guardian. */
-  | 'RELEASED_TO_FAMILY';
+  | 'RELEASED_TO_FAMILY'
+  /** QA D3451 (r77): the holder of a family-access grant read part of the record. */
+  | 'FAMILY_ACCESS';
 
 export interface AccessLogEntry {
   id: string;
@@ -948,6 +950,8 @@ export interface AccessLogEntry {
   recipientRelationship?: string | null;
   /** The category of the released result (HIV), never its value. */
   resultCategory?: string | null;
+  /** QA D3451 (r77): on a family-access read, the part of the record opened (MEDICATIONS, RECORDS, …). */
+  accessedSection?: string | null;
 }
 
 export interface DisclosureAccounting {

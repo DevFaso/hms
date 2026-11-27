@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
 
+import { fakeToken, seedTabSession } from './tab-session';
+
 export const TEST_ID = '00000000-0000-0000-0000-00000000cd12';
 
 /**
@@ -23,15 +25,12 @@ export async function signInAs(page: Page, role: string, baseURL: string): Promi
     primaryHospitalName: 'Centre Hospitalier Wend-Panga',
     hospitalIds: [TEST_ID],
   };
-  await page.addInitScript(
-    ({ profile }) => {
-      const payload = btoa(
-        JSON.stringify({ sub: profile.username, roles: profile.roles, exp: 9999999999 }),
-      );
-      localStorage.setItem('auth_token', `eyJhbGciOiJIUzI1NiJ9.${payload}.layout-signature`);
-      localStorage.setItem('user_profile', JSON.stringify(profile));
-    },
-    { profile },
+  await seedTabSession(
+    page,
+    fakeToken(
+      { sub: profile.username, uid: profile.id, roles: profile.roles, exp: 9999999999 },
+      'layout-signature',
+    ),
   );
   await page.route('**/api/auth/session/bootstrap', (route) =>
     route.fulfill({

@@ -63,14 +63,18 @@ class FileUploadServiceContentSniffTest {
 
     @Test
     void eachAllowedTypeIsRecognisedByItsSignature() {
-        assertThat(FileUploadService.contentMatches(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, ".png")).isTrue();
-        assertThat(FileUploadService.contentMatches(new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00}, ".jpg")).isTrue();
-        assertThat(FileUploadService.contentMatches("GIF89a".getBytes(StandardCharsets.US_ASCII), ".gif")).isTrue();
-        assertThat(FileUploadService.contentMatches(new byte[] {'I', 'I', 0x2A, 0x00}, ".tiff")).isTrue();
-        assertThat(FileUploadService.contentMatches(new byte[] {'P', 'K', 0x03, 0x04}, ".docx")).isTrue();
-        assertThat(FileUploadService.contentMatches("{\\rtf1".getBytes(StandardCharsets.US_ASCII), ".rtf")).isTrue();
-        assertThat(FileUploadService.contentMatches("Blood pressure 120/80".getBytes(StandardCharsets.UTF_8), ".txt")).isTrue();
-        assertThat(FileUploadService.contentMatches("<html><body>x".getBytes(StandardCharsets.UTF_8), ".txt")).isFalse();
+        assertThat(com.example.hms.upload.ContentSniffer.detect(com.example.hms.testsupport.UploadSamples.png())).contains(com.example.hms.upload.UploadType.PNG);
+        assertThat(com.example.hms.upload.ContentSniffer.detect(com.example.hms.testsupport.UploadSamples.jpeg())).contains(com.example.hms.upload.UploadType.JPEG);
+        assertThat(com.example.hms.upload.ContentSniffer.detect(com.example.hms.testsupport.UploadSamples.gif())).contains(com.example.hms.upload.UploadType.GIF);
+        assertThat(com.example.hms.upload.ContentSniffer.detect(new byte[] {'I', 'I', 0x2A, 0x00}))
+            .contains(com.example.hms.upload.UploadType.TIFF);
+        assertThat(com.example.hms.upload.ContentSniffer.detect(new byte[] {'P', 'K', 0x03, 0x04}))
+            .contains(com.example.hms.upload.UploadType.DOCX);
+        assertThat(com.example.hms.upload.ContentSniffer.detect("{\\rtf1".getBytes(StandardCharsets.US_ASCII)))
+            .contains(com.example.hms.upload.UploadType.RTF);
+        assertThat(com.example.hms.upload.ContentSniffer.detect("Blood pressure 120/80".getBytes(StandardCharsets.UTF_8)))
+            .contains(com.example.hms.upload.UploadType.TEXT);
+        assertThat(com.example.hms.upload.ContentSniffer.detect("<html><body>x".getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
 
     @Test

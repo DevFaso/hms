@@ -9,6 +9,7 @@ import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../core/idle.service';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
+import { isAccountChanged } from '../auth/session-lifetime';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
@@ -45,6 +46,12 @@ export class LockScreenComponent {
    * lockout on the sign-in page.
    */
   readonly lockedOut = output<void>();
+
+  /**
+   * Another account signed in from this browser since the screen locked (the
+   * refresh minted its token). The shell ends this tab's session locally only.
+   */
+  readonly accountChanged = output<void>();
 
   password = '';
   error = '';
@@ -90,7 +97,16 @@ export class LockScreenComponent {
     // forever. Renew the access token first whenever it is already dead.
     this.ensureFreshToken().subscribe({
       next: () => this.verifyPassword(),
-      error: (err: HttpErrorResponse) => this.failWith(this.renewalErrorKey(err)),
+      error: (err: HttpErrorResponse) => {
+        if (isAccountChanged(err)) {
+          this.loading.set(false);
+          this.password = '';
+          this.idle.unlock(); // clear lock state
+          this.accountChanged.emit();
+          return;
+        }
+        this.failWith(this.renewalErrorKey(err));
+      },
     });
   }
 

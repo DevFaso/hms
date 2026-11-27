@@ -60,6 +60,7 @@ public class ReferenceCatalogController {
     }
 
     @PostMapping(value = "/{catalogId}/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @com.example.hms.upload.UploadPolicy(com.example.hms.upload.UploadKind.CSV_IMPORT)
     @Operation(summary = "Import catalog entries from CSV",
         description = "Imports entries. CSV must include a 'code' column; optional columns: label, description, metadata (JSON), active")
     @ApiResponse(responseCode = "200", description = "Catalog entries imported",
