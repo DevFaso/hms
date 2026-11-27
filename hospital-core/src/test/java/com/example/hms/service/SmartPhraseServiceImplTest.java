@@ -340,6 +340,29 @@ class SmartPhraseServiceImplTest {
             assertThat(out.getScope()).isEqualTo(SmartPhraseScope.HOSPITAL);
             assertThat(out.getHospitalId()).isEqualTo(hospitalId);
         }
+
+        /** r81: a hospital phrase is owned by no user, whatever user the body names. */
+        @Test
+        @DisplayName("HOSPITAL scope: a body naming an owner leaves the phrase without one")
+        void hospitalScopeHasNoOwner() {
+            UUID id = UUID.randomUUID();
+            SmartPhrase existing = SmartPhrase.builder()
+                .trigger(".old").title("o").expansion("e")
+                .scope(SmartPhraseScope.HOSPITAL).hospital(hospital).build();
+            existing.setId(id);
+            when(repository.findById(id)).thenReturn(Optional.of(existing));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(repository.save(any(SmartPhrase.class))).thenAnswer(inv -> inv.getArgument(0));
+            UUID someoneElse = UUID.randomUUID();
+
+            SmartPhraseRequestDTO req = SmartPhraseRequestDTO.builder()
+                .trigger(".new").title("t").expansion("x")
+                .scope(SmartPhraseScope.HOSPITAL).hospitalId(hospitalId).ownerUserId(someoneElse).build();
+
+            SmartPhraseResponseDTO out = service.update(id, req);
+            assertThat(out.getOwnerUserId()).isNull();
+            org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).findById(someoneElse);
+        }
     }
 
     @Nested

@@ -67,6 +67,7 @@ class ObgynReferralServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.example.hms.repository.StaffRepository staffRepository;
     @Mock private ObgynReferralMapper referralMapper;
     @Mock private ObjectMapper objectMapper;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
@@ -256,10 +257,29 @@ class ObgynReferralServiceImplTest {
         ObgynReferralAcknowledgeRequestDTO req = new ObgynReferralAcknowledgeRequestDTO();
         req.setObgynUserId(userId); req.setPlanSummary("Will consult");
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(activeStaff()));
         when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
         when(referralMapper.toResponseDTO(any())).thenReturn(ObgynReferralResponseDTO.builder().id(referralId).status(ObgynReferralStatus.ACKNOWLEDGED).build());
         ObgynReferralResponseDTO result = service.acknowledgeReferral(referralId, req, "admin");
         assertThat(result.getStatus()).isEqualTo(ObgynReferralStatus.ACKNOWLEDGED);
+    }
+
+    /** r81: an obstetrician who is not staff of the referral's hospital answers as an unknown user. */
+    @Test void acknowledgeReferral_obgynOfAnotherHospital_isUnknown() {
+        ObgynReferralAcknowledgeRequestDTO req = new ObgynReferralAcknowledgeRequestDTO();
+        req.setObgynUserId(userId); req.setPlanSummary("Will consult");
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.acknowledgeReferral(referralId, req, "admin"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).findByIdWithRolesAndProfiles(any());
+        assertThat(referral.getObgyn()).isNull();
+    }
+
+    private static com.example.hms.model.Staff activeStaff() {
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setActive(true);
+        return staff;
     }
 
     @Test void acknowledgeReferral_noObgynId_throws() {
@@ -278,6 +298,7 @@ class ObgynReferralServiceImplTest {
         ObgynReferralAcknowledgeRequestDTO req = new ObgynReferralAcknowledgeRequestDTO();
         req.setObgynUserId(userId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(activeStaff()));
         when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.acknowledgeReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)
