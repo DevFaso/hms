@@ -1,17 +1,17 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
+import base from './playwright.production.config';
 
-// Isolated, mocked local UI checks; never reuse another worktree's server.
+// Use the isolated production build: the development server cannot link the
+// partially compiled browser library in this environment.
 export default defineConfig({
-  testDir: './e2e',
+  ...base,
   testMatch: 'layout-overflow.spec.ts',
   timeout: 90_000,
   workers: 1,
-  reporter: 'list',
-  use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:4319', headless: true },
   webServer: {
-    command: 'npm start -- --host 127.0.0.1 --port 4319',
-    url: 'http://127.0.0.1:4319',
+    command: 'npm run build && node scripts/serve-built-portal.mjs',
+    url: 'http://127.0.0.1:4281',
     reuseExistingServer: false,
-    timeout: 300_000,
+    timeout: 600_000,
   },
 });
