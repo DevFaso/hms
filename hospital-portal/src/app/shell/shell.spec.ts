@@ -144,7 +144,9 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('allows laboratory scientists to open the scoped inventory and instrument views', () => {
-    const shell = routes.find((route) => route.children?.some((child) => child.path === 'lab-inventory'));
+    const shell = routes.find((route) =>
+      route.children?.some((child) => child.path === 'lab-inventory'),
+    );
     expect(shell).toBeDefined();
     for (const path of ['lab-inventory', 'lab-instruments']) {
       const route = shell!.children!.find((child) => child.path === path);
