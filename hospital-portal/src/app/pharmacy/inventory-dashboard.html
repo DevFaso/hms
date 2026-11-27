@@ -354,7 +354,7 @@
                         #priceInput
                         [id]="'price-input-' + item.id"
                         type="number"
-                        min="0"
+                        min="1"
                         step="1"
                         class="price-input"
                         [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
@@ -737,7 +737,7 @@
                     type="number"
                     [(ngModel)]="createForm.unitPrice"
                     name="unitPrice"
-                    min="0"
+                    min="1"
                     step="1"
                   />
                 </div>

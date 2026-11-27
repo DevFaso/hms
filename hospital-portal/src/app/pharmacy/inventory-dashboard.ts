@@ -421,7 +421,8 @@ export class InventoryDashboardComponent implements OnInit {
   savePrice(item: InventoryItemResponse, raw: string, reason = ''): void {
     const price = Number(raw);
     const priceId = `price-input-${item.id}`;
-    if (raw === '' || !Number.isInteger(price) || price < 0) {
+    // Review of #1380 (F1): 0 is never a selling price; free is documented with a reason.
+    if (raw === '' || !Number.isInteger(price) || price < 1) {
       // QA D1306 (round 28): the price box is marked, not only a toast.
       const message = this.translate.instant('PHARMACY.PRICE_INVALID');
       refuseFields(this.host.nativeElement, [priceId], [priceId], message);

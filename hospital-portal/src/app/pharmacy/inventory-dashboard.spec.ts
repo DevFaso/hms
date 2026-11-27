@@ -48,6 +48,12 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
     expect(req.priceChangeReason).toBe('Nouveau tarif fournisseur');
     expect(toast.success).toHaveBeenCalled();
 
+    // Review of #1380 (F1): 0 is never a selling price; nothing is sent.
+    svc.updateInventoryItem.calls.reset();
+    c.savePrice(item, '0', 'gratuité');
+    expect(svc.updateInventoryItem).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.PRICE_INVALID');
+
     // The same price again is no price change: it needs no reason and sends none.
     svc.updateInventoryItem.calls.reset();
     c.savePrice({ ...item, unitPrice: 250 } as InventoryItemResponse, '250');

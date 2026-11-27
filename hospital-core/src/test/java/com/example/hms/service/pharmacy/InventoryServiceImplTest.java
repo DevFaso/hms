@@ -1572,6 +1572,60 @@ class InventoryServiceImplTest {
     }
 
     @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1380 (F1): 0 is never a new selling price, on an existing item or a new one; free is said with a reason")
+    void zeroIsNeverANewSellingPrice() {
+        stubPricedItem(true);
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, priceRequest("0", "gratuité")))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field", "messageKey").containsExactly("unitPrice", "pharmacy.price.zeroRefused");
+        verify(inventoryItemRepository, never()).save(any());
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+
+        // An unpriced item (null) is not priced 0 either.
+        inventoryItem.setUnitPrice(null);
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, priceRequest("0", null)))
+                .extracting("messageKey").isEqualTo("pharmacy.price.zeroRefused");
+
+        // Lenient: the refusal comes before the twin check reads the pharmacy's items.
+        org.mockito.Mockito.lenient().when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        org.mockito.Mockito.lenient().when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                .thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        assertThatThrownBy(() -> service.createInventoryItem(priceRequest("0", null)))
+                .extracting("messageKey").isEqualTo("pharmacy.price.zeroRefused");
+        verify(inventoryItemRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1380 (F1): an item that already carries 0 is still saved with its 0 unchanged")
+    void anItemAlreadyAtZeroIsStillEdited() {
+        stubPricedItem(false);
+        inventoryItem.setUnitPrice(BigDecimal.ZERO);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+
+        service.updateInventoryItem(inventoryItemId, priceRequest("0", null));
+
+        verify(inventoryItemRepository).save(inventoryItem);
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1380 (F3): pricing an item closes the task an unpriced fill raised")
+    void pricingAnItemClosesItsPricingTask() {
+        stubPricedItem(true);
+        inventoryItem.setUnitPrice(null);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+        UnpricedFillRelease pricingTask = org.mockito.Mockito.mock(UnpricedFillRelease.class);
+        service.setUnpricedFillRelease(pricingTask);
+
+        service.updateInventoryItem(inventoryItemId, priceRequest("300", "Prix fixé après une remise d'urgence"));
+
+        verify(pricingTask).priced(pharmacyId, inventoryItem.getMedicationCatalogItem().getId());
+    }
+
+    @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("review of #1239: the unchanged price in the form asks for no role and no reason (a pharmacist still edits thresholds)")
     void anUnchangedPriceIsNotAPriceChange() {
         stubPricedItem(false);

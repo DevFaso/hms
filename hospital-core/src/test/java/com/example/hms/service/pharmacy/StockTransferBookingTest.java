@@ -31,6 +31,7 @@ class StockTransferBookingTest {
     @Mock EntityManager entityManager;
     @Mock FefoLotPolicy fefoLotPolicy;
     @Mock PharmacyPriceHistory priceHistory;
+    @Mock com.example.hms.service.AuditEventLogService auditEventLogService;
     @InjectMocks StockTransferBooking booking;
     private Pharmacy source;
     private Pharmacy destination;
@@ -129,6 +130,28 @@ class StockTransferBookingTest {
         assertThat(PharmacyListPrice.of(created)).contains(new BigDecimal("900"));
         verify(priceHistory).keep(eq(created), isNull(), eq(new BigDecimal("900")),
             eq(StockTransferBooking.TRANSFER_PRICE_REASON), eq(outgoing.getPerformedByUser().getId()), any());
+        // Review of #1380 (F4): the same audit event as a price set on the item form.
+        verify(auditEventLogService).logEvent(argThat(event ->
+            event.getEventType() == com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED
+                && created.getId().toString().equals(event.getResourceId())));
+    }
+
+    @Test
+    void aPriceOfZeroSetOnPurposeIsNeverOverwritten() {
+        // Review of #1380 (F1): the store manager set the item at B from 500 to 0, with a reason in the history.
+        sourceItem.setUnitPrice(new BigDecimal("500"));
+        destinationItem.setUnitPrice(BigDecimal.ZERO);
+        when(items.findByPharmacyIdAndMedicationCatalogItemId(destination.getId(), sourceItem.getMedicationCatalogItem().getId()))
+            .thenReturn(Optional.of(destinationItem));
+        when(lots.findSameLot(destinationItem.getId(), sourceLot.getLotNumber(), sourceLot.getExpiryDate())).thenReturn(List.of());
+        when(lots.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(items.incrementOnHand(eq(destinationItem.getId()), eq(BigDecimal.TEN), any())).thenReturn(1);
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        assertThat(destinationItem.getUnitPrice()).as("0 is the store's own price").isEqualByComparingTo("0");
+        verifyNoInteractions(priceHistory, auditEventLogService);
+        verify(items, never()).saveAndFlush(destinationItem);
     }
 
     @Test
@@ -157,8 +180,16 @@ class StockTransferBookingTest {
 
         ArgumentCaptor<StockTransaction> ledger = ArgumentCaptor.forClass(StockTransaction.class);
         verify(transactions).save(ledger.capture());
-        assertThat(ledger.getValue().getInventoryItem().getFreeOfChargeReason()).isEqualTo("Programme national");
-        verifyNoInteractions(priceHistory);
+        InventoryItem created = ledger.getValue().getInventoryItem();
+        assertThat(created.getFreeOfChargeReason()).isEqualTo("Programme national");
+        assertThat(created.getUnitPrice()).as("a free item takes no price").isNull();
+        // Review of #1380 (F4): the copied free-of-charge reason is kept in the history and audited.
+        verify(priceHistory).keep(eq(created), isNull(), isNull(),
+            eq(StockTransferBooking.TRANSFER_FREE_REASON_PREFIX + "Programme national"),
+            eq(outgoing.getPerformedByUser().getId()), any());
+        verify(auditEventLogService).logEvent(argThat(event ->
+            event.getEventType() == com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED
+                && created.getId().toString().equals(event.getResourceId())));
     }
 
     @Test

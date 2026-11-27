@@ -452,7 +452,10 @@
           <div class="form-row">
             <div class="field full-width" data-testid="dispense-defer">
               <span class="field-label">{{
-                'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate
+                (oneStepCharge() === 0 && oneStepUnpriced()
+                  ? 'PHARMACY_MONEY.DEFERRAL.ONESTEP_UNPRICED_TITLE'
+                  : 'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE'
+                ) | translate
               }}</span>
               @if (oneStepCharge() > 0) {
                 {{ ' '
@@ -465,6 +468,7 @@
                 #oneStepDeferral
                 idPrefix="dispense-deferral"
                 [prescriptionId]="form.prescriptionId"
+                [urgencyOnly]="oneStepCharge() === 0 && oneStepUnpriced()"
               />
             </div>
           </div>
@@ -670,6 +674,7 @@
               #handOverDeferral
               idPrefix="hand-over-deferral"
               [prescriptionId]="readyAction()!.rx.id"
+              [urgencyOnly]="handOverPayment()?.status === 'NOT_PRICED'"
             />
           }
         </section>

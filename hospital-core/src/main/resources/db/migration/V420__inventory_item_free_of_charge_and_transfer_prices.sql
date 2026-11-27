@@ -8,13 +8,16 @@
 --    neither a selling price nor this reason is refused by the
 --    application.
 -- 2. Items a stock transfer created at its destination took no selling
---    price. Each such item still unpriced takes the price its source
---    item has now, and the change is kept in the price history under the
---    person who recorded the transfer. An item that already has a price,
---    or whose source has none, is left as it is.
+--    price. Each such item that still has no price at all (NULL) takes
+--    the price its source item has now, and the change is kept in the
+--    price history under the person who recorded the transfer. Left as
+--    it is: an item that has a price, a price of 0 included (0 may have
+--    been set on purpose), an item whose latest price-history change set
+--    0, an item documented as free, and an item whose source has no
+--    price.
 --
 -- Additive and idempotent: IF NOT EXISTS on the column, and the backfill
--- only touches rows with no price: a second run changes nothing.
+-- only touches rows whose price is NULL: a second run changes nothing.
 -- Rollback: none declared (forward-only).
 -- =====================================================================
 
@@ -34,7 +37,18 @@ WITH priced AS (
          ON receipt.inventory_item_id = dest.id AND receipt.transfer_origin_id IS NOT NULL
     JOIN clinical.stock_transactions origin ON origin.id = receipt.transfer_origin_id
     JOIN clinical.inventory_items src ON src.id = origin.inventory_item_id
-    WHERE (dest.unit_price IS NULL OR dest.unit_price <= 0)
+    WHERE dest.unit_price IS NULL
+      AND dest.free_of_charge_reason IS NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM clinical.pharmacy_price_changes latest
+          WHERE latest.inventory_item_id = dest.id
+            AND latest.new_price = 0
+            AND NOT EXISTS (
+                SELECT 1
+                FROM clinical.pharmacy_price_changes later
+                WHERE later.inventory_item_id = dest.id
+                  AND (later.changed_at, later.created_at) > (latest.changed_at, latest.created_at)))
       AND src.unit_price > 0
       AND src.unit IS NOT DISTINCT FROM dest.unit
       AND src.units_per_pack IS NOT DISTINCT FROM dest.units_per_pack

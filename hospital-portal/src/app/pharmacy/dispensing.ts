@@ -877,9 +877,30 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** The server refused a one-step fill as unpaid (a price it knows and this page does not). */
   readonly deferReasonAsked = signal(false);
 
-  /** The deferral choice is shown: the fill has a price here, or the server refused it as unpaid. */
+  /**
+   * Review of #1380 (F3): the medication of this one-step fill has no selling price at this pharmacy
+   * and is not documented as free. It leaves only on a logged urgency override or an open stay.
+   */
+  oneStepUnpriced(): boolean {
+    if (!this.form.pharmacyId) return false;
+    const lot = this.selectedLot();
+    if (!lot && !this.form.medicationCatalogItemId) return false;
+    const item = lot
+      ? this.inventoryItems().find((i) => i.id === lot.inventoryItemId)
+      : this.inventoryItems().find(
+          (i) => i.medicationCatalogItemId === this.form.medicationCatalogItemId,
+        );
+    // An item this page has not loaded is not judged here: the server's refusal says so (unpricedAsked).
+    if (!item) return this.unpricedAsked();
+    return !(Number(item.unitPrice ?? 0) > 0) && !item.freeOfChargeReason;
+  }
+
+  /** Review of #1380 (F3): the server refused the fill as unpriced (an item this page has not loaded). */
+  readonly unpricedAsked = signal(false);
+
+  /** The deferral choice is shown: the fill has a price here, or none, or the server refused it as unpaid. */
   oneStepNeedsDeferral(): boolean {
-    return this.oneStepCharge() > 0 || this.deferReasonAsked();
+    return this.oneStepCharge() > 0 || this.deferReasonAsked() || this.oneStepUnpriced();
   }
 
   /** QA D654: the chosen lot is of a controlled substance, so the fill is witnessed. */
@@ -1139,6 +1160,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.verifyAttested.set(false);
     this.cdsAlerts.set([]);
     this.deferReasonAsked.set(false);
+    this.unpricedAsked.set(false);
     this.allergyHold.set(null);
     this.showForm.set(true);
     this.loadStockLots();
@@ -1193,6 +1215,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
       ?.fieldErrors;
     if (fields && ('billingDeferralId' in fields || 'billingUrgencyReason' in fields)) {
       this.deferReasonAsked.set(true);
+    }
+    // Review of #1380 (F3): the pharmacy refused the fill as unpriced; it may leave on an urgency reason.
+    if (fields && 'pharmacyId' in fields && this.oneStepCharge() === 0) {
+      this.unpricedAsked.set(true);
     }
   }
 
@@ -1387,7 +1413,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * somebody else approved, or on a logged urgency override; the choice is shown then.
    */
   handOverNeedsDeferral(): boolean {
-    return this.handOverPayment()?.status === 'UNPAID' || this.handOverDeferralAsked();
+    const status = this.handOverPayment()?.status;
+    // Review of #1380 (F3): an unpriced fill leaves only on an urgency override or an open stay.
+    return status === 'UNPAID' || status === 'NOT_PRICED' || this.handOverDeferralAsked();
   }
 
   /** The server refused the hand-over as unpaid although the payment status was not (or could not be) read. */

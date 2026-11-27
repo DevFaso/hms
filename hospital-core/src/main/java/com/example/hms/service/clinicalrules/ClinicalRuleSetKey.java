@@ -62,7 +62,9 @@ public enum ClinicalRuleSetKey {
     /** Go-live D2 (V385): who approves a formulary entry and a dose limit, and that nobody approves their own. */
     CATALOGUE_CHANGE_APPROVAL(ClinicalRuleArea.PRESCRIBING),
     /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
-    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS);
+    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS),
+    /** Review of #1380 (QA r81 D4181): an unpriced fill leaves only on an urgency override or an open stay. */
+    UNPRICED_FILL_RELEASE(ClinicalRuleArea.BILLING);
 
     private final ClinicalRuleArea area;
 

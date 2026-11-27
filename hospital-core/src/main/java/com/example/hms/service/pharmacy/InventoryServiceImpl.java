@@ -145,6 +145,13 @@ public class InventoryServiceImpl implements InventoryService {
      */
     private PriceChange priceChangeOf(InventoryItem existing, InventoryItemRequestDTO dto, Pharmacy pharmacy) {
         BigDecimal current = existing != null ? existing.getUnitPrice() : null;
+        // Review of #1380 (F1): 0 is never a new selling price. "Free" is said with the free-of-charge reason, which
+        // is kept in the history; a price of 0 read as "no price" was overwritten by a transfer. An item that
+        // already carries 0 (set before this rule) is still saved with its 0 unchanged.
+        if (dto.getUnitPrice() != null && dto.getUnitPrice().signum() == 0
+                && (current == null || current.signum() != 0)) {
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "pharmacy.price.zeroRefused");
+        }
         if (dto.getUnitPrice() == null || PharmacyPriceHistory.samePrice(current, dto.getUnitPrice())) {
             return null;
         }
@@ -227,6 +234,24 @@ public class InventoryServiceImpl implements InventoryService {
                 java.time.LocalDateTime.now(clock));
         // The same event and wording as a price change: free of charge is a change of what the item costs.
         logAudit(AuditEventType.PHARMACY_PRICE_CHANGED, "Pharmacy selling price changed", item.getId().toString());
+        if (change.free()) {
+            closePricingTask(item);
+        }
+    }
+
+    /** Review of #1380 (F3): the pricing task an unpriced fill raised. A unit test built by hand may omit it. */
+    private UnpricedFillRelease unpricedFillRelease;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setUnpricedFillRelease(UnpricedFillRelease unpricedFillRelease) {
+        this.unpricedFillRelease = unpricedFillRelease;
+    }
+
+    /** Review of #1380 (F3): the item is priced or documented as free; the task to price it is done. */
+    private void closePricingTask(InventoryItem item) {
+        if (unpricedFillRelease != null && item.getPharmacy() != null && item.getMedicationCatalogItem() != null) {
+            unpricedFillRelease.priced(item.getPharmacy().getId(), item.getMedicationCatalogItem().getId());
+        }
     }
 
     @Override
@@ -260,6 +285,9 @@ public class InventoryServiceImpl implements InventoryService {
                 java.time.LocalDateTime.now(clock));
         // Ids only: the prices and the reason stay on the history row.
         logAudit(AuditEventType.PHARMACY_PRICE_CHANGED, "Pharmacy selling price changed", item.getId().toString());
+        if (change.newPrice() != null && change.newPrice().signum() > 0) {
+            closePricingTask(item);
+        }
     }
 
     /**

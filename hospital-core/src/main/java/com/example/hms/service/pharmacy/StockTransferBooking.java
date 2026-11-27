@@ -35,6 +35,7 @@ public class StockTransferBooking {
     private final EntityManager entityManager;
     private final FefoLotPolicy fefoLotPolicy;
     private final PharmacyPriceHistory priceHistory;
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
 
     public record Route(Pharmacy destination, StockTransaction originalReceipt, String fefoOverrideReason) {
         public Route(Pharmacy destination, StockTransaction originalReceipt) {
@@ -164,6 +165,7 @@ public class StockTransferBooking {
                 .unit(source.getUnit()).unitsPerPack(source.getUnitsPerPack()).packUnit(source.getPackUnit())
                 .packSizeSetAt(source.getPackSizeSetAt()).freeOfChargeReason(source.getFreeOfChargeReason()).build();
             item = items.saveAndFlush(item);
+            keepCopiedFreeOfCharge(item, movement);
             carryPrice(item, source, movement);
             return item;
         }
@@ -173,7 +175,8 @@ public class StockTransferBooking {
                 || !Objects.equals(item.getUnitsPerPack(), source.getUnitsPerPack())) {
             throw refused("stockTransaction.transfer.unitsDiffer");
         }
-        // An item the destination holds but never priced takes the source's price; a price it set stays its own.
+        // An item the destination holds but never priced takes the source's price; a price it set stays its own,
+        // a price of 0 included (review of #1380: 0 set on purpose is not "no price").
         carryPrice(item, source, movement);
         return item;
     }
@@ -181,21 +184,58 @@ public class StockTransferBooking {
     /** The reason kept in the price history when a transfer gives its destination item the source's price. */
     static final String TRANSFER_PRICE_REASON = "Prix repris de la pharmacie d'origine du transfert";
 
+    /** The reason kept when a transfer creates its destination item documented as free, as its source is. */
+    static final String TRANSFER_FREE_REASON_PREFIX = "Gratuité reprise de la pharmacie d'origine du transfert : ";
+
     /**
-     * QA D4181 (r81): gives {@code item} the selling price of {@code source} when it has none of its own and is
-     * not documented as free, and keeps the change in the price history under the person who moved the stock.
+     * QA D4181 (r81): gives {@code item} the selling price of {@code source} when it has no price at all (null) and
+     * is not documented as free, and keeps the change in the price history under the person who moved the stock,
+     * with the same audit event as a price set on the item form. Review of #1380: a price the store set, 0
+     * included, is its own and is never overwritten.
      */
     private void carryPrice(InventoryItem item, InventoryItem source, StockTransaction movement) {
         BigDecimal price = PharmacyListPrice.of(source).orElse(null);
-        if (price == null || PharmacyListPrice.isFree(item) || PharmacyListPrice.of(item).isPresent()) {
+        if (price == null || PharmacyListPrice.isFree(item) || item.getUnitPrice() != null) {
             return;
         }
-        BigDecimal before = item.getUnitPrice();
         item.setUnitPrice(price);
         items.saveAndFlush(item);
+        keepChange(item, null, price, TRANSFER_PRICE_REASON, movement);
+    }
+
+    /**
+     * Review of #1380 (F4): an item a transfer creates documented as free, as its source is, keeps that in its
+     * price history and in the audit log like a free-of-charge reason set on the item form.
+     */
+    private void keepCopiedFreeOfCharge(InventoryItem item, StockTransaction movement) {
+        if (PharmacyListPrice.isFree(item)) {
+            keepChange(item, null, null, TRANSFER_FREE_REASON_PREFIX + item.getFreeOfChargeReason(), movement);
+        }
+    }
+
+    /** The price-history row (when somebody is named on the movement) and the audit event of a transfer's change. */
+    private void keepChange(InventoryItem item, BigDecimal before, BigDecimal after, String reason,
+                            StockTransaction movement) {
         UUID movedBy = movement.getPerformedByUser() != null ? movement.getPerformedByUser().getId() : null;
         if (movedBy != null) {
-            priceHistory.keep(item, before, price, TRANSFER_PRICE_REASON, movedBy, LocalDateTime.now());
+            priceHistory.keep(item, before, after, reason, movedBy, LocalDateTime.now());
+        }
+        try {
+            // Ids only: the prices and the reason stay on the history row.
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .userId(movedBy)
+                .hospitalId(item.getPharmacy() != null && item.getPharmacy().getHospital() != null
+                    ? item.getPharmacy().getHospital().getId() : null)
+                .eventType(com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED)
+                .eventDescription("Pharmacy selling price changed")
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .resourceId(item.getId() != null ? item.getId().toString() : null)
+                .entityType("INVENTORY")
+                .build());
+        } catch (RuntimeException e) {
+            // The audit never undoes the stock movement it describes.
+            org.slf4j.LoggerFactory.getLogger(StockTransferBooking.class)
+                .warn("Failed to log audit event PHARMACY_PRICE_CHANGED: {}", e.getMessage());
         }
     }
 

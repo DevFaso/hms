@@ -75,7 +75,15 @@ describe('DispensingComponent', () => {
 
   const mockInventory = {
     data: {
-      content: [{ id: 'inv-1', medicationName: 'Amoxicillin', quantityOnHand: 100 }],
+      // Review of #1380 (F3): documented free, so a fill needs no price (an unpriced item asks for an urgency reason).
+      content: [
+        {
+          id: 'inv-1',
+          medicationName: 'Amoxicillin',
+          quantityOnHand: 100,
+          freeOfChargeReason: 'Programme national (fixture)',
+        },
+      ],
       totalElements: 1,
       totalPages: 1,
       size: 200,
@@ -580,6 +588,7 @@ describe('DispensingComponent', () => {
         medicationName: 'Morphine',
         quantityOnHand: 100,
         controlled: true,
+        freeOfChargeReason: 'Programme national (fixture)',
       } as any,
     ]);
   }
@@ -769,7 +778,18 @@ describe('DispensingComponent', () => {
     expect('billingUrgencyReason' in sent).toBeFalse();
   });
 
-  it('review of #1239: an unpriced one-step fill shows no deferral choice, until the server refuses it as unpaid', () => {
+  it('review of #1239: a free one-step fill shows no deferral choice, until the server refuses it as unpaid', () => {
+    // Review of #1380 (F3): the item is documented as free here (an unpriced one asks for an urgency reason).
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Amoxicilline',
+        quantityOnHand: 100,
+        unitPrice: null,
+        freeOfChargeReason: 'Programme national',
+      } as any,
+    ]);
     component.selectPrescription(mockWorkQueue.data.content[0]);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
@@ -1135,6 +1155,83 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {
       billingUrgencyReason: 'Crise, caisse fermée',
     });
+  });
+
+  it('review of #1380 (F3): an unpriced fill leaves only on an urgency reason, sent with the hand-over', () => {
+    pharmacySvc.handOver.and.returnValue(of({ data: {} } as any));
+    component.openHandOver(preparedRow as any);
+    TestBed.inject(HttpTestingController)
+      .expectOne('/pharmacy/dispense/d-ready/payment-status')
+      .flush({
+        data: {
+          dispenseId: 'd-ready',
+          quantity: 10,
+          charge: 0,
+          paid: 0,
+          claimed: 0,
+          due: 0,
+          status: 'NOT_PRICED',
+          priceStanding: 'UNPRICED',
+        },
+      });
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="deferral-unpriced"]')).not.toBeNull();
+    // Never on an approved deferral or a request: those are granted on an amount.
+    expect(el.querySelector('[data-testid="deferral-use-urgency"]')).toBeNull();
+    expect(el.querySelector('[data-testid="deferral-request"]')).toBeNull();
+
+    component.confirmHandOver();
+    expect(pharmacySvc.handOver).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.DEFERRAL.URGENCY_REASON_REQUIRED');
+
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="deferral-urgency-reason"]',
+    )!;
+    reason.value = 'Crise d’asthme, nuit';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    component.confirmHandOver();
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {
+      billingUrgencyReason: 'Crise d’asthme, nuit',
+    });
+  });
+
+  it('review of #1380 (F3): an unpriced one-step fill asks for the urgency reason', () => {
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Amoxicilline',
+        quantityOnHand: 100,
+        unitPrice: null,
+      } as any,
+    ]);
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.oneStepUnpriced()).toBeTrue();
+    expect(
+      el.querySelector('[data-testid="dispense-defer"] [data-testid="deferral-unpriced"]'),
+    ).not.toBeNull();
+  });
+
+  it('review of #1380 (F3): a fill the server refuses as unpriced (an item not loaded here) asks for the urgency reason', () => {
+    component.inventoryItems.set([]);
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.oneStepUnpriced()).toBeFalse();
+    pharmacySvc.createDispense.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Pas de prix', fieldErrors: { pharmacyId: 'Pas de prix' } },
+      })),
+    );
+    component.submitDispense();
+    fixture.detectChanges();
+    expect(component.unpricedAsked()).toBeTrue();
+    expect(el.querySelector('[data-testid="deferral-unpriced"]')).not.toBeNull();
   });
 
   function readPaymentStatus(data: Record<string, unknown>): HTMLElement {

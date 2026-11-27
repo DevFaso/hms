@@ -895,6 +895,88 @@ class DispenseReadyForCollectionTest {
             assertThat(status.getStatus()).isEqualTo("NO_CHARGE");
             assertThat(status.getFreeOfChargeReason()).isEqualTo("Gratuité des soins des enfants de moins de 5 ans");
         }
+
+        @Test
+        @DisplayName("review of #1380 (F3): the night pharmacist hands the unpriced syrup over on a logged urgency "
+                + "override: NOT_PRICED, audited, finance reviews the override and the price roles get a task")
+        void anUnpricedFillLeavesOnAnUrgencyOverride() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            wireTheDeferralGate();
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+
+            assertThat(service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .billingUrgencyReason("Crise d'asthme, nuit, responsable absent").build()).getStatus())
+                    .isEqualTo("COMPLETED");
+
+            ArgumentCaptor<com.example.hms.model.pharmacy.DispenseBillingDeferral> row =
+                    ArgumentCaptor.forClass(com.example.hms.model.pharmacy.DispenseBillingDeferral.class);
+            verify(deferralRepository).save(row.capture());
+            assertThat(row.getValue().getKind())
+                    .isEqualTo(com.example.hms.enums.DispenseBillingDeferralKind.URGENCY_OVERRIDE);
+            assertThat(row.getValue().getAmountDue()).isEqualByComparingTo("0");
+            verify(deferralFollowUp).reviewNeeded(eq(row.getValue()), any(), any());
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_RELEASED_UNPRICED), anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+            verify(pricingTask).priceNeeded(pharmacy, inventoryItem.getMedicationCatalogItem(), "Amoxicillin", userId);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("NOT_PRICED");
+        }
+
+        @Test
+        @DisplayName("review of #1380 (F3): an unpriced fill of an order charged to the open stay is handed over with "
+                + "no override, on the stay's account, audited, with a pricing task")
+        void anUnpricedFillOfAnOpenStayIsHandedOver() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            DispenseBillingDeferralService gate = mock(DispenseBillingDeferralService.class);
+            service.setBillingDeferrals(gate);
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+            when(gate.chargedToOpenStay(prescription, hospitalId)).thenReturn(true);
+            com.example.hms.model.pharmacy.DispenseBillingDeferral stayAccount =
+                    com.example.hms.model.pharmacy.DispenseBillingDeferral.builder()
+                            .kind(com.example.hms.enums.DispenseBillingDeferralKind.ADMISSION_ACCOUNT).build();
+            stayAccount.setId(UUID.randomUUID());
+            ArgumentCaptor<DispenseBillingDeferralService.Choice> choice =
+                    ArgumentCaptor.forClass(DispenseBillingDeferralService.Choice.class);
+            when(gate.admit(eq(prescription), eq(hospitalId), eq(BigDecimal.ZERO), choice.capture(), eq(user), any(),
+                    any())).thenReturn(stayAccount);
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+
+            assertThat(choice.getValue().deferralId()).as("never on an approved deferral").isNull();
+            verify(gate).executed(stayAccount, d, prescription);
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_RELEASED_UNPRICED), anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+            verify(pricingTask).priceNeeded(pharmacy, inventoryItem.getMedicationCatalogItem(), "Amoxicillin", userId);
+        }
+
+        @Test
+        @DisplayName("review of #1380 (F3): an outpatient unpriced fill with no urgency override stays refused, "
+                + "with the gate wired; nothing is logged")
+        void anOutpatientUnpricedFillStaysRefused() {
+            theSecondStoreHoldsTheSyrupWithNoPrice();
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            wireTheDeferralGate();
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .extracting("messageKey").isEqualTo(FillPriceGate.NO_PRICE_KEY);
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(deferralRepository, never()).save(any());
+            verifyNoInteractions(pricingTask);
+        }
     }
 
     @Nested

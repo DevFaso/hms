@@ -109,7 +109,12 @@ class UnpricedFillGuardTest {
         assertThat(transfer)
             .contains(".freeOfChargeReason(source.getFreeOfChargeReason())")
             .contains("carryPrice(item, source, movement)")
-            .contains("priceHistory.keep(item, before, price, TRANSFER_PRICE_REASON");
+            .contains("keepChange(item, null, price, TRANSFER_PRICE_REASON, movement)")
+            // Review of #1380 (F4): a copied free reason is kept in the history and audited too.
+            .contains("keepCopiedFreeOfCharge(item, movement)")
+            .contains("AuditEventType.PHARMACY_PRICE_CHANGED")
+            // Review of #1380 (F1): only a missing price (null) is filled; a price the store set, 0 included, stays.
+            .contains("PharmacyListPrice.isFree(item) || item.getUnitPrice() != null");
         assertThat(countOf(transfer, "carryPrice(item, source, movement)"))
             .as("both the created and the existing destination item take the source's price").isEqualTo(2);
     }
@@ -129,6 +134,27 @@ class UnpricedFillGuardTest {
             .as("the checkout takes no money for an unpriced fill").contains("\"pharmacy.payment.noPrice\"");
         assertThat(read(PHARMACY.resolve("PharmacyClaimServiceImpl.java")))
             .as("an unpriced fill cannot be claimed").contains("\"pharmacy.claim.noPrice\"");
+    }
+
+    @Test
+    @DisplayName("review of #1380 (F3): an unpriced fill leaves only on an urgency override or an open stay, audited, "
+        + "with a pricing task; 0 is never a new selling price")
+    void anUnpricedFillLeavesOnlyOnAnUrgencyOrAnOpenStay() throws IOException {
+        String dispensing = read(PHARMACY.resolve("DispenseServiceImpl.java"));
+        assertThat(countOf(dispensing, "if (!unpricedRelease) {"))
+            .as("the one-step / prepared fill and the hand-over skip the price gate only on a release").isEqualTo(2);
+        assertThat(countOf(dispensing, "&& unpricedFillReleasable("))
+            .as("a release is decided in one place").isEqualTo(2);
+        assertThat(dispensing)
+            .contains("return UnpricedFillRelease.releasable(urgencyReason, onStay);")
+            .contains("new DispenseBillingDeferralService.Choice(null, urgencyReason)")
+            .contains("AuditEventType.DISPENSE_RELEASED_UNPRICED")
+            .contains("unpricedFillRelease.priceNeeded(");
+        assertThat(read(PHARMACY.resolve("UnpricedFillRelease.java")))
+            .contains("return chargedToOpenStay || (urgencyReason != null && !urgencyReason.isBlank());")
+            .contains("@ProvisionalRule(ClinicalRuleSetKey.UNPRICED_FILL_RELEASE)");
+        assertThat(read(PHARMACY.resolve("InventoryServiceImpl.java")))
+            .contains("\"pharmacy.price.zeroRefused\"");
     }
 
     private static int countOf(String source, String needle) {
