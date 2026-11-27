@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -22,8 +23,15 @@ public final class WriteAuditDetail {
 
     static final String ATTRIBUTE = WriteAuditDetail.class.getName();
 
-    /** The specific event, the written resource and its patient (any may be null). */
-    public record Detail(AuditEventType eventType, UUID resourceId, UUID patientId) {}
+    /**
+     * The specific event, the written resource and its patient (any may be null), and what else the row
+     * should keep about the write: ids, counts, a masked contact, a stated reason. Never a name or a value.
+     */
+    public record Detail(AuditEventType eventType, UUID resourceId, UUID patientId, Map<String, Object> details) {
+        public Detail(AuditEventType eventType, UUID resourceId, UUID patientId) {
+            this(eventType, resourceId, patientId, null);
+        }
+    }
 
     private WriteAuditDetail() {
     }
@@ -33,9 +41,15 @@ public final class WriteAuditDetail {
     }
 
     public static void describe(AuditEventType eventType, UUID resourceId, UUID patientId) {
+        describe(eventType, resourceId, patientId, null);
+    }
+
+    /** As above, with details for the row (see {@link Detail}). */
+    public static void describe(AuditEventType eventType, UUID resourceId, UUID patientId,
+                                Map<String, Object> details) {
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
         if (attributes != null) {
-            attributes.setAttribute(ATTRIBUTE, new Detail(eventType, resourceId, patientId),
+            attributes.setAttribute(ATTRIBUTE, new Detail(eventType, resourceId, patientId, details),
                 RequestAttributes.SCOPE_REQUEST);
         }
     }

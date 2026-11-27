@@ -415,6 +415,29 @@ describe('LabTestConfigComponent', () => {
     expect(component.clinicalFieldsLocked()).toBeFalse();
   });
 
+  it('D3904: the culture setting follows the catalogue approval lock and survives editing', async () => {
+    fixture.detectChanges();
+    flushInit();
+    const base = component.definitions()[0];
+    component.openEditDef({ ...base, culture: true, approvalStatus: 'ACTIVE' } as never);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.defForm.culture).toBeTrue();
+    const culture = fixture.nativeElement.querySelector('#defCulture') as HTMLInputElement;
+    expect(culture.checked).toBeTrue();
+    expect(culture.disabled).toBeTrue();
+    component.openEditDef({ ...base, culture: true, approvalStatus: 'DRAFT' } as never);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement.querySelector('#defCulture') as HTMLInputElement).disabled,
+    ).toBeFalse();
+    component.openCreateDef();
+    expect(component.defForm.culture).toBeFalse();
+  });
+
   it('should close definition modal', () => {
     fixture.detectChanges();
     flushInit();

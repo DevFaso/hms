@@ -1,3 +1,5 @@
+import { Location } from '@angular/common';
+import { SpyLocation } from '@angular/common/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -9,16 +11,20 @@ import { ResetPasswordComponent } from './reset-password';
 describe('ResetPasswordComponent — a refused link is never shown as a reset (QA D2051/D2052)', () => {
   let httpMock: HttpTestingController;
 
-  function open(query: Record<string, string>): ComponentFixture<ResetPasswordComponent> {
+  function open(
+    query: Record<string, string>,
+    fragment: string | null = null,
+  ): ComponentFixture<ResetPasswordComponent> {
     TestBed.configureTestingModule({
       imports: [ResetPasswordComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
+        { provide: Location, useClass: SpyLocation },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+          useValue: { snapshot: { fragment, queryParamMap: convertToParamMap(query) } },
         },
       ],
     });
@@ -151,6 +157,20 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
       .expectOne('/auth/password/confirm')
       .flush(null, { status: 204, statusText: 'No Content' });
     httpMock.expectNone('/auth/password/confirm');
+  });
+
+  it('the token of the link fragment is posted in the body and leaves the address bar', () => {
+    const fixture = open({}, 'token=frag-1');
+    expect((TestBed.inject(Location) as SpyLocation).path()).toBe('/reset-password');
+    const c = fixture.componentInstance;
+    c.newPassword = 'Valid-Pass-2026';
+    c.confirmPassword = 'Valid-Pass-2026';
+    c.submit();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/auth/password/confirm' && r.urlWithParams === '/auth/password/confirm',
+    );
+    expect(req.request.body).toEqual({ token: 'frag-1', newPassword: 'Valid-Pass-2026' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
   it('a link with no token is refused up front', () => {

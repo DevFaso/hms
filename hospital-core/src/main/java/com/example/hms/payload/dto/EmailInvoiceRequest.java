@@ -18,15 +18,28 @@ public record EmailInvoiceRequest(
      */
     @jakarta.validation.constraints.Size(max = 35)
     String locale,
-    Boolean attachPdf
+    Boolean attachPdf,
+    /**
+     * Why the invoice also goes to an address that is neither the patient's own nor a guarantor's on file.
+     * Required for such an address, kept in the audit trail; ignored otherwise.
+     */
+    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_REASON_LENGTH)
+    String reason
 ) {
     /**
-     * QA round 34: one invoice goes to a patient and those who pay for them, with a short
-     * note; a 20 000-character message to 60 recipients was accepted and mailed. These are
-     * this form's limits, not a mail server's: 10 on each list, 2000 characters.
+     * One invoice goes to the patient and those who pay for them: at most this many addresses in one send, all
+     * lists together (the service counts them; each list is capped at the same number). 2000 characters for the
+     * note.
      */
-    public static final int MAX_RECIPIENTS = 10;
+    public static final int MAX_RECIPIENTS = 3;
     public static final int MAX_MESSAGE_LENGTH = 2000;
+    public static final int MAX_REASON_LENGTH = 500;
+
+    /** A send to addresses on file only: no reason. */
+    public EmailInvoiceRequest(java.util.List<String> to, java.util.List<String> cc, java.util.List<String> bcc,
+                               String message, String locale, Boolean attachPdf) {
+        this(to, cc, bcc, message, locale, attachPdf, null);
+    }
 
     // A body that leaves this out or sends null gets the documented default
     // (QA D23): Jackson 3 refuses a null for a primitive record component.

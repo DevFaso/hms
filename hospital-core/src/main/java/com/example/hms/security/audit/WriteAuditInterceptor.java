@@ -177,6 +177,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             .roleName(roleNameOf(assignment, auth))
             .ipAddress(request.getRemoteAddr())
             .eventDescription(request.getMethod().toUpperCase(Locale.ROOT) + " " + pattern)
+            .details(detail != null ? detail.details() : null)
             .build());
     }
 

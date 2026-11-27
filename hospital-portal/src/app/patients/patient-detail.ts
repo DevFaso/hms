@@ -307,9 +307,9 @@ export class PatientDetailComponent implements OnInit {
     this.loadPatient(id);
   }
 
-  /** Active hospital for the caller. Null when no scope is selected (e.g. SUPER_ADMIN unscoped view). */
+  /** Emergency access follows the selected scope, not the account's primary hospital. */
   currentHospitalId(): string | null {
-    return this.roleContext.activeHospitalId ?? null;
+    return this.scopedHospitalId();
   }
 
   /** E9 #64 — the break-glass banner, so a restricted line can open its declaration. */

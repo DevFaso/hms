@@ -75,7 +75,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({StablePageOrderConfig.class, TenantContextAccessor.class})
+// The notification rows this seeds are encrypted at rest (V387): the slice needs the key holder.
+@Import({StablePageOrderConfig.class, TenantContextAccessor.class, com.example.hms.security.EncryptionKeyHolder.class})
 @DisplayName("D1295: the ordered pages run on PostgreSQL")
 class SortedPagePostgresIT {
 

@@ -70,8 +70,8 @@ hms/
 │       └── services/           # API services
 ├── .github/workflows/          # CI/CD pipelines
 ├── docker-compose.yml          # Local PostgreSQL
-├── Dockerfile                  # Production container
-└── railway.toml                # Railway deployment config
+├── .railway/railway.ts         # Railway service settings (applied with `railway config apply`)
+└── Dockerfile                  # Production container
 ```
 
 ## Spring Profiles

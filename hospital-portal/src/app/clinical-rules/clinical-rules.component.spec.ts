@@ -146,6 +146,119 @@ describe('ClinicalRulesComponent (V356)', () => {
     fixture.detectChanges();
   }
 
+  it('ignores the first hospital response after switching away and back', () => {
+    const oldA = httpMock.expectOne(URL);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    const b = httpMock.expectOne('/hospitals/h-2/clinical-rules');
+    roleContext.activeHospitalId = 'h-1';
+    fixture.detectChanges();
+    const newA = httpMock.expectOne(URL);
+    oldA.flush(overview(true, [rule('OLD')]));
+    fixture.detectChanges();
+    expect(q('clinical-rules-progress')).toBeNull();
+    newA.flush(overview(true, [rule('CURRENT')]));
+    b.flush({ ...overview(true, [rule('OTHER')]), hospitalId: 'h-2' });
+    fixture.detectChanges();
+    expect(host.textContent).toContain('CURRENT');
+    expect(host.textContent).not.toContain('OLD');
+    expect(host.textContent).not.toContain('OTHER');
+  });
+
+  it('never signs a rule in a hospital different from the one that opened it', async () => {
+    load(overview(true, [rule('RULE')]));
+    q<HTMLButtonElement>('rule-sign')!.click();
+    fixture.detectChanges();
+    await type('rule-signer-name', 'Dr Awa');
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE')]), hospitalId: 'h-2' });
+    q<HTMLButtonElement>('rule-sign-confirm')!.click();
+    httpMock.expectNone('/hospitals/h-2/clinical-rules/RULE/signoffs');
+  });
+
+  it('does not apply a delayed sign-off response to another hospital', async () => {
+    load(overview(true, [rule('RULE')]));
+    q<HTMLButtonElement>('rule-sign')!.click();
+    fixture.detectChanges();
+    await type('rule-signer-name', 'Dr Awa');
+    q<HTMLButtonElement>('rule-sign-confirm')!.click();
+    const sign = httpMock.expectOne(`${URL}/RULE/signoffs`);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE')]), hospitalId: 'h-2' });
+    sign.flush(rule('RULE', 'SIGNED'));
+    fixture.detectChanges();
+    expect(q('clinical-rules-progress')!.textContent).toContain('0 / 1');
+  });
+
+  it('refreshes when a sign-off finishes after returning to its hospital', async () => {
+    load(overview(true, [rule('RULE')]));
+    q<HTMLButtonElement>('rule-sign')!.click();
+    fixture.detectChanges();
+    await type('rule-signer-name', 'Dr Awa');
+    q<HTMLButtonElement>('rule-sign-confirm')!.click();
+    const sign = httpMock.expectOne(`${URL}/RULE/signoffs`);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    const b = httpMock.expectOne('/hospitals/h-2/clinical-rules');
+    roleContext.activeHospitalId = 'h-1';
+    fixture.detectChanges();
+    httpMock.expectOne(URL).flush(overview(true, [rule('RULE')]));
+    b.flush({ ...overview(true, []), hospitalId: 'h-2' });
+    sign.flush(rule('RULE', 'SIGNED'));
+    httpMock.expectOne(URL).flush(overview(true, [rule('RULE', 'SIGNED')]));
+    fixture.detectChanges();
+    expect(q('clinical-rules-progress')!.textContent).toContain('1 / 1');
+  });
+
+  it('does not download a previous hospital pack after the scope changes', () => {
+    load(overview(true, [rule('RULE')]));
+    const createUrl = spyOn(globalThis.URL, 'createObjectURL').and.returnValue('blob:test');
+    q<HTMLButtonElement>('clinical-rules-pack')!.click();
+    const pack = httpMock.expectOne(`${URL}/signoff-pack`);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE')]), hospitalId: 'h-2' });
+    pack.flush(new Blob(['pdf'], { type: 'application/pdf' }));
+    expect(createUrl).not.toHaveBeenCalled();
+  });
+
+  it('explains a changed hospital and refuses revocation before sending', () => {
+    load(overview(true, [rule('RULE', 'SIGNED')]));
+    q<HTMLButtonElement>('rule-revoke')!.click();
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE', 'SIGNED')]), hospitalId: 'h-2' });
+    answerReasonDialog(fixture, 'Reason');
+    fixture.detectChanges();
+    expect(q('revoke-scope-changed')?.getAttribute('role')).toBe('alert');
+    httpMock.expectNone('/hospitals/h-2/clinical-rules/RULE/revocation');
+  });
+
+  it('does not apply a previous hospital revocation to the current overview', () => {
+    load(overview(true, [rule('RULE', 'SIGNED')]));
+    q<HTMLButtonElement>('rule-revoke')!.click();
+    answerReasonDialog(fixture, 'Reason');
+    const revoke = httpMock.expectOne(`${URL}/RULE/revocation`);
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/hospitals/h-2/clinical-rules')
+      .flush({ ...overview(true, [rule('RULE', 'SIGNED')]), hospitalId: 'h-2' });
+    revoke.flush(rule('RULE', 'REVOKED'));
+    fixture.detectChanges();
+    expect(q('clinical-rules-progress')!.textContent).toContain('1 / 1');
+  });
+
   it('lists each rule set with its source, approver and status here, and the progress', () => {
     load(
       overview(true, [rule('MINOR_HIV_RESULT_RELEASE'), rule('PRESCRIPTION_RENEWAL', 'SIGNED')]),

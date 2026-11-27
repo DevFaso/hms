@@ -488,7 +488,9 @@
             @for (r of visibleReports(); track r.id) {
               <tr class="data-row">
                 <td>
-                  <div class="cell-primary">{{ r.reportNumber || '—' }}</div>
+                  <div class="cell-primary">
+                    {{ r.reportNumber || ('IMAGING.NOT_SPECIFIED' | translate) }}
+                  </div>
                   <div class="cell-secondary">{{ r.reportTitle }}</div>
                 </td>
                 <td data-testid="imaging-report-patient">
@@ -1237,6 +1239,12 @@
         </div>
         <div class="detail-body">
           <div class="detail-grid">
+            <div class="detail-field" data-testid="imaging-order-hospital">
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
+              <span class="field-value">{{
+                hospitalNameOf(ord.hospitalId, ord.hospitalName)
+              }}</span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
                 class="field-value"

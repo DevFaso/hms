@@ -10,10 +10,33 @@
     </div>
   </div>
 
+  @if (isSuperAdmin()) {
+    @if (
+      !showPartnerForm() && !showBackOrderForm() && !saving() && !printingCopy() && !allergyHold()
+    ) {
+      <app-hospital-scope-chip
+        [preserveScope]="true"
+        [disableUrlSync]="true"
+        (scopeChange)="onScopeChange()"
+      />
+    } @else {
+      <p class="scope-switch-note" role="status">
+        {{ 'PHARMACY_WORKSPACE.SCOPE_LOCKED' | translate }}
+      </p>
+    }
+    @if (scopeChanged()) {
+      <p class="scope-switch-note" role="status">
+        {{ 'PHARMACY_WORKSPACE.SCOPE_CHANGED' | translate }}
+      </p>
+    }
+  }
+
   <!-- The reads on this page answer in global view; the writes behind them
        still require a hospital, so the hint says which and the controls are
        disabled rather than offered and refused. -->
-  <app-hospital-scope-hint />
+  @if (canAct) {
+    <app-hospital-scope-hint />
+  }
 
   <ol class="workspace-steps" [attr.aria-label]="'PHARMACY.STOCK_ROUTING' | translate">
     <li
@@ -208,7 +231,12 @@
       @if (canAct && isPrinted()) {
         <div class="routing-options" data-testid="printed-copy-panel">
           <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
-          <button class="btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
+          <button
+            class="btn-secondary"
+            (click)="reprintCopy()"
+            [disabled]="printingCopy()"
+            data-testid="reprint-copy"
+          >
             {{ 'PHARMACY.REPRINT_COPY' | translate }}
           </button>
         </div>

@@ -27,6 +27,7 @@ import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PageHeaderComponent } from '../shared/page-header/page-header.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
@@ -71,6 +72,7 @@ interface SignDraft {
     ModalDialogDirective,
     SubmitGuardDirective,
     PageHeaderComponent,
+    HospitalScopeChipComponent,
     DayMonthPipe,
     ReasonDialogComponent,
   ],
@@ -92,12 +94,16 @@ export class ClinicalRulesComponent {
   protected readonly failed = signal(false);
   protected readonly busy = signal(false);
   protected readonly printing = signal(false);
+  private scopeGeneration = 0;
+  private signHospitalId: string | null = null;
+  private revokeHospitalId: string | null = null;
 
   /** The rule set being signed, and the dialog's fields. */
   protected readonly signing = signal<ClinicalRuleStatus | null>(null);
   protected draft: SignDraft = this.emptyDraft();
   /** The rule set whose sign-off is being revoked. */
   protected readonly revoking = signal<ClinicalRuleStatus | null>(null);
+  protected readonly revokeScopeChanged = signal(false);
 
   protected readonly today = localDateString();
   protected readonly text = ruleText;
@@ -120,30 +126,43 @@ export class ClinicalRulesComponent {
   }
 
   protected load(hospitalId: string | null): void {
+    const generation = ++this.scopeGeneration;
     this.overview.set(null);
     this.failed.set(false);
-    if (!hospitalId) return;
+    if (!hospitalId) {
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.rulesService.overview(hospitalId).subscribe({
       next: (overview) => {
-        if (this.hospitalId() === hospitalId) this.overview.set(overview);
+        if (generation !== this.scopeGeneration || this.hospitalId() !== hospitalId) return;
+        this.overview.set(overview);
         this.loading.set(false);
       },
       error: () => {
+        if (generation !== this.scopeGeneration || this.hospitalId() !== hospitalId) return;
         this.loading.set(false);
-        if (this.hospitalId() === hospitalId) this.failed.set(true);
+        this.failed.set(true);
       },
     });
   }
 
   protected openSign(rule: ClinicalRuleStatus): void {
     this.draft = this.emptyDraft();
+    this.signHospitalId = this.hospitalId();
     this.signing.set(rule);
   }
 
   protected closeSign(): void {
     if (this.busy()) return;
     this.signing.set(null);
+  }
+
+  protected openRevoke(rule: ClinicalRuleStatus): void {
+    this.revokeScopeChanged.set(false);
+    this.revokeHospitalId = this.hospitalId();
+    this.revoking.set(rule);
   }
 
   protected toggleSelf(selfSigned: boolean): void {
@@ -159,6 +178,9 @@ export class ClinicalRulesComponent {
     const d = this.draft;
     // QA D1256: every reason at once — the blank fields by name, and a date in the future.
     return joinReasons([
+      this.hospitalId() !== this.signHospitalId
+        ? this.translate.instant('CLINICAL_RULES.SCOPE_CHANGED')
+        : null,
       missingRequiredMessage(this.translate, [
         { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_NAME', value: d.signerName.trim() },
         { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_TITLE', value: d.signerTitle.trim() },
@@ -173,7 +195,15 @@ export class ClinicalRulesComponent {
   protected submitSign(): void {
     const rule = this.signing();
     const hospitalId = this.hospitalId();
-    if (!rule || !hospitalId || this.busy() || this.signBlocked()) return;
+    if (
+      !rule ||
+      !hospitalId ||
+      hospitalId !== this.signHospitalId ||
+      this.busy() ||
+      this.signBlocked()
+    )
+      return;
+    const generation = this.scopeGeneration;
     this.busy.set(true);
     this.rulesService
       .sign(hospitalId, rule.key, {
@@ -187,12 +217,19 @@ export class ClinicalRulesComponent {
       .subscribe({
         next: (status) => {
           this.busy.set(false);
-          this.replace(status);
+          if (generation === this.scopeGeneration && this.hospitalId() === hospitalId) {
+            this.replace(status);
+            this.toast.success(this.translate.instant('CLINICAL_RULES.SIGN.DONE'));
+          } else if (this.hospitalId() === hospitalId) {
+            // We returned to the same hospital after another scope. Refresh:
+            // the newer overview may have been read before this write landed.
+            this.load(hospitalId);
+          }
           this.signing.set(null);
-          this.toast.success(this.translate.instant('CLINICAL_RULES.SIGN.DONE'));
         },
         error: (err: unknown) => {
           this.busy.set(false);
+          if (generation !== this.scopeGeneration || this.hospitalId() !== hospitalId) return;
           // The server's own reason at the field it names (RuleSignoffRequestDTO).
           const refused = refusedFieldReasons(err, SIGN_FIELDS);
           if (refused.length) {
@@ -211,17 +248,27 @@ export class ClinicalRulesComponent {
 
   protected revoke(rule: ClinicalRuleStatus, reason: string): void {
     const hospitalId = this.hospitalId();
-    if (!hospitalId || this.busy()) return;
+    if (this.busy()) return;
+    if (!hospitalId || hospitalId !== this.revokeHospitalId) {
+      this.revokeScopeChanged.set(true);
+      return;
+    }
+    const generation = this.scopeGeneration;
     this.busy.set(true);
     this.rulesService.revoke(hospitalId, rule.key, reason).subscribe({
       next: (status) => {
         this.busy.set(false);
-        this.replace(status);
+        if (generation === this.scopeGeneration && this.hospitalId() === hospitalId) {
+          this.replace(status);
+          this.toast.success(this.translate.instant('CLINICAL_RULES.REVOKE.DONE'));
+        } else if (this.hospitalId() === hospitalId) {
+          this.load(hospitalId);
+        }
         this.revoking.set(null);
-        this.toast.success(this.translate.instant('CLINICAL_RULES.REVOKE.DONE'));
       },
       error: (err: unknown) => {
         this.busy.set(false);
+        if (generation !== this.scopeGeneration || this.hospitalId() !== hospitalId) return;
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('CLINICAL_RULES.REVOKE.FAILED'),
         );
@@ -232,17 +279,20 @@ export class ClinicalRulesComponent {
   protected printPack(): void {
     const hospitalId = this.hospitalId();
     if (!hospitalId || this.printing()) return;
+    const generation = this.scopeGeneration;
     this.printing.set(true);
     this.rulesService.signoffPack(hospitalId).subscribe({
       next: (blob) => {
         this.printing.set(false);
-        saveBlob(blob, 'regles-cliniques-validation.pdf');
+        if (generation === this.scopeGeneration && this.hospitalId() === hospitalId) {
+          saveBlob(blob, 'regles-cliniques-validation.pdf');
+        }
       },
       error: async (err: unknown) => {
         this.printing.set(false);
-        this.toast.error(
-          (await blobRefusalReason(err)) ?? this.translate.instant('CLINICAL_RULES.PACK_FAILED'),
-        );
+        const reason = await blobRefusalReason(err);
+        if (generation !== this.scopeGeneration || this.hospitalId() !== hospitalId) return;
+        this.toast.error(reason ?? this.translate.instant('CLINICAL_RULES.PACK_FAILED'));
       },
     });
   }

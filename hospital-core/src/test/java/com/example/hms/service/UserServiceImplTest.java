@@ -3275,10 +3275,65 @@ class UserServiceImplTest {
             u.setId(UUID.randomUUID());
             u.setEmail("apatient@example.com");
             u.setActive(false);
-            u.setActivationToken("tok-1");
+            u.setActivationToken(k4bStored("tok-1"));
             u.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
-            when(userRepository.findByEmail("apatient@example.com")).thenReturn(Optional.of(u));
+            lenient().when(userRepository.findByEmail("apatient@example.com")).thenReturn(Optional.of(u));
             return u;
+        }
+
+        /** What the account keeps of a token: its hash, never the token. */
+        private static String k4bStored(String token) {
+            return com.example.hms.utility.ActivationTokens.storedForms(token).get(0);
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("K4: the mailed link activates by its token alone, and the token is single use")
+        void theTokenAloneActivatesOnce() {
+            User u = pending();
+            when(userRepository.findByActivationToken(k4bStored("tok-1"))).thenReturn(Optional.of(u));
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of());
+
+            assertThat(userService.verifyEmailByToken("tok-1")).isTrue();
+
+            assertThat(u.isActive()).isTrue();
+            assertThat(u.getActivationToken()).isNull();
+            // Spent: the account no longer holds it, so the lookup finds nothing.
+            when(userRepository.findByActivationToken(k4bStored("tok-1"))).thenReturn(Optional.empty());
+            assertThat(userService.verifyEmailByToken("tok-1")).isFalse();
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("K4: an unknown, blank or expired token activates nothing; the stored hash is not a token")
+        void aTokenThatIsNotTheLinksActivatesNothing() {
+            User u = pending();
+            String stored = u.getActivationToken();
+            lenient().when(userRepository.findByActivationToken(stored)).thenReturn(Optional.of(u));
+
+            assertThat(userService.verifyEmailByToken("wrong")).isFalse();
+            assertThat(userService.verifyEmailByToken(" ")).isFalse();
+            assertThat(userService.verifyEmailByToken(null)).isFalse();
+            // Presenting what the database holds is presenting something else's hash.
+            assertThat(userService.verifyEmailByToken(stored)).isFalse();
+            assertThat(userService.verifyEmail("apatient@example.com", stored)).isFalse();
+
+            u.setActivationTokenExpiresAt(java.time.LocalDateTime.now().minusMinutes(1));
+            when(userRepository.findByActivationToken(k4bStored("tok-1"))).thenReturn(Optional.of(u));
+            assertThat(userService.verifyEmailByToken("tok-1")).isFalse();
+
+            assertThat(u.isActive()).isFalse();
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("K4: a link mailed before (a UUID kept as sent) still activates until it expires")
+        void aLinkMailedBeforeStillWorks() {
+            User u = pending();
+            String old = "3f2b8c1e-6a4d-4e0b-9c57-1d2e3f4a5b6c";
+            u.setActivationToken(old);
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of());
+
+            assertThat(userService.verifyEmail("apatient@example.com", old)).isTrue();
+            assertThat(u.getActivationToken()).isNull();
         }
 
         @org.junit.jupiter.api.Test
@@ -3316,7 +3371,7 @@ class UserServiceImplTest {
             selfRegistered.setId(UUID.randomUUID());
             selfRegistered.setEmail("own@example.com");
             selfRegistered.setActive(false);
-            selfRegistered.setActivationToken("tok-2");
+            selfRegistered.setActivationToken(k4bStored("tok-2"));
             selfRegistered.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
             when(userRepository.findByEmail("own@example.com")).thenReturn(Optional.of(selfRegistered));
             when(assignmentRepository.findByUserId(selfRegistered.getId())).thenReturn(List.of());
@@ -3334,7 +3389,7 @@ class UserServiceImplTest {
             assertThat(userService.verifyEmail("apatient@example.com", "wrong")).isFalse();
 
             assertThat(u.isActive()).isFalse();
-            assertThat(u.getActivationToken()).isEqualTo("tok-1");
+            assertThat(u.getActivationToken()).isEqualTo(k4bStored("tok-1"));
             verify(loginAttemptService, never()).resetAttempts(any());
             verify(assignmentRepository, never()).findByUserId(any());
             verify(userRepository, never()).save(any(User.class));

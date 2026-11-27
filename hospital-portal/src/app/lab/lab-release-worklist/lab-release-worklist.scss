@@ -449,3 +449,21 @@
   color: #78350f;
   overflow-wrap: anywhere;
 }
+
+/* D3909: allow long clinical labels and timestamps to wrap instead of pushing the preceding header under Actions. */
+.release-table {
+  min-width: 60rem;
+
+  th,
+  td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  th:last-child,
+  td:last-child,
+  .numeric {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+}

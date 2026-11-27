@@ -181,6 +181,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .testCode(current.getTestCode())
             .name(current.getName())
             .category(current.getCategory())
+            .culture(current.isCulture())
             .description(current.getDescription())
             .sampleType(current.getSampleType())
             .unit(current.getUnit())
@@ -1171,7 +1172,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
             return;
         }
-        boolean changed = (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
+        boolean changed = (dto.getCulture() != null && dto.getCulture() != definition.isCulture())
+            || (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
             || !sameText(definition.getUnit(), dto.getUnit())
             || !sameText(definition.getSampleType(), dto.getSampleType())
             || !sameText(definition.getLoincCode(), dto.getLoincCode())
@@ -1199,8 +1201,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (!allowed.contains(definition.getApprovalStatus())) {
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
                 "lab.definition.actionNotAllowed", statusLabel(definition.getApprovalStatus()),
-                allowed.stream().map(LabTestDefinitionServiceImpl::statusLabel)
-                    .collect(java.util.stream.Collectors.joining(", "))));
+                com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    "lab.definition.nextAction." + definition.getApprovalStatus().name())));
         }
     }
 

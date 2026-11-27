@@ -60,14 +60,29 @@ class InvoiceEmailServiceTest {
     @Mock private PatientChannelConsent consent;
     @Mock private PatientNotificationLedger ledger;
     @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Mock private com.example.hms.repository.PatientGuarantorRepository guarantorRepository;
+    @Mock private com.example.hms.service.notification.PatientRecipientCurrentCheck currentCheck;
     private InvoiceEmailService service;
+    /** The guarantor on the patient's file at hospital A, whose address is billing@example.test. */
+    private final UUID guarantorId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         // The real gate over a mocked consent: the opt-out path is the gate's own.
         service = new InvoiceEmailService(billingInvoiceRepository, invoiceItemRepository, pdfInvoiceService,
-            new PatientMessageGate(consent, ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)), patientLocaleResolver,
-            TestMessageSources.bundles(), roleValidator, adjustmentRepository);
+            new PatientMessageGate(consent, ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), currentCheck), patientLocaleResolver,
+            TestMessageSources.bundles(), roleValidator, adjustmentRepository,
+            new com.example.hms.service.billing.InvoiceMailRecipients(guarantorRepository));
+        // The send states its trace on the request (WriteAuditDetail), for the request's own audit row.
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+            new org.springframework.web.context.request.ServletRequestAttributes(
+                new org.springframework.mock.web.MockHttpServletRequest()));
+        com.example.hms.model.PatientGuarantor guarantor = com.example.hms.model.PatientGuarantor.builder()
+            .fullName("Issa Ouédraogo").email("Billing@Example.test").build();
+        guarantor.setId(guarantorId);
+        lenient().when(currentCheck.isVerified(any(), any(), any())).thenReturn(true);
+        lenient().when(guarantorRepository.findByPatient_IdAndHospital_IdAndActiveTrue(any(), eq(hospitalA)))
+            .thenReturn(List.of(guarantor));
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenAnswer(inv -> inv.getArgument(1));
         lenient().when(consent.decision(any(), any(), any()))
             .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
@@ -284,5 +299,136 @@ class InvoiceEmailServiceTest {
 
         mailed();
         verifyNoInteractions(ledger);
+    }
+
+    // ---------- Scorecard K4: who an invoice is mailed to, and the trace of it ----------
+
+    @org.junit.jupiter.api.AfterEach
+    void k4bClearRequest() {
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** What the send stated for the request's audit row, or null when it stated nothing. */
+    private com.example.hms.security.audit.WriteAuditDetail.Detail k4bDetail() {
+        Object stated = org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()
+            .getAttribute(com.example.hms.security.audit.WriteAuditDetail.class.getName(),
+                org.springframework.web.context.request.RequestAttributes.SCOPE_REQUEST);
+        return (com.example.hms.security.audit.WriteAuditDetail.Detail) stated;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<java.util.Map<String, Object>> k4bRecipients() {
+        return (List<java.util.Map<String, Object>>) k4bDetail().details().get("invoiceEmailRecipients");
+    }
+
+    @Test
+    @DisplayName("K4: an address that is on no file is refused without a reason: nothing is composed, sent or traced")
+    void anAddressOnNoFileNeedsAReason() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        UUID id = invoice.getId();
+        EmailInvoiceRequest toAStranger = new EmailInvoiceRequest(List.of("seydou@example.test"),
+            List.of("stranger@employer.test"), null, null, null, true);
+
+        assertThatThrownBy(() -> service.emailInvoice(id, toAStranger))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(refusal -> {
+                BusinessException e = (BusinessException) refusal;
+                assertThat(e.getMessageKey()).isEqualTo("invoiceMail.recipient.notOnFile");
+                // The refusal names the address masked, never whole.
+                assertThat(e.getArgs()).containsExactly("s***@employer.test");
+            });
+        verifyNoInteractions(emailService, pdfInvoiceService);
+        assertThat(k4bDetail()).isNull();
+    }
+
+    @Test
+    @DisplayName("K4: a guarantor on another hospital's file is not on this invoice's file")
+    void aGuarantorOfAnotherHospitalIsNotOnFile() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        when(guarantorRepository.findByPatient_IdAndHospital_IdAndActiveTrue(any(), eq(hospitalA)))
+            .thenReturn(List.of());
+        UUID id = invoice.getId();
+
+        assertThatThrownBy(() -> service.emailInvoice(id, request))
+            .isInstanceOf(BusinessException.class).extracting("messageKey")
+            .isEqualTo("invoiceMail.recipient.notOnFile");
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
+    }
+
+    @Test
+    @DisplayName("K4: the patient's verified address and a guarantor on file are mailed, each traced masked, ids only")
+    // The trace is the detail of the request's own audit row: see WriteAuditInterceptorTest for the row.
+    void recipientsOnFileAreMailedAndTraced() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+
+        service.emailInvoice(invoice.getId(), new EmailInvoiceRequest(List.of(" Seydou@Example.test "),
+            List.of("billing@example.test"), List.of("seydou@example.test"), "note du guichet", null, false));
+
+        mailed();
+        com.example.hms.security.audit.WriteAuditDetail.Detail trace = k4bDetail();
+        assertThat(trace.eventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_EXPORT);
+        assertThat(trace.resourceId()).isEqualTo(invoice.getId());
+        assertThat(trace.patientId()).isEqualTo(invoice.getPatient().getId());
+        // Never an address, a name, the subject or the clerk's note.
+        assertThat(String.valueOf(trace.details()))
+            .doesNotContainIgnoringCase("seydou@", "billing@", "Ouédraogo", "INV-1", "note du guichet");
+        assertThat(trace.details()).containsEntry("attachment", false).doesNotContainKey("reason");
+        // The same address typed twice is one recipient.
+        assertThat(k4bRecipients()).hasSize(2);
+        assertThat(k4bRecipients().get(0)).containsEntry("recipient", "S***@Example.test")
+            .containsEntry("recipientKind", "PATIENT").doesNotContainKey("guarantorId");
+        assertThat(k4bRecipients().get(1)).containsEntry("recipient", "b***@example.test")
+            .containsEntry("recipientKind", "GUARANTOR").containsEntry("guarantorId", guarantorId.toString());
+    }
+
+    @Test
+    @DisplayName("K4: another address is mailed only with a reason, and the reason is kept with its trace")
+    void anotherAddressIsMailedWithARecordedReason() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+
+        service.emailInvoice(invoice.getId(), new EmailInvoiceRequest(List.of("rh@employer.test"), null, null,
+            null, null, false, "  Employeur du patient, à sa demande  "));
+
+        mailed();
+        assertThat(k4bRecipients()).singleElement().satisfies(one -> assertThat(one)
+            .containsEntry("recipient", "r***@employer.test").containsEntry("recipientKind", "OTHER"));
+        assertThat(k4bDetail().details()).containsEntry("reason", "Employeur du patient, à sa demande");
+    }
+
+    @Test
+    @DisplayName("K4: one send reaches three addresses at most, all lists together, even with a reason")
+    void moreThanThreeAddressesAreRefused() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        UUID id = invoice.getId();
+        EmailInvoiceRequest four = new EmailInvoiceRequest(List.of("seydou@example.test", "a@x.test"),
+            List.of("billing@example.test"), List.of("b@x.test"), null, null, false, "demandé");
+
+        assertThatThrownBy(() -> service.emailInvoice(id, four))
+            .isInstanceOf(BusinessException.class).extracting("messageKey")
+            .isEqualTo("invoiceMail.recipient.tooMany");
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
+        assertThat(EmailInvoiceRequest.MAX_RECIPIENTS).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("K4: a send the patient refused leaves no recipient trace (nothing left the hospital)")
+    void aRefusedSendIsNotTracedAsSent() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        when(consent.decision(any(), eq(NotificationType.BILLING), eq(NotificationChannel.EMAIL)))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
+        UUID id = invoice.getId();
+        EmailInvoiceRequest toPatient = new EmailInvoiceRequest(List.of("seydou@example.test"), null, null, null, null, false);
+
+        assertThatThrownBy(() -> service.emailInvoice(id, toPatient)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
     }
 }

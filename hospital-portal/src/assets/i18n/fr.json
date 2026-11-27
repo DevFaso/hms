@@ -873,17 +873,17 @@
   },
   "INTEGRATION_MESSAGES": {
     "TITLE": "Journal des messages d'intégration",
-    "SUBTITLE": "Recherche de messages de style Bridges, file d'attente de lettres mortes et rejeu pour le trafic des protocoles partenaires.",
-    "DLQ_BADGE": "{{ count }} messages en échec en attente de rejeu",
-    "SHOW_DLQ_ONLY": "Afficher uniquement la DLQ",
+    "SUBTITLE": "Consultez les messages des partenaires et les échecs. Cette page enregistre une demande dans le journal ; elle ne renvoie pas le message au partenaire.",
+    "DLQ_BADGE": "{{ count }} messages en échec",
+    "SHOW_DLQ_ONLY": "Afficher les messages en échec",
     "SEARCH": "Rechercher",
     "SEARCHING": "Recherche…",
     "RESET": "Réinitialiser",
     "RETRY": "Réessayer",
     "LOAD_ERROR": "Impossible de charger le journal des messages. Réessayez.",
     "EMPTY": "Aucun message ne correspond aux filtres actuels.",
-    "REPLAY": "Rejouer",
-    "REPLAYING": "Rejeu…",
+    "REPLAY": "Enregistrer dans le journal",
+    "REPLAYING": "Enregistrement…",
     "PAGER": "Page {{ current }} sur {{ total }}",
     "CONTENT_PURGED": "Contenu purgé (politique de conservation)",
     "CONTENT_PURGED_TITLE": "Contenu du message effacé le {{ date }} selon la politique de conservation ; l'enregistrement de l'événement est conservé.",
@@ -902,7 +902,7 @@
       "SENT": "Envoyé",
       "RECEIVED": "Reçu",
       "FAILED": "Échoué",
-      "REPLAYED": "Rejoué"
+      "REPLAYED": "Événement enregistré"
     },
     "COL": {
       "RECEIVED_AT": "Reçu",
@@ -914,7 +914,7 @@
       "ERROR": "Erreur"
     },
     "ERROR": {
-      "REPLAY_FAILED": "Échec du rejeu. Réessayez."
+      "REPLAY_FAILED": "Impossible d’enregistrer l’événement. Réessayez."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1574,6 +1574,7 @@
     "SUBTITLE": "Indicateurs de performance hospitalière",
     "TITLE": "Analytique",
     "KPI": {
+      "PERIOD": "Du {{from}} au {{to}}",
       "SECTION_HEADING": "Indicateurs opérationnels",
       "LOADING": "Chargement des indicateurs…",
       "DOOR_TO_DOCTOR_LABEL": "Délai accueil-médecin",
@@ -4862,7 +4863,9 @@
       "REMOVE_RANGE": "Retirer cet intervalle",
       "ADD_RANGE": "Ajouter un intervalle",
       "ADD": "Ajouter un composant"
-    }
+    },
+    "CULTURE": "Culture (rapport de culture et antibiogramme)",
+    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",
@@ -10110,7 +10113,8 @@
     "RESET_FILTERS": "Réinitialiser les filtres",
     "LOAD_ERROR": "Impossible de charger les signatures. Veuillez réessayer.",
     "NO_MATCHES": "Aucune signature ne correspond à ces filtres.",
-    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports. Vous pouvez aussi consulter un rapport avec sa référence."
+    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports.",
+    "EMPTY_LOOKUP_HELP": "Vous pouvez aussi consulter un rapport avec sa référence."
   },
   "STAFF": {
     "ADD_STAFF": "Ajouter un membre",
@@ -11992,6 +11996,7 @@
     "NETWORK_HELP": "Choisissez un établissement pour consulter ses demandes d’actes, consentements et plannings."
   },
   "REGISTRATIONS": {
+    "HOSPITAL_REQUIRED": "Choisissez l’hôpital pour cette inscription.",
     "DEACTIVATE_TITLE": "Désactiver cet enregistrement ?",
     "DEACTIVATE_BODY": "Le patient quitte la liste active de cet hôpital. Vous pourrez réactiver l'enregistrement plus tard.",
     "DEACTIVATE_REASON": "Motif de la désactivation",
@@ -13107,6 +13112,7 @@
     "PASSWORD_AGE": "Âge du mot de passe",
     "ROTATION_DUE": "Échéance de rotation",
     "DAYS_UNTIL_DUE": "Jours avant échéance",
+    "DAYS_ONE": "{{days}} jour",
     "DAYS_N": "{{days}} jours",
     "IMPORT_USERS_HINT": "CSV avec ligne d'en-tête. Colonnes requises : username, email, firstname, lastname, phonenumber, roles. Optionnelles : password, hospitalid, licensenumber, jobtitle. Les rôles peuvent être séparés par virgule, point-virgule, barre verticale ou espace.",
     "FORCE_PASSWORD_CHANGE": "Forcer le changement de mot de passe à la première connexion",
@@ -13551,6 +13557,7 @@
     "BANNER_DEFAULT": "Le système est en maintenance. La consultation fonctionne ; les modifications sont temporairement désactivées."
   },
   "DRUG_INTERACTIONS": {
+    "EDIT_LANGUAGE_NOTE": "Ces champs contiennent le texte enregistré, qui peut être dans une autre langue que celle affichée dans la liste. Les modifications remplacent ce texte pour tous les hôpitaux.",
     "ACTIONS": "Actions",
     "ACTIVE": "En vigueur",
     "ADD": "Ajouter une interaction",
@@ -13652,6 +13659,7 @@
     "NONE_YET": "Aucun rapport planifié",
     "NONE_YET_HINT": "Créez-en un pour recevoir un CSV agrégé chaque jour, semaine ou mois.",
     "NO_RUNS": "Aucune exécution pour ce rapport",
+    "WEEK_LABEL": "Semaine {{week}}, {{year}}",
     "PERIOD_TOKEN": "Période",
     "ROWS": "Lignes",
     "GENERATED_AT": "Généré le",
@@ -14984,6 +14992,8 @@
     "FIELD_REASON": "{{field}} : {{reason}}"
   },
   "NURSING_NOTES": {
+    "HOSPITAL_CONTEXT": "Choisissez le contexte hospitalier pour lire les notes. Ce choix ne modifie pas le reste du dossier.",
+    "CHOOSE_HOSPITAL": "Choisir un hôpital",
     "ACTION": "Action :",
     "ASSESSMENT": "Évaluation :",
     "DATA": "Données :",
@@ -15346,6 +15356,8 @@
     "CONFIG_NOTE": "Versions des tests, types de prélèvement et plages de référence."
   },
   "PHARMACY_WORKSPACE": {
+    "SCOPE_LOCKED": "Terminez ou annulez l’action en cours avant de changer d’hôpital.",
+    "SCOPE_CHANGED": "Hôpital modifié. Choisissez de nouveau une ordonnance dans la file.",
     "LABEL": "Espace pharmacie",
     "CLAIMS_SUBTITLE": "Suivre les demandes, les décisions et les remboursements.",
     "LOADED_CLAIMS": "demandes chargées",
@@ -16446,6 +16458,7 @@
     "PRINTED_ON": "Imprimé le {{date}}"
   },
   "CLINICAL_RULES": {
+    "SCOPE_CHANGED": "L’hôpital a changé. Fermez ce formulaire et ouvrez-le de nouveau dans le bon établissement.",
     "TITLE": "Règles cliniques et validation",
     "SUBTITLE": "Chaque règle appliquée par la plateforme, sa source, qui l’approuve, et si cet établissement l’a validée.",
     "BEHAVIOUR_NOTE": "Une règle s’applique de la même façon, validée ou non : la validation enregistre la décision de l’approbateur et ne change que la mention « provisoire ».",

@@ -193,6 +193,21 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
     expect(cells).toEqual(['CHU Yalgado', 'CHR Koudougou']);
   });
 
+  it('keeps the hospital visible in the request details', () => {
+    setUp(['ROLE_SUPER_ADMIN'], true);
+    imaging.getReportsForOrder.and.returnValue(of([]));
+    component.viewDetail(order({ hospitalId: 'h2', hospitalName: 'CHR Koudougou' }));
+    fixture.detectChanges();
+    expect(q('[data-testid="imaging-order-hospital"]')?.textContent).toContain('CHR Koudougou');
+  });
+
+  it('explains when a report number is absent', () => {
+    setUp(['ROLE_SUPER_ADMIN'], true);
+    component.setView('results');
+    fixture.detectChanges();
+    expect(q('tbody tr td .cell-primary')?.textContent?.trim()).toBe(fr.IMAGING.NOT_SPECIFIED);
+  });
+
   it('the super-admin filters to one hospital: its orders only, no hospital column', () => {
     setUp(['ROLE_SUPER_ADMIN'], true);
     component.setHospitalFilter('h2');

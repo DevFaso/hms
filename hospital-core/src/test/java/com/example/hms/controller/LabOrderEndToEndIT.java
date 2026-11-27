@@ -1006,8 +1006,54 @@ class LabOrderEndToEndIT extends BaseIT {
             .andExpect(status().isCreated());
     }
 
-    private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
-        LabOrderRequestDTO request = LabOrderRequestDTO.builder()
+    @Test
+    void anUnapprovedCultureDefinitionCannotBeBoundToANewOrderOverHttp() throws Exception {
+        testDefinition.setCulture(true);
+        testDefinition.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.DRAFT);
+        labTestDefinitionRepository.saveAndFlush(testDefinition);
+        mockMvc.perform(post(LAB_ORDERS).contextPath(API).contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsBytes(orderRequest(LocalDateTime.now())))
+            .with(signedInAs(doctor)).with(csrf())).andExpect(status().isBadRequest());
+        assertThat(labOrderRepository.existsByLabTestDefinition_Id(testDefinition.getId())).isFalse();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void mixedCultureAndOrdinaryReportsCompleteOnlyAfterTheLastRelease(boolean cultureFirst) throws Exception {
+        testDefinition.setCulture(true);
+        labTestDefinitionRepository.saveAndFlush(testDefinition);
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
+        collectSpecimen(orderId);
+        UUID resultId = idOf(postResult(scientist, orderId, NORMAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+        String report = mockMvc.perform(post(API + "/micro-cultures").contextPath(API)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsBytes(com.example.hms.payload.dto.MicroCultureRequestDTO.builder()
+                .labOrderId(orderId).growthResult(com.example.hms.enums.MicroGrowthResult.NO_GROWTH).build()))
+            .with(signedInAs(scientist)).with(csrf())).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID cultureId = idOf(report);
+        if (cultureFirst) {
+            finalizeCultureReport(cultureId);
+            assertThat(orderStatus(orderId)).isNotEqualTo(LabOrderStatus.COMPLETED);
+        }
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("selfRelease", "true")
+            .with(signedInAs(scientist)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(criticalCall(resultId)))
+            .andExpect(status().isOk());
+        if (!cultureFirst) {
+            assertThat(orderStatus(orderId)).isNotEqualTo(LabOrderStatus.COMPLETED);
+            finalizeCultureReport(cultureId);
+        }
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
+    }
+
+    private void finalizeCultureReport(UUID cultureId) throws Exception {
+        mockMvc.perform(post(API + "/micro-cultures/{id}/finalize", cultureId).contextPath(API)
+            .with(signedInAs(scientist)).with(csrf())).andExpect(status().isOk());
+    }
+
+    private LabOrderRequestDTO orderRequest(LocalDateTime orderedAt) {
+        return LabOrderRequestDTO.builder()
             .patientId(patient.getId())
             .hospitalId(hospital.getId())
             .testName(testDefinition.getName())
@@ -1023,6 +1069,10 @@ class LabOrderEndToEndIT extends BaseIT {
             .labTestDefinitionId(testDefinition.getId())
             .assignmentId(doctor.assignmentId())
             .build();
+    }
+
+    private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
+        LabOrderRequestDTO request = orderRequest(orderedAt);
         MvcResult created = mockMvc.perform(post(LAB_ORDERS).contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsBytes(request))

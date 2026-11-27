@@ -202,7 +202,7 @@ describe('GoodsReceiptComponent', () => {
     fillForm('inv-pack');
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('#grQtyIn')).not.toBeNull();
-    expect(el.querySelector('[data-testid="gr-qty-unit"]')?.textContent).toContain('comprimé');
+    expect(el.querySelector('[data-testid="gr-qty-unit"]')).toBeNull();
 
     component.submitForm();
     expect(svc.receiveStock).not.toHaveBeenCalled();
@@ -220,6 +220,8 @@ describe('GoodsReceiptComponent', () => {
 
     fillForm('inv-pack');
     component.receivedIn = 'UNITS';
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="gr-qty-unit"]')?.textContent).toContain('comprimé');
     component.submitForm();
     expect(svc.receiveStock.calls.mostRecent().args[0].inPacks).toBeFalse();
   });
