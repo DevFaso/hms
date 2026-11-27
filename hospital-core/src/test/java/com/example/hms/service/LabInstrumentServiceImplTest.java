@@ -109,6 +109,21 @@ class LabInstrumentServiceImplTest {
     }
 
     @Test
+    void plannedServiceDatesAfterLastServiceAreAccepted() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        requestDto.setInstallationDate(today.minusDays(10));
+        requestDto.setLastCalibrationDate(today);
+        requestDto.setNextCalibrationDate(today.plusDays(30));
+        requestDto.setLastMaintenanceDate(today.minusDays(1));
+        requestDto.setNextMaintenanceDate(today.plusDays(10));
+        when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(mapper.toEntity(eq(requestDto), eq(hospital), any())).thenReturn(instrument);
+        when(instrumentRepository.save(instrument)).thenReturn(instrument);
+        when(mapper.toDto(instrument)).thenReturn(responseDto);
+        assertThat(service.create(HOSPITAL_ID, requestDto, LOCALE)).isEqualTo(responseDto);
+    }
+
+    @Test
     void createAndUpdateRejectInvalidInstrumentDatesBeforeSaving() {
         when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
         java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
