@@ -59,7 +59,16 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
     /** Where a locked screen is recorded. Set by the container; absent in a hand-built filter. */
     private TokenBlacklistService tokenBlacklistService;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /**
+     * The container hands the one store the configuration switched on (in
+     * memory, or Redis: their conditions exclude each other), or none.
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    void useTokenBlacklistService(org.springframework.beans.factory.ObjectProvider<TokenBlacklistService> stores) {
+        this.tokenBlacklistService = stores.getIfAvailable();
+    }
+
+    /** Sets the store directly (a hand-built filter). */
     public void setTokenBlacklistService(TokenBlacklistService tokenBlacklistService) {
         this.tokenBlacklistService = tokenBlacklistService;
     }

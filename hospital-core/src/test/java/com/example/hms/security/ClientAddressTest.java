@@ -89,6 +89,53 @@ class ClientAddressTest {
         assertThat(ClientAddress.of(request)).isEqualTo("41.203.10.7");
     }
 
+    @Test
+    @DisplayName("our own ranges, and only those, are skipped: loopback in both spellings, private, link-local, carrier-grade, unique-local")
+    void ourOwnRanges() {
+        for (String own : List.of("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "10.1.2.3", "172.16.0.1", "172.31.255.255",
+                "192.168.0.1", "169.254.1.1", "100.64.0.1", "100.127.255.255", "fd00::1", "fc00::1", "fe80::1",
+                "::ffff:10.0.0.1")) {
+            assertThat(ClientAddress.isOurOwn(own)).as(own).isTrue();
+        }
+        for (String outside : List.of("41.203.10.7", "172.15.0.1", "172.32.0.1", "192.169.0.1", "169.253.1.1",
+                "100.63.0.1", "100.128.0.1", "2001:db8::7", "::ffff:41.203.10.7", "11.0.0.1")) {
+            assertThat(ClientAddress.isOurOwn(outside)).as(outside).isFalse();
+        }
+    }
+
+    @Test
+    @DisplayName("the container's spelling of the IPv6 loopback is a hop of ours: the forwarded address is read")
+    void tomcatsIpv6Loopback() {
+        assertThat(ClientAddress.of(from("0:0:0:0:0:0:0:1", "41.203.10.7"))).isEqualTo("41.203.10.7");
+    }
+
+    @Test
+    @DisplayName("a configured edge is matched as a whole address or as a prefix ending in '.' or ':', never as a bare start")
+    void configuredEdges() {
+        ClientAddress.trustAlso(java.util.Arrays.asList("162.220.232.9", "2606:4700:", null, " "));
+        assertThat(ClientAddress.isOurOwn("162.220.232.9")).isTrue();
+        assertThat(ClientAddress.isOurOwn("2606:4700::1")).isTrue();
+        assertThat(ClientAddress.isOurOwn("162.220.232.90")).isFalse();
+
+        ClientAddress.trustAlso(null);
+        assertThat(ClientAddress.isOurOwn("162.220.232.9")).isFalse();
+    }
+
+    @Test
+    @DisplayName("outside a request there is no address")
+    void outsideARequest() {
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        assertThat(ClientAddress.current()).isNull();
+
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+            new org.springframework.web.context.request.ServletRequestAttributes(from("10.0.0.5", "41.203.10.7")));
+        try {
+            assertThat(ClientAddress.current()).isEqualTo("41.203.10.7");
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
     private static final Set<String> MAY_READ_THE_CONNECTION = Set.of(
         "ClientAddress.java",
         // Its own, documented rule: the proxy headers only when app.rate-limit.trust-proxy says so.

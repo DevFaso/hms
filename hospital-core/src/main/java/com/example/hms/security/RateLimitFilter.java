@@ -129,13 +129,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Only read the forwarded chain when explicitly configured behind a trusted
         // proxy, and then only the entry our own hop recorded (ClientAddress), never
         // the caller's own claim at the left of it.
-        if (trustProxy) {
-            String client = ClientAddress.of(request);
-            if (client != null) {
-                return "ip:" + client;
-            }
-        }
-        return "ip:" + request.getRemoteAddr();
+        String peer = request.getRemoteAddr();
+        String client = trustProxy ? ClientAddress.of(request) : null;
+        return "ip:" + (client != null ? client : peer);
     }
 
     private Bucket createBucket() {

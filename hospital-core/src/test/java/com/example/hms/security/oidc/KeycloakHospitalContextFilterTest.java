@@ -259,7 +259,11 @@ class KeycloakHospitalContextFilterTest {
     private void lockedSince(String lockKey, long lockedAt) {
         var store = new com.example.hms.security.InMemoryTokenBlacklistService();
         store.lockSession(lockKey, lockedAt, lockedAt + 172_800_000L);
-        filter.setTokenBlacklistService(store);
+        // As the container hands it: the one store switched on.
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.security.TokenBlacklistService> stores = mock(ObjectProvider.class);
+        when(stores.getIfAvailable()).thenReturn(store);
+        filter.useTokenBlacklistService(stores);
     }
 
     private static void signInAt(String subject, String sid, Instant authTime) {

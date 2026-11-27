@@ -19,21 +19,28 @@ public final class FamilyGrantThrottle {
 
     static final int MAX_REFUSALS = 5;
     static final long WINDOW_MS = 60 * 60 * 1000L;
-    private static final int MAX_TRACKED = 10_000;
+    static final int MAX_TRACKED = 10_000;
 
     private final Map<UUID, Deque<Long>> refusals = new ConcurrentHashMap<>();
 
     /** Whether {@code grantor} has used up the refusals of the current window. */
     public boolean blocked(UUID grantor) {
-        return grantor != null && recent(grantor, System.currentTimeMillis()) >= MAX_REFUSALS;
+        return blocked(grantor, System.currentTimeMillis());
+    }
+
+    boolean blocked(UUID grantor, long now) {
+        return grantor != null && recent(grantor, now) >= MAX_REFUSALS;
     }
 
     /** Records one refused grant for {@code grantor}. */
     public void refused(UUID grantor) {
+        refused(grantor, System.currentTimeMillis());
+    }
+
+    void refused(UUID grantor, long now) {
         if (grantor == null) {
             return;
         }
-        long now = System.currentTimeMillis();
         if (refusals.size() > MAX_TRACKED) {
             refusals.entrySet().removeIf(entry -> {
                 synchronized (entry.getValue()) {
@@ -45,6 +52,11 @@ public final class FamilyGrantThrottle {
         synchronized (times) {
             times.addLast(now);
         }
+    }
+
+    /** How many grantors are counted (FamilyGrantThrottleTest). */
+    int tracked() {
+        return refusals.size();
     }
 
     private int recent(UUID grantor, long now) {

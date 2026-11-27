@@ -214,4 +214,43 @@ class UsernameReminderServiceImplTest {
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
         }
     }
+
+    @Nested
+    @DisplayName("ReminderCooldown")
+    class Cooldown {
+
+        private static final long T0 = 1_000_000_000L;
+
+        @Test
+        @DisplayName("one reminder per account per window, whoever asks")
+        void onePerWindow() {
+            var cooldown = new UsernameReminderServiceImpl.ReminderCooldown();
+            UUID account = UUID.randomUUID();
+
+            org.assertj.core.api.Assertions.assertThat(cooldown.recentlySent(account, T0)).isFalse();
+            cooldown.sent(account, T0);
+
+            org.assertj.core.api.Assertions.assertThat(cooldown.recentlySent(account, T0 + 1)).isTrue();
+            org.assertj.core.api.Assertions.assertThat(
+                cooldown.recentlySent(account, T0 + UsernameReminderServiceImpl.ReminderCooldown.WINDOW_MS)).isFalse();
+            org.assertj.core.api.Assertions.assertThat(cooldown.recentlySent(UUID.randomUUID())).isFalse();
+        }
+
+        @Test
+        @DisplayName("past its size the memory drops the accounts whose window has ended")
+        void theMemoryIsBounded() {
+            var cooldown = new UsernameReminderServiceImpl.ReminderCooldown();
+            UUID recent = UUID.randomUUID();
+            cooldown.sent(recent, T0 + UsernameReminderServiceImpl.ReminderCooldown.WINDOW_MS);
+            for (int i = 0; i < UsernameReminderServiceImpl.ReminderCooldown.MAX_TRACKED; i++) {
+                cooldown.sent(UUID.randomUUID(), T0);
+            }
+
+            long later = T0 + UsernameReminderServiceImpl.ReminderCooldown.WINDOW_MS + 1;
+            cooldown.sent(UUID.randomUUID(), later);
+
+            org.assertj.core.api.Assertions.assertThat(cooldown.tracked()).isEqualTo(2);
+            org.assertj.core.api.Assertions.assertThat(cooldown.recentlySent(recent, later)).isTrue();
+        }
+    }
 }

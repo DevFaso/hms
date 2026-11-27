@@ -67,7 +67,7 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
      */
     private Optional<User> resolve(String identifier) {
         Optional<User> typed = userRepository.findActiveByEmailOrPhone(identifier);
-        if (typed != null && typed.isPresent()) {
+        if (typed.isPresent()) {
             return typed;
         }
         if (identifier.contains("@")) {
@@ -78,27 +78,38 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
         if (e164 == null || e164.equals(identifier)) {
             return Optional.empty();
         }
-        Optional<User> international = userRepository.findActiveByEmailOrPhone(e164);
-        return international == null ? Optional.empty() : international;
+        return userRepository.findActiveByEmailOrPhone(e164);
     }
 
     /** At most one reminder per account every {@link #WINDOW_MS}. */
     static final class ReminderCooldown {
         static final long WINDOW_MS = 10 * 60 * 1000L;
-        private static final int MAX_TRACKED = 10_000;
+        static final int MAX_TRACKED = 10_000;
         private final java.util.Map<java.util.UUID, Long> lastSent = new java.util.concurrent.ConcurrentHashMap<>();
 
         boolean recentlySent(java.util.UUID accountId) {
+            return recentlySent(accountId, System.currentTimeMillis());
+        }
+
+        boolean recentlySent(java.util.UUID accountId, long now) {
             Long previous = lastSent.get(accountId);
-            return previous != null && System.currentTimeMillis() - previous < WINDOW_MS;
+            return previous != null && now - previous < WINDOW_MS;
         }
 
         void sent(java.util.UUID accountId) {
-            long now = System.currentTimeMillis();
+            sent(accountId, System.currentTimeMillis());
+        }
+
+        void sent(java.util.UUID accountId, long now) {
             if (lastSent.size() > MAX_TRACKED) {
                 lastSent.entrySet().removeIf(entry -> now - entry.getValue() >= WINDOW_MS);
             }
             lastSent.put(accountId, now);
+        }
+
+        /** How many accounts are remembered (UsernameReminderServiceImplTest). */
+        int tracked() {
+            return lastSent.size();
         }
     }
 

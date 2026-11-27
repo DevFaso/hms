@@ -33,18 +33,22 @@ public final class ClientAddress {
         "(?:::ffff:)?(\\d{1,3})\\.(\\d{1,3})\\.\\d{1,3}\\.\\d{1,3}", Pattern.CASE_INSENSITIVE);
 
     /** Extra address prefixes of our own hops ({@code app.audit.trusted-proxies}), lower case. */
-    private static volatile java.util.List<String> extraTrusted = java.util.List.of();
+    private static final java.util.concurrent.atomic.AtomicReference<java.util.List<String>> EXTRA_TRUSTED =
+        new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of());
+
+    /** The loopback in the spellings a servlet container reports it. */
+    private static final java.util.Set<String> IPV6_LOOPBACK = java.util.Set.of("::1", "0:0:0:0:0:0:0:1");
 
     private ClientAddress() {
     }
 
     /** Sets the extra trusted prefixes (an address, or its leading part ending in '.' or ':'). */
     public static void trustAlso(java.util.Collection<String> prefixes) {
-        extraTrusted = prefixes == null ? java.util.List.of() : prefixes.stream()
+        EXTRA_TRUSTED.set(prefixes == null ? java.util.List.of() : prefixes.stream()
             .filter(java.util.Objects::nonNull)
             .map(prefix -> prefix.trim().toLowerCase(java.util.Locale.ROOT))
             .filter(prefix -> !prefix.isEmpty())
-            .toList();
+            .toList());
     }
 
     /** The address of {@code request}, or {@code null} when there is none to read. */
@@ -86,26 +90,41 @@ public final class ClientAddress {
     /** Whether {@code address} is one of the platform's own hops. */
     static boolean isOurOwn(String address) {
         String a = address.toLowerCase(java.util.Locale.ROOT);
-        for (String prefix : extraTrusted) {
-            if (a.equals(prefix) || ((prefix.endsWith(".") || prefix.endsWith(":")) && a.startsWith(prefix))) {
+        return isConfiguredHop(a) || isOwnIpv6(a) || isOwnIpv4(a);
+    }
+
+    /** One of the {@code app.audit.trusted-proxies} entries: the address itself, or a prefix ending in '.' or ':'. */
+    private static boolean isConfiguredHop(String a) {
+        for (String prefix : EXTRA_TRUSTED.get()) {
+            boolean isPrefix = prefix.endsWith(".") || prefix.endsWith(":");
+            if (a.equals(prefix) || (isPrefix && a.startsWith(prefix))) {
                 return true;
             }
         }
-        if (a.equals("::1") || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe80:")) {
-            return true;
-        }
+        return false;
+    }
+
+    /** The IPv6 loopback, unique-local (fc00::/7) or link-local (fe80::/10) ranges. */
+    private static boolean isOwnIpv6(String a) {
+        return IPV6_LOOPBACK.contains(a) || a.startsWith("fc") || a.startsWith("fd") || a.startsWith("fe80:");
+    }
+
+    /** The IPv4 loopback, private, link-local and carrier-grade ranges (also as an IPv4-mapped IPv6 address). */
+    private static boolean isOwnIpv4(String a) {
         java.util.regex.Matcher v4 = IPV4.matcher(a);
         if (!v4.matches()) {
             return false;
         }
         int first = Integer.parseInt(v4.group(1));
         int second = Integer.parseInt(v4.group(2));
-        return first == 10
-            || first == 127
-            || (first == 172 && second >= 16 && second <= 31)
-            || (first == 192 && second == 168)
-            || (first == 169 && second == 254)
-            || (first == 100 && second >= 64 && second <= 127);
+        return switch (first) {
+            case 10, 127 -> true;
+            case 172 -> second >= 16 && second <= 31;
+            case 192 -> second == 168;
+            case 169 -> second == 254;
+            case 100 -> second >= 64 && second <= 127;
+            default -> false;
+        };
     }
 
     private static String addressOrNull(String value) {

@@ -152,7 +152,7 @@ public final class PasswordPolicy {
         static final Set<String> COMMON = load();
 
         private static Set<String> load() {
-            Set<String> words = new HashSet<>(40_000);
+            Set<String> words = HashSet.newHashSet(40_000);
             try (InputStream in = PasswordPolicy.class.getClassLoader().getResourceAsStream(LIST)) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(
                     java.util.Objects.requireNonNull(in, LIST), StandardCharsets.UTF_8));
