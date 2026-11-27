@@ -166,7 +166,7 @@ class OrdonnancePdfServiceTest {
                 if (quantityIndex >= 0) quantity = positions.get(quantityIndex).getXDirAdj();
             }
         }
-        try (var doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+        try (var doc = PDDocument.load(pdf)) {
             Positions positions = new Positions();
             positions.getText(doc);
             assertThat(positions.asNeeded).isNotNull();
