@@ -5087,6 +5087,8 @@
     "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?"
   },
   "LAB_OUTBOX": {
+    "ORDERING_HOSPITAL": "Hôpital prescripteur",
+    "HOSPITAL_REQUIRED": "Ce message n’a pas d’hôpital prescripteur ; cette action ne peut pas être effectuée.",
     "TITLE": "Boîte d’envoi des instruments",
     "SUBTITLE": "Messages HL7 sortants vers l’interface des analyseurs",
     "PENDING_COUNT": "{{count}} en attente",

@@ -5087,6 +5087,8 @@
     "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this instrument?"
   },
   "LAB_OUTBOX": {
+    "ORDERING_HOSPITAL": "Ordering hospital",
+    "HOSPITAL_REQUIRED": "This message has no ordering hospital; this action cannot be performed.",
     "TITLE": "Instrument Outbox",
     "SUBTITLE": "Outbound HL7 messages to the lab analyser interface",
     "PENDING_COUNT": "{{count}} pending",

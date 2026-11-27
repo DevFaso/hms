@@ -15,6 +15,8 @@ export type OutboxStatus = 'PENDING' | 'SENT' | 'ACK' | 'ERROR';
 export interface OutboxMessage {
   id: string;
   labOrderId?: string;
+  orderingHospitalId?: string | null;
+  orderingHospitalName?: string | null;
   messageType: string;
   /** Full HL7 text. Present only on single-message reads — list rows elide it. */
   payload?: string;
@@ -68,21 +70,31 @@ export class InstrumentOutboxService {
       .pipe(map((res) => res.data));
   }
 
-  getMessage(id: string): Observable<OutboxMessage> {
+  getMessage(id: string, hospitalId?: string): Observable<OutboxMessage> {
     return this.http
-      .get<ApiWrapper<OutboxMessage>>(`/lab-instrument-outbox/${id}`)
+      .get<ApiWrapper<OutboxMessage>>(
+        `/lab-instrument-outbox/${id}`,
+        hospitalId ? { headers: { 'X-Hospital-Id': hospitalId } } : {},
+      )
       .pipe(map((res) => res.data));
   }
 
-  getMessagesForOrder(labOrderId: string): Observable<OutboxMessage[]> {
+  getMessagesForOrder(labOrderId: string, hospitalId?: string): Observable<OutboxMessage[]> {
     return this.http
-      .get<ApiWrapper<OutboxMessage[]>>(`/lab-instrument-outbox/orders/${labOrderId}`)
+      .get<ApiWrapper<OutboxMessage[]>>(
+        `/lab-instrument-outbox/orders/${labOrderId}`,
+        hospitalId ? { headers: { 'X-Hospital-Id': hospitalId } } : {},
+      )
       .pipe(map((res) => res.data));
   }
 
-  retry(id: string): Observable<OutboxMessage> {
+  retry(id: string, hospitalId?: string): Observable<OutboxMessage> {
     return this.http
-      .post<ApiWrapper<OutboxMessage>>(`/lab-instrument-outbox/${id}/retry`, {})
+      .post<ApiWrapper<OutboxMessage>>(
+        `/lab-instrument-outbox/${id}/retry`,
+        {},
+        hospitalId ? { headers: { 'X-Hospital-Id': hospitalId } } : {},
+      )
       .pipe(map((res) => res.data));
   }
 
