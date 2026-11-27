@@ -4,7 +4,7 @@
 #
 # This Dockerfile is the infra-as-code artefact consumed by Railway when each
 # `hms-keycloak-{dev,uat,prod}` service is provisioned (see README.md). One
-# Dockerfile, one railway.toml, three Railway services — each service sets
+# Dockerfile, one settings block in .railway/railway.ts, one Railway service per environment — each service sets
 # `BUILD_CONFIG=<env>` plus its own runtime vars (KC_HOSTNAME, KC_DB_*).
 #
 # Dev users (`realm-export.dev-users.json`) are deliberately NOT baked in,

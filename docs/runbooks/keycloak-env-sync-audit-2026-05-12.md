@@ -35,7 +35,7 @@ Every branch carries the same nine files:
 | [`keycloak/README.md`](../../keycloak/README.md) | Local-dev runbook. |
 | [`keycloak/prod/Dockerfile`](../../keycloak/prod/Dockerfile) | The image used by **all three** Railway services (`hms-keycloak-{dev,uat,prod}`). |
 | [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh) | Idempotent admin bootstrap + `kc.sh start --optimized --import-realm`. |
-| [`keycloak/prod/railway.toml`](../../keycloak/prod/railway.toml) | Same `railway.toml` for all three services. |
+| `keycloak/prod/railway.toml` (deleted 2026-11-26, replaced by `.railway/railway.ts`) | Same `railway.toml` for all three services. |
 | [`keycloak/prod/README.md`](../../keycloak/prod/README.md) | Per-env Railway provisioning recipe. |
 | [`scripts/keycloak/cutover-smoke.sh`](../../scripts/keycloak/cutover-smoke.sh) | Cutover smoke test. |
 

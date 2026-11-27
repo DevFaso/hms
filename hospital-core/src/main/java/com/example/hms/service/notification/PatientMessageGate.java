@@ -215,13 +215,14 @@ public class PatientMessageGate {
     }
 
     /**
-     * A mail with an attachment, sent now, to recipients the staff typed. When any recipient is the
-     * patient's own address (on record or on the portal account, case and spaces ignored), the
-     * patient's choice applies to the whole send: a mail the patient refused is not sent to anyone,
-     * and the caller tells the clerk why. A mail only to third parties (an insurer, an employer) is
-     * not a notice to the patient. Failures of the mail service propagate.
+     * A mail with an attachment, sent now, to recipients the staff chose. The caller has already settled who they
+     * may be (the invoice: the patient's own address, a guarantor's on file, or another address with a recorded
+     * reason; see {@code InvoiceMailRecipients}). When any recipient is the patient's own address (on record or on
+     * the portal account, case and spaces ignored), it must be verified and the patient's choice applies to the
+     * whole send: a mail the patient refused is not sent to anyone, and the caller tells the clerk why. Failures
+     * of the mail service propagate.
      *
-     * @return false when the patient refused it (and the trace was written)
+     * @return false when the patient refused it or their address is not verified (and the trace was written)
      */
     public boolean emailWithAttachment(Patient patient, Notice notice, OutgoingMail mail, byte[] attachment,
                                        String filename, String contentType) {

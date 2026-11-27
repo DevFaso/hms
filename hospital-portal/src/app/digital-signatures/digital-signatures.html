@@ -270,7 +270,14 @@
               {{ 'SIGNATURES.RESET_FILTERS' | translate }}
             </button>
           } @else {
-            <p class="muted">{{ 'SIGNATURES.EMPTY_HELP' | translate }}</p>
+            <p class="muted">
+              {{ 'SIGNATURES.EMPTY_HELP' | translate }}
+              @if (canLookup) {
+                <span data-testid="empty-lookup-help">{{
+                  'SIGNATURES.EMPTY_LOOKUP_HELP' | translate
+                }}</span>
+              }
+            </p>
           }
         </div>
       }

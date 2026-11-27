@@ -162,18 +162,19 @@ class NotificationServiceImplTest {
         }
 
         @Test
-        @DisplayName("filters by read AND search when both provided")
+        @DisplayName("filters by read AND search when both provided: matched in memory, the body is encrypted at rest")
         void filtersByReadAndSearch() {
-            Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
-            when(notificationRepository.findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(
-                    username, true, "urgent", pageable))
-                    .thenReturn(page);
+            Notification other = Notification.builder().id(UUID.randomUUID()).message("Rappel de rendez-vous")
+                .recipientUsername(username).read(true).createdAt(LocalDateTime.now()).build();
+            Notification urgent = Notification.builder().id(UUID.randomUUID()).message("Résultat URGENT à lire")
+                .recipientUsername(username).read(true).createdAt(LocalDateTime.now()).build();
+            when(notificationRepository.findByRecipientUsernameAndRead(eq(username), eq(true), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(other, urgent)));
 
             Page<Notification> result = service.getNotificationsForUser(username, true, "urgent", pageable);
 
-            assertThat(result.getContent()).hasSize(1);
-            verify(notificationRepository)
-                    .findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(username, true, "urgent", pageable);
+            assertThat(result.getContent()).containsExactly(urgent);
+            assertThat(result.getTotalElements()).isEqualTo(1);
         }
 
         @Test
@@ -205,18 +206,27 @@ class NotificationServiceImplTest {
         }
 
         @Test
-        @DisplayName("filters by search only when read is null and search is non-empty")
+        @DisplayName("filters by search only when read is null and search is non-empty, paged after the match")
         void filtersBySearchOnly() {
-            Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
-            when(notificationRepository.findByRecipientUsernameAndMessageContainingIgnoreCase(
-                    username, "lab", pageable))
-                    .thenReturn(page);
+            List<Notification> rows = new java.util.ArrayList<>();
+            for (int i = 0; i < 5; i++) {
+                rows.add(Notification.builder().id(UUID.randomUUID()).message("Lab result " + i)
+                    .recipientUsername(username).createdAt(LocalDateTime.now()).build());
+                rows.add(Notification.builder().id(UUID.randomUUID()).message("Rendez-vous " + i)
+                    .recipientUsername(username).createdAt(LocalDateTime.now()).build());
+            }
+            org.mockito.ArgumentCaptor<Pageable> scan = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+            when(notificationRepository.findByRecipientUsername(eq(username), scan.capture()))
+                    .thenReturn(new PageImpl<>(rows));
 
-            Page<Notification> result = service.getNotificationsForUser(username, null, "lab", pageable);
+            Page<Notification> result = service.getNotificationsForUser(username, null, "lab", PageRequest.of(1, 2));
 
-            assertThat(result.getContent()).hasSize(1);
-            verify(notificationRepository)
-                    .findByRecipientUsernameAndMessageContainingIgnoreCase(username, "lab", pageable);
+            assertThat(result.getContent()).extracting(Notification::getMessage)
+                .containsExactly("Lab result 2", "Lab result 3");
+            assertThat(result.getTotalElements()).isEqualTo(5);
+            // The scan is the recipient's own newest rows, bounded.
+            assertThat(scan.getValue().getPageSize()).isEqualTo(NotificationServiceImpl.SEARCH_SCAN_LIMIT);
+            assertThat(scan.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
         }
 
         @Test

@@ -16,6 +16,7 @@ import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.security.SecurityUtils;
+import com.example.hms.security.chart.RestrictedChartGate;
 import com.example.hms.security.audit.ActingAssignments;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
@@ -48,6 +49,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     private final LabResultRepository labResultRepository;
     /** Appended for the same reason: every payload read is a PHI read, audited like one. */
     private final AuditEventLogService auditEventLogService;
+    private final RestrictedChartGate restrictedChartGate;
 
     /** Audit entity type for a payload read of one outbox message. */
     static final String AUDIT_ENTITY_TYPE = "INSTRUMENT_OUTBOX_MESSAGE";
@@ -231,6 +233,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
         }
         InstrumentOutbox message = loadScoped(id);
+        requireReadablePatient(message);
         auditPayloadRead(message, hospitalId);
         return toResponseDTO(message);
     }
@@ -266,7 +269,11 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     @Override
     @Transactional
     public InstrumentOutboxResponseDTO retry(UUID id) {
+        if (roleValidator.requireActiveHospitalId() == null) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
         InstrumentOutbox message = loadScoped(id);
+        requireReadablePatient(message);
         if (message.getStatus() != InstrumentOutboxStatus.ERROR) {
             // QA D1187 class (round 22): a key, in the reader's language.
             throw new BusinessException("instrumentOutbox.retry.notInError");
@@ -281,7 +288,16 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         message.setLastAttemptAt(null);
         InstrumentOutbox saved = outboxRepository.save(message);
         log.info("Instrument outbox {} manually requeued", saved.getId());
-        return toResponseDTO(saved);
+        // Requeueing does not require returning the PHI-bearing HL7 payload.
+        return toSummaryDTO(saved);
+    }
+
+    private void requireReadablePatient(InstrumentOutbox message) {
+        if (message.getLabOrder() == null || message.getLabOrder().getPatient() == null
+            || message.getLabOrder().getPatient().getId() == null) {
+            throw new ResourceNotFoundException("instrumentOutbox.message.notFound", message.getId());
+        }
+        restrictedChartGate.requireReadable(message.getLabOrder().getPatient().getId());
     }
 
     @Override
@@ -305,7 +321,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             .orElseThrow(() -> new ResourceNotFoundException("instrumentOutbox.message.notFound", id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         // B1: the performing laboratory's own result messages are its to see and retry.
-        if (!message.getLabOrder().isHandledBy(hospitalId)) {
+        if (message.getLabOrder() == null || !message.getLabOrder().isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException("instrumentOutbox.message.notFound", id);
         }
         return message;
@@ -335,6 +351,10 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         return InstrumentOutboxResponseDTO.builder()
             .id(msg.getId())
             .labOrderId(msg.getLabOrder() != null ? msg.getLabOrder().getId() : null)
+            .orderingHospitalId(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
+                ? msg.getLabOrder().getHospital().getId() : null)
+            .orderingHospitalName(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
+                ? msg.getLabOrder().getHospital().getName() : null)
             .messageType(msg.getMessageType())
             // OBX-11 (F / P / C) so a preliminary + final pair does not read as a duplicate.
             .resultStatus(Hl7v2MessageBuilder.observationStatusOf(msg.getPayload()))

@@ -21,6 +21,7 @@ public interface InstrumentOutboxRepository extends JpaRepository<InstrumentOutb
      * the tenancy conventions), so scope is reached through the owning lab
      * order. {@code hospitalId} null = super-admin global view.
      */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"labOrder", "labOrder.hospital"})
     @org.springframework.data.jpa.repository.Query(
         "SELECT o FROM InstrumentOutbox o "
         + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId "

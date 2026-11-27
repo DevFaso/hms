@@ -56,8 +56,11 @@ Enforced by `scripts/i18n/check-completeness.js` wired into
 When you add a translatable string:
 
 1. Add the key + EN value to `src/assets/i18n/en.json`.
-2. Add the FR + ES translations in the matching files. If you don't
-   speak FR/ES, ask the user to provide — **do not invent**.
+2. Write the FR translation yourself, in the matching file, in the
+   vocabulary the product already uses for that screen (do not stop to ask
+   the user for it): French is the product language and the FR value is
+   never the English text. Add the ES key too; Spanish is not a launch
+   language (2026-11-26), so its value may be the EN text.
 3. Use the `ngx-translate` `| translate` pipe or the matching
    `TranslateDirective` in the template; never hard-code clinical
    strings. The portal uses **ngx-translate**, not Transloco — keep

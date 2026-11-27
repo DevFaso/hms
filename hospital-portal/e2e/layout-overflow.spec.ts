@@ -59,7 +59,12 @@ async function open(page: Page, baseURL: string, role: string | null, path: stri
   if (role) await signInAs(page, role, baseURL);
   await installLocalIconFonts(page);
   await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible();
+  // The first heading in the document is a menu group's, inside the navigation
+  // drawer. On a phone the closed drawer is hidden (P5: it left the Tab order),
+  // so wait for the first heading a reader can see: the page's own.
+  await expect(
+    page.locator('h1:visible, h2:visible, [role="heading"]:visible').first(),
+  ).toBeVisible();
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
@@ -1787,4 +1792,175 @@ test.describe('D3943 paired transfer return form', () => {
       await expect(page.locator('[data-testid="refund-prompt"]')).toHaveCount(0);
     });
   }
+});
+
+// D3908/D3909: populated diagnostics worklists, not just their empty states.
+test.describe('r77 diagnostic worklist controls', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const width of [390, 1440]) {
+    test(`D3904: culture catalogue setting is visible and governed at ${width}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await signInAs(page, 'ROLE_LAB_DIRECTOR', testInfo.project.use.baseURL as string);
+      await installLocalIconFonts(page);
+      await page.addInitScript(() => localStorage.setItem('lang', 'fr'));
+      await page.route(/\/api\/lab-test-definitions\/search(?:\?.*)?$/, (route) =>
+        route.fulfill({
+          json: {
+            data: {
+              content: [
+                {
+                  id: TEST_ID,
+                  testCode: 'ECBU',
+                  testName: 'ECBU',
+                  category: 'Microbiologie',
+                  culture: true,
+                  approvalStatus: 'ACTIVE',
+                  isActive: true,
+                  referenceRanges: [],
+                },
+              ],
+              totalElements: 1,
+              totalPages: 1,
+              number: 0,
+            },
+          },
+        }),
+      );
+      await page.goto('/lab-test-config');
+      await page.getByTestId('edit-def').first().click();
+      const culture = page.locator('#defCulture');
+      await expect(culture).toBeChecked();
+      await expect(culture).toBeDisabled();
+      await expect(page.locator('label[for="defCulture"]')).toContainText('Culture');
+      await expect(page.locator('#defCultureHint')).toBeVisible();
+      await testInfo.attach(`culture-catalogue-${width}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+      await page.keyboard.press('Escape');
+      await expect(culture).toHaveCount(0);
+      await page.locator('.header-right .btn-primary').click();
+      await expect(culture).not.toBeChecked();
+      await expect(culture).toBeEnabled();
+    });
+
+    test(`D3908: blood-bank tabs and row actions are styled at ${width}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await signInAs(page, 'ROLE_LAB_DIRECTOR', testInfo.project.use.baseURL as string);
+      await installLocalIconFonts(page);
+      await page.route(/\/api\/transfusions\/requests(?:\?.*)?$/, (route) =>
+        route.fulfill({
+          json: [
+            {
+              id: TEST_ID,
+              patientId: TEST_ID,
+              hospitalId: TEST_ID,
+              patientName: LONG_NAME,
+              patientMrn: 'SYN-77',
+              productType: 'PACKED_RED_CELLS',
+              unitsRequested: 1,
+              indication: 'Synthetic worklist',
+              urgency: 'ROUTINE',
+              status: 'REQUESTED',
+              requestedAt: '2026-11-25T10:00:00',
+              patientAboGroup: null,
+              patientRhFactor: null,
+            },
+          ],
+        }),
+      );
+      await page.goto('/transfusions');
+      const selected = page.locator('.tab-btn.active');
+      const rowAction = page.locator('tbody .action-link').first();
+      await expect(rowAction).toBeVisible();
+      for (const control of [selected, rowAction]) {
+        const style = await control.evaluate((element) => {
+          const computed = getComputedStyle(element);
+          return {
+            radius: parseFloat(computed.borderRadius),
+            height: element.getBoundingClientRect().height,
+          };
+        });
+        expect(style.radius).toBeGreaterThanOrEqual(8);
+        expect(style.height).toBeGreaterThanOrEqual(40);
+      }
+      await selected.focus();
+      await expect(selected).toBeFocused();
+      await testInfo.attach(`blood-bank-${width}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+    });
+  }
+
+  test('D3909: the received-date header stays clear of Actions on a desktop', async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await signInAs(page, 'ROLE_LAB_DIRECTOR', testInfo.project.use.baseURL as string);
+    await installLocalIconFonts(page);
+    await page.route(/\/api\/lab-results\/pending-release(?:\?.*)?$/, (route) =>
+      route.fulfill({
+        json: {
+          data: {
+            content: [
+              {
+                id: TEST_ID,
+                patientId: TEST_ID,
+                hospitalId: TEST_ID,
+                patientFullName: LONG_NAME,
+                labTestName: 'Potassium - laboratoire de biochimie',
+                labOrderCode: 'LAB-SYNTHETIC-77',
+                resultValue: '4.2',
+                resultUnit: 'mmol/L',
+                severity: 'NORMAL',
+                resultDate: '2026-11-25T10:00:00',
+                createdAt: '2026-11-25T10:02:00',
+                resultStatus: 'FINAL',
+                validated: false,
+              },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+          },
+        },
+      }),
+    );
+    await page.goto('/lab-release-worklist');
+    await expect(page.locator('[data-testid="release-row-' + TEST_ID + '"]')).toBeVisible();
+    const headers = page.locator('.release-table thead th');
+    const received = await headers.nth(6).boundingBox();
+    const actions = await headers.nth(7).boundingBox();
+    expect(received).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(received!.x + received!.width).toBeLessThanOrEqual(actions!.x + 1);
+    const receivedText = await headers.nth(6).evaluate((header) => {
+      const range = document.createRange();
+      range.selectNodeContents(header);
+      return [...range.getClientRects()]
+        .filter((rect) => rect.width > 0)
+        .map((rect) => ({
+          left: rect.left,
+          right: rect.right,
+        }));
+    });
+    expect(receivedText.length).toBeGreaterThan(0);
+    for (const text of receivedText) {
+      expect(text.left).toBeGreaterThanOrEqual(received!.x - 1);
+      expect(text.right).toBeLessThanOrEqual(received!.x + received!.width + 1);
+      expect(text.right).toBeLessThanOrEqual(actions!.x + 1);
+    }
+
+    await testInfo.attach('release-worklist-1440', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  });
 });

@@ -1,9 +1,14 @@
 # Railway: from `railway.toml` to `.railway/railway.ts`
 
-> Status on 2026-11-26: the new file is written and checked read-only against
-> dev and prod. **Nothing has been changed on Railway.** The three `railway.toml`
-> files are still in the repo and still drive every deploy. The owner runs the
-> steps in [Owner procedure](#owner-procedure): dev first, prod on the owner's word.
+> Status on 2026-11-26 (evening): **dev is on `.railway/railway.ts`** (cutover and
+> apply done; backend and frontend redeployed fine, the Keycloak redeploy failed
+> and the previous Keycloak deployment still serves, see
+> [What happened on dev](#what-happened-on-dev-2026-11-26)). The three
+> `railway.toml` files are deleted from `develop` by the follow-up PR.
+> **prod is still on Config as Code**: `main` still has the toml files and the prod
+> services still point at them. prod is done on the owner's word, in the order
+> given in [prod](#prod-on-the-owners-word-only): sync to `main` first, cutover and
+> apply straight after.
 
 ## What happens on 2026-12-01
 
@@ -50,19 +55,20 @@ The procedure below removes both unknowns before the date.
 |---|---|
 | `.railway/railway.ts` | The whole project, both environments. Replaces the three toml files. |
 | `.railway/package.json`, `package-lock.json` | Pins the `railway` SDK the CLI needs to read the file. Operator tooling only. |
-| `RailwayConfigTest` | Now also fails if Keycloak stops being "always restart" in the new file. |
-| `railway.toml`, `hospital-portal/railway.toml`, `keycloak/prod/railway.toml` | **Unchanged, still authoritative.** Removed in a follow-up PR after a verified apply. |
+| `RailwayConfigTest` | Fails if Keycloak stops being "always restart" in the file, and if a `railway.toml` or `railway.json` reappears anywhere in the repo. |
+| `railway.toml`, `hospital-portal/railway.toml`, `keycloak/prod/railway.toml` | **Deleted** by the follow-up PR, once dev was on the new file. They stay on `main` until the next sync. |
 
 How the new model differs from the old one:
 
-- **Railway does not read `.railway/railway.ts` during a deploy.** Merging this PR
-  changes nothing. The file takes effect only when someone runs
+- **Railway does not read `.railway/railway.ts` during a deploy.** Merging a change
+  to it changes nothing. The file takes effect only when someone runs
   `railway config apply`, which writes the settings into the service on Railway.
   After that, an edit to the file needs another apply; a merge alone does nothing.
 - **The file describes a whole environment.** Anything that exists on Railway and
   is missing from the file is deleted by apply, databases, volumes and buckets
-  included. That is why the file lists the Postgres and Redis services, every
-  volume (two of them detached) and the three prod buckets.
+  included. That is why the file lists the Postgres and Redis services, the
+  volumes and the three prod buckets. Detached volumes turned out to behave
+  differently, see [What happened on dev](#what-happened-on-dev-2026-11-26).
 - **One file, two environments.** dev and prod hold different services, so the
   file returns a different list for each and throws for any other environment.
 - **Variables stay in the dashboard.** The file sets `variables: { managed: false }`
@@ -90,6 +96,10 @@ in its output did not reproduce the current state and were corrected by hand:
 setting and never reached a deployment, so it has no equivalent in the new file.
 
 ## Plan results (read-only, 2026-11-26)
+
+This section is the record of what was checked before anything was changed. The
+plan output below still shows `"railway.toml"` among the backend watch patterns:
+that pattern has since been removed from the file.
 
 `railway config plan` only reads. It was run with CLI 5.75.0 against both
 environments.
@@ -183,124 +193,211 @@ observed before cutover.
 line; a line for a database, a volume or a bucket; `source.image`; a variable;
 a domain; a change on a service that is not one of the three application services.
 
+## What happened on dev (2026-11-26)
+
+The owner approved the dev step and it was run the same day with CLI 5.75.0:
+`config migrate cutover`, then `config apply --environment dev`.
+
+- **Cutover** cleared the stored Config File path on `hms-frontend-dev` and
+  `hms-keycloak-dev`.
+- **Apply** succeeded, with a plan that showed **0 to destroy**. `hms-backend-dev`
+  and `hms-frontend-dev` redeployed with the settings from the file.
+- **The `hms-keycloak-dev` redeploy FAILED.** With its path cleared, the service
+  has no root directory, so Railway looked for a config file at the repo root and
+  found `railway.toml`, the *backend's* file. That file overrode the settings
+  apply had just written: Railway built the root `Dockerfile` and started Spring
+  Boot inside the Keycloak service. The first version of this page listed this
+  as a possibility; it is what happens.
+- **Nothing went down.** The previous `hms-keycloak-dev` deployment kept serving,
+  so sign-in on dev went on working.
+- **Detached volumes are not destroyed by apply.** The plan showed 0 to destroy
+  with a detached volume present. The opposite is the trap: declaring a detached
+  volume in the file does not adopt the existing one, the plan shows a **new**
+  volume to create. Do not add a declaration for a detached volume, and treat
+  any `Create` line for a volume as a reason to stop.
+
+Consequences:
+
+1. The three toml files have to go from `develop` before Keycloak can be
+   redeployed on dev: that is the follow-up PR (see
+   [Follow-up PR](#follow-up-pr-toml-files-deleted)).
+2. On prod, "cutover, apply, then delete the files" would break the Keycloak
+   redeploy the same way. The prod order is therefore reversed: the commit
+   without toml files reaches `main` first, cutover and apply follow in the same
+   sitting.
+
 ## Owner procedure
 
-Do dev completely, then prod. Each environment takes about 15 minutes. Pick a
-moment when nothing is being merged: apply is expected to redeploy the three
-application services of that environment.
+dev is done except for the last check (step 6). prod is still to do. Each
+environment takes about 15 minutes. Pick a moment when nothing is being merged:
+apply redeploys the three application services of that environment.
 
 ### Once: tooling
 
 ```powershell
-npm install -g @railway/cli@5.75.0     # the installed 5.47.1 has no cutover/undo/status
-railway --version                      # 5.75.0 or newer
+npm install -g @railway/cli@5.75.0     # 5.47.1 has no cutover/undo/status
 cd C:\dev\hms                          # a checkout that contains .railway/railway.ts
 npm ci --prefix .railway               # installs the pinned SDK into .railway/node_modules
 ```
 
-Run the commands below from PowerShell, at the repo root.
+**On Windows, do not use the `railway` command that npm puts on the PATH.** It is
+a `.cmd` shim, and the SDK's version check fails with it: plan and apply stop with
+`This version of railway/iac requires Railway CLI 5.42.1 or newer` although the
+CLI is recent enough. Run the native binary and set the environment variable `_`
+to its path:
 
-### dev
+```powershell
+$railway = "$env:APPDATA\npm\node_modules\@railway\cli\bin\railway.exe"
+$env:_ = $railway
+& $railway --version                   # 5.75.0 or newer
+```
 
-1. Link and confirm the environment. Every later command acts on the linked one.
+Every command below is written `& $railway …` for that reason. Run them from
+PowerShell, at the repo root, in the same window (the two variables are gone in a
+new window).
+
+Flags, as used on dev:
+
+- `config migrate cutover --yes` and `config apply --environment <env> --yes`.
+  `--yes` answers the confirmation prompt.
+- **Never add `--confirm-destructive`.** Nothing in this change deletes anything.
+  That flag is what allows a destructive apply from a non-interactive session;
+  leaving it out keeps a plan with a deletion from going through unnoticed. Read
+  the plan first all the same.
+- Pass `--environment` to plan and apply rather than relying on the linked
+  environment.
+
+### dev (run on 2026-11-26, kept as the record)
+
+1. Link and confirm the environment.
 
    ```powershell
-   railway link -p e-keneya -e dev
-   railway status                       # must say Environment: dev
-   railway config migrate status        # lists hms-frontend-dev and hms-keycloak-dev
+   & $railway link -p e-keneya -e dev
+   & $railway status                    # must say Environment: dev
+   & $railway config migrate status     # listed hms-frontend-dev and hms-keycloak-dev
    ```
 
-2. Cut over. This clears the stored Config File path on `hms-frontend-dev` and
-   `hms-keycloak-dev`. It deploys nothing and changes no other setting.
+2. Cut over. This cleared the stored Config File path on `hms-frontend-dev` and
+   `hms-keycloak-dev`.
 
    ```powershell
-   railway config migrate cutover
+   & $railway config migrate cutover --yes
    Copy-Item .railway\.cac-migration.json .railway\.cac-migration.dev.json   # keep the undo snapshot
    ```
 
 3. Plan and read it against [the expected plan](#what-the-real-plan-should-show-after-cutover).
 
    ```powershell
-   railway config plan --verbose
+   & $railway config plan --environment dev --verbose
    ```
 
-4. Apply right away if, and only if, the plan matches. Answer the confirmation
-   prompt by hand. Do not pass `--yes` or `--confirm-destructive`: nothing in this
-   change is destructive, and without those flags a destructive plan cannot go
-   through unnoticed.
+4. Apply right away if, and only if, the plan matches (no `Delete`, no `Create`,
+   0 to destroy).
 
    ```powershell
-   railway config apply
+   & $railway config apply --environment dev --yes
    ```
 
 5. Verify.
 
    ```powershell
-   railway config plan                  # "Your Railway configuration is already up to date."
-   railway service list                 # every service SUCCESS, no deployment stuck or FAILED
+   & $railway config plan --environment dev   # "Your Railway configuration is already up to date."
+   & $railway service list                    # every service SUCCESS, no deployment stuck or FAILED
    curl.exe -s -o NUL -w "%{http_code}`n" https://api.dev.e-keneya.com/api/actuator/health
    curl.exe -s -o NUL -w "%{http_code}`n" https://dev.e-keneya.com/
    curl.exe -s -o NUL -w "%{http_code}`n" https://hms-keycloak-dev-dev.up.railway.app/realms/master/
    ```
 
-   All three must return 200 (they did before the change, 2026-11-26). Then sign in
-   to the dev portal once, which exercises Keycloak and the backend together.
-   In the dashboard, open the service settings of the three application services
-   and check they now show the values from the table at the top (Dockerfile
-   builder, health check path, watch paths, restart policy).
+   All three must return 200. Then sign in to the dev portal once, which exercises
+   Keycloak and the backend together. In the dashboard, open the service settings
+   of the three application services and check they show the values from the
+   table at the top (Dockerfile builder, health check path, watch paths, restart
+   policy).
 
-6. **Check which config the Keycloak deployment used.** This is the one thing that
-   could not be tested in advance. Once its path is cleared, `hms-keycloak-dev`
-   has no root directory, and Railway's documentation says a service without a
-   stored path reads a `railway.toml` found at the repo root, which is the
-   *backend's* file. If apply redeploys Keycloak while that file is still in the
-   branch, the build may use the backend Dockerfile and fail its health check; the
-   previous Keycloak deployment then stays in service. Look at the newest
-   `hms-keycloak-dev` deployment in the dashboard:
-   - built from `keycloak/prod/Dockerfile`, status SUCCESS: no issue, carry on;
-   - built from the root `Dockerfile` or FAILED: sign-in still works on the old
-     deployment. Merge the follow-up PR that deletes the toml files (next step),
-     then redeploy `hms-keycloak-dev` from the dashboard and re-run step 5.
-     Tell whoever prepares the prod step: prod must then be done as cutover, apply
-     and the sync that carries the deletion in one sitting.
+   Result on 2026-11-26: the newest `hms-keycloak-dev` deployment FAILED, for the
+   reason given in [What happened on dev](#what-happened-on-dev-2026-11-26).
 
-7. Merge the follow-up PR that removes the three toml files into `develop` as soon
-   as dev is verified. Until that merge (or 2026-12-01, whichever comes first) do
-   not merge anything that touches `keycloak/**` or `.dockerignore`, for the reason
-   in step 6. The merge redeploys the three dev services from a commit without
-   toml files; re-run step 5 after it.
+6. **Still to do, after the follow-up PR is merged into `develop`.** The merge
+   touches `hospital-core/**`, `hospital-portal/**` and `keycloak/**`, so Railway
+   redeploys the three dev services from a commit without toml files. Re-run
+   step 5 and look at the newest `hms-keycloak-dev` deployment in the dashboard:
+   - built from `keycloak/prod/Dockerfile`, status SUCCESS: dev is finished;
+   - no new deployment: redeploy `hms-keycloak-dev` from the dashboard;
+   - built from the root `Dockerfile` again, or FAILED: stop. Sign-in still works
+     on the old deployment. Do not start prod until this is understood.
+
+   The settings stored on `hms-backend-dev` still list `railway.toml` among the
+   watch paths, because apply ran before the pattern was removed from the file.
+   It matches no file. The next `config apply --environment dev` removes it; the
+   plan for it should show that one change and nothing else.
 
 ### prod (on the owner's word only)
 
-Applying to prod redeploys the production backend, portal and Keycloak. Do it
-only after dev has been verified, and plan it together with the sync to `main`
-that carries the toml deletion, so that production spends as little time as
-possible between cutover and deletion.
+This redeploys the production backend, portal and Keycloak. Do it only after
+dev step 6 is green, at a quiet hour, and **do all of it in one sitting**. The
+order is not the one used on dev:
 
-Same steps as dev with:
+1. **Recommended first, in the dashboard:** on `hms-backend-core`, Settings, set
+   the health check path to `/api/actuator/health` (timeout 180 s) if it is empty.
+   It was empty on 2026-11-26 (table at the top): the value only came from the
+   root `railway.toml`, and the sync in the next step removes that file before
+   apply has written the setting. Without it, a backend deploy triggered by the
+   sync would take traffic before Spring Boot is up. Setting it early changes
+   nothing while the toml is still read (same value).
 
-```powershell
-railway link -p e-keneya -e prod
-railway status                          # must say Environment: prod
-railway config migrate status           # lists hms-keycloak-prod and hms-frontend-prod
-railway config migrate cutover
-Copy-Item .railway\.cac-migration.json .railway\.cac-migration.prod.json
-railway config plan --verbose
-railway config apply
-railway config plan
-railway service list
-curl.exe -s -o NUL -w "%{http_code}`n" https://api.e-keneya.com/api/actuator/health
-curl.exe -s -o NUL -w "%{http_code}`n" https://e-keneya.com/
-curl.exe -s -o NUL -w "%{http_code}`n" https://hms-keycloak-prod-prod.up.railway.app/realms/master/
-```
+2. **Sync `develop` to `main`**, with the commit that deletes the toml files in
+   it. From that push on `main` has no toml file, and Railway starts a deploy of
+   the prod services. Expected, not yet observed:
+   - `hms-backend-core` has no stored config path: it builds with the settings
+     stored on the service (Dockerfile builder, plus the health check from step 1);
+   - `hms-frontend-prod` and `hms-keycloak-prod` still have a stored path to a
+     file that no longer exists. Railway's documentation says such a build
+     "reports that the config file was not found", so these two deployments
+     should fail while the previous ones keep serving. This is the reason not to
+     stop here: until cutover, neither service can be deployed.
 
-Then relink to dev (`railway link -p e-keneya -e dev`) so that the next command
-typed in this folder does not land on production.
+3. **Straight after the push, cutover and apply**, from a checkout of the synced
+   commit, so that the file applied is the one that was reviewed.
+
+   ```powershell
+   & $railway link -p e-keneya -e prod
+   & $railway status                                    # must say Environment: prod
+   & $railway config migrate status                     # lists hms-keycloak-prod and hms-frontend-prod
+   & $railway config migrate cutover --yes
+   Copy-Item .railway\.cac-migration.json .railway\.cac-migration.prod.json
+   & $railway config plan --environment prod --verbose  # read it: no Delete, no Create, 0 to destroy
+   & $railway config apply --environment prod --yes
+   ```
+
+4. **Verify.**
+
+   ```powershell
+   & $railway config plan --environment prod            # "already up to date"
+   & $railway service list
+   curl.exe -s -o NUL -w "%{http_code}`n" https://api.e-keneya.com/api/actuator/health
+   curl.exe -s -o NUL -w "%{http_code}`n" https://e-keneya.com/
+   curl.exe -s -o NUL -w "%{http_code}`n" https://hms-keycloak-prod-prod.up.railway.app/realms/master/
+   ```
+
+   All three 200, every service SUCCESS, and the newest `hms-keycloak-prod`
+   deployment built from `keycloak/prod/Dockerfile`. If apply did not start a new
+   deployment for the frontend or Keycloak after a failed one in step 2, redeploy
+   them from the dashboard. Sign in to the production portal once.
+
+5. Relink to dev (`& $railway link -p e-keneya -e dev`) so that the next command
+   typed in this folder does not land on production.
+
+Why not cutover first, as on dev: between cutover and the deletion reaching
+`main`, any deploy of `hms-keycloak-prod` reads the root `railway.toml` and
+builds the backend image, which is what failed on dev.
 
 ### Rollback
 
-Before 2026-12-01 the old mechanism can be restored per environment. Link the
-environment first.
+Before 2026-12-01 the old mechanism can be restored per environment, **as long
+as the branch that environment deploys still has the toml files**. Once the
+deletion is on `develop` (dev) or on `main` (prod), putting the stored paths back
+points the services at files that are gone: revert the deletion commit on that
+branch first, then follow the two steps below. Link the environment first.
 
 1. `railway config migrate undo` puts the stored Config File paths back from
    `.railway/.cac-migration.json` (copy the `.dev` / `.prod` snapshot back to that
@@ -324,30 +421,44 @@ From 2026-12-01 there is no way back to the toml files. Fix forward with the fil
 or the dashboard.
 
 Apply cannot delete a database, a volume or a bucket in this procedure unless the
-plan says so and someone confirms it. If a plan ever shows one, stop.
+plan says so. If a plan ever shows a deletion, stop, and never pass
+`--confirm-destructive`.
 
-## After both environments are verified
+## Follow-up PR: toml files deleted
 
-Follow-up PR (not in this one):
+Done in the PR that follows the dev apply:
 
-- delete `railway.toml`, `hospital-portal/railway.toml`, `keycloak/prod/railway.toml`;
-- drop `"railway.toml"` from the backend watch patterns in `.railway/railway.ts`,
-  then plan and apply (a one-line change on each backend);
-- remove the toml half of `RailwayConfigTest`;
-- point `railway-services.md`, `railway-env-matrix.md` and `keycloak/prod/README.md`
-  at `.railway/railway.ts`.
+- `railway.toml`, `hospital-portal/railway.toml` and `keycloak/prod/railway.toml`
+  are deleted;
+- `"railway.toml"` is dropped from the backend watch patterns in
+  `.railway/railway.ts`;
+- `RailwayConfigTest` reads `.railway/railway.ts` only and fails if a
+  `railway.toml` or `railway.json` comes back anywhere in the repo;
+- `railway-services.md`, `railway-env-matrix.md`, `keycloak/prod/README.md` and
+  the other current pages that named the toml files point at `.railway/railway.ts`.
+
+What its merge does:
+
+- **dev:** the three dev services redeploy from a commit without toml files (dev
+  step 6 above).
+- **prod:** nothing, until the next sync to `main`. That sync is step 2 of the
+  prod procedure and must be followed by cutover and apply immediately.
+
+Do not add a `railway.toml` or `railway.json` back, in any folder.
 
 ## Found on the way, not changed here
 
 - `hms-keycloak-prod` has "sleep when idle" (serverless) switched on, so the first
   sign-in after a quiet period waits for Keycloak to start. The file reproduces it
   as found. `hms-keycloak-dev` does not have it.
-- `railway-services.md` lists the Keycloak health check as `/health/ready` and
-  watch paths that no longer match; the deployed values are the ones in the table
-  at the top of this page.
 - Detached volumes that still hold data: `hospital-core-volume` in prod (about
   1 GB, the uploads from before object storage) and `redis-volume-GW5t` in dev.
-  Both are declared in the file so that apply keeps them.
+  Both are declared in the file, which was written before the dev apply showed
+  how detached volumes behave (see
+  [What happened on dev](#what-happened-on-dev-2026-11-26)). The declarations are
+  left as they are here. In the prod plan, look at `hospital-core-volume` in
+  particular: a `Create` line under that name means the declaration would produce
+  a second volume, and apply must not be run until the declaration is removed.
 - `.github/workflows/deploy.yml` pins CLI 4.57.2 and uses `railway up`. It is a
   manual re-trigger that is not part of the normal deploy path and is not affected
   by this change.
@@ -356,9 +467,13 @@ Follow-up PR (not in this one):
 
 - `The Railway TypeScript SDK is not installed`: run `npm ci --prefix .railway`.
 - `This version of railway/iac requires Railway CLI 5.42.1 or newer` with a recent
-  CLI: the SDK could not run `railway --version`. This happens when the CLI is
-  started through an npm shim from Git Bash. Use PowerShell.
+  CLI: the SDK's version check failed. This happens when the CLI is started
+  through the npm shim (`railway.cmd`). Run the native `railway.exe` with the
+  environment variable `_` set to its path, as in [Once: tooling](#once-tooling).
 - `.railway/railway.ts only describes the "dev" and "prod" environments`: the
   folder is linked to another environment. `railway link -p e-keneya -e dev`.
-- `... is already managed by /…/railway.toml`: cutover has not been run for the
-  linked environment.
+- `... is already managed by /…/railway.toml`: cutover has not been run for that
+  environment.
+- A Keycloak deployment builds the root `Dockerfile` and starts Spring Boot: a
+  `railway.toml` is at the repo root of the branch that service deploys. Delete it
+  and redeploy.

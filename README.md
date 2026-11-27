@@ -70,8 +70,8 @@ hms/
 │       └── services/           # API services
 ├── .github/workflows/          # CI/CD pipelines
 ├── docker-compose.yml          # Local PostgreSQL
-├── Dockerfile                  # Production container
-└── railway.toml                # Railway deployment config
+├── .railway/railway.ts         # Railway service settings (applied with `railway config apply`)
+└── Dockerfile                  # Production container
 ```
 
 ## Spring Profiles
@@ -95,6 +95,16 @@ npm run lint
 npm run format:check
 npm run test:headless
 ```
+
+## Working with AI agents
+
+Agents that build or review pull requests follow [`docs/agents/`](docs/agents/):
+
+- [`review-instructions.md`](docs/agents/review-instructions.md): how a reviewer pins the head, runs the mechanical pass, checks the failure classes, rates severity and writes its comment.
+- [`implementation-brief-template.md`](docs/agents/implementation-brief-template.md): the brief a coordinator fills (Part 1) and the standing rules every builder follows (Part 2).
+- `python scripts/review/pr_mechanics.py <PR#>`: the read-only mechanical check of a PR at its exact head (conflict markers, changelog, migrations, i18n keys, removed tests). Run it after any merge of `develop`.
+
+Domain rules live in the project skills under `.claude/skills/`.
 
 ## Environment Variables
 

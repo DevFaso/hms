@@ -34,7 +34,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>every SMS takes at most the arguments it was reviewed with ({@link #SMS_ARGUMENTS}): a new
  *       {@code {n}}, the way a medicine or a test name gets in, fails until reviewed;</li>
  *   <li>the code that writes an SMS reads no clinical value and no full name;</li>
- *   <li>the invoice mailed to a patient is the minimum-disclosure copy.</li>
+ *   <li>the invoice mailed to a patient is the minimum-disclosure copy;</li>
+ *   <li>an activation code goes to the person it activates and to nobody else: the registrar's and the
+ *       hospital's copies say where it was sent, masked;</li>
+ *   <li>an invoice is mailed to addresses on file (the patient's own, a guarantor's) or to another with a recorded
+ *       reason, to a small number of them, each traced masked;</li>
+ *   <li>the in-app notification, which can name a patient, a test and a value, is encrypted at rest.</li>
  * </ul>
  */
 @DisplayName("Messages, attachments and links disclose the minimum (K4)")
@@ -247,6 +252,94 @@ class MessageDisclosureGuardTest {
         assertThat(source).as("InvoiceEmailService attaches generateMailedInvoicePdf (no test or medicine "
                 + "names), never the desk copy")
             .contains("generateMailedInvoicePdf(").doesNotContain("generateInvoicePdf(");
+    }
+
+    /** The copies of an activation message that go to somebody other than the person activated. */
+    private static final List<String> STAFF_COPY_KEYS = List.of("sms.activation.registrar",
+        "sms.activation.registrar.platform", "sms.activation.hospital");
+
+    @Test
+    @DisplayName("the registrar's and the hospital's copies of an activation never carry the code")
+    void staffCopiesOfAnActivationCarryNoCode() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(
+            SERVICES.resolve("UserRoleHospitalAssignmentServiceImpl.java"), StandardCharsets.UTF_8));
+        for (String writer : List.of("notifyRegistrarBySms", "notifyHospitalBySms")) {
+            String body = SourceScan.methodBody(source, writer);
+            assertThat(body).as(writer + " is gone (update this guard)").isNotNull();
+            assertThat(body).as(writer + " reads the activation code: the copy says where the code was sent "
+                + "(masked), never the code").doesNotContainIgnoringCase("confirmationCode");
+        }
+        // Wherever a copy is written, in any service: no code among its arguments.
+        Pattern copyWithCode = Pattern.compile(
+            "\"sms\\.activation\\.(?:registrar|hospital)[^;]*?(?i:confirmationCode|getConfirmationCode|\\bcode\\b)");
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(SERVICES)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (copyWithCode.matcher(code).find()) {
+                    offenders.add(SERVICES.relativize(file).toString());
+                }
+            }
+        }
+        assertThat(offenders).as("a staff copy of an activation message is composed with the code").isEmpty();
+        // The templates: the copy states that a code was sent, in every locale, and takes no new argument
+        // (SMS_ARGUMENTS); the person's own message is the only one that says « Code : ».
+        for (Path bundle : bundles()) {
+            Properties properties = load(bundle);
+            for (String key : STAFF_COPY_KEYS) {
+                String text = properties.getProperty(key);
+                if (text != null) {
+                    assertThat(text).as(bundle.getFileName() + " " + key)
+                        .containsPattern("(?i)sent to|envoy[ée] à|enviado a");
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("an invoice is mailed to addresses on file or with a recorded reason, a few at most, each traced")
+    void invoiceRecipientsAreCheckedAndTraced() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(SERVICES.resolve("InvoiceEmailService.java"),
+            StandardCharsets.UTF_8));
+        int checked = source.indexOf("recipientPolicy.classify(");
+        int sent = source.indexOf(".emailWithAttachment(");
+        int traced = source.indexOf("auditRecipients(invoice, recipients");
+        assertThat(checked).as("InvoiceEmailService settles the recipients (InvoiceMailRecipients)").isPositive();
+        assertThat(sent).as("the recipients are settled before the mail is sent").isGreaterThan(checked);
+        assertThat(traced).as("each recipient is traced once the mail is sent").isGreaterThan(sent);
+        assertThat(SourceScan.methodBody(source, "auditRecipients")).as("the trace holds the masked address")
+            .contains("recipient.masked()").doesNotContain("recipient.address()", "req.to()", "req.message()");
+        assertThat(com.example.hms.payload.dto.EmailInvoiceRequest.MAX_RECIPIENTS)
+            .as("one invoice e-mail reaches a small number of addresses").isLessThanOrEqualTo(3);
+        // The mail with an attachment to addresses staff chose has this one caller.
+        List<String> callers = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (code.contains(".emailWithAttachment(")) {
+                    callers.add(file.getFileName().toString());
+                }
+            }
+        }
+        assertThat(callers).as("a new sender of a mail with an attachment to staff-chosen addresses: settle "
+            + "and trace its recipients as InvoiceEmailService does, then list it here")
+            .containsExactly("InvoiceEmailService.java");
+    }
+
+    @Test
+    @DisplayName("the in-app notification body and its arguments are encrypted at rest, and never searched in SQL")
+    void theInAppNotificationIsEncryptedAtRest() throws IOException {
+        String entity = SourceScan.stripComments(Files.readString(
+            Path.of("src/main/java/com/example/hms/model/Notification.java"), StandardCharsets.UTF_8));
+        assertThat(entity).containsPattern(
+            "@Convert\\(converter = EncryptedStringConverter\\.class\\)\\s+@Column\\([^)]*\\)\\s+private String message;");
+        assertThat(entity).containsPattern("@Convert\\(converter = SealedJsonListConverter\\.class\\)[^;]*"
+            + "private List<Object> messageArgs;");
+        String repository = SourceScan.stripComments(Files.readString(
+            Path.of("src/main/java/com/example/hms/repository/NotificationRepository.java"), StandardCharsets.UTF_8));
+        assertThat(repository).as("a query on the notification body: the column is ciphertext, match it in "
+            + "memory as NotificationServiceImpl#searched does").doesNotContainPattern("(?:By|And|Or)Message(?!Key|Args)")
+            .doesNotContain("n.message ");
     }
 
     @Test

@@ -4,8 +4,9 @@
 > [../../docs/tasks-keycloak.md](../../docs/tasks-keycloak.md) and **Phase
 > 2.8.A** from
 > [../../docs/keycloak-implementation-gaps.md](../../docs/keycloak-implementation-gaps.md).
-> One Dockerfile + one `railway.toml` serves all three environments via
-> the `BUILD_CONFIG` build arg.
+> One Dockerfile serves every environment via the `BUILD_CONFIG` build arg;
+> the Railway service settings are in
+> [`.railway/railway.ts`](../../.railway/railway.ts).
 
 ## What this ships
 
@@ -13,8 +14,12 @@
   Accepts `ARG BUILD_CONFIG=prod` (override per env) and stamps both a
   `com.bitnesttechs.hms.env` Docker label and a `KC_HMS_ENV` runtime env
   var so the running image is grep-able from boot logs and metrics.
-- [`railway.toml`](railway.toml) — Railway service config; the same file
-  is referenced by all three `hms-keycloak-{env}` services.
+- [`.railway/railway.ts`](../../.railway/railway.ts) — Railway service settings
+  (`KEYCLOAK_BUILD`, `KEYCLOAK_HEALTHCHECK`, `RESTART_ALWAYS`), shared by every
+  `hms-keycloak-{env}` service and written to Railway with
+  `railway config apply`. There is no `railway.toml` any more, and none may be
+  added back: see
+  [railway-config-as-code.md](../../docs/runbooks/railway-config-as-code.md).
 - This runbook for one-time provisioning + ongoing ops.
 
 Dev users (`../realm-export.dev-users.json`) are deliberately **not**
@@ -32,9 +37,11 @@ each downstream env reuses settings proven in the previous one.
 
 1. In the HMS Railway project, **+ New → GitHub Repo** → select this repo.
 2. Name the service `hms-keycloak-<env>` (e.g. `hms-keycloak-dev`).
-3. Under **Settings → Source → Config-as-code**, set the config path to
-   `keycloak/prod/railway.toml`. (Yes, the same file for every env — the
-   directory name is historical; this Dockerfile now serves all envs.)
+3. Leave **Settings → Source → Config-as-code** empty. Declare the service
+   in `.railway/railway.ts` with `KEYCLOAK_BUILD` (Dockerfile path
+   `keycloak/prod/Dockerfile` — the directory name is historical, this
+   Dockerfile serves all envs) and run `railway config plan` then
+   `railway config apply` for that environment.
 4. Under **Settings → Source → Branch**, set the branch to match the
    environment. Railway defaults new services to `main`, which is wrong
    for dev — without this the service won't pick up Keycloak fixes
@@ -177,8 +184,8 @@ restart is required after rotating.
 
 ### Restart policy
 
-`railway.toml` sets `restartPolicyType = "always"` for every
-`hms-keycloak-{env}` service. It used to be `on_failure` with
+`.railway/railway.ts` sets `restartPolicyType: "ALWAYS"` (`RESTART_ALWAYS`) for
+every `hms-keycloak-{env}` service; `RailwayConfigTest` guards it. It used to be `on_failure` with
 `restartPolicyMaxRetries = 3`: after a fourth crash (an out-of-memory kill,
 a Postgres blip during boot) Railway stopped restarting it and every sign-in
 failed until someone redeployed by hand (D16). With `always`, Railway keeps
