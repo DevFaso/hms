@@ -106,10 +106,14 @@ public final class HospitalContextRequestOverrides {
      * is only a patient ({@link HospitalContext#isTreatedOnlyAt}): a write
      * outside the patient portal acts at a hospital where the caller works.
      * The patient portal's own paths, every read and a request outside HTTP
-     * keep the caller's whole permitted set.
+     * keep the caller's whole permitted set. A caller who works at a provider
+     * facility (a pharmacy, a laboratory) is left to the provider confinement,
+     * whose answer for a hospital endpoint must stay that of an unmapped path.
      */
     public static boolean refusesStaffWriteAt(HospitalContext context, UUID hospitalId, HttpServletRequest request) {
-        return context != null && context.isTreatedOnlyAt(hospitalId) && isStaffWrite(request);
+        return context != null && context.isTreatedOnlyAt(hospitalId)
+            && (context.getProviderFacilityTypes() == null || context.getProviderFacilityTypes().isEmpty())
+            && isStaffWrite(request);
     }
 
     /** {@link #refusesStaffWriteAt} for the request being served. */
