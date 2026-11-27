@@ -722,7 +722,14 @@ public class GlobalExceptionHandler {
                 }
             } else {
                 for (org.springframework.context.MessageSourceResolvable error : result.getResolvableErrors()) {
-                    fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
+                    jakarta.validation.ConstraintViolation<?> violation = null;
+                    try {
+                        violation = result.unwrap(error, jakarta.validation.ConstraintViolation.class);
+                    } catch (IllegalArgumentException unsupported) {
+                        // Some method-validation errors have no bean constraint to unwrap.
+                    }
+                    String template = violation == null ? null : violation.getMessageTemplate();
+                    fieldErrors.putIfAbsent(prefix, constraintReason(error.getDefaultMessage(), template, prefix, violation));
                 }
             }
         }

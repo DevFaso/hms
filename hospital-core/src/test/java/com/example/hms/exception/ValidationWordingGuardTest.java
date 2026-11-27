@@ -29,6 +29,29 @@ class ValidationWordingGuardTest {
     static void endpoint(Input body) { }
 
     @Test
+    void methodParameterConstraintUsesTheSameMinimumWording() throws Exception {
+        var handler = new GlobalExceptionHandler();
+        handler.setMessageSource(TestMessageSources.bundles());
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var violation = factory.getValidator().validate(new Input()).stream()
+                .filter(v -> v.getPropertyPath().toString().equals("quantity")).findFirst().orElseThrow();
+            var parameter = new MethodParameter(ValidationWordingGuardTest.class.getDeclaredMethod("endpoint", Input.class), 0);
+            var error = new org.springframework.context.support.DefaultMessageSourceResolvable(new String[] {"min"}, null,
+                violation.getMessage());
+            var result = new org.springframework.validation.method.ParameterValidationResult(parameter, null,
+                java.util.List.of(error), null, null, null, (ignored, type) -> violation);
+            var exception = org.mockito.Mockito.mock(org.springframework.web.method.annotation.HandlerMethodValidationException.class);
+            org.mockito.Mockito.when(exception.getParameterValidationResults()).thenReturn(java.util.List.of(result));
+            LocaleContextHolder.setLocale(Locale.ENGLISH);
+            var response = (Map<?, ?>) handler.handleHandlerMethodValidation(exception,
+                new ServletWebRequest(new MockHttpServletRequest())).getBody();
+            assertThat((String) response.get("message")).contains("at least", "1");
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
     void defaultConstraintsUseHouseWordingOnBothValidationPaths() throws Exception {
         var handler = new GlobalExceptionHandler();
         handler.setMessageSource(TestMessageSources.bundles());
