@@ -528,6 +528,8 @@ export class ImagingComponent implements OnInit {
    * any other clinician after the confirm). Per row, through the shared rule.
    */
   canCancelThisOrder(o: ImagingOrderResponse): boolean {
+    // QA D4140: a request that waits for a physician is declined or withdrawn, by its own buttons.
+    if (this.awaitsPhysician(o)) return false;
     return (
       this.canCancelOrder() &&
       // Policy rule 3 (provisional): a technician never cancels an order; they discontinue a
@@ -537,6 +539,103 @@ export class ImagingComponent implements OnInit {
       isOrderCancellable(o.status) &&
       this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
     );
+  }
+
+  /**
+   * QA D4140 (r81, provisional): an imaging request placed by a nurse or a midwife is not an order
+   * until a physician of the hospital authorises it. The server says so on the row
+   * (`awaitingPhysicianAuthorisation`) and refuses every step of the exam until then.
+   */
+  awaitsPhysician(o: ImagingOrderResponse): boolean {
+    return o.awaitingPhysicianAuthorisation === true;
+  }
+
+  /** POST /imaging/orders/{id}/signature: a physician makes the request their order. */
+  private readonly canSignOrders = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingOrderSign'),
+  );
+
+  canAuthoriseRequest(o: ImagingOrderResponse): boolean {
+    return this.awaitsPhysician(o) && this.canSignOrders;
+  }
+
+  /** A physician declines it, with a reason, through the status endpoint. */
+  canDeclineRequest(o: ImagingOrderResponse): boolean {
+    return this.canAuthoriseRequest(o) && this.canCancelOrder();
+  }
+
+  /** Whoever asked withdraws her own request while it waits. */
+  canWithdrawRequest(o: ImagingOrderResponse): boolean {
+    const me = this.auth.getUserProfile()?.id;
+    return (
+      this.awaitsPhysician(o) &&
+      !this.canAuthoriseRequest(o) &&
+      this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderWithdraw')) &&
+      !!me &&
+      (o.requestedByUserId ?? o.orderingProviderUserId) === me
+    );
+  }
+
+  /** The request whose authorisation is in flight. */
+  readonly authorisingId = signal<string | null>(null);
+
+  async authoriseRequest(o: ImagingOrderResponse): Promise<void> {
+    if (this.authorisingId()) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.AUTHORISE.CONFIRM_TITLE',
+        messageKey: 'IMAGING.AUTHORISE.CONFIRM_BODY',
+        confirmKey: 'IMAGING.AUTHORISE.ACTION',
+      }))
+    )
+      return;
+    this.authorisingId.set(o.id);
+    this.imagingService
+      .signOrder(o.id, {
+        // Stored on the order and read back by everyone, so it stays canonical English, as the
+        // cancellation note does.
+        signatureStatement: 'Imaging request authorised by the signing physician',
+        attestationConfirmed: true,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.authorisingId.set(null);
+          this.toast.success(this.translate.instant('IMAGING.AUTHORISE.DONE'));
+          if (this.selectedOrder()?.id === o.id && updated) {
+            this.selectedOrder.set(updated);
+          }
+          this.load();
+        },
+        error: (err: unknown) => {
+          this.authorisingId.set(null);
+          this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.AUTHORISE.ERROR'));
+        },
+      });
+  }
+
+  /** Declining and withdrawing both end the request with a reason: the cancel dialog asks it. */
+  readonly endingPendingRequest = signal<'decline' | 'withdraw' | null>(null);
+
+  declineRequest(o: ImagingOrderResponse): void {
+    this.endingPendingRequest.set('decline');
+    this.confirmCancel(o);
+  }
+
+  withdrawRequest(o: ImagingOrderResponse): void {
+    this.endingPendingRequest.set('withdraw');
+    this.confirmCancel(o);
+  }
+
+  /** The cancel dialog's title: what is being ended, in the words of who ends it. */
+  cancelDialogTitleKey(): string {
+    switch (this.endingPendingRequest()) {
+      case 'decline':
+        return 'IMAGING.AUTHORISE.DECLINE';
+      case 'withdraw':
+        return 'IMAGING.AUTHORISE.WITHDRAW';
+      default:
+        return 'IMAGING.CANCEL_ORDER';
+    }
   }
 
   /**
@@ -1144,6 +1243,10 @@ export class ImagingComponent implements OnInit {
         this.toast.success(
           this.translate.instant(wasEditing ? 'IMAGING.ORDER_UPDATED' : 'IMAGING.ORDER_CREATED'),
         );
+        // QA D4140: a nurse's or midwife's request is told for what it is: it waits for a physician.
+        if (!wasEditing && saved?.awaitingPhysicianAuthorisation) {
+          this.toast.info(this.translate.instant('IMAGING.AUTHORISE.PLACED_PENDING'));
+        }
         // QA D1921: a duplicate the server found that nobody was shown (an
         // order placed since the preview, or a preview that failed) is told.
         if (!wasEditing && !acknowledgedDuplicate && saved?.duplicateOfRecentOrder) {
@@ -1205,6 +1308,7 @@ export class ImagingComponent implements OnInit {
   cancelDeleteAction(): void {
     this.showDeleteConfirm.set(false);
     this.deletingItem.set(null);
+    this.endingPendingRequest.set(null);
   }
   executeCancel(): void {
     const reason = this.cancelReason().trim();
@@ -1215,30 +1319,44 @@ export class ImagingComponent implements OnInit {
       return;
     }
     this.deleting.set(true);
-    this.imagingService
-      .updateOrderStatus(this.deletingItem()!.id, {
-        status: 'CANCELLED',
-        cancellationReason: reason,
-        // Stored on the order and read back by everyone, so it stays canonical
-        // English: translating it would bake the cancelling user's locale
-        // into the record and give the same note three spellings.
-        notes: 'Cancelled by admin',
-      })
-      .subscribe({
-        next: () => {
-          this.toast.success(this.translate.instant('IMAGING.ORDER_CANCELLED'));
-          this.cancelDeleteAction();
-          this.deleting.set(false);
-          this.load();
-        },
-        error: (err: unknown) => {
-          // QA D930 class: "only the ordering provider or a radiologist" is the reason.
-          this.toast.error(
-            refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'),
-          );
-          this.deleting.set(false);
-        },
-      });
+    const ending = this.endingPendingRequest();
+    const item = this.deletingItem()!;
+    // QA D4140: whoever asked withdraws through her own door; she holds no role on the status endpoint.
+    const write =
+      ending === 'withdraw'
+        ? this.imagingService.withdrawPendingRequest(item.id, reason)
+        : this.imagingService.updateOrderStatus(item.id, {
+            status: 'CANCELLED',
+            cancellationReason: reason,
+            // Stored on the order and read back by everyone, so it stays canonical
+            // English: translating it would bake the cancelling user's locale
+            // into the record and give the same note three spellings.
+            notes: 'Cancelled by admin',
+          });
+    const doneKey =
+      ending === 'decline'
+        ? 'IMAGING.AUTHORISE.DECLINED'
+        : ending === 'withdraw'
+          ? 'IMAGING.AUTHORISE.WITHDRAWN'
+          : 'IMAGING.ORDER_CANCELLED';
+    write.subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant(doneKey));
+        if (this.selectedOrder()?.id === item.id) {
+          this.selectedOrder.set(null);
+        }
+        this.cancelDeleteAction();
+        this.deleting.set(false);
+        this.load();
+      },
+      error: (err: unknown) => {
+        // QA D930 class: "only the ordering provider or a radiologist" is the reason.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'),
+        );
+        this.deleting.set(false);
+      },
+    });
   }
 
   load(): void {

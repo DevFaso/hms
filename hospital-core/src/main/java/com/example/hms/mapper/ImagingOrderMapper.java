@@ -215,6 +215,12 @@ public class ImagingOrderMapper {
             .orderingProviderNpi(order.getOrderingProviderNpi())
             .orderingProviderUserId(order.getOrderingProviderUserId())
             .providerSignedAt(order.getProviderSignedAt())
+            .requestedByUserId(order.getRequestedByUserId())
+            .requestedByName(order.getRequestedByName())
+            .physicianAuthorisationRequired(order.getPhysicianAuthorisationRequired())
+            .awaitingPhysicianAuthorisation(Boolean.TRUE.equals(order.getPhysicianAuthorisationRequired())
+                && order.getProviderSignedAt() == null
+                && order.getStatus() == com.example.hms.enums.ImagingOrderStatus.DRAFT)
             .providerSignatureStatement(order.getProviderSignatureStatement())
             .encounterId(order.getEncounterId())
             .duplicateOfRecentOrder(order.getDuplicateOfRecentOrder())

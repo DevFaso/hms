@@ -141,6 +141,11 @@ class TransfusionServiceImplTest {
         second = new Staff();
         second.setId(UUID.randomUUID());
         second.setHospital(hospital);
+        // QA D4141: the second checker is a nurse of this hospital, with an account of their own.
+        bedside(second, "ROLE_NURSE");
+        // ...and confirms the check themselves; the confirmation itself is BedsideVerifierConfirmationTest's.
+        when(bedsideVerifier.confirm(any(), any(), any(), any())).thenReturn("PASSWORD");
+        service.setBedsideVerifier(bedsideVerifier);
 
         // V380: the O positive decision service, real, with the hospital protocol active (the defaults).
         service.setPositiveAuthority(new com.example.hms.service.transfusion.OPositiveAuthorityFixture(
@@ -160,6 +165,22 @@ class TransfusionServiceImplTest {
         when(unitRepository.findByRequest_IdOrderByUnitNumberAsc(any())).thenReturn(List.of());
         when(crossmatchRepository.findByRequest_IdOrderByPerformedAtDesc(any())).thenReturn(List.of());
         when(reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(any())).thenReturn(List.of());
+    }
+
+    private final com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier =
+        mock(com.example.hms.service.transfusion.BedsideVerifierConfirmation.class);
+
+    /** A staff record with an account and the role of its assignment at the hospital. */
+    private static Staff bedside(Staff staff, String roleCode) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(roleCode);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setRole(role);
+        staff.setAssignment(assignment);
+        return staff;
     }
 
     private PatientBloodGroup group(AboGroup abo, RhFactor rh, AntibodyScreenResult screen) {
@@ -2731,5 +2752,220 @@ class TransfusionServiceImplTest {
 
         assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
         verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
+    }
+
+    // ═══ QA D4141 (r81): the second bedside check is a clinician's, and they confirm it themselves ═══
+
+    private TransfusionAdministrationRequestDTO hangOfAnIssuedBag(Staff verifier, String secret) {
+        TransfusionRequest request = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        bag.setRequest(request);
+        when(staffRepository.findById(verifier.getId())).thenReturn(Optional.of(verifier));
+        return TransfusionAdministrationRequestDTO.builder().requestId(request.getId()).bloodUnitId(bag.getId())
+            .verifiedByStaffId(verifier.getId()).verifierSecret(secret).build();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_RECEPTIONIST", "ROLE_BILLING_SPECIALIST",
+        "ROLE_LAB_SCIENTIST", "ROLE_PHARMACIST", "ROLE_HOSPITAL_ADMIN"})
+    void d4141_theSecondCheckerIsOfTheBedsideTeam_whateverTheClientSends(String roleCode) {
+        Staff notAClinician = new Staff();
+        notAClinician.setId(UUID.randomUUID());
+        notAClinician.setHospital(hospital);
+        bedside(notAClinician, roleCode);
+        TransfusionAdministrationRequestDTO hang = hangOfAnIssuedBag(notAClinician, "whatever");
+
+        assertThatThrownBy(() -> service.startAdministration(hang))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(refused -> assertThat(((FieldBusinessException) refused).getField()).isEqualTo("verifiedByStaffId"))
+            .extracting("messageKey").isEqualTo("transfusion.administration.verifierNotBedside");
+        verify(administrationRepository, never()).save(any());
+        // Nobody's password or code is tried for a person who could not be the checker.
+        verify(bedsideVerifier, never()).confirm(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR"})
+    void d4141_aNurseAMidwifeOrADoctorOfTheHospitalIsTheSecondChecker(String roleCode) {
+        Staff clinician = new Staff();
+        clinician.setId(UUID.randomUUID());
+        clinician.setHospital(hospital);
+        bedside(clinician, roleCode);
+
+        service.startAdministration(hangOfAnIssuedBag(clinician, "their-own-factor"));
+
+        verify(administrationRepository).save(any(TransfusionAdministration.class));
+    }
+
+    @Test
+    void d4141_aStaffRecordWithNoAccountCannotBeTheSecondChecker() {
+        Staff noAccount = new Staff();
+        noAccount.setId(UUID.randomUUID());
+        noAccount.setHospital(hospital);
+        bedside(noAccount, "ROLE_NURSE");
+        noAccount.setUser(null);
+        TransfusionAdministrationRequestDTO hang = hangOfAnIssuedBag(noAccount, "whatever");
+
+        assertThatThrownBy(() -> service.startAdministration(hang))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("transfusion.administration.verifierNotBedside");
+        verify(administrationRepository, never()).save(any());
+    }
+
+    @Test
+    void d4141_theCheckersOwnFactorIsAskedForThisHang_andWhatConfirmedIsKept() {
+        caller.setUser(new com.example.hms.model.User());
+        caller.getUser().setId(callerUserId);
+        when(bedsideVerifier.confirm(second.getUser(), callerUserId, hospitalId, "123456")).thenReturn("TOTP");
+
+        service.startAdministration(hangOfAnIssuedBag(second, "123456"));
+
+        org.mockito.ArgumentCaptor<TransfusionAdministration> saved =
+            org.mockito.ArgumentCaptor.forClass(TransfusionAdministration.class);
+        verify(administrationRepository).save(saved.capture());
+        assertThat(saved.getValue().getVerifiedBy()).isSameAs(second);
+        assertThat(saved.getValue().getVerifierConfirmationMethod()).isEqualTo("TOTP");
+        assertThat(saved.getValue().getVerifierConfirmedAt()).isNotNull();
+    }
+
+    @Test
+    void d4141_withoutTheCheckersConfirmationNothingIsHung() {
+        TransfusionAdministrationRequestDTO hang = hangOfAnIssuedBag(second, null);
+        when(bedsideVerifier.confirm(any(), any(), any(), any())).thenThrow(new FieldBusinessException(
+            com.example.hms.service.transfusion.BedsideVerifierConfirmation.FIELD_SECRET, "transfusion.verifier.required"));
+
+        assertThatThrownBy(() -> service.startAdministration(hang))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(refused -> assertThat(((FieldBusinessException) refused).getField()).isEqualTo("verifierSecret"));
+        verify(administrationRepository, never()).save(any());
+    }
+
+    @Test
+    void d4141_theRequestNeverPrintsTheCheckersFactor() {
+        assertThat(TransfusionAdministrationRequestDTO.builder().verifierSecret("s3cret-factor").build().toString())
+            .doesNotContain("s3cret-factor");
+    }
+
+    @Test
+    void d4141_thePickerListsExactlyThePeopleTheHangAccepts() {
+        Staff receptionist = new Staff();
+        receptionist.setId(UUID.randomUUID());
+        receptionist.setHospital(hospital);
+        bedside(receptionist, "ROLE_RECEPTIONIST");
+        receptionist.getUser().setActive(true);
+        second.getUser().setActive(true);
+        second.getUser().setFirstName("Awa");
+        when(staffRepository.findByHospital_IdIn(List.of(hospitalId))).thenReturn(List.of(second, receptionist));
+        when(bedsideVerifier.methodFor(second.getUser())).thenReturn("TOTP");
+
+        assertThat(service.listVerifierCandidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.userId()).isEqualTo(second.getUser().getId());
+            assertThat(candidate.confirmationMethod()).isEqualTo("TOTP");
+        });
+    }
+
+    // ═══ QA D4178 (r81): an issued bag comes back through the laboratory, never through a cancellation ═══
+
+    @Test
+    void d4178_cancellingARequestLeavesItsIssuedBagOutOfStock_andFreesTheReservedOne() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit issued = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        issued.setRequest(req);
+        BloodUnit reserved = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.CROSSMATCHED);
+        reserved.setRequest(req);
+        when(unitRepository.findByRequest_IdOrderByUnitNumberAsc(req.getId())).thenReturn(List.of(issued, reserved));
+
+        com.example.hms.payload.dto.transfusion.TransfusionRequestResponseDTO cancelled = service.cancelRequest(req.getId(), "Saignement maîtrisé");
+
+        assertThat(req.getStatus()).isEqualTo(TransfusionRequestStatus.CANCELLED);
+        assertThat(issued.getStatus()).as("still out of the laboratory").isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(issued.isAssignable()).isFalse();
+        assertThat(reserved.getStatus()).as("never left the fridge").isEqualTo(BloodUnitStatus.RETURNED);
+        assertThat(cancelled.getUnits()).filteredOn(BloodUnitResponseDTO::isAwaitingReturn)
+            .extracting(BloodUnitResponseDTO::getId).containsExactly(issued.getId());
+    }
+
+    private BloodUnit issuedBagOfACancelledRequest() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        req.setStatus(TransfusionRequestStatus.CANCELLED);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        bag.setRequest(req);
+        when(administrationRepository.findByBloodUnit_Id(bag.getId())).thenReturn(Optional.empty());
+        return bag;
+    }
+
+    private static com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO returned(
+            com.example.hms.enums.BloodUnitReturnOutcome outcome, Boolean coldChain, Boolean intact, String note) {
+        return com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(outcome).coldChainKept(coldChain).bagIntact(intact).note(note).build();
+    }
+
+    @Test
+    void d4178_aBagReEntersStockOnlyOnTheLaboratorysTwoStatements() {
+        BloodUnit bag = issuedBagOfACancelledRequest();
+        UUID bagId = bag.getId();
+        var fit = com.example.hms.enums.BloodUnitReturnOutcome.FIT_FOR_STOCK;
+
+        assertThatThrownBy(() -> service.recordUnitReturn(bagId, returned(fit, null, true, null)))
+            .isInstanceOf(FieldBusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.return.coldChainRequired");
+        assertThatThrownBy(() -> service.recordUnitReturn(bagId, returned(fit, true, false, null)))
+            .isInstanceOf(FieldBusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.return.intactRequired");
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+
+        BloodUnitResponseDTO back = service.recordUnitReturn(bagId, returned(fit, true, true, " 20 min hors du laboratoire "));
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        assertThat(bag.isAssignable()).isTrue();
+        assertThat(back.getReturnOutcome()).isEqualTo(fit);
+        assertThat(back.getReturnNote()).isEqualTo("20 min hors du laboratoire");
+        assertThat(back.getReturnRecordedAt()).isNotNull();
+        assertThat(back.isAwaitingReturn()).isFalse();
+        assertThat(bag.getReturnRecordedByUserId()).isEqualTo(callerUserId);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.BloodUnitReturnOutcome.class,
+        names = {"UNFIT_DESTROYED", "NOT_RECOVERED"})
+    void d4178_aBagThatIsNotFitOrNeverCameBackLeavesStockForGood_withWhatWasFound(
+            com.example.hms.enums.BloodUnitReturnOutcome outcome) {
+        BloodUnit bag = issuedBagOfACancelledRequest();
+        UUID bagId = bag.getId();
+
+        assertThatThrownBy(() -> service.recordUnitReturn(bagId, returned(outcome, null, null, "  ")))
+            .isInstanceOf(FieldBusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.return.noteRequired");
+
+        service.recordUnitReturn(bagId, returned(outcome, null, null, "Poche restée 3 h sur la paillasse"));
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.DISCARDED);
+        assertThat(bag.getDiscardReason()).isEqualTo("Poche restée 3 h sur la paillasse");
+        assertThat(bag.getReturnOutcome()).isEqualTo(outcome);
+        assertThat(bag.isAssignable()).isFalse();
+    }
+
+    @Test
+    void d4178_onlyABagThatIsOutAndWasNeverHungIsReturned() {
+        BloodUnit inStock = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.AVAILABLE);
+        UUID inStockId = inStock.getId();
+        var fit = returned(com.example.hms.enums.BloodUnitReturnOutcome.FIT_FOR_STOCK, true, true, null);
+        assertThatThrownBy(() -> service.recordUnitReturn(inStockId, fit))
+            .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.return.notIssued");
+
+        TransfusionAdministration running = running();
+        UUID hungId = running.getBloodUnit().getId();
+        assertThatThrownBy(() -> service.recordUnitReturn(hungId, fit)).isInstanceOf(BusinessException.class);
+        assertThat(running.getBloodUnit().getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    @Test
+    void d4178_anIssuedBagIsNotWrittenOffFromTheStockList() {
+        BloodUnit bag = issuedBagOfACancelledRequest();
+        UUID bagId = bag.getId();
+
+        assertThatThrownBy(() -> service.discardUnit(bagId, "Sceau rompu"))
+            .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.discardIssued");
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }
 }

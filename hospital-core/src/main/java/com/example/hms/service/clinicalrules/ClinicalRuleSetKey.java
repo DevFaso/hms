@@ -62,7 +62,9 @@ public enum ClinicalRuleSetKey {
     /** Go-live D2 (V385): who approves a formulary entry and a dose limit, and that nobody approves their own. */
     CATALOGUE_CHANGE_APPROVAL(ClinicalRuleArea.PRESCRIBING),
     /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
-    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS);
+    URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS),
+    /** QA D4140 (r81, V465): an imaging request placed by a nurse or a midwife waits for a physician's authorisation. */
+    IMAGING_ORDER_PHYSICIAN_AUTHORISATION(ClinicalRuleArea.IMAGING);
 
     private final ClinicalRuleArea area;
 

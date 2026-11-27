@@ -792,6 +792,13 @@ class TransfusionEmergencyReleaseTest {
     private void hang(TransfusionRequest request, BloodUnit unit) {
         Staff nurse = staff(UUID.randomUUID());
         Staff second = staff(UUID.randomUUID());
+        // QA D4141: the second checker is of the bedside team and confirms themselves (BedsideVerifierConfirmationTest).
+        com.example.hms.model.Role nurseRole = new com.example.hms.model.Role();
+        nurseRole.setCode("ROLE_NURSE");
+        com.example.hms.model.UserRoleHospitalAssignment secondAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        secondAssignment.setRole(nurseRole);
+        second.setAssignment(secondAssignment);
+        service.setBedsideVerifier(org.mockito.Mockito.mock(com.example.hms.service.transfusion.BedsideVerifierConfirmation.class));
         when(staffRepository.findByUserIdAndHospitalId(issuer, hospitalId)).thenReturn(Optional.of(nurse));
         when(staffRepository.findById(second.getId())).thenReturn(Optional.of(second));
         when(administrationRepository.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -1483,7 +1490,7 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
-    @DisplayName("pr1346: hanging the bag writes « given » on its release; a bag that comes back or is discarded unused closes it")
+    @DisplayName("pr1346: hanging the bag writes « given » on its release; a bag the laboratory records as back and destroyed closes it")
     void whatBecomesOfTheBagIsWrittenOnItsRelease() {
         adultMale();
         TransfusionRequest request = emergency();
@@ -1496,7 +1503,14 @@ class TransfusionEmergencyReleaseTest {
         TransfusionRequest second = emergency();
         service.issueUnit(second.getId(), unused.getId());
         when(positive.decisionRepository.findOpenIdsForUnit(unused.getId())).thenReturn(List.of(positive.last().getId()));
-        service.discardUnit(unused.getId(), "Broken seal");
+        // QA D4178: a bag that is out is not written off from the stock list; the laboratory records that it
+        // came back and was destroyed, and that is what closes its release.
+        UUID unusedId = unused.getId();
+        assertThatThrownBy(() -> service.discardUnit(unusedId, "Broken seal"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(positive.decisionRepository, org.mockito.Mockito.never()).markNotGiven(any(), any(), any());
+        service.recordUnitReturn(unusedId, com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(com.example.hms.enums.BloodUnitReturnOutcome.UNFIT_DESTROYED).note("Broken seal").build());
         verify(positive.decisionRepository).markNotGiven(eq(List.of(positive.last().getId())),
             eq(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED), any());
         verify(positive.inBasket).removeOpenItemsForReference(positive.last().getId(), "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");

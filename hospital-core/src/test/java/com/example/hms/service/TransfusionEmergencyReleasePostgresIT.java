@@ -126,6 +126,8 @@ class TransfusionEmergencyReleasePostgresIT {
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    /** QA D4141: the second checker's own confirmation; its rules are BedsideVerifierConfirmationTest's. */
+    @MockitoBean private com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier;
 
     private final UUID hospital = UUID.randomUUID();
     private final UUID patient = UUID.randomUUID();
@@ -548,6 +550,9 @@ class TransfusionEmergencyReleasePostgresIT {
         UUID negative = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
         service.issueUnit(first.getId(), negative);
         signedInAsDoctor(() -> service.cancelRequest(first.getId(), "Bleeding controlled"));
+        // QA D4178: the cancellation leaves the issued bag out of stock; the laboratory records its return.
+        assertThat(status(negative)).isEqualTo("ISSUED");
+        service.recordUnitReturn(negative, backAndFit());
         assertThat(status(negative)).isEqualTo("RETURNED");
 
         TransfusionRequestResponseDTO second = emergencyRequest();
@@ -704,7 +709,19 @@ class TransfusionEmergencyReleasePostgresIT {
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
+        // QA D4178: an issued bag is out of the laboratory. The prescriber's cancellation does not bring it back.
+        assertThat(status(bagId)).isEqualTo("ISSUED");
+        assertThat(service.listAssignableUnits()).extracting(BloodUnitResponseDTO::getId).doesNotContain(bagId);
+        actingAs(techUser);
+        assertThat(service.recordUnitReturn(bagId, backAndFit()).getReturnOutcome())
+            .isEqualTo(com.example.hms.enums.BloodUnitReturnOutcome.FIT_FOR_STOCK);
         assertThat(status(bagId)).isEqualTo("RETURNED");
+        assertThat(service.listAssignableUnits()).extracting(BloodUnitResponseDTO::getId).contains(bagId);
+    }
+
+    private static com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO backAndFit() {
+        return com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(com.example.hms.enums.BloodUnitReturnOutcome.FIT_FOR_STOCK).coldChainKept(true).bagIntact(true).build();
     }
 
     @Test
@@ -1100,9 +1117,28 @@ class TransfusionEmergencyReleasePostgresIT {
         UUID third = service.listPositiveReleases(false).stream().filter(row -> row.getBloodUnitId().equals(otherBag))
             .findFirst().orElseThrow().getId();
         clearInvocations(inBasketService);
-        service.discardUnit(otherBag, "Broken seal");
+        // QA D4178: a bag that is out is not written off from the stock list...
+        assertThatThrownBy(() -> service.discardUnit(otherBag, "Broken seal")).isInstanceOf(BusinessException.class);
+        verify(inBasketService, never()).removeOpenItemsForReference(third, "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
+        // ...the laboratory records that it came back and was destroyed: nobody received it.
+        service.recordUnitReturn(otherBag, com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(com.example.hms.enums.BloodUnitReturnOutcome.UNFIT_DESTROYED).note("Broken seal").build());
+        assertThat(status(otherBag)).isEqualTo("DISCARDED");
         verify(inBasketService).removeOpenItemsForReference(third, "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
         assertThat(service.listPositiveReleases(false)).filteredOn(row -> row.getId().equals(third)).singleElement()
             .satisfies(row -> assertThat(row.getDisposition()).isEqualTo("RETURNED_UNUSED"));
+
+        // A bag that never came back keeps the follow-up its release opened: nobody can say it was not given.
+        UUID lostBag = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        service.emergencyRelease(requestId, documented(lostBag, EmergencyReleaseType.O_POSITIVE_DECISION));
+        UUID fourth = service.listPositiveReleases(false).stream().filter(row -> row.getBloodUnitId().equals(lostBag))
+            .findFirst().orElseThrow().getId();
+        clearInvocations(inBasketService);
+        service.recordUnitReturn(lostBag, com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(com.example.hms.enums.BloodUnitReturnOutcome.NOT_RECOVERED).note("Introuvable dans le service").build());
+        assertThat(status(lostBag)).isEqualTo("DISCARDED");
+        verify(inBasketService, never()).removeOpenItemsForReference(fourth, "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");
+        assertThat(service.listPositiveReleases(false)).filteredOn(row -> row.getId().equals(fourth)).singleElement()
+            .satisfies(row -> assertThat(row.getDisposition()).isNotEqualTo("RETURNED_UNUSED"));
     }
 }

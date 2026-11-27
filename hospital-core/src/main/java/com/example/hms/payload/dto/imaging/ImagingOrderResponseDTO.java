@@ -109,6 +109,17 @@ public class ImagingOrderResponseDTO {
 
     private LocalDateTime providerSignedAt;
 
+    /** QA D4140: who placed the request (a nurse or a midwife asks, a physician authorises). */
+    private UUID requestedByUserId;
+
+    private String requestedByName;
+
+    /** QA D4140: the request was placed by somebody who is not a physician of the hospital. */
+    private Boolean physicianAuthorisationRequired;
+
+    /** QA D4140: no physician has authorised the request yet: nothing of the exam can be done. */
+    private boolean awaitingPhysicianAuthorisation;
+
     private String providerSignatureStatement;
 
     private UUID encounterId;

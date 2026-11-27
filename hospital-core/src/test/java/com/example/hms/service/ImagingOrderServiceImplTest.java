@@ -2823,4 +2823,221 @@ class ImagingOrderServiceImplTest {
 
         assertThat(order.getExamTechnicalNote()).isEqualTo("RAS");
     }
+
+    // ═══ QA D4140 (r81): a nurse's or midwife's request waits for a physician of the hospital ═══
+
+    private static final String DOCTOR_AUTHORITY = "ROLE_DOCTOR";
+    private static final String NURSE_AUTHORITY = "ROLE_NURSE";
+
+    /** A request the nurse placed, as createOrder leaves it: pending, flagged, with who asked. */
+    private ImagingOrder nursesPendingRequest(UUID nurse) {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.DRAFT);
+        order.setOrderingProviderUserId(nurse);
+        order.setRequestedByUserId(nurse);
+        order.setPhysicianAuthorisationRequired(true);
+        lenient().when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+        return order;
+    }
+
+    @Test
+    void d4140_aNursesRequestIsPendingAndNothingOfTheExamStarts() {
+        UUID nurse = UUID.randomUUID();
+        signer(nurse, "Awa", "Infirmière");
+        ImagingOrder order = stubCreate(null);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        signInAs(nurse, NURSE_AUTHORITY);
+
+        imagingOrderService.createOrder(requestWithVisit(null), nurse);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+        assertThat(order.getPhysicianAuthorisationRequired()).isTrue();
+        assertThat(order.getRequestedByUserId()).isEqualTo(nurse);
+        assertThat(order.getRequestedByName()).isEqualTo("Awa Infirmière");
+        assertThat(order.getProviderSignedAt()).isNull();
+    }
+
+    @Test
+    void d4140_aDoctorsOrderIsPlacedAtOnce_asBefore() {
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "Un");
+        ImagingOrder order = stubCreate(null);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        signInAs(doctor, DOCTOR_AUTHORITY);
+
+        imagingOrderService.createOrder(requestWithVisit(null), doctor);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        assertThat(order.getPhysicianAuthorisationRequired()).isFalse();
+        assertThat(order.getRequestedByUserId()).isEqualTo(doctor);
+    }
+
+    @Test
+    void d4140_theTechnicianCanNeitherCheckInNorStartNorScheduleAPendingRequest() {
+        ImagingOrder order = nursesPendingRequest(UUID.randomUUID());
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        for (ImagingOrderStatus target : List.of(ImagingOrderStatus.ORDERED, ImagingOrderStatus.SCHEDULED,
+                ImagingOrderStatus.PENDING_AUTHORIZATION)) {
+            assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, step(target)))
+                .as("status write to %s", target)
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasMessage("imaging.order.awaitingPhysician");
+        }
+        assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+        assertThat(order.getCheckedInAt()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d4140_anOrderWrittenBeforeTheFlag_placedByANurseAndUnsigned_isNotStartedEither() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(nurse);
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasMessage("imaging.order.awaitingPhysician");
+        assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasMessage("imaging.order.awaitingPhysician");
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+    }
+
+    @Test
+    void d4140_aPhysicianAuthorises_theRequestBecomesTheirOrder_andTheExamCanStart() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = nursesPendingRequest(nurse);
+        order.setRequestedByName("Awa Infirmière");
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "Un");
+        signInAs(doctor, DOCTOR_AUTHORITY);
+
+        imagingOrderService.captureProviderSignature(orderId,
+            ImagingOrderSignatureRequestDTO.builder().signatureStatement("Autorisée").build(), doctor);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        assertThat(order.getProviderSignedAt()).isNotNull();
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(doctor);
+        assertThat(order.getRequestedByUserId()).isEqualTo(nurse);
+        assertThat(order.getRequestedByName()).isEqualTo("Awa Infirmière");
+
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void d4140_aPhysicianDeclinesWithAReason_andAnotherNurseCannot() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = nursesPendingRequest(nurse);
+        UUID otherNurse = UUID.randomUUID();
+        signInAs(otherNurse, NURSE_AUTHORITY);
+        // A nurse holds no exam role: whoever did not ask is refused before anything is written.
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId,
+                ImagingOrderStatusUpdateRequestDTO.builder().status(ImagingOrderStatus.CANCELLED)
+                    .cancellationReason("Pas indiqué").build()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "Un");
+        signInAs(doctor, DOCTOR_AUTHORITY);
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.CANCELLED)))
+            .as("a refusal states why")
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.CANCELLED).cancellationReason("Pas indiqué : échographie d'abord").build());
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        assertThat(order.getCancelledByUserId()).isEqualTo(doctor);
+        assertThat(order.getCancellationReason()).isEqualTo("Pas indiqué : échographie d'abord");
+    }
+
+    @Test
+    void d4140_whoeverAskedWithdrawsHerOwnPendingRequest_andNothingElse() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = nursesPendingRequest(nurse);
+        signer(nurse, "Awa", "Infirmière");
+        signInAs(nurse, NURSE_AUTHORITY);
+
+        // She holds no role on the status endpoint, for her own request either.
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.CANCELLED).cancellationReason("x").build()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingOrderService.withdrawPendingRequest(orderId, "  "))
+            .as("a withdrawal states why")
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+
+        imagingOrderService.withdrawPendingRequest(orderId, "Demande saisie pour le mauvais patient");
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        assertThat(order.getCancelledByUserId()).isEqualTo(nurse);
+        assertThat(order.getCancelledByName()).isEqualTo("Awa Infirmière");
+        assertThat(order.getCancellationReason()).isEqualTo("Demande saisie pour le mauvais patient");
+    }
+
+    @Test
+    void d4140_theWithdrawalOpensNothingElse() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder pending = nursesPendingRequest(nurse);
+
+        // Another nurse, or a doctor, does not "withdraw" her request (a physician declines it instead).
+        signInAs(UUID.randomUUID(), NURSE_AUTHORITY);
+        assertThatThrownBy(() -> imagingOrderService.withdrawPendingRequest(orderId, "Pas la mienne"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        signInAs(UUID.randomUUID(), DOCTOR_AUTHORITY);
+        assertThatThrownBy(() -> imagingOrderService.withdrawPendingRequest(orderId, "Pas la mienne"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(pending.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+
+        // Once a physician has signed, the order is the physician's: she no longer withdraws it.
+        pending.setProviderSignedAt(LocalDateTime.now());
+        pending.setStatus(ImagingOrderStatus.ORDERED);
+        signInAs(nurse, NURSE_AUTHORITY);
+        assertThatThrownBy(() -> imagingOrderService.withdrawPendingRequest(orderId, "Trop tard"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(pending.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d4140_aNurseIsRefusedEveryStatusWriteOnAnOrderThatIsNotHerPendingRequest() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        signInAs(UUID.randomUUID(), NURSE_AUTHORITY);
+
+        for (ImagingOrderStatus target : List.of(ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.SCHEDULED,
+                ImagingOrderStatus.CANCELLED)) {
+            assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId,
+                    ImagingOrderStatusUpdateRequestDTO.builder().status(target).cancellationReason("x").build()))
+                .as("status write to %s", target)
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d4140_anEditNeverSendsAPendingRequest() {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = nursesPendingRequest(nurse);
+        signInAs(nurse, NURSE_AUTHORITY);
+        // The mapper of an edit is a mock here; an edit that named another status is simulated on the row.
+        org.mockito.Mockito.doAnswer(call -> {
+            order.setStatus(ImagingOrderStatus.ORDERED);
+            return null;
+        }).when(imagingOrderMapper).updateEntityFromRequest(any(), any());
+
+        imagingOrderService.updateOrder(orderId, requestWithVisit(null), nurse);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
+    }
 }

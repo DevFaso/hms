@@ -336,6 +336,31 @@ class ImagingStudyImageServiceTest {
                 .isInstanceOf(BusinessException.class);
         }
 
+        /** QA D4142 (r81): an image belongs to an exam that took place; none on an order nobody started. */
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class,
+            names = {"DRAFT", "ORDERED", "PENDING_AUTHORIZATION", "SCHEDULED"})
+        void d4142_anOrderWhoseExamNeverStartedTakesNoImage(ImagingOrderStatus notStarted) {
+            order.setStatus(notStarted);
+
+            assertThatThrownBy(() -> service.upload(order.getId(), null, png(), null))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("imaging.report.examNotStarted");
+            verify(imageRepository, never()).save(any());
+        }
+
+        /** QA D4140 (r81): nor on a nurse's request no physician has authorised. */
+        @Test
+        void d4140_aRequestWaitingForAPhysicianTakesNoImage() {
+            order.setStatus(ImagingOrderStatus.IN_PROGRESS);
+            order.setPhysicianAuthorisationRequired(true);
+
+            assertThatThrownBy(() -> service.upload(order.getId(), null, png(), null))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("imaging.order.awaitingPhysician");
+            verify(imageRepository, never()).save(any());
+        }
+
         @Test
         void aStudyHoldsABoundedNumberOfImages() {
             when(imageRepository.countByImagingOrder_Id(order.getId()))

@@ -368,6 +368,35 @@ class ImagingReportServiceImplTest {
         assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
 
+    /**
+     * QA D4142 (r81): a report was written and signed on an order nobody had checked in or started, which
+     * jumped from placed to resulted and skipped the pre-authorisation a routine study needs before it starts.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class,
+        names = {"IN_PROGRESS", "COMPLETED", "RESULTS_AVAILABLE", "CANCELLED"},
+        mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+    void d4142_noReportIsWrittenRevisedOrSignedBeforeTheExamStarts(ImagingOrderStatus notStarted) {
+        imagingOrder.setStatus(notStarted);
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        ImagingReportUpsertRequestDTO create = ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("x").build();
+        ImagingReportUpsertRequestDTO revise = ImagingReportUpsertRequestDTO.builder().findings("revised").build();
+        assertThatThrownBy(() -> imagingReportService.createReport(create))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, revise))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThat(report.getSignedAt()).isNull();
+        assertThat(imagingOrder.getStatus()).as("the order does not jump to resulted").isEqualTo(notStarted);
+    }
+
     // ── Signing ──────────────────────────────────────────────────────────
 
     /** QA D1930 (r54): signing a revision keeps its kind; only an original read becomes FINAL. */
