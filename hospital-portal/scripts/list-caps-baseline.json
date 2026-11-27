@@ -42,6 +42,18 @@
       "count": 1,
       "why": "a section titled recent notes: the chart holds the full list"
     },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildRecentVitals:5": {
+      "count": 1,
+      "why": "the patient snapshot's preview of the latest five vital signs, cut after the restricted-visit filter; the full vitals view lists every row"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildLatestLabs:10": {
+      "count": 1,
+      "why": "the patient snapshot's preview of the latest ten lab results, cut after the restricted-visit filter; the lab results view lists every row"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/impl/SuperAdminIntegrationMessageServiceImpl.java::server-query-top::findTop50ByCorrelationIdOrderByReceivedAtAsc": {
+      "count": 1,
+      "why": "QA D4302 preview: the detail drawer lists the first 50 rows of one exchange, answers attemptsTotal (countByCorrelationId) and says « the first 50 of N » when there are more"
+    },
     "hospital-core/src/main/java/com/example/hms/service/PermissionMatrixServiceImpl.java::server-query-top::findTop50ByActionOrderByCreatedAtDesc": {
       "count": 1,
       "why": "open D1347 sibling found by the round-33 server-query-top rule, tasklist.md round-33 (fix/r33-followup): the newest 50 permission-matrix audit events of one action with no total"

@@ -52,8 +52,16 @@ class SuperAdminIntegrationHealthActionsQaTest {
         IntegrationHealthEventRepository events = mock(IntegrationHealthEventRepository.class);
         when(events.findRecentForIntegration(anyString(), any())).thenReturn(List.of());
 
+        // QA D4300: the four partner connectors, registered as on a running platform.
+        IntegrationHealthRecorder recorder = mock(IntegrationHealthRecorder.class);
+        List<com.example.hms.service.integration.partner.StubPartnerConnector> partners = List.of(
+            new com.example.hms.service.integration.partner.NhisConnector(recorder, null),
+            new com.example.hms.service.integration.partner.NhiaConnector(recorder, null),
+            new com.example.hms.service.integration.partner.CnamgsConnector(recorder, null),
+            new com.example.hms.service.integration.partner.MutuelleConnector(recorder, null));
+        com.example.hms.utility.MessageUtil.setMessageSource(TestMessageSources.bundles());
         IntegrationHealthActionService actions = new IntegrationHealthActionService(
-            List.of(), List.of(), mock(IntegrationHealthRecorder.class), events);
+            List.copyOf(partners), List.copyOf(partners), recorder, events);
         SuperAdminIntegrationHealthServiceImpl inventory = new SuperAdminIntegrationHealthServiceImpl(
             List.of(adapter("billing", PlatformServiceType.BILLING),
                 adapter("ehr", PlatformServiceType.EHR),
@@ -67,14 +75,47 @@ class SuperAdminIntegrationHealthActionsQaTest {
             .build();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void resetMessages() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+    }
+
+    private static final List<String> PARTNERS =
+        List.of("partner.nhis", "partner.nhia", "partner.cnamgs", "partner.mutuelle");
+
     @Test
-    @DisplayName("the inventory lists the four integrations and says none can be probed or re-synced")
-    void inventoryAdvertisesNoActions() throws Exception {
-        mvc.perform(get("/super-admin/integrations"))
+    @DisplayName("D4300: the inventory lists the partner connectors too, each with a test and its re-sync")
+    void inventoryListsEveryConnectorWithItsActions() throws Exception {
+        mvc.perform(get("/super-admin/integrations").header("Accept-Language", "fr"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalIntegrations").value(4))
-            .andExpect(jsonPath("$.integrations[?(@.probeSupported == true)]").isEmpty())
-            .andExpect(jsonPath("$.integrations[?(@.resyncSupported == true)]").isEmpty());
+            .andExpect(jsonPath("$.totalIntegrations").value(8))
+            // Every listed integration can be tested.
+            .andExpect(jsonPath("$.integrations[?(@.probeSupported == false)]").isEmpty())
+            .andExpect(jsonPath("$.integrations[?(@.resyncSupported == true)].integrationId",
+                org.hamcrest.Matchers.containsInAnyOrder(PARTNERS.toArray())))
+            // Named in words, and shown as not configured while nothing is behind them.
+            .andExpect(jsonPath("$.integrations[?(@.integrationId == 'partner.nhis')].displayName",
+                org.hamcrest.Matchers.contains(org.hamcrest.Matchers.containsString("NHIS"))))
+            .andExpect(jsonPath("$.integrations[?(@.integrationId == 'partner.nhis')].stub",
+                org.hamcrest.Matchers.contains(true)));
+    }
+
+    @Test
+    @DisplayName("D4300: a partner connector has its own page, history, test and re-sync (was 404 on the page)")
+    void aPartnerConnectorIsKnownEverywhere() throws Exception {
+        for (String id : PARTNERS) {
+            mvc.perform(get("/super-admin/integrations/" + id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.integrationId").value(id));
+            mvc.perform(get("/super-admin/integrations/" + id + "/history")).andExpect(status().isOk());
+            mvc.perform(post("/super-admin/integrations/" + id + "/resync")).andExpect(status().isAccepted());
+            mvc.perform(post("/super-admin/integrations/" + id + "/probe").header("Accept-Language", "fr"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(false))
+                // D4303: the reason in French, with no English and no raw key.
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("partenaire")))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.not(
+                    org.hamcrest.Matchers.containsString("stub"))));
+        }
     }
 
     @Test
@@ -97,12 +138,18 @@ class SuperAdminIntegrationHealthActionsQaTest {
     }
 
     @Test
-    @DisplayName("Test connection on a listed integration is the 'not supported' refusal (400), not 404")
-    void probeOnListedIntegrationIsNotSupportedRatherThanUnknown() throws Exception {
-        for (String id : LISTED) {
-            mvc.perform(post("/super-admin/integrations/" + id + "/probe"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("D4300: Test connection on a platform integration checks its configuration (was a 400 refusal)")
+    void probeOnAPlatformIntegrationChecksItsConfiguration() throws Exception {
+        for (String id : List.of("billing", "ehr", "inventory")) {
+            mvc.perform(post("/super-admin/integrations/" + id + "/probe").header("Accept-Language", "fr"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("configurée")));
         }
+        // Only the built-in reference provider answers eligibility: nothing is connected.
+        mvc.perform(post("/super-admin/integrations/eligibility/probe"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.ok").value(false));
     }
 
     @Test

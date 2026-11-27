@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.ObgynReferralStatus;
 import com.example.hms.enums.ObgynReferralUrgency;
 import com.example.hms.exception.BusinessException;
@@ -70,6 +71,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final com.example.hms.repository.StaffRepository staffRepository;
     private final ObgynReferralMapper referralMapper;
     private final ObjectMapper objectMapper;
     private final RecordAccessPolicy recordAccessPolicy;
@@ -151,7 +153,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-        Page<ObgynReferral> rows = referralRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
+        // A referral written in a visit follows that visit's restriction, in the query.
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+        Page<ObgynReferral> rows = restricted.isEmpty()
+            ? referralRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+            : referralRepository.findByPatientAcrossHospitalsOutsideVisits(
+                patientId, readable, restricted.visitIdsForQuery(), pageable);
         reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital OB/GYN referral read on the treatment relationship");
@@ -184,6 +192,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             throw new FieldBusinessException("obgynUserId", "obgynReferral.acknowledge.obgynRequired");
         }
 
+        // r81: the obstetrician named is an active staff member of the referral's hospital;
+        // anyone else answers as an unknown user.
+        if (referral.getHospital() == null || staffRepository
+            .findByUserIdAndHospitalId(request.getObgynUserId(), referral.getHospital().getId())
+            .filter(com.example.hms.model.Staff::isActive).isEmpty()) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_WITH_ID, request.getObgynUserId());
+        }
         User assignedObgyn = userRepository.findByIdWithRolesAndProfiles(request.getObgynUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_WITH_ID, request.getObgynUserId()));
 

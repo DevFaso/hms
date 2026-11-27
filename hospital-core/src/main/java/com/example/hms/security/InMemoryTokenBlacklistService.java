@@ -35,6 +35,38 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
     /** jtis whose entry a claim wrote and no revocation has overwritten since. */
     private final java.util.Set<String> claimedOnly = ConcurrentHashMap.newKeySet();
 
+    /** session id → { locked at, lock expires at }, epoch-millis */
+    private final Map<String, long[]> lockedSessions = new ConcurrentHashMap<>();
+
+    @Override
+    public void lockSession(String sessionId, long lockedAtMs, long expirationMs) {
+        if (sessionId == null || sessionId.isBlank() || expirationMs <= System.currentTimeMillis()) {
+            return;
+        }
+        lockedSessions.put(sessionId, new long[] {lockedAtMs, expirationMs});
+    }
+
+    @Override
+    public boolean isSessionLocked(String sessionId) {
+        return sessionLockedAt(sessionId) != null;
+    }
+
+    @Override
+    public Long sessionLockedAt(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return null;
+        }
+        long[] lock = lockedSessions.get(sessionId);
+        return lock == null || lock[1] <= System.currentTimeMillis() ? null : Long.valueOf(lock[0]);
+    }
+
+    @Override
+    public void unlockSession(String sessionId) {
+        if (sessionId != null) {
+            lockedSessions.remove(sessionId);
+        }
+    }
+
     @Override
     public synchronized void blacklist(String jti, long expirationMs) {
         if (jti == null || jti.isBlank()) {
@@ -104,6 +136,7 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
         int before = blacklistedTokens.size();
         blacklistedTokens.entrySet().removeIf(e -> e.getValue() <= now);
         recentlyRotated.entrySet().removeIf(e -> e.getValue() <= now);
+        lockedSessions.entrySet().removeIf(e -> e.getValue()[1] <= now);
         claimedOnly.removeIf(jti -> !blacklistedTokens.containsKey(jti));
         int evicted = before - blacklistedTokens.size();
         if (evicted > 0) {

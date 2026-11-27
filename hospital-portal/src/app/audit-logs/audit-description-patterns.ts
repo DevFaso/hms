@@ -176,6 +176,19 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['step', 'status'],
     localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
   },
+  // r81: a session opened or closed (the row carries the address and the device).
+  {
+    key: 'AUDIT.DESC.SIGNED_IN_PASSWORD',
+    re: /^Signed in with the password$/,
+  },
+  {
+    key: 'AUDIT.DESC.SIGNED_IN_SECOND_FACTOR',
+    re: /^Signed in with the password and a second factor$/,
+  },
+  {
+    key: 'AUDIT.DESC.SIGNED_OUT',
+    re: /^Signed out$/,
+  },
   {
     key: 'AUDIT.DESC.LOGIN_FAILED_BAD_CREDENTIALS',
     re: /^Login failed: bad credentials$/,

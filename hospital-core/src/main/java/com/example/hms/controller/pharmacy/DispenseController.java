@@ -119,6 +119,8 @@ public class DispenseController {
     @ApiResponse(responseCode = "201", description = "Medication dispensed")
     @ApiResponse(responseCode = "400", description = "Invalid request or insufficient stock")
     @ApiResponse(responseCode = "404", description = "Prescription, patient, or pharmacy not found")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the prescription); the service refuses any other")
     public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> dispense(
             @Valid @RequestBody DispenseRequestDTO dto) {
         DispenseResponseDTO created = dispenseService.createDispense(dto);
@@ -148,6 +150,8 @@ public class DispenseController {
     @ApiResponse(responseCode = "400", description = "Not dispensable, CDS, verification, or a status in the body")
     @ApiResponse(responseCode = "404", description = "Prescription or pharmacy outside scope, or the feature is off")
     @ApiResponse(responseCode = "409", description = "A preparation is already open, or a concurrent change")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the prescription); the service refuses any other")
     public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> markReady(
             @Valid @RequestBody DispenseRequestDTO dto) {
         DispenseResponseDTO prepared = dispenseService.markReadyForCollection(dto);

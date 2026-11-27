@@ -47,6 +47,8 @@ POST /auth/register
 POST /auth/request-reset
 POST /auth/resend-verification
 POST /auth/reset-password
+POST /auth/session/lock
+POST /auth/session/unlock
 POST /auth/token/refresh
 POST /auth/username/reminder
 POST /auth/verify-email

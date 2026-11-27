@@ -1,5 +1,7 @@
 package com.example.hms.mapper;
 
+import com.example.hms.service.webhook.WebhookDeliveryError;
+import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.model.platform.WebhookDelivery;
 import com.example.hms.model.platform.WebhookEndpoint;
 import com.example.hms.payload.dto.platform.WebhookDeliveryResponseDTO;
@@ -40,6 +42,7 @@ public class WebhookMapper {
         if (d == null) {
             return null;
         }
+        WebhookDeliveryError error = WebhookDeliveryError.of(d.getResponseStatus(), d.getLastError());
         return WebhookDeliveryResponseDTO.builder()
             .id(d.getId())
             .endpointId(d.getEndpoint() != null ? d.getEndpoint().getId() : null)
@@ -48,7 +51,11 @@ public class WebhookMapper {
             .status(d.getStatus())
             .attempts(d.getAttempts())
             .responseStatus(d.getResponseStatus())
-            .lastError(d.getLastError())
+            // QA D4078: a cause and its sentence in the reader's language; the
+            // stored transport text stays on the server.
+            .errorCode(error == null ? null : error.name())
+            .lastError(error == null ? null
+                : error.describe(d.getResponseStatus(), LocaleContextHolder.getLocale()))
             .lastAttemptAt(d.getLastAttemptAt())
             .sentAt(d.getSentAt())
             .createdAt(d.getCreatedAt())

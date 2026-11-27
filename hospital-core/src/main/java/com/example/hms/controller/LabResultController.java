@@ -81,6 +81,8 @@ public class LabResultController {
     @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_CREATED)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the lab order); the service refuses any other")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -132,6 +134,8 @@ public class LabResultController {
     // service. This stays broad on purpose.
     @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "the patient is the one on the in-scope parent row the body also names (the lab order); the service refuses any other")
     public ResponseEntity<LabResultResponseDTO> updateLabResult(
             @PathVariable UUID id,
             @Valid @RequestBody LabResultRequestDTO requestDTO,

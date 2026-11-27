@@ -57,6 +57,8 @@ public class BreakGlassController {
     @ApiResponse(responseCode = "403", description = "Caller lacks a privileged role at the hospital")
     @ApiResponse(responseCode = "404", description = "Patient or hospital not found")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "an emergency access declaration reaches a patient the acting hospital does not hold; the service bounds it to patients the caller's search finds, and audits it")
     public ResponseEntity<BreakGlassSessionResponseDTO> declare(
             @Valid @RequestBody BreakGlassDeclareRequestDTO request) {
         BreakGlassSessionResponseDTO created = breakGlassService.declare(request);

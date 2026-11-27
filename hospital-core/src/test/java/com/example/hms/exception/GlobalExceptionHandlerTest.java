@@ -897,7 +897,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("QA D2120 review: a clinical act during a support session is refused in words, in French")
         void impersonationRefusalIsNamed() {
             assertThat(messageOf(refuse(true, true, "ROLE_DOCTOR")))
-                .isEqualTo("Action clinique impossible pendant une prise en main du compte.");
+                .isEqualTo("Action clinique impossible pendant une session de support.");
         }
 
         @Test

@@ -32,12 +32,12 @@ import java.math.BigDecimal;
 public class TenantCostModelProperties {
 
     /**
-     * ISO 4217 currency code. Defaults to USD; deployments operating in
-     * West Africa typically override to XOF (CFA franc). HMS does no
-     * FX conversion — the report carries whatever currency the operator
-     * configured.
+     * ISO 4217 currency code. QA D4305: defaults to XOF (F CFA), the currency
+     * every other amount of the product is in; it was USD, which no screen
+     * uses. HMS does no FX conversion - the report carries the configured
+     * currency.
      */
-    private String currency = "USD";
+    private String currency = "XOF";
 
     @NestedConfigurationProperty
     private final Rates rates = new Rates();
@@ -76,6 +76,6 @@ public class TenantCostModelProperties {
     }
 
     public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency == null ? "USD" : currency; }
+    public void setCurrency(String currency) { this.currency = currency == null || currency.isBlank() ? "XOF" : currency.trim().toUpperCase(java.util.Locale.ROOT); }
     public Rates getRates() { return rates; }
 }

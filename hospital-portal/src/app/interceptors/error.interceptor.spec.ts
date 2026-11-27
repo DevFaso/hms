@@ -29,6 +29,7 @@ import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST } from '../services/step-up';
 import { SESSION_RESTORE_REQUEST } from '../auth/session-lifetime';
 import { backgroundRequestOptions } from '../services/ws-transport';
+import { IdleService } from '../core/idle.service';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -462,6 +463,26 @@ describe('errorInterceptor', () => {
     expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
     expect(auth.logout).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  describe("the session's screen is locked on the server (session_locked, r81 D4262)", () => {
+    it('shows the lock screen: never the forbidden page, a toast or a sign-out', () => {
+      const idle = TestBed.inject(IdleService);
+      const lockFromServer = spyOn(idle, 'lockFromServer');
+      let error: HttpErrorResponse | undefined;
+      http.get('/patients/p1').subscribe({ error: (e: HttpErrorResponse) => (error = e) });
+      httpMock
+        .expectOne('/patients/p1')
+        .flush(
+          { status: 403, error: 'Forbidden', code: 'session_locked', message: 'Locked.' },
+          { status: 403, statusText: 'Forbidden' },
+        );
+
+      expect(error?.status).toBe(403);
+      expect(lockFromServer).toHaveBeenCalledTimes(1);
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
   });
 
   describe('the account must set its own password first (password_change_required)', () => {

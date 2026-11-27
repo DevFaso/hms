@@ -21,6 +21,20 @@ export interface ChargebackRow {
   currency: string;
 }
 
+/**
+ * QA D4305-D4307: the cost page's one answer - the period the server applied
+ * (its default one when none was asked), the rate, the rows and their totals.
+ */
+export interface ChargebackReport {
+  from: string;
+  to: string;
+  currency: string;
+  ratePerAuditEvent: number;
+  rows: ChargebackRow[];
+  totalAuditEvents: number;
+  totalAmount: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChargebackService {
   private readonly http = inject(HttpClient);
@@ -38,5 +52,13 @@ export class ChargebackService {
     return this.http.get<ChargebackRow[] | null>('/super-admin/cost/per-tenant/chargeback', {
       params,
     });
+  }
+
+  /** GET /api/super-admin/cost/report?from&to; a 204 (null) means cost tracking is off. */
+  report(from?: string, to?: string): Observable<ChargebackReport | null> {
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    return this.http.get<ChargebackReport | null>('/super-admin/cost/report', { params });
   }
 }
