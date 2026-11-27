@@ -50,9 +50,23 @@ test('lab inventory and instruments remain readable at supported widths', async 
     for (const screen of ['lab-inventory', 'lab-instruments']) {
       await page.goto('/' + screen, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('tbody tr').first()).toBeVisible();
-      if (screen === 'lab-inventory')
+      if (screen === 'lab-inventory') {
         await expect(page.locator('#lab-inventory-search')).toBeVisible();
-      else await expect(page.locator('tbody tr').first()).toContainText('15/03/2025');
+        if (width === 768) {
+          const lines = await page
+            .locator('thead th')
+            .nth(2)
+            .evaluate((header) => {
+              const range = document.createRange();
+              range.selectNodeContents(header);
+              const positions = Array.from(range.getClientRects())
+                .filter((rect) => rect.width > 1 && rect.height > 1)
+                .map((rect) => Math.round(rect.top));
+              return new Set(positions).size;
+            });
+          expect(lines).toBe(1);
+        }
+      } else await expect(page.locator('tbody tr').first()).toContainText('15/03/2025');
       await testInfo.attach(`${screen}-${width}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: 'image/png',

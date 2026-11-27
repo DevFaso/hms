@@ -117,6 +117,17 @@
   }
 }
 
+@media screen and (min-width: 600px) and (max-width: 900px) {
+  .inventory-table th,
+  .inventory-table td {
+    padding: 0.5rem 0.45rem;
+  }
+
+  .inventory-table th:nth-child(3) {
+    white-space: nowrap !important;
+  }
+}
+
 .low-stock-row {
   background: #fffbeb;
 }
