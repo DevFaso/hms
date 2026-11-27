@@ -504,6 +504,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         assertNoDuplicateEncounter(ctx, encounterDate);
+        assertNoOpenSameDayVisit(ctx, request.getEncounterType(), encounterDate);
 
         Encounter encounter = encounterMapper.mergeEncounter(
             request,
@@ -1315,6 +1316,33 @@ public class EncounterServiceImpl implements EncounterService {
         if (exists) {
             // QA D1367 class (round 31): the date already holding a visit is named.
             throw new com.example.hms.exception.FieldBusinessException("encounterDate", "encounter.duplicate");
+        }
+    }
+
+    /** QA r81 D4115: the visit statuses that are still open (the patient is still being seen). */
+    private static final java.util.Set<EncounterStatus> OPEN_VISIT_STATUSES = java.util.EnumSet.of(
+        EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
+        EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+
+    /**
+     * QA r81 D4115: a second walk-in of the same type, for the same patient, in the same department and on the
+     * same day, while the first is still open, was created with no word and the triage queue listed the patient
+     * twice. It is refused and the open visit is named; once the first visit is closed (seen, left without being
+     * seen, cancelled) a new one is accepted. A booked appointment keeps its own check above.
+     */
+    private void assertNoOpenSameDayVisit(EncounterResolution ctx, com.example.hms.enums.EncounterType type,
+                                          LocalDateTime encounterDate) {
+        if (ctx.appointment() != null || ctx.department() == null || type == null) {
+            return;
+        }
+        LocalDateTime dayStart = encounterDate.toLocalDate().atStartOfDay();
+        boolean open = encounterRepository
+            .existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
+                ctx.hospitalId(), ctx.patient().getId(), ctx.department().getId(), type, OPEN_VISIT_STATUSES,
+                dayStart, dayStart.plusDays(1).minusNanos(1));
+        if (open) {
+            throw new com.example.hms.exception.FieldBusinessException("encounterType", "encounter.duplicateOpenVisit",
+                ctx.department().getName());
         }
     }
 

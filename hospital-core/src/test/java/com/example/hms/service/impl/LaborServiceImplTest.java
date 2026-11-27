@@ -449,6 +449,26 @@ class LaborServiceImplTest {
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
     }
 
+    /** QA r81 D4113: a 12-year-old in labour carries the vigilance mark on her card; an adult does not. */
+    @Test
+    void startEpisodeMarksAMinorForSafeguarding() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        service.setMinorLabourSafeguarding(new com.example.hms.service.safeguarding.MinorLabourSafeguarding(
+            org.mockito.Mockito.mock(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class)));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        patient.setDateOfBirth(LocalDate.now().minusYears(12).minusMonths(3));
+        assertThat(service.startEpisode(patientId, recorderUserId, request).getMinorSafeguardingUnderYears())
+            .isEqualTo(13);
+        patient.setDateOfBirth(LocalDate.now().minusYears(25));
+        assertThat(service.startEpisode(patientId, recorderUserId, request).getMinorSafeguardingUnderYears())
+            .isNull();
+    }
+
     /** QA D629: the screen names nobody, so the recorder is the admitting clinician. */
     @Test
     void startEpisodeWithNoAdmittingStaffNamesTheRecorder() {
@@ -610,13 +630,13 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        verify(notificationService).created(contains("Alerte obstétricale (progression du travail)"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
         // QA D605: the on-call team is told too, not only the documenter.
         verify(obstetricAlertEscalation, org.mockito.Mockito.atLeastOnce()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
             hospitalId.equals(a.hospitalId()) && patientId.equals(a.patientId())
                 && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH.equals(a.sourceType())
                 && recorderUserId.equals(a.documentedByUserId())
-                && a.notificationText().contains("Alerte de travail")));
+                && a.notificationText().contains("Alerte obstétricale (progression du travail)")));
     }
 
     @Test

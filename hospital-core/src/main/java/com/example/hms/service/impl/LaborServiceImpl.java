@@ -282,7 +282,7 @@ public class LaborServiceImpl implements LaborService {
 
         LaborEpisode saved = episodeRepository.save(episode);
         screenMinorLabour(saved, recorderUserId);
-        return laborMapper.toEpisodeResponse(saved, 0, false);
+        return withSafeguardingMark(laborMapper.toEpisodeResponse(saved, 0, false), saved);
     }
 
     /**
@@ -491,7 +491,7 @@ public class LaborServiceImpl implements LaborService {
         raiseTransferNotice(continued, destination.getId(), callerUserId, "TRANSFER_IN",
             messageSource.getMessage("labor.alert.type.TRANSFER_IN", null, NotificationLocales.STAFF),
             "labor.transfer.notice.in", hospitalName(source.getHospital()));
-        return laborMapper.toEpisodeResponse(continued, 0, false);
+        return withSafeguardingMark(laborMapper.toEpisodeResponse(continued, 0, false), continued);
     }
 
     /**
@@ -543,7 +543,7 @@ public class LaborServiceImpl implements LaborService {
         raiseTransferNotice(source, sourceHospitalId, callerUserId, "LEFT_WITHOUT_HANDOVER",
             messageSource.getMessage("labor.alert.type.LEFT_WITHOUT_HANDOVER", null, NotificationLocales.STAFF),
             "labor.transfer.notice.leftWithoutHandover", hospitalName(acting));
-        return laborMapper.toEpisodeResponse(continued, 0, false);
+        return withSafeguardingMark(laborMapper.toEpisodeResponse(continued, 0, false), continued);
     }
 
     /**
@@ -599,6 +599,15 @@ public class LaborServiceImpl implements LaborService {
         minorLabourSafeguarding.onLabourAdmission(episode.getPatient(), episode.getHospital().getId(),
             episode.getAdmittedAt(), com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_LABOR_EPISODE,
             episode.getId(), actorUserId);
+    }
+
+    /** QA r81 D4113: a minor in labour carries the vigilance mark on her labour card. */
+    private LaborEpisodeResponseDTO withSafeguardingMark(LaborEpisodeResponseDTO dto, LaborEpisode episode) {
+        if (dto != null && minorLabourSafeguarding != null && episode != null) {
+            dto.setMinorSafeguardingUnderYears(
+                minorLabourSafeguarding.coveredThresholdYears(episode.getPatient(), episode.getAdmittedAt()));
+        }
+        return dto;
     }
 
     /** The receiving hospital's episode: the source's admission facts, active, linked to it. */
@@ -848,10 +857,10 @@ public class LaborServiceImpl implements LaborService {
         // Rex on #1134: the handed-over rows never take the list past its limit.
         return episodes.stream().limit(effectiveLimit).toList()
             .stream()
-            .map(episode -> laborMapper.toEpisodeResponse(
+            .map(episode -> withSafeguardingMark(laborMapper.toEpisodeResponse(
                 episode,
                 entryRepository.countByEpisode_Id(episode.getId()),
-                deliveryRecordRepository.existsByEpisode_Id(episode.getId())))
+                deliveryRecordRepository.existsByEpisode_Id(episode.getId())), episode))
             .toList();
     }
 

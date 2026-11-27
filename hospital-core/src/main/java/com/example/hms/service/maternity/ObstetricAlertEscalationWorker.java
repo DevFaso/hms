@@ -99,6 +99,17 @@ public class ObstetricAlertEscalationWorker {
      */
     static final String DOCUMENTER_REMINDER_KEY = "obstetric.alert.escalation.documenter";
     /**
+     * QA r81 D4106: the steps before « non résolue » say who the alert was passed to, not « rappel 1 / 2 »:
+     * {0} the minutes since the first notice, {1} the alert type, {2} the patient, {3} the alert sentence.
+     * {@link #REMINDER_KEY} and {@link #DOCUMENTER_REMINDER_KEY} stay in the bundles for notices already stored.
+     */
+    static final String COVER_KEY = "obstetric.alert.escalation.cover";
+    static final String LEAD_KEY = "obstetric.alert.escalation.lead";
+    static final String DOCUMENTER_COVER_KEY = "obstetric.alert.escalation.documenter.cover";
+    static final String DOCUMENTER_LEAD_KEY = "obstetric.alert.escalation.documenter.lead";
+    /** QA r81 D4106: the documenter reads « non résolue » at the same step as the clinicians, not « rappel 3 ». */
+    static final String DOCUMENTER_UNRESOLVED_KEY = "obstetric.alert.escalation.documenter.unresolved";
+    /**
      * Scorecard K4: the notice of the last step of the ladder and of every reminder after it: {0} the alert type,
      * {1} the patient, {2} the alert sentence, {3} the minutes since the first notice.
      */
@@ -448,19 +459,19 @@ public class ObstetricAlertEscalationWorker {
         String storedMessage = row.getAlertMessage() == null ? "" : row.getAlertMessage();
         boolean unresolved = UrgentEscalationSupport.unresolved(step);
         long minutes = UrgentEscalationSupport.minutesSince(row.getFirstNoticeFiledAt(), now);
-        Object[] reminderArgs = {String.valueOf(next), typeArg, patientArg, messageArg};
+        Object[] stepArgs = {minutes, typeArg, patientArg, messageArg};
         // The last step and every reminder after it say « non résolue » and for how long; the steps before say
-        // which reminder this is. Staff-locale text only titles the in-basket item; notices are keyed (QA D665).
-        String noticeKey = unresolved ? UNRESOLVED_KEY : REMINDER_KEY;
-        Object[] noticeArgs = unresolved ? new Object[]{typeArg, patientArg, messageArg, minutes} : reminderArgs;
+        // who the alert was passed to (QA r81 D4106). Staff-locale text only titles the in-basket item; notices
+        // are keyed (QA D665).
+        String noticeKey = unresolved ? UNRESOLVED_KEY : stepKey(step);
+        Object[] noticeArgs = unresolved ? new Object[]{typeArg, patientArg, messageArg, minutes} : stepArgs;
         String message = unresolved
             ? messageSource.getMessage(UNRESOLVED_KEY, new Object[]{storedType, patientName, storedMessage, minutes}, locale)
-            : messageSource.getMessage(REMINDER_KEY, new Object[]{reminderArgs[0], storedType, patientName, storedMessage},
-                locale);
+            : messageSource.getMessage(noticeKey, new Object[]{minutes, storedType, patientName, storedMessage}, locale);
         String documenter = usernameOf(row.getDocumentedByUserId());
         if (documenter != null) {
             // The documenter learns it is still unanswered; she cannot answer it herself.
-            notifyQuietly(DOCUMENTER_REMINDER_KEY, reminderArgs, documenter, noticeType(row.getSourceType(), true),
+            notifyQuietly(documenterKey(step), stepArgs, documenter, noticeType(row.getSourceType(), true),
                 row.getId());
         }
         Set<String> circle = stepCircle(row, step, documenter);
@@ -488,6 +499,19 @@ public class ObstetricAlertEscalationWorker {
                 row.getId(), row.getHospitalId(), step);
         }
         return true;
+    }
+
+    /** QA r81 D4106: the notice of a step before « non résolue » names who the alert was passed to. */
+    static String stepKey(CriticalResultEscalationLadder.Step step) {
+        return step == CriticalResultEscalationLadder.Step.COVER ? COVER_KEY : LEAD_KEY;
+    }
+
+    /** QA r81 D4106: the documenter's notice of a step, « non résolue » from the same step as the clinicians'. */
+    static String documenterKey(CriticalResultEscalationLadder.Step step) {
+        if (UrgentEscalationSupport.unresolved(step)) {
+            return DOCUMENTER_UNRESOLVED_KEY;
+        }
+        return step == CriticalResultEscalationLadder.Step.COVER ? DOCUMENTER_COVER_KEY : DOCUMENTER_LEAD_KEY;
     }
 
     /** The step of the ladder due now; without the ladder (a unit test of the circles), the default minutes. */

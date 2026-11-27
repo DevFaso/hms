@@ -99,6 +99,11 @@ public interface EncounterRepository
     boolean existsByAssignment_Id(UUID assignmentId);
 
     // Duplicate guards
+    /** QA r81 D4115: an open visit of this type, for this patient, in this department, within the day. */
+    boolean existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
+        UUID hospitalId, UUID patientId, UUID departmentId, com.example.hms.enums.EncounterType encounterType,
+        java.util.Collection<com.example.hms.enums.EncounterStatus> statuses, LocalDateTime from, LocalDateTime to
+    );
     boolean existsByHospital_IdAndPatient_IdAndEncounterDate(
         UUID hospitalId, UUID patientId, LocalDateTime encounterDate
     );

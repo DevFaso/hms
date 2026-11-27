@@ -3204,6 +3204,25 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        void r81_d4115_aSecondOpenWalkInTheSameDayInTheSameDepartmentIsRefused() {
+            // QA r81 D4115: the triage queue listed the patient twice.
+            when(encounterRepository
+                .existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
+                    eq(hospitalId), any(), eq(departmentId), eq(com.example.hms.enums.EncounterType.EMERGENCY), any(),
+                    any(), any()))
+                .thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            request.setStatus(EncounterStatus.ARRIVED);
+
+            assertThatThrownBy(() -> service.createEncounter(request, locale))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    e -> assertThat(e.getMessageKey()).isEqualTo("encounter.duplicateOpenVisit"));
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
         void d761_aClinicianEncounterWithNoStatusKeepsItsInProgressDefault() {
             // Path re-verified: the encounters page posts no status.
             Encounter fresh = encounter();

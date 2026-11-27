@@ -23,6 +23,11 @@ public class LaborEpisodeResponseDTO {
     private UUID registrationId;
     private UUID maternalHistoryId;
     private String admittedByStaffName;
+    /**
+     * QA r81 D4113: the safeguarding age (years) when she was under it at admission, a review being open for her
+     * (provisional rule MINOR_LABOUR_SAFEGUARDING); null otherwise.
+     */
+    private Integer minorSafeguardingUnderYears;
 
     private LocalDateTime laborOnsetAt;
     private LocalDateTime admittedAt;
