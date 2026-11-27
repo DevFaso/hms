@@ -36,6 +36,9 @@ class PermittedHospitalReadersGuardTest {
             + " the hospital at all; a hospital where they are only a patient is then ignored outside the portal"),
         entry("security/tenant/ActingScopeResolver.java", "the producer, narrowTo (with the same patient-only rule) and"
             + " workingHospitalIds, the filtered set every scope reads"),
+        entry("security/tenant/RequestBodyScopeAdvice.java", "whether a body's hospital is one the caller holds,"
+            + " with the same patient-only rule; the hospitals an unnamed body is measured over are"
+            + " workingHospitalIds"),
         entry("security/TenantLifecycleGate.java", "refuses a request when any held hospital is suspended: a block,"
             + " never a scope"),
         entry("fhir/FhirTenantBoundary.java", "whether the pinned hospital is one the caller holds; the pin itself"
