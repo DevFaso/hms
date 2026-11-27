@@ -204,8 +204,11 @@ class LabOrderEndToEndIT extends BaseIT {
                 .andExpect(status().isOk());
             mockMvc.perform(get(path, otherHospital.getId()).contextPath(API).with(signedInAs(scientist)))
                 .andExpect(status().isForbidden());
+            String body = area.equals("inventory")
+                ? "{\"name\":\"Test\",\"itemCode\":\"X\",\"quantity\":1,\"reorderThreshold\":0}"
+                : "{\"name\":\"Test\",\"serialNumber\":\"X\"}";
             mockMvc.perform(post(path, hospital.getId()).contextPath(API).with(signedInAs(scientist)).with(csrf())
-                    .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
         }
         mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
