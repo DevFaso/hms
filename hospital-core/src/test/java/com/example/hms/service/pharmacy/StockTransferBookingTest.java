@@ -137,6 +137,17 @@ class StockTransferBookingTest {
     }
 
     @Test
+    void aFailedAuditNeverUndoesTheTransfer() {
+        // Review of #1380 (F4): the audit of a copied price is written beside the movement, never instead of it.
+        theSyrupMovesToAStoreThatNeverHeldIt();
+        doThrow(new IllegalStateException("audit down")).when(auditEventLogService).logEvent(any());
+
+        booking.bookCounterpart(new StockTransferBooking.Route(destination, null), outgoing);
+
+        verify(transactions).save(any(StockTransaction.class));
+    }
+
+    @Test
     void aPriceOfZeroSetOnPurposeIsNeverOverwritten() {
         // Review of #1380 (F1): the store manager set the item at B from 500 to 0, with a reason in the history.
         sourceItem.setUnitPrice(new BigDecimal("500"));
