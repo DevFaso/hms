@@ -128,12 +128,12 @@ export class LabInstrumentService {
     size = 20,
     search = '',
   ): Observable<PagedResponse<LabInventoryItemResponse>> {
-    let params = new HttpParams().set('page', page).set('size', size);
-    if (search.trim()) params = params.set('search', search.trim());
-    return this.http.get<PagedResponse<LabInventoryItemResponse>>(
-      `/lab/inventory/hospital/${hospitalId}`,
-      { params },
-    );
+    const params = new HttpParams().set('page', page).set('size', size);
+    const url = `/lab/inventory/hospital/${hospitalId}`;
+    const query = search.trim();
+    return query
+      ? this.http.post<PagedResponse<LabInventoryItemResponse>>(`${url}/search`, { query }, { params })
+      : this.http.get<PagedResponse<LabInventoryItemResponse>>(url, { params });
   }
 
   getInventoryItem(id: string): Observable<LabInventoryItemResponse> {

@@ -168,7 +168,7 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
-    void inventorySearchScopesActiveItemsAndPaginatesByNameOrCode() {
+    void inventorySearchScopesActiveItemsAndPaginatesByNameOrCode() throws Exception {
         var items = List.of(
             LabInventoryItem.builder().hospital(hospital).name("Reagent Alpha").itemCode("MATCH-A").build(),
             LabInventoryItem.builder().hospital(hospital).name("Reagent Beta").itemCode("MATCH-B").build(),
@@ -182,6 +182,14 @@ class LabOrderEndToEndIT extends BaseIT {
             var second = labInventoryItemRepository.searchActive(hospital.getId(), "match-b", org.springframework.data.domain.PageRequest.of(0, 10));
             assertThat(second.getContent()).extracting(LabInventoryItem::getItemCode).containsExactly("MATCH-B");
             assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "foreign", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
+                    .contextPath(API).with(signedInAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+                .andExpect(status().isOk());
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", otherHospital.getId())
+                    .contextPath(API).with(signedInAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+                .andExpect(status().isForbidden());
         } finally {
             labInventoryItemRepository.deleteAll(items);
             labInventoryItemRepository.flush();
