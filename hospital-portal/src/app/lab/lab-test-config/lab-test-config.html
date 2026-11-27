@@ -133,6 +133,11 @@
               </td>
               <td>
                 {{ def.testName }}
+                @if (def.culture) {
+                  <span class="cell-secondary" data-testid="def-culture">{{
+                    'LAB_TEST_CONFIG.CULTURE' | translate
+                  }}</span>
+                }
                 @if (def.sensitivityCategory; as category) {
                   <!-- QA D2730: a sensitive test says so in the catalogue. -->
                   <span class="cell-secondary sensitive-test" data-testid="def-sensitive">
