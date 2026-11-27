@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ImmunizationMapper;
 import com.example.hms.model.Encounter;
@@ -126,7 +127,11 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         } else {
             UUID requesterUserId = ctx.getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-            immunizations = immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, readable);
+            // A vaccination given during a visit follows that visit's restriction.
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+            immunizations = immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, readable)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
                 "Cross-hospital immunization read on the treatment relationship");
@@ -199,8 +204,11 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         } else {
             UUID requesterUserId = ctx.getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
             immunizations = immunizationRepository
-                .findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(patientId, readable, vaccineCode);
+                .findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(patientId, readable, vaccineCode)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
                 "Cross-hospital immunization read on the treatment relationship");

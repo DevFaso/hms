@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.enums.DischargeDisposition;
 import com.example.hms.enums.MedicationReconciliationAction;
 import com.example.hms.exception.BusinessException;
@@ -357,10 +358,14 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries;
         if (activeHospitalId != null) {
             // E9 #59e — discharge summaries follow the patient across the
-            // readable hospitals (untagged, V158); every foreign row is accounted.
+            // readable hospitals. Untagged (V158): a summary follows the
+            // restriction of the visit it closes. Every foreign row is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
-            summaries = dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientId, readable);
+            RestrictedVisitScope restricted =
+                RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, activeHospitalId));
+            summaries = dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientId, readable)
+                .stream().filter(restricted::admits).toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(summaries.stream().map(s -> CrossHospitalReachRecorder.hospitalIdOf(s.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital discharge summary read on the treatment relationship");

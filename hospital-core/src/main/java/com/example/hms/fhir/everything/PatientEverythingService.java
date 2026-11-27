@@ -1,5 +1,6 @@
 package com.example.hms.fhir.everything;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
@@ -295,7 +296,12 @@ public class PatientEverythingService {
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // encounters and conditions the D3 rule withholds; the ledger names it.
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
-        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, readable, unlocked, params);
+        // What a visit produced follows the visit: an observation, a medication
+        // request or a discharge summary recorded in a withheld visit is
+        // withheld with it, and unlocked with it.
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
+        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, readable, unlocked, restricted, params);
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.SEARCHSET);
 
@@ -337,7 +343,8 @@ public class PatientEverythingService {
         if (ctx.isFirstPage()) {
             List<com.example.hms.model.discharge.DischargeSummary> summaries = dischargeSummaryRepository
                 .findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(
-                    ctx.patientId(), ctx.readable());
+                    ctx.patientId(), ctx.readable())
+                .stream().filter(ctx.restricted()::admits).toList();
             ctx.account(summaries.stream().map(s -> CrossHospitalReachRecorder.hospitalIdOf(s.getHospital())).toList());
             summaries.stream()
                 .filter(sSummary -> ctx.passesSinceFilter(sSummary.getUpdatedAt()))
@@ -410,8 +417,10 @@ public class PatientEverythingService {
             .findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
                 ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(vitals);
-        ctx.account(vitals.getContent().stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
-        vitals.forEach(v -> {
+        List<com.example.hms.model.PatientVitalSign> shownVitals =
+            vitals.getContent().stream().filter(ctx.restricted()::admits).toList();
+        ctx.account(shownVitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
+        shownVitals.forEach(v -> {
             if (ctx.passesSinceFilter(v.getUpdatedAt())) {
                 observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o));
             }
@@ -420,11 +429,13 @@ public class PatientEverythingService {
             .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
                 ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(labResults);
-        ctx.account(labResults.getContent().stream()
+        List<com.example.hms.model.LabResult> shownResults =
+            labResults.getContent().stream().filter(ctx.restricted()::admits).toList();
+        ctx.account(shownResults.stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());
         // QA D740/D741: released, current results only.
-        ClinicalLabResultView.releasedAndCurrent(labResults.getContent()).forEach(r -> {
+        ClinicalLabResultView.releasedAndCurrent(shownResults).forEach(r -> {
             if (ctx.passesSinceFilter(r.getUpdatedAt())) {
                 addEntry(bundle, observationMapper.toFhir(r));
             }
@@ -456,9 +467,15 @@ public class PatientEverythingService {
         // chosen in the query so a page is never thinned after it was fetched. The query is the single
         // source: an issued order is a sent one (NeverSentRule.sent), so no hospital's never-sent row
         // reaches this section and no post-filter is needed (QA D652).
-        Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
+        // A prescription written in a withheld visit follows the visit, in the query too.
+        Page<com.example.hms.model.Prescription> prescriptions = ctx.restricted().isEmpty()
+            ? prescriptionRepository
             .findIssuedByPatientIdAndHospitalIdIn(ctx.patientId(), ctx.readable(),
-                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest());
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest())
+            : prescriptionRepository
+            .findIssuedByPatientIdAndHospitalIdInOutsideVisits(ctx.patientId(), ctx.readable(),
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS,
+                ctx.restricted().visitIdsForQuery(), ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
         List<com.example.hms.model.Prescription> shown = prescriptions.getContent();
         ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
@@ -587,24 +604,26 @@ public class PatientEverythingService {
         private final UUID hospitalId;
         private final Set<UUID> readable;
         private final boolean unlocked;
+        private final RestrictedVisitScope restricted;
         private final PatientEverythingParams params;
         private final PageRequest pageRequest;
         private final Map<String, Long> reach = new HashMap<>();
         private boolean hasMore;
 
         private SectionContext(UUID patientId, UUID hospitalId, Set<UUID> readable, boolean unlocked,
-                               PatientEverythingParams params) {
+                               RestrictedVisitScope restricted, PatientEverythingParams params) {
             this.patientId = patientId;
             this.hospitalId = hospitalId;
             this.readable = readable;
             this.unlocked = unlocked;
+            this.restricted = restricted;
             this.params = params;
             this.pageRequest = PageRequest.of(params.cursor(), params.count());
         }
 
         static SectionContext forRequest(UUID patientId, UUID hospitalId, Set<UUID> readable, boolean unlocked,
-                                         PatientEverythingParams params) {
-            return new SectionContext(patientId, hospitalId, readable, unlocked, params);
+                                         RestrictedVisitScope restricted, PatientEverythingParams params) {
+            return new SectionContext(patientId, hospitalId, readable, unlocked, restricted, params);
         }
 
         UUID patientId() { return patientId; }
@@ -613,6 +632,8 @@ public class PatientEverythingService {
         Set<UUID> readable() { return readable; }
         /** E9 #62 — the actor holds a live break-the-glass session for this patient here. */
         boolean unlocked() { return unlocked; }
+        /** The visits withheld from this read; what they produced is withheld with them. */
+        RestrictedVisitScope restricted() { return restricted; }
         /** E9 #60b — one entry per foreign hospital surfaced on this page, across every section. */
         Map<String, Long> reach() { return reach; }
         void account(List<UUID> sourceHospitalIds) {
