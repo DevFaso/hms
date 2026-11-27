@@ -397,7 +397,7 @@ public class GlobalExceptionHandler {
             } else {
                 String path = joinPath(item.prefix(), RequestFieldPaths.toJson(item.beanType(), property));
                 fieldErrors.putIfAbsent(path,
-                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path));
+                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path, violation));
             }
         }
         return malformedBodyResponse(fieldErrors, globalReasons, request);
@@ -659,10 +659,10 @@ public class GlobalExceptionHandler {
         if (error.isBindingFailure()) {
             return invalidFieldReason(path);
         }
-        String template = error.contains(jakarta.validation.ConstraintViolation.class)
-            ? error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate()
-            : null;
-        return constraintReason(error.getDefaultMessage(), template, path);
+        jakarta.validation.ConstraintViolation<?> violation = error.contains(jakarta.validation.ConstraintViolation.class)
+            ? error.unwrap(jakarta.validation.ConstraintViolation.class) : null;
+        String template = violation == null ? null : violation.getMessageTemplate();
+        return constraintReason(error.getDefaultMessage(), template, path, violation);
     }
 
     /**
@@ -670,12 +670,20 @@ public class GlobalExceptionHandler {
      * default template is prefixed with the field's label, one written for the
      * field passes unchanged.
      */
-    private String constraintReason(String message, String template, String path) {
+    private String constraintReason(String message, String template, String path,
+            jakarta.validation.ConstraintViolation<?> violation) {
         String label = fieldLabel(path);
         if (message == null || message.isBlank()) {
             return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
         }
         if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
+            if (template.matches("\\{jakarta\\.validation\\.constraints\\.(NotNull|NotBlank|NotEmpty)\\.message}")) {
+                return localized("error.validation.requiredField", "Please enter {0}", label);
+            }
+            if (violation != null && template.equals("{jakarta.validation.constraints.Min.message}")) {
+                Object minimum = violation.getConstraintDescriptor().getAttributes().get("value");
+                if (minimum != null) return localized("error.validation.minimumField", "{0} must be at least {1}", label, minimum);
+            }
             return localized("error.validation.namedField", "{0}: {1}", label, message);
         }
         return message;
@@ -766,8 +774,8 @@ public class GlobalExceptionHandler {
         Map<String, String> violations = new LinkedHashMap<>();
         for (jakarta.validation.ConstraintViolation<?> v : ex.getConstraintViolations()) {
             // QA D1338 (round 29): keyed on the request's JSON name ("testName", not "name").
-            violations.putIfAbsent(RequestFieldPaths.toJson(v.getRootBeanClass(), v.getPropertyPath().toString()),
-                v.getMessage());
+            String path = RequestFieldPaths.toJson(v.getRootBeanClass(), v.getPropertyPath().toString());
+            violations.putIfAbsent(path, constraintReason(v.getMessage(), v.getMessageTemplate(), path, v));
         }
         String reasons = joinReasons(violations.values().stream());
 
