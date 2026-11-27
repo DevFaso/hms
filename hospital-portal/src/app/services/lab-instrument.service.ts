@@ -132,7 +132,11 @@ export class LabInstrumentService {
     const url = `/lab/inventory/hospital/${hospitalId}`;
     const query = search.trim();
     return query
-      ? this.http.post<PagedResponse<LabInventoryItemResponse>>(`${url}/search`, { query }, { params })
+      ? this.http.post<PagedResponse<LabInventoryItemResponse>>(
+          `${url}/search`,
+          { query },
+          { params },
+        )
       : this.http.get<PagedResponse<LabInventoryItemResponse>>(url, { params });
   }
 
