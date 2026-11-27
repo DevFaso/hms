@@ -181,6 +181,17 @@ class CdsAcknowledgementServiceImplTest {
     }
 
     @Test
+    void overridden_refusesReasonsWithFewerThanTenNonWhitespaceCharacters() {
+        for (String reason : java.util.List.of("ok", "123456789", "  12345 6789  ")) {
+            var request = buildRequest(CdsAcknowledgementAction.OVERRIDDEN, reason);
+            assertThatThrownBy(() -> service.acknowledge(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("clinical.override.reasonMin");
+        }
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("OVERRIDDEN gets a 72-hour TTL")
     void overridden_uses72hTtl() {
         stubInScopeUser();
