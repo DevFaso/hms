@@ -74,8 +74,8 @@ class SecurityConfigInvoiceMailRecipientsMatcherTest {
         assertThat(config.indexOf(RECIPIENTS_READ)).as("before the broader GET /billing-invoices/**")
             .isPositive().isLessThan(config.indexOf(INVOICE_BLANKET));
         String readers = gateAfter(config, RECIPIENTS_READ);
-        assertThat(readers).isEqualTo(gateAfter(config, MAIL_SEND));
-        assertThat(readers).doesNotContain("ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_ACCOUNTANT");
+        assertThat(readers).isEqualTo(gateAfter(config, MAIL_SEND))
+            .doesNotContain("ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_ACCOUNTANT");
 
         String controller = Files.readString(INVOICES, StandardCharsets.UTF_8);
         int get = controller.indexOf("@GetMapping(\"/{id}/email-recipients\")");

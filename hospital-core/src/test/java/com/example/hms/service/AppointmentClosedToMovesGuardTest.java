@@ -24,7 +24,7 @@ class AppointmentClosedToMovesGuardTest {
                 closedByTheMachine.add(status);
             }
         }
-        assertThat(AppointmentServiceImpl.CLOSED_TO_MOVES).containsExactlyInAnyOrderElementsOf(closedByTheMachine);
+        assertThat(closedByTheMachine).containsExactlyInAnyOrderElementsOf(AppointmentServiceImpl.CLOSED_TO_MOVES);
     }
 
     @Test

@@ -87,6 +87,12 @@ public class BedDaysChargeSource implements VisitChargeSource {
     private static boolean underADay(Admission admission, Visit visit) {
         java.time.LocalDateTime out = admission.getActualDischargeDateTime() != null
             ? admission.getActualDischargeDateTime() : visit.checkedOutAt();
-        return out != null && java.time.Duration.between(admission.getAdmissionDateTime(), out).toHours() < 24;
+        if (out == null || admission.getAdmissionDateTime() == null) {
+            return false;
+        }
+        // Stored times are on the server's clock: measured as instants, a clock change inside the stay counts.
+        java.time.ZoneId server = java.time.ZoneId.systemDefault();
+        return java.time.Duration.between(admission.getAdmissionDateTime().atZone(server).toInstant(),
+            out.atZone(server).toInstant()).toHours() < 24;
     }
 }

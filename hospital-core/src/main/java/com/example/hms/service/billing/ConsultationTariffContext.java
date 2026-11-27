@@ -93,7 +93,7 @@ public final class ConsultationTariffContext {
             return false;
         }
         LocalTime time = at.toLocalTime();
-        return at.getDayOfWeek() == DayOfWeek.SUNDAY || !time.isBefore(NIGHT_FROM) || time.isBefore(NIGHT_UNTIL);
+        return DayOfWeek.SUNDAY.equals(at.getDayOfWeek()) || !time.isBefore(NIGHT_FROM) || time.isBefore(NIGHT_UNTIL);
     }
 
     /** Postnatal before antenatal and both before gynaecology: the CPON and the CPN of a maternity are their own. */
