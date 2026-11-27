@@ -51,7 +51,7 @@
 | # | Task | Status | Owner | Blocks |
 |---|------|--------|-------|--------|
 | P-1 | Provision Keycloak **dev** instance via `docker-compose.yml` (new `keycloak` + `keycloak-db` services, PostgreSQL storage). | ✅ KC-1 | Backend/DevOps | 2.x |
-| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | 🚧 infra-as-code shipped (see [`keycloak/prod/`](../keycloak/prod/) — Dockerfile, railway.toml, runbook); Railway dashboard provisioning awaits DevOps | DevOps | 2.x |
+| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | 🚧 infra-as-code shipped (see [`keycloak/prod/`](../keycloak/prod/) — Dockerfile, runbook; service settings now in `.railway/railway.ts`); Railway dashboard provisioning awaits DevOps | DevOps | 2.x |
 | P-3 | Author `keycloak/realm-export.json` (realm `hms`, 4 clients, 24 roles, TOTP policy, token lifetimes per design doc). Commit to repo so the realm is infra-as-code. | ✅ KC-1 | Backend | 2.x |
 | P-4 | Decide redirect/post-logout URI matrix per environment (dev/uat/prod) for all 3 client apps. Record in `keycloak/redirect-uris.md`. | ✅ KC-1 | Backend + mobile leads | 2.2, 2.3, 2.4 |
 | P-5 | Decide claim names: `preferred_username`, `email`, custom `hospital_id`, custom `role_assignments` (array of `{hospitalId,role}`). Write the protocol mapper JSON into the realm export. | ✅ KC-1 (mappers shipped in `hms-claims` client scope) | Backend | 2.1, 4.1 |
