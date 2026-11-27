@@ -89,9 +89,14 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
   });
 
   describe('a reload of a tab signed in by SSO (its tokens were in memory only)', () => {
-    const claims = { sub: 'kc-user-1', preferred_username: 'dev.doctor', realm_access: { roles: ['DOCTOR'] } };
+    const claims = {
+      sub: 'kc-user-1',
+      preferred_username: 'dev.doctor',
+      realm_access: { roles: ['DOCTOR'] },
+    };
     const kcToken = (sub: string) => {
-      const b64 = (v: string) => btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+      const b64 = (v: string) =>
+        btoa(v).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
       return `${b64('{"alg":"none"}')}.${b64(JSON.stringify({ sub, exp: 9999999999 }))}.sig`;
     };
 

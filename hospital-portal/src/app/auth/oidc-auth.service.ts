@@ -121,7 +121,10 @@ export class OidcAuthService {
     const sso = ssoTabState();
     if (this.oauth.hasValidAccessToken()) {
       // Back from a reload's round trip: only the account this tab signed in as is restored.
-      if (sso === 'restoring' && !(await this.auth.isTokenForThisTab(this.oauth.getAccessToken()))) {
+      if (
+        sso === 'restoring' &&
+        !(await this.auth.isTokenForThisTab(this.oauth.getAccessToken()))
+      ) {
         this.auth.endLocalSession();
         this.ready.set(true);
         return;
