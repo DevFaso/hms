@@ -1582,8 +1582,26 @@ export class BillingComponent implements OnInit {
     if (!inv) return;
     const to = emailAddresses(this.emailTo());
     const cc = emailAddresses(this.emailCc());
+    // QA D4223 (round 81): the blank fields of one press are named together:
+    // no recipient, and no reason for an address that is on no file.
+    const reason = this.emailReason().trim();
+    const blank: { id: string; message: string }[] = [];
     if (to.length === 0) {
-      this.refuseEmail([EMAIL_TO_ID], this.translate.instant('BILLING.EMAIL_TO_REQUIRED'));
+      blank.push({ id: EMAIL_TO_ID, message: this.translate.instant('BILLING.EMAIL_TO_REQUIRED') });
+    }
+    if (this.emailOffFile().length > 0 && !reason) {
+      blank.push({
+        id: EMAIL_REASON_ID,
+        message: this.translate.instant('BILLING.EMAIL_REASON_REQUIRED', {
+          addresses: this.emailOffFile().join(', '),
+        }),
+      });
+    }
+    if (blank.length > 0) {
+      this.refuseEmail(
+        blank.map((b) => b.id),
+        joinReasons(blank.map((b) => b.message)) ?? '',
+      );
       return;
     }
     // QA D1179: a malformed address is refused on its field, in the reader's
@@ -1615,17 +1633,6 @@ export class BillingComponent implements OnInit {
       this.refuseEmail(
         [EMAIL_TO_ID],
         this.translate.instant('BILLING.EMAIL_TOO_MANY', { max: options.maxRecipients }),
-      );
-      return;
-    }
-    // QA D4223: an address on no file needs the reason the server asks for.
-    const reason = this.emailReason().trim();
-    if (this.emailOffFile().length > 0 && !reason) {
-      this.refuseEmail(
-        [EMAIL_REASON_ID],
-        this.translate.instant('BILLING.EMAIL_REASON_REQUIRED', {
-          addresses: this.emailOffFile().join(', '),
-        }),
       );
       return;
     }

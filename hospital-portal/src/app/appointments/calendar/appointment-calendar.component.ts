@@ -56,7 +56,7 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'CANCELLED' | 'NO_SHOW';
 const STATUS_FILTERS: readonly StatusFilter[] = ['ALL', 'ACTIVE', 'CANCELLED', 'NO_SHOW'];
 
 /** Where the status filter is remembered, per browser. */
-const STATUS_FILTER_STORAGE_KEY = 'appointmentCalendar.statusFilter';
+const STATUS_FILTER_STORAGE_KEY = 'hms.appointmentCalendar.statusFilter';
 
 /**
  * QA D4224 (round 81): the statuses drawn apart from an appointment that
@@ -133,6 +133,7 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
           }}</label>
           <select
             id="provider-filter"
+            class="filter-select"
             [ngModel]="selectedStaffId"
             (ngModelChange)="onProviderChange($event)"
             data-testid="appointment-calendar-provider"
@@ -152,6 +153,7 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
           <label for="status-filter">{{ 'APPOINTMENT_CALENDAR.FILTER_STATUS' | translate }}</label>
           <select
             id="status-filter"
+            class="filter-select"
             [ngModel]="statusFilter()"
             (ngModelChange)="onStatusFilterChange($event)"
             data-testid="appointment-calendar-status"

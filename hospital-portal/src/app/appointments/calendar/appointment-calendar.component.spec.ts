@@ -56,7 +56,7 @@ describe('AppointmentCalendarComponent', () => {
     title: 'Nora Away',
     status: 'NO_SHOW',
   };
-  const STATUS_FILTER_KEY = 'appointmentCalendar.statusFilter';
+  const STATUS_FILTER_KEY = 'hms.appointmentCalendar.statusFilter';
 
   beforeEach(() => localStorage.removeItem(STATUS_FILTER_KEY));
   afterEach(() => localStorage.removeItem(STATUS_FILTER_KEY));
