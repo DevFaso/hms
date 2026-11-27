@@ -79,9 +79,20 @@ export class MyBillingComponent implements OnInit {
   openDetailId = signal<string | null>(null);
   detail = signal<PortalInvoiceDetail | null>(null);
 
-  /** Billing-money plan PR 7: the shares my insurer refused (now mine to pay), with the insurer's reason. */
+  /**
+   * Billing-money plan PR 7, insurer claims PR 3 (QA D3983): the shares my insurer refused, wholly or in part (now
+   * mine to pay), with the insurer's reason.
+   */
   rejectedShares(detail: PortalInvoiceDetail): PortalPayerShare[] {
-    return (detail.invoice.payerShares ?? []).filter((share) => share.status === 'REJECTED');
+    return (detail.invoice.payerShares ?? []).filter((share) => this.refusedAmount(share) > 0);
+  }
+
+  /** What my insurer refused of a share: all of a rejected one, else the part billed back to me. */
+  refusedAmount(share: PortalPayerShare): number {
+    if (share.status === 'CANCELLED') return 0;
+    const part = Number(share.rejectedAmount ?? 0);
+    if (part > 0) return part;
+    return share.status === 'REJECTED' ? share.amount : 0;
   }
   detailLoading = signal(false);
   detailError = signal(false);

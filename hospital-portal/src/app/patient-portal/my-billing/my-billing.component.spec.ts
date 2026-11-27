@@ -413,6 +413,15 @@ describe('MyBillingComponent', () => {
                 rejectionReason: 'Bénéficiaire non à jour de cotisation',
               },
               { id: 's2', payerName: 'RAMU', amount: 4000, status: 'OPEN' },
+              // Insurer claims PR 3 (QA D3983): 9 000 paid, 2 800 refused and billed back to me.
+              {
+                id: 's3',
+                payerName: 'RAMU',
+                amount: 11800,
+                status: 'PAID',
+                rejectedAmount: 2800,
+                rejectionReason: 'Plafond annuel atteint',
+              },
             ],
           },
         }),
@@ -425,6 +434,13 @@ describe('MyBillingComponent', () => {
       fixture.detectChanges();
       expect(host().querySelector('[data-testid="rejected-share-s1"]')).not.toBeNull();
       expect(host().querySelector('[data-testid="rejected-share-s2"]')).toBeNull();
+      expect(host().querySelector('[data-testid="rejected-share-s3"]')).not.toBeNull();
+      const component = fixture.componentInstance;
+      expect(
+        component.refusedAmount({ id: 's3', amount: 11800, status: 'PAID', rejectedAmount: 2800 }),
+      ).toBe(2800);
+      expect(component.refusedAmount({ id: 's1', amount: 5600, status: 'REJECTED' })).toBe(5600);
+      expect(component.refusedAmount({ id: 's2', amount: 4000, status: 'OPEN' })).toBe(0);
     });
 
     it('PR 7: no insurer line on a card no insurer covers', () => {
