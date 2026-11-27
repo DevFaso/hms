@@ -1582,14 +1582,19 @@ export class BillingComponent implements OnInit {
     if (!inv) return;
     const to = emailAddresses(this.emailTo());
     const cc = emailAddresses(this.emailCc());
+    const badTo = invalidEmailAddresses(to);
+    const badCc = invalidEmailAddresses(cc);
+    const malformed = badTo.length > 0 || badCc.length > 0;
     // QA D4223 (round 81): the blank fields of one press are named together:
-    // no recipient, and no reason for an address that is on no file.
+    // no recipient, and no reason for an address that is on no file. The
+    // reason is asked once the addresses are well formed: a mistyped address
+    // is corrected first (below), not explained.
     const reason = this.emailReason().trim();
     const blank: { id: string; message: string }[] = [];
     if (to.length === 0) {
       blank.push({ id: EMAIL_TO_ID, message: this.translate.instant('BILLING.EMAIL_TO_REQUIRED') });
     }
-    if (this.emailOffFile().length > 0 && !reason) {
+    if (!malformed && this.emailOffFile().length > 0 && !reason) {
       blank.push({
         id: EMAIL_REASON_ID,
         message: this.translate.instant('BILLING.EMAIL_REASON_REQUIRED', {
@@ -1606,9 +1611,7 @@ export class BillingComponent implements OnInit {
     }
     // QA D1179: a malformed address is refused on its field, in the reader's
     // language, before anything is sent (the server answered in raw Jakarta text).
-    const badTo = invalidEmailAddresses(to);
-    const badCc = invalidEmailAddresses(cc);
-    if (badTo.length > 0 || badCc.length > 0) {
+    if (malformed) {
       this.refuseEmail(
         [...(badTo.length > 0 ? [EMAIL_TO_ID] : []), ...(badCc.length > 0 ? [EMAIL_CC_ID] : [])],
         this.translate.instant('BILLING.EMAIL_ADDRESS_INVALID', {

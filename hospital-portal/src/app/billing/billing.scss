@@ -3,16 +3,14 @@
 .summary-cards {
   display: grid;
   /* QA D2231: 160px left « 13 550 F CFA » (one unbreakable amount) about 60px
-     of text room on six cards; 200px moves a card to the next row first. */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+     of text room on six cards; 200px moved a card to the next row first.
+     QA D3986 / D4235 (round 81): 200px still left about 108px, less than a
+     six-figure amount needs now that it is never cut: 280px leaves room for
+     « 99 999 999 F CFA » beside the icon, and seats six tiles three and three
+     on a wide screen (they sat five and one). */
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
-
-  /* QA D3986 / D4235 (round 81): on a wide screen six tiles sat five and one,
-     and the five were too narrow for « 639 401 F CFA ». Three and three. */
-  @media (min-width: 1100px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 .summary-card {
@@ -560,9 +558,8 @@
 }
 
 @media (max-width: 768px) {
-  .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  /* QA D3986 / D4235: the tiles keep their 280px floor here too (two columns
+     of a narrow tablet cut the amount); they fall to one column by themselves. */
   .detail-grid {
     grid-template-columns: 1fr;
   }
