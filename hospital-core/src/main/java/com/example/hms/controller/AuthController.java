@@ -280,12 +280,7 @@ public class AuthController {
         if (remainMs > 0) {
             long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
             log.warn("🔐 [LOGIN] Sign-in refused: account is locked.");
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.ACCOUNT_LOCKED)
-                    .eventDescription("Login rejected — account locked")
-                    .userName(loginRequest.getUsername())
-                    .status(AuditStatus.FAILURE)
-                    .build());
+            auditRefusedSignIn(AuditEventType.ACCOUNT_LOCKED, loginRequest.getUsername(), LOCKED_SIGN_IN_AUDIT);
             return ResponseEntity.status(423)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.locked", remainMin)));
         }
@@ -430,6 +425,7 @@ public class AuthController {
             // A super admin signing in again leaves any impersonation of the
             // previous session behind: end it (audited) so the new session works.
             endTrackedImpersonation(user.getId(), "the super admin signed in again");
+            auditEventLogService.logEvent(com.example.hms.security.audit.SignInAuditRows.signedIn(user, false));
 
             // Pull details from related profiles
             var patient = user.getPatientProfile();
@@ -561,19 +557,31 @@ public class AuthController {
     /** The sign-in refusal's code for a temporary password past its lifetime. */
     public static final String TEMPORARY_PASSWORD_EXPIRED_CODE = "temporary_password_expired";
     private static final String NO_ACTIVE_ROLE_AUDIT = "Login refused: no active role";
+    private static final String LOCKED_SIGN_IN_AUDIT = "Login rejected — account locked";
 
     private void auditLoginFailure(String typedName, String description) {
+        auditRefusedSignIn(AuditEventType.LOGIN_FAILURE, typedName, description);
+    }
+
+    /**
+     * A refused sign-in or a refusal for a locked account, with the address it
+     * came from and the device. The audit service files it at a staff
+     * account's hospital, so its administrator reads it too.
+     */
+    private void auditRefusedSignIn(AuditEventType type, String typedName, String description) {
         UUID accountId = null;
         if (typedName != null && !typedName.isBlank()) {
             List<UUID> ids = userRepository.findIdsByUsernameIgnoreCase(typedName);
-            accountId = ids.size() == 1 ? ids.get(0) : null;
+            accountId = ids != null && ids.size() == 1 ? ids.get(0) : null;
         }
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(AuditEventType.LOGIN_FAILURE)
+                .eventType(type)
                 .eventDescription(description)
                 .userId(accountId)
                 .resourceId(accountId == null ? null : accountId.toString())
                 .entityType("USER")
+                .ipAddress(com.example.hms.security.ClientAddress.current())
+                .details(com.example.hms.security.ClientDevice.currentDetails())
                 .status(AuditStatus.FAILURE)
                 .build());
     }
@@ -738,7 +746,8 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response) {
         String bodyRefresh = body != null ? body.get("refreshToken") : null;
-        revokePresentedSession(request, response, bodyRefresh, "logout");
+        String signedOut = revokePresentedSession(request, response, bodyRefresh, "logout");
+        auditSignOut(signedOut);
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.api.loggedOut")));
     }
@@ -751,9 +760,10 @@ public class AuthController {
      * lockout (D2001), so both close a session the same way.
      *
      * @param occasion what ended it, for the audit row ("logout", "lock-screen lockout")
+     * @return the username whose session ended (the bearer's, else the refresh token's), or {@code null}
      */
-    private void revokePresentedSession(HttpServletRequest request, HttpServletResponse response,
-                                        String bodyRefresh, String occasion) {
+    private String revokePresentedSession(HttpServletRequest request, HttpServletResponse response,
+                                          String bodyRefresh, String occasion) {
         // Blacklist the current access token so it cannot be reused
         String bearerToken = request.getHeader("Authorization");
         String username = null;
@@ -765,7 +775,7 @@ public class AuthController {
                 username = jwtTokenProvider.getUsernameFromJWT(jwt);
                 // QA D2184: the whole sign-in session, not only this token: an
                 // access token a refresh superseded is still alive otherwise.
-                revokeSession(jwtTokenProvider.getSessionId(jwt), username, request.getRemoteAddr(), occasion);
+                revokeSession(jwtTokenProvider.getSessionId(jwt), username, com.example.hms.security.ClientAddress.of(request), occasion);
                 if (jti != null) {
                     tokenBlacklistService.blacklist(jti, expMs);
                     log.info("[LOGOUT] Blacklisted access token jti={} ({})", jti, occasion);
@@ -773,7 +783,7 @@ public class AuthController {
                     auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                             .eventType(AuditEventType.TOKEN_REVOKED)
                             .eventDescription("Access token revoked on " + occasion + " (jti=" + jti + ")")
-                            .ipAddress(request.getRemoteAddr())
+                            .ipAddress(com.example.hms.security.ClientAddress.of(request))
                             .status(AuditStatus.SUCCESS)
                             .userName(username)
                             .build());
@@ -790,12 +800,30 @@ public class AuthController {
         // keeps the refresh cookie from login while it rotates the refresh
         // token it actually uses in the body, so the cookie can be stale.
         String cookieRefresh = refreshTokenCookieService.read(request);
-        revokeRefreshTokenOnLogout(cookieRefresh, username, request.getRemoteAddr(), occasion);
+        String ip = com.example.hms.security.ClientAddress.of(request);
+        String cookieSubject = revokeRefreshTokenOnLogout(cookieRefresh, username, ip, occasion);
+        String bodySubject = null;
         if (bodyRefresh != null && !bodyRefresh.equals(cookieRefresh)) {
-            revokeRefreshTokenOnLogout(bodyRefresh, username, request.getRemoteAddr(), occasion);
+            bodySubject = revokeRefreshTokenOnLogout(bodyRefresh, username, ip, occasion);
         }
         // S-01: clear the HttpOnly refresh-token cookie
         refreshTokenCookieService.clear(response);
+        if (username != null) {
+            return username;
+        }
+        return cookieSubject != null ? cookieSubject : bodySubject;
+    }
+
+    /** The sign-out, in the audit trail, with the address and the device. Nothing when no session was presented. */
+    private void auditSignOut(String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        var account = userRepository.findByUsername(username).orElse(null);
+        if (account == null) {
+            return;
+        }
+        auditEventLogService.logEvent(com.example.hms.security.audit.SignInAuditRows.signedOut(account));
     }
 
     /**
@@ -809,25 +837,25 @@ public class AuthController {
      * alone, so logout cannot sign another person out. An expired or
      * unparseable refresh token needs no revocation and is ignored.
      */
-    private void revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip, String occasion) {
+    private String revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip, String occasion) {
         if (refreshToken == null || refreshToken.isBlank()) {
-            return;
+            return null;
         }
         try {
             if (!jwtTokenProvider.validateToken(refreshToken)) {
-                return;
+                return null;
             }
             String subject = jwtTokenProvider.getUsernameFromJWT(refreshToken);
             if (bearerUsername != null && !bearerUsername.equals(subject)) {
                 log.warn("[LOGOUT] Refresh token not revoked: it belongs to a different user than the bearer");
-                return;
+                return null;
             }
             // QA D2184: an idle client arrives with an expired bearer (no
             // session read from it); the refresh token names the session too.
             revokeSession(jwtTokenProvider.getSessionId(refreshToken), subject, ip, occasion);
             String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
             if (jti == null) {
-                return;
+                return subject;
             }
             tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(refreshToken).getTime());
             log.info("[LOGOUT] Blacklisted refresh token jti={} ({})", jti, occasion);
@@ -838,8 +866,10 @@ public class AuthController {
                     .status(AuditStatus.SUCCESS)
                     .userName(subject)
                     .build());
+            return subject;
         } catch (Exception ex) {
             log.debug("[LOGOUT] Could not revoke the refresh token: {}", ex.getMessage());
+            return null;
         }
     }
 
@@ -937,12 +967,12 @@ public class AuthController {
         } catch (RuntimeException expiredSinceChecked) {
             subject = null; // the session still ends; the audit row just names no user
         }
-        revokeSession(sessionId, subject, request.getRemoteAddr(), "refresh token reuse");
+        revokeSession(sessionId, subject, com.example.hms.security.ClientAddress.of(request), "refresh token reuse");
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.TOKEN_REFRESH)
                 .eventDescription("Refresh refused — a used refresh token was presented again (jti=" + refreshJti
                         + "); its session was ended")
-                .ipAddress(request.getRemoteAddr())
+                .ipAddress(com.example.hms.security.ClientAddress.of(request))
                 .userName(subject)
                 .status(AuditStatus.FAILURE)
                 .build());
@@ -1237,7 +1267,7 @@ public class AuthController {
                 // Left spent, not released: this token can never yield a pair again.
                 // Its session ends too, so a later use of the token reads as an
                 // ended session, not as a reused one.
-                revokeSession(jwtTokenProvider.getSessionId(refreshToken), username, request.getRemoteAddr(),
+                revokeSession(jwtTokenProvider.getSessionId(refreshToken), username, com.example.hms.security.ClientAddress.of(request),
                         "second-factor lapse");
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
@@ -1288,6 +1318,16 @@ public class AuthController {
             // S-01: rotate the HttpOnly refresh-token cookie
             writeRefreshCookie(response, newRefreshToken);
 
+            // A locked screen stays locked through a refresh, for as long as
+            // the rotated token lives; the answer says so, and the portal
+            // shows its lock screen whatever the browser remembers.
+            boolean screenLocked = tokenBlacklistService.isSessionLocked(sessionId);
+            if (screenLocked) {
+                long lockedAt = java.util.Optional.ofNullable(tokenBlacklistService.sessionLockedAt(sessionId))
+                        .orElse(nowMs);
+                tokenBlacklistService.lockSession(sessionId, lockedAt, refreshExp);
+            }
+
             return ResponseEntity.ok(JwtResponse.builder()
                     .accessToken(newAccessToken)
                     .refreshToken(newRefreshToken)
@@ -1295,6 +1335,7 @@ public class AuthController {
                     .accessTokenExpiresAt(accessExp)
                     .refreshTokenExpiresAt(refreshExp)
                     .sessionEndsAt(liveSession.get().endsAt().toEpochMilli())
+                    .sessionLocked(screenLocked ? Boolean.TRUE : null)
                     .id(user.getId())
                     .username(user.getUsername())
                     .roles(roles)
@@ -1334,6 +1375,8 @@ public class AuthController {
                                                  HttpServletRequest httpRequest,
                                                  HttpServletResponse httpResponse) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        // Read now: the check below resets the security context.
+        String lockKey = sessionLockKey(httpRequest);
 
         // Security: only allow verifying the password for the currently authenticated user
         if (!currentUsername.equalsIgnoreCase(request.getUsername())) {
@@ -1360,6 +1403,8 @@ public class AuthController {
 
         if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
             log.debug("🔒 [VERIFY-PWD] Password verified");
+            // The holder authenticated again: the session's screen lock is lifted.
+            tokenBlacklistService.unlockSession(lockKey);
             return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.api.passwordVerified")));
         }
         if (check != LoginAttemptService.PasswordCheck.LOCKED) {
@@ -1379,11 +1424,91 @@ public class AuthController {
                 .userId(user.getId())
                 .resourceId(user.getId().toString())
                 .userName(user.getUsername())
-                .ipAddress(httpRequest.getRemoteAddr())
+                .ipAddress(com.example.hms.security.ClientAddress.of(httpRequest))
                 .status(AuditStatus.FAILURE)
                 .build());
         revokePresentedSession(httpRequest, httpResponse, null, "lock-screen lockout");
         return lockedAnswer(user.getId());
+    }
+
+    /**
+     * The key the screen lock of the presented session is kept under: the
+     * sign-in session of a native token, the provider's session of an
+     * identity-provider one. {@code null} when the request names no session.
+     */
+    private String sessionLockKey(HttpServletRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication
+                instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider) {
+            return com.example.hms.security.SessionLockGate.providerSessionKey(
+                    provider.getToken().getClaimAsString("sid"));
+        }
+        String bearer = request.getHeader("Authorization");
+        if (bearer == null || !bearer.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+        try {
+            return jwtTokenProvider.getSessionId(bearer.substring(BEARER_PREFIX.length()));
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /**
+     * The portal's idle lock, recorded for the session: from now on the
+     * session may only unlock, read who it is, refresh and sign out
+     * ({@link com.example.hms.security.SessionLockGate}), until its holder
+     * authenticates again. Locking a locked session changes nothing.
+     */
+    @WriteAudited(skip = true, reason = "locks the caller's own screen; changes no record")
+    @PostMapping("/session/lock")
+    @Operation(summary = "Lock the session's screen",
+               description = "Marks the caller's sign-in session as locked. Until the password is verified "
+                           + "(POST /auth/verify-password) or the identity provider signs the holder in again "
+                           + "(POST /auth/session/unlock), every other request of the session is refused.")
+    @ApiResponse(responseCode = "204", description = "Locked")
+    public ResponseEntity<Void> lockSession(HttpServletRequest request) {
+        String lockKey = sessionLockKey(request);
+        if (lockKey != null && !tokenBlacklistService.isSessionLocked(lockKey)) {
+            long now = System.currentTimeMillis();
+            tokenBlacklistService.lockSession(lockKey, now, now + jwtTokenProvider.getRefreshTokenExpirationMs());
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Unlocks a session signed in through the identity provider: accepted
+     * only with a token whose sign-in at the provider is later than the lock.
+     * A password session unlocks with {@code POST /auth/verify-password}.
+     */
+    @WriteAudited(skip = true, reason = "unlocks the caller's own screen; changes no record")
+    @PostMapping("/session/unlock")
+    @Operation(summary = "Unlock the session's screen after a new sign-in at the identity provider")
+    @ApiResponse(responseCode = "204", description = "Unlocked (or was not locked)")
+    @ApiResponse(responseCode = "403", description = "The holder has not authenticated again since the lock")
+    public ResponseEntity<Object> unlockSession(HttpServletRequest request) {
+        String lockKey = sessionLockKey(request);
+        if (!tokenBlacklistService.isSessionLocked(lockKey)) {
+            return ResponseEntity.noContent().build();
+        }
+        // An unreadable lock time counts as "now": only a later sign-in lifts it.
+        long lockedAt = java.util.Optional.ofNullable(tokenBlacklistService.sessionLockedAt(lockKey))
+                .filter(at -> at > 0).orElseGet(System::currentTimeMillis);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        java.time.Instant signedInAt = authentication
+                instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider
+                ? provider.getToken().getClaimAsInstant("auth_time")
+                : null;
+        // Whole seconds at the provider: a sign-in in the second of the lock counts.
+        if (signedInAt == null || signedInAt.toEpochMilli() + 999 < lockedAt) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "status", 403,
+                    "error", "Forbidden",
+                    "code", com.example.hms.security.SessionLockGate.CODE,
+                    "message", MessageUtil.resolve(com.example.hms.security.SessionLockGate.MESSAGE_KEY)));
+        }
+        tokenBlacklistService.unlockSession(lockKey);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -1426,6 +1551,7 @@ public class AuthController {
                     .userId(userId)
                     .resourceId(resourceId)
                     .entityType("USER")
+                    .ipAddress(com.example.hms.security.ClientAddress.current())
                     .status(AuditStatus.FAILURE)
                     .build());
         }
@@ -1438,6 +1564,7 @@ public class AuthController {
                     .userId(userId)
                     .resourceId(resourceId)
                     .entityType("USER")
+                    .ipAddress(com.example.hms.security.ClientAddress.current())
                     .status(AuditStatus.FAILURE)
                     .build());
         }
@@ -1495,10 +1622,8 @@ public class AuthController {
             return lockedAnswer(user.getId());
         }
 
-        if (request.newPassword() == null || request.newPassword().length() < 8) {
-            // QA round 29 sweep: named, so the form marks the field.
-            throw new com.example.hms.exception.FieldBusinessException("newPassword", "auth.password.tooShort");
-        }
+        // Length, common passwords and the account's own name (PasswordPolicy), named so the form marks the field.
+        com.example.hms.security.PasswordPolicy.require("newPassword", request.newPassword(), user);
         if (request.newPassword().equals(request.currentPassword())) {
             // QA round 29 sweep: named, so the form marks the field.
             throw new com.example.hms.exception.FieldBusinessException("newPassword", "auth.password.sameAsCurrent");
@@ -1584,13 +1709,23 @@ public class AuthController {
      * The message key for what is wrong with the new password of a forced
      * setup, or {@code null}. A reused password is audited (ids only).
      */
-    private String setupPasswordProblem(UUID userId, CompleteSetupRequest request) {
+    private String setupPasswordProblem(com.example.hms.model.User user, String newUsername,
+                                        CompleteSetupRequest request) {
+        UUID userId = user.getId();
         String newPassword = request.newPassword();
         if (newPassword == null || newPassword.isBlank()) {
             return "account.setup.password.required";
         }
-        if (newPassword.length() < 8) {
+        if (newPassword.length() < com.example.hms.security.PasswordPolicy.MIN_LENGTH) {
             return "account.setup.password.length";
+        }
+        // Against the username the holder is taking in the same call.
+        String policyProblem = com.example.hms.security.PasswordPolicy.problemKey(newPassword,
+                com.example.hms.security.PasswordPolicy.Identity.of(user).withUsername(newUsername));
+        if (policyProblem != null) {
+            return com.example.hms.security.PasswordPolicy.TOO_COMMON_KEY.equals(policyProblem)
+                    ? "auth.password.tooCommon"
+                    : "auth.password.containsIdentity";
         }
         if (newPassword.equals(request.currentPassword())) {
             return "account.setup.password.same";
@@ -1663,7 +1798,7 @@ public class AuthController {
         String newUsername = mustRename ? Objects.toString(request.newUsername(), "").trim() : null;
         String problem = mustRename ? usernameProblem(newUsername) : null;
         if (problem == null && mustChangePassword) {
-            problem = setupPasswordProblem(user.getId(), request);
+            problem = setupPasswordProblem(user, newUsername, request);
         }
         if (problem != null) {
             return badSetup(problem);
@@ -1810,13 +1945,7 @@ public class AuthController {
     }
 
     private static String clientIp(HttpServletRequest request) {
-        String h = request.getHeader("X-Forwarded-For");
-        if (h != null && !h.isBlank()) {
-            int comma = h.indexOf(',');
-            return comma > 0 ? h.substring(0, comma).trim() : h.trim();
-        }
-        h = request.getHeader("X-Real-IP");
-        return (h != null && !h.isBlank()) ? h.trim() : request.getRemoteAddr();
+        return com.example.hms.security.ClientAddress.of(request);
     }
 
     @GetMapping("/credentials/me")

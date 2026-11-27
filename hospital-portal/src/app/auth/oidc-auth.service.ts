@@ -146,6 +146,18 @@ export class OidcAuthService {
     this.ready.set(true);
   }
 
+  /**
+   * The lock screen of a tab signed in here: the holder signs in again at the
+   * provider (`prompt=login`, so its own session does not answer for them).
+   * The tab comes back as after a reload, and the server lifts the lock only
+   * for a sign-in later than the lock.
+   */
+  reauthenticate(): void {
+    if (!this.isEnabled()) return;
+    markSsoTab('restoring');
+    this.oauth.initCodeFlow('', { prompt: 'login' });
+  }
+
   /** Kick off Authorization Code + PKCE — browser navigates to Keycloak. */
   login(): void {
     if (!this.isEnabled()) return;

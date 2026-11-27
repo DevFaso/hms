@@ -53,6 +53,7 @@ class PatientPortalServiceImplProxyTest {
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PatientProxyRepository patientProxyRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AppointmentService appointmentService;
     /** Policy 2026-11-20: the grant check hands the verified grant to the read filter. */
     @org.mockito.Spy
@@ -81,11 +82,23 @@ class PatientPortalServiceImplProxyTest {
         proxyUser.setUsername("caregiver.sam");
         proxyUser.setFirstName("Sam");
         proxyUser.setLastName("Kabore");
+        proxyUser.setActive(true);
+        holdsRole(proxyUser, "ROLE_PATIENT");
 
         grantor = new Patient();
         grantor.setId(grantorPatientId);
         grantor.setFirstName("Awa");
         grantor.setLastName("Diallo");
+    }
+
+    private static void holdsRole(User account, String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRole link = new com.example.hms.model.UserRole();
+        link.setUser(account);
+        link.setRole(role);
+        account.getUserRoles().clear();
+        account.getUserRoles().add(link);
     }
 
     private PatientProxy buildGrant(String permissions, LocalDateTime expiresAt) {
@@ -326,9 +339,10 @@ class PatientPortalServiceImplProxyTest {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
 
-        @Test
-        @DisplayName("an unknown username names the username, not a user id, in French")
-        void unknownUsernameIsNamed() {
+        private static final String NEUTRAL = "Cet identifiant ne correspond à aucun compte patient ou aidant "
+            + "pouvant recevoir cet accès. Vérifiez-le auprès de la personne.";
+
+        private void grantorSignedInFrench() {
             com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
             org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
             User grantorUser = new User();
@@ -336,19 +350,97 @@ class PatientPortalServiceImplProxyTest {
             grantor.setUser(grantorUser);
             when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
             when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
-            when(userRepository.findByUsername("inconnu.xyz")).thenReturn(Optional.empty());
+        }
 
-            ProxyGrantRequestDTO dto = ProxyGrantRequestDTO.builder()
-                    .proxyUsername(" inconnu.xyz ")
+        private ProxyGrantRequestDTO grantTo(String username) {
+            return ProxyGrantRequestDTO.builder()
+                    .proxyUsername(username)
                     .relationship(ProxyRelationship.CAREGIVER)
                     .permissions("VIEW_APPOINTMENTS")
                     .build();
+        }
+
+        @Test
+        @DisplayName("D4266: an identifier nobody holds is refused on its field, with the neutral sentence")
+        void unknownIdentifierIsRefusedNeutrally() {
+            grantorSignedInFrench();
+            when(userRepository.findByUsername("inconnu.xyz")).thenReturn(Optional.empty());
+            ProxyGrantRequestDTO dto = grantTo(" inconnu.xyz ");
 
             assertThatThrownBy(() -> service.grantProxy(auth, dto))
-                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
-                    .hasMessage("Aucun compte ne porte l'identifiant inconnu.xyz. Vérifiez l'orthographe "
-                        + "auprès de la personne à qui vous voulez donner accès.");
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        refused -> assertThat(refused.getField()).isEqualTo("proxyUsername"))
+                    .hasMessage(NEUTRAL);
             verify(patientProxyRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D4266: an account that cannot use family access gets the same answer as nobody, and no grant")
+        void anAccountThatCannotUseItIsRefusedTheSameWay() {
+            grantorSignedInFrench();
+            User doctor = new User();
+            doctor.setId(UUID.randomUUID());
+            doctor.setUsername("dr.kone");
+            doctor.setFirstName("Mariam");
+            doctor.setLastName("Koné");
+            doctor.setActive(true);
+            holdsRole(doctor, "ROLE_DOCTOR");
+            User switchedOff = new User();
+            switchedOff.setId(UUID.randomUUID());
+            switchedOff.setUsername("parti.x");
+            switchedOff.setActive(false);
+            holdsRole(switchedOff, "ROLE_PATIENT");
+            when(userRepository.findByUsername("dr.kone")).thenReturn(Optional.of(doctor));
+            when(userRepository.findByUsername("parti.x")).thenReturn(Optional.of(switchedOff));
+
+            for (String username : List.of("dr.kone", "parti.x")) {
+                ProxyGrantRequestDTO dto = grantTo(username);
+                assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                        .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                        .hasMessage(NEUTRAL)
+                        .hasMessageNotContaining("Mariam")
+                        .hasMessageNotContaining("Koné");
+            }
+            verify(patientProxyRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D4266: after five refusals the form stops answering for the hour, also for a valid identifier")
+        void refusalsAreCounted() {
+            grantorSignedInFrench();
+            when(userRepository.findByUsername(org.mockito.ArgumentMatchers.startsWith("essai"))).thenReturn(Optional.empty());
+            for (int attempt = 1; attempt <= 5; attempt++) {
+                ProxyGrantRequestDTO dto = grantTo("essai" + attempt);
+                assertThatThrownBy(() -> service.grantProxy(auth, dto)).hasMessage(NEUTRAL);
+            }
+
+            ProxyGrantRequestDTO valid = grantTo("caregiver.sam");
+            assertThatThrownBy(() -> service.grantProxy(auth, valid))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("portal.proxy.tooManyAttempts");
+            verify(userRepository, never()).findByUsername("caregiver.sam");
+            verify(patientProxyRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D4266: the grantor reads back the identifier they typed, not the holder's name or account id")
+        void theGrantorDoesNotReadTheHoldersName() {
+            grantorSignedInFrench();
+            when(userRepository.findByUsername("caregiver.sam")).thenReturn(Optional.of(proxyUser));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                    grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.empty());
+            when(patientProxyRepository.save(any(PatientProxy.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(patientProxyRepository.findByGrantorPatient_IdAndStatus(grantorPatientId, ProxyStatus.ACTIVE))
+                    .thenReturn(List.of(buildGrant("ALL", null)));
+
+            ProxyResponseDTO granted = service.grantProxy(auth, grantTo("caregiver.sam"));
+            ProxyResponseDTO listed = service.getMyProxies(auth).get(0);
+
+            for (ProxyResponseDTO seen : List.of(granted, listed)) {
+                assertThat(seen.getProxyUsername()).isEqualTo("caregiver.sam");
+                assertThat(seen.getProxyDisplayName()).isEqualTo("caregiver.sam");
+                assertThat(seen.getProxyUserId()).isNull();
+            }
         }
     }
 

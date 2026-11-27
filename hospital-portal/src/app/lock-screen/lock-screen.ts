@@ -1,4 +1,12 @@
-import { Component, inject, signal, output, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  Injector,
+  OnInit,
+  inject,
+  signal,
+  output,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -10,6 +18,8 @@ import { IdleService } from '../core/idle.service';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 import { isAccountChanged } from '../auth/session-lifetime';
+import { OidcAuthService } from '../auth/oidc-auth.service';
+import { ssoTabState } from '../core/browser-storage';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
@@ -27,11 +37,36 @@ import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',
 })
-export class LockScreenComponent {
+export class LockScreenComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly idle = inject(IdleService);
   private readonly translate = inject(TranslateService);
+  private readonly injector = inject(Injector);
+
+  /**
+   * This tab signed in through the identity provider: it has no password
+   * here, so it unlocks by signing in again at the provider.
+   */
+  readonly sso = ssoTabState() !== null;
+
+  ngOnInit(): void {
+    // The lock is the server's to hold: tell it again if the first call was lost.
+    this.idle.ensureServerLock();
+    // Back from the provider: the server unlocks only a sign-in later than the lock.
+    if (this.sso) {
+      this.http.post('/auth/session/unlock', {}).subscribe({
+        next: () => this.idle.unlock(),
+        error: () => undefined,
+      });
+    }
+  }
+
+  /** Sends the holder to the identity provider to sign in again. */
+  reauthenticate(): void {
+    this.loading.set(true);
+    this.injector.get(OidcAuthService).reauthenticate();
+  }
 
   /** Emitted when the user signs out from the lock screen */
   readonly signedOut = output<void>();
@@ -101,7 +136,7 @@ export class LockScreenComponent {
         if (isAccountChanged(err)) {
           this.loading.set(false);
           this.password = '';
-          this.idle.unlock(); // clear lock state
+          this.idle.release();
           this.accountChanged.emit();
           return;
         }
@@ -140,6 +175,7 @@ export class LockScreenComponent {
         password: this.password,
       })
       .subscribe({
+        // 200: the server checked the password and lifted the session's lock.
         next: () => {
           this.loading.set(false);
           this.password = '';
@@ -151,7 +187,7 @@ export class LockScreenComponent {
           if (err?.status === 423) {
             this.loading.set(false);
             this.password = '';
-            this.idle.unlock(); // clear lock state
+            this.idle.release();
             this.lockedOut.emit();
             return;
           }
@@ -182,7 +218,7 @@ export class LockScreenComponent {
   }
 
   signOut(): void {
-    this.idle.unlock(); // clear lock state
+    this.idle.release();
     this.signedOut.emit();
   }
 
@@ -192,7 +228,7 @@ export class LockScreenComponent {
    * starts completely fresh — no trace of the previous user.
    */
   switchUser(): void {
-    this.idle.unlock(); // clear lock state
+    this.idle.release();
     this.switchedUser.emit();
   }
 

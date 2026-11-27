@@ -54,9 +54,7 @@ public class FrontendAuditController {
     }
 
     private String resolveIpAddress(String forwardedIps, HttpServletRequest request) {
-        if (forwardedIps != null && !forwardedIps.isBlank()) {
-            return forwardedIps.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        String forwarded = com.example.hms.security.ClientAddress.first(forwardedIps);
+        return forwarded != null ? forwarded : com.example.hms.security.ClientAddress.of(request);
     }
 }

@@ -271,7 +271,7 @@ class AccountLifecycleSecurityIT extends BaseIT {
 
         mvc.perform(edit).andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("CSRF_TOKEN_INVALID"));
-        assertThat(users.findById(user.getId()).orElseThrow().getFirstName()).isEqualTo("Lifecycle");
+        assertThat(users.findById(user.getId()).orElseThrow().getFirstName()).isEqualTo("Aminata");
         mvc.perform(edit.with(csrf())).andExpect(status().isOk());
         assertThat(users.findById(user.getId()).orElseThrow().getFirstName()).isEqualTo("Updated");
     }
@@ -279,7 +279,7 @@ class AccountLifecycleSecurityIT extends BaseIT {
     private User account(boolean phoneOnly) {
         String suffix = UUID.randomUUID().toString().substring(0, 12);
         User user = users.saveAndFlush(User.builder().username("x3-" + suffix)
-            .passwordHash(encoder.encode(PASSWORD)).firstName("Lifecycle").lastName("Test")
+            .passwordHash(encoder.encode(PASSWORD)).firstName("Aminata").lastName("Sanou")
             .email(phoneOnly ? null : "x3-" + suffix + "@example.test")
             .phoneNumber(String.format("+22670%06d", SEQUENCE.incrementAndGet()))
             .passwordChangedAt(LocalDateTime.now().minusMinutes(10)).isActive(true).build());

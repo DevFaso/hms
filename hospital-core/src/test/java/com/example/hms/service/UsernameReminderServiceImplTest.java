@@ -162,5 +162,55 @@ class UsernameReminderServiceImplTest {
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
             verify(smsService, never()).send(anyString(), anyString());
         }
+    
+        @Test
+        @DisplayName("D4271: an account that was never activated gets no reminder (its contact is not confirmed)")
+        void anInactiveAccountGetsNothing() {
+            user.setActive(false);
+            when(userRepository.findActiveByEmailOrPhone("john@example.com")).thenReturn(Optional.of(user));
+
+            service.sendReminder("john@example.com", locale, requestIp);
+
+            verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
+            verify(smsService, never()).send(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("D4271: one delivered reminder per account in the cooldown, whoever asks and however often")
+        void oneReminderPerCooldown() {
+            when(userRepository.findActiveByEmailOrPhone("john@example.com")).thenReturn(Optional.of(user));
+
+            service.sendReminder("john@example.com", locale, requestIp);
+            service.sendReminder("john@example.com", locale, "203.0.113.9");
+            service.sendReminder("john@example.com", locale, requestIp);
+
+            verify(emailService, org.mockito.Mockito.times(1))
+                .sendUsernameReminderEmail("john@example.com", "johndoe", locale);
+        }
+
+        @Test
+        @DisplayName("D4271: a phone number typed the local way finds the account that stores it internationally")
+        void aLocalPhoneNumberFindsTheAccount() {
+            user.setPhoneNumber("+22670202020");
+            when(userRepository.findActiveByEmailOrPhone("70 20 20 20")).thenReturn(Optional.empty());
+            when(userRepository.findActiveByEmailOrPhone("+22670202020")).thenReturn(Optional.of(user));
+            when(smsService.deliversRealSms()).thenReturn(false);
+
+            service.sendReminder("70 20 20 20", locale, requestIp);
+
+            verify(emailService).sendUsernameReminderEmail("john@example.com", "johndoe", locale);
+        }
+
+        @Test
+        @DisplayName("D4271: two accounts under one identifier: nothing is sent and nothing is thrown")
+        void anAmbiguousIdentifierIsSilent() {
+            when(userRepository.findActiveByEmailOrPhone("john@example.com"))
+                .thenThrow(new org.springframework.dao.IncorrectResultSizeDataAccessException(1, 2));
+
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> service.sendReminder("john@example.com", locale, requestIp));
+
+            verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
+        }
     }
 }

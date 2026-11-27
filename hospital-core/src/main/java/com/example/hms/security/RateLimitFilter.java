@@ -57,6 +57,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/me/complete-setup",
             "/api/auth/me/change-email",
             "/api/auth/password",
+            // Anonymous and able to send an SMS or an e-mail: the username
+            // reminder. The service adds a cooldown per account.
+            "/api/auth/username",
             // The MFA step-up endpoints (a code in X-Mfa-Token): enrolment or
             // replacement, and rewriting the MFA records. MfaService also locks
             // the step-up per user after repeated wrong codes.

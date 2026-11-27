@@ -300,6 +300,37 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
   });
 
+  it('r81 D4271: the forgotten-username dialog asks the server to send it, and answers the same either way', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotUsername();
+
+    component.forgotUsernameIdentifier = ' awa@exemple.test ';
+    component.submitForgotUsername();
+    const sent = httpMock.expectOne('/auth/username/reminder');
+    expect(sent.request.method).toBe('POST');
+    expect(sent.request.body).toEqual({ identifier: 'awa@exemple.test' });
+    sent.flush(null);
+    expect(component.forgotUsernameAck).toBe('LOGIN.FU_ACK');
+
+    component.openForgotUsername();
+    expect(component.forgotUsernameAck).toBe('');
+    component.forgotUsernameIdentifier = '70 00 00 00';
+    component.submitForgotUsername();
+    httpMock
+      .expectOne('/auth/username/reminder')
+      .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
+    expect(component.forgotUsernameAck).toBe('LOGIN.FU_ACK');
+  });
+
+  it('r81 D4271: an empty identifier posts nothing', () => {
+    component.openForgotUsername();
+    component.forgotUsernameIdentifier = '  ';
+    component.submitForgotUsername();
+    httpMock.expectNone('/auth/username/reminder');
+    expect(component.forgotUsernameAck).toBe('');
+  });
+
   it('QA D787: an empty identifier asks for one and posts nothing', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);

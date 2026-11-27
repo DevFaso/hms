@@ -56,7 +56,14 @@ describe('LockScreenComponent — unlock', () => {
     auth.getSubject.and.returnValue('doctor_b');
     auth.refreshTokenRequest.and.returnValue(of(FRESH_TOKENS));
 
-    idle = jasmine.createSpyObj<IdleService>('IdleService', ['unlock', 'lock', 'start', 'stop']);
+    idle = jasmine.createSpyObj<IdleService>('IdleService', [
+      'unlock',
+      'release',
+      'ensureServerLock',
+      'lock',
+      'start',
+      'stop',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [LockScreenComponent, TranslateModule.forRoot()],
@@ -114,7 +121,9 @@ describe('LockScreenComponent — unlock', () => {
 
     httpMock.expectNone('/auth/verify-password');
     expect(auth.setToken).not.toHaveBeenCalled();
-    expect(idle.unlock).toHaveBeenCalled();
+    // The lock is forgotten, the page behind it is never put back.
+    expect(idle.release).toHaveBeenCalled();
+    expect(idle.unlock).not.toHaveBeenCalled();
     expect(changed).toBeTrue();
   });
 
@@ -230,7 +239,8 @@ describe('LockScreenComponent — unlock', () => {
     );
 
     expect(lockedOut).toHaveBeenCalledTimes(1);
-    expect(idle.unlock).toHaveBeenCalled();
+    expect(idle.release).toHaveBeenCalled();
+    expect(idle.unlock).not.toHaveBeenCalled();
     expect(component.error).toBe('');
     expect(component.password).toBe('');
     expect(component.loading()).toBeFalse();
@@ -281,5 +291,27 @@ describe('LockScreenComponent — unlock', () => {
 
     // expectOne throws if the component issued the request twice.
     expectVerify().flush({ message: 'Password verified.' });
+  });
+  // ── r81 D4262: only the server's acceptance of the password opens the screen ──
+
+  it('tells the server about the lock again when the lock screen opens', () => {
+    setUp({ tokenExpired: false });
+    expect(idle.ensureServerLock).toHaveBeenCalled();
+  });
+
+  it('signing out or switching user forgets the lock without putting the page back', () => {
+    setUp({ tokenExpired: false });
+    component.signOut();
+    component.switchUser();
+
+    expect(idle.release).toHaveBeenCalledTimes(2);
+    expect(idle.unlock).not.toHaveBeenCalled();
+  });
+
+  it('a password tab does not ask the identity provider to unlock', () => {
+    setUp({ tokenExpired: false });
+    expect(component.sso).toBeFalse();
+    httpMock.expectNone('/auth/session/unlock');
+    expect(fixture.nativeElement.querySelector('#unlock-password')).not.toBeNull();
   });
 });

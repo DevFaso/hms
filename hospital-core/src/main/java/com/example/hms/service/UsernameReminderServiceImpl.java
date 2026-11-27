@@ -25,7 +25,11 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
     @Transactional(readOnly = true)
     public void sendReminder(String identifier, Locale locale, String requestIp) {
         // Always behave the same to prevent account enumeration
-        Optional<User> userOpt = userRepository.findActiveByEmailOrPhone(identifier);
+        Optional<User> userOpt = resolve(identifier)
+            // Only to a contact its holder confirmed: an account not yet activated gets nothing.
+            .filter(User::isActive)
+            // One delivered reminder per account per cooldown, whoever asks.
+            .filter(user -> !cooldown.recentlySent(user.getId()));
 
         // D2000 (account enumeration): whatever happens below, nothing escapes
         // this method. A missing address, a refused provider or an absent mail
@@ -46,9 +50,60 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
                 sent = sendByEmail(user, locale);
             }
             if (sent) {
+                cooldown.sent(user.getId());
                 log.info("📨 Username reminder issued for userId={} ip={}", user.getId(), requestIp);
             }
         });
+    }
+
+    /** Sent reminders, per account (this instance's memory). */
+    private final ReminderCooldown cooldown = new ReminderCooldown();
+
+    /**
+     * The account an e-mail address or a phone number names. A phone number
+     * is also tried in its international form, as the account stores it. Two
+     * accounts under one identifier: nobody, as for an unknown one.
+     */
+    private Optional<User> resolve(String identifier) {
+        try {
+            Optional<User> typed = userRepository.findActiveByEmailOrPhone(identifier);
+            if (typed != null && typed.isPresent()) {
+                return typed;
+            }
+            if (identifier.contains("@")) {
+                return Optional.empty();
+            }
+            String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                identifier, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+            if (e164 == null || e164.equals(identifier)) {
+                return Optional.empty();
+            }
+            Optional<User> international = userRepository.findActiveByEmailOrPhone(e164);
+            return international == null ? Optional.empty() : international;
+        } catch (org.springframework.dao.IncorrectResultSizeDataAccessException ambiguous) {
+            log.warn("Username reminder not sent: the identifier matches more than one account");
+            return Optional.empty();
+        }
+    }
+
+    /** At most one reminder per account every {@link #WINDOW_MS}. */
+    static final class ReminderCooldown {
+        static final long WINDOW_MS = 10 * 60 * 1000L;
+        private static final int MAX_TRACKED = 10_000;
+        private final java.util.Map<java.util.UUID, Long> lastSent = new java.util.concurrent.ConcurrentHashMap<>();
+
+        boolean recentlySent(java.util.UUID accountId) {
+            Long previous = lastSent.get(accountId);
+            return previous != null && System.currentTimeMillis() - previous < WINDOW_MS;
+        }
+
+        void sent(java.util.UUID accountId) {
+            long now = System.currentTimeMillis();
+            if (lastSent.size() > MAX_TRACKED) {
+                lastSent.entrySet().removeIf(entry -> now - entry.getValue() >= WINDOW_MS);
+            }
+            lastSent.put(accountId, now);
+        }
     }
 
     private boolean sendByEmail(User user, Locale locale) {
