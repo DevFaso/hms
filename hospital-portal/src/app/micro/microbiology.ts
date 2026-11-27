@@ -30,6 +30,7 @@ import {
   SUSCEPTIBILITY_METHODS,
 } from '../services/micro.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
@@ -65,6 +66,7 @@ export function takesNewCulture(order: LabOrderResponse): boolean {
     ModalDialogDirective,
     SubmitGuardDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

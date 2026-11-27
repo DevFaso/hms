@@ -55,6 +55,11 @@ export class BloodGroupStatusComponent {
   protected readonly severeReaction = computed(
     () => this.showAntibodies() && this.status()?.severeTransfusionReaction === true,
   );
+  /** The i18n key of the reaction's type (the enum never reaches the screen raw). */
+  protected readonly severeReactionTypeKey = computed(() => {
+    const type = this.status()?.severeTransfusionReactionType;
+    return type ? `TRANSFUSION.REACTION_${type}` : null;
+  });
   /** The bag was hung: an issued bag nobody recorded giving is shown as unconfirmed. */
   protected readonly rhdExposureConfirmed = computed(
     () => this.status()?.rhdPositiveExposureConfirmed === true,

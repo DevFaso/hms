@@ -133,6 +133,10 @@ export class TransfusionComponent implements OnInit {
    * the flag follows the patient, so it is read on its own, with or without a blood group on record here.
    */
   requestAntibody = signal<AntibodyStatusResponse | null>(null);
+  /** QA D4151: the i18n key of a severe reaction's type on record (never the raw enum). */
+  severeReactionTypeKey(known: AntibodyStatusResponse): string {
+    return `TRANSFUSION.REACTION_${known.severeTransfusionReactionType ?? 'OTHER'}`;
+  }
 
   /** The patient of the request being written is allo-immunised, by the group read here or by the patient's flag. */
   get requestPatientAlloImmunised(): boolean {

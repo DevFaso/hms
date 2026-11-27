@@ -444,7 +444,7 @@
             @for (order of orders(); track order.id) {
               <option [value]="order.id">
                 {{ shortOrderCode(order.labOrderCode) }} ·
-                {{ order.orderDatetime | serverTime | date: 'dd/MM/yyyy HH:mm' }} ·
+                {{ order.orderDatetime | serverTime | dateTime }} ·
                 {{ orderLabel(order) }}
               </option>
             }

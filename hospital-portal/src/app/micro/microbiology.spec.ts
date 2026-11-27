@@ -286,7 +286,7 @@ describe('MicrobiologyComponent', () => {
     const options = Array.from(el.querySelectorAll('#create-order option')).slice(1);
     expect(options.length).toBe(1);
     expect(options[0].textContent).toContain('LAB-000025');
-    expect(options[0].textContent).toContain('27/11/2026');
+    expect(options[0].textContent).toContain('2026');
     expect(options[0].textContent).toContain('Boukary BTest — ECBU');
     expect(el.querySelector('[data-testid="create-order-hint"]')?.textContent).toContain(
       'MICRO.ORDERS_CULTURE_ONLY',

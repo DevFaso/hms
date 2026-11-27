@@ -882,9 +882,7 @@
                       'BLOOD_GROUP.SEVERE_REACTION'
                         | translate
                           : {
-                              type:
-                                'TRANSFUSION.REACTION_' +
-                                  (known.severeTransfusionReactionType ?? 'OTHER') | translate,
+                              type: severeReactionTypeKey(known) | translate,
                               date:
                                 (known.severeTransfusionReactionAt
                                   | serverTime

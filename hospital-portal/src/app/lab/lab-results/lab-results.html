@@ -536,7 +536,8 @@
                   <span class="field-value"
                     >{{ r.supersededResultValue | labValue: r.supersededResultUnit }}
                     @if (r.supersededReleasedAt) {
-                      <span class="cell-secondary">{{
+                      {{ ' · '
+                      }}<span class="cell-secondary">{{
                         'LAB_RESULTS.REPLACED_RELEASED_AT'
                           | translate: { date: (r.supersededReleasedAt | serverTime | dateTime) }
                       }}</span>
@@ -547,7 +548,7 @@
               @if (r.correctionReason) {
                 <div class="detail-field" data-testid="detail-correction-reason">
                   <span class="field-label">{{ 'LAB_RESULTS.CORRECTION_REASON' | translate }}</span>
-                  <span class="field-value">{{ r.correctionReason }}</span>
+                  {{ ' ' }}<span class="field-value">{{ r.correctionReason }}</span>
                 </div>
               }
             }
