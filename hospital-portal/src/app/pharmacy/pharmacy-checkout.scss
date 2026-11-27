@@ -189,7 +189,6 @@
   }
   .history-table {
     width: 100%;
-    min-width: 40rem;
   }
   .num {
     text-align: right;
@@ -197,9 +196,6 @@
   }
   .history-voided td {
     color: var(--text-secondary, inherit);
-  }
-  .patient-cell {
-    min-width: 10rem;
   }
 }
 
@@ -218,10 +214,4 @@
   display: block;
   letter-spacing: 0;
   text-transform: none;
-}
-
-@media (max-width: 600px) {
-  .receipt-history .history-table {
-    min-width: 34rem;
-  }
 }

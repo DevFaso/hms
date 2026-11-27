@@ -191,8 +191,8 @@ describe('r81 dispensing lane', () => {
         voidedDecision: 'CONTINUE',
         voidedReviewedByName: 'Aminata Ouedraogo',
         voidedReviewedAt: '2026-11-10T09:30:00',
-        voidReason: 'ALLERGY_CHANGED',
-        voidReasonText:
+        voidedBecause: 'ALLERGY_CHANGED',
+        voidedBecauseText:
           'L’allergie du patient a été modifiée après cette revue : elle ne s’applique plus.',
       });
       expect(el.querySelector('[data-testid=allergy-review-state-voided]')).not.toBeNull();

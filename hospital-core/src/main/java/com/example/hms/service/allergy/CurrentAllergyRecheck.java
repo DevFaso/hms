@@ -432,7 +432,7 @@ public class CurrentAllergyRecheck {
      * allergy's own timestamp: changed after the review, it is the allergy; otherwise the allergies or the order
      * (drug, dose, route, frequency).
      */
-    public static String voidReasonOf(Prescription rx, String token, Stop stop) {
+    public static String voidedBecauseOf(Prescription rx, String token, Stop stop) {
         if (rx == null || rx.getAllergyReviewDecision() == null || decisionFor(rx, token) != null) {
             return null;
         }
@@ -444,12 +444,12 @@ public class CurrentAllergyRecheck {
             ? VOID_ALLERGY_CHANGED : VOID_ALLERGY_OR_ORDER_CHANGED;
     }
 
-    /** {@link #voidReasonOf} as a sentence in the reader's language. */
-    public static String voidReasonText(String voidReason) {
-        if (voidReason == null) {
+    /** {@link #voidedBecauseOf} as a sentence in the reader's language. */
+    public static String voidedBecauseText(String voidedBecause) {
+        if (voidedBecause == null) {
             return null;
         }
-        return VOID_ALLERGY_CHANGED.equals(voidReason)
+        return VOID_ALLERGY_CHANGED.equals(voidedBecause)
             ? MessageUtil.resolveOrRaw("allergy.recheck.voided.ALLERGY_CHANGED")
             : MessageUtil.resolveOrRaw("allergy.recheck.voided.ALLERGY_OR_ORDER_CHANGED");
     }
@@ -459,7 +459,7 @@ public class CurrentAllergyRecheck {
         if (state == null || state.getState() != AllergyReviewStateDTO.State.AWAITING_REVIEW) {
             return;
         }
-        String reason = voidReasonOf(rx, reviewToken(rx, stop), stop);
+        String reason = voidedBecauseOf(rx, reviewToken(rx, stop), stop);
         if (reason == null) {
             return;
         }
@@ -467,8 +467,8 @@ public class CurrentAllergyRecheck {
             ? AllergyReviewStateDTO.State.CONTINUE : AllergyReviewStateDTO.State.STOP);
         state.setVoidedReviewedByName(reviewerName(rx.getAllergyReviewedBy()));
         state.setVoidedReviewedAt(rx.getAllergyReviewedAt());
-        state.setVoidReason(reason);
-        state.setVoidReasonText(voidReasonText(reason));
+        state.setVoidedBecause(reason);
+        state.setVoidedBecauseText(voidedBecauseText(reason));
     }
 
     /** The reviewer's name as the screens show it, or null. */
@@ -750,7 +750,7 @@ public class CurrentAllergyRecheck {
      */
     static CdsCard cardFor(Stop stop, String medicationName, AllergyReviewStateDTO review) {
         if (review == null || review.getState() == AllergyReviewStateDTO.State.AWAITING_REVIEW) {
-            return review == null || review.getVoidReasonText() == null ? stop.card() : voidedCard(stop, review);
+            return review == null || review.getVoidedBecauseText() == null ? stop.card() : voidedCard(stop, review);
         }
         boolean continued = review.getState() == AllergyReviewStateDTO.State.CONTINUE;
         String who = review.getReviewedByName() != null
@@ -787,7 +787,7 @@ public class CurrentAllergyRecheck {
             ? MessageUtil.resolveOrRaw("allergy.recheck.reviewerName", review.getVoidedReviewedByName())
             : MessageUtil.resolveOrRaw("allergy.recheck.reviewerUnknown");
         String detail = MessageUtil.resolveOrRaw("allergy.recheck.detail.voided", who,
-            DisplayDates.shortDateTime(review.getVoidedReviewedAt()), review.getVoidReasonText());
+            DisplayDates.shortDateTime(review.getVoidedReviewedAt()), review.getVoidedBecauseText());
         CdsCard card = stop.card();
         return new CdsCard(card.summary(), detail + " " + card.detail(),
             card.indicator(), card.source(), card.links(), card.suggestions(), card.selectionBehavior(),

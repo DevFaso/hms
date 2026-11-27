@@ -54,7 +54,7 @@ public class AllergyReviewStateDTO {
     private String voidedReviewedByName;
     private LocalDateTime voidedReviewedAt;
     /** Why it no longer counts: {@code ALLERGY_CHANGED} or {@code ALLERGY_OR_ORDER_CHANGED}. */
-    private String voidReason;
-    /** {@link #voidReason} as a sentence in the reader's language, for a screen that shows the server's text. */
-    private String voidReasonText;
+    private String voidedBecause;
+    /** {@link #voidedBecause} as a sentence in the reader's language, for a screen that shows the server's text. */
+    private String voidedBecauseText;
 }

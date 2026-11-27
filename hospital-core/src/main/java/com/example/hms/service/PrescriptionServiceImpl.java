@@ -1402,8 +1402,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String reviewerName = reviewer == null ? null
             : java.util.Objects.toString(com.example.hms.service.allergy.CurrentAllergyRecheck.reviewerName(reviewer), "");
         String token = conflict.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse(null);
-        String voidReason = conflict.map(c -> com.example.hms.service.allergy.CurrentAllergyRecheck
-            .voidReasonOf(prescription, c.reviewToken(), c.stop())).orElse(null);
+        String voidedBecause = conflict.map(c -> com.example.hms.service.allergy.CurrentAllergyRecheck
+            .voidedBecauseOf(prescription, c.reviewToken(), c.stop())).orElse(null);
         return com.example.hms.payload.dto.prescription.AllergyConflictDTO.builder()
             .conflict(conflict.isPresent())
             .allergen(conflict.map(c -> c.stop().allergen()).orElse(null))
@@ -1416,8 +1416,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             .reviewedAt(prescription.getAllergyReviewedAt())
             .reviewCurrent(token != null && token.equals(prescription.getAllergyReviewToken()))
             // QA D3945: a review on record that no longer answers the conflict says why.
-            .voidReason(voidReason)
-            .voidReasonText(com.example.hms.service.allergy.CurrentAllergyRecheck.voidReasonText(voidReason))
+            .voidedBecause(voidedBecause)
+            .voidedBecauseText(com.example.hms.service.allergy.CurrentAllergyRecheck.voidedBecauseText(voidedBecause))
             .build();
     }
 

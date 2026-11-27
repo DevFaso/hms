@@ -36,8 +36,8 @@ export interface AllergyReviewState {
   voidedDecision?: 'CONTINUE' | 'STOP' | null;
   voidedReviewedByName?: string | null;
   voidedReviewedAt?: string | null;
-  voidReason?: 'ALLERGY_CHANGED' | 'ALLERGY_OR_ORDER_CHANGED' | null;
-  voidReasonText?: string | null;
+  voidedBecause?: 'ALLERGY_CHANGED' | 'ALLERGY_OR_ORDER_CHANGED' | null;
+  voidedBecauseText?: string | null;
 }
 
 /** What the server held: its sentence (awaiting review, who was notified, or the prescriber's STOP) and the card(s). */

@@ -58,7 +58,7 @@ import { TranslateModule } from '@ngx-translate/core';
       font-weight: 400;
     }
     .patient-id-line__part {
-      white-space: nowrap;
+      overflow-wrap: anywhere;
     }
   `,
 })

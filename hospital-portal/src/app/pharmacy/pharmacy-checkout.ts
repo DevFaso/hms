@@ -17,7 +17,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -92,7 +92,6 @@ import { PhonePipe } from '../shared/pipes/phone.pipe';
     CommonModule,
     FormsModule,
     TranslateModule,
-    DatePipe,
     CfaPipe,
     CountUnitPipe,
     PhonePipe,

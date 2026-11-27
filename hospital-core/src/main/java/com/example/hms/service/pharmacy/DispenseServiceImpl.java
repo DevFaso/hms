@@ -1260,7 +1260,13 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "dispense.lot.required");
         }
         recordFefoOverride(dto, stockLot);
-        // QA D4181 (r81): sold at this pharmacy's price or documented there as free, before any stock moves.
+        // QA D4181 (r81): a fill that names no product is the order's own item (a dispensary that keeps no lots).
+        // It is priced on that item and saved with it: with none, it had no charge at all.
+        if (catalogItem == null && prescription.getMedicationCatalogItemId() != null) {
+            catalogItem = medicationCatalogItemRepository.findById(prescription.getMedicationCatalogItemId())
+                    .orElse(null);
+        }
+        // Sold at this pharmacy's price or documented there as free, before any stock moves.
         FillPriceGate.require(pharmacy, catalogItem, dto.getMedicationName(), inventoryItemRepository);
 
         return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification, allergyAck);

@@ -65,7 +65,7 @@ import { AllergyReviewState } from './allergy-acknowledgement';
             }}
           </p>
           <p data-testid="allergy-review-state-void-reason">
-            {{ r.voidReasonText || (voidReasonKey() | translate) }}
+            {{ r.voidedBecauseText || (voidedBecauseKey() | translate) }}
           </p>
         }
         @if (r.state === 'CONTINUE' && r.plan) {
@@ -123,8 +123,8 @@ export class AllergyReviewStateComponent {
   );
 
   /** QA D3945: why it no longer counts, when the server sent the code without its sentence. */
-  protected readonly voidReasonKey = computed(() =>
-    this.review()?.voidReason === 'ALLERGY_CHANGED'
+  protected readonly voidedBecauseKey = computed(() =>
+    this.review()?.voidedBecause === 'ALLERGY_CHANGED'
       ? 'ALLERGY_REVIEW_STATE.VOID_ALLERGY_CHANGED'
       : 'ALLERGY_REVIEW_STATE.VOID_ALLERGY_OR_ORDER_CHANGED',
   );

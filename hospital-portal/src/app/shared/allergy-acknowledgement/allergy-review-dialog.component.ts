@@ -92,7 +92,7 @@ let nextId = 0;
                 </p>
               } @else if (c.decision) {
                 <p data-testid="allergy-review-outdated">
-                  {{ c.voidReasonText || ('ALLERGY_REVIEW.OUTDATED' | translate) }}
+                  {{ c.voidedBecauseText || ('ALLERGY_REVIEW.OUTDATED' | translate) }}
                 </p>
               }
               <fieldset class="field">

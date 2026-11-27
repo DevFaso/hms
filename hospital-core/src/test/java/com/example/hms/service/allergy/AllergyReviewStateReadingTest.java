@@ -181,8 +181,8 @@ class AllergyReviewStateReadingTest {
             assertThat(state.getVoidedDecision()).as(response.getKey()).isEqualTo(State.CONTINUE);
             assertThat(state.getVoidedReviewedByName()).isEqualTo("Aminata Ouedraogo");
             assertThat(state.getVoidedReviewedAt()).isEqualTo(LocalDateTime.of(2026, 11, 10, 9, 30));
-            assertThat(state.getVoidReason()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_CHANGED);
-            assertThat(state.getVoidReasonText()).contains("allergy record was changed after that review");
+            assertThat(state.getVoidedBecause()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_CHANGED);
+            assertThat(state.getVoidedBecauseText()).contains("allergy record was changed after that review");
             // The old plan never comes back with a review that no longer counts.
             assertThat(state.getPlan()).isNull();
             assertThat(state.getRationale()).isNull();
@@ -204,23 +204,23 @@ class AllergyReviewStateReadingTest {
         AllergyReviewStateDTO state = dto.getAllergyReview();
         assertThat(state.getState()).isEqualTo(State.AWAITING_REVIEW);
         assertThat(state.getVoidedDecision()).isEqualTo(State.STOP);
-        assertThat(state.getVoidReason()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_OR_ORDER_CHANGED);
-        assertThat(state.getVoidReasonText()).contains("drug, dose, route or frequency");
+        assertThat(state.getVoidedBecause()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_OR_ORDER_CHANGED);
+        assertThat(state.getVoidedBecauseText()).contains("drug, dose, route or frequency");
     }
 
     @Test
-    void aConflictNeverReviewedAndACurrentReviewCarryNoVoidReason() {
+    void aConflictNeverReviewedAndACurrentReviewCarryNoVoidedBecause() {
         WorkQueuePrescriptionDTO never = new WorkQueuePrescriptionDTO();
         check.readFor(rx, "Amoxicillin", true).applyTo(never);
-        assertThat(never.getAllergyReview().getVoidReason()).isNull();
+        assertThat(never.getAllergyReview().getVoidedBecause()).isNull();
         assertThat(never.getAllergyReview().getVoidedDecision()).isNull();
 
         review(AllergyReviewDecision.CONTINUE);
         WorkQueuePrescriptionDTO current = new WorkQueuePrescriptionDTO();
         check.readFor(rx, "Amoxicillin", true).applyTo(current);
         assertThat(current.getAllergyReview().getState()).isEqualTo(State.CONTINUE);
-        assertThat(current.getAllergyReview().getVoidReason()).isNull();
-        assertThat(current.getAllergyReview().getVoidReasonText()).isNull();
+        assertThat(current.getAllergyReview().getVoidedBecause()).isNull();
+        assertThat(current.getAllergyReview().getVoidedBecauseText()).isNull();
     }
 
     @Test

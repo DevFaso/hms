@@ -396,8 +396,7 @@
                         class="badge badge-info"
                         [title]="item.freeOfChargeReason || ''"
                         [attr.data-testid]="'free-' + item.id"
-                        >{{ 'R81_DISPENSING.FREE.BADGE' | translate }}</span
-                      >
+                        >{{ 'R81_DISPENSING.FREE.BADGE' | translate }}</span>{{ ' ' }}
                       <span class="free-reason" [attr.data-testid]="'free-reason-' + item.id">{{
                         item.freeOfChargeReason
                       }}</span>
@@ -406,7 +405,8 @@
                         (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
                       }}</span>
                       @if (!item.unitPrice) {
-                        <span
+                        {{ ' '
+                        }}<span
                           class="badge badge-warning"
                           role="note"
                           [attr.data-testid]="'unpriced-' + item.id"

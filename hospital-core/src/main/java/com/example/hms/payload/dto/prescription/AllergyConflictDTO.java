@@ -38,6 +38,6 @@ public class AllergyConflictDTO {
      * QA D3945: when a review is on record and {@code reviewCurrent} is false, why it no longer counts
      * ({@code ALLERGY_CHANGED} or {@code ALLERGY_OR_ORDER_CHANGED}) and the same as a sentence. Null otherwise.
      */
-    private String voidReason;
-    private String voidReasonText;
+    private String voidedBecause;
+    private String voidedBecauseText;
 }
