@@ -1653,6 +1653,10 @@ public class LabResultServiceImpl implements LabResultService {
             throw new com.example.hms.exception.FieldBusinessException("qcOverrideReason", "lab.qc.releaseBlocked",
                 test != null ? test.getName() : "");
         }
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
+            throw new com.example.hms.exception.FieldBusinessException("qcOverrideReason", "clinical.override.reasonMin");
+        }
+        reason = com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(reason);
         labResult.setQcOverrideReason(reason);
         labResult.setQcOverrideEventId(blocking.get().getId());
         labResult.setQcOverrideByUserId(actorId);
