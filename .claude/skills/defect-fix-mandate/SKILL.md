@@ -59,9 +59,13 @@ defect is **not fixed**, whatever the local test says.
 A fix that breaks a working path is worse than the defect: the user loses
 a feature they had, and the next round finds it as a "new" defect. So:
 
-- **The whole suite, every time.** Before every push: the full hospital-core
-  suite (not just the touched module) and the full portal suite, plus
-  `EntitySchemaValidationIT` whenever an entity changed. A red test that
+- **The whole suite, every push, in CI.** The full hospital-core and portal
+  suites run on the draft PR; wait for them on the pushed head before the
+  hand-back. Locally, run the targeted tests plus the trigger list in
+  `docs/agents/implementation-brief-template.md` Part 2 (slices, migration
+  and entity ITs, guards), one Gradle run at a time with `--no-daemon`, and
+  never `gradlew --stop` (it kills other agents' builds): several agents
+  running full suites exhausted the build machine on 2026-11-25. A red test that
   "looks unrelated" is a regression until proven otherwise; never skip,
   delete or weaken an existing test to get green. If an existing test
   must change, the PR body says which assertion changed and why the old
@@ -110,6 +114,10 @@ semantics, missing tenant scope) is a red flag the reviewer must challenge.
   branch's files, make the smallest fix there and flag it in the hand-back;
   do not leave it for "the next round". The file-ownership split exists to
   avoid merge conflicts, not to leave half a class unfixed.
+- **One PR stays narrow.** The PR fixes the defect and ships the guard for
+  its class. Instances the hunt finds beyond the PR's area go on the guard's
+  allowlist with the defect id and become a follow-up PR (user rule
+  2026-11-08). Lows never hold a merge (2026-11-02).
 - **Regressions are class failures.** A defect that was reported FIXED in an
   earlier round (grep `docs/qa/`) and reappears means the earlier fix had no
   guard. Add the guard now and say so in the row.
@@ -119,8 +127,9 @@ semantics, missing tenant scope) is a red flag the reviewer must challenge.
 
 ## For reviewers and re-testers
 
-- `/code-review` and the self-review gate in `pr-review-response` treat a
-  missing or thin class table as a **blocking** finding.
+- Reviewers (`docs/agents/review-instructions.md`) and the self-review gate
+  in `pr-review-response` treat a missing or thin class table as a
+  **blocking** finding.
 - A re-test never replays only the defect list: it re-runs the full area
   walk (the round's `scripts/<round>/<area>` pack and the earlier packs) and
   every sibling path named in the class table. A round is clean only when
