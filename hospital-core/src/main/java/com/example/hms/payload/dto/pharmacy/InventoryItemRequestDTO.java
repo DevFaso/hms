@@ -37,7 +37,7 @@ public class InventoryItemRequestDTO {
 
     /** QA D264: the selling price of one unit, in whole XOF. */
     @jakarta.validation.constraints.PositiveOrZero
-    @jakarta.validation.constraints.Digits(integer = 10, fraction = 0)
+    @jakarta.validation.constraints.Digits(integer = 10, fraction = 0, message = "{pharmacy.inventory.price.whole}")
     private BigDecimal unitPrice;
 
     /**

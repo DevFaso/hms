@@ -141,7 +141,6 @@ class SwallowedNestedTransactionGuardTest {
         "service/pharmacy/DispenseServiceImpl.java: PrescriptionRoutingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc", 1, REPO_READ,
         "service/pharmacy/DispenseServiceImpl.java: RefillRequestRepository.findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc", 1, REPO_READ,
         "service/pharmacy/DispenseServiceImpl.java: RefillRequestRepository.save", 1, REPO_WRITE,
-        "service/pharmacy/InventoryServiceImpl.java: UserRepository.findById", 1, REPO_READ,
         "service/pharmacy/StockOutRoutingServiceImpl.java: PrescriptionRoutingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc", 1, REPO_READ,
         "service/pharmacy/StockOutRoutingServiceImpl.java: PrescriptionRoutingDecisionRepository.save", 1, REPO_WRITE,
         "service/pro/ProScreeningEscalationService.java: ProResponseRepository.save", 1, REPO_WRITE,

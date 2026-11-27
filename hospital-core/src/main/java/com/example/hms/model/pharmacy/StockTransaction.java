@@ -71,6 +71,16 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "quantity", nullable = false, precision = 12, scale = 2)
     private BigDecimal quantity;
 
+    /** Unit in which this immutable movement was recorded; older rows stay unknown rather than being guessed. */
+    @Size(max = 60)
+    @Column(name = "unit_snapshot", length = 60, updatable = false)
+    private String unitSnapshot;
+
+    @jakarta.persistence.PrePersist
+    void captureStockUnit() {
+        unitSnapshot = inventoryItem == null ? null : inventoryItem.getUnit();
+    }
+
     @Size(max = 500)
     @Column(name = "reason", length = 500)
     private String reason;
@@ -107,8 +117,8 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "lot_number", length = 120)
     private String lotNumber;
 
-    @Size(max = 200)
-    @Column(name = "supplier", length = 200)
+    @Size(max = 255)
+    @Column(name = "supplier", length = 255)
     private String supplier;
 
     @Size(max = 120)
@@ -118,6 +128,12 @@ public class StockTransaction extends BaseEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
-    @Column(name = "unit_cost", precision = 12, scale = 2)
+    @Column(name = "unit_cost", precision = 14, scale = 4)
     private BigDecimal unitCost;
+
+    @Column(name = "receipt_date")
+    private LocalDate receiptDate;
+    @Size(max = 1000)
+    @Column(name = "receipt_notes", length = 1000)
+    private String receiptNotes;
 }

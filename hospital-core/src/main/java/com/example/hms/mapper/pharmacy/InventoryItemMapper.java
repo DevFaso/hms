@@ -27,6 +27,7 @@ public class InventoryItemMapper {
             .medicationCode(med != null ? med.getCode() : null)
             .controlled(med != null && med.isControlled())
             .quantityOnHand(entity.getQuantityOnHand())
+            .stockRevision(entity.getStockRevision())
             .reorderThreshold(entity.getReorderThreshold())
             .reorderQuantity(entity.getReorderQuantity())
             .unitPrice(entity.getUnitPrice())

@@ -44,6 +44,14 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class InventoryItem extends BaseEntity {
 
+    /** Database-maintained revision: includes native stock updates and committed unit changes. */
+    @org.hibernate.annotations.ColumnDefault("0")
+    @org.hibernate.annotations.Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "stock_revision", nullable = false, insertable = false, updatable = false)
+    @Builder.Default
+    private Long stockRevision = 0L;
+
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "pharmacy_id", nullable = false,

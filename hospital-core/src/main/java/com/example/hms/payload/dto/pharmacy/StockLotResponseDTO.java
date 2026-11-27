@@ -28,6 +28,7 @@ public class StockLotResponseDTO {
     private LocalDate expiryDate;
     private BigDecimal initialQuantity;
     private BigDecimal remainingQuantity;
+    private Long stockRevision;
     private String supplier;
     private BigDecimal unitCost;
     private LocalDate receivedDate;
