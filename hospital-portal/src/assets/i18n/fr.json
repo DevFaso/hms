@@ -1,4 +1,5 @@
 {
+  "CLINICAL_OVERRIDE": { "MIN_REASON_HINT": "Au moins 10 caractères hors espaces." },
   "API_TIMEOUT": {
     "TITLE": "Le serveur met trop de temps à répondre",
     "MESSAGE": "Le délai de la requête est dépassé. Réessayez l’action lorsque la connexion est disponible, ou rechargez la page pour charger ses données.",

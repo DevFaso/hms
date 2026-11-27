@@ -1,4 +1,5 @@
 {
+  "CLINICAL_OVERRIDE": { "MIN_REASON_HINT": "At least 10 non-whitespace characters." },
   "API_TIMEOUT": {
     "TITLE": "The server is taking too long to respond",
     "MESSAGE": "The request timed out. Retry the action when the connection is available, or reload the page to load its data again.",

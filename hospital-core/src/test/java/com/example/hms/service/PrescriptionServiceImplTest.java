@@ -1629,8 +1629,11 @@ class PrescriptionServiceImplTest {
             com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
                 .allergyOverrideReason("   ").doseExceptionToken(token).build();
 
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, blank, Locale.FRENCH))
-            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            blank.setAllergyOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, blank, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
     }
 
@@ -4050,8 +4053,11 @@ class PrescriptionServiceImplTest {
         when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(softStop));
 
-        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            request.setOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
         verify(prescriptionRepository, never()).save(any());
     }
 

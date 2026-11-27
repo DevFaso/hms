@@ -87,6 +87,9 @@ public final class ClinicalRuleRegistry {
             "service.impl.AdmissionServiceImpl"),
         rule(ClinicalRuleSetKey.ALLERGY_OVERRIDE_REASON, "2026-11-09.1",
             "service.PrescriptionServiceImpl"),
+        // Owner decision: provisional until clinical approval.
+        rule(ClinicalRuleSetKey.CLINICAL_OVERRIDE_REASON_MINIMUM, "2026-11-27.1",
+            "service.clinicalrules.ClinicalOverrideReason"),
         rule(ClinicalRuleSetKey.ALLERGY_CONFLICT_REVIEW, "2026-11-10.1",
             "service.allergy.CurrentAllergyRecheck"),
         rule(ClinicalRuleSetKey.LABOUR_TRANSFER, "2026-11-12.1",

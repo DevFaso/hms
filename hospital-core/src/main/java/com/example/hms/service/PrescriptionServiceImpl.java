@@ -825,10 +825,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String allergen = com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(stop.get().allergy());
         String reason = request == null || request.getAllergyOverrideReason() == null
             ? "" : request.getAllergyOverrideReason().trim();
-        if (reason.isEmpty()) {
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(reason)) {
             throw new CdsCriticalBlockException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.signatureReasonRequired",
-                    card.summary(), allergen),
+                com.example.hms.utility.MessageUtil.resolveOrRaw("clinical.override.reasonMin"),
                 List.of(card), FIELD_ALLERGY_OVERRIDE_REASON);
         }
         if (!tokenMatches(request, token)) {
@@ -3585,10 +3584,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private static void requireOverrideReasonForCritical(PrescriptionRequestDTO request, List<CdsCard> advisories) {
         boolean critical = advisories.stream().anyMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL);
-        if (critical && (request.getOverrideReason() == null || request.getOverrideReason().isBlank())) {
+        if (critical && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getOverrideReason())) {
             throw new CdsCriticalBlockException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.overrideReasonRequired"),
-                advisories);
+                com.example.hms.utility.MessageUtil.resolveOrRaw("clinical.override.reasonMin"),
+                advisories, "overrideReason");
         }
     }
 
