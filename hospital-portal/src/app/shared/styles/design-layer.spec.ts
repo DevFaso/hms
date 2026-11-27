@@ -211,23 +211,21 @@ describe('global design layer (QA r65)', () => {
         </tbody></table></div>`;
 
     for (const width of [768, 1440]) {
-      it(`keeps a pinned actions column above its neighbours, on one header line and under 40 % of the screen at ${width}`, async () => {
+      it(`keeps a pinned actions column above its neighbours and leaves the table's width alone at ${width}`, async () => {
         const doc = await screen(width);
         doc.body.innerHTML = ACTIONS_TABLE;
         const view = doc.defaultView!;
         const cell = doc.querySelector<HTMLElement>('tbody td:last-child')!;
         const head = doc.querySelector<HTMLElement>('thead th:last-child')!;
+        const table = doc.querySelector<HTMLElement>('table')!;
         expect(view.getComputedStyle(cell).position).toBe('sticky');
         // Above a cell's own positioned content (a chip at z-index 1).
         expect(Number(view.getComputedStyle(cell).zIndex)).toBeGreaterThan(1);
         expect(Number(view.getComputedStyle(head).zIndex)).toBeGreaterThan(1);
-        // « Actions » is never « Ac-tions ».
-        expect(view.getComputedStyle(head).hyphens).toBe('manual');
-        expect(view.getComputedStyle(head).overflowWrap).toBe('normal');
-        // The pin leaves the larger part of the screen to the data columns.
-        expect(cell.getBoundingClientRect().width).toBeLessThanOrEqual(width * 0.4 + 32);
         // Opaque: nothing shows through it.
         expect(view.getComputedStyle(cell).backgroundColor).toBe(WHITE);
+        // The pin adds no width: the table is as wide as its own minimum or its box.
+        expect(table.getBoundingClientRect().width).toBeLessThanOrEqual(Math.max(1100, width) + 1);
       });
     }
 

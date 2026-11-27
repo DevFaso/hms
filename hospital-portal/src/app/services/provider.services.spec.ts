@@ -99,6 +99,16 @@ describe('SuperAdminProviderService', () => {
     all.flush({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 });
   });
 
+  it('QA D4075: a typed term is sent in the body of a POST, never in the URL', () => {
+    service.list({ type: 'LABORATORY', status: '', search: '  Kalo  ' }, 1, 20).subscribe();
+    const search = http.expectOne((r) => r.url === '/super-admin/providers/search');
+    expect(search.request.method).toBe('POST');
+    expect(search.request.body).toEqual({ type: 'LABORATORY', status: null, term: 'Kalo' });
+    expect(search.request.urlWithParams).not.toContain('Kalo');
+    expect(search.request.params.get('page')).toBe('1');
+    search.flush({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 1 });
+  });
+
   it('reaches every provider endpoint', () => {
     const evidence = normaliseEvidence(emptyEvidence());
     service.get('a b').subscribe();

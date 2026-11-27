@@ -956,17 +956,14 @@ textarea {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   QA D4304 (r81): a pinned column never paints over what it cannot be scrolled
-   away from, and never takes the table for itself. The pinned cells are the
-   two above: a row's actions cell at any width (r63), and the last column of
-   any table below the desktop width (r65).
-   - It sits ABOVE its neighbours: a role chip or a badge with its own stacking
-     (position, transform) was drawn across the pinned « Actions » column.
-   - Its header is never hyphenated or broken inside a word (« Ac-tions »).
-   - A cell of grouped actions is at most 40 % of the screen's width: its
-     buttons wrap inside it, so the data columns keep the larger part and
-     scroll underneath with the scroll cue.
-   - The cell next to it keeps a gutter, so its text never touches the pin.
+   QA D4304 (r81): a pinned column sits ABOVE the cells it is pinned over. The
+   pinned cells are the two above: a row's actions cell at any width (r63), and
+   the last column of any table below the desktop width (r65). A role chip or
+   a badge with its own stacking (position, z-index, transform) was drawn
+   across the pinned « Actions » column; the pin now wins, and its background
+   stops at its own padding box so nothing shows through at a row's edge.
+   Nothing here changes a column's width: every table still fits its box at a
+   desktop width (r64) and keeps its last column on screen below it (r65).
    Guarded by shared/styles/design-layer.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
 :where(
@@ -975,21 +972,6 @@ textarea {
 ) {
   z-index: 2;
   background-clip: padding-box;
-}
-/* A cell of grouped actions is as narrow as its group, and the group wraps at
-   40 % of the screen: the table's spare width goes to the data columns. */
-:where(td:has(> :where(.action-group, .row-actions, .table-actions))) {
-  width: 1%;
-}
-:where(
-    td:has(> :where(.action-group, .row-actions, .table-actions)),
-    td:last-child:has(> :where(button, a, .btn-sm))
-  )
-  > :where(.action-group, .row-actions, .table-actions) {
-  width: max-content;
-  max-width: 40vw;
-  flex-wrap: wrap;
-  row-gap: 0.25rem;
 }
 :where(
   table:has(
@@ -1003,9 +985,6 @@ textarea {
     > th:last-child
 ) {
   z-index: 2;
-  overflow-wrap: normal !important;
-  word-break: keep-all;
-  hyphens: manual !important;
 }
 @media screen and (max-width: 1023px) {
   :where(
@@ -1016,16 +995,6 @@ textarea {
   ) {
     z-index: 2;
     background-clip: padding-box;
-  }
-  :where(
-    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
-      > thead
-      > tr
-      > th:last-child:not([colspan], :first-child)
-  ) {
-    overflow-wrap: normal !important;
-    word-break: keep-all;
-    hyphens: manual !important;
   }
 }
 

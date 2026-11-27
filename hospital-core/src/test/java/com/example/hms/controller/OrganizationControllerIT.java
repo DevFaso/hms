@@ -108,6 +108,85 @@ class OrganizationControllerIT extends BaseIT {
                 OrganizationSecurityConstants.DEFAULT_SESSION_POLICY);
     }
 
+    @Autowired
+    private com.example.hms.security.TenantLifecycleGate lifecycleGate;
+
+    @Autowired
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
+    @Test
+    @DisplayName("QA D4317 (review F1): saving a suspended organization's details leaves it suspended")
+    void editingASuspendedOrganizationKeepsItSuspended() throws Exception {
+        Organization suspended = storedTwin("SUSP01");
+        suspended.setName("Suspended Health");
+        suspended.setActive(false);
+        suspended.setLifecycleState(com.example.hms.enums.OrganizationLifecycleState.SUSPENDED);
+        suspended.setSuspensionReason("Non-paiement");
+        organizationRepository.save(suspended);
+
+        // The portal's edit form: no `active` in the body.
+        mockMvc.perform(put(API_CONTEXT + "/organizations/{id}", suspended.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "Suspended Health",
+                    "code", "SUSP01",
+                    "description", "Contact updated",
+                    "type", "GOVERNMENT_AGENCY"))))
+            .andExpect(status().isOk());
+
+        Organization after = organizationRepository.findById(suspended.getId()).orElseThrow();
+        assertThat(after.getDescription()).isEqualTo("Contact updated");
+        assertThat(after.getLifecycleState())
+            .isEqualTo(com.example.hms.enums.OrganizationLifecycleState.SUSPENDED);
+        assertThat(after.isActive()).isFalse();
+
+        // An explicit `active: true` is refused too: restoring belongs to the lifecycle page.
+        mockMvc.perform(put(API_CONTEXT + "/organizations/{id}", suspended.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "Suspended Health",
+                    "code", "SUSP01",
+                    "type", "GOVERNMENT_AGENCY",
+                    "active", true))))
+            .andExpect(status().isConflict());
+        assertThat(organizationRepository.findById(suspended.getId()).orElseThrow().getLifecycleState())
+            .isEqualTo(com.example.hms.enums.OrganizationLifecycleState.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("QA D4317 (review F2): deactivating from the list never suspends; a user assigned at an inactive hospital of the organization is still let in")
+    void deactivationNeverBlocksTheOrganizationsUsers() throws Exception {
+        Organization target = storedTwin("NOFAC1");
+        target.setName("No Active Facility");
+        organizationRepository.save(target);
+        // What the resolver builds for a user holding an active assignment at one of
+        // the organization's hospitals, whatever that hospital's own flag.
+        com.example.hms.security.context.HospitalContext assignedUser =
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(java.util.UUID.randomUUID())
+                .permittedOrganizationIds(java.util.Set.of(target.getId()))
+                .build();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete(API_CONTEXT + "/organizations/{id}", target.getId()).contextPath(API_CONTEXT))
+            .andExpect(status().isConflict());
+        mockMvc.perform(put(API_CONTEXT + "/organizations/{id}", target.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "No Active Facility",
+                    "code", "NOFAC1",
+                    "type", "GOVERNMENT_AGENCY",
+                    "active", false))))
+            .andExpect(status().isConflict());
+
+        Organization after = organizationRepository.findById(target.getId()).orElseThrow();
+        assertThat(after.getLifecycleState())
+            .isEqualTo(com.example.hms.enums.OrganizationLifecycleState.ACTIVE);
+        assertThat(after.isActive()).isTrue();
+        lifecycleStatusService.invalidate();
+        assertThat(lifecycleGate.isBlocked(assignedUser)).isFalse();
+    }
+
     private Organization storedTwin(String code) {
         // Saved straight through the repository: duplicate names stored before the D435 guard.
         Organization org = new Organization();

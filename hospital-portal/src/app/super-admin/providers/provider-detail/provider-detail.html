@@ -404,7 +404,7 @@
               <span class="event-when">
                 {{ event.occurredAt ? (event.occurredAt | serverTime | dateTime) : '—' }}
               </span>
-              <span class="event-what">{{ 'PROVIDER.EVENT.' + event.event | translate }}</span>
+              <span class="event-what">{{ event.event | keyLabel: 'PROVIDER.EVENT.' }}</span>
               <span class="event-who">{{ event.actorName || '—' }}</span>
             </li>
           }

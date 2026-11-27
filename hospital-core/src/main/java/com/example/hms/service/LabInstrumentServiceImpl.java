@@ -63,7 +63,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO reactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
         if (!instrument.isActive()) {
             instrument.setActive(true);
             instrument = instrumentRepository.save(instrument);
@@ -105,7 +105,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO getById(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
         return mapper.toDto(instrument);
     }
 
@@ -133,7 +133,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
 
         // Check serial number uniqueness if changed
         if (dto.getSerialNumber() != null
@@ -155,7 +155,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public void deactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
         instrument.setActive(false);
         instrumentRepository.save(instrument);
     }
@@ -169,6 +169,16 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         // QA r5 tenancy sweep: another hospital's row answers as unknown.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notfound", departmentId);
         return department;
+    }
+
+    /**
+     * Another hospital's instrument answers exactly as an unknown id (404): a
+     * 403 here told the caller that the id exists somewhere else.
+     */
+    private void requireOwnInstrument(LabInstrument instrument, UUID id) {
+        if (instrument.getHospital() == null || !hasHospitalAccess(instrument.getHospital().getId())) {
+            throw new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id);
+        }
     }
 
     private boolean hasHospitalAccess(UUID hospitalId) {

@@ -73,9 +73,10 @@ public class SuperAdminPlatformRegistryController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Cancel a release window that has not finished")
     public ResponseEntity<PlatformReleaseWindowResponseDTO> cancelReleaseWindow(
-        @org.springframework.web.bind.annotation.PathVariable java.util.UUID id
+        @org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
+        @Valid @RequestBody com.example.hms.payload.dto.superadmin.PlatformReleaseWindowCancelRequestDTO request
     ) {
-        return ResponseEntity.ok(registryService.cancelReleaseWindow(id));
+        return ResponseEntity.ok(registryService.cancelReleaseWindow(id, request.getReason()));
     }
 
     /** D6: the release-window list survives a reload; newest start first, capped. */

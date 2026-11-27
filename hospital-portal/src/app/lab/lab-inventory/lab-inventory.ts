@@ -12,7 +12,8 @@ import {
 
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { CountUnitPipe } from '../../shared/pipes/count-unit.pipe';
+import { countUnit } from '../../shared/pipes/count-unit.pipe';
+import { LabValuePipe } from '../shared/lab-value.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabInstrumentService,
@@ -74,7 +75,7 @@ export function labStockStates(
     SubmitGuardDirective,
     ModalDialogDirective,
     DatePipe,
-    CountUnitPipe,
+    LabValuePipe,
     ServerTimePipe,
     PluralPipe,
     RouterModule,
@@ -111,6 +112,15 @@ export class LabInventoryComponent implements OnInit {
     });
   });
   readonly stockStates = labStockStates;
+
+  /** QA D4077: « 500 tubes », « 1 boîte »: the unit in the plural when the quantity asks for it. */
+  stockUnit(item: LabInventoryItemResponse): string | undefined {
+    const unit = (item.unit ?? '').trim();
+    if (!unit) return undefined;
+    const shown = countUnit(item.quantity ?? 0, unit);
+    const space = shown.indexOf(' ');
+    return space < 0 ? unit : shown.slice(space + 1);
+  }
   totalElements = signal(0);
 
   canManage = computed(() => {

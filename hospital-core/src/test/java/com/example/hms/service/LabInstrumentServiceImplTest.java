@@ -108,6 +108,40 @@ class LabInstrumentServiceImplTest {
         HospitalContextHolder.clear();
     }
 
+    // ── another hospital's instrument answers as an unknown one (review F3) ──
+
+    @Test
+    @DisplayName("another hospital's instrument is 'not found' on read, update, deactivate and reactivate, exactly like an unknown id")
+    void anotherHospitalsInstrumentAnswersAsUnknown() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        instrument.setHospital(elsewhere);
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+
+        assertThatThrownBy(() -> service.getById(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivate(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.reactivate(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(instrumentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D4314: a deactivated instrument of the caller's hospital is reactivated")
+    void reactivatesOwnInstrument() {
+        instrument.setActive(false);
+        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+        when(instrumentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.reactivate(INSTRUMENT_ID, LOCALE);
+
+        assertThat(instrument.isActive()).isTrue();
+    }
+
     // ── getByHospital ────────────────────────────────────────────
 
     @Test

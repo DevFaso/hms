@@ -116,34 +116,37 @@ class OrganizationLifecycleServiceImplTest {
     }
 
     @Test
-    @DisplayName("QA D4317: a deactivation moves active and the lifecycle state together, and so does the reactivation")
-    void deactivateAndReactivateKeepBothSwitchesTogether() {
+    @DisplayName("QA D4317: deactivating never suspends on its own, even with no active facility: users may still be assigned")
+    void deactivateNeverSuspends() {
         org.setActive(true);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.countActiveFacilities(orgId)).thenReturn(0L);
 
-        service.deactivate(orgId);
-
-        assertThat(org.isActive()).isFalse();
-        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
-        assertThat(org.getSuspendedAt()).isNotNull();
-
-        service.reactivate(orgId);
+        assertThatThrownBy(() -> service.deactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
 
         assertThat(org.isActive()).isTrue();
         assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
+        assertThat(org.getSuspendedAt()).isNull();
+        verify(organizationRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("QA D4317: an archived organization is not reactivated from the list")
-    void reactivateRefusedWhenArchived() {
+    @DisplayName("QA D4317: a suspended or archived organization is not reactivated from an edit; a legacy flag is aligned")
+    void reactivateOnlyAlignsAnActiveLifecycle() {
         org.setActive(false);
-        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
 
         assertThatThrownBy(() -> service.reactivate(orgId))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
         assertThat(org.isActive()).isFalse();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
+
+        org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
+        service.reactivate(orgId);
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
     }
 
     // ── suspend ────────────────────────────────────────────────────────

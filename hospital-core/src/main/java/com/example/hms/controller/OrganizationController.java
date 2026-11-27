@@ -141,12 +141,12 @@ public class OrganizationController {
         // QA D435: two organisations with the same name cannot be told apart in any picker.
         requireNameFree(requestDTO.getName(), null);
 
-        Organization organization = organizationMapper.toEntity(requestDTO);
-        // QA D4317: created inactive means created suspended; the two switches never disagree.
-        if (!organization.isActive()) {
-            organization.setLifecycleState(com.example.hms.enums.OrganizationLifecycleState.SUSPENDED);
-            organization.setSuspendedAt(java.time.Instant.now());
+        // QA D4317: an organization is created active; it is suspended from its
+        // lifecycle page (reason and step-up), never born inactive.
+        if (Boolean.FALSE.equals(requestDTO.getActive())) {
+            throw new com.example.hms.exception.FieldBusinessException("active", "organization.create.inactive");
         }
+        Organization organization = organizationMapper.toEntity(requestDTO);
         organization = organizationRepository.save(organization);
 
         Organization organizationWithHospitals = organizationRepository
@@ -186,10 +186,13 @@ public class OrganizationController {
             requireNameFree(requestDTO.getName(), organization.getId());
         }
 
-        // QA D4317: the form's "active" switch is a lifecycle transition, refused
-        // while a facility is still active, and applied before any other edit.
-        if (organization.isActive() != requestDTO.isActive()) {
-            if (requestDTO.isActive()) {
+        // QA D4317: an edit changes the state only when the body says so. A body
+        // without `active` (the portal's) leaves a suspended organization
+        // suspended; an explicit value is answered by the lifecycle service,
+        // which refuses and points to the lifecycle page.
+        Boolean wanted = requestDTO.getActive();
+        if (wanted != null && wanted != organization.isActive()) {
+            if (wanted) {
                 organizationLifecycleService.reactivate(id);
             } else {
                 organizationLifecycleService.deactivate(id);
@@ -223,8 +226,9 @@ public class OrganizationController {
         Organization organization = organizationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
-        // QA D4317: refused while a facility is still active; otherwise
-        // suspended and inactive together, with its audit row.
+        // QA D4317: an organization in use is not switched off from the list. The
+        // refusal gives the count of active facilities, or points to the
+        // lifecycle page, where a suspension takes its reason and its step-up.
         organizationLifecycleService.deactivate(id);
         
         log.info("Soft deleted organization: {}", organization.getCode());

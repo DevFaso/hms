@@ -100,9 +100,6 @@
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
             <span class="kpi-label">{{ 'PLATFORM.ACTIVE_RELEASES' | translate }}</span>
-            <span class="kpi-sub" data-test="planned-releases">{{
-              'PLATFORM.PLANNED_WINDOWS' | plural: s.actions.plannedReleaseWindows ?? 0
-            }}</span>
           </div>
         </div>
       </div>
@@ -573,11 +570,11 @@
                 </div>
                 <div>
                   <dt>{{ 'PLATFORM.STARTS_AT' | translate }}</dt>
-                  <dd>{{ rel.startsAt | serverTime | date: 'medium' }}</dd>
+                  <dd>{{ rel.startsAt | serverTime | date: 'short' }}</dd>
                 </div>
                 <div>
                   <dt>{{ 'PLATFORM.ENDS_AT' | translate }}</dt>
-                  <dd>{{ rel.endsAt | serverTime | date: 'medium' }}</dd>
+                  <dd>{{ rel.endsAt | serverTime | date: 'short' }}</dd>
                 </div>
                 <div>
                   <dt>{{ 'PLATFORM.CHANGE_FREEZE' | translate }}</dt>
@@ -589,11 +586,17 @@
                 </div>
                 <div>
                   <dt>{{ 'PLATFORM.RELEASE_CREATED_AT' | translate }}</dt>
-                  <dd>{{ rel.createdAt | serverTime | date: 'medium' }}</dd>
+                  <dd>{{ rel.createdAt | serverTime | date: 'short' }}</dd>
                 </div>
+                @if (rel.cancelReason) {
+                  <div>
+                    <dt>{{ 'PLATFORM.CANCEL_RELEASE_REASON' | translate }}</dt>
+                    <dd>{{ rel.cancelReason }}</dd>
+                  </div>
+                }
                 <div>
                   <dt>{{ 'PLATFORM.RELEASE_UPDATED_AT' | translate }}</dt>
-                  <dd>{{ rel.updatedAt | serverTime | date: 'medium' }}</dd>
+                  <dd>{{ rel.updatedAt | serverTime | date: 'short' }}</dd>
                 </div>
               </dl>
             }
@@ -627,7 +630,7 @@
                   type="button"
                   class="btn btn-outline btn-sm btn-danger-outline"
                   [attr.data-test]="'release-cancel-' + rel.id"
-                  (click)="cancelRelease(rel)"
+                  (click)="startCancelRelease(rel)"
                 >
                   {{ 'PLATFORM.CANCEL_RELEASE' | translate }}
                 </button>
@@ -637,6 +640,20 @@
         }
       </div>
     }
+  }
+
+  <!-- QA D4082: a cancellation keeps its reason: asked here, refused blank by the server too. -->
+  @if (cancellingRelease(); as rel) {
+    <app-reason-dialog
+      titleKey="PLATFORM.CANCEL_RELEASE_TITLE"
+      messageKey="PLATFORM.CANCEL_RELEASE_CONFIRM_BODY"
+      labelKey="PLATFORM.CANCEL_RELEASE_REASON"
+      confirmKey="PLATFORM.CANCEL_RELEASE"
+      dismissKey="PLATFORM.CANCEL_RELEASE_KEEP"
+      [busy]="saving()"
+      (confirmed)="cancelRelease(rel, $event)"
+      (cancelled)="stopCancelRelease()"
+    />
   }
 
   <!-- ═══════════════════════════════════════════

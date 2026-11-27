@@ -175,17 +175,35 @@ class SuperAdminPlatformRegistryServiceImplTest {
         when(platformReleaseWindowRepository.findById(ahead.getId())).thenReturn(Optional.of(ahead));
         when(platformReleaseWindowRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        PlatformReleaseWindowResponseDTO cancelled = service.cancelReleaseWindow(ahead.getId());
+        PlatformReleaseWindowResponseDTO cancelled = service.cancelReleaseWindow(ahead.getId(), " Planifiée par erreur ");
 
         assertThat(cancelled.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
+        assertThat(cancelled.getCancelReason()).isEqualTo("Planifiée par erreur");
         assertThat(ahead.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
 
         PlatformReleaseWindow done = persisted(request("Done",
             LocalDateTime.now().minusDays(3), LocalDateTime.now().minusDays(2)));
         when(platformReleaseWindowRepository.findById(done.getId())).thenReturn(Optional.of(done));
         UUID doneId = done.getId();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReleaseWindow(doneId))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReleaseWindow(doneId, "Trop tard"))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("QA D4082: a release window is not cancelled without a reason, and nothing is written")
+    void cancelReleaseWindowNeedsAReason() {
+        PlatformReleaseWindow ahead = persisted(request("Kept",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        UUID id = ahead.getId();
+
+        for (String blank : new String[] {null, "", "   "}) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReleaseWindow(id, blank))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(ex -> assertThat(((com.example.hms.exception.FieldBusinessException) ex).getField())
+                    .isEqualTo("reason"));
+        }
+        assertThat(ahead.getStatus()).isEqualTo(PlatformReleaseStatus.SCHEDULED);
+        org.mockito.Mockito.verify(platformReleaseWindowRepository, org.mockito.Mockito.never()).saveAndFlush(any());
     }
 
     private PlatformReleaseWindowRequestDTO request(String name, LocalDateTime startsAt, LocalDateTime endsAt) {

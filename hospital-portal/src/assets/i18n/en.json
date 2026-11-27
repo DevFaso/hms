@@ -6719,17 +6719,17 @@
     "VIEW_DETAILS": "View Details",
     "VIEW_DOCS": "View Docs",
     "WEBHOOKS": "Webhooks",
-    "PLANNED_WINDOWS_ONE": "{{count}} planned",
-    "PLANNED_WINDOWS_OTHER": "{{count}} planned",
     "PLANNED_WINDOWS_LABEL": "Planned windows",
     "EDIT_RELEASE_WINDOW": "Edit the release window",
     "CANCEL_RELEASE": "Cancel the window",
-    "CANCEL_RELEASE_CONFIRM": "Cancel the window “{{name}}”?",
     "CANCEL_RELEASE_CONFIRM_BODY": "It stays in the list as cancelled, and its change freeze will not apply.",
     "RELEASE_SHOW_DETAIL": "Details",
     "RELEASE_HIDE_DETAIL": "Hide details",
     "RELEASE_CREATED_AT": "Created",
-    "RELEASE_UPDATED_AT": "Last changed"
+    "RELEASE_UPDATED_AT": "Last changed",
+    "CANCEL_RELEASE_REASON": "Reason for cancelling",
+    "CANCEL_RELEASE_KEEP": "Keep the window",
+    "CANCEL_RELEASE_TITLE": "Cancel this release window?"
   },
   "PORTAL": {
     "VITALS": {

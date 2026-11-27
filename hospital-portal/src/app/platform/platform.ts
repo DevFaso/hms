@@ -32,7 +32,7 @@ import {
   AutomationTask,
 } from '../services/platform.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { PluralPipe } from '../shared/i18n/plural';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { toServerDateTime, localDateString, toLocalInputValue } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -185,7 +185,7 @@ const RELEASE_FIELD_IDS = ['relName', 'relEnvironment', 'relStartsAt', 'relEndsA
     InlineDiscardAskComponent,
     InlineSubFormDirective,
     ServerTimePipe,
-    PluralPipe,
+    ReasonDialogComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -932,25 +932,37 @@ export class PlatformComponent implements OnInit {
     return rel.status === 'SCHEDULED' || rel.status === 'IN_PROGRESS';
   }
 
-  /** QA D4082: a window scheduled by mistake is withdrawn; it stays in the list as cancelled. */
-  async cancelRelease(rel: ReleaseWindowResponse): Promise<void> {
-    const confirmed = await this.confirmService.ask({
-      titleKey: 'PLATFORM.CANCEL_RELEASE_CONFIRM',
-      messageKey: 'PLATFORM.CANCEL_RELEASE_CONFIRM_BODY',
-      params: { name: rel.name },
-      confirmKey: 'PLATFORM.CANCEL_RELEASE',
-    });
-    if (!confirmed) return;
-    this.platformSvc.cancelReleaseWindow(rel.id).subscribe({
+  /** QA D4082: the window whose cancellation is being confirmed in the reason dialog. */
+  cancellingRelease = signal<ReleaseWindowResponse | null>(null);
+
+  startCancelRelease(rel: ReleaseWindowResponse): void {
+    this.cancellingRelease.set(rel);
+  }
+
+  stopCancelRelease(): void {
+    this.cancellingRelease.set(null);
+  }
+
+  /**
+   * QA D4082: a window scheduled by mistake is withdrawn with its reason (the reason dialog
+   * refuses a blank one, and so does the server); it stays in the list as cancelled.
+   */
+  cancelRelease(rel: ReleaseWindowResponse, reason: string): void {
+    this.saving.set(true);
+    this.platformSvc.cancelReleaseWindow(rel.id, reason.trim()).subscribe({
       next: () => {
+        this.saving.set(false);
+        this.stopCancelRelease();
         this.toast.success(
           this.translate.instant('PLATFORM.TOAST.RELEASE_CANCELLED', { name: rel.name }),
         );
         this.loadReleases();
         this.loadDashboard();
       },
-      error: (err) =>
-        this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.RELEASE_CANCEL_FAILED')),
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.RELEASE_CANCEL_FAILED'));
+      },
     });
   }
 

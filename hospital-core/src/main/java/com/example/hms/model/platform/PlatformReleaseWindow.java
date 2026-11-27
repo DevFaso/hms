@@ -71,4 +71,9 @@ public class PlatformReleaseWindow extends BaseEntity {
     @Size(max = 255)
     @Column(name = "notes", length = 255)
     private String notes;
+
+    /** Why the window was cancelled (V417); null while it is not. Written once. */
+    @Size(max = 500)
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
 }

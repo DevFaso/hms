@@ -24,6 +24,8 @@ public class PlatformReleaseWindowResponseDTO {
     private boolean freezeChanges;
     private String ownerTeam;
     private String notes;
+    /** Why the window was cancelled; null while it is not. */
+    private String cancelReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

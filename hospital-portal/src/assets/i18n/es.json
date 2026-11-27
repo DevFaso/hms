@@ -6719,17 +6719,17 @@
     "VIEW_DETAILS": "Ver detalles",
     "VIEW_DOCS": "Ver documentación",
     "WEBHOOKS": "Webhooks",
-    "PLANNED_WINDOWS_ONE": "{{count}} planificada",
-    "PLANNED_WINDOWS_OTHER": "{{count}} planificadas",
     "PLANNED_WINDOWS_LABEL": "Ventanas planificadas",
     "EDIT_RELEASE_WINDOW": "Modificar la ventana de despliegue",
     "CANCEL_RELEASE": "Cancelar la ventana",
-    "CANCEL_RELEASE_CONFIRM": "¿Cancelar la ventana «{{name}}»?",
     "CANCEL_RELEASE_CONFIRM_BODY": "Permanecerá en la lista como cancelada y su congelación de cambios no se aplicará.",
     "RELEASE_SHOW_DETAIL": "Detalle",
     "RELEASE_HIDE_DETAIL": "Ocultar el detalle",
     "RELEASE_CREATED_AT": "Creada el",
-    "RELEASE_UPDATED_AT": "Modificada el"
+    "RELEASE_UPDATED_AT": "Modificada el",
+    "CANCEL_RELEASE_REASON": "Motivo de la cancelación",
+    "CANCEL_RELEASE_KEEP": "Conservar la ventana",
+    "CANCEL_RELEASE_TITLE": "¿Cancelar esta ventana de despliegue?"
   },
   "PORTAL": {
     "VITALS": {

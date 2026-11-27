@@ -69,7 +69,8 @@ public class OrganizationMapper {
         organization.setCode(requestDTO.getCode());
         organization.setDescription(requestDTO.getDescription());
         organization.setType(requestDTO.getType());
-        organization.setActive(requestDTO.isActive());
+        // `active` is not copied: it follows the lifecycle state, which only
+        // OrganizationLifecycleService changes (QA D4317).
         // QA D191: contact fields sent with the form are kept; absent ones are left alone.
         if (requestDTO.getContactEmail() != null) {
             organization.setPrimaryContactEmail(blankToNull(requestDTO.getContactEmail()));

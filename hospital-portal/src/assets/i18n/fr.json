@@ -6719,17 +6719,17 @@
     "VIEW_DETAILS": "Voir les détails",
     "VIEW_DOCS": "Voir la documentation",
     "WEBHOOKS": "Webhooks",
-    "PLANNED_WINDOWS_ONE": "{{count}} planifiée",
-    "PLANNED_WINDOWS_OTHER": "{{count}} planifiées",
     "PLANNED_WINDOWS_LABEL": "Fenêtres planifiées",
     "EDIT_RELEASE_WINDOW": "Modifier la fenêtre de mise en production",
     "CANCEL_RELEASE": "Annuler la fenêtre",
-    "CANCEL_RELEASE_CONFIRM": "Annuler la fenêtre « {{name}} » ?",
     "CANCEL_RELEASE_CONFIRM_BODY": "Elle restera dans la liste avec le statut « Annulée », et son gel des changements ne s'appliquera pas.",
     "RELEASE_SHOW_DETAIL": "Détail",
     "RELEASE_HIDE_DETAIL": "Masquer le détail",
     "RELEASE_CREATED_AT": "Créée le",
-    "RELEASE_UPDATED_AT": "Modifiée le"
+    "RELEASE_UPDATED_AT": "Modifiée le",
+    "CANCEL_RELEASE_REASON": "Motif de l'annulation",
+    "CANCEL_RELEASE_KEEP": "Garder la fenêtre",
+    "CANCEL_RELEASE_TITLE": "Annuler cette fenêtre de mise en production ?"
   },
   "PORTAL": {
     "VITALS": {

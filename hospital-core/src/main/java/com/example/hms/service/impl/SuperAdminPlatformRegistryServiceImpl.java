@@ -228,12 +228,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
     public PlatformReleaseWindowResponseDTO updateReleaseWindow(UUID id, PlatformReleaseWindowRequestDTO request) {
         PlatformReleaseWindow window = loadReleaseWindow(id);
         LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
-        // Only a window still ahead can be corrected: once it has started its
-        // dates and its freeze are what the teams worked under.
-        if (statusAt(window.getStatus(), window.getStartsAt(), window.getEndsAt(), now)
-                != PlatformReleaseStatus.SCHEDULED) {
-            throw new ConflictException(MessageUtil.resolve("platform.releaseWindow.notEditable"));
-        }
+        requireNotCancelled(window, now);
         if (!request.getEndsAt().isAfter(request.getStartsAt())) {
             throw new com.example.hms.exception.FieldBusinessException("endsAt", "platform.releaseWindow.endBeforeStart");
         }
@@ -257,8 +252,25 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         return mapReleaseWindow(saved, now);
     }
 
+    /**
+     * Only a window still ahead can be corrected: a cancelled or finished one
+     * is closed, and once one has started its dates and its freeze are what
+     * the teams worked under.
+     */
+    private static void requireNotCancelled(PlatformReleaseWindow window, LocalDateTime now) {
+        if (statusAt(window.getStatus(), window.getStartsAt(), window.getEndsAt(), now)
+                != PlatformReleaseStatus.SCHEDULED) {
+            throw new ConflictException(MessageUtil.resolve("platform.releaseWindow.notEditable"));
+        }
+    }
+
     @Override
-    public PlatformReleaseWindowResponseDTO cancelReleaseWindow(UUID id) {
+    public PlatformReleaseWindowResponseDTO cancelReleaseWindow(UUID id, String reason) {
+        // The body before the state: a missing reason is always named.
+        if (reason == null || reason.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                "reason", "platform.releaseWindow.cancelReasonRequired");
+        }
         PlatformReleaseWindow window = loadReleaseWindow(id);
         LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
         PlatformReleaseStatus current = statusAt(window.getStatus(), window.getStartsAt(), window.getEndsAt(), now);
@@ -269,6 +281,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             throw new ConflictException(MessageUtil.resolve("platform.releaseWindow.notCancellable"));
         }
         window.setStatus(PlatformReleaseStatus.CANCELLED);
+        window.setCancelReason(reason.trim());
         PlatformReleaseWindow saved = platformReleaseWindowRepository.saveAndFlush(window);
         recordReleaseWindowAudit(saved, String.format(
             "Release window cancelled name=%s env=%s", saved.getName(), saved.getEnvironment()));
@@ -453,6 +466,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .freezeChanges(window.isFreezeChanges())
             .ownerTeam(window.getOwnerTeam())
             .notes(window.getNotes())
+            .cancelReason(window.getCancelReason())
             .createdAt(window.getCreatedAt())
             .updatedAt(window.getUpdatedAt())
             .build();

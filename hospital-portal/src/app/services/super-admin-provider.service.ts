@@ -37,8 +37,15 @@ export class SuperAdminProviderService {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
     if (filters.type) params = params.set('type', filters.type);
     if (filters.status) params = params.set('status', filters.status);
-    const search = (filters.search ?? '').trim();
-    if (search) params = params.set('search', search);
+    const term = (filters.search ?? '').trim();
+    if (term) {
+      // QA D4075: a typed term stays out of the URL (and of every access log).
+      return this.http.post<ProviderPage>(
+        `${BASE}/search`,
+        { type: filters.type || null, status: filters.status || null, term },
+        { params: new HttpParams().set('page', String(page)).set('size', String(size)) },
+      );
+    }
     return this.http.get<ProviderPage>(BASE, { params });
   }
 

@@ -4178,10 +4178,16 @@
                  splitStatements="false" stripComments="false"/>
     </changeSet>
 
-    <!-- V416 (QA r81 D4317): an organization's active flag follows its lifecycle state; rows written
-         before the two switches moved together are aligned. -->
+    <!-- V416 (QA r81 D4317): an inactive organization that still holds an active facility gets its
+         active flag back; nothing is suspended. -->
     <changeSet id="V416-organization-active-follows-lifecycle" author="hms-team" runOnChange="false">
         <sqlFile path="V416__organization_active_follows_lifecycle.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V417 (QA r81 D4082): a cancelled release window keeps its reason. -->
+    <changeSet id="V417-release-window-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V417__release_window_cancel_reason.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 

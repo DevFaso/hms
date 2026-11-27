@@ -219,6 +219,8 @@ export interface ReleaseWindowResponse {
   freezeChanges: boolean;
   ownerTeam: string;
   notes: string;
+  /** QA D4082: why the window was cancelled; null while it is not. */
+  cancelReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -379,10 +381,10 @@ export class PlatformService {
   }
 
   /** QA D4082: withdraws a window that has not finished; it stays listed as cancelled. */
-  cancelReleaseWindow(id: string): Observable<ReleaseWindowResponse> {
+  cancelReleaseWindow(id: string, reason: string): Observable<ReleaseWindowResponse> {
     return this.http.post<ReleaseWindowResponse>(
       `/super-admin/platform/release-windows/${encodeURIComponent(id)}/cancel`,
-      {},
+      { reason },
     );
   }
 

@@ -129,6 +129,23 @@ class LabInventoryServiceImplTest {
             .isInstanceOf(AccessDeniedException.class);
     }
 
+    @Test
+    @DisplayName("another hospital's item is 'not found' on read, update and deactivate, exactly like an unknown id")
+    void anotherHospitalsItemAnswersAsUnknown() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        item.setHospital(elsewhere);
+        when(inventoryRepository.findByIdAndActiveTrue(ITEM_ID)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.getById(ITEM_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.update(ITEM_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivate(ITEM_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(inventoryRepository, never()).save(any());
+    }
+
     // ── getById ──────────────────────────────────────────────────
 
     @Test

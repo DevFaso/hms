@@ -47,7 +47,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     public LabInventoryItemResponseDTO getById(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
         return mapper.toDto(item);
     }
 
@@ -77,7 +77,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     public LabInventoryItemResponseDTO update(UUID id, LabInventoryItemRequestDTO dto, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
 
         // Check item code uniqueness if changed
         if (dto.getItemCode() != null
@@ -101,7 +101,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     public void deactivate(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
         item.setActive(false);
         inventoryRepository.save(item);
     }
@@ -121,6 +121,16 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         if (context.isSuperAdmin()) return true;
         return HospitalScopeUtils.resolveScope(context).contains(hospitalId);
+    }
+
+    /**
+     * Another hospital's item answers exactly as an unknown id (404): a 403
+     * here told the caller that the id exists somewhere else.
+     */
+    private void requireOwnItem(LabInventoryItem item, UUID id) {
+        if (item.getHospital() == null || !hasHospitalAccess(item.getHospital().getId())) {
+            throw new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id);
+        }
     }
 
     private void requireHospitalScope(UUID hospitalId, Locale locale) {

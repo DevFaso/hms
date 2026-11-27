@@ -97,20 +97,17 @@
             <button type="button" class="btn-ghost" (click)="startEdit(plan)">
               {{ 'SUBSCRIPTIONS.EDIT' | translate }}
             </button>
-            @if (plan.active) {
-              <button type="button" class="btn-ghost danger" (click)="deactivate(plan)">
-                {{ 'SUBSCRIPTIONS.DEACTIVATE' | translate }}
-              </button>
-            } @else {
-              <button
-                type="button"
-                class="btn-ghost"
-                [attr.data-test]="'plan-reactivate-' + plan.id"
-                (click)="reactivate(plan)"
-              >
-                {{ 'SUBSCRIPTIONS.REACTIVATE' | translate }}
-              </button>
-            }
+            <button
+              type="button"
+              class="btn-ghost"
+              [class.danger]="plan.active"
+              [attr.data-test]="'plan-toggle-' + plan.id"
+              (click)="plan.active ? deactivate(plan) : reactivate(plan)"
+            >
+              {{
+                (plan.active ? 'SUBSCRIPTIONS.DEACTIVATE' : 'SUBSCRIPTIONS.REACTIVATE') | translate
+              }}
+            </button>
           </footer>
         </div>
       }

@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { KeyLabelPipe } from '../../../shared/pipes/key-label.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subscription } from 'rxjs';
 
@@ -82,6 +83,7 @@ const STEP_UP_FAILED_KEY = 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED';
     DatePipe,
     FormsModule,
     RouterLink,
+    KeyLabelPipe,
     TranslateModule,
     EnumLabelPipe,
     ProviderEvidenceFormComponent,

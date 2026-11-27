@@ -27,18 +27,19 @@ public interface OrganizationLifecycleService {
     TenantLifecycleResponseDTO getLifecycle(UUID organizationId);
 
     /**
-     * QA D4317: the organization list's "deactivate". Refused (409, with the
-     * count) while the organization holds an active facility; otherwise the
-     * organization becomes SUSPENDED and inactive together, so {@code active}
-     * and the lifecycle state never disagree. An organization that already
-     * left ACTIVE only has its {@code active} flag aligned.
+     * QA D4317: the organization list's "deactivate". An ACTIVE organization
+     * is never switched off here: the refusal (409) gives the count of its
+     * active facilities, or points to the lifecycle page, where a suspension
+     * takes its reason and its step-up. This method never suspends: a
+     * suspension blocks every user assigned in the organization. An
+     * organization that already left ACTIVE only has its flag aligned.
      */
     void deactivate(UUID organizationId);
 
     /**
-     * QA D4317: the reverse of {@link #deactivate}: a SUSPENDED organization
-     * becomes ACTIVE and active together. An archived or purge-scheduled one
-     * is refused (409): it comes back through its lifecycle page.
+     * QA D4317: an explicit "active" on an edit. An organization whose
+     * lifecycle is ACTIVE only has its flag aligned; any other state is
+     * refused (409): it is restored from its lifecycle page.
      */
     void reactivate(UUID organizationId);
 

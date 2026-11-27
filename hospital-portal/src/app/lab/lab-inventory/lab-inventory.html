@@ -206,7 +206,7 @@
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
-              <td>{{ item.quantity | countUnit: item.unit }}</td>
+              <td>{{ item.quantity | labValue: stockUnit(item) }}</td>
               <td data-test="inventory-lot">{{ item.lotNumber || '—' }}</td>
               <td>
                 {{

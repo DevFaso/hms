@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { PluralPipe } from '../shared/i18n/plural';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -28,6 +29,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
     SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,
+    ServerTimePipe,
     TranslateModule,
     DatePipe,
     PluralPipe,

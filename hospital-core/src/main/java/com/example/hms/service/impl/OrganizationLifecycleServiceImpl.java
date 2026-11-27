@@ -235,38 +235,24 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             throw new ConflictException(
                 MessageUtil.resolveOrRaw("organization.deactivate.activeHospitals", activeFacilities));
         }
-        String reason = MessageUtil.resolveOrRaw("organization.deactivate.reason");
-        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
-        org.setActive(false);
-        org.setSuspendedAt(Instant.now(clock));
-        org.setSuspendedBy(currentActorId());
-        org.setSuspensionReason(reason);
-        organizationRepository.save(org);
-        invalidateStatusCache();
-        recordAudit(org, AuditEventType.TENANT_SUSPENDED, "Organization suspended: " + reason);
+        // No active facility is not "nobody affected": a user may still hold an
+        // assignment at an inactive one, and a suspended organization blocks
+        // every request of its users. Suspending stays on the lifecycle page.
+        throw new ConflictException(MessageUtil.resolveOrRaw("organization.deactivate.useLifecycle"));
     }
 
     @Override
     public void reactivate(UUID organizationId) {
         Organization org = loadOrThrow(organizationId);
-        OrganizationLifecycleState previous = org.getLifecycleState();
-        if (previous == OrganizationLifecycleState.ACTIVE) {
-            // A row deactivated before the two switches moved together.
-            if (!org.isActive()) {
-                org.setActive(true);
-                organizationRepository.save(org);
-                invalidateStatusCache();
-            }
-            return;
-        }
-        if (previous != OrganizationLifecycleState.SUSPENDED) {
+        if (org.getLifecycleState() != OrganizationLifecycleState.ACTIVE) {
             throw new ConflictException(MessageUtil.resolveOrRaw("organization.reactivate.useLifecycle"));
         }
-        org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
-        org.setActive(true);
-        organizationRepository.save(org);
-        invalidateStatusCache();
-        recordAudit(org, AuditEventType.TENANT_RESTORED, "Organization restored from " + previous);
+        // A row whose flag was cleared before the two switches moved together.
+        if (!org.isActive()) {
+            org.setActive(true);
+            organizationRepository.save(org);
+            invalidateStatusCache();
+        }
     }
 
     // ── helpers ────────────────────────────────────────────────────────

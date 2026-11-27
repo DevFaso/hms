@@ -172,9 +172,6 @@
             <a class="strip-card" routerLink="/super-admin/platform">
               <span class="strip-value">{{ actions.activeReleaseWindows }}</span>
               <span class="strip-label">{{ 'SUPER_ADMIN.PLATFORM.RELEASES' | translate }}</span>
-              <span class="strip-sub">{{
-                'PLATFORM.PLANNED_WINDOWS' | plural: actions.plannedReleaseWindows ?? 0
-              }}</span>
             </a>
           </div>
         } @else {

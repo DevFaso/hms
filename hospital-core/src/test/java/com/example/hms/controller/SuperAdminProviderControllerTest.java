@@ -49,7 +49,7 @@ class SuperAdminProviderControllerTest {
         List<Method> handlers = Arrays.stream(SuperAdminProviderController.class.getDeclaredMethods())
             .filter(m -> m.isAnnotationPresent(GetMapping.class) || m.isAnnotationPresent(PostMapping.class))
             .toList();
-        assertThat(handlers).hasSize(9).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
+        assertThat(handlers).hasSize(10).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
             .isEqualTo("hasAuthority('ROLE_SUPER_ADMIN')"));
     }
 
@@ -68,7 +68,7 @@ class SuperAdminProviderControllerTest {
     void listGetAndDecisionsDelegate() {
         Pageable pageable = PageRequest.of(0, 20);
         Page<ProviderResponseDTO> page = new PageImpl<>(List.of(dto));
-        when(service.list(FacilityType.PHARMACY, ProviderVerificationStatus.SUBMITTED, null, pageable)).thenReturn(page);
+        when(service.list(FacilityType.PHARMACY, ProviderVerificationStatus.SUBMITTED, pageable)).thenReturn(page);
         when(service.get(id)).thenReturn(dto);
         ProviderVerifyRequestDTO verify = new ProviderVerifyRequestDTO();
         ProviderDecisionRequestDTO decision = new ProviderDecisionRequestDTO("reason");
@@ -78,7 +78,7 @@ class SuperAdminProviderControllerTest {
         when(service.revoke(id, decision)).thenReturn(dto);
         when(service.resubmit(id, resubmit)).thenReturn(dto);
 
-        assertThat(controller.list(FacilityType.PHARMACY, ProviderVerificationStatus.SUBMITTED, null, pageable).getBody())
+        assertThat(controller.list(FacilityType.PHARMACY, ProviderVerificationStatus.SUBMITTED, pageable).getBody())
             .isSameAs(page);
         assertThat(controller.get(id).getBody()).isSameAs(dto);
         List<ProviderVerificationHistoryEntryDTO> history = List.of(new ProviderVerificationHistoryEntryDTO());

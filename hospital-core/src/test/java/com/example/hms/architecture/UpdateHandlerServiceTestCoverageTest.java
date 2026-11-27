@@ -109,9 +109,7 @@ class UpdateHandlerServiceTestCoverageTest {
         "PatientPortalController#markAllNotificationsRead -> notificationService.markAllReadForUser", 1, DARK,
         "PatientPortalController#updateNotificationPreferences -> portalService.updateMyNotificationPreferences", 1, DARK,
         "PermissionController#updatePermission -> permissionService.updatePermission", 1, DARK,
-        "RoleController#setPermissions -> roleService.assignPermissions", 1, DARK,
-        "OrganizationController#updateOrganization -> <none>.<none>", 1,
-            NO_SERVICE + " (the controller loads, checks and saves the Organization through organizationRepository itself)");
+        "RoleController#setPermissions -> roleService.assignPermissions", 1, DARK);
 
     private record Delegation(int mapping, String handler, String service, String serviceType, String method) {
         String key() {

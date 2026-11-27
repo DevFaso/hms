@@ -63,7 +63,11 @@
               <td>
                 {{ 'ADMIN_GOV.AGE_DAYS' | plural: row.passwordAgeDays }}
               </td>
-              <td>{{ row.rotationDueOn ? (row.rotationDueOn | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{
+                  row.rotationDueOn ? (row.rotationDueOn | serverTime | date: 'mediumDate') : '—'
+                }}
+              </td>
               <td [class.overdue]="row.daysUntilDue < 0">{{ row.daysUntilDue }}</td>
               <td>
                 <span

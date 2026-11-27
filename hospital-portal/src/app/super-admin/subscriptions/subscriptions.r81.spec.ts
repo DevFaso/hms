@@ -106,7 +106,7 @@ describe('SubscriptionsComponent (QA r81)', () => {
     expect(service.listPlans).toHaveBeenCalledWith(false);
     expect(component.visiblePlans().map((p) => p.id)).toEqual(['b']);
     expect(host.querySelector('[data-test="plan-status-b"]')).not.toBeNull();
-    expect(host.querySelector('[data-test="plan-reactivate-b"]')).not.toBeNull();
+    expect(host.querySelector('[data-test="plan-toggle-b"]')).not.toBeNull();
 
     await component.reactivate(component.visiblePlans()[0]);
     expect(confirm.ask).toHaveBeenCalled();

@@ -68,10 +68,24 @@ public class SuperAdminProviderController {
     public ResponseEntity<Page<ProviderResponseDTO>> list(
         @RequestParam(name = "type", required = false) FacilityType type,
         @RequestParam(name = "status", required = false) ProviderVerificationStatus status,
-        @RequestParam(name = "search", required = false) String search,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(onboardingService.list(type, status, search, pageable));
+        return ResponseEntity.ok(onboardingService.list(type, status, pageable));
+    }
+
+    /** QA D4075: the same list narrowed to a typed term, which stays out of the URL. */
+    @PostMapping("/search")
+    @PreAuthorize(SUPER_ADMIN_ONLY)
+    @com.example.hms.security.ReadsOnly("the provider list's search box, under POST so the typed term stays out of the URL")
+    @Operation(summary = "Search provider facilities by name, code or city",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<Page<ProviderResponseDTO>> search(
+        @Valid @RequestBody(required = false) com.example.hms.payload.dto.provider.ProviderSearchRequestDTO request,
+        @PageableDefault(size = 20) Pageable pageable
+    ) {
+        com.example.hms.payload.dto.provider.ProviderSearchRequestDTO body = request == null
+            ? new com.example.hms.payload.dto.provider.ProviderSearchRequestDTO() : request;
+        return ResponseEntity.ok(onboardingService.list(body.getType(), body.getStatus(), body.getTerm(), pageable));
     }
 
     @GetMapping("/{providerId}/lifecycle-events")
