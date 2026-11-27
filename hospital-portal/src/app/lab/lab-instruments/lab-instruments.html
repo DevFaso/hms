@@ -162,14 +162,13 @@
                 </span>
               </td>
               <td>
+                {{
+                  instr.nextCalibrationDate
+                    ? (instr.nextCalibrationDate | serverTime | date: 'dd/MM/yyyy')
+                    : '—'
+                }}
                 @if (instr.calibrationOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextCalibrationDate
-                      ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
-                      : '—'
-                  }}
                 }
               </td>
               <td>

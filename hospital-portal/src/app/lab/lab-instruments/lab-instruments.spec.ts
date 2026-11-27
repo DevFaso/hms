@@ -98,6 +98,18 @@ describe('LabInstrumentsComponent', () => {
     expect(component.totalElements()).toBe(2);
   });
 
+  it('shows the next calibration date even when it is overdue', () => {
+    fixture.detectChanges();
+    flushInstruments({
+      ...PAGED,
+      content: [mockInstrument({ nextCalibrationDate: '2025-03-15', calibrationOverdue: true })],
+    });
+    fixture.detectChanges();
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr')!;
+    expect(row.textContent).toContain('15/03/2025');
+    expect(row.textContent).toContain('LAB_INSTRUMENTS.OVERDUE');
+  });
+
   it('should show loading state initially', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeTrue();
