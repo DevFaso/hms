@@ -44,6 +44,13 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     }
 
     @Override
+    public Page<LabInventoryItemResponseDTO> searchByHospital(UUID hospitalId, String search, Pageable pageable, Locale locale) {
+        requireHospitalScope(hospitalId, locale);
+        if (search == null || search.isBlank()) return inventoryRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable).map(mapper::toDto);
+        return inventoryRepository.searchActive(hospitalId, search.trim(), pageable).map(mapper::toDto);
+    }
+
+    @Override
     public LabInventoryItemResponseDTO getById(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));

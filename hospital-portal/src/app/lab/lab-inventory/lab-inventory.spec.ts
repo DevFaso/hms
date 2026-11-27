@@ -120,6 +120,22 @@ describe('LabInventoryComponent', () => {
     expect(row.querySelectorAll('td')[4].textContent).toContain('10');
   });
 
+  it('searches across inventory pages and retains the search on navigation', () => {
+    fixture.detectChanges();
+    flushItems();
+    component.searchText = ' reagent ';
+    component.search();
+    let req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.params.get('search')).toBe('reagent');
+    expect(req.request.params.get('page')).toBe('0');
+    req.flush({ ...PAGED, totalPages: 2 });
+    component.goToPage(1);
+    req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.params.get('search')).toBe('reagent');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush({ ...PAGED, number: 1, totalPages: 2 });
+  });
+
   it('should show loading state initially', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeTrue();

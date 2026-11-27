@@ -24,6 +24,7 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { labelledRefusalReason, refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 
 /**
  * QA D1193 (round 22): a field the server refuses is named with its label, not
@@ -40,6 +41,7 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
   selector: 'app-lab-inventory',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     DatePipe,
@@ -65,6 +67,10 @@ export class LabInventoryComponent implements OnInit {
   error = signal<string | null>(null);
   items = signal<LabInventoryItemResponse[]>([]);
   totalElements = signal(0);
+  totalPages = signal(0);
+  pageIndex = signal(0);
+  activeSearch = signal('');
+  searchText = '';
 
   canManage = computed(() => {
     const roles = this.auth.getRoles();
@@ -97,18 +103,34 @@ export class LabInventoryComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.instrumentService.getInventoryItems(hospitalId).subscribe({
-      next: (page) => {
-        this.items.set(page.content ?? []);
-        this.totalElements.set(page.totalElements ?? 0);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        console.error('Failed to load inventory', err);
-        this.error.set(this.translate.instant('LAB_INVENTORY.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.instrumentService
+      .getInventoryItems(hospitalId, this.pageIndex(), 20, this.activeSearch())
+      .subscribe({
+        next: (page) => {
+          this.items.set(page.content ?? []);
+          this.totalElements.set(page.totalElements ?? 0);
+          this.totalPages.set(page.totalPages ?? 0);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          console.error('Failed to load inventory', err);
+          this.error.set(this.translate.instant('LAB_INVENTORY.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
+  }
+
+  search(): void {
+    if (this.loading()) return;
+    this.activeSearch.set(this.searchText.trim());
+    this.pageIndex.set(0);
+    this.loadItems();
+  }
+
+  goToPage(page: number): void {
+    if (this.loading() || page < 0 || page >= this.totalPages()) return;
+    this.pageIndex.set(page);
+    this.loadItems();
   }
 
   openCreate(): void {

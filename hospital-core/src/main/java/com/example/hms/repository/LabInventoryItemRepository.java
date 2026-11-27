@@ -17,6 +17,11 @@ public interface LabInventoryItemRepository extends JpaRepository<LabInventoryIt
 
     Page<LabInventoryItem> findByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
+    @Query("SELECT i FROM LabInventoryItem i WHERE i.hospital.id = :hospitalId AND i.active = true "
+         + "AND (LOWER(i.name) LIKE LOWER(CONCAT('%', :term, '%')) "
+         + "OR LOWER(i.itemCode) LIKE LOWER(CONCAT('%', :term, '%')))")
+    Page<LabInventoryItem> searchActive(@Param("hospitalId") UUID hospitalId, @Param("term") String term, Pageable pageable);
+
     Optional<LabInventoryItem> findByIdAndActiveTrue(UUID id);
 
     boolean existsByHospitalIdAndItemCode(UUID hospitalId, String itemCode);

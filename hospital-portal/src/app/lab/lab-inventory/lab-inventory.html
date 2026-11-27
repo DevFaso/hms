@@ -118,6 +118,20 @@
     </div>
   }
 
+  <form class="filter-bar" (ngSubmit)="search()">
+    <label for="lab-inventory-search">{{ 'COMMON.SEARCH' | translate }}</label>
+    <input
+      appFormControl
+      id="lab-inventory-search"
+      name="search"
+      type="search"
+      [(ngModel)]="searchText"
+    />
+    <button type="submit" class="btn-secondary" [disabled]="loading()">
+      {{ 'COMMON.SEARCH' | translate }}
+    </button>
+  </form>
+
   <!-- Loading -->
   @if (loading()) {
     <div class="loading-state">
@@ -141,7 +155,7 @@
   @if (!loading() && !error() && items().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined">inventory</span>
-      <p>{{ 'LAB_INVENTORY.EMPTY' | translate }}</p>
+      <p>{{ (activeSearch() ? 'LAB.NO_RESULTS' : 'LAB_INVENTORY.EMPTY') | translate }}</p>
     </div>
   }
 
@@ -223,5 +237,26 @@
         </tbody>
       </table>
     </div>
+  }
+  @if (!loading() && !error() && totalPages() > 1) {
+    <nav class="pagination" [attr.aria-label]="'COMMON.PAGE' | translate">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="pageIndex() === 0"
+        (click)="goToPage(pageIndex() - 1)"
+      >
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span>{{ 'COMMON.PAGE' | translate }} {{ pageIndex() + 1 }} / {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="pageIndex() + 1 >= totalPages()"
+        (click)="goToPage(pageIndex() + 1)"
+      >
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </nav>
   }
 </div>

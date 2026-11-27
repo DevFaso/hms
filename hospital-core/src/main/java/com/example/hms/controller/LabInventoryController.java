@@ -41,9 +41,12 @@ public class LabInventoryController {
     public ResponseEntity<Page<LabInventoryItemResponseDTO>> list(
             @PathVariable UUID hospitalId,
             @ParameterObject Pageable pageable,
+            @org.springframework.web.bind.annotation.RequestParam(name = "search", required = false) String search,
             @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(inventoryService.getByHospital(hospitalId, pageable, locale));
+        return ResponseEntity.ok(search == null || search.isBlank()
+            ? inventoryService.getByHospital(hospitalId, pageable, locale)
+            : inventoryService.searchByHospital(hospitalId, search, pageable, locale));
     }
 
     @Operation(summary = "Get inventory item by ID")

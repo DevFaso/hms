@@ -126,8 +126,10 @@ export class LabInstrumentService {
     hospitalId: string,
     page = 0,
     size = 20,
+    search = '',
   ): Observable<PagedResponse<LabInventoryItemResponse>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (search.trim()) params = params.set('search', search.trim());
     return this.http.get<PagedResponse<LabInventoryItemResponse>>(
       `/lab/inventory/hospital/${hospitalId}`,
       { params },

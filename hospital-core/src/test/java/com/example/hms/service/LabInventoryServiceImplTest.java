@@ -132,6 +132,17 @@ class LabInventoryServiceImplTest {
     // ── getById ──────────────────────────────────────────────────
 
     @Test
+    void inventorySearchKeepsTheHospitalScopeAndPaging() {
+        Pageable page = PageRequest.of(1, 20);
+        when(inventoryRepository.searchActive(HOSPITAL_ID, "reagent", page)).thenReturn(new PageImpl<>(List.of(item)));
+        when(mapper.toDto(item)).thenReturn(responseDto);
+        assertThat(service.searchByHospital(HOSPITAL_ID, "  reagent  ", page, LOCALE).getContent()).containsExactly(responseDto);
+        UUID otherHospital = UUID.randomUUID();
+        assertThatThrownBy(() -> service.searchByHospital(otherHospital, "reagent", page, LOCALE)).isInstanceOf(AccessDeniedException.class);
+        verify(inventoryRepository, never()).searchActive(org.mockito.ArgumentMatchers.eq(otherHospital), anyString(), any());
+    }
+
+    @Test
     @DisplayName("getById returns item when found")
     void getByIdReturnsItem() {
         when(inventoryRepository.findByIdAndActiveTrue(ITEM_ID)).thenReturn(Optional.of(item));
