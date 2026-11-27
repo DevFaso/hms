@@ -30,6 +30,7 @@ public interface UploadRecordRepository extends JpaRepository<UploadRecord, UUID
         + "where r.hospitalId = :hospitalId and r.createdAt > :since")
     long bytesByHospitalSince(@Param("hospitalId") UUID hospitalId, @Param("since") LocalDateTime since);
 
-    @Query("select r from UploadRecord r where r.scanStatus = :status order by r.createdAt asc")
-    List<UploadRecord> findByScanStatusOldestFirst(@Param("status") UploadScanStatus status, Pageable page);
+    /** The rows of a status, the one tried longest ago first (a pending row is touched on each try). */
+    @Query("select r from UploadRecord r where r.scanStatus = :status order by r.updatedAt asc, r.createdAt asc")
+    List<UploadRecord> findByScanStatusLeastRecentlyTried(@Param("status") UploadScanStatus status, Pageable page);
 }

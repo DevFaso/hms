@@ -227,6 +227,20 @@ public final class ContentSniffer {
                 return true;
             }
         }
+        return opensATag(text);
+    }
+
+    /**
+     * Whether a {@code <} opens a tag, a comment or a processing instruction: followed by a letter, {@code !},
+     * {@code ?} or {@code /}. A {@code <} before a digit, a space or {@code =} (« TA <120 », « a < b ») is text.
+     */
+    private static boolean opensATag(String text) {
+        for (int at = text.indexOf('<'); at >= 0 && at + 1 < text.length(); at = text.indexOf('<', at + 1)) {
+            char next = text.charAt(at + 1);
+            if ((next >= 'a' && next <= 'z') || next == '!' || next == '?' || next == '/') {
+                return true;
+            }
+        }
         return false;
     }
 

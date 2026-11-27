@@ -16,6 +16,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -44,9 +45,11 @@ public class UploadLedger {
     private final UploadScanner scanner;
     private final FileStorage storage;
     private final TransactionTemplate ownTransaction;
+    private final Clock clock;
 
     public UploadLedger(UploadRecordRepository records, UploadScanner scanner, FileStorage storage,
-                        PlatformTransactionManager transactionManager) {
+                        PlatformTransactionManager transactionManager, Clock clock) {
+        this.clock = clock;
         this.records = records;
         this.scanner = scanner;
         this.storage = storage;
@@ -85,7 +88,7 @@ public class UploadLedger {
             .hospitalId(hospitalId)
             .scanStatus(status)
             .scanEngine(scanner.engine())
-            .scannedAt(status == UploadScanStatus.PENDING ? null : LocalDateTime.now())
+            .scannedAt(status == UploadScanStatus.PENDING ? null : LocalDateTime.now(clock))
             .build();
         ownTransaction.executeWithoutResult(tx -> records.save(row));
         if (status != UploadScanStatus.CLEAN) {
@@ -112,12 +115,13 @@ public class UploadLedger {
     }
 
     /**
-     * Check again the files whose scan has not answered, oldest first.
+     * Check again the files whose scan has not answered, the one tried longest ago first. A file still without
+     * an answer is touched, so it goes to the back of the queue and never holds back the newer ones.
      *
      * @return how many left the pending state
      */
     public int rescanPending() {
-        List<UploadRecord> pending = records.findByScanStatusOldestFirst(
+        List<UploadRecord> pending = records.findByScanStatusLeastRecentlyTried(
             UploadScanStatus.PENDING, PageRequest.of(0, RESCAN_BATCH));
         int settled = 0;
         for (UploadRecord row : pending) {
@@ -131,9 +135,12 @@ public class UploadLedger {
             if (status != UploadScanStatus.PENDING) {
                 row.setScanStatus(status);
                 row.setScanEngine(scanner.engine());
-                row.setScannedAt(LocalDateTime.now());
+                row.setScannedAt(LocalDateTime.now(clock));
                 ownTransaction.executeWithoutResult(tx -> records.save(row));
                 settled++;
+            } else {
+                row.setUpdatedAt(LocalDateTime.now(clock));
+                ownTransaction.executeWithoutResult(tx -> records.save(row));
             }
         }
         return settled;

@@ -194,6 +194,26 @@ class UploadAdmissionTest {
     }
 
     @Test
+    @DisplayName("text uploads are checked for markup more strictly: any tag is refused, a « < » in a value is text")
+    void anyTagIsMarkupInText() {
+        for (String tagged : new String[] {"Voir <p>compte rendu</p>", "<a href=x>lien</a>", "note <!-- x -->",
+            "<?php echo 1; ?>", "fin </div>", "<Style>x</Style>", "<img src=x>"}) {
+            byte[] content = tagged.getBytes(StandardCharsets.UTF_8);
+            refused(UploadKind.PATIENT_DOCUMENT, "notes.txt", "text/plain", content, "file.contentMismatch");
+            refused(UploadKind.CHART_ATTACHMENT, "notes.txt", "text/plain", content, "file.contentMismatch");
+            refused(UploadKind.CSV_IMPORT, "grille.csv", "text/csv", content, "file.contentMismatch");
+        }
+        byte[] lateTag = ("x".repeat(ContentSniffer.HEAD_BYTES + 10) + "<b>").getBytes(StandardCharsets.UTF_8);
+        refused(UploadKind.PATIENT_DOCUMENT, "notes.txt", "text/plain", lateTag, "file.contentMismatch");
+
+        byte[] clinical = "TA <120/80, glycémie < 1,1 g/l, a<=b, 3 <5 ans, fin <".getBytes(StandardCharsets.UTF_8);
+        assertThat(UploadAdmission.vet(file("notes.txt", "text/plain", clinical), UploadKind.PATIENT_DOCUMENT).type())
+            .isEqualTo(UploadType.TEXT);
+        assertThat(UploadAdmission.vet(file("grille.csv", "text/csv", clinical), UploadKind.CSV_IMPORT).type())
+            .isEqualTo(UploadType.CSV);
+    }
+
+    @Test
     @DisplayName("a text file is text to its last byte: markup or binary after a clean head is refused")
     void textIsCheckedToItsEnd() {
         byte[] clean = "Tension 12/8, pouls 72.\n".repeat(400).getBytes(StandardCharsets.UTF_8);

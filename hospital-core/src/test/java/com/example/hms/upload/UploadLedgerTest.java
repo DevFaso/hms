@@ -68,7 +68,8 @@ class UploadLedgerTest {
         storage = new LocalFileStorage(tempDir);
         storage.put(KEY, new ByteArrayInputStream(new byte[] {1, 2, 3}), 3, "application/pdf");
         when(records.save(any(UploadRecord.class))).thenAnswer(call -> call.getArgument(0));
-        ledger = new UploadLedger(records, scanner, storage, mock(PlatformTransactionManager.class));
+        ledger = new UploadLedger(records, scanner, storage, mock(PlatformTransactionManager.class),
+            java.time.Clock.systemDefaultZone());
     }
 
     private UploadLedger.StoredUpload upload() {
@@ -154,12 +155,15 @@ class UploadLedgerTest {
     @DisplayName("the rescan settles a pending file once the scanner answers, and leaves it pending until then")
     void rescanSettlesPending() {
         UploadRecord pending = row(UploadScanStatus.PENDING);
-        when(records.findByScanStatusOldestFirst(any(), any())).thenReturn(List.of(pending));
+        when(records.findByScanStatusLeastRecentlyTried(any(), any())).thenReturn(List.of(pending));
 
         scannerFails = true;
         assertThat(ledger.rescanPending()).isZero();
         assertThat(pending.getScanStatus()).isEqualTo(UploadScanStatus.PENDING);
-        verify(records, never()).save(any());
+        // Still pending: touched, so the next sweep takes the newer files first.
+        assertThat(pending.getUpdatedAt()).isNotNull();
+        verify(records).save(pending);
+        org.mockito.Mockito.clearInvocations(records);
 
         scannerFails = false;
         verdict = UploadScanner.Verdict.INFECTED;
@@ -174,7 +178,7 @@ class UploadLedgerTest {
     void rescanDropsTheRecordOfARemovedFile() throws IOException {
         UploadRecord pending = row(UploadScanStatus.PENDING);
         pending.setId(UUID.randomUUID());
-        when(records.findByScanStatusOldestFirst(any(), any())).thenReturn(List.of(pending));
+        when(records.findByScanStatusLeastRecentlyTried(any(), any())).thenReturn(List.of(pending));
         storage.delete(KEY);
 
         assertThat(ledger.rescanPending()).isEqualTo(1);
@@ -185,7 +189,7 @@ class UploadLedgerTest {
     @DisplayName("with no scanner plugged in every upload is clean, under the engine name none")
     void theDefaultScannerAnswersClean() {
         UploadLedger noScanner = new UploadLedger(records, new NoOpUploadScanner(), storage,
-            mock(PlatformTransactionManager.class));
+            mock(PlatformTransactionManager.class), java.time.Clock.systemDefaultZone());
 
         assertThat(noScanner.record(upload())).isEqualTo(UploadScanStatus.CLEAN);
         assertThat(saved().getScanEngine()).isEqualTo("none");

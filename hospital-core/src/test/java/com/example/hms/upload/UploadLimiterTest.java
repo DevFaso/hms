@@ -33,7 +33,7 @@ class UploadLimiterTest {
 
     /** 10 a minute; a user 5 files / 20 MB, a patient 2 files / 4 MB, a hospital 8 files / 30 MB a day. */
     private UploadLimiter limiter(boolean enabled) {
-        return new UploadLimiter(records, enabled, 10, 5, "20MB", 2, "4MB", 8, "30MB");
+        return new UploadLimiter(records, enabled, 10, 5, "20MB", 2, "4MB", 8, "30MB", java.time.Clock.systemDefaultZone());
     }
 
     @BeforeEach

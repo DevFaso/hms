@@ -19,7 +19,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -134,9 +133,9 @@ class UploadPolicyCoverageGuardTest {
                 .isFalse();
         }
         for (com.example.hms.upload.UploadType type : com.example.hms.upload.UploadType.values()) {
-            assertThat(Set.of("image/svg+xml", "text/html", "application/xhtml+xml", "text/xml", "application/xml",
-                "text/javascript", "application/javascript"))
-                .as("the stored and served type of %s", type).doesNotContain(type.mediaType());
+            assertThat(type.mediaType()).as("the stored and served type of %s", type)
+                .isNotIn("image/svg+xml", "text/html", "application/xhtml+xml", "text/xml", "application/xml",
+                    "text/javascript", "application/javascript");
         }
     }
 

@@ -14,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -41,6 +42,7 @@ public class UploadLimiter {
     private static final long BYTES_PER_MEGABYTE = 1024L * 1024L;
 
     private final UploadRecordRepository records;
+    private final Clock clock;
     private final boolean enabled;
     private final int perMinute;
     private final Allowance user;
@@ -54,10 +56,11 @@ public class UploadLimiter {
 
     private static final class TimedBucket {
         private final Bucket bucket;
-        private volatile Instant lastUsed = Instant.now();
+        private volatile Instant lastUsed;
 
-        private TimedBucket(Bucket bucket) {
+        private TimedBucket(Bucket bucket, Instant now) {
             this.bucket = bucket;
+            this.lastUsed = now;
         }
     }
 
@@ -71,8 +74,10 @@ public class UploadLimiter {
             @Value("${app.upload.quota.patient.files-per-day:40}") long patientFiles,
             @Value("${app.upload.quota.patient.bytes-per-day:200MB}") String patientBytes,
             @Value("${app.upload.quota.hospital.files-per-day:10000}") long hospitalFiles,
-            @Value("${app.upload.quota.hospital.bytes-per-day:50GB}") String hospitalBytes) {
+            @Value("${app.upload.quota.hospital.bytes-per-day:50GB}") String hospitalBytes,
+            Clock clock) {
         this.records = records;
+        this.clock = clock;
         this.enabled = enabled;
         this.perMinute = Math.max(1, perMinute);
         this.user = new Allowance(userFiles, DataSize.parse(userBytes).toBytes());
@@ -93,13 +98,17 @@ public class UploadLimiter {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UUID userId = context.getPrincipalUserId();
-        String caller = userId != null ? userId.toString()
-            : authentication != null ? authentication.getName() : null;
+        String caller = null;
+        if (userId != null) {
+            caller = userId.toString();
+        } else if (authentication != null) {
+            caller = authentication.getName();
+        }
         if (caller != null && !bucketOf(caller).tryConsume(Math.min(files, perMinute))) {
             log.warn("[UPLOAD] rate refused for a caller ({} per minute)", perMinute);
             throw new UploadLimitExceededException("file.upload.rateLimited", 60);
         }
-        LocalDateTime since = LocalDateTime.now().minus(WINDOW);
+        LocalDateTime since = LocalDateTime.now(clock).minus(WINDOW);
         if (userId != null) {
             Allowance allowance = isPatientOnly(authentication) ? patient : user;
             require(allowance, records.countByUserSince(userId, since), records.bytesByUserSince(userId, since),
@@ -140,13 +149,13 @@ public class UploadLimiter {
 
     private Bucket bucketOf(String caller) {
         if (buckets.size() > MAX_TRACKED_CALLERS) {
-            Instant idleSince = Instant.now().minus(IDLE_BUCKET);
+            Instant idleSince = clock.instant().minus(IDLE_BUCKET);
             buckets.values().removeIf(held -> held.lastUsed.isBefore(idleSince));
         }
         TimedBucket held = buckets.computeIfAbsent(caller, ignored -> new TimedBucket(Bucket.builder()
             .addLimit(Bandwidth.builder().capacity(perMinute).refillGreedy(perMinute, Duration.ofMinutes(1)).build())
-            .build()));
-        held.lastUsed = Instant.now();
+            .build(), clock.instant()));
+        held.lastUsed = clock.instant();
         return held.bucket;
     }
 }
