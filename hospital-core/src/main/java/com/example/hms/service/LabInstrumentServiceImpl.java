@@ -11,14 +11,9 @@ import com.example.hms.payload.dto.LabInstrumentResponseDTO;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabInstrumentRepository;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +31,10 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     private final HospitalRepository hospitalRepository;
     private final DepartmentRepository departmentRepository;
     private final LabInstrumentMapper mapper;
-    private final MessageSource messageSource;
 
     @Override
     public Page<LabInstrumentResponseDTO> getByHospital(UUID hospitalId, Pageable pageable, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, false);
         return instrumentRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable)
             .map(mapper::toDto);
     }
@@ -49,14 +43,14 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO getById(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        LabFacilityAccess.require(instrument.getHospital().getId(), false);
         return mapper.toDto(instrument);
     }
 
     @Override
     @Transactional
     public LabInstrumentResponseDTO create(UUID hospitalId, LabInstrumentRequestDTO dto, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, true);
         validateDates(dto);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
@@ -77,7 +71,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        LabFacilityAccess.require(instrument.getHospital().getId(), true);
         validateDates(dto);
         validateEffectivePairs(instrument, dto);
 
@@ -100,7 +94,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public void deactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        LabFacilityAccess.require(instrument.getHospital().getId(), true);
         instrument.setActive(false);
         instrumentRepository.save(instrument);
     }
@@ -148,20 +142,6 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         // QA r5 tenancy sweep: another hospital's row answers as unknown.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notfound", departmentId);
         return department;
-    }
-
-    private boolean hasHospitalAccess(UUID hospitalId) {
-        if (hospitalId == null) return false;
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) return true;
-        return HospitalScopeUtils.resolveScope(context).contains(hospitalId);
-    }
-
-    private void requireHospitalScope(UUID hospitalId, Locale locale) {
-        if (!hasHospitalAccess(hospitalId)) {
-            throw new AccessDeniedException(
-                messageSource.getMessage("access.denied", null, "Access denied", locale));
-        }
     }
 
 }

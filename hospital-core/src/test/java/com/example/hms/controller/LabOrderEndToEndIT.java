@@ -190,6 +190,14 @@ class LabOrderEndToEndIT extends BaseIT {
                     .contextPath(API).with(scopedAs(labManager)).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
                 .andExpect(status().isForbidden());
+            mockMvc.perform(get(API + "/lab/inventory/{id}", items.get(2).getId())
+                    .contextPath(API).with(scopedAs(labManager)))
+                .andExpect(status().isForbidden());
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}", otherHospital.getId())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"Test\",\"itemCode\":\"X\",\"quantity\":1,\"reorderThreshold\":0}"))
+                .andExpect(status().isForbidden());
         } finally {
             labInventoryItemRepository.deleteAll(items);
             labInventoryItemRepository.flush();
@@ -1220,7 +1228,9 @@ class LabOrderEndToEndIT extends BaseIT {
             HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext.builder()
                 .principalUserId(actor.user().getId())
                 .activeHospitalId(hospital.getId())
-                .permittedHospitalIds(java.util.Set.of(hospital.getId()))
+                .permittedHospitalIds(java.util.Set.of(hospital.getId(), otherHospital.getId()))
+                .hospitalRoles(java.util.Map.of(hospital.getId(), java.util.Set.of(actor.role()),
+                    otherHospital.getId(), java.util.Set.of("ROLE_RECEPTIONIST")))
                 .build());
             return signedInAs(actor).postProcessRequest(request);
         };

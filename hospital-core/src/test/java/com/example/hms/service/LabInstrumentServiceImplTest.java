@@ -74,6 +74,7 @@ class LabInstrumentServiceImplTest {
         // Set hospital context so scope checks pass
         HospitalContext context = HospitalContext.builder()
             .permittedHospitalIds(Set.of(HOSPITAL_ID))
+            .hospitalRoles(java.util.Map.of(HOSPITAL_ID, Set.of("ROLE_LAB_MANAGER")))
             .activeHospitalId(HOSPITAL_ID)
             .superAdmin(false)
             .build();
