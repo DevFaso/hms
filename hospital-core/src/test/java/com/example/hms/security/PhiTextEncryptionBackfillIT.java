@@ -221,36 +221,22 @@ class PhiTextEncryptionBackfillIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a notification written before is read as it is, then encrypted by the backfill, once")
-    void aNotificationWrittenBeforeIsEncryptedByTheBackfill() {
-        UUID id = notification("k4b-" + UUID.randomUUID(), "to be replaced", List.of("x")).getId();
-        UUID bare = notification("k4b-" + UUID.randomUUID(), "to be replaced", null).getId();
+    @DisplayName("a notification body written before is encrypted by the backfill, once")
+    void aNotificationBodyWrittenBeforeIsEncryptedByTheBackfill() {
+        // The body here; the arguments (jsonb) on PostgreSQL: NotificationAtRestPostgresIT.
+        UUID id = notification("k4b-" + UUID.randomUUID(), "to be replaced", null).getId();
         String legacyBody = "Résultat critique : Potassium 6,8 mmol/L pour Traore Awa";
-        jdbcTemplate.update("UPDATE security.notifications SET message = ?,"
-            + " message_args = CAST(? AS jsonb) WHERE id = ?", legacyBody, "[7, \"Traore Awa\", {\"key\": \"a.b\"}]", id);
-        jdbcTemplate.update("UPDATE security.notifications SET message = ?, message_args = NULL WHERE id = ?",
-            legacyBody, bare);
-        List<Object> legacyArgs = List.of(7, "Traore Awa", java.util.Map.of("key", "a.b"));
-
-        com.example.hms.model.Notification before = notificationRepository.findById(id).orElseThrow();
-        assertThat(before.getMessage()).isEqualTo(legacyBody);
-        assertThat(before.getMessageArgs()).isEqualTo(legacyArgs);
+        jdbcTemplate.update("UPDATE security.notifications SET message = ? WHERE id = ?", legacyBody, id);
+        assertThat(notificationRepository.findById(id).orElseThrow().getMessage()).isEqualTo(legacyBody);
 
         backfill.backfill();
 
         String body = storedBody(id);
-        String args = storedArgs(id);
         assertThat(body).startsWith("gcm1:").doesNotContain("Traore");
-        assertThat(args).contains("sealed").doesNotContain("Traore");
-        assertThat(storedBody(bare)).startsWith("gcm1:");
-        assertThat(storedArgs(bare)).isNull();
-        com.example.hms.model.Notification after = notificationRepository.findById(id).orElseThrow();
-        assertThat(after.getMessage()).isEqualTo(legacyBody);
-        assertThat(after.getMessageArgs()).isEqualTo(legacyArgs);
+        assertThat(notificationRepository.findById(id).orElseThrow().getMessage()).isEqualTo(legacyBody);
 
         backfill.backfill();
 
         assertThat(storedBody(id)).as("idempotent").isEqualTo(body);
-        assertThat(storedArgs(id)).as("idempotent").isEqualTo(args);
     }
 }

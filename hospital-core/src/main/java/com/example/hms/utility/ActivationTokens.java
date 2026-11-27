@@ -70,7 +70,8 @@ public final class ActivationTokens {
             return HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is required by every JRE", e);
+            // Every JRE ships SHA-256.
+            throw new IllegalStateException(e);
         }
     }
 }

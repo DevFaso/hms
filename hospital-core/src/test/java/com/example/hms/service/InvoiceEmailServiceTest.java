@@ -61,7 +61,6 @@ class InvoiceEmailServiceTest {
     @Mock private PatientNotificationLedger ledger;
     @Mock private PatientLocaleResolver patientLocaleResolver;
     @Mock private com.example.hms.repository.PatientGuarantorRepository guarantorRepository;
-    @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.notification.PatientRecipientCurrentCheck currentCheck;
     private InvoiceEmailService service;
     /** The guarantor on the patient's file at hospital A, whose address is billing@example.test. */
@@ -73,7 +72,11 @@ class InvoiceEmailServiceTest {
         service = new InvoiceEmailService(billingInvoiceRepository, invoiceItemRepository, pdfInvoiceService,
             new PatientMessageGate(consent, ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), currentCheck), patientLocaleResolver,
             TestMessageSources.bundles(), roleValidator, adjustmentRepository,
-            new com.example.hms.service.billing.InvoiceMailRecipients(guarantorRepository), auditEventLogService);
+            new com.example.hms.service.billing.InvoiceMailRecipients(guarantorRepository));
+        // The send states its trace on the request (WriteAuditDetail), for the request's own audit row.
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+            new org.springframework.web.context.request.ServletRequestAttributes(
+                new org.springframework.mock.web.MockHttpServletRequest()));
         com.example.hms.model.PatientGuarantor guarantor = com.example.hms.model.PatientGuarantor.builder()
             .fullName("Issa Ouédraogo").email("Billing@Example.test").build();
         guarantor.setId(guarantorId);
@@ -300,11 +303,22 @@ class InvoiceEmailServiceTest {
 
     // ---------- Scorecard K4: who an invoice is mailed to, and the trace of it ----------
 
-    private List<com.example.hms.payload.dto.AuditEventRequestDTO> audited(int times) {
-        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> rows =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-        verify(auditEventLogService, org.mockito.Mockito.times(times)).logEvent(rows.capture());
-        return rows.getAllValues();
+    @org.junit.jupiter.api.AfterEach
+    void k4bClearRequest() {
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** What the send stated for the request's audit row, or null when it stated nothing. */
+    private com.example.hms.security.audit.WriteAuditDetail.Detail k4bDetail() {
+        Object stated = org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()
+            .getAttribute(com.example.hms.security.audit.WriteAuditDetail.class.getName(),
+                org.springframework.web.context.request.RequestAttributes.SCOPE_REQUEST);
+        return (com.example.hms.security.audit.WriteAuditDetail.Detail) stated;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<java.util.Map<String, Object>> k4bRecipients() {
+        return (List<java.util.Map<String, Object>>) k4bDetail().details().get("invoiceEmailRecipients");
     }
 
     @Test
@@ -324,7 +338,8 @@ class InvoiceEmailServiceTest {
                 // The refusal names the address masked, never whole.
                 assertThat(e.getArgs()).containsExactly("s***@employer.test");
             });
-        verifyNoInteractions(emailService, pdfInvoiceService, auditEventLogService);
+        verifyNoInteractions(emailService, pdfInvoiceService);
+        assertThat(k4bDetail()).isNull();
     }
 
     @Test
@@ -339,40 +354,35 @@ class InvoiceEmailServiceTest {
         assertThatThrownBy(() -> service.emailInvoice(id, request))
             .isInstanceOf(BusinessException.class).extracting("messageKey")
             .isEqualTo("invoiceMail.recipient.notOnFile");
-        verifyNoInteractions(emailService, auditEventLogService);
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
     }
 
     @Test
     @DisplayName("K4: the patient's verified address and a guarantor on file are mailed, each traced masked, ids only")
+    // The trace is the detail of the request's own audit row: see WriteAuditInterceptorTest for the row.
     void recipientsOnFileAreMailedAndTraced() {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
-        UUID clerk = UUID.randomUUID();
-        when(roleValidator.getCurrentUserId()).thenReturn(clerk);
 
         service.emailInvoice(invoice.getId(), new EmailInvoiceRequest(List.of(" Seydou@Example.test "),
             List.of("billing@example.test"), List.of("seydou@example.test"), "note du guichet", null, false));
 
         mailed();
+        com.example.hms.security.audit.WriteAuditDetail.Detail trace = k4bDetail();
+        assertThat(trace.eventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_EXPORT);
+        assertThat(trace.resourceId()).isEqualTo(invoice.getId());
+        assertThat(trace.patientId()).isEqualTo(invoice.getPatient().getId());
+        // Never an address, a name, the subject or the clerk's note.
+        assertThat(String.valueOf(trace.details()))
+            .doesNotContainIgnoringCase("seydou@", "billing@", "Ouédraogo", "INV-1", "note du guichet");
+        assertThat(trace.details()).containsEntry("attachment", false).doesNotContainKey("reason");
         // The same address typed twice is one recipient.
-        List<com.example.hms.payload.dto.AuditEventRequestDTO> rows = audited(2);
-        assertThat(rows).allSatisfy(row -> {
-            assertThat(row.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_EXPORT);
-            assertThat(row.getUserId()).isEqualTo(clerk);
-            assertThat(row.getHospitalId()).isEqualTo(hospitalA);
-            assertThat(row.getPatientId()).isEqualTo(invoice.getPatient().getId());
-            assertThat(row.getEntityType()).isEqualTo("BILLING_INVOICE");
-            assertThat(row.getResourceId()).isEqualTo(invoice.getId().toString());
-            // Never an address, a name, the subject or the clerk's note.
-            assertThat(String.valueOf(row.getDetails()) + row.getEventDescription() + row.getResourceName())
-                .doesNotContainIgnoringCase("seydou@", "billing@", "Ouédraogo", "INV-1", "note du guichet");
-        });
-        assertThat(rows.get(0).getDetails()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-            .containsEntry("recipient", "S***@Example.test").containsEntry("recipientKind", "PATIENT")
-            .doesNotContainKeys("reason", "guarantorId");
-        assertThat(rows.get(1).getDetails()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-            .containsEntry("recipient", "b***@example.test").containsEntry("recipientKind", "GUARANTOR")
-            .containsEntry("guarantorId", guarantorId.toString()).doesNotContainKey("reason");
+        assertThat(k4bRecipients()).hasSize(2);
+        assertThat(k4bRecipients().get(0)).containsEntry("recipient", "S***@Example.test")
+            .containsEntry("recipientKind", "PATIENT").doesNotContainKey("guarantorId");
+        assertThat(k4bRecipients().get(1)).containsEntry("recipient", "b***@example.test")
+            .containsEntry("recipientKind", "GUARANTOR").containsEntry("guarantorId", guarantorId.toString());
     }
 
     @Test
@@ -385,11 +395,9 @@ class InvoiceEmailServiceTest {
             null, null, false, "  Employeur du patient, à sa demande  "));
 
         mailed();
-        List<com.example.hms.payload.dto.AuditEventRequestDTO> rows = audited(1);
-        assertThat(rows.get(0).getDetails()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-            .containsEntry("recipient", "r***@employer.test").containsEntry("recipientKind", "OTHER")
-            .containsEntry("reason", "Employeur du patient, à sa demande");
-        assertThat(rows.get(0).getEventDescription()).contains("with a reason");
+        assertThat(k4bRecipients()).singleElement().satisfies(one -> assertThat(one)
+            .containsEntry("recipient", "r***@employer.test").containsEntry("recipientKind", "OTHER"));
+        assertThat(k4bDetail().details()).containsEntry("reason", "Employeur du patient, à sa demande");
     }
 
     @Test
@@ -404,7 +412,8 @@ class InvoiceEmailServiceTest {
         assertThatThrownBy(() -> service.emailInvoice(id, four))
             .isInstanceOf(BusinessException.class).extracting("messageKey")
             .isEqualTo("invoiceMail.recipient.tooMany");
-        verifyNoInteractions(emailService, auditEventLogService);
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
         assertThat(EmailInvoiceRequest.MAX_RECIPIENTS).isEqualTo(3);
     }
 
@@ -419,6 +428,7 @@ class InvoiceEmailServiceTest {
         EmailInvoiceRequest toPatient = new EmailInvoiceRequest(List.of("seydou@example.test"), null, null, null, null, false);
 
         assertThatThrownBy(() -> service.emailInvoice(id, toPatient)).isInstanceOf(BusinessException.class);
-        verifyNoInteractions(emailService, auditEventLogService);
+        verifyNoInteractions(emailService);
+        assertThat(k4bDetail()).isNull();
     }
 }

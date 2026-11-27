@@ -182,6 +182,36 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
+    @DisplayName("K4: the details a handler stated (masked recipients, a reason) are kept on the same row")
+    void keepsTheHandlerStatedDetails() throws Exception {
+        MockHttpServletRequest req = request("POST", "/billing-invoices/{id}/email", Map.of("id", RESOURCE.toString()));
+        Map<String, Object> details = Map.of(
+            "invoiceEmailRecipients", java.util.List.of(Map.of("recipient", "s***@example.test", "recipientKind", "PATIENT")),
+            "attachment", true);
+        req.setAttribute(WriteAuditDetail.ATTRIBUTE,
+            new WriteAuditDetail.Detail(AuditEventType.DATA_EXPORT, RESOURCE, PATIENT, details));
+        interceptor.afterCompletion(req, ok(200), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.DATA_EXPORT);
+        assertThat(row.getResourceId()).isEqualTo(RESOURCE.toString());
+        assertThat(row.getPatientId()).isEqualTo(PATIENT);
+        assertThat(row.getDetails()).isEqualTo(details);
+        assertThat(row.getEntityType()).isEqualTo("BILLING_INVOICE");
+    }
+
+    @Test
+    @DisplayName("a write whose handler stated no details keeps none")
+    void noDetailsWhenNoneWereStated() throws Exception {
+        MockHttpServletRequest req = request("POST", "/lab-results", Map.of());
+        req.setAttribute(WriteAuditDetail.ATTRIBUTE,
+            new WriteAuditDetail.Detail(AuditEventType.LAB_RESULT_CREATED, RESOURCE, PATIENT));
+        interceptor.afterCompletion(req, ok(201), handler(Handlers.class, "plain"), null);
+
+        assertThat(emitted().getDetails()).isNull();
+    }
+
+    @Test
     @DisplayName("PUT/PATCH are DATA_UPDATE with the resource from {id}; DELETE is DATA_DELETE")
     void recordsUpdateAndDelete() throws Exception {
         interceptor.afterCompletion(request("PATCH", "/micro-cultures/{id}", Map.of("id", RESOURCE.toString())),

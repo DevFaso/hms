@@ -17,7 +17,6 @@ import com.example.hms.service.notification.PatientMessageGate;
 import com.example.hms.utility.DisplayDates;
 import com.example.hms.utility.InvoiceBalance;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.stereotype.Service;
@@ -27,13 +26,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class InvoiceEmailService {
 
     private static final String NOT_FOUND = "billinginvoice.notfound";
-    private static final String AUDIT_ENTITY = "BILLING_INVOICE";
 
     private final BillingInvoiceRepository billingInvoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
@@ -48,8 +45,6 @@ public class InvoiceEmailService {
 
     /** Scorecard K4: who the invoice may be mailed to (the patient, a guarantor on file, or a reasoned exception). */
     private final InvoiceMailRecipients recipientPolicy;
-    /** Scorecard K4: every recipient of a mailed invoice is audited, masked. */
-    private final com.example.hms.service.AuditEventLogService auditEventLogService;
 
     /** Billing-money plan PR 7: the payers' shares on the mailed paper. Optional so hand-built tests keep working. */
     private com.example.hms.service.billing.InvoiceCoverageService coverageService;
@@ -119,48 +114,33 @@ public class InvoiceEmailService {
     }
 
     /**
-     * One audit row per recipient: who sent which invoice to which kind of address. The address is masked, the
-     * invoice, patient and guarantor are ids, and the clerk's reason is kept for an address that is on no file.
-     * Never the subject, the note or a name.
+     * The trace of a sent invoice, on the request's own audit row ({@code WriteAuditInterceptor}: who, where,
+     * when, which route): a release of a copy ({@code DATA_EXPORT}) of this invoice, for this patient, to these
+     * recipients. Each address is masked; the invoice, the patient and a guarantor are ids; the clerk's reason
+     * is kept when an address was on no file. Never the subject, the note or a name.
      */
     private void auditRecipients(BillingInvoice invoice, List<InvoiceMailRecipients.Recipient> recipients,
                                  EmailInvoiceRequest req) {
-        UUID actorId = roleValidator.getCurrentUserId();
-        UUID hospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
-        UUID patientId = invoice.getPatient() != null ? invoice.getPatient().getId() : null;
+        List<java.util.Map<String, Object>> sentTo = new java.util.ArrayList<>();
+        boolean reasoned = false;
         for (InvoiceMailRecipients.Recipient recipient : recipients) {
-            java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
-            details.put("recipient", recipient.masked());
-            details.put("recipientKind", recipient.kind().name());
-            details.put("attachment", req.attachPdf());
+            java.util.Map<String, Object> one = new java.util.LinkedHashMap<>();
+            one.put("recipient", recipient.masked());
+            one.put("recipientKind", recipient.kind().name());
             if (recipient.guarantorId() != null) {
-                details.put("guarantorId", recipient.guarantorId().toString());
+                one.put("guarantorId", recipient.guarantorId().toString());
             }
-            if (recipient.kind() == InvoiceMailRecipients.Kind.OTHER) {
-                details.put("reason", req.reason().strip());
-            }
-            String description = switch (recipient.kind()) {
-                case PATIENT -> "Invoice e-mailed to the patient";
-                case GUARANTOR -> "Invoice e-mailed to a guarantor on file";
-                case OTHER -> "Invoice e-mailed to another address, with a reason";
-            };
-            try {
-                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
-                    .eventType(com.example.hms.enums.AuditEventType.DATA_EXPORT)
-                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
-                    .userId(actorId)
-                    .hospitalId(hospitalId)
-                    .patientId(patientId)
-                    .eventDescription(description)
-                    .entityType(AUDIT_ENTITY)
-                    .resourceId(String.valueOf(invoice.getId()))
-                    .details(details)
-                    .build());
-            } catch (RuntimeException ex) {
-                log.warn("Invoice e-mail audit not written for invoice {}: {}", invoice.getId(),
-                    ex.getClass().getSimpleName());
-            }
+            sentTo.add(one);
+            reasoned = reasoned || recipient.kind() == InvoiceMailRecipients.Kind.OTHER;
         }
+        java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("invoiceEmailRecipients", sentTo);
+        details.put("attachment", req.attachPdf());
+        if (reasoned) {
+            details.put("reason", req.reason().strip());
+        }
+        com.example.hms.security.audit.WriteAuditDetail.describe(com.example.hms.enums.AuditEventType.DATA_EXPORT,
+            invoice.getId(), invoice.getPatient() != null ? invoice.getPatient().getId() : null, details);
     }
 
     /**
