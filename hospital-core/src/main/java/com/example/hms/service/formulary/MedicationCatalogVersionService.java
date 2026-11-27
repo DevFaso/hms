@@ -494,8 +494,23 @@ public class MedicationCatalogVersionService {
     @Transactional(readOnly = true)
     public List<com.example.hms.payload.dto.medication.MedicationCatalogSimilarEntryDTO> similarEntries(
             FormularySnapshot proposed, UUID ownItemId) {
+        // The bounds of the catalogue columns: this read takes its values from the query string.
+        requireWithin("nameFr", proposed.nameFr());
+        requireWithin("form", proposed.form());
+        requireWithin("strength", proposed.strength());
+        requireWithin("strengthUnit", proposed.strengthUnit());
         UUID scope = roleValidator.requireActiveHospitalId();
         return duplicates.knownAt(scope).similarTo(proposed, ownItemId, null);
+    }
+
+    /** No catalogue column holds more than this; a longer value is refused on its field. */
+    static final int MAX_IDENTITY_LENGTH = 255;
+
+    private static void requireWithin(String field, String value) {
+        if (value != null && value.length() > MAX_IDENTITY_LENGTH) {
+            throw new FieldBusinessException(field, "medication.catalog.similar.tooLong",
+                String.valueOf(MAX_IDENTITY_LENGTH));
+        }
     }
 
     /* ───────────────────────────── plumbing ───────────────────────────── */

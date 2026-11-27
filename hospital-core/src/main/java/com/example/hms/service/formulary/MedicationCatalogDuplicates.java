@@ -2,7 +2,6 @@ package com.example.hms.service.formulary;
 
 import com.example.hms.enums.MedicationCatalogVersionKind;
 import com.example.hms.enums.MedicationCatalogVersionStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.medication.FormularySnapshot;
 import com.example.hms.model.medication.MedicationCatalogVersion;
@@ -13,8 +12,8 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -49,9 +48,9 @@ public class MedicationCatalogDuplicates {
     private static final Pattern MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern NOT_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Pattern DIGIT_THEN_LETTER = Pattern.compile("(\\d)(\\p{L})");
-    /** A strength written at the end of a name: "500 mg", "120 mg/5 ml", "0,5 %", "1 000 000 ui". */
-    private static final Pattern TRAILING_STRENGTH = Pattern.compile(
-        "(\\s+\\d[\\d ]*(\\s\\d+)?\\s*(mg|g|kg|mcg|µg|ug|ml|l|ui|iu|mmol|meq)?(\\s+\\d[\\d ]*\\s*(mg|g|ml|l))?)+$");
+    /** The units a strength is written in, as the words of a name read once punctuation is gone ("120 mg/5 ml"). */
+    private static final Set<String> STRENGTH_UNITS = Set.of(
+        "mg", "g", "kg", "mcg", "µg", "ug", "ml", "l", "ui", "iu", "mmol", "meq");
 
     private final MedicationCatalogItemRepository catalogue;
     private final MedicationCatalogVersionRepository versions;
@@ -64,20 +63,40 @@ public class MedicationCatalogDuplicates {
             FormularySnapshot identity = new FormularySnapshot((String) row[1], null, null, null, (String) row[2],
                 (String) row[3], (String) row[4], null, null, null, false, Boolean.TRUE.equals(row[5]), null, false,
                 null, null);
-            entries.add(new Entry((UUID) row[0], null, identity,
+            entries.add(new Entry((UUID) row[0], null, identity, Keys.of(identity),
                 Boolean.TRUE.equals(row[5]) ? "IN_CATALOGUE" : "WITHDRAWN", row[6] == null));
         }
         for (MedicationCatalogVersion waiting : versions.findInScope(hospitalId,
                 MedicationCatalogVersionStatus.PENDING_APPROVAL, MedicationCatalogVersionKind.FORMULARY,
                 Pageable.unpaged()).getContent()) {
-            entries.add(new Entry(waiting.getCatalogItemId(), waiting.getId(),
-                MedicationCatalogVersionService.readFormulary(waiting.getPayload()), "PENDING", hospitalId == null));
+            FormularySnapshot proposed = MedicationCatalogVersionService.readFormulary(waiting.getPayload());
+            entries.add(new Entry(waiting.getCatalogItemId(), waiting.getId(), proposed, Keys.of(proposed), "PENDING",
+                hospitalId == null));
         }
         return new Known(entries);
     }
 
-    /** One entry, or one waiting proposal, as it is compared. */
-    record Entry(UUID catalogItemId, UUID versionId, FormularySnapshot identity, String state, boolean platform) {
+    /** One entry, or one waiting proposal, with what it is compared by (worked out once, when it is read). */
+    record Entry(UUID catalogItemId, UUID versionId, FormularySnapshot identity, Keys keys, String state,
+                 boolean platform) {
+    }
+
+    /** What an entry is compared by: its name, its name without a strength at its end, its form, its strength. */
+    record Keys(String name, String baseName, String form, String strength) {
+        static Keys of(FormularySnapshot entry) {
+            String name = nameKey(entry.nameFr());
+            return new Keys(name, baseNameOf(name), formKey(entry.form()), strengthKey(entry));
+        }
+
+        boolean exact(Keys other) {
+            return !name.isEmpty() && name.equals(other.name) && form.equals(other.form)
+                && strength.equals(other.strength);
+        }
+
+        /** The same name, or the same medicine once the strength written in the name is set aside. */
+        boolean similar(Keys other) {
+            return !name.isEmpty() && (name.equals(other.name) || baseName.equals(other.baseName));
+        }
     }
 
     /** The catalogue as compared with one proposal after another (the approval queue reads it once). */
@@ -95,7 +114,12 @@ public class MedicationCatalogDuplicates {
         public List<MedicationCatalogSimilarEntryDTO> similarTo(FormularySnapshot proposed, UUID ownItemId,
                                                                 UUID ownVersionId) {
             List<MedicationCatalogSimilarEntryDTO> found = new ArrayList<>();
-            if (proposed == null || nameKey(proposed.nameFr()).isEmpty()) {
+            if (proposed == null) {
+                return found;
+            }
+            // The proposal is normalised once, not once per entry of the catalogue.
+            Keys mine = Keys.of(proposed);
+            if (mine.name().isEmpty()) {
                 return found;
             }
             for (Entry entry : entries) {
@@ -104,8 +128,8 @@ public class MedicationCatalogDuplicates {
                 if (self) {
                     continue;
                 }
-                boolean exact = exact(proposed, entry.identity());
-                if (exact || similar(proposed, entry.identity())) {
+                boolean exact = mine.exact(entry.keys());
+                if (exact || mine.similar(entry.keys())) {
                     found.add(new MedicationCatalogSimilarEntryDTO(entry.catalogItemId(), entry.versionId(),
                         entry.identity().label(), entry.identity().form(), exact, entry.state(), entry.platform()));
                 }
@@ -148,26 +172,19 @@ public class MedicationCatalogDuplicates {
         MedicationCatalogSimilarEntryDTO twin = knownAt(version.getHospitalId())
             .refusing(proposed, version.getCatalogItemId(), version.getId(), false);
         if (twin != null) {
-            throw new BusinessException(DUPLICATE_AT_APPROVAL, twin.label());
+            // On the name, as at proposal: a value refused because another record holds it names its field.
+            throw new FieldBusinessException("nameFr", DUPLICATE_AT_APPROVAL, twin.label());
         }
     }
 
     /* ───────────────────────────── comparing ───────────────────────────── */
 
     static boolean exact(FormularySnapshot a, FormularySnapshot b) {
-        return same(a, b, MedicationCatalogDuplicates::nameKey)
-            && formKey(a.form()).equals(formKey(b.form()))
-            && strengthKey(a).equals(strengthKey(b));
+        return Keys.of(a).exact(Keys.of(b));
     }
 
-    /** The same name, or the same medicine once the strength written in the name is set aside. */
     static boolean similar(FormularySnapshot a, FormularySnapshot b) {
-        return same(a, b, MedicationCatalogDuplicates::nameKey) || same(a, b, MedicationCatalogDuplicates::baseNameKey);
-    }
-
-    private static boolean same(FormularySnapshot a, FormularySnapshot b, Function<String, String> key) {
-        String mine = key.apply(a.nameFr());
-        return !mine.isEmpty() && mine.equals(key.apply(b.nameFr()));
+        return Keys.of(a).similar(Keys.of(b));
     }
 
     /** A name as compared: no case, no accent, one space between words, no punctuation. */
@@ -183,9 +200,39 @@ public class MedicationCatalogDuplicates {
 
     /** The name without a strength written at its end: « Paracétamol 500 mg » and « Paracétamol » are one medicine. */
     static String baseNameKey(String name) {
-        String key = nameKey(name);
-        String base = TRAILING_STRENGTH.matcher(key).replaceAll("").trim();
-        return base.isEmpty() ? key : base;
+        return baseNameOf(nameKey(name));
+    }
+
+    /**
+     * {@code key} (a {@link #nameKey}) without the strength at its end: "500 mg", "120 mg 5 ml", "1 000 000 ui".
+     * One pass over its words from the last one: the numbers and units at the end are left out, provided a number
+     * is among them. Linear in the length of the name, whatever it holds: the pattern this replaces took seconds
+     * on a long run of digit groups.
+     */
+    private static String baseNameOf(String key) {
+        String[] words = key.split(" ");
+        int end = words.length;
+        boolean number = false;
+        while (end > 0 && (isNumber(words[end - 1]) || STRENGTH_UNITS.contains(words[end - 1]))) {
+            number |= isNumber(words[end - 1]);
+            end--;
+        }
+        if (!number || end == 0) {
+            return key;
+        }
+        return String.join(" ", java.util.Arrays.copyOf(words, end));
+    }
+
+    private static boolean isNumber(String word) {
+        if (word.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < word.length(); i++) {
+            if (!Character.isDigit(word.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static String formKey(String form) {

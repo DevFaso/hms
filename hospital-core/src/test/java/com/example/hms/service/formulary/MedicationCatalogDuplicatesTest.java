@@ -63,6 +63,36 @@ class MedicationCatalogDuplicatesTest {
             entry("Vitamine B6", null, null, null))).isFalse();
     }
 
+    /**
+     * Review of #1383 (F1): the strength at the end of a name was found by a pattern that backtracked (about four
+     * seconds at 500 characters of digit groups). The comparison is linear: a name far longer than any column,
+     * made of the shape that defeated the pattern, is compared in a few milliseconds.
+     */
+    @Test
+    void aNameOfThousandsOfDigitGroups_isComparedInLinearTime() {
+        String hostile = "Paracetamol " + "1 ".repeat(2500) + "x";
+        assertThat(hostile.length()).isGreaterThan(5000);
+        FormularySnapshot proposed = entry(hostile, "TABLET", null, null);
+        FormularySnapshot existing = entry("Paracétamol 500 mg", "TABLET", null, null);
+        // Warm-up, so the measure is the comparison and not class loading.
+        MedicationCatalogDuplicates.similar(proposed, existing);
+
+        // The fastest of five runs, so a busy build machine does not decide the result; the pattern this
+        // replaces took seconds on a tenth of this length.
+        long best = Long.MAX_VALUE;
+        for (int i = 0; i < 5; i++) {
+            long started = System.nanoTime();
+            MedicationCatalogDuplicates.similar(proposed, existing);
+            best = Math.min(best, (System.nanoTime() - started) / 1_000_000);
+        }
+
+        assertThat(best).as("one comparison of a 5,000-character name, in ms").isLessThan(100);
+        // And it still reads a strength: the numbers at the end of a name are set aside, the last word is not.
+        assertThat(MedicationCatalogDuplicates.baseNameKey("Paracetamol " + "1 ".repeat(2500) + "mg"))
+            .isEqualTo("paracetamol");
+        assertThat(MedicationCatalogDuplicates.baseNameKey(hostile)).endsWith(" x");
+    }
+
     @Test
     void aBlankNameMatchesNothing() {
         assertThat(MedicationCatalogDuplicates.exact(entry(" ", "TABLET", null, null), entry("", "TABLET", null, null)))

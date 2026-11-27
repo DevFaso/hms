@@ -94,6 +94,8 @@ class RestrictedChartEnforcementGuardTest {
         entry("BedResponseDTO", "a bed"),
         entry("BedBoardEntryDTO#notes", "a note about the bed; the occupant carries its patientId"),
         entry("BloodUnitResponseDTO", "a blood unit in stock"),
+        entry("StockBalanceDriftDTO",
+            "a stock item whose total differs from its lots: a product and its lots, about no patient"),
         entry("CashSessionDTO", "a till session: money"),
         entry("ComplianceAlertDTO", "an organisation's compliance alert"),
         entry("CredentialRenewalResponseDTO", "a clinician's credential"),
@@ -135,6 +137,8 @@ class RestrictedChartEnforcementGuardTest {
         entry("QuarantineLineDTO", "stock put in quarantine"),
         entry("ReturnableDispenseDTO", "stock returns, worked by the pharmacy"),
         entry("StockLotResponseDTO", "a stock lot"),
+        entry("StockTransactionResponseDTO#medicationName",
+            "the product a stock movement moved (QA D4184): a catalogue name, about no patient"),
         entry("StockCountResponseDTO", "physical stock count for an inventory item, no patient"),
         entry("StockConsumptionLine", "aggregate pharmacy stock movements by item and unit, no patient"),
         // Answers to the caller's own clinical act, safety-critical at the point of care.

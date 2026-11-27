@@ -298,6 +298,23 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(el.querySelector('[data-test="approval-refuse"]')).toBeNull();
   });
 
+  it('QA D4188: the two views are the tabs of one tab bar, the one shown marked as such', () => {
+    render([strengthChange]);
+    const tabs = Array.from(el.querySelectorAll<HTMLButtonElement>('.tab-bar > button.tab-btn'));
+    expect(tabs.map((b) => b.dataset['test'])).toEqual([
+      'approvals-view-pending',
+      'approvals-view-history',
+    ]);
+    expect(tabs.map((b) => b.classList.contains('active'))).toEqual([true, false]);
+    expect(tabs[0].getAttribute('aria-pressed')).toBe('true');
+
+    tabs[1].click();
+    fixture.detectChanges();
+
+    expect(tabs.map((b) => b.classList.contains('active'))).toEqual([false, true]);
+    expect(tabs[1].getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('reads one entry’s versions when given an entry, with no queue tabs', () => {
     render([{ ...strengthChange, status: 'APPROVED' }], {
       id: 'm-1',

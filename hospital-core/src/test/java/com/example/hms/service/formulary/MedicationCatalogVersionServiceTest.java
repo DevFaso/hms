@@ -385,7 +385,8 @@ class MedicationCatalogVersionServiceTest {
 
         actingAs(pharmacist);
         assertThatThrownBy(() -> service.approve(version.getId(), null))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
             .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicateAtApproval");
         verify(catalogue, never()).save(any());
         assertThat(version.getStatus()).isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
@@ -415,6 +416,16 @@ class MedicationCatalogVersionServiceTest {
         // A change that leaves name, form and strength alone is never compared (an old twin does not block it).
         assertThat(service.proposeFormulary(item, liveWith("500", true), "Classement").getStatus())
             .isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
+    }
+
+    @Test
+    void theLookAlikeReadRefusesAValueLongerThanAnyCatalogueColumn_onItsField() {
+        actingAs(admin);
+        assertThatThrownBy(() -> service.similarEntries(cefixime("x".repeat(256), "200", "mg"), null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.similar.tooLong");
+        assertThat(service.similarEntries(cefixime("x".repeat(255), "200", "mg"), null)).isEmpty();
     }
 
     // ── QA D4190 (r81): a withdrawal is a line of the entry's history ──

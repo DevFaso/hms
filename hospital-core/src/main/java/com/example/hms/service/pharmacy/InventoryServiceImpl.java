@@ -825,7 +825,8 @@ public class InventoryServiceImpl implements InventoryService {
     /** QA D4197: who deactivated an item, what it still held, and why, on the audit trail. */
     private void logDeactivation(InventoryItem item, BigDecimal onHand, String reason) {
         logAudit(AuditEventType.CONFIGURATION_CHANGED,
-            "Inventory item deactivated with " + onHand.stripTrailingZeros().toPlainString() + " on hand"
+            "Inventory item deactivated with "
+                + com.example.hms.utility.DisplayNumbers.quantity(onHand, java.util.Locale.ENGLISH) + " on hand"
                 + (reason.isEmpty() ? "" : "; reason: " + reason),
             item.getId() == null ? null : item.getId().toString());
     }
