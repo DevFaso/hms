@@ -29,6 +29,9 @@ public class WebhookDeliveryResponseDTO {
     private WebhookDeliveryStatus status;
     private int attempts;
     private Integer responseStatus;
+    /** QA D4078: the cause of the last failed attempt ({@code WebhookDeliveryError}); null when none failed. */
+    private String errorCode;
+    /** The same cause as a sentence in the caller's language. Never the text of an exception. */
     private String lastError;
     private LocalDateTime lastAttemptAt;
     private LocalDateTime sentAt;

@@ -46,6 +46,21 @@ class IntegrationMessageReplayContractIntegrationTest {
         });
         when(repository.findById(any(UUID.class))).thenAnswer(invocation -> Optional.ofNullable(rows.get(invocation.getArgument(0))));
         when(repository.findByIdForUpdate(any(UUID.class))).thenAnswer(invocation -> Optional.ofNullable(rows.get(invocation.getArgument(0))));
+        // The two "a later attempt took this row over" queries, answered from the rows held here.
+        when(repository.existsLaterAttempt(any(), any())).thenAnswer(invocation -> rows.values().stream()
+            .anyMatch(row -> invocation.getArgument(0).equals(row.getCorrelationId())
+                && row.getLastAttemptedAt().isAfter(invocation.getArgument(1))));
+        when(repository.findResolvedFailureIds(any())).thenAnswer(invocation -> {
+            java.util.Collection<UUID> ids = invocation.getArgument(0);
+            return rows.values().stream()
+                .filter(row -> ids.contains(row.getId()) && row.getStatus() == IntegrationMessageStatus.FAILED)
+                .filter(row -> rows.values().stream().anyMatch(later ->
+                    row.getCorrelationId().equals(later.getCorrelationId())
+                        && later.getLastAttemptedAt().isAfter(row.getLastAttemptedAt())))
+                .map(IntegrationMessageEvent::getId).toList();
+        });
+        when(repository.findTop50ByCorrelationIdOrderByReceivedAtAsc(any())).thenAnswer(invocation ->
+            rows.values().stream().filter(row -> invocation.getArgument(0).equals(row.getCorrelationId())).toList());
         recorder = new IntegrationMessageRecorder(repository);
         service = new SuperAdminIntegrationMessageServiceImpl(repository, recorder,
             new IntegrationMessageRetentionPolicy(true, 180, 365));
@@ -55,6 +70,33 @@ class IntegrationMessageReplayContractIntegrationTest {
         return recorder.recordMessage("cdx-simulator", UUID.randomUUID(),
             IntegrationMessageDirection.OUTBOUND, "CDX/Envelope", "{\"id\":\"cdx-fake-resource\"}",
             status, status == IntegrationMessageStatus.FAILED ? "cdx simulated timeout" : null);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("D4301: a successful replay clears the failure, and the same message cannot be replayed twice")
+    void aFailureIsReplayedOnceAndThenReadsAsHandled() throws InterruptedException {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            IntegrationMessageEvent original = recordMessage(IntegrationMessageStatus.FAILED);
+            assertThat(service.getById(original.getId()).resolved()).isFalse();
+            Thread.sleep(5);
+
+            var replay = service.replay(original.getId());
+
+            // The failure now reads as handled, with both rows of its exchange.
+            var handled = service.getById(original.getId());
+            assertThat(handled.resolved()).isTrue();
+            assertThat(handled.attempts()).extracting(a -> a.status())
+                .containsExactly(IntegrationMessageStatus.FAILED, IntegrationMessageStatus.REPLAYED);
+            assertThat(replay.resolved()).isFalse();
+
+            // A second replay - a second click, a second operator - writes nothing.
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.replay(original.getId()))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            assertThat(rows).hasSize(2);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
     }
 
     @Test
@@ -76,7 +118,9 @@ class IntegrationMessageReplayContractIntegrationTest {
         assertThat(result.status()).isEqualTo(IntegrationMessageStatus.REPLAYED);
         assertThat(result.attemptCount()).isEqualTo(2);
         assertThat(result.lastAttemptedAt()).isNotNull();
-        assertThat(service.getById(original.getId())).isEqualTo(originalSnapshot);
+        // The stored row is untouched; it now reads as handled, with its exchange (QA D4301).
+        assertThat(service.getById(original.getId())).usingRecursiveComparison()
+            .ignoringFields("resolved", "attempts").isEqualTo(originalSnapshot);
         assertThat(service.getById(original.getId()).payload()).isEqualTo(result.payload());
     }
 
@@ -91,16 +135,16 @@ class IntegrationMessageReplayContractIntegrationTest {
         assertThat(rows).hasSize(3);
     }
 
+    /** Was the known gap C9 (two replays, two history rows): closed by QA D4301. */
     @Test
-    void replayingOriginalFailedIdTwiceCurrentlyCreatesTwoHistoryRows_knownGapC9() {
+    void replayingOriginalFailedIdTwiceWritesOneHistoryRow_gapC9Closed() throws InterruptedException {
         var original = recordMessage(IntegrationMessageStatus.FAILED);
         UUID originalId = original.getId();
-        var originalSnapshot = service.getById(originalId);
-        var first = service.replay(originalId);
-        var second = service.replay(originalId);
-        assertThat(rows).hasSize(3);
-        assertThat(first.id()).isNotEqualTo(second.id());
-        assertThat(service.getById(originalId)).isEqualTo(originalSnapshot);
+        Thread.sleep(5);
+        service.replay(originalId);
+        assertThatThrownBy(() -> service.replay(originalId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(rows).hasSize(2);
     }
 
     @Test
@@ -116,6 +160,8 @@ class IntegrationMessageReplayContractIntegrationTest {
                 exception -> assertThat(exception.getStatusCode().value()).isEqualTo(500));
         verify(repository).save(any(IntegrationMessageEvent.class));
         assertThat(rows).hasSize(1);
-        assertThat(service.getById(original.getId())).isEqualTo(originalSnapshot);
+        // The stored row is untouched; it now reads as handled, with its exchange (QA D4301).
+        assertThat(service.getById(original.getId())).usingRecursiveComparison()
+            .ignoringFields("resolved", "attempts").isEqualTo(originalSnapshot);
     }
 }

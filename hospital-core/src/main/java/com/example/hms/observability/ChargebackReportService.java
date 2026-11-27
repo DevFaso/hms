@@ -59,12 +59,11 @@ public class ChargebackReportService {
      */
     @Transactional(readOnly = true)
     public List<TenantCostRow> auditEventCountsPerTenant(LocalDateTime from, LocalDateTime to) {
-        List<Object[]> rows = auditEventLogRepository.countByHospitalBetween(from, to);
-        List<TenantCostRow> out = new ArrayList<>(rows.size());
-        for (Object[] row : rows) {
-            String hospitalName = (String) row[0];
-            long count = ((Number) row[1]).longValue();
-            out.add(new TenantCostRow(hospitalName, count));
+        // QA D4307: the same rows as the chargeback, so the two endpoints cannot
+        // give two counts for one hospital and one period.
+        List<TenantCostRow> out = new ArrayList<>();
+        for (TenantCostRowV2 row : chargebackPerTenant(from, to)) {
+            out.add(new TenantCostRow(row.hospitalName(), row.auditEventCount()));
         }
         return out;
     }
@@ -87,7 +86,7 @@ public class ChargebackReportService {
      */
     @Transactional(readOnly = true)
     public List<TenantCostRowV2> chargebackPerTenant(LocalDateTime from, LocalDateTime to) {
-        List<Object[]> rows = auditEventLogRepository.countByHospitalIdBetween(from, to);
+        List<Object[]> rows = auditEventLogRepository.countAttributedToHospitalBetween(from, to);
         List<TenantCostRowV2> out = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
             UUID hospitalId = (UUID) row[0];
@@ -99,6 +98,31 @@ public class ChargebackReportService {
                 amount, costModel.getCurrency()));
         }
         return out;
+    }
+
+    /**
+     * QA D4305-D4307: the page's one answer - the period actually applied, the
+     * rate the amounts were computed with, the rows and their totals. The page
+     * showed neither the period nor the rate, so an amount of zero (no rate
+     * configured) could not be told from an amount that was never computed.
+     */
+    @Transactional(readOnly = true)
+    public ChargebackReport report(java.time.LocalDate from, java.time.LocalDate to) {
+        List<TenantCostRowV2> rows = chargebackPerTenant(from.atStartOfDay(), to.atTime(java.time.LocalTime.MAX));
+        long events = 0;
+        BigDecimal amount = BigDecimal.ZERO;
+        for (TenantCostRowV2 row : rows) {
+            events += row.auditEventCount();
+            amount = amount.add(row.chargebackAmount());
+        }
+        return new ChargebackReport(from, to, costModel.getCurrency(),
+            costModel.getRates().getPerAuditEvent(), rows, events, amount);
+    }
+
+    /** The F CFA has no subunit: an amount in XOF (or XAF) is a whole number. */
+    private int amountScale() {
+        String currency = costModel.getCurrency();
+        return "XOF".equals(currency) || "XAF".equals(currency) ? 0 : 2;
     }
 
     /**
@@ -119,8 +143,19 @@ public class ChargebackReportService {
                 .divide(BYTES_PER_GIB, 6, RoundingMode.HALF_UP);
             total = total.add(rates.getPerStorageGib().multiply(gib));
         }
-        return total.setScale(2, RoundingMode.HALF_UP);
+        return total.setScale(amountScale(), RoundingMode.HALF_UP);
     }
+
+    /** The cost page's answer: period, rate, rows and totals. */
+    public record ChargebackReport(
+        java.time.LocalDate from,
+        java.time.LocalDate to,
+        String currency,
+        BigDecimal ratePerAuditEvent,
+        List<TenantCostRowV2> rows,
+        long totalAuditEvents,
+        BigDecimal totalAmount
+    ) {}
 
     /** Foundation-pass output shape — kept for backwards compatibility. */
     public record TenantCostRow(String hospitalName, long auditEventCount) {}

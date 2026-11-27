@@ -874,7 +874,7 @@
   "INTEGRATION_MESSAGES": {
     "TITLE": "Integration message log",
     "SUBTITLE": "Review partner messages and failures. This page records an event in the log; it does not resend the message to the partner.",
-    "DLQ_BADGE": "{{ count }} failed messages",
+    "DLQ_BADGE": "{{ count }} failed messages to handle",
     "SHOW_DLQ_ONLY": "Show failed messages",
     "SEARCH": "Search",
     "SEARCHING": "Searching…",
@@ -902,7 +902,8 @@
       "SENT": "Sent",
       "RECEIVED": "Received",
       "FAILED": "Failed",
-      "REPLAYED": "Event recorded"
+      "REPLAYED": "Event recorded",
+      "FAILED_RESOLVED": "Failed — handled"
     },
     "COL": {
       "RECEIVED_AT": "Received",
@@ -915,6 +916,34 @@
     },
     "ERROR": {
       "REPLAY_FAILED": "Could not record the event. Try again."
+    },
+    "DLQ_BADGE_ONE": "{{ count }} failed message to handle",
+    "REPLAY_DONE": "Replay recorded: the message is no longer counted as failed.",
+    "REPLAY_CONFIRM": {
+      "TITLE": "Record a replay in the log?",
+      "MESSAGE": "A new \"Event recorded\" line will be added for this message of the {{ integration }} integration, and the message will no longer be counted as failed. Nothing is sent to the partner again. A message can be replayed only once."
+    },
+    "DIRECTION": {
+      "OUTBOUND": "Outbound",
+      "INBOUND": "Inbound"
+    },
+    "TYPE": {
+      "PROBE": "Connection test",
+      "RESYNC": "Re-synchronisation"
+    },
+    "DETAIL": {
+      "OPEN": "Details",
+      "TITLE": "Message detail",
+      "ORGANIZATION": "Organization",
+      "PLATFORM_WIDE": "Whole platform",
+      "CORRELATION_ID": "Correlation ID",
+      "LAST_ATTEMPT": "Last attempt",
+      "PAYLOAD": "Message content",
+      "NO_PAYLOAD": "No content was recorded for this message.",
+      "LOADING": "Loading the content…",
+      "LOAD_ERROR": "The content of this message could not be loaded. Try again.",
+      "EXCHANGE": "Attempts of this exchange",
+      "EXCHANGE_PREVIEW": "The first {{shown}} of {{total}} attempts."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1596,6 +1625,7 @@
     "TREND_BAR_TITLE": "{{count}} appointments"
   },
   "ANNOUNCEMENTS": {
+    "PLATFORM_WIDE": "Platform",
     "CREATE": "Create",
     "CREATE_ANNOUNCEMENT": "Create Announcement",
     "DELETE_ANNOUNCEMENT": "Delete Announcement",
@@ -1618,10 +1648,12 @@
       "LOAD_FAILED": "Failed to load announcements",
       "SAVE_FAILED": "Failed to save announcement",
       "TEXT_REQUIRED": "Announcement text is required",
-      "UPDATED": "Announcement updated"
+      "UPDATED": "Announcement updated",
+      "TEXT_TOO_LONG": "The announcement text cannot exceed {{ max }} characters."
     },
     "CREATE_FIRST": "Create your first announcement.",
-    "NONE_YET": "No announcements yet."
+    "NONE_YET": "No announcements yet.",
+    "TEXT_LIMIT": "{{ count }} / {{ max }} characters"
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -3854,7 +3886,7 @@
   },
   "COST_PANEL": {
     "TITLE": "Cost per hospital",
-    "SUBTITLE": "What each hospital would be billed for the selected period. Today the amount is based on recorded activity (audit events); the log, monitoring and storage columns stay at zero until those measurements are connected.",
+    "SUBTITLE": "What each hospital would be charged for the chosen period. The amount is the number of audit events recorded for the hospital, multiplied by the rate shown below.",
     "FROM": "From",
     "TO": "To",
     "REFRESH": "Refresh",
@@ -3867,7 +3899,13 @@
     "COL_SPLUNK": "Log events",
     "COL_GRAFANA": "Monitoring series",
     "COL_STORAGE_GIB": "Storage (GiB)",
-    "COL_AMOUNT": "Chargeback amount"
+    "COL_AMOUNT": "Chargeback amount",
+    "EXPORT_CSV": "Export (CSV)",
+    "EXPORT_FILE": "costs-per-hospital",
+    "PERIOD": "Period shown: {{ from }} to {{ to }}",
+    "RATE": "Rate applied: {{ amount }} per recorded event (provisional rate, set by the platform operator).",
+    "NO_RATE": "No rate is configured: the amount is not computed. Ask the platform operator to set the rate per event.",
+    "TOTAL": "Total"
   },
   "EMPI": {
     "MERGE_BUTTON": "Merge duplicates",
@@ -6044,7 +6082,8 @@
     "CONFIRM_ROTATE_KEY": "Rotate this key? The current key stops working immediately.",
     "CONFIRM_REVOKE_KEY": "Revoke this key? The client loses access immediately and permanently.",
     "CONFIRM_REVOKE_ENDPOINT": "Revoke this endpoint? Deliveries stop permanently; the log stays readable.",
-    "CONFIRM_ROTATE_SECRET": "Rotate the signing secret? The receiver must be updated or its verification will fail."
+    "CONFIRM_ROTATE_SECRET": "Rotate the signing secret? The receiver must be updated or its verification will fail.",
+    "LAST_ATTEMPT_AT": "Last attempt"
   },
   "ROI": {
     "TITLE": "Release of Information",
@@ -8447,7 +8486,8 @@
         "HOSPITAL_INCOMPATIBLE_RELEASE_PROTOCOL": "Incompatible release fallback setting",
         "IMAGING_CATALOGUE_EXAM": "Imaging catalogue exam",
         "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
-        "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off"
+        "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off",
+        "PLATFORM_REQUEST": "Request to the platform"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -10696,6 +10736,19 @@
       "readBackRequired": "Read-back required",
       "readBackAt": "Read back {{at}}",
       "followUp": "Order follow-up"
+    },
+    "openPlatformItem": "Open",
+    "platformRequest": {
+      "open": "Write to the platform",
+      "title": "Request to the platform",
+      "hint": "Your request arrives in the platform administrators’ inbox, with your hospital’s name and yours. No SMS or e-mail is sent.",
+      "subject": "Subject",
+      "message": "Message",
+      "send": "Send",
+      "sending": "Sending…",
+      "sent": "Request sent to the platform administrators.",
+      "failed": "The request could not be sent. Try again.",
+      "required": "This field is required."
     }
   },
   "common": {

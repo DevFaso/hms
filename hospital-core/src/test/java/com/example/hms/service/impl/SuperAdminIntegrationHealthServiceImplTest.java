@@ -149,10 +149,10 @@ class SuperAdminIntegrationHealthServiceImplTest {
     }
 
     @Test
-    @DisplayName("QA D851: rows say whether a probe or a re-sync exists, so the console can hide the buttons")
+    @DisplayName("QA D4300: every listed integration can be tested; a re-sync only where one is registered")
     void rowsCarryActionSupport() {
         for (IntegrationHealthRowDTO row : service.getInventory().getIntegrations()) {
-            assertThat(row.isProbeSupported()).as(row.getIntegrationId()).isFalse();
+            assertThat(row.isProbeSupported()).as(row.getIntegrationId()).isTrue();
             assertThat(row.isResyncSupported()).as(row.getIntegrationId()).isFalse();
         }
     }

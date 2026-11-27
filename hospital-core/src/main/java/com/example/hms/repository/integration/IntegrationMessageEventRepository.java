@@ -87,6 +87,38 @@ public interface IntegrationMessageEventRepository
     long countUnresolvedDeadLetters();
 
     /**
+     * QA D4301: which of these failed rows a later attempt has taken over - the
+     * same rule {@link #countUnresolvedDeadLetters} counts by, so the rows the
+     * page marks as handled and the number on its banner cannot disagree.
+     */
+    @Query("SELECT m.id FROM IntegrationMessageEvent m "
+        + "WHERE m.id IN :ids "
+        + "AND m.status = com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "AND EXISTS ("
+        + "  SELECT 1 FROM IntegrationMessageEvent later "
+        + "  WHERE later.correlationId IS NOT NULL "
+        + "  AND later.correlationId = m.correlationId "
+        + "  AND later.lastAttemptedAt > m.lastAttemptedAt"
+        + ")")
+    List<UUID> findResolvedFailureIds(@Param("ids") Collection<UUID> ids);
+
+    /** Whether a later attempt shares this correlation id (the row is then resolved). */
+    @Query("SELECT COUNT(later) > 0 FROM IntegrationMessageEvent later "
+        + "WHERE later.correlationId = :correlationId AND later.lastAttemptedAt > :after")
+    boolean existsLaterAttempt(@Param("correlationId") String correlationId,
+                               @Param("after") LocalDateTime after);
+
+    /** QA D4302: the rows of one exchange, oldest first, for the detail view. */
+    List<IntegrationMessageEvent> findTop50ByCorrelationIdOrderByReceivedAtAsc(String correlationId);
+
+    /** How many rows one exchange has (the detail view shows its first 50 and says so). */
+    long countByCorrelationId(String correlationId);
+
+    /** Names of the organisations a page of messages belongs to: {@code [id, name]}. */
+    @Query("SELECT o.id, o.name FROM Organization o WHERE o.id IN :ids")
+    List<Object[]> findOrganizationNames(@Param("ids") Collection<UUID> ids);
+
+    /**
      * The most recent row recorded under this correlation id within a
      * window, if there is one.
      *
