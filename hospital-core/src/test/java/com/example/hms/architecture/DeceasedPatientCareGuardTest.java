@@ -284,7 +284,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("SuperAdminUserGovernance", NOT_CARE), Map.entry("TenantProvisioning", NOT_CARE),
         Map.entry("TenantSchemaCache", NOT_CARE), Map.entry("Treatment", NOT_CARE), Map.entry("User", NOT_CARE),
         Map.entry("UserRoleHospitalAssignment", NOT_CARE), Map.entry("UsernameReminder", NOT_CARE),
-        Map.entry("VisitType", NOT_CARE), Map.entry("WebhookEndpoint", NOT_CARE));
+        Map.entry("VisitType", NOT_CARE), Map.entry("WebhookEndpoint", NOT_CARE),
+        Map.entry("PlatformRequest", NOT_CARE));
 
     @Test
     @DisplayName("every write endpoint is refused, or stays open and says why")

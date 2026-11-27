@@ -239,6 +239,57 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
                                                             @Param("proposals") Collection<PrescriptionStatus> proposals,
                                                             Pageable pageable);
 
+    /**
+     * {@link #findSentAcrossHospitals} less the prescriptions written in a
+     * visit the acting hospital may not read
+     * ({@code RecordAccessPolicy.withheldVisits}): a prescription follows its
+     * visit's restriction, in the query, so neither the page nor its count
+     * includes one.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)"
+        + " AND p.encounter.id NOT IN :withheldVisitIds",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)"
+        + " AND p.encounter.id NOT IN :withheldVisitIds")
+    Page<Prescription> findSentAcrossHospitalsOutsideVisits(@Param("patientId") UUID patientId,
+                                                            @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                            @Param("actingHospitalId") UUID actingHospitalId,
+                                                            @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                                            @Param("withheldVisitIds") Collection<UUID> withheldVisitIds,
+                                                            Pageable pageable);
+
+    /** {@link #findSentAcrossHospitalsOutsideVisits} restricted to a set of statuses. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses"
+        + " AND p.encounter.id NOT IN :withheldVisitIds",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.withdrawnBeforeSigning = false AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses"
+        + " AND p.encounter.id NOT IN :withheldVisitIds")
+    Page<Prescription> findSentAcrossHospitalsAndStatusInOutsideVisits(@Param("patientId") UUID patientId,
+                                                                       @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                                       @Param("actingHospitalId") UUID actingHospitalId,
+                                                                       @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                                                       @Param("statuses") Collection<PrescriptionStatus> statuses,
+                                                                       @Param("withheldVisitIds") Collection<UUID> withheldVisitIds,
+                                                                       Pageable pageable);
+
+    /** {@link #findIssuedByPatientIdAndHospitalIdIn} less the prescriptions of a withheld visit. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false"
+        + " AND p.encounter.id NOT IN :withheldVisitIds",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND p.status NOT IN :proposals AND p.withdrawnBeforeSigning = false"
+        + " AND p.encounter.id NOT IN :withheldVisitIds")
+    Page<Prescription> findIssuedByPatientIdAndHospitalIdInOutsideVisits(@Param("patientId") UUID patientId,
+                                                                         @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                                         @Param("proposals") Collection<PrescriptionStatus> proposals,
+                                                                         @Param("withheldVisitIds") Collection<UUID> withheldVisitIds,
+                                                                         Pageable pageable);
+
     /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"

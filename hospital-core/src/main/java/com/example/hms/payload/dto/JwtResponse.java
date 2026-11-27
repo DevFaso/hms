@@ -25,6 +25,8 @@ public class JwtResponse {
      * patient one for a patient-only session). Null on answers that open no session.
      */
     private Long sessionEndsAt;
+    /** True on a refresh whose session's screen is locked: the portal shows its lock screen. Absent otherwise. */
+    private Boolean sessionLocked;
 
     private UUID id;
     private String username;

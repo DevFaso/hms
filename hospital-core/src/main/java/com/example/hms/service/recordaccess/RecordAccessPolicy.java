@@ -1,5 +1,8 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.model.Encounter;
+
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -57,4 +60,18 @@ public interface RecordAccessPolicy {
      * nothing about whether such rows exist.
      */
     boolean foreignRowsWithheld(UUID actorUserId, UUID patientId, UUID actingHospitalId);
+
+    /**
+     * The patient's visits recorded at another hospital that the D3 rule
+     * withholds from a read at the acting hospital: a visit whose effective
+     * sensitivity category is set ({@link SensitivityClassifier}), unless the
+     * actor holds a live break-the-glass session here. Everything recorded in
+     * such a visit is withheld with it: a shared read hands this list to
+     * {@link RestrictedVisitScope#of} and filters its rows through the scope.
+     *
+     * <p>Empty with no acting hospital (a global view measures against no
+     * hospital). Says nothing about whether the visits' hospital is readable
+     * at all: {@link #readableHospitalIds} decides that first.
+     */
+    List<Encounter> withheldVisits(UUID actorUserId, UUID patientId, UUID actingHospitalId);
 }

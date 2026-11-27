@@ -292,6 +292,23 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     """)
     List<com.example.hms.model.User> findLiveStaffUsersPlatformWide();
 
+    /**
+     * QA D4320: whether two accounts are colleagues - each holds an active,
+     * non-patient role at one same hospital.
+     */
+    @Query("""
+        SELECT COUNT(a) > 0
+        FROM UserRoleHospitalAssignment a, UserRoleHospitalAssignment b
+        WHERE a.user.id = :firstUserId
+          AND b.user.id = :secondUserId
+          AND a.hospital.id = b.hospital.id
+          AND a.active = TRUE
+          AND b.active = TRUE
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+          AND UPPER(b.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    boolean sharesActiveHospital(@Param("firstUserId") UUID firstUserId, @Param("secondUserId") UUID secondUserId);
+
     /* ------------ Fetch graphs for DTO mapping ------------ */
 
     /** Deep enough for most response DTOs (user/hospital/role/registeredBy). */

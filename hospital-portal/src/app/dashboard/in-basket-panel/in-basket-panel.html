@@ -180,6 +180,16 @@
                 (saved)="onPreAuthRecorded()"
               />
             }
+            @if (platformLink(item)) {
+              <button
+                type="button"
+                class="btn-review"
+                data-testid="in-basket-open-platform-item"
+                (click)="openPlatformItem(item)"
+              >
+                {{ 'inBasket.openPlatformItem' | translate }}
+              </button>
+            }
             @if (isNoteToSign(item)) {
               <button
                 type="button"

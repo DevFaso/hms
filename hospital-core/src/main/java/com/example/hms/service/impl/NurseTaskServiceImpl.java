@@ -1318,9 +1318,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         int effectiveLimit = clampLimit(limit);
         Pageable page = PageRequest.of(0, effectiveLimit);
 
-        List<Announcement> dbAnnouncements = announcementRepository
-            .findByHospital_IdOrderByDateDesc(hospitalId, page)
-            .getContent();
+        // QA D4309: the hospital's announcements and the platform's.
+        List<Announcement> dbAnnouncements = announcementRepository.findVisibleAtHospital(hospitalId, page);
 
         if (!dbAnnouncements.isEmpty()) {
             return dbAnnouncements.stream()
@@ -1357,7 +1356,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long handoffsPending = countPendingHandoffs(nurseUserId, hospitalId);
 
         // Announcement count
-        long announcementCount = hospitalId != null ? announcementRepository.countByHospital_Id(hospitalId) : 0L;
+        long announcementCount = hospitalId != null ? announcementRepository.countVisibleAtHospital(hospitalId) : 0L;
 
         return NurseDashboardSummaryDTO.builder()
             .assignedPatients(assignedPatients)

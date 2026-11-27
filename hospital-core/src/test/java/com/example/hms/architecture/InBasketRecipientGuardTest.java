@@ -77,6 +77,9 @@ class InBasketRecipientGuardTest {
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             codes(com.example.hms.service.support.OPositiveReleaseAuthority.BIOLOGIST_ROLE_CODES),
             codes(com.example.hms.service.support.OPositiveReleaseAuthority.HIGH_RISK_DECIDER_ROLE_CODES))),
+        // QA D4308: platform items (a provider to verify, an integration failing, a webhook switched off, a
+        // hospital administrator's request), for the platform administrators.
+        Map.entry("PlatformInbox.java", Set.of("SUPER_ADMIN")),
         // The clinician who ordered the test.
         Map.entry("LabResultServiceImpl.java", labOrderers()),
         Map.entry("LabSpecimenRejectionNotifier.java", labOrderers()),

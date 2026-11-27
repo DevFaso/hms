@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.RestrictedVisitScope;
 import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.support.PrescriptionIssuance;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
@@ -1570,6 +1571,9 @@ public class PatientServiceImpl implements PatientService {
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // rows every collector below withholds (D3); the ledger names the session.
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, resolvedHospitalId);
+        // What a visit produced follows the visit: withheld with it, unlocked with it.
+        RestrictedVisitScope restricted = RestrictedVisitScope.of(
+            recordAccessPolicy.withheldVisits(requesterUserId, patientId, resolvedHospitalId));
         List<PrescriptionResponseDTO> medications = collectDoctorRecordMedications(
             patientId,
             resolvedHospitalId,
@@ -1577,7 +1581,8 @@ public class PatientServiceImpl implements PatientService {
             unlocked,
             includeSensitive,
             maxItems,
-            sensitiveSections
+            sensitiveSections,
+            restricted
         );
         // #751 - the lab section's only foreign rows are the ones this
         // hospital's laboratory performed; they are accounted on their own.
@@ -1588,7 +1593,8 @@ public class PatientServiceImpl implements PatientService {
             includeSensitive,
             maxItems,
             sensitiveSections,
-            performedHereLabReach
+            performedHereLabReach,
+            restricted
         );
         ImagingBundle imagingBundle = collectDoctorRecordImaging(
             patientId,
@@ -2888,7 +2894,8 @@ public class PatientServiceImpl implements PatientService {
         boolean unlocked,
         boolean includeSensitive,
         int limit,
-        Set<String> sensitiveSections
+        Set<String> sensitiveSections,
+        RestrictedVisitScope restricted
     ) {
         // E9 #59c — medications follow the patient. A FOREIGN prescription the
         // keyword heuristic marks sensitive is withheld whatever the caller
@@ -2897,8 +2904,10 @@ public class PatientServiceImpl implements PatientService {
         // exists. A local one keeps the includeSensitive behaviour.
         // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
         // QA D1537 review: and less a draft withdrawn before anyone signed it, never an order.
+        // And a prescription written in a withheld visit follows the visit.
         List<Prescription> prescriptions = PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
-            prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), hospitalId));
+            prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), hospitalId))
+            .stream().filter(restricted::admits).toList();
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
                 Comparator.nullsLast(Comparator.reverseOrder()));
@@ -2923,7 +2932,8 @@ public class PatientServiceImpl implements PatientService {
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections,
-        Map<String, Long> performedHereReach
+        Map<String, Long> performedHereReach,
+        RestrictedVisitScope restricted
     ) {
         // Handled by the acting hospital (#751), read at the database: ordered
         // here, or performed by this hospital's own laboratory for another
@@ -2933,6 +2943,8 @@ public class PatientServiceImpl implements PatientService {
         // QA D740/D741: the record carries values, so released, current results only.
         List<LabResult> results = ClinicalLabResultView.releasedAndCurrent(labResultRepository.findPatientResultsReadableAt(
                 patientId, Set.of(hospitalId), hospitalId, false, Pageable.unpaged())).stream()
+            // A result this laboratory performed for another hospital follows its order's visit.
+            .filter(restricted::admits)
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);

@@ -48,9 +48,9 @@ class ChargebackReportServiceTest {
     @Test
     @DisplayName("auditEventCountsPerTenant maps Object[] rows to TenantCostRow records")
     void mapsRepositoryRowsToTypedRecords() {
-        when(repository.countByHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
-            new Object[] {"Aspen Memorial", 42L},
-            new Object[] {"Beacon General", 7L}
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
+            new Object[] {UUID.randomUUID(), "Aspen Memorial", 42L},
+            new Object[] {UUID.randomUUID(), "Beacon General", 7L}
         ));
         List<ChargebackReportService.TenantCostRow> rows = service.auditEventCountsPerTenant(
             LocalDateTime.now().minusDays(7),
@@ -68,8 +68,8 @@ class ChargebackReportServiceTest {
     @Test
     @DisplayName("auditEventCountsPerTenant accepts Integer counts (boxed Long path)")
     void acceptsIntegerCountFromRepository() {
-        when(repository.countByHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
-            new Object[] {"Aspen Memorial", 5}
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
+            new Object[] {UUID.randomUUID(), "Aspen Memorial", 5}
         ));
         var rows = service.auditEventCountsPerTenant(
             LocalDateTime.now().minusDays(1),
@@ -82,7 +82,7 @@ class ChargebackReportServiceTest {
     @Test
     @DisplayName("auditEventCountsPerTenant returns empty list when repository returns no rows")
     void emptyRepositoryReturnsEmptyList() {
-        when(repository.countByHospitalBetween(any(), any())).thenReturn(List.of());
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.of());
         assertThat(service.auditEventCountsPerTenant(
             LocalDateTime.now().minusDays(1),
             LocalDateTime.now()
@@ -96,10 +96,11 @@ class ChargebackReportServiceTest {
     void chargebackComputesAmountUsingCostModel() {
         UUID h1 = UUID.randomUUID();
         UUID h2 = UUID.randomUUID();
+        costModel.setCurrency("USD");
         costModel.getRates().setPerAuditEvent(new BigDecimal("0.01"));
         properties.setEnabled(true);
 
-        when(repository.countByHospitalIdBetween(any(), any())).thenReturn(List.<Object[]>of(
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
             new Object[] {h1, "Aspen Memorial", 100L},
             new Object[] {h2, "Beacon General", 250L}
         ));
@@ -121,13 +122,52 @@ class ChargebackReportServiceTest {
     @DisplayName("chargebackPerTenant carries the configured currency through to the output rows")
     void chargebackCarriesCurrency() {
         costModel.setCurrency("XOF");
-        when(repository.countByHospitalIdBetween(any(), any())).thenReturn(List.<Object[]>of(
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
             new Object[] {UUID.randomUUID(), "Aspen Memorial", 1L}
         ));
 
         var rows = service.chargebackPerTenant(
             LocalDateTime.now().minusDays(1), LocalDateTime.now());
         assertThat(rows.get(0).currency()).isEqualTo("XOF");
+    }
+
+    // ── QA D4305 / D4307 ────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("D4305: the amount is in F CFA by default, computed from the events, as whole francs")
+    void amountIsComputedInWholeFrancsByDefault() {
+        UUID h1 = UUID.randomUUID();
+        costModel.getRates().setPerAuditEvent(new BigDecimal("1.5"));
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
+            new Object[] {h1, "Aspen Memorial", 2_598L},
+            new Object[] {UUID.randomUUID(), "Beacon General", 104L}
+        ));
+
+        ChargebackReportService.ChargebackReport report = service.report(
+            java.time.LocalDate.of(2026, 11, 1), java.time.LocalDate.of(2026, 11, 27));
+
+        assertThat(report.currency()).isEqualTo("XOF");
+        assertThat(report.ratePerAuditEvent()).isEqualByComparingTo("1.5");
+        assertThat(report.from()).isEqualTo(java.time.LocalDate.of(2026, 11, 1));
+        assertThat(report.to()).isEqualTo(java.time.LocalDate.of(2026, 11, 27));
+        assertThat(report.rows()).extracting(ChargebackReportService.TenantCostRowV2::chargebackAmount)
+            .containsExactly(new BigDecimal("3897"), new BigDecimal("156"));
+        assertThat(report.totalAuditEvents()).isEqualTo(2_702L);
+        assertThat(report.totalAmount()).isEqualByComparingTo("4053");
+    }
+
+    @Test
+    @DisplayName("D4307: the two endpoints read the same rows, so they cannot disagree on a count")
+    void bothEndpointsGiveTheSameCount() {
+        when(repository.countAttributedToHospitalBetween(any(), any())).thenReturn(List.<Object[]>of(
+            new Object[] {UUID.randomUUID(), "Aspen Memorial", 1_747L}
+        ));
+        LocalDateTime from = LocalDateTime.now().minusDays(1);
+        LocalDateTime to = LocalDateTime.now();
+
+        assertThat(service.auditEventCountsPerTenant(from, to).get(0).auditEventCount())
+            .isEqualTo(service.chargebackPerTenant(from, to).get(0).auditEventCount())
+            .isEqualTo(1_747L);
     }
 
     @Test
@@ -151,6 +191,7 @@ class ChargebackReportServiceTest {
     @Test
     @DisplayName("computeAmount — combines all four rates linearly")
     void computeAmountCombinesAllFour() {
+        costModel.setCurrency("USD");
         costModel.getRates().setPerAuditEvent(new BigDecimal("0.01"));   // 100 × 0.01 = 1.00
         costModel.getRates().setPerSplunkEvent(new BigDecimal("0.001")); // 5000 × 0.001 = 5.00
         costModel.getRates().setPerGrafanaSeries(new BigDecimal("0.10")); // 20 × 0.10 = 2.00

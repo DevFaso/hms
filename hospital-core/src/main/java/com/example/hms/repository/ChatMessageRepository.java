@@ -15,6 +15,10 @@ import java.util.UUID;
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
+    /** QA D4320: whether {@code senderId} has already written to {@code recipientId} (an answer is then allowed). */
+    boolean existsBySender_IdAndRecipient_Id(UUID senderId, UUID recipientId);
+
+
     // 1. Paginated chat history between two users
     @Query("""
         SELECT m FROM ChatMessage m

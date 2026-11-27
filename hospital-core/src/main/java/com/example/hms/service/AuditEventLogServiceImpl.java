@@ -79,6 +79,19 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
 
     }
 
+    /** Session housekeeping: left out of a person's own activity. */
+    private static final java.util.Set<com.example.hms.enums.AuditEventType> NOT_OWN_ACTIVITY = java.util.EnumSet.of(
+        com.example.hms.enums.AuditEventType.TOKEN_REFRESH,
+        com.example.hms.enums.AuditEventType.TOKEN_REVOKED,
+        com.example.hms.enums.AuditEventType.MFA_CHALLENGE);
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AuditEventLogResponseDTO> getOwnActivity(UUID userId, Pageable pageable) {
+        return auditRepository.findOwnActivity(userId, NOT_OWN_ACTIVITY, pageable)
+            .map(auditMapper::toDto);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<AuditEventLogResponseDTO> getAuditLogsByEventTypeAndStatus(AuditEventType type, AuditStatus status, Pageable pageable) {
@@ -399,7 +412,41 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
                 .resolve(assignmentRepository, user.getId(), requestDTO.getHospitalId(), actingRolesOf(requestDTO, user))
                 .orElse(null);
         }
+        // A sign-in event names no hospital: a staff account's row is filed at
+        // its own hospital, so that hospital's administrator reads who signed
+        // in, who failed to and which account was locked.
+        if (assignment == null && user != null && requestDTO.getHospitalId() == null
+                && SIGN_IN_EVENTS.contains(requestDTO.getEventType())) {
+            assignment = staffHomeAssignment(user);
+        }
         return assignment;
+    }
+
+    /** The events of a session opening, failing to open, or closing. */
+    private static final java.util.Set<com.example.hms.enums.AuditEventType> SIGN_IN_EVENTS = java.util.EnumSet.of(
+        com.example.hms.enums.AuditEventType.LOGIN,
+        com.example.hms.enums.AuditEventType.LOGOUT,
+        com.example.hms.enums.AuditEventType.LOGIN_FAILURE,
+        com.example.hms.enums.AuditEventType.ACCOUNT_LOCKED,
+        com.example.hms.enums.AuditEventType.MFA_FAILURE);
+
+    /**
+     * The active staff assignment a sign-in row is filed under: the first by
+     * hospital and role, so the same account always files at the same place.
+     * None for an account that is a patient only.
+     */
+    private UserRoleHospitalAssignment staffHomeAssignment(User user) {
+        List<UserRoleHospitalAssignment> held = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+        if (held == null) {
+            return null;
+        }
+        return held.stream()
+            .filter(row -> row.getHospital() != null && row.getHospital().getId() != null && row.getRole() != null)
+            .filter(row -> !"PATIENT".equals(com.example.hms.service.support.UserAccountAccess.roleCode(row.getRole())))
+            .min(java.util.Comparator
+                .comparing((UserRoleHospitalAssignment row) -> row.getHospital().getId().toString())
+                .thenComparing(row -> String.valueOf(row.getRole().getCode())))
+            .orElse(null);
     }
 
     /**

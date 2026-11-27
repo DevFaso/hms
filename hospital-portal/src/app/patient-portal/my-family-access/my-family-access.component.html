@@ -167,8 +167,7 @@
             @for (p of proxies(); track p.id) {
               <tr>
                 <td>
-                  <strong>{{ p.proxyDisplayName }}</strong><br />
-                  <small class="text-muted">{{ p.proxyUsername }}</small>
+                  <strong>{{ p.proxyUsername }}</strong>
                 </td>
                 <td>
                   <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
