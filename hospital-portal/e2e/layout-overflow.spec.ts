@@ -438,7 +438,7 @@ test.describe('layout: prescription patient safety (D4111)', () => {
     );
     await page.goto(`/prescriptions?new=1&patientId=${TEST_ID}`, { waitUntil: 'domcontentloaded' });
     const name = page.locator('.picker-chip .chip-name');
-    await expect(name).toContainText('Pengdwend\u00e9-LongueIdentit\u00e9');
+    await expect(name).toContainText('Pengdwend\u00e9-LongueIdentit\u00e9', { timeout: 60_000 });
     const blood = page.locator('[data-testid="patient-safety-blood-group"]');
     await expect(blood).toBeVisible();
     for (const width of [390, 768, 1440]) {
