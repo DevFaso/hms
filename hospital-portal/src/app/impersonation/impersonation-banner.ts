@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { ImpersonationService } from '../services/impersonation.service';
 import { AuthService } from '../auth/auth.service';
+import { personName } from '../shared/pipes/person-name.pipe';
 
 @Component({
   selector: 'app-impersonation-banner',
@@ -29,7 +30,7 @@ export class ImpersonationBannerComponent {
     const profile = this.auth.currentProfile();
     const username = this.active()?.targetUsername ?? '';
     const sameAccount = !!profile && (!username || profile.username === username);
-    const name = sameAccount ? `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() : '';
+    const name = sameAccount ? personName(profile) : '';
     return name || username;
   });
 
@@ -37,7 +38,7 @@ export class ImpersonationBannerComponent {
   readonly impersonatorName = computed(() => {
     this.active();
     const own = this.auth.heldProfile();
-    const name = own ? `${own.firstName ?? ''} ${own.lastName ?? ''}`.trim() : '';
+    const name = personName(own);
     return name || (this.active()?.impersonatorUsername ?? '');
   });
 
