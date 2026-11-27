@@ -48,9 +48,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       ({@code PatientChartAccess.require}) or widens a read, and holds the
  *       repository of a record that follows its visit, applies the scope or is
  *       listed as reading one hospital only;</li>
- *   <li><b>the finders</b>: every call of a finder that reads such a record
- *       across several hospitals is made from a class that applies the
- *       scope, or is listed as passing one hospital.</li>
+ *   <li><b>the reads, method by method</b>: every call of a repository read
+ *       that takes a patient and is not held to one hospital (a set of
+ *       hospitals, or no hospital at all), on a record that follows its
+ *       visit, is made in a method that applies the scope to it, or is listed
+ *       by method with why no reader of another hospital gets the rows. The
+ *       reads are found from the repositories' own declarations, so a class
+ *       that neither widens a read nor opens the chart gate is seen too, and
+ *       a class that applies the scope in one method is not excused in
+ *       another.</li>
  * </ol>
  */
 @DisplayName("D4261: every shared read withholds what a restricted visit produced")
@@ -186,24 +192,93 @@ class RestrictedVisitCoverageGuardTest {
         Map.entry("service/recordaccess/MinorResultReleaseServiceImpl.java", "a clinician's release of a result of"
             + " their own hospital"));
 
-    /** A caller of a several-hospital finder that passes one hospital. */
-    private static final Map<String, String> ONE_HOSPITAL_FINDER_CALLERS = Map.ofEntries(
-        Map.entry("fhir/bulk/FhirBulkExportRunner.java", "the bulk export reads one hospital's own orders"
-            + " (Set.of(hospitalId))"),
-        Map.entry("service/imaging/ImagingReadingContextService.java", "the reading context of one hospital"
-            + " (List.of(hospitalId))"),
-        Map.entry("service/timeline/VisitTimelineRows.java", "the visit timeline of the acting hospital"
-            + " (Set.of(acting))"));
+    /**
+     * A method that calls a patient read not held to one hospital, without the scope: "file#method" and why no
+     * reader of another hospital is handed a restricted visit's rows by it.
+     */
+    private static final Map<String, String> UNSCOPED_PATIENT_READS = Map.ofEntries(
+        // One hospital, passed as a set.
+        Map.entry("fhir/bulk/FhirBulkExportRunner.java#exportOnePatient",
+            "the bulk export reads one hospital's own orders (Set.of(hospitalId))"),
+        Map.entry("service/imaging/ImagingReadingContextService.java#priorStudiesOf",
+            "the reading context of one hospital (List.of(hospitalId))"),
+        Map.entry("service/timeline/VisitTimelineRows.java#obgynReferralRows",
+            "the visit timeline of the acting hospital (Set.of(acting))"),
+        // The FHIR servlet: bounded for every provider, once.
+        Map.entry("fhir/provider/ImmunizationFhirResourceProvider.java#search",
+            "FhirTenantBoundaryInterceptor filters every resource that leaves to the bound hospital"),
+        Map.entry("fhir/provider/MedicationRequestFhirResourceProvider.java#search",
+            "FhirTenantBoundaryInterceptor filters every resource that leaves to the bound hospital"),
+        // The patient's own record, and the proxy's read of it (held to ProxyRecordFilter by its own guard).
+        Map.entry("service/DischargeSummaryServiceImpl.java#getDischargeSummariesForPortalPatient",
+            "the patient's own summaries, in the portal"),
+        Map.entry("service/DischargeSummaryServiceImpl.java#enrichSparseExistingSummaries",
+            "completes the patient's own summaries before the portal read; returns a count"),
+        Map.entry("service/PrescriptionServiceImpl.java#getPrescriptionsForPortalPatient",
+            "the patient's own prescriptions, in the portal"),
+        Map.entry("service/imaging/PatientImagingPortalService.java#studiesOf",
+            "the patient's own studies, in the portal (a proxy read is filtered there)"),
+        Map.entry("service/impl/ImmunizationServiceImpl.java#portalImmunizations",
+            "the patient's own doses, in the portal (the proxy read applies ProxyRecordFilter)"),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#issuedFor",
+            "the patient's own medicines, in the portal (the proxy read applies ProxyRecordFilter)"),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForPatientPortal",
+            "the count of the patient's own medicines, in the portal"),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
+            "the patient's own vitals, in the portal"),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
+            "the patient's own vitals, in the portal"),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForProxy",
+            "the proxy's read, filtered by ProxyRecordFilter.admits(vital, sensitiveVisits)"),
+        // No acting hospital: a verified super-admin in global view, who measures against no hospital.
+        Map.entry("cdshooks/bpa/BpaRuleEngine.java#loadActivePrescriptions",
+            "patient-wide only with no hospital (global view); with one, that hospital's orders"),
+        Map.entry("cdshooks/rules/CdsRuleEngine.java#loadActivePrescriptions",
+            "patient-wide only with no hospital (global view); with one, that hospital's orders"),
+        Map.entry("cdshooks/rules/CdsRuleEngine.java#loadLatestWeighing",
+            "patient-wide only with no hospital (global view); with one, that hospital's weighing"),
+        Map.entry("service/impl/PatientStoryboardServiceImpl.java#latestWeighing",
+            "patient-wide only with no hospital (global view); with one, that hospital's weighing"),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getLatestSnapshot",
+            "patient-wide only with no hospital (global view); with one, that hospital's latest row"),
+        Map.entry("service/LabResultServiceImpl.java#readLabResultsPage",
+            "findAllForReader runs only with no hospital (global view); a hospital reads what it handles"),
+        // Writes: nothing is handed to a reader.
+        Map.entry("service/impl/ImmunizationServiceImpl.java#refuseDuplicateDose",
+            "the duplicate check of a write: a dose is one event in the patient's life; answers a refusal, no row"),
+        Map.entry("service/impl/OrderReviewHoldServiceImpl.java#snapshot",
+            "locks the patient's open orders to hold them at a death or a transfer: a write, no row returned"),
+        Map.entry("service/impl/OrderReviewHoldServiceImpl.java#snapshotAtDeath",
+            "locks the patient's open orders to hold them at a death: a write, no row returned"));
 
     private static final Pattern WIDENS = Pattern.compile("\\brecordAccessPolicy\\s*\\.\\s*readableHospitalIds\\s*\\(");
     private static final Pattern OPENS_A_CHART = Pattern.compile("\\bpatientChartAccess\\s*\\.\\s*require\\s*\\(");
     private static final Pattern APPLIES_THE_SCOPE = Pattern.compile(
         "RestrictedVisitScope\\s*\\.\\s*of\\s*\\(\\s*recordAccessPolicy\\s*\\.\\s*withheldVisits\\s*\\(");
-    /** A finder that reads across several hospitals, by its name. */
-    private static final Pattern SEVERAL_HOSPITALS = Pattern.compile(
-        "Hospital_IdIn|HospitalIdIn|ReadableAt|ReadableOrPerformedAt|AcrossHospitals|OutsideVisits");
+    /** The scope at work in a method: built there, handed to it, or the timeline's own form of the same rule. */
+    private static final Pattern SCOPED_HERE = Pattern.compile(
+        "\\bRestrictedVisitScope\\b|\\brestricted\\b|\\bwithheld\\s*\\.\\s*admit\\s*\\(");
     private static final Pattern FIELD = Pattern.compile("(?:[\\w.]+\\.)?(\\w+Repository)\\s+(\\w+)\\s*[;,)]");
-    private static final Pattern CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(find\\w+|count\\w+|exists\\w+)\\s*\\(");
+    private static final Pattern CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\s*\\(");
+    /** A repository read, by the first word of its name. */
+    private static final Pattern READ_NAME = Pattern.compile("^(?:find|count|exists|search|lock|get)\\w*");
+    private static final Pattern DECLARED = Pattern.compile("\\b(\\w+)\\s*\\(");
+    private static final Pattern NAMES_A_PATIENT = Pattern.compile("Patient");
+    private static final Pattern PATIENT_PARAMETER = Pattern.compile("\\bUUID\\s+patientId\\b");
+    private static final Pattern SEVERAL_HOSPITALS = Pattern.compile("Hospital_IdIn|HospitalIdIn");
+    private static final Pattern SEVERAL_HOSPITALS_PARAMETER = Pattern.compile("Collection<UUID>\\s+\\w*[hH]ospital");
+    private static final Pattern ONE_HOSPITAL = Pattern.compile("Hospital_Id(?!In)|HospitalId(?!In)");
+    private static final Pattern ONE_HOSPITAL_PARAMETER = Pattern.compile("\\bUUID\\s+\\w*[hH]ospitalId\\b");
+    /** A class member's declaration, at member indentation: anything but a statement, then a name and its "(". */
+    private static final Pattern MEMBER = Pattern.compile("\\n {4}(?! )([^\\n(;={}]*?)\\b(\\w+)\\s*\\(");
+    private static final Set<String> NOT_A_DECLARATION = Set.of("return", "new", "else", "throw");
+
+    /** A method of a source file: its name and where its body starts and ends. */
+    private record Member(String name, int open, int close) {
+        boolean holds(int index) {
+            return open < index && index < close;
+        }
+    }
 
     @Test
     @DisplayName("rule 1: every record type that hangs off a visit is classified, and the classification holds")
@@ -327,12 +402,21 @@ class RestrictedVisitCoverageGuardTest {
     }
 
     @Test
-    @DisplayName("rule 4: a finder that reads a visit's record across hospitals is called from a class that applies the scope")
-    void everySeveralHospitalFinderIsScoped() throws IOException {
-        Map<String, String> code = mainSources();
-        Set<String> callers = new TreeSet<>();
+    @DisplayName("rule 4: every patient read not held to one hospital is scoped in the method that makes it")
+    void everyPatientReadIsScopedInItsMethod() throws IOException {
+        Map<String, Set<String>> patientReads = patientReadsNotHeldToOneHospital();
+        assertThat(patientReads.get("PrescriptionRepository")).as("the scan must find the known reads")
+            .contains("findByPatient_Id", "findByPatient_IdAndHospital_IdIn", "findSentAcrossHospitals");
+        assertThat(patientReads.get("ImmunizationRepository"))
+            .contains("findOverdueImmunizations", "findUpcomingDueDates", "findByPatient_IdAndActiveTrue");
+        assertThat(patientReads.get("PatientVitalSignRepository"))
+            .contains("findFirstByPatient_IdOrderByRecordedAtDesc")
+            .doesNotContain("findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc");
+
+        Set<String> unscoped = new TreeSet<>();
+        Set<String> scopedCallers = new TreeSet<>();
         List<String> problems = new ArrayList<>();
-        for (Map.Entry<String, String> source : code.entrySet()) {
+        for (Map.Entry<String, String> source : mainSources().entrySet()) {
             String file = source.getKey();
             if (file.startsWith("repository/")) {
                 continue;
@@ -341,40 +425,133 @@ class RestrictedVisitCoverageGuardTest {
             Map<String, String> fields = new LinkedHashMap<>();
             Matcher field = FIELD.matcher(text);
             while (field.find()) {
-                if (SCOPED_REPOSITORIES.containsKey(field.group(1))) {
+                if (patientReads.containsKey(field.group(1))) {
                     fields.put(field.group(2), field.group(1));
                 }
             }
-            Set<String> finders = new TreeSet<>();
-            Matcher call = CALL.matcher(text);
-            while (call.find()) {
-                if (fields.containsKey(call.group(1)) && SEVERAL_HOSPITALS.matcher(call.group(2)).find()) {
-                    finders.add(fields.get(call.group(1)) + "." + call.group(2));
-                }
-            }
-            if (finders.isEmpty()) {
+            if (fields.isEmpty()) {
                 continue;
             }
-            callers.add(file);
-            boolean scoped = APPLIES_THE_SCOPE.matcher(text).find();
-            boolean listed = ONE_HOSPITAL_FINDER_CALLERS.containsKey(file);
-            if (!scoped && !listed) {
-                problems.add(file + " calls " + finders + " without RestrictedVisitScope: apply it, or list the class"
-                    + " in ONE_HOSPITAL_FINDER_CALLERS with the single hospital it passes");
+            List<Member> members = membersOf(text);
+            Set<String> scopingHelpers = new TreeSet<>();
+            for (Member member : members) {
+                if (APPLIES_THE_SCOPE.matcher(text.substring(member.open(), member.close())).find()) {
+                    scopingHelpers.add(member.name());
+                }
             }
-            if (scoped && listed) {
-                problems.add(file + " applies the scope and is listed as passing one hospital: remove the entry");
+            Matcher call = CALL.matcher(text);
+            while (call.find()) {
+                String repository = fields.get(call.group(1));
+                if (repository == null || !patientReads.get(repository).contains(call.group(2))) {
+                    continue;
+                }
+                int at = call.start();
+                Member owner = members.stream().filter(m -> m.holds(at)).findFirst().orElse(null);
+                String key = file + "#" + (owner == null ? "?" : owner.name());
+                if (owner != null && (SCOPED_HERE.matcher(text.substring(owner.open(), owner.close())).find()
+                        || handedToAScopingHelper(text.substring(owner.open(), at), scopingHelpers))) {
+                    scopedCallers.add(key);
+                    continue;
+                }
+                unscoped.add(key);
+                if (!UNSCOPED_PATIENT_READS.containsKey(key)) {
+                    problems.add(key + " calls " + repository + "." + call.group(2) + ", a patient read not held to"
+                        + " one hospital, without RestrictedVisitScope in that method: apply the scope there (or pass"
+                        + " the rows straight to a method of the class that does), read at one hospital, or list the"
+                        + " method in UNSCOPED_PATIENT_READS with why no reader of another hospital gets the rows");
+                }
             }
         }
-        for (String listed : ONE_HOSPITAL_FINDER_CALLERS.keySet()) {
-            if (!callers.contains(listed)) {
-                problems.add(listed + " is listed and no longer calls a several-hospital finder: remove the entry");
+        for (String listed : UNSCOPED_PATIENT_READS.keySet()) {
+            if (!unscoped.contains(listed)) {
+                problems.add(listed + " is listed and no longer makes an unscoped patient read: remove the entry");
             }
         }
-        assertThat(callers).as("the scan must find the known callers, or it scans nothing")
-            .contains("service/PrescriptionServiceImpl.java", "service/impl/PatientLabResultServiceImpl.java",
-                "service/impl/ImagingOrderServiceImpl.java");
-        assertThat(problems).as("several-hospital finders of a visit's records").isEmpty();
+        assertThat(problems).as("patient reads of a visit's records").isEmpty();
+        assertThat(scopedCallers).as("the scan must find the known scoped methods, or it scans nothing")
+            .contains("service/PrescriptionServiceImpl.java#sentRows",
+                "service/impl/PatientLabResultServiceImpl.java#fetchRows",
+                "service/impl/ImmunizationServiceImpl.java#getOverdueImmunizations",
+                "service/impl/ImmunizationServiceImpl.java#getUpcomingImmunizations",
+                "service/impl/ChartReviewServiceImpl.java#loadMedications");
+    }
+
+    /**
+     * For each scoped repository, the reads that take a patient and are not held to one hospital: read from the
+     * repository's own declarations, by name and by parameter, so a {@code @Query} finder counts as a derived one.
+     */
+    private static Map<String, Set<String>> patientReadsNotHeldToOneHospital() throws IOException {
+        Map<String, Set<String>> reads = new LinkedHashMap<>();
+        for (Path file : sources("repository")) {
+            String repository = file.getFileName().toString().replace(".java", "");
+            if (!SCOPED_REPOSITORIES.containsKey(repository)) {
+                continue;
+            }
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Set<String> names = new TreeSet<>();
+            Matcher declared = DECLARED.matcher(code);
+            while (declared.find()) {
+                String name = declared.group(1);
+                int close = SourceScan.closingParen(code, declared.end() - 1);
+                if (close < 0 || !READ_NAME.matcher(name).matches()) {
+                    continue;
+                }
+                String after = code.substring(close + 1, Math.min(code.length(), close + 40)).strip();
+                if (!after.startsWith(";") && !after.startsWith("{")) {
+                    continue;
+                }
+                String parameters = code.substring(declared.end(), close);
+                boolean patient = NAMES_A_PATIENT.matcher(name).find() || PATIENT_PARAMETER.matcher(parameters).find();
+                boolean several = SEVERAL_HOSPITALS.matcher(name).find()
+                    || SEVERAL_HOSPITALS_PARAMETER.matcher(parameters).find();
+                boolean one = ONE_HOSPITAL.matcher(name).find() || ONE_HOSPITAL_PARAMETER.matcher(parameters).find();
+                if (patient && (several || !one)) {
+                    names.add(name);
+                }
+            }
+            reads.put(repository, names);
+        }
+        assertThat(reads.keySet()).as("every scoped repository was read")
+            .containsExactlyInAnyOrderElementsOf(SCOPED_REPOSITORIES.keySet());
+        return reads;
+    }
+
+    /** The methods of a source file: a declaration at member indentation, with a body. */
+    private static List<Member> membersOf(String code) {
+        List<Member> members = new ArrayList<>();
+        Matcher member = MEMBER.matcher(code);
+        while (member.find()) {
+            String[] words = member.group(1).strip().split("\\s+");
+            if (words[0].isEmpty() || NOT_A_DECLARATION.contains(words[0]) || words[0].startsWith("@")) {
+                continue;
+            }
+            int close = SourceScan.closingParen(code, member.end() - 1);
+            if (close < 0) {
+                continue;
+            }
+            int open = code.indexOf('{', close);
+            int semicolon = code.indexOf(';', close);
+            if (open < 0 || (semicolon >= 0 && semicolon < open)) {
+                continue;
+            }
+            int end = SourceScan.closingBrace(code, open);
+            if (end > open) {
+                members.add(new Member(member.group(2), open, end));
+            }
+        }
+        return members;
+    }
+
+    /** The read is an argument of a call to a method of the class that applies the scope: {@code helper(.. read(..}. */
+    private static boolean handedToAScopingHelper(String bodyBeforeTheRead, Set<String> scopingHelpers) {
+        int statement = bodyBeforeTheRead.lastIndexOf(';') + 1;
+        String sameStatement = bodyBeforeTheRead.substring(statement);
+        for (String helper : scopingHelpers) {
+            if (Pattern.compile("\\b" + helper + "\\s*\\(").matcher(sameStatement).find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether {@code owner} declares {@code name(Type)} for the entity of that simple name. */

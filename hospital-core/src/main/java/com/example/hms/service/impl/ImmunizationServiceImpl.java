@@ -219,6 +219,33 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .toList();
     }
 
+    /**
+     * What a reader at the acting hospital may see of the patient's doses, as
+     * {@link #getImmunizationsByPatientId} reads them: the rows of the
+     * hospitals the policy opens, less a dose given in a visit withheld from
+     * this hospital; every foreign row shown is accounted. A super-admin in
+     * global view keeps every row.
+     */
+    private List<PatientImmunization> sharedHere(UUID patientId, List<PatientImmunization> rows) {
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return rows;
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        RestrictedVisitScope restricted =
+            RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, actingHospitalId));
+        List<PatientImmunization> shown = rows.stream()
+            .filter(row -> readable.contains(CrossHospitalReachRecorder.hospitalIdOf(row.getHospital())))
+            .filter(restricted::admits)
+            .toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(shown.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital immunization read on the treatment relationship");
+        return shown;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getOverdueImmunizations(UUID patientId) {
@@ -228,7 +255,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> overdueImmunizations = immunizationRepository.findOverdueImmunizations(patientId);
+        List<PatientImmunization> overdueImmunizations =
+                sharedHere(patientId, immunizationRepository.findOverdueImmunizations(patientId));
         
         return overdueImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
@@ -244,8 +272,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> upcomingImmunizations = 
-                immunizationRepository.findUpcomingDueDates(patientId, startDate, endDate);
+        List<PatientImmunization> upcomingImmunizations =
+                sharedHere(patientId, immunizationRepository.findUpcomingDueDates(patientId, startDate, endDate));
         
         return upcomingImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
@@ -261,8 +289,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        List<PatientImmunization> needingReminders = 
-                immunizationRepository.findImmunizationsNeedingReminders(patientId, reminderDate);
+        List<PatientImmunization> needingReminders =
+                sharedHere(patientId, immunizationRepository.findImmunizationsNeedingReminders(patientId, reminderDate));
         
         return needingReminders.stream()
                 .map(immunizationMapper::toResponseDTO)

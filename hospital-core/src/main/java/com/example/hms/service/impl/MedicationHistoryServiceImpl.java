@@ -90,10 +90,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         RestrictedVisitScope restricted =
             RestrictedVisitScope.of(recordAccessPolicy.withheldVisits(requesterUserId, patientId, hospitalId));
         List<Prescription> prescriptions = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
-            NeverSentRule.prescriptionsReadableHere(fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId))
-            .stream().filter(restricted::admits).toList();
-        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate)
-            .stream().filter(restricted::admits).toList();
+            NeverSentRule.prescriptionsReadableHere(
+                fetchPrescriptions(patientId, readable, restricted, startDate, endDate), hospitalId));
+        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, restricted, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
 
@@ -248,8 +247,10 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
     // ========== Helper Methods ==========
 
-    private List<Prescription> fetchPrescriptions(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
+    private List<Prescription> fetchPrescriptions(UUID patientId, Set<UUID> readableHospitalIds,
+                                                  RestrictedVisitScope restricted, LocalDate startDate, LocalDate endDate) {
+        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds)
+            .stream().filter(restricted::admits).toList();
         
         // Filter by date range if provided
         if (startDate != null || endDate != null) {
@@ -261,13 +262,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return prescriptions;
     }
 
-    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
-        if (startDate != null && endDate != null) {
-            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
-                patientId, readableHospitalIds, startDate, endDate);
-        } else {
-            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readableHospitalIds);
-        }
+    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, Set<UUID> readableHospitalIds,
+                                                  RestrictedVisitScope restricted, LocalDate startDate, LocalDate endDate) {
+        List<PharmacyFill> fills = startDate != null && endDate != null
+            ? pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
+                patientId, readableHospitalIds, startDate, endDate)
+            : pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readableHospitalIds);
+        return fills.stream().filter(restricted::admits).toList();
     }
 
     private boolean isWithinDateRange(LocalDate date, LocalDate startDate, LocalDate endDate) {

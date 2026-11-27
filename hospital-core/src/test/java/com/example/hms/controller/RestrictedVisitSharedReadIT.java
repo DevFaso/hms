@@ -105,7 +105,10 @@ class RestrictedVisitSharedReadIT extends BaseIT {
     private static final String RESTRICTED_STUDY = "Echo R81 restreinte";
     private static final String PLAIN_PROCEDURE = "Suture R81 ordinaire";
     private static final String RESTRICTED_PROCEDURE = "Geste R81 restreint";
+    private static final String PLAIN_VACCINE = "Vaccin R81 ordinaire";
+    private static final String RESTRICTED_VACCINE = "Vaccin R81 restreint";
     private static final int PLAIN_HEART_RATE = 61;
+    private static final int HERE_HEART_RATE = 72;
     private static final int RESTRICTED_HEART_RATE = 187;
 
     private final AtomicInteger sequence = new AtomicInteger();
@@ -128,6 +131,7 @@ class RestrictedVisitSharedReadIT extends BaseIT {
     @Autowired private ImagingOrderRepository imagingOrderRepository;
     @Autowired private ProcedureOrderRepository procedureOrderRepository;
     @Autowired private PatientVitalSignRepository vitalSignRepository;
+    @Autowired private com.example.hms.repository.ImmunizationRepository immunizationRepository;
 
     private Organization organization;
     private Hospital hospitalA;
@@ -170,9 +174,9 @@ class RestrictedVisitSharedReadIT extends BaseIT {
         Encounter plainVisit = visitAtA(LocalDateTime.now().minusDays(20), null);
         Encounter restrictedVisit = visitAtA(LocalDateTime.now().minusDays(10), SensitivityCategory.HIV);
         plainPrescription = produce(plainVisit, test, PLAIN_MEDICINE, PLAIN_RESULT, PLAIN_STUDY, PLAIN_PROCEDURE,
-            PLAIN_HEART_RATE);
+            PLAIN_HEART_RATE, PLAIN_VACCINE);
         restrictedPrescription = produce(restrictedVisit, test, RESTRICTED_MEDICINE, RESTRICTED_RESULT,
-            RESTRICTED_STUDY, RESTRICTED_PROCEDURE, RESTRICTED_HEART_RATE);
+            RESTRICTED_STUDY, RESTRICTED_PROCEDURE, RESTRICTED_HEART_RATE, RESTRICTED_VACCINE);
         restrictedImagingOrderId = imagingOrderIds.get(imagingOrderIds.size() - 1);
 
         // The designed flow: the desk of B links the patient, who is then seen there.
@@ -181,6 +185,10 @@ class RestrictedVisitSharedReadIT extends BaseIT {
             .patient(patient).staff(doctorB.staff()).hospital(hospitalB).assignment(doctorB.assignment())
             .encounterType(EncounterType.CONSULTATION).encounterDate(LocalDateTime.now().minusHours(1))
             .status(EncounterStatus.IN_PROGRESS).code("ENC-R81-" + nextId()).build()).getId());
+        // B's own vitals, older than the restricted visit's: the latest row of the patient is not B's.
+        vitalSignRepository.save(PatientVitalSign.builder()
+            .patient(patient).hospital(hospitalB).recordedAt(LocalDateTime.now().minusDays(15))
+            .heartRateBpm(HERE_HEART_RATE).build());
         HospitalContextHolder.clear();
     }
 
@@ -189,6 +197,7 @@ class RestrictedVisitSharedReadIT extends BaseIT {
         SecurityContextHolder.clearContext();
         HospitalContextHolder.clear();
         // What this class made and the shared wipe does not know, children first.
+        immunizationRepository.deleteAllInBatch();
         prescriptionRepository.deleteAllByIdInBatch(prescriptionIds);
         imagingOrderRepository.deleteAllByIdInBatch(imagingOrderIds);
         procedureOrderRepository.deleteAllByIdInBatch(procedureOrderIds);
@@ -254,6 +263,32 @@ class RestrictedVisitSharedReadIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("at hospital B, the doctor's worklist summarises the vitals taken at B, and no other hospital's")
+    void theWorklistSummaryReadsTheVitalsOfItsOwnHospital() throws Exception {
+        String worklist = bodyOf(mockMvc.perform(get(API + "/me/worklist").with(acting(doctorB)))
+            .andExpect(status().isOk()).andReturn());
+        assertThat(worklist).as("the patient is on B's worklist").contains(patient.getId().toString());
+        assertThat(worklist).as("the summary is of B's own vitals").containsPattern("(HR|FC) " + HERE_HEART_RATE);
+        assertThat(worklist).as("nothing of the restricted visit's vitals")
+            .doesNotContainPattern("(HR|FC) " + RESTRICTED_HEART_RATE);
+    }
+
+    @Test
+    @DisplayName("at hospital B, the vaccination lists show the ordinary visit's dose and not the restricted visit's")
+    void theVaccinationListsFollowTheVisit() throws Exception {
+        UUID id = patient.getId();
+        assertShared(readAtB("/medical-history/patient/{id}/immunizations", id), "immunizations",
+            PLAIN_VACCINE, RESTRICTED_VACCINE);
+        assertShared(readAtB("/medical-history/patient/{id}/immunizations/overdue", id), "overdue immunizations",
+            PLAIN_VACCINE, RESTRICTED_VACCINE);
+        String upcoming = bodyOf(mockMvc.perform(get(API + "/medical-history/patient/{id}/immunizations/upcoming", id)
+            .param("startDate", LocalDate.now().minusDays(7).toString())
+            .param("endDate", LocalDate.now().plusDays(7).toString())
+            .with(acting(doctorB))).andExpect(status().isOk()).andReturn());
+        assertShared(upcoming, "upcoming immunizations", PLAIN_VACCINE, RESTRICTED_VACCINE);
+    }
+
+    @Test
     @DisplayName("at hospital A, where the visit was recorded, nothing is withheld")
     void theRecordingHospitalStillReadsItsOwnVisit() throws Exception {
         UUID id = patient.getId();
@@ -295,7 +330,7 @@ class RestrictedVisitSharedReadIT extends BaseIT {
 
     /** Everything one visit at A produces: a prescription, a released result, an imaging order, a procedure order, a vital sign. */
     private Prescription produce(Encounter visit, LabTestDefinition test, String medicine, String resultValue,
-                                 String study, String procedure, int heartRate) {
+                                 String study, String procedure, int heartRate, String vaccine) {
         LocalDateTime when = visit.getEncounterDate();
         Prescription prescription = prescriptionRepository.save(Prescription.builder()
             .patient(patient).staff(doctorA.staff()).encounter(visit).hospital(hospitalA)
@@ -319,6 +354,11 @@ class RestrictedVisitSharedReadIT extends BaseIT {
             .orderedAt(when).build()).getId());
         vitalSignRepository.save(PatientVitalSign.builder()
             .patient(patient).hospital(hospitalA).recordedAt(when.plusMinutes(5)).heartRateBpm(heartRate).build());
+        // A dose given in the visit, its next one overdue since yesterday.
+        immunizationRepository.save(com.example.hms.model.PatientImmunization.builder()
+            .patient(patient).hospital(hospitalA).encounter(visit).vaccineDisplay(vaccine)
+            .administrationDate(when.toLocalDate()).status("COMPLETED").active(true).overdue(true)
+            .nextDoseDueDate(LocalDate.now().minusDays(1)).build());
         return prescription;
     }
 
