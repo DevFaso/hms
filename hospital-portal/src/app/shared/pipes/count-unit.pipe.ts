@@ -29,6 +29,11 @@ const INVARIABLE = new Set([
  * measured unit (mg, mL, UI), an abbreviation, a unit holding a digit or a slash, or one already
  * in the plural (ending in s, x or z, or « (s) ») is shown as stored. Each word of a compound
  * unit takes the plural (« comprimés pelliculés »).
+ *
+ * QA D4194 (r81): a pack unit read « 198 boîte de 12 gélules ». The pack is what is counted, so
+ * its name takes the plural and what it holds stays as written (« 198 boîtes de 12 gélules »).
+ * Whether a count is plural is the language's own rule (`Intl.PluralRules`), not a threshold
+ * written here.
  */
 export function countUnit(
   quantity: number | string | null | undefined,
@@ -40,13 +45,21 @@ export function countUnit(
   const word = (unit ?? '').trim();
   if (!word || word === 'UNIT') return shown;
   const n = Number(quantity);
-  const plural =
-    Number.isFinite(n) && (locale.startsWith('fr') ? Math.abs(n) >= 2 : Math.abs(n) !== 1);
+  const plural = Number.isFinite(n) && new Intl.PluralRules(locale).select(Math.abs(n)) !== 'one';
   return `${shown} ${plural ? pluralUnit(word) : word}`.trim();
 }
 
+/** « boîte de 12 gélules », « box of 10 »: the pack's name, then what it holds. */
+const PACK_UNIT = /^(.+?)(\s+(?:de|du|des|of|à)\s+.+|\s+d['’].+)$/i;
+
 function pluralUnit(unit: string): string {
+  const pack = PACK_UNIT.exec(unit);
+  if (pack && !/[\d/%()]/.test(pack[1])) return `${pluralWords(pack[1])}${pack[2]}`;
   if (/[\d/%()]/.test(unit)) return unit;
+  return pluralWords(unit);
+}
+
+function pluralWords(unit: string): string {
   const words = unit.split(/\s+/);
   if (words.some((w) => INVARIABLE.has(w.toLowerCase()) || w.length < 3 || w === w.toUpperCase())) {
     return unit;

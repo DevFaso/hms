@@ -37,4 +37,12 @@ public class StockCheckResultDTO {
     private String prescriptionStatus;
     private boolean routable;
     private List<PartnerOptionDTO> partnerPharmacies;
+    /**
+     * QA D4193 (r81): what each of the hospital's own stores holds. {@link #quantityOnHand} is their total: 118 was
+     * shown for an order the dispensing pharmacy could fill with 83, the rest sitting in a ward reserve.
+     */
+    private List<StoreStock> stores;
+
+    /** One of the hospital's own stores and what it holds of the prescribed medicine. */
+    public record StoreStock(UUID pharmacyId, String pharmacyName, BigDecimal quantityOnHand, String unit) { }
 }

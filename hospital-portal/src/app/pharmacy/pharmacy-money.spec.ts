@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
@@ -74,6 +75,7 @@ describe('Inventory pack size (QA D2674)', () => {
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PharmacyService, useValue: svc },
         { provide: PharmacyMoneyService, useValue: m },
         { provide: ToastService, useValue: toast() },

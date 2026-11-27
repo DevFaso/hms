@@ -1268,6 +1268,24 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['kind', 'n', 'item'],
     localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
   },
+  // QA D4190 (r81): an entry taken out of the catalogue, a line of its history.
+  {
+    key: 'AUDIT.DESC.CATALOG_ENTRY_WITHDRAWN',
+    re: /^Medication catalogue (\S+) version (\S+) WITHDRAWN_FROM_CATALOGUE \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  // QA D4197 (r81): a stock item deactivated, with what it still held and the reason given.
+  {
+    key: 'AUDIT.DESC.INVENTORY_ITEM_DEACTIVATED_REASON',
+    re: /^Inventory item deactivated with (\S+) on hand; reason: ([\s\S]*)$/,
+    params: ['quantity', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.INVENTORY_ITEM_DEACTIVATED',
+    re: /^Inventory item deactivated with (\S+) on hand$/,
+    params: ['quantity'],
+  },
   {
     key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
     re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,

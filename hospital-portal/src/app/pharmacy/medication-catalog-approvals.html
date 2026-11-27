@@ -1,10 +1,11 @@
 <section class="approvals" data-test="catalog-approvals">
   @if (!forOneEntry()) {
     <p class="approvals-intro">{{ 'PHARMACY.CATALOG_APPROVAL.INTRO' | translate }}</p>
-    <div class="tabs">
+    <!-- QA D4188 (r81): the house tab bar; these were two unstyled native buttons touching each other. -->
+    <div class="tab-bar">
       <button
         type="button"
-        class="tab"
+        class="tab-btn"
         [class.active]="view() === 'PENDING'"
         [attr.aria-pressed]="view() === 'PENDING'"
         data-test="approvals-view-pending"
@@ -14,7 +15,7 @@
       </button>
       <button
         type="button"
-        class="tab"
+        class="tab-btn"
         [class.active]="view() === 'HISTORY'"
         [attr.aria-pressed]="view() === 'HISTORY'"
         data-test="approvals-view-history"
@@ -49,7 +50,7 @@
         <li class="version-card" [attr.data-status]="version.status" data-test="approval-version">
           <header class="version-head">
             <div>
-              <h3 class="version-title">{{ version.itemLabel }}</h3>
+              <h3 class="version-title">{{ label(version.itemLabel) }}</h3>
               <p class="version-meta">
                 <span class="chip">{{
                   version.kind | keyLabel: 'PHARMACY.CATALOG_APPROVAL.KIND.'
@@ -114,16 +115,66 @@
           @if (version.changeType === 'RATIFY') {
             <p class="version-note">{{ 'PHARMACY.CATALOG_APPROVAL.RATIFY_NOTE' | translate }}</p>
           }
+          @if (version.changeType === 'WITHDRAWAL') {
+            <p class="version-note" data-test="approval-withdrawal-note">
+              {{ 'PHARMACY.CATALOG_APPROVAL.WITHDRAWAL_NOTE' | translate }}
+            </p>
+          }
+
+          <!-- QA D4180 (r81): the approver sees the entry that is already there before approving its twin. -->
+          @if (version.similarEntries?.length) {
+            <div class="similar-warning" role="note" data-test="approval-similar">
+              <p>
+                <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                <strong>{{ 'PHARMACY.CATALOG_DUPLICATE.APPROVER_TITLE' | translate }}</strong>
+              </p>
+              <ul>
+                @for (entry of version.similarEntries; track $index) {
+                  <li>
+                    {{ label(entry.label) }}
+                    {{ ' '
+                    }}<span class="chip">{{
+                      entry.state | keyLabel: 'PHARMACY.CATALOG_DUPLICATE.STATE.'
+                    }}</span>
+                    @if (entry.platform) {
+                      {{ ' '
+                      }}<span class="chip">{{
+                        'PHARMACY.CATALOG_DUPLICATE.PLATFORM' | translate
+                      }}</span>
+                    }
+                    @if (entry.exact) {
+                      {{ ' '
+                      }}<span class="chip chip-exact">{{
+                        'PHARMACY.CATALOG_DUPLICATE.EXACT' | translate
+                      }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+              <p>{{ 'PHARMACY.CATALOG_DUPLICATE.APPROVER_HINT' | translate }}</p>
+            </div>
+          }
 
           <div class="version-table">
             <table>
               <thead>
                 <tr>
                   <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_FIELD' | translate }}</th>
+                  <!-- QA D4189 (r81): for a decided version this column is what it replaced, not what is
+                       in force today; it said « En vigueur » for both. -->
                   @if (version.changeType !== 'CREATE') {
-                    <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_BEFORE' | translate }}</th>
+                    <th scope="col">
+                      {{
+                        (waiting(version)
+                          ? 'PHARMACY.CATALOG_APPROVAL.COL_BEFORE'
+                          : 'PHARMACY.CATALOG_APPROVAL.COL_BEFORE_DECIDED'
+                        ) | translate
+                      }}
+                    </th>
                   }
-                  <th scope="col">{{ 'PHARMACY.CATALOG_APPROVAL.COL_PROPOSED' | translate }}</th>
+                  <th scope="col">
+                    {{ version.status | keyLabel: 'PHARMACY.CATALOG_APPROVAL.COL_AFTER.' }}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -212,7 +263,7 @@
       (confirmed)="confirmRefusal(refused, $event)"
       (cancelled)="cancelRefusal()"
     >
-      <p>{{ refused.itemLabel }}</p>
+      <p>{{ label(refused.itemLabel) }}</p>
     </app-reason-dialog>
   }
 </section>

@@ -483,10 +483,44 @@ class InventoryServiceImplTest {
             stubHospitalScope();
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
 
-            service.deactivateInventoryItem(inventoryItemId);
+            inventoryItem.setQuantityOnHand(BigDecimal.ZERO);
+
+            service.deactivateInventoryItem(inventoryItemId, null);
 
             assertThat(inventoryItem.isActive()).isFalse();
             verify(inventoryItemRepository).save(inventoryItem);
+        }
+
+        @Test
+        @DisplayName("QA D4197: an item that still holds stock is refused without a reason, on the field « reason »")
+        void withStockAndNoReasonIsRefused() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            inventoryItem.setQuantityOnHand(new BigDecimal("40"));
+
+            assertThatThrownBy(() -> service.deactivateInventoryItem(inventoryItemId, "  "))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "reason")
+                .hasFieldOrPropertyWithValue("messageKey", "inventoryItem.deactivate.reasonRequired");
+            assertThat(inventoryItem.isActive()).isTrue();
+            verify(inventoryItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D4197: with its reason, the item is deactivated and the audit trail keeps the reason")
+        void withStockAndAReasonIsDeactivatedAndAudited() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            inventoryItem.setQuantityOnHand(new BigDecimal("40"));
+
+            service.deactivateInventoryItem(inventoryItemId, "Article retiré de la vente");
+
+            assertThat(inventoryItem.isActive()).isFalse();
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            assertThat(row.getValue().getEventDescription()).contains("40", "Article retiré de la vente");
         }
     }
 

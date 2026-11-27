@@ -2219,7 +2219,10 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)",
       "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Posible duplicado conservado como paciente distinto"
+      "DUPLICATE_KEPT_SEPARATE": "Posible duplicado conservado como paciente distinto",
+      "CATALOG_ENTRY_WITHDRAWN": "Medicine withdrawn from the catalogue ({{kind}}, version {{n}}): {{item}}",
+      "INVENTORY_ITEM_DEACTIVATED_REASON": "Stock item deactivated with {{quantity}} on hand. Reason: {{reason}}",
+      "INVENTORY_ITEM_DEACTIVATED": "Stock item deactivated with {{quantity}} on hand"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3630,7 +3633,9 @@
       "CLAIMS_REVIEWER": "Revisor de reclamaciones",
       "ANESTHESIOLOGIST": "Anestesiólogo",
       "PHYSIOTHERAPIST": "Fisioterapeuta",
-      "IMAGING_TECHNICIAN": "Técnico de imagen médica"
+      "IMAGING_TECHNICIAN": "Técnico de imagen médica",
+      "STORE_MANAGER": "Store manager",
+      "INVENTORY_CLERK": "Inventory clerk"
     },
     "ROLES": "Roles",
     "ROOMED": "En consultorio",
@@ -3759,7 +3764,17 @@
     "AGING_90_PLUS": "Más de 90 días",
     "CRITICAL_ALERTS_ONE": "{{count}} alerta crítica",
     "CRITICAL_ALERTS_MANY": "{{count}} alertas críticas",
-    "DAYS_LEFT_SHORT": "{{days}} d"
+    "DAYS_LEFT_SHORT": "{{days}} d",
+    "STOCK": {
+      "TITLE": "Stock to watch",
+      "LOW": "items at or under their reorder threshold",
+      "LOW_ONE": "item at or under its reorder threshold",
+      "OUT": "items out of stock",
+      "OUT_ONE": "item out of stock",
+      "ITEM": "In stock: {{held}} · threshold: {{threshold}}",
+      "NONE": "No item is under its threshold.",
+      "PAGES": "Stock pages"
+    }
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "El correo de activación (con el código de cada rol) está en cola de envío.",
@@ -5435,7 +5450,9 @@
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
     "CLINICAL_RULES": "Reglas clínicas",
-    "PAYER_SHARES": "Partes de aseguradoras"
+    "PAYER_SHARES": "Partes de aseguradoras",
+    "STOCK_COUNT": "Stock count",
+    "STOCK_CONSUMPTION": "Consumption report"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -11092,7 +11109,7 @@
     "FORMULARY": "Formulario farmacéutico",
     "FULFILLMENT_MODE": "Modo de dispensación",
     "GENERIC_NAME": "Nombre genérico",
-    "GENERIC_NAME_PLACEHOLDER": "p. ej., Amoxicillin",
+    "GENERIC_NAME_PLACEHOLDER": "p. ej. amoxicilina (DCI)",
     "GOODS_RECEIPT_SUBTITLE": "Recibir y registrar las entregas de existencias",
     "GOODS_RECEIPT_TITLE": "Recepción de mercancías",
     "INSUFFICIENT_STOCK": "Existencias insuficientes",
@@ -11114,8 +11131,8 @@
     "MEDICATION": "Medicamento",
     "MED_CREATED": "Medicamento creado",
     "MED_CREATE_FAILED": "Error al crear el medicamento",
-    "MED_DELETED": "Medicamento eliminado",
-    "MED_DELETE_FAILED": "Error al eliminar el medicamento",
+    "MED_DELETED": "Medicine withdrawn from the catalogue",
+    "MED_DELETE_FAILED": "The medicine could not be withdrawn from the catalogue",
     "MED_REQUIRED_FIELDS": "El nombre (FR) y el nombre genérico son obligatorios",
     "MED_UPDATED": "Medicamento actualizado",
     "MED_UPDATE_FAILED": "Error al actualizar el medicamento",
@@ -11157,9 +11174,9 @@
     "NO_TRANSACTIONS": "Sin transacciones",
     "OFFLINE_PENDING_MANY": "dispensaciones pendientes de sincronizar",
     "OFFLINE_PENDING_ONE": "dispensación pendiente de sincronizar",
-    "OFFLINE_SYNCED": "{{count}} dispensación(es) sincronizada(s)",
-    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispensación(es) sincronizada(s) — {{failed}} pendiente(s)",
-    "OFFLINE_SYNC_FAILED": "Error de sincronización — {{count}} dispensación(es) siguen en cola",
+    "OFFLINE_SYNCED": "{{count}} dispenses synced",
+    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispenses synced — still queued: {{failed}}",
+    "OFFLINE_SYNC_FAILED": "Sync failed — {{count}} dispenses still queued",
     "OFFLINE_SYNC_NOW": "Sincronizar ahora",
     "ON_FORMULARY": "En el formulario",
     "OUT_OF_STOCK": "Sin existencias",
@@ -11246,7 +11263,7 @@
     "REFILL": "Renovación",
     "REFILL_AWAITING_PICKUP": "Aprobada — pendiente de recogida",
     "REFILL_NONE": "Primera dispensación",
-    "REFILL_REMAINING": "{{count}} renovación(es) restante(s)",
+    "REFILL_REMAINING": "{{count}} refills left",
     "REGION": "Región",
     "REGISTRY_SUBTITLE": "Gestionar las farmacias registradas",
     "REGISTRY_TITLE": "Registro de farmacias",
@@ -11404,7 +11421,7 @@
     "CANCEL_READY_SUCCESS": "Preparación cancelada.",
     "CANCEL_READY_FAILED": "No se pudo cancelar la preparación.",
     "PREPARED_BY": "Preparada por {{name}}",
-    "STOCK_REMAINING": "Quedan {{qty}} (umbral: {{threshold}})",
+    "STOCK_REMAINING": "In stock: {{qty}} (threshold: {{threshold}})",
     "UNITS": "unidades",
     "BADGE_ESSENTIAL": "Esencial",
     "BADGE_CONTROLLED": "Controlado",
@@ -11469,9 +11486,9 @@
     "REGISTER_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
     "REGISTER_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
     "CATALOG_APPROVAL": {
-      "PANEL_TITLE": "Aprobación del formulario y de los límites de dosis",
+      "PANEL_TITLE": "Approval of the formulary and of the dose limits",
       "PENDING_COUNT": "{{count}} pendientes de aprobación",
-      "INTRO": "Un medicamento nuevo, un cambio en lo que se prescribe y dispensa (nombre, código ATC, forma, dosis, vía, controlado) y todo límite de dosis solo entran en vigor tras la aprobación de una persona distinta de la que los propuso: un farmacéutico del establecimiento para el formulario; un farmacéutico o el médico jefe para los límites de dosis. Hasta entonces, la prescripción y la dispensación usan la versión vigente.",
+      "INTRO": "A new medicine, a change to what is prescribed and dispensed (name, ATC code, form, strength, route, controlled drug) and any dose limit take effect only once approved by a person other than the one who proposed them: for the formulary, a pharmacist of the hospital, or its chief physician when the hospital has no active pharmacist; for the dose limits, a pharmacist or the chief physician. Until then, prescribing and dispensing use the version in force.",
       "VIEW_PENDING": "Pendientes de aprobación",
       "VIEW_HISTORY": "Historial de versiones",
       "EMPTY_PENDING": "Ninguna versión pendiente de aprobación.",
@@ -11479,20 +11496,22 @@
       "EMPTY_ENTRY": "Ninguna versión registrada para este artículo: es anterior al circuito de aprobación.",
       "LOAD_FAILED": "No se pudieron cargar las versiones.",
       "KIND": {
-        "FORMULARY": "Formulario",
+        "FORMULARY": "Formulary",
         "DOSE_LIMIT": "Límites de dosis"
       },
       "CHANGE": {
         "CREATE": "Medicamento nuevo",
         "UPDATE": "Modificación",
-        "RATIFY": "Valores vigentes enviados tal cual"
+        "RATIFY": "Valores vigentes enviados tal cual",
+        "WITHDRAWAL": "Withdrawal from the catalogue"
       },
       "STATUS": {
         "PENDING_APPROVAL": "Pendiente de aprobación",
         "APPROVED": "Aprobada, vigente",
         "REJECTED": "Rechazada",
         "SUPERSEDED": "Sustituida por una versión posterior",
-        "WITHDRAWN": "Retirada por su autor"
+        "WITHDRAWN": "Retirada por su autor",
+        "RECORDED": "Withdrawn from the catalogue"
       },
       "VERSION": "Versión {{n}}",
       "PROPOSED_BY": "Propuesta por",
@@ -11502,7 +11521,8 @@
         "SUPERSEDED": "Aprobada por",
         "REJECTED": "Rechazada por",
         "WITHDRAWN": "Retirada por",
-        "PENDING_APPROVAL": "Decisión"
+        "PENDING_APPROVAL": "Decisión",
+        "RECORDED": "Withdrawn by"
       },
       "DECISION_REASON": "Motivo de la decisión",
       "DECISION_BASIS_LABEL": "En calidad de",
@@ -11520,7 +11540,7 @@
       "BAND": "{{min}} a {{max}} kg: {{dose}}, {{perDay}} tomas/día",
       "OWN_PROPOSAL_NOTE": "Usted propuso esta versión: otra persona debe aprobarla.",
       "ROLE_NOTE": {
-        "FORMULARY": "Solo un farmacéutico del establecimiento, distinto del autor, aprueba o rechaza un artículo del formulario (el médico jefe solo si el establecimiento no tiene ningún farmacéutico activo).",
+        "FORMULARY": "Only a pharmacist of the hospital, other than the author, approves or refuses a formulary entry (the chief physician only when the hospital has no active pharmacist).",
         "DOSE_LIMIT": "Solo un farmacéutico del establecimiento o su médico jefe, distinto del autor, aprueba o rechaza los límites de dosis."
       },
       "APPROVE": "Aprobar",
@@ -11548,12 +11568,12 @@
       "SUBMIT_FOR_APPROVAL": "Enviar a aprobación",
       "CHANGE_REASON": "Motivo (lo lee la persona que aprueba)",
       "CHANGE_REASON_REQUIRED": "Indique el motivo: lo lee la persona que aprueba y se conserva en el historial.",
-      "CREATE_HINT": "El medicamento podrá prescribirse y dispensarse cuando lo apruebe un farmacéutico del establecimiento, distinto de usted.",
+      "CREATE_HINT": "The medicine can be prescribed and dispensed once approved by a pharmacist of the hospital other than you (its chief physician when the hospital has no active pharmacist).",
       "EDIT_HINT_PROPOSES": "Está cambiando lo que se prescribe y dispensa: el cambio se envía a aprobación y el artículo conserva sus valores actuales hasta entonces. La categoría, la lista esencial, la descripción y la categoría sensible se guardan de inmediato.",
       "EDIT_HINT_DIRECT": "Nada de lo que se prescribe o dispensa cambia: se guarda de inmediato, sin aprobación.",
       "DOSING_HINT": "Los límites se envían a aprobación: otro farmacéutico o el médico jefe los aprueba. Hasta entonces, el control de dosis usa los límites vigentes.",
       "DOSING_PENDING_NOTE": "Ya hay límites pendientes de aprobación para este artículo: deben aprobarse, rechazarse o retirarse antes de proponer otros.",
-      "PROPOSED_TOAST_CREATE": "Medicamento propuesto: pendiente de aprobación por un farmacéutico",
+      "PROPOSED_TOAST_CREATE": "Medicine proposed: awaiting approval",
       "PROPOSED_TOAST_UPDATE": "Cambio enviado a aprobación: el artículo conserva sus valores actuales hasta entonces",
       "PROPOSED_TOAST_DOSING": "Límites de dosis enviados a aprobación",
       "FIELD": {
@@ -11579,7 +11599,20 @@
         "manualReviewUnderMonths": "Revisión manual antes de (meses)",
         "weightBands": "Bandas de peso",
         "source": "Fuente de los valores"
-      }
+      },
+      "WITHDRAWAL_NOTE": "The medicine was withdrawn from the catalogue: it can no longer be prescribed or dispensed. The withdrawal took effect at once, with no approval.",
+      "COL_BEFORE_DECIDED": "Before this version",
+      "COL_AFTER": {
+        "PENDING_APPROVAL": "Proposed",
+        "APPROVED": "Approved, in force",
+        "SUPERSEDED": "Approved, replaced since",
+        "REJECTED": "Proposed, refused",
+        "WITHDRAWN": "Proposed, taken back",
+        "RECORDED": "After the withdrawal"
+      },
+      "APPROVE_CONFIRM_TITLE": "Approve this version?",
+      "APPROVE_CONFIRM_MESSAGE": "{{label}}: the version takes effect at once for prescribing and dispensing. An approved version cannot be undone; correcting it needs a new proposal.",
+      "APPROVE_CONFIRM_SIMILAR": "{{label}}: the version takes effect at once and cannot be undone. Note: the catalogue already holds {{similar}}. Check it is not the same medicine."
     },
     "DOSING": {
       "ACTION": "Límites de dosis pediátricos",
@@ -11616,7 +11649,7 @@
       "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
     },
     "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta",
-    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}».",
+    "LOTS_OTHER_FORM": "{{count}} lots of this drug in another form are not offered: the order is written in \"{{unit}}\".",
     "SAVE_PRICE": "Guardar el precio",
     "WRITE_OFF_REMOVES_ONLY": "El deterioro y la caducidad solo retiran existencias: introduzca una cantidad negativa.",
     "WRITE_OFF_SIGN_HINT": "Este motivo retira existencias: introduzca una cantidad negativa (por ejemplo −2).",
@@ -11669,7 +11702,50 @@
     "STOCK_CONDITION_MISSING_LOSS": "Nada vuelve al stock: las unidades se registran como pérdida.",
     "CANCEL_READY_NOT_INTACT": "« Stock faltante o dañado » no puede volver a la venta como intacto: elija dañado, caducado, contaminado o faltante.",
     "LEDGER_REASON_MISSING": "Faltante en una preparación anulada (pérdida)",
-    "TRANSFER_NO_DESTINATIONS": "No hay otro almacén activo configurado en este hospital. Añada un almacén de destino en el registro de farmacias antes del traslado."
+    "TRANSFER_NO_DESTINATIONS": "No hay otro almacén activo configurado en este hospital. Añada un almacén de destino en el registro de farmacias antes del traslado.",
+    "LEDGER": {
+      "FILTER_MEDICINE": "Medicine or lot",
+      "FILTER_MEDICINE_PLACEHOLDER": "Medicine name or lot number",
+      "FILTER_FROM": "From",
+      "FILTER_TO": "To",
+      "CLEAR_FILTERS": "Clear the filters",
+      "TRANSFER_TO": "to {{store}}",
+      "TRANSFER_FROM": "from {{store}}",
+      "NO_MATCH": "No movement matches these filters.",
+      "NO_MATCH_HINT": "Widen the period or clear the filters."
+    },
+    "TRIGGER_ALERTS_HINT": "Sends an alert now to the pharmacists and the store manager for each item under its threshold that was not reported yet.",
+    "STOCK_PER_STORE_HINT": "The total adds up the hospital’s stores; a fill is taken from one store.",
+    "REFILL_REMAINING_ONE": "{{count}} refill left",
+    "LOTS_OTHER_FORM_ONE": "{{count}} lot of this drug in another form is not offered: the order is written in \"{{unit}}\".",
+    "OFFLINE_SYNCED_ONE": "{{count}} dispense synced",
+    "OFFLINE_SYNCED_WITH_PENDING_ONE": "{{count}} dispense synced — still queued: {{failed}}",
+    "OFFLINE_SYNC_FAILED_ONE": "Sync failed — {{count}} dispense still queued",
+    "CATALOG_DUPLICATE": {
+      "TITLE": "The catalogue already holds a medicine that looks like this one:",
+      "APPROVER_TITLE": "The catalogue already holds a medicine that looks like this proposal:",
+      "APPROVER_HINT": "Check it is not the same medicine before approving. An exact duplicate is refused.",
+      "STATE": {
+        "IN_CATALOGUE": "in the catalogue",
+        "WITHDRAWN": "withdrawn from the catalogue",
+        "PENDING": "proposal awaiting approval"
+      },
+      "PLATFORM": "national list",
+      "EXACT": "identical",
+      "EXACT_HINT": "Same name, same form and same strength: this proposal would be refused. Edit the entry that is there.",
+      "SIMILAR_HINT": "If it is the same medicine, edit the entry that is there. If it is another strength or another form, you may send the proposal.",
+      "SIMILAR_TOAST": "A medicine that looks like this one is already in the catalogue: check the list before sending.",
+      "SEND_ANYWAY": "Send for approval anyway",
+      "EXACT_IN_CATALOGUE": "This medicine is already in the catalogue: {{label}}.",
+      "EXACT_PENDING": "The same medicine is already proposed and awaiting approval: {{label}}."
+    },
+    "CATALOG_WITHDRAW": {
+      "ACTION": "Withdraw from the catalogue",
+      "TITLE": "Withdraw this medicine from the catalogue?",
+      "REASON": "Reason for the withdrawal",
+      "CONFIRM": "Withdraw from the catalogue",
+      "EXPLAIN": "It can no longer be prescribed or dispensed. The withdrawal takes effect at once; your name, the date and the reason are kept in the history of the entry. Putting it back will need an approval."
+    }
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -15399,12 +15475,14 @@
     "LOADED_CLAIMS": "solicitudes cargadas",
     "CLAIMS_NONE_HINT": "Todavía no hay solicitudes. Actualice la lista para comprobar si hay nuevas solicitudes.",
     "CLAIMS_EMPTY_HINT": "No hay solicitudes para este filtro. Cambie el estado o actualice la lista.",
-    "LOADED_MOVEMENTS": "movimientos cargados para este filtro",
-    "STOCK_HINT": "Revise el lote, el motivo y el autor de cada movimiento.",
+    "LOADED_MOVEMENTS": "movements shown",
+    "STOCK_HINT": "Each movement names its medicine, lot, reason and author.",
     "LOADED_QUEUE": "recetas en esta página de la cola",
     "DISPENSE_HINT": "Verifique el paciente, el medicamento y la cantidad antes de la entrega.",
     "ROUTING_DECISION": "Elegir una derivación",
-    "VISIBLE_INTERACTIONS": "interacciones que coinciden con los filtros"
+    "VISIBLE_INTERACTIONS": "interacciones que coinciden con los filtros",
+    "LOADED_MOVEMENTS_ONE": "movement shown",
+    "LOADED_QUEUE_ONE": "prescription on this page of the queue"
   },
   "LAB_EVOLUTION": {
     "TITLE": "Evolución del resultado",
@@ -15923,10 +16001,10 @@
       "DATE": "Day",
       "LOAD_FAILED": "The reconciliation could not be loaded.",
       "RECONCILED": "Day reconciled: no difference.",
-      "DIFFERENCES": "{{count}} difference(s) to review.",
+      "DIFFERENCES": "{{count}} differences to review.",
       "MONEY": "Money of the day",
       "SALES": "Counter sales",
-      "COUNT": "{{count}} operation(s)",
+      "COUNT": "{{count}} operations",
       "DISPENSE_PAYMENTS": "Fill payments",
       "REFUNDS": "Refunds handed over",
       "NET": "Net collected",
@@ -15964,7 +16042,9 @@
       "DEFERRED_STAY": "of which hospital stays: {{amount}}",
       "HANDED_OVER_BY": "handed over by {{name}}",
       "OVERRIDE_REVIEWED": "Reviewed by accounting",
-      "OVERRIDE_TO_REVIEW": "To be reviewed by accounting"
+      "OVERRIDE_TO_REVIEW": "To be reviewed by accounting",
+      "DIFFERENCES_ONE": "{{count}} difference to review.",
+      "COUNT_ONE": "{{count}} operation"
     },
     "ONESTEP": {
       "DEFER_LABEL": "Hand over « to be billed »: reason",
@@ -16859,5 +16939,153 @@
     "COMPLETE_CORRECTION": "Completar revisión de la corrección",
     "CORRECTION_HINT": "Revise la corrección en el proceso autorizado del expediente y explique el resultado. Esta decisión no sustituye datos clínicos.",
     "EXPORT": "Descargar copia aprobada (PDF)"
+  },
+  "STOCK_COUNT": {
+    "TITLE": "Physical stock count",
+    "SUBTITLE": "Count the stock of a store, have a second person confirm each variance, and reconcile the balances.",
+    "STORE": "Store",
+    "TAB": {
+      "COUNTS": "Recorded counts",
+      "SHEET": "Count the stock",
+      "BALANCE": "Balance reconciliation"
+    },
+    "SEARCH": "Search a medicine or a lot",
+    "FILTER": "Show",
+    "FILTERS": {
+      "OPEN": "To deal with",
+      "PENDING": "Awaiting confirmation",
+      "OUTDATED": "To count again",
+      "APPLIED": "Applied to the stock",
+      "CLOSED": "Closed without adjustment",
+      "ALL": "Every count"
+    },
+    "STATUS": {
+      "PENDING": "Awaiting confirmation",
+      "OUTDATED": "To count again: the stock moved",
+      "APPLIED": "Applied to the stock",
+      "CLOSED": "Closed without adjustment"
+    },
+    "NEW": "New count",
+    "NO_LOT": "No lot",
+    "NO_VARIANCE": "No variance",
+    "COL": {
+      "MEDICINE": "Medicine",
+      "BOOK": "Book quantity",
+      "COUNTED": "Counted quantity",
+      "VARIANCE": "Variance"
+    },
+    "EMPTY": "No count recorded for this store.",
+    "EMPTY_FILTER": "No count matches this filter.",
+    "EMPTY_HINT": "Start a count to enter the counted quantities lot by lot.",
+    "RECORDED_BY": "Counted by {{name}}, {{date}}",
+    "BY_ON": "{{name}}, {{date}}",
+    "APPLIED": "Adjustment confirmed by",
+    "CLOSED": "Closed by",
+    "SAME_PERSON": "Confirmed by the person who counted: no other authorised colleague at this hospital.",
+    "OUTDATED_NOTE": "The stock of this lot moved after this count: it can no longer be applied. Count it again, or close this count.",
+    "RECOUNT": "Count again",
+    "SHEET": {
+      "START_TITLE": "Start a count",
+      "START_EXPLAIN": "A count records what you see on the shelf. Nothing changes in the stock until a second person confirms the adjustment.",
+      "REASON": "Purpose of the count",
+      "REASON_PLACEHOLDER": "p. ej. Inventario mensual de noviembre",
+      "REASON_REQUIRED": "Say what this count is for (up to 300 characters).",
+      "START": "Load the lots to count",
+      "EXPLAIN": "Enter the counted quantity of the lots you counted; a line left empty is not recorded.",
+      "SHOW_EMPTY": "Also show the lots at zero ({{count}})",
+      "REFRESH": "Reload the book quantities",
+      "EMPTY": "This store has no active item.",
+      "EMPTY_HINT": "Add an item to the inventory or receive a lot.",
+      "COUNTED_FOR": "Counted quantity, {{medicine}} {{lot}}",
+      "LINE_SAVED": "Recorded",
+      "LINE_FAILED": "This count could not be recorded.",
+      "NOTHING_TYPED": "Enter at least one counted quantity.",
+      "INVALID_QUANTITY": "Enter a counted quantity of zero or more, with at most two decimals.",
+      "PROGRESS": "To record: {{count}} · Already recorded: {{saved}}",
+      "SAVE": "Record the count",
+      "FINISH": "Finish",
+      "SAVED": "{{count}} counts recorded. A second person confirms the variances under \"Recorded counts\".",
+      "SAVED_ONE": "{{count}} count recorded. A second person confirms the variance under \"Recorded counts\".",
+      "REFUSED": "{{count}} lines refused: each line says why.",
+      "REFUSED_ONE": "{{count}} line refused: the line says why.",
+      "DISCARD_TITLE": "Leave this count?",
+      "DISCARD_MESSAGE": "{{count}} quantities you entered are not recorded and will be lost.",
+      "DISCARD_MESSAGE_ONE": "{{count}} quantity you entered is not recorded and will be lost.",
+      "DISCARD_CONFIRM": "Leave without recording"
+    },
+    "CONFIRM": {
+      "TITLE": "Confirm the stock adjustment",
+      "OWN_NOTE": "You recorded this count: an authorised colleague confirms it. You can confirm it yourself only if the hospital has nobody else.",
+      "CHECK": "I confirm the adjustment of {{variance}}: the stock of this lot becomes {{quantity}}.",
+      "CHECK_NO_VARIANCE": "I confirm this count: no variance, the stock stays at {{quantity}}.",
+      "CHECK_REQUIRED": "Tick the confirmation of the adjustment.",
+      "SUBMIT": "Confirm",
+      "ACTION": "Confirm the adjustment",
+      "ACTION_NO_VARIANCE": "Confirm (no variance)",
+      "DONE": "Adjustment recorded: the stock is up to date.",
+      "DONE_NO_VARIANCE": "Count confirmed: no variance, no movement.",
+      "FAILED": "The confirmation could not be recorded."
+    },
+    "CLOSE": {
+      "ACTION": "Close",
+      "TITLE": "Close this count?",
+      "REASON": "Reason for closing",
+      "CONFIRM": "Close the count",
+      "EXPLAIN": "The count will not be applied: nothing changes in the stock. It stays in the history with your name and the reason.",
+      "DONE": "Count closed.",
+      "FAILED": "The count could not be closed."
+    },
+    "BALANCE": {
+      "EXPLAIN": "An item is listed here when its total stock no longer equals the sum of its lots. The reconciliation brings the total to the sum of the lots, once each lot is checked.",
+      "EMPTY": "The total stock and the lots agree for every item.",
+      "EMPTY_HINT": "Nothing to reconcile in this store.",
+      "ON_HAND": "Total stock",
+      "LOT_TOTAL": "Sum of the lots",
+      "OPEN": "Reconcile",
+      "READ_ONLY": "Read only",
+      "FORM_TITLE": "Reconcile the stock of {{name}}",
+      "FORM_EXPLAIN": "Count each lot and enter its quantity. Each quantity must be the balance of its lot: if a lot differs, count it first under \"Count the stock\".",
+      "LOTS": "Lots of the item",
+      "LOT_BALANCE": "Lot balance",
+      "RESULT": "Total stock {{onHand}}, sum of the lots {{lots}}: adjustment of {{difference}}.",
+      "REASON": "Reason for the reconciliation",
+      "CHECK": "I confirm I counted each lot: the total stock becomes {{total}}.",
+      "SUBMIT": "Reconcile the stock",
+      "INCOMPLETE": "Enter the quantity of each lot, the reason and the confirmation.",
+      "LOT_DIFFERS": "A quantity you entered differs from the balance of its lot. Count that lot first under \"Count the stock\", then come back.",
+      "DONE": "Stock reconciled: the total equals the lots.",
+      "FAILED": "The reconciliation could not be recorded."
+    }
+  },
+  "STOCK_CONSUMPTION": {
+    "TITLE": "Consumption report",
+    "SUBTITLE": "What a store issued (fills and sales) and took back (returns) over a period, per medicine.",
+    "STORE": "Store",
+    "FROM": "From",
+    "TO": "To",
+    "MEDICINE": "Medicine",
+    "MEDICINE_PLACEHOLDER": "Filter by name",
+    "EXPLAIN": "One year at most. Transfers between stores are not counted: they are not consumption.",
+    "EXPORT": "Export (CSV)",
+    "NOTHING_TO_EXPORT": "Nothing to export for this period.",
+    "LOAD_FAILED": "The report could not be loaded.",
+    "EMPTY": "Nothing was issued over this period.",
+    "EMPTY_SEARCH": "No medicine matches this filter.",
+    "EMPTY_HINT": "Change the period, the store or the filter.",
+    "COUNT": "{{count}} lines, from {{from}} to {{to}}",
+    "COUNT_ONE": "{{count}} line, from {{from}} to {{to}}",
+    "COL": {
+      "MEDICINE": "Medicine",
+      "FORM": "Form",
+      "UNIT": "Unit",
+      "ISSUED": "Issued",
+      "RETURNED": "Returned",
+      "NET": "Net consumption",
+      "MOVEMENTS": "Movements"
+    },
+    "UNIT_NOT_RECORDED": "unit not recorded",
+    "UNIT_NOT_RECORDED_NOTE": "Unit not recorded: movements older than the recording of the unit. The quantities are as they were entered.",
+    "PERIOD": "Period",
+    "FILE_NAME": "stock-consumption"
   }
 }

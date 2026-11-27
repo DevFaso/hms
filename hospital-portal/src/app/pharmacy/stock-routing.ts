@@ -1,3 +1,4 @@
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { personName } from '../shared/pipes/person-name.pipe';
 import {
   Component,
@@ -54,6 +55,7 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
     HospitalScopeChipComponent,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
+    CountUnitPipe,
   ],
   templateUrl: './stock-routing.html',
   changeDetection: ChangeDetectionStrategy.Eager,

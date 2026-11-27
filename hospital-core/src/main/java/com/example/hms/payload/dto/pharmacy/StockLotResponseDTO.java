@@ -42,9 +42,10 @@ public class StockLotResponseDTO {
     private String barcodeValue;
 
     /*
-     * QA D3940 (r77): what the dispensing lot picker shows of each lot's product, filled by the dispensable-lots
-     * read only. The picker showed the lot number and the expiry, never the product or its strength, and
-     * preselected a 250 mg lot for a 500 mg order.
+     * QA D3940 (r77): what the dispensing lot picker shows of each lot's product. The picker showed the lot number
+     * and the expiry, never the product or its strength, and preselected a 250 mg lot for a 500 mg order.
+     * QA D4184 (r81): filled on EVERY read of a lot ({@code StockLotMapper}): the expiry report listed lots with
+     * no medicine, and lot numbers repeat across medicines. Only {@code productMatch} is the dispensing read's.
      */
     /** The lot's product in the reader's language, with its strength. */
     private String productName;

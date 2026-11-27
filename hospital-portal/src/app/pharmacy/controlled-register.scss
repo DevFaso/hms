@@ -66,6 +66,29 @@
   font-weight: 600;
 }
 
+// QA D4199 (r81): ten columns at the shared cell padding were 1033 to 1088 px wide in a 1028 px card, so the
+// register scrolled sideways at 1440. Tighter cells, and names, dates and reasons wrap inside their column;
+// only the figures stay on one line. The wrapper still scrolls on a narrow screen.
+.register-table {
+  th,
+  td {
+    padding: 0.5rem 0.625rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+
+  td:nth-child(3),
+  td:nth-child(5) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .quarantine-move {
+    white-space: normal;
+  }
+}
+
 .table-scroll {
   overflow-x: auto;
 }

@@ -249,7 +249,6 @@ class TerminalReasonOverwriteGuardTest {
         "DrugInteractionAdminServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
         "HospitalLifecycleServiceImpl#archive", 1, NOT_A_PATIENT_RECORD,
         "HospitalLifecycleServiceImpl#suspend", 1, NOT_A_PATIENT_RECORD,
-        "InventoryServiceImpl#deactivateInventoryItem", 1, NOT_A_PATIENT_RECORD,
         "OrganizationController#deleteOrganization", 1, NOT_A_PATIENT_RECORD,
         "OrganizationLifecycleServiceImpl#archive", 1, NOT_A_PATIENT_RECORD,
         "OrganizationLifecycleServiceImpl#suspend", 1, NOT_A_PATIENT_RECORD,

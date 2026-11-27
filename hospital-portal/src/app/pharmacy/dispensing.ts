@@ -62,6 +62,7 @@ import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import { PluralKeyPipe, pluralKey } from '../shared/i18n/plural-key';
 import { BillingDeferralChoiceComponent } from './billing-deferral-choice';
 import { BillingDeferralChoice } from '../services/billing-deferral.service';
 import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
@@ -211,6 +212,7 @@ import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.compo
     CfaPipe,
     KeyLabelPipe,
     BillingDeferralChoiceComponent,
+    PluralKeyPipe,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -448,18 +450,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
         // language.
         this.toast.success(
           result.failed > 0
-            ? this.translate.instant('PHARMACY.OFFLINE_SYNCED_WITH_PENDING', {
+            ? this.translate.instant(
+                pluralKey('PHARMACY.OFFLINE_SYNCED_WITH_PENDING', result.succeeded),
+                { count: result.succeeded, failed: result.failed },
+              )
+            : this.translate.instant(pluralKey('PHARMACY.OFFLINE_SYNCED', result.succeeded), {
                 count: result.succeeded,
-                failed: result.failed,
-              })
-            : this.translate.instant('PHARMACY.OFFLINE_SYNCED', { count: result.succeeded }),
+              }),
         );
         // Refresh the on-screen queue so the just-synced rows appear.
         this.loadRecentDispenses();
         this.loadWorkQueue();
       } else if (result.failed > 0) {
         this.toast.error(
-          this.translate.instant('PHARMACY.OFFLINE_SYNC_FAILED', { count: result.failed }),
+          this.translate.instant(pluralKey('PHARMACY.OFFLINE_SYNC_FAILED', result.failed), {
+            count: result.failed,
+          }),
         );
       }
     } finally {

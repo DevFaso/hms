@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import en from '../../assets/i18n/en.json';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
@@ -17,6 +18,7 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PharmacyService, useValue: svc },
         { provide: ToastService, useValue: toast },
         { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
@@ -95,6 +97,7 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PharmacyService, useValue: svc },
         {
           provide: ToastService,
@@ -235,6 +238,7 @@ describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PharmacyService, useValue: svc },
         {
           provide: ToastService,
@@ -277,6 +281,7 @@ describe('Inventory workspace scoped reads', () => {
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PharmacyService, useValue: svc },
         { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
         { provide: ToastService, useValue: { error: jasmine.createSpy('error') } },
@@ -347,6 +352,7 @@ describe('InventoryDashboard expiry day wording', () => {
       TestBed.configureTestingModule({
         imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
         providers: [
+          provideRouter([]),
           { provide: PharmacyService, useValue: {} },
           { provide: ToastService, useValue: {} },
           { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
@@ -360,4 +366,53 @@ describe('InventoryDashboard expiry day wording', () => {
       expect(translate.instant(component.expiryDaysLabelKey(2), { days: 2 })).toBe(plural);
     });
   }
+});
+
+describe('InventoryDashboardComponent expiry report (QA D4184)', () => {
+  it('names the medicine of each lot beside its number: lot numbers repeat across medicines', () => {
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'listPharmacies',
+      'listInventoryByPharmacy',
+      'getExpiringSoon',
+    ]);
+    svc.listPharmacies.and.returnValue(
+      of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never,
+    );
+    svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    const lot = {
+      lotNumber: 'R81-A-1',
+      expiryDate: '2099-01-31',
+      remainingQuantity: 20,
+      unit: 'comprimé',
+    };
+    svc.getExpiringSoon.and.returnValue(
+      of({
+        data: [
+          { ...lot, id: 'l-1', productName: 'Métronidazole 250 mg', form: 'TABLET' },
+          { ...lot, id: 'l-2', productName: 'Métronidazole 500 mg', form: 'CAPSULE' },
+        ],
+      }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: PharmacyService, useValue: svc },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+      ],
+    });
+    const fixture = TestBed.createComponent(InventoryDashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.setTab('expiry');
+    fixture.detectChanges();
+    const products = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="expiry-product"]'),
+    ).map((cell) => cell.textContent!.replace(/\s+/g, ' ').trim());
+    expect(products).toEqual([
+      'Métronidazole 250 mgPHARMACY.FORM_OPTION.TABLET',
+      'Métronidazole 500 mgPHARMACY.FORM_OPTION.CAPSULE',
+    ]);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('20 comprimés');
+  });
 });

@@ -283,6 +283,10 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
 
     component.form.changeReason = 'Nouveau dosage référencé';
     component.submitForm();
+    // QA D4180: a change of strength is compared with the catalogue, the entry itself left out.
+    const similar = http.expectOne((r) => r.url === '/medication-catalog/similar');
+    expect(similar.request.params.get('excludeId')).toBe('m-azt');
+    similar.flush([]);
     const put = http.expectOne((r) => r.method === 'PUT');
     expect(put.request.body.strength).toBe('300');
     expect(put.request.body.changeReason).toBe('Nouveau dosage référencé');
@@ -319,6 +323,11 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
 
     component.form.changeReason = 'Ajout au formulaire';
     component.submitForm();
+    // QA D4180 (r81): the catalogue is asked first what already looks like the entry.
+    const similar = http.expectOne((r) => r.url === '/medication-catalog/similar');
+    expect(similar.request.params.get('nameFr')).toBe('Amoxicilline 500 mg');
+    http.expectNone((r) => r.method === 'POST');
+    similar.flush([]);
     const post = http.expectOne((r) => r.method === 'POST');
     expect(post.request.url).toBe('/medication-catalog');
     expect(post.request.body.changeReason).toBe('Ajout au formulaire');
@@ -432,15 +441,103 @@ describe('MedicationCatalogComponent: save, tag and deactivate (r66 D2901)', () 
     expect(el.querySelector('[data-test="history-submit-as-is"]')).toBeNull();
   });
 
+  it('QA D4180: shows the entry that looks like the proposal, and sends only when the proposer says so again', () => {
+    render(['ROLE_HOSPITAL_ADMIN'], []);
+    const component = fixture.componentInstance;
+    component.openCreate();
+    component.form.nameFr = 'Céfixime';
+    component.form.genericName = 'cefixime';
+    component.form.form = 'TABLET';
+    component.form.strength = '400';
+    component.form.changeReason = 'Ajout';
+
+    component.submitForm();
+    http
+      .expectOne((r) => r.url === '/medication-catalog/similar')
+      .flush([
+        {
+          catalogItemId: 'm-1',
+          label: 'Céfixime 200 mg (TABLET)',
+          form: 'TABLET',
+          exact: false,
+          state: 'IN_CATALOGUE',
+          platform: false,
+        },
+      ]);
+    fixture.detectChanges();
+
+    // Nothing was sent: the look-alike is shown, its form in the reader's words, and the button says so.
+    http.expectNone((r) => r.method === 'POST');
+    const warning = el.querySelector('[data-test="catalog-similar-warning"]')!;
+    expect(warning.textContent).toContain('Céfixime 200 mg (PHARMACY.FORM_OPTION.TABLET)');
+    expect(warning.textContent).toContain('PHARMACY.CATALOG_DUPLICATE.SIMILAR_HINT');
+    expect(el.querySelector('[data-test="catalog-submit"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_DUPLICATE.SEND_ANYWAY',
+    );
+
+    // Sent again with the same name, form and strength: the proposal goes, with no second question.
+    component.submitForm();
+    http.expectNone((r) => r.url === '/medication-catalog/similar');
+    http
+      .expectOne((r) => r.method === 'POST')
+      .flush({ id: 'v-9' }, { status: 202, statusText: 'Accepted' });
+    http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page([]));
+    flushPendingCount(1);
+  });
+
+  it('QA D4180: an exact duplicate is not sent; the name is refused with the entry that is there', () => {
+    render(['ROLE_HOSPITAL_ADMIN'], []);
+    const component = fixture.componentInstance;
+    component.openCreate();
+    component.form.nameFr = 'Céfixime';
+    component.form.genericName = 'cefixime';
+    component.form.changeReason = 'Ajout';
+
+    component.submitForm();
+    http
+      .expectOne((r) => r.url === '/medication-catalog/similar')
+      .flush([
+        {
+          catalogItemId: 'm-1',
+          label: 'Céfixime 200 mg (TABLET)',
+          form: 'TABLET',
+          exact: true,
+          state: 'IN_CATALOGUE',
+          platform: false,
+        },
+      ]);
+    fixture.detectChanges();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.CATALOG_DUPLICATE.EXACT_IN_CATALOGUE');
+    // A second click sends nothing either.
+    component.submitForm();
+    http.expectNone((r) => r.method === 'POST');
+    expect(el.querySelector('[data-test="catalog-similar-warning"]')!.textContent).toContain(
+      'PHARMACY.CATALOG_DUPLICATE.EXACT_HINT',
+    );
+
+    // Renamed: the question is asked again for the new name.
+    component.form.nameFr = 'Céfixime pédiatrique';
+    component.submitForm();
+    http.expectOne((r) => r.url === '/medication-catalog/similar').flush([]);
+    http
+      .expectOne((r) => r.method === 'POST')
+      .flush({ id: 'v-9' }, { status: 202, statusText: 'Accepted' });
+    http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page([]));
+    flushPendingCount(1);
+  });
+
   it('deactivates an entry with no hospital in the request', () => {
     render(['ROLE_HOSPITAL_ADMIN'], [zidovudine]);
     el.querySelector<HTMLButtonElement>('[data-test="catalog-delete"]')!.click();
     fixture.detectChanges();
-    fixture.componentInstance.executeDelete();
+    // QA D4190 (r81): the withdrawal asks its reason (the shared dialog) and sends it.
+    expect(el.querySelector('[data-test="catalog-withdraw-dialog"]')).not.toBeNull();
+    fixture.componentInstance.executeDelete('Rappel de lot');
 
     const del = http.expectOne((r) => r.method === 'DELETE');
     expect(del.request.url).toBe('/medication-catalog/m-azt');
-    expect(del.request.params.keys()).toEqual([]);
+    expect(del.request.params.keys()).toEqual(['reason']);
+    expect(del.request.params.get('reason')).toBe('Rappel de lot');
     del.flush(null);
     expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.MED_DELETED');
     http.expectOne((r) => r.method === 'GET' && r.url === '/medication-catalog').flush(page([]));

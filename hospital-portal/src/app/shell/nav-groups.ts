@@ -108,6 +108,8 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/pharmacy/inventory': 'PHARMACY',
   '/pharmacy/goods-receipt': 'PHARMACY',
   '/pharmacy/stock-adjustment': 'PHARMACY',
+  '/pharmacy/stock-count': 'PHARMACY',
+  '/pharmacy/consumption': 'PHARMACY',
   '/pharmacy/controlled-register': 'PHARMACY',
   '/pharmacy/dispensing': 'PHARMACY',
   '/pharmacy/stock-routing': 'PHARMACY',

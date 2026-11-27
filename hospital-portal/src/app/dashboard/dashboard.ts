@@ -76,7 +76,9 @@ import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-resul
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 import { EncounterService } from '../services/encounter.service';
-import { PharmacyService } from '../services/pharmacy.service';
+import { InventoryItemResponse, PharmacyService } from '../services/pharmacy.service';
+import { countUnit } from '../shared/pipes/count-unit.pipe';
+import { PluralKeyPipe } from '../shared/i18n/plural-key';
 import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
 import { LabService } from '../services/lab.service';
@@ -163,6 +165,7 @@ export { currentMedications };
     RouterLink,
     DatePipe,
     TranslateModule,
+    PluralKeyPipe,
     DoctorWorklistComponent,
     DoctorPatientFlowComponent,
     DoctorResultsPanelComponent,
@@ -294,6 +297,75 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Exact totals, read from the paginated endpoints with size=1 so the count
   // costs one row rather than a page of rows nothing renders.
   dispenseQueueCount = signal<number | null>(null);
+  /**
+   * QA D4200 (r81): the items at or under their reorder threshold, for the store manager and the
+   * inventory clerk. They receive the low-stock alerts and their dashboard was the generic « Votre
+   * tableau de bord se remplira… » with no stock on it. Null: not read (another role, or the read failed).
+   */
+  stockAlerts = signal<InventoryItemResponse[] | null>(null);
+  stockOutCount = computed(
+    () => (this.stockAlerts() ?? []).filter((item) => Number(item.quantityOnHand) <= 0).length,
+  );
+  /** The first low items, the emptiest first; the inventory page lists them all. */
+  stockAlertsShown = computed(() =>
+    [...(this.stockAlerts() ?? [])]
+      .sort((a, b) => Number(a.quantityOnHand) - Number(b.quantityOnHand))
+      .slice(0, 6),
+  );
+
+  /** « 5 flacons »: what an item holds, its unit in the plural when counted so. */
+  stockHeld(item: InventoryItemResponse): string {
+    return countUnit(item.quantityOnHand, item.unit);
+  }
+
+  // ── Stock keeper workflow tiles (QA D4200) ───────────────────
+  stockWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'inventory_2',
+        label: this.t('NAV.PHARMACY_INVENTORY'),
+        route: '/pharmacy/inventory',
+        color: '#0e7c6b',
+        bg: '#ccebe4',
+      },
+      {
+        icon: 'add_box',
+        label: this.t('NAV.GOODS_RECEIPT'),
+        route: '/pharmacy/goods-receipt',
+        color: '#9333ea',
+        bg: '#f3e8ff',
+      },
+      {
+        icon: 'swap_vert',
+        label: this.t('NAV.STOCK_ADJUSTMENT'),
+        route: '/pharmacy/stock-adjustment',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'fact_check',
+        label: this.t('NAV.STOCK_COUNT'),
+        route: '/pharmacy/stock-count',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'query_stats',
+        label: this.t('NAV.STOCK_CONSUMPTION'),
+        route: '/pharmacy/consumption',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'local_police',
+        label: this.t('NAV.CONTROLLED_REGISTER'),
+        route: '/pharmacy/controlled-register',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+    ].filter((t) => this.canAccessRoute(t.route));
+  });
   refillPendingCount = signal<number | null>(null);
   pharmacyClaimsCount = signal<number | null>(null);
   imagingPendingCount = signal<number | null>(null);
@@ -653,6 +725,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     if (this.auth.hasAnyRole(['ROLE_PHYSIOTHERAPIST'])) {
       return this.t('DASHBOARD.ROLE.PHYSIOTHERAPIST');
+    }
+    // QA D4200 (r81): the stock roles read « Personnel » on their dashboard.
+    if (this.auth.hasAnyRole(['ROLE_STORE_MANAGER'])) {
+      return this.t('DASHBOARD.ROLE.STORE_MANAGER');
+    }
+    if (this.auth.hasAnyRole(['ROLE_INVENTORY_CLERK'])) {
+      return this.t('DASHBOARD.ROLE.INVENTORY_CLERK');
     }
     // Policy rule 3 (2026-11-20, provisional): the imaging technician's own badge.
     if (this.auth.hasAnyRole(['ROLE_IMAGING_TECHNICIAN'])) {
@@ -2299,6 +2378,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.qualityManagerDashboard.set(null);
     this.labOpsSummary.set(null);
     this.dispenseQueueCount.set(null);
+    this.stockAlerts.set(null);
     this.refillPendingCount.set(null);
     this.pharmacyClaimsCount.set(null);
     this.imagingPendingCount.set(null);
@@ -2569,6 +2649,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.pharmacyService.getDispenseWorkQueue(0, 1).subscribe({
         next: (r) => {
           this.dispenseQueueCount.set(r?.data?.totalElements ?? 0);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // QA D4200 (r81): the stock card of the store manager and the inventory clerk. The endpoint
+    // admits both; a failed read leaves the card out rather than showing « 0 article ».
+    if (this.auth.hasAnyRole(['ROLE_STORE_MANAGER', 'ROLE_INVENTORY_CLERK'])) {
+      pending++;
+      this.pharmacyService.getReorderAlerts().subscribe({
+        next: (r) => {
+          this.stockAlerts.set(r?.data ?? []);
           done();
         },
         error: () => done(),

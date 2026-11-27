@@ -16,7 +16,15 @@ public class StockTransactionMapper {
             return null;
         }
 
+        InventoryItem moved = entity.getInventoryItem();
+        com.example.hms.model.medication.MedicationCatalogItem medicine =
+            moved == null ? null : moved.getMedicationCatalogItem();
         return StockTransactionResponseDTO.builder()
+            // QA D4184: what moved, and in which unit.
+            .medicationName(com.example.hms.service.pharmacy.StockProductLabel.nameOf(medicine))
+            .strength(com.example.hms.service.pharmacy.StockProductLabel.strengthOf(medicine))
+            .form(com.example.hms.service.pharmacy.StockProductLabel.formOf(medicine))
+            .unit(entity.getUnitSnapshot())
             .id(entity.getId())
             .inventoryItemId(entity.getInventoryItem() != null ? entity.getInventoryItem().getId() : null)
             .stockLotId(entity.getStockLot() != null ? entity.getStockLot().getId() : null)

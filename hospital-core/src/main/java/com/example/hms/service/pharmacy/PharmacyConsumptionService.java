@@ -8,7 +8,6 @@ import com.example.hms.payload.dto.pharmacy.PharmacyConsumptionDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
-import com.example.hms.utility.DrugDisplayNames;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -62,8 +61,12 @@ public class PharmacyConsumptionService {
             .map(row -> {
                 String unit = (String) row[2];
                 boolean comparable = unit != null && !unit.isBlank();
-                return new PharmacyConsumptionDTO.StockConsumptionLine((UUID) row[0], DrugDisplayNames.forReader(names.get((UUID) row[1])), unit,
-                    comparable ? decimal(row[3]) : null, comparable ? decimal(row[4]) : null, comparable, ((Number) row[5]).longValue());
+                MedicationCatalogItem medicine = names.get((UUID) row[1]);
+                // QA D4192 (r81): a movement older than the unit snapshot (V398) keeps its quantities; only its
+                // unit is unknown (null, never guessed from today's unit), and the line says so. The line was blank.
+                return new PharmacyConsumptionDTO.StockConsumptionLine((UUID) row[0], StockProductLabel.nameOf(medicine),
+                    StockProductLabel.strengthOf(medicine), StockProductLabel.formOf(medicine), comparable ? unit : null,
+                    decimal(row[3]), decimal(row[4]), comparable, ((Number) row[5]).longValue());
             })
             .sorted(Comparator.comparing(PharmacyConsumptionDTO.StockConsumptionLine::medicationName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
             .toList();

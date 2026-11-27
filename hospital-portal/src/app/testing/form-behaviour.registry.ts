@@ -63,6 +63,8 @@ import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
 import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconciliation';
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
+import { StockConsumptionComponent } from '../pharmacy/stock-consumption';
+import { StockCountComponent } from '../pharmacy/stock-count';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
 import { WitnessConfirmComponent } from '../pharmacy/witness-confirm/witness-confirm.component';
 import { CheckinDialogComponent } from '../reception/checkin-dialog/checkin-dialog.component';
@@ -362,6 +364,12 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     file: 'pharmacy/stock-adjustment',
     type: StockAdjustmentComponent,
   },
+  {
+    name: 'StockConsumptionComponent',
+    file: 'pharmacy/stock-consumption',
+    type: StockConsumptionComponent,
+  },
+  { name: 'StockCountComponent', file: 'pharmacy/stock-count', type: StockCountComponent },
   { name: 'StockRoutingComponent', file: 'pharmacy/stock-routing', type: StockRoutingComponent },
   {
     name: 'WitnessConfirmComponent',

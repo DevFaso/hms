@@ -46,6 +46,30 @@ public class StockCountController {
         return counts.confirm(id, confirmation);
     }
 
+    /**
+     * QA D4183: the hospital's own stores a count, a balance reconciliation or the consumption report is read for.
+     * The accountant reads the report and has no access to the pharmacy registry, so the list is served here.
+     */
+    @GetMapping("/stores")
+    @PreAuthorize("hasAnyRole('PHARMACIST','INVENTORY_CLERK','STORE_MANAGER','HOSPITAL_ADMIN','ACCOUNTANT','SUPER_ADMIN')")
+    public java.util.List<StockStoreDTO> stores() {
+        return counts.stores();
+    }
+
+    /** QA D4191: closes a count that will never be applied; nothing moves in the stock. */
+    @PostMapping("/{id}/close")
+    @PreAuthorize("hasAnyRole('PHARMACIST','INVENTORY_CLERK','STORE_MANAGER','HOSPITAL_ADMIN','SUPER_ADMIN')")
+    public StockCountResponseDTO close(@PathVariable UUID id, @Valid @RequestBody StockCountClosureDTO closure) {
+        return counts.close(id, closure);
+    }
+
+    /** QA D4183: the items whose total no longer equals the sum of their lots, with the lots to count. */
+    @GetMapping("/balance-drift")
+    @PreAuthorize("hasAnyRole('PHARMACIST','INVENTORY_CLERK','STORE_MANAGER','HOSPITAL_ADMIN','ACCOUNTANT','SUPER_ADMIN')")
+    public java.util.List<StockBalanceDriftDTO> balanceDrift(@RequestParam UUID pharmacyId) {
+        return balanceReconciliation.drifted(pharmacyId);
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyRole('PHARMACIST','INVENTORY_CLERK','STORE_MANAGER','HOSPITAL_ADMIN','ACCOUNTANT','SUPER_ADMIN')")
     public Page<StockCountResponseDTO> list(@RequestParam UUID pharmacyId, Pageable pageable) {

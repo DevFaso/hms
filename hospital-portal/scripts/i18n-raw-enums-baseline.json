@@ -283,7 +283,9 @@
     "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason"
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason",
+    "src/app/pharmacy/stock-count.html::count.reason",
+    "src/app/pharmacy/stock-count.html::count.closeReason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -320,6 +322,8 @@
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/staff/staff-list.html::<option>d": "QA r70 D3202: DepartmentOption.name from GET /departments/active-minimal/{hospitalId} (Department.name, a hospital admin's free text); the staff write resolves the department by that name. Not an enum.",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum."
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum.",
+    "src/app/pharmacy/stock-count.html::count.reason": "QA D4183: the purpose of a stock count, typed by the person who counted (free text)",
+    "src/app/pharmacy/stock-count.html::count.closeReason": "QA D4191: the reason a stock count was closed, typed by the person who closed it (free text)"
   }
 }

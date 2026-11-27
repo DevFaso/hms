@@ -3498,6 +3498,87 @@
           </div>
         </section>
       }
+      <!-- QA D4200 (r81): the stock, for the store manager and the inventory clerk. They receive the
+           low-stock alerts; their dashboard had no stock on it. -->
+      @if (stockAlerts(); as lowStock) {
+        <section class="card" data-testid="dashboard-stock-card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">inventory_2</span>
+              <h2 class="card-title">{{ 'DASHBOARD.STOCK.TITLE' | translate }}</h2>
+            </div>
+            <a
+              [routerLink]="linkFor('/pharmacy/inventory')"
+              [class.link-off]="!canOpen('/pharmacy/inventory')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
+          </div>
+          <div class="schedule-list">
+            <div class="sched-row">
+              <div class="sched-info">
+                <span class="sched-name" data-testid="dashboard-stock-low">{{
+                  lowStock.length
+                }}</span>
+                <span class="sched-reason">{{
+                  'DASHBOARD.STOCK.LOW' | pluralKey: lowStock.length | translate
+                }}</span>
+              </div>
+            </div>
+            <div class="sched-row">
+              <div class="sched-info">
+                <span class="sched-name" data-testid="dashboard-stock-out">{{
+                  stockOutCount()
+                }}</span>
+                <span class="sched-reason">{{
+                  'DASHBOARD.STOCK.OUT' | pluralKey: stockOutCount() | translate
+                }}</span>
+              </div>
+            </div>
+            @for (item of stockAlertsShown(); track item.id) {
+              <div class="sched-row" data-testid="dashboard-stock-item">
+                <div class="sched-info">
+                  <span class="sched-name">{{
+                    item.medicationName ?? item.medicationCode ?? ('COMMON.UNKNOWN' | translate)
+                  }}</span>
+                  <span class="sched-reason">{{
+                    'DASHBOARD.STOCK.ITEM'
+                      | translate: { held: stockHeld(item), threshold: item.reorderThreshold }
+                  }}</span>
+                </div>
+              </div>
+            } @empty {
+              <p class="sched-reason" data-testid="dashboard-stock-none">
+                {{ 'DASHBOARD.STOCK.NONE' | translate }}
+              </p>
+            }
+          </div>
+        </section>
+        @if (stockWorkflowTiles().length > 0) {
+          <section class="card" data-testid="dashboard-stock-tiles">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">apps</span>
+                <h2 class="card-title">{{ 'DASHBOARD.STOCK.PAGES' | translate }}</h2>
+              </div>
+            </div>
+            <div class="nurse-workflow-tiles">
+              @for (tile of stockWorkflowTiles(); track tile.route) {
+                <a class="workflow-tile" [routerLink]="tile.route">
+                  <span
+                    class="workflow-tile-icon"
+                    [style.background]="tile.bg"
+                    [style.color]="tile.color"
+                  >
+                    <span class="material-symbols-outlined">{{ tile.icon }}</span>
+                  </span>
+                  <span class="workflow-tile-label">{{ tile.label }}</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      }
       <!-- Work queues for roles that land on the fallback view (role audit
            D1). Both endpoints already admit the role; before this the two
            had a sidebar and nothing to start from on the dashboard. -->
@@ -3660,7 +3741,8 @@
         todayAppointments().length === 0 &&
         recentPatients().length === 0 &&
         quickActions().length === 0 &&
-        !billingSnapshotLoaded()
+        !billingSnapshotLoaded() &&
+        stockAlerts() === null
       ) {
         <section class="card empty-card">
           <div class="empty-state">

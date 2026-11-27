@@ -2219,7 +2219,10 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
       "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct"
+      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct",
+      "CATALOG_ENTRY_WITHDRAWN": "Médicament retiré du livret ({{kind}}, version n° {{n}}) : {{item}}",
+      "INVENTORY_ITEM_DEACTIVATED_REASON": "Article de stock désactivé avec {{quantity}} en stock. Motif : {{reason}}",
+      "INVENTORY_ITEM_DEACTIVATED": "Article de stock désactivé avec {{quantity}} en stock"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -3630,7 +3633,9 @@
       "CLAIMS_REVIEWER": "Contrôleur(se) des remboursements",
       "ANESTHESIOLOGIST": "Anesthésiste",
       "PHYSIOTHERAPIST": "Kinésithérapeute",
-      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur"
+      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur",
+      "STORE_MANAGER": "Gestionnaire de stock",
+      "INVENTORY_CLERK": "Magasinier"
     },
     "ROLES": "Rôles",
     "ROOMED": "En salle d'examen",
@@ -3759,7 +3764,17 @@
     "AGING_90_PLUS": "Plus de 90 jours",
     "CRITICAL_ALERTS_ONE": "{{count}} alerte critique",
     "CRITICAL_ALERTS_MANY": "{{count}} alertes critiques",
-    "DAYS_LEFT_SHORT": "{{days}} j"
+    "DAYS_LEFT_SHORT": "{{days}} j",
+    "STOCK": {
+      "TITLE": "Stock à surveiller",
+      "LOW": "articles au seuil de réapprovisionnement ou en dessous",
+      "LOW_ONE": "article au seuil de réapprovisionnement ou en dessous",
+      "OUT": "articles en rupture de stock",
+      "OUT_ONE": "article en rupture de stock",
+      "ITEM": "En stock : {{held}} · seuil : {{threshold}}",
+      "NONE": "Aucun article n’est sous son seuil.",
+      "PAGES": "Gestion du stock"
+    }
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "L'e-mail d'activation (avec le code de chaque rôle) est en file d'envoi.",
@@ -5435,7 +5450,9 @@
     "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie",
     "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
     "CLINICAL_RULES": "Règles cliniques",
-    "PAYER_SHARES": "Parts assureurs"
+    "PAYER_SHARES": "Parts assureurs",
+    "STOCK_COUNT": "Inventaire physique",
+    "STOCK_CONSUMPTION": "Rapport de consommation"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -11092,7 +11109,7 @@
     "FORMULARY": "Livret thérapeutique",
     "FULFILLMENT_MODE": "Mode de dispensation",
     "GENERIC_NAME": "Nom générique",
-    "GENERIC_NAME_PLACEHOLDER": "ex. Amoxicillin",
+    "GENERIC_NAME_PLACEHOLDER": "ex. amoxicilline (DCI)",
     "GOODS_RECEIPT_SUBTITLE": "Recevoir et enregistrer les livraisons de stock",
     "GOODS_RECEIPT_TITLE": "Réception de marchandises",
     "INSUFFICIENT_STOCK": "Stock insuffisant",
@@ -11114,8 +11131,8 @@
     "MEDICATION": "Médicament",
     "MED_CREATED": "Médicament créé",
     "MED_CREATE_FAILED": "Échec de la création du médicament",
-    "MED_DELETED": "Médicament supprimé",
-    "MED_DELETE_FAILED": "Échec de la suppression du médicament",
+    "MED_DELETED": "Médicament retiré du livret",
+    "MED_DELETE_FAILED": "Le médicament n’a pas pu être retiré du livret",
     "MED_REQUIRED_FIELDS": "Le nom (FR) et le nom générique sont obligatoires",
     "MED_UPDATED": "Médicament mis à jour",
     "MED_UPDATE_FAILED": "Échec de la mise à jour du médicament",
@@ -11157,9 +11174,9 @@
     "NO_TRANSACTIONS": "Aucune transaction",
     "OFFLINE_PENDING_MANY": "dispensations en attente de synchronisation",
     "OFFLINE_PENDING_ONE": "dispensation en attente de synchronisation",
-    "OFFLINE_SYNCED": "{{count}} dispensation(s) synchronisée(s)",
-    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispensation(s) synchronisée(s) — {{failed}} en attente",
-    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — {{count}} dispensation(s) restent en file d'attente",
+    "OFFLINE_SYNCED": "{{count}} dispensations synchronisées",
+    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispensations synchronisées — encore en attente : {{failed}}",
+    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — {{count}} dispensations restent en file d’attente",
     "OFFLINE_SYNC_NOW": "Synchroniser maintenant",
     "ON_FORMULARY": "Au formulaire",
     "OUT_OF_STOCK": "En rupture de stock",
@@ -11246,7 +11263,7 @@
     "REFILL": "Renouvellement",
     "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait",
     "REFILL_NONE": "Première délivrance",
-    "REFILL_REMAINING": "{{count}} renouvellement(s) restant(s)",
+    "REFILL_REMAINING": "{{count}} renouvellements restants",
     "REGION": "Région",
     "REGISTRY_SUBTITLE": "Gérer les pharmacies enregistrées",
     "REGISTRY_TITLE": "Registre des pharmacies",
@@ -11404,7 +11421,7 @@
     "CANCEL_READY_SUCCESS": "Préparation annulée.",
     "CANCEL_READY_FAILED": "Impossible d'annuler la préparation.",
     "PREPARED_BY": "Préparée par {{name}}",
-    "STOCK_REMAINING": "{{qty}} restant(s) (seuil : {{threshold}})",
+    "STOCK_REMAINING": "En stock : {{qty}} (seuil : {{threshold}})",
     "UNITS": "unités",
     "BADGE_ESSENTIAL": "Essentiel",
     "BADGE_CONTROLLED": "Contrôlé",
@@ -11469,9 +11486,9 @@
     "REGISTER_RETURN_FILL": "Retour, réf. lot {{lot}} délivré le {{date}}",
     "REGISTER_RETURN_FILL_DATE": "Retour de la délivrance du {{date}}",
     "CATALOG_APPROVAL": {
-      "PANEL_TITLE": "Validation du formulaire et des limites de dose",
+      "PANEL_TITLE": "Validation du livret thérapeutique et des limites de dose",
       "PENDING_COUNT": "{{count}} en attente de validation",
-      "INTRO": "Un nouveau médicament, une modification de ce qui est prescrit et délivré (nom, code ATC, forme, dosage, voie, stupéfiant) et toute limite de dose ne prennent effet qu’après validation par une autre personne que celle qui les a proposés : un pharmacien de l’établissement pour le formulaire ; un pharmacien ou le médecin-chef pour les limites de dose. D’ici là, la prescription et la délivrance utilisent la version en vigueur.",
+      "INTRO": "Un nouveau médicament, une modification de ce qui est prescrit et délivré (nom, code ATC, forme, dosage, voie, stupéfiant) et toute limite de dose ne prennent effet qu’après validation par une autre personne que celle qui les a proposés : pour le livret thérapeutique, un pharmacien de l’établissement, ou son médecin-chef quand l’établissement n’a aucun pharmacien actif ; pour les limites de dose, un pharmacien ou le médecin-chef. D’ici là, la prescription et la délivrance utilisent la version en vigueur.",
       "VIEW_PENDING": "En attente de validation",
       "VIEW_HISTORY": "Historique des versions",
       "EMPTY_PENDING": "Aucune version en attente de validation.",
@@ -11479,20 +11496,22 @@
       "EMPTY_ENTRY": "Aucune version enregistrée pour cet article : il date d’avant le circuit de validation.",
       "LOAD_FAILED": "Les versions n’ont pas pu être chargées.",
       "KIND": {
-        "FORMULARY": "Formulaire",
+        "FORMULARY": "Livret thérapeutique",
         "DOSE_LIMIT": "Limites de dose"
       },
       "CHANGE": {
         "CREATE": "Nouveau médicament",
         "UPDATE": "Modification",
-        "RATIFY": "Valeurs en vigueur soumises telles quelles"
+        "RATIFY": "Valeurs en vigueur soumises telles quelles",
+        "WITHDRAWAL": "Retrait du livret"
       },
       "STATUS": {
         "PENDING_APPROVAL": "En attente de validation",
         "APPROVED": "Validée, en vigueur",
         "REJECTED": "Refusée",
         "SUPERSEDED": "Remplacée par une version plus récente",
-        "WITHDRAWN": "Retirée par son auteur"
+        "WITHDRAWN": "Retirée par son auteur",
+        "RECORDED": "Retiré du livret"
       },
       "VERSION": "Version n° {{n}}",
       "PROPOSED_BY": "Proposée par",
@@ -11502,7 +11521,8 @@
         "SUPERSEDED": "Validée par",
         "REJECTED": "Refusée par",
         "WITHDRAWN": "Retirée par",
-        "PENDING_APPROVAL": "Décision"
+        "PENDING_APPROVAL": "Décision",
+        "RECORDED": "Retiré par"
       },
       "DECISION_REASON": "Motif de la décision",
       "DECISION_BASIS_LABEL": "En qualité de",
@@ -11520,7 +11540,7 @@
       "BAND": "{{min}} à {{max}} kg : {{dose}}, {{perDay}} prises/jour",
       "OWN_PROPOSAL_NOTE": "Vous avez proposé cette version : une autre personne doit la valider.",
       "ROLE_NOTE": {
-        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du formulaire (le médecin-chef seulement si l’établissement n’a aucun pharmacien actif).",
+        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du livret thérapeutique (le médecin-chef seulement si l’établissement n’a aucun pharmacien actif).",
         "DOSE_LIMIT": "Seul un pharmacien de l’établissement ou son médecin-chef, autre que l’auteur, valide ou refuse des limites de dose."
       },
       "APPROVE": "Valider",
@@ -11548,12 +11568,12 @@
       "SUBMIT_FOR_APPROVAL": "Envoyer en validation",
       "CHANGE_REASON": "Motif (lu par la personne qui valide)",
       "CHANGE_REASON_REQUIRED": "Indiquez le motif : il est lu par la personne qui valide et conservé dans l’historique.",
-      "CREATE_HINT": "Le médicament sera prescriptible et délivrable après validation par un pharmacien de l’établissement, autre que vous.",
+      "CREATE_HINT": "Le médicament sera prescriptible et délivrable après validation par un pharmacien de l’établissement, autre que vous (son médecin-chef si l’établissement n’a aucun pharmacien actif).",
       "EDIT_HINT_PROPOSES": "Vous modifiez ce qui est prescrit et délivré : la modification part en validation et l’article garde ses valeurs actuelles d’ici là. La catégorie, la liste essentielle, la description et la catégorie sensible sont enregistrées tout de suite.",
       "EDIT_HINT_DIRECT": "Rien de ce qui est prescrit ou délivré ne change : l’enregistrement est immédiat, sans validation.",
       "DOSING_HINT": "Les limites partent en validation : un autre pharmacien ou le médecin-chef les valide. D’ici là, le contrôle de dose utilise les limites en vigueur.",
       "DOSING_PENDING_NOTE": "Des limites sont déjà en attente de validation pour cet article : elles doivent être validées, refusées ou retirées avant d’en proposer d’autres.",
-      "PROPOSED_TOAST_CREATE": "Médicament proposé : en attente de validation par un pharmacien",
+      "PROPOSED_TOAST_CREATE": "Médicament proposé : en attente de validation",
       "PROPOSED_TOAST_UPDATE": "Modification envoyée en validation : l’article garde ses valeurs actuelles d’ici là",
       "PROPOSED_TOAST_DOSING": "Limites de dose envoyées en validation",
       "FIELD": {
@@ -11579,7 +11599,20 @@
         "manualReviewUnderMonths": "Vérification manuelle avant (mois)",
         "weightBands": "Tranches de poids",
         "source": "Source des valeurs"
-      }
+      },
+      "WITHDRAWAL_NOTE": "Le médicament a été retiré du livret : il n’est plus prescriptible ni délivrable. Le retrait a pris effet tout de suite, sans validation.",
+      "COL_BEFORE_DECIDED": "Avant cette version",
+      "COL_AFTER": {
+        "PENDING_APPROVAL": "Proposé",
+        "APPROVED": "Validé, en vigueur",
+        "SUPERSEDED": "Validé, remplacé depuis",
+        "REJECTED": "Proposé, refusé",
+        "WITHDRAWN": "Proposé, retiré par son auteur",
+        "RECORDED": "Après le retrait"
+      },
+      "APPROVE_CONFIRM_TITLE": "Valider cette version ?",
+      "APPROVE_CONFIRM_MESSAGE": "{{label}} : la version prend effet tout de suite pour la prescription et la délivrance. Une version validée ne peut pas être annulée ; la corriger demande une nouvelle proposition.",
+      "APPROVE_CONFIRM_SIMILAR": "{{label}} : la version prend effet tout de suite et ne peut pas être annulée. Attention, le livret contient déjà : {{similar}}. Vérifiez qu’il ne s’agit pas du même médicament."
     },
     "DOSING": {
       "ACTION": "Limites de dose pédiatriques",
@@ -11616,7 +11649,7 @@
       "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
     },
     "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
-    "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
+    "LOTS_OTHER_FORM": "{{count}} lots de ce médicament sous une autre forme ne sont pas proposés : l’ordonnance est rédigée en « {{unit}} ».",
     "SAVE_PRICE": "Enregistrer le prix",
     "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
     "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2).",
@@ -11669,7 +11702,50 @@
     "STOCK_CONDITION_MISSING_LOSS": "Rien ne revient en stock : les unités sont enregistrées comme perte.",
     "CANCEL_READY_NOT_INTACT": "« Stock manquant ou endommagé » ne peut pas revenir en vente comme intact : choisissez endommagé, périmé, contaminé ou manquant.",
     "LEDGER_REASON_MISSING": "Manquant sur une préparation annulée (perte)",
-    "TRANSFER_NO_DESTINATIONS": "Aucun autre dépôt actif n’est configuré dans cet hôpital. Ajoutez un dépôt de destination au registre des pharmacies avant de transférer du stock."
+    "TRANSFER_NO_DESTINATIONS": "Aucun autre dépôt actif n’est configuré dans cet hôpital. Ajoutez un dépôt de destination au registre des pharmacies avant de transférer du stock.",
+    "LEDGER": {
+      "FILTER_MEDICINE": "Médicament ou lot",
+      "FILTER_MEDICINE_PLACEHOLDER": "Nom du médicament ou numéro de lot",
+      "FILTER_FROM": "Du",
+      "FILTER_TO": "Au",
+      "CLEAR_FILTERS": "Effacer les filtres",
+      "TRANSFER_TO": "vers {{store}}",
+      "TRANSFER_FROM": "depuis {{store}}",
+      "NO_MATCH": "Aucun mouvement ne correspond à ces filtres.",
+      "NO_MATCH_HINT": "Élargissez la période ou effacez les filtres."
+    },
+    "TRIGGER_ALERTS_HINT": "Envoie maintenant une alerte aux pharmaciens et au gestionnaire de stock pour chaque article sous son seuil qui n’a pas encore été signalé.",
+    "STOCK_PER_STORE_HINT": "Le total additionne les magasins de l’établissement ; une délivrance se fait depuis un seul magasin.",
+    "REFILL_REMAINING_ONE": "{{count}} renouvellement restant",
+    "LOTS_OTHER_FORM_ONE": "{{count}} lot de ce médicament sous une autre forme n’est pas proposé : l’ordonnance est rédigée en « {{unit}} ».",
+    "OFFLINE_SYNCED_ONE": "{{count}} dispensation synchronisée",
+    "OFFLINE_SYNCED_WITH_PENDING_ONE": "{{count}} dispensation synchronisée — encore en attente : {{failed}}",
+    "OFFLINE_SYNC_FAILED_ONE": "Échec de la synchronisation — {{count}} dispensation reste en file d’attente",
+    "CATALOG_DUPLICATE": {
+      "TITLE": "Le livret contient déjà un médicament qui ressemble à celui-ci :",
+      "APPROVER_TITLE": "Le livret contient déjà un médicament qui ressemble à cette proposition :",
+      "APPROVER_HINT": "Vérifiez qu’il ne s’agit pas du même médicament avant de valider. Un doublon exact est refusé.",
+      "STATE": {
+        "IN_CATALOGUE": "au livret",
+        "WITHDRAWN": "retiré du livret",
+        "PENDING": "proposition en attente de validation"
+      },
+      "PLATFORM": "liste nationale",
+      "EXACT": "identique",
+      "EXACT_HINT": "Même nom, même forme et même dosage : cette proposition serait refusée. Modifiez l’entrée existante.",
+      "SIMILAR_HINT": "S’il s’agit du même médicament, modifiez l’entrée existante. S’il s’agit d’un autre dosage ou d’une autre forme, vous pouvez envoyer la proposition.",
+      "SIMILAR_TOAST": "Un médicament ressemblant est déjà au livret : vérifiez la liste avant d’envoyer.",
+      "SEND_ANYWAY": "Envoyer quand même en validation",
+      "EXACT_IN_CATALOGUE": "Ce médicament est déjà au livret : {{label}}.",
+      "EXACT_PENDING": "Le même médicament est déjà proposé et en attente de validation : {{label}}."
+    },
+    "CATALOG_WITHDRAW": {
+      "ACTION": "Retirer du livret",
+      "TITLE": "Retirer ce médicament du livret ?",
+      "REASON": "Motif du retrait",
+      "CONFIRM": "Retirer du livret",
+      "EXPLAIN": "Il ne pourra plus être prescrit ni délivré. Le retrait prend effet tout de suite ; votre nom, la date et le motif sont conservés dans l’historique de l’article. Le remettre au livret demandera une validation."
+    }
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -15399,12 +15475,14 @@
     "LOADED_CLAIMS": "demandes chargées",
     "CLAIMS_NONE_HINT": "Aucune demande pour le moment. Actualisez la liste pour vérifier les nouvelles demandes.",
     "CLAIMS_EMPTY_HINT": "Aucune demande pour ce filtre. Changez de statut ou actualisez la liste.",
-    "LOADED_MOVEMENTS": "mouvements chargés pour ce filtre",
-    "STOCK_HINT": "Consultez le lot, le motif et l’auteur de chaque mouvement.",
+    "LOADED_MOVEMENTS": "mouvements affichés",
+    "STOCK_HINT": "Chaque mouvement indique son médicament, son lot, son motif et son auteur.",
     "LOADED_QUEUE": "ordonnances sur cette page de la file",
     "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
     "ROUTING_DECISION": "Choisir une orientation",
-    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
+    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres",
+    "LOADED_MOVEMENTS_ONE": "mouvement affiché",
+    "LOADED_QUEUE_ONE": "ordonnance sur cette page de la file"
   },
   "LAB_EVOLUTION": {
     "TITLE": "Évolution du résultat",
@@ -15923,10 +16001,10 @@
       "DATE": "Jour",
       "LOAD_FAILED": "Le rapprochement n’a pas pu être chargé.",
       "RECONCILED": "Journée rapprochée : aucun écart.",
-      "DIFFERENCES": "{{count}} écart(s) à examiner.",
+      "DIFFERENCES": "{{count}} écarts à examiner.",
       "MONEY": "Argent du jour",
       "SALES": "Ventes au comptoir",
-      "COUNT": "{{count}} opération(s)",
+      "COUNT": "{{count}} opérations",
       "DISPENSE_PAYMENTS": "Paiements des délivrances",
       "REFUNDS": "Remboursements remis",
       "NET": "Net encaissé",
@@ -15964,7 +16042,9 @@
       "DEFERRED_STAY": "dont comptes de séjour : {{amount}}",
       "HANDED_OVER_BY": "remis par {{name}}",
       "OVERRIDE_REVIEWED": "Revue par la comptabilité",
-      "OVERRIDE_TO_REVIEW": "À revoir par la comptabilité"
+      "OVERRIDE_TO_REVIEW": "À revoir par la comptabilité",
+      "DIFFERENCES_ONE": "{{count}} écart à examiner.",
+      "COUNT_ONE": "{{count}} opération"
     },
     "ONESTEP": {
       "DEFER_LABEL": "Remettre « à facturer » : motif",
@@ -16859,5 +16939,153 @@
     "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
     "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
     "EXPORT": "Télécharger la copie approuvée (PDF)"
+  },
+  "STOCK_COUNT": {
+    "TITLE": "Inventaire physique",
+    "SUBTITLE": "Comptez le stock d’un magasin, faites confirmer chaque écart par une seconde personne et rapprochez les soldes.",
+    "STORE": "Magasin",
+    "TAB": {
+      "COUNTS": "Comptages enregistrés",
+      "SHEET": "Compter le stock",
+      "BALANCE": "Rapprochement des soldes"
+    },
+    "SEARCH": "Rechercher un médicament ou un lot",
+    "FILTER": "Afficher",
+    "FILTERS": {
+      "OPEN": "À traiter",
+      "PENDING": "En attente de confirmation",
+      "OUTDATED": "À recompter",
+      "APPLIED": "Appliqués au stock",
+      "CLOSED": "Clôturés sans ajustement",
+      "ALL": "Tous les comptages"
+    },
+    "STATUS": {
+      "PENDING": "En attente de confirmation",
+      "OUTDATED": "À recompter : le stock a changé",
+      "APPLIED": "Appliqué au stock",
+      "CLOSED": "Clôturé sans ajustement"
+    },
+    "NEW": "Nouveau comptage",
+    "NO_LOT": "Sans lot",
+    "NO_VARIANCE": "Aucun écart",
+    "COL": {
+      "MEDICINE": "Médicament",
+      "BOOK": "Quantité théorique",
+      "COUNTED": "Quantité comptée",
+      "VARIANCE": "Écart"
+    },
+    "EMPTY": "Aucun comptage enregistré pour ce magasin.",
+    "EMPTY_FILTER": "Aucun comptage ne correspond à ce filtre.",
+    "EMPTY_HINT": "Démarrez un comptage pour saisir les quantités comptées lot par lot.",
+    "RECORDED_BY": "Compté par {{name}}, {{date}}",
+    "BY_ON": "{{name}}, {{date}}",
+    "APPLIED": "Ajustement confirmé par",
+    "CLOSED": "Clôturé par",
+    "SAME_PERSON": "Confirmé par la personne qui a compté : aucun autre collègue habilité dans l’établissement.",
+    "OUTDATED_NOTE": "Le stock de ce lot a changé depuis ce comptage : il ne peut plus être appliqué. Recomptez-le, ou clôturez ce comptage.",
+    "RECOUNT": "Recompter",
+    "SHEET": {
+      "START_TITLE": "Démarrer un comptage",
+      "START_EXPLAIN": "Le comptage enregistre ce que vous voyez sur l’étagère. Rien ne change dans le stock tant qu’une seconde personne n’a pas confirmé l’ajustement.",
+      "REASON": "Objet du comptage",
+      "REASON_PLACEHOLDER": "ex. Inventaire mensuel de novembre",
+      "REASON_REQUIRED": "Indiquez l’objet du comptage (300 caractères au maximum).",
+      "START": "Charger les lots à compter",
+      "EXPLAIN": "Saisissez la quantité comptée des lots que vous avez comptés ; une ligne laissée vide n’est pas enregistrée.",
+      "SHOW_EMPTY": "Afficher aussi les lots à zéro ({{count}})",
+      "REFRESH": "Recharger les quantités théoriques",
+      "EMPTY": "Ce magasin n’a aucun article actif.",
+      "EMPTY_HINT": "Ajoutez un article à l’inventaire ou réceptionnez un lot.",
+      "COUNTED_FOR": "Quantité comptée, {{medicine}} {{lot}}",
+      "LINE_SAVED": "Enregistré",
+      "LINE_FAILED": "Ce comptage n’a pas pu être enregistré.",
+      "NOTHING_TYPED": "Saisissez au moins une quantité comptée.",
+      "INVALID_QUANTITY": "Saisissez une quantité comptée positive ou nulle, avec deux décimales au plus.",
+      "PROGRESS": "À enregistrer : {{count}} · Déjà enregistré : {{saved}}",
+      "SAVE": "Enregistrer le comptage",
+      "FINISH": "Terminer",
+      "SAVED": "{{count}} comptages enregistrés. Une seconde personne confirme les écarts dans « Comptages enregistrés ».",
+      "SAVED_ONE": "{{count}} comptage enregistré. Une seconde personne confirme l’écart dans « Comptages enregistrés ».",
+      "REFUSED": "{{count}} lignes refusées : le motif est indiqué sur chaque ligne.",
+      "REFUSED_ONE": "{{count}} ligne refusée : le motif est indiqué sur la ligne.",
+      "DISCARD_TITLE": "Quitter ce comptage ?",
+      "DISCARD_MESSAGE": "{{count}} quantités saisies ne sont pas enregistrées et seront perdues.",
+      "DISCARD_MESSAGE_ONE": "{{count}} quantité saisie n’est pas enregistrée et sera perdue.",
+      "DISCARD_CONFIRM": "Quitter sans enregistrer"
+    },
+    "CONFIRM": {
+      "TITLE": "Confirmer l’ajustement du stock",
+      "OWN_NOTE": "Vous avez enregistré ce comptage : un collègue habilité doit le confirmer. Vous ne pouvez le confirmer vous-même que si l’établissement n’a personne d’autre.",
+      "CHECK": "Je confirme l’ajustement de {{variance}} : le stock de ce lot devient {{quantity}}.",
+      "CHECK_NO_VARIANCE": "Je confirme ce comptage : aucun écart, le stock reste à {{quantity}}.",
+      "CHECK_REQUIRED": "Cochez la confirmation de l’ajustement.",
+      "SUBMIT": "Confirmer",
+      "ACTION": "Confirmer l’ajustement",
+      "ACTION_NO_VARIANCE": "Confirmer (aucun écart)",
+      "DONE": "Ajustement enregistré : le stock est à jour.",
+      "DONE_NO_VARIANCE": "Comptage confirmé : aucun écart, aucun mouvement.",
+      "FAILED": "La confirmation n’a pas pu être enregistrée."
+    },
+    "CLOSE": {
+      "ACTION": "Clôturer",
+      "TITLE": "Clôturer ce comptage ?",
+      "REASON": "Motif de la clôture",
+      "CONFIRM": "Clôturer le comptage",
+      "EXPLAIN": "Le comptage ne sera pas appliqué : rien ne change dans le stock. Il reste dans l’historique avec votre nom et le motif.",
+      "DONE": "Comptage clôturé.",
+      "FAILED": "Le comptage n’a pas pu être clôturé."
+    },
+    "BALANCE": {
+      "EXPLAIN": "Un article est listé ici quand son stock total ne correspond plus à la somme de ses lots. Le rapprochement ramène le total à la somme des lots, après vérification de chaque lot.",
+      "EMPTY": "Le stock total et les lots correspondent pour tous les articles.",
+      "EMPTY_HINT": "Rien à rapprocher dans ce magasin.",
+      "ON_HAND": "Stock total",
+      "LOT_TOTAL": "Somme des lots",
+      "OPEN": "Rapprocher",
+      "READ_ONLY": "Lecture seule",
+      "FORM_TITLE": "Rapprocher le stock de {{name}}",
+      "FORM_EXPLAIN": "Comptez chaque lot et saisissez sa quantité. Chaque quantité doit être le solde de son lot : si un lot diffère, comptez-le d’abord dans « Compter le stock ».",
+      "LOTS": "Lots de l’article",
+      "LOT_BALANCE": "Solde du lot",
+      "RESULT": "Stock total {{onHand}}, somme des lots {{lots}} : ajustement de {{difference}}.",
+      "REASON": "Motif du rapprochement",
+      "CHECK": "Je confirme avoir compté chaque lot : le stock total devient {{total}}.",
+      "SUBMIT": "Rapprocher le stock",
+      "INCOMPLETE": "Saisissez la quantité de chaque lot, le motif et la confirmation.",
+      "LOT_DIFFERS": "Une quantité saisie diffère du solde de son lot. Comptez d’abord ce lot dans « Compter le stock », puis revenez rapprocher.",
+      "DONE": "Stock rapproché : le total correspond aux lots.",
+      "FAILED": "Le rapprochement n’a pas pu être enregistré."
+    }
+  },
+  "STOCK_CONSUMPTION": {
+    "TITLE": "Rapport de consommation",
+    "SUBTITLE": "Ce qu’un magasin a sorti (délivrances et ventes) et repris (retours) sur une période, par médicament.",
+    "STORE": "Magasin",
+    "FROM": "Du",
+    "TO": "Au",
+    "MEDICINE": "Médicament",
+    "MEDICINE_PLACEHOLDER": "Filtrer par nom",
+    "EXPLAIN": "Un an au plus. Les transferts entre magasins ne sont pas comptés : ce ne sont pas des consommations.",
+    "EXPORT": "Exporter (CSV)",
+    "NOTHING_TO_EXPORT": "Rien à exporter pour cette période.",
+    "LOAD_FAILED": "Le rapport n’a pas pu être chargé.",
+    "EMPTY": "Aucune sortie sur cette période.",
+    "EMPTY_SEARCH": "Aucun médicament ne correspond à ce filtre.",
+    "EMPTY_HINT": "Changez la période, le magasin ou le filtre.",
+    "COUNT": "{{count}} lignes, du {{from}} au {{to}}",
+    "COUNT_ONE": "{{count}} ligne, du {{from}} au {{to}}",
+    "COL": {
+      "MEDICINE": "Médicament",
+      "FORM": "Forme",
+      "UNIT": "Unité",
+      "ISSUED": "Sorties",
+      "RETURNED": "Retours",
+      "NET": "Consommation nette",
+      "MOVEMENTS": "Mouvements"
+    },
+    "UNIT_NOT_RECORDED": "unité non enregistrée",
+    "UNIT_NOT_RECORDED_NOTE": "Unité non enregistrée : mouvements antérieurs à l’enregistrement de l’unité. Les quantités sont telles qu’elles ont été saisies.",
+    "PERIOD": "Période",
+    "FILE_NAME": "consommation-stock"
   }
 }

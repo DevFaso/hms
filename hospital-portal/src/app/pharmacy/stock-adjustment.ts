@@ -1,10 +1,11 @@
 import { FormControlStyleDirective } from '../shared/forms/form-control-style.directive';
-import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
+import { CountUnitPipe, countUnit } from '../shared/pipes/count-unit.pipe';
 import { allRows } from '../shared/all-pages';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { PluralKeyPipe } from '../shared/i18n/plural-key';
 import {
   Component,
   ElementRef,
@@ -43,6 +44,13 @@ import { DashPipe } from '../shared/pipes/dash.pipe';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { PharmacyMoneyService } from '../services/pharmacy-money.service';
+/** The calendar day of an instant in the reader's zone, as `YYYY-MM-DD` (what a date input holds). */
+function localDay(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 /** QA D1051: a fill reference as stored: an optional lot (older rows: "lot X"), then the minute. */
 const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})$/i;
 
@@ -124,10 +132,12 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
 };
 
 import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.component';
+import { CatalogFormPipe } from './catalog-label';
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    CatalogFormPipe,
     WitnessConfirmComponent,
     FormControlStyleDirective,
     CountUnitPipe,
@@ -140,6 +150,7 @@ import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.compo
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    PluralKeyPipe,
   ],
   templateUrl: './stock-adjustment.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -163,6 +174,10 @@ export class StockAdjustmentComponent implements OnInit {
 
   // Filter
   filterType = '';
+  /** QA D4184: the ledger narrowed to a medicine (or a lot number) and to a period. */
+  filterMedicine = '';
+  filterFrom = '';
+  filterTo = '';
   /** Every type, for the history filter (dispenses are listed, not entered here). */
   readonly transactionTypes: TxType[] = [
     'RECEIPT',
@@ -372,6 +387,60 @@ export class StockAdjustmentComponent implements OnInit {
 
   onFilterChange(): void {
     this.loadTransactions();
+  }
+
+  /**
+   * QA D4184 (r81): the medicine a movement is about, from the server; a movement read from an
+   * older server falls back to the page's own list of the store's items. Lot numbers repeat
+   * across medicines, so a row without it could not be attributed.
+   */
+  productOf(tx: StockTransactionResponse): string {
+    if (tx.medicationName) return tx.medicationName;
+    const item = this.inventoryItems().find((i) => i.id === tx.inventoryItemId);
+    return item ? this.getItemName(item) : this.translate.instant('PHARMACY.UNKNOWN_ITEM');
+  }
+
+  /** The unit the movement was recorded in; none for the movements older than the unit snapshot. */
+  unitOf(tx: StockTransactionResponse): string | null {
+    return tx.unit && tx.unit !== 'UNIT' ? tx.unit : null;
+  }
+
+  /** « −20 comprimés »: the signed quantity with its unit, the unit in the plural when counted so. */
+  quantityLabel(tx: StockTransactionResponse): string {
+    const signed = this.signedQuantity(tx);
+    return `${signed[0]}${countUnit(signed.slice(1), this.unitOf(tx))}`;
+  }
+
+  /** The movements the filters keep: the medicine or lot typed, and the days chosen (the reader's days). */
+  visibleTransactions(): StockTransactionResponse[] {
+    const query = this.filterMedicine.trim().toLocaleLowerCase();
+    return this.transactions().filter((tx) => {
+      if (
+        query &&
+        !this.productOf(tx).toLocaleLowerCase().includes(query) &&
+        !(tx.stockLotNumber ?? tx.lotNumber ?? '').toLocaleLowerCase().includes(query)
+      ) {
+        return false;
+      }
+      if (!this.filterFrom && !this.filterTo) return true;
+      const day = localDay(serverInstant(tx.createdAt));
+      return (
+        (!this.filterFrom || day >= this.filterFrom) && (!this.filterTo || day <= this.filterTo)
+      );
+    });
+  }
+
+  hasLedgerFilter(): boolean {
+    return !!(this.filterType || this.filterMedicine.trim() || this.filterFrom || this.filterTo);
+  }
+
+  clearLedgerFilters(): void {
+    const reload = !!this.filterType;
+    this.filterType = '';
+    this.filterMedicine = '';
+    this.filterFrom = '';
+    this.filterTo = '';
+    if (reload) this.loadTransactions();
   }
 
   openForm(): void {

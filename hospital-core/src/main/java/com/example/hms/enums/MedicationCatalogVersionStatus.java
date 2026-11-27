@@ -14,5 +14,7 @@ public enum MedicationCatalogVersionStatus {
     /** Once in force, replaced by a later approved version. */
     SUPERSEDED,
     /** Taken back by its author before a decision. It never took effect. */
-    WITHDRAWN
+    WITHDRAWN,
+    /** QA D4190 (V426): an act that took effect when it was recorded (the withdrawal of an entry); never decided. */
+    RECORDED
 }

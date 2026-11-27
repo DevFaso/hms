@@ -661,22 +661,74 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ txLoading() ? '—' : transactions().length }}</strong>{{ ' '
-      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | translate }}</span>
+      <strong data-testid="ledger-count">{{
+        txLoading() ? '—' : visibleTransactions().length
+      }}</strong>{{ ' '
+      }}<span>{{
+        'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | pluralKey: visibleTransactions().length | translate
+      }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.STOCK_HINT' | translate }}</p>
   </div>
   <!-- Filter -->
-  <div class="filter-bar">
-    <label for="txFilterType"
-      >{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}</label
-    >
-    <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
-      <option value="">{{ 'COMMON.ALL' | translate }}</option>
-      @for (t of transactionTypes; track t) {
-        <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
-      }
-    </select>
+  <!-- QA D4184 (r81): by medicine (or lot), by type and by period; there was only the type. -->
+  <div class="filter-bar" data-testid="ledger-filters">
+    <div class="filter-field">
+      <label for="txFilterMedicine">{{ 'PHARMACY.LEDGER.FILTER_MEDICINE' | translate }}</label>
+      <input
+        appFormControl
+        id="txFilterMedicine"
+        type="search"
+        name="txFilterMedicine"
+        [placeholder]="'PHARMACY.LEDGER.FILTER_MEDICINE_PLACEHOLDER' | translate"
+        [(ngModel)]="filterMedicine"
+      />
+    </div>
+    <div class="filter-field">
+      <label for="txFilterType">{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}</label>
+      <select
+        appFormControl
+        id="txFilterType"
+        [(ngModel)]="filterType"
+        (ngModelChange)="onFilterChange()"
+      >
+        <option value="">{{ 'COMMON.ALL' | translate }}</option>
+        @for (t of transactionTypes; track t) {
+          <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-field">
+      <label for="txFilterFrom">{{ 'PHARMACY.LEDGER.FILTER_FROM' | translate }}</label>
+      <input
+        appFormControl
+        id="txFilterFrom"
+        type="date"
+        name="txFilterFrom"
+        [(ngModel)]="filterFrom"
+      />
+    </div>
+    <div class="filter-field">
+      <label for="txFilterTo">{{ 'PHARMACY.LEDGER.FILTER_TO' | translate }}</label>
+      <input
+        appFormControl
+        id="txFilterTo"
+        type="date"
+        name="txFilterTo"
+        [attr.min]="filterFrom || null"
+        [(ngModel)]="filterTo"
+      />
+    </div>
+    @if (hasLedgerFilter()) {
+      <button
+        type="button"
+        class="btn-secondary"
+        data-testid="ledger-clear-filters"
+        (click)="clearLedgerFilters()"
+      >
+        {{ 'PHARMACY.LEDGER.CLEAR_FILTERS' | translate }}
+      </button>
+    }
   </div>
 
   <!-- Transactions List -->
@@ -685,7 +737,7 @@
       <div class="spinner"></div>
       <p>{{ 'COMMON.LOADING' | translate }}</p>
     </div>
-  } @else if (transactions().length > 0) {
+  } @else if (visibleTransactions().length > 0) {
     <div
       class="table-wrapper"
       tabindex="0"
@@ -696,6 +748,7 @@
         <thead>
           <tr>
             <th>{{ 'PHARMACY.TRANSACTION_TYPE' | translate }}</th>
+            <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
             <th>{{ 'PHARMACY.QUANTITY' | translate }}</th>
             <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
             <th>{{ 'PHARMACY.REASON' | translate }}</th>
@@ -704,16 +757,32 @@
           </tr>
         </thead>
         <tbody>
-          @for (tx of transactions(); track tx.id) {
-            <tr>
+          @for (tx of visibleTransactions(); track tx.id) {
+            <tr data-testid="ledger-row">
               <td>
                 <span class="tx-type" [class]="getTypeClass(tx.transactionType)">
                   {{ tx.transactionType | enumLabel: 'stockTransactionType' }}
                 </span>
+                <!-- QA D4184: a transfer says where the stock went, or where it came from. -->
+                @if (tx.counterpartPharmacyName) {
+                  <small class="tx-store" data-testid="ledger-transfer-store">{{
+                    (tx.transactionType === 'RECEIPT'
+                      ? 'PHARMACY.LEDGER.TRANSFER_FROM'
+                      : 'PHARMACY.LEDGER.TRANSFER_TO'
+                    ) | translate: { store: tx.counterpartPharmacyName }
+                  }}</small>
+                }
+              </td>
+              <!-- QA D4184: lot numbers repeat across medicines; the row names what moved. -->
+              <td class="tx-product" data-testid="ledger-product">
+                <span class="med-name">{{ productOf(tx) }}</span>
+                @if (tx.form) {
+                  <small class="tx-form">{{ tx.form | catalogForm }}</small>
+                }
               </td>
               <td>
                 <span class="tx-qty" [class]="getTypeClass(tx.transactionType)">
-                  {{ signedQuantity(tx) }}
+                  {{ quantityLabel(tx) }}
                 </span>
               </td>
               <td>
@@ -723,7 +792,7 @@
                   —
                 }
               </td>
-              <td class="reason-cell" [title]="reasonLabel(tx)">{{ reasonLabel(tx) }}</td>
+              <td class="reason-cell">{{ reasonLabel(tx) }}</td>
               <td>{{ tx.createdAt | serverTime | dateTime }}</td>
               <td>
                 {{ tx.performedByName | dash }}
@@ -737,6 +806,12 @@
           }
         </tbody>
       </table>
+    </div>
+  } @else if (transactions().length > 0) {
+    <div class="empty-state" data-testid="ledger-no-match">
+      <span class="material-symbols-outlined empty-icon">filter_alt_off</span>
+      <h3>{{ 'PHARMACY.LEDGER.NO_MATCH' | translate }}</h3>
+      <p>{{ 'PHARMACY.LEDGER.NO_MATCH_HINT' | translate }}</p>
     </div>
   } @else {
     <div class="empty-state">

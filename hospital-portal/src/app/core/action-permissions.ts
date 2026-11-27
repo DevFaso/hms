@@ -350,6 +350,41 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
     roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
+  // QA D4183 (r81): the physical stock count; the accountant reads the page and is offered none of these.
+  stockCountRecord: {
+    endpoint: 'pharmacy.StockCountController#record',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockCountConfirm: {
+    endpoint: 'pharmacy.StockCountController#confirm',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockCountClose: {
+    endpoint: 'pharmacy.StockCountController#close',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockBalanceReconcile: {
+    endpoint: 'pharmacy.StockCountController#reconcileBalance',
+    roles: ['ROLE_PHARMACIST', 'ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
   /** Labour transfer (provisional rule, 2026-11-12): the service also requires the role AT the hospital. */
   laborTransfer: {
     endpoint: 'LaborController#transferEpisode',

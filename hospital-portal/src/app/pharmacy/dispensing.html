@@ -31,7 +31,9 @@
   <div class="workspace-strip">
     <p>
       <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
-      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+      }}<span>{{
+        'PHARMACY_WORKSPACE.LOADED_QUEUE' | pluralKey: workQueue().length | translate
+      }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -229,6 +231,7 @@
               {{ ' '
               }}<small class="field-hint" data-testid="other-form-lots">{{
                 'PHARMACY.LOTS_OTHER_FORM'
+                  | pluralKey: otherFormLots()
                   | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
               }}</small>
             }
@@ -1057,7 +1060,9 @@
                       }}</span>
                     }
                     <span class="refill-note">{{
-                      'PHARMACY.REFILL_REMAINING' | translate: { count: refill.remaining ?? 0 }
+                      'PHARMACY.REFILL_REMAINING'
+                        | pluralKey: refill.remaining ?? 0
+                        | translate: { count: refill.remaining ?? 0 }
                     }}</span>
                     @if (refill.lastProviderNotes) {
                       <span class="refill-note refill-note--quote">{{

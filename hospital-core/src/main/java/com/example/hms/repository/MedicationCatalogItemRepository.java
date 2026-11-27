@@ -27,6 +27,19 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     Page<MedicationCatalogItem> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     /**
+     * QA D4180: {@code [id, nameFr, form, strength, strengthUnit, active, hospitalId]} of every entry a hospital's
+     * catalogue shows (its own and the platform's), withdrawn ones included: what a new entry is compared with.
+     */
+    @Query("SELECT m.id, m.nameFr, m.form, m.strength, m.strengthUnit, m.active, h.id FROM MedicationCatalogItem m "
+         + "LEFT JOIN m.hospital h WHERE h IS NULL OR h.id = :hospitalId")
+    java.util.List<Object[]> identityOfEntriesVisibleAt(@Param("hospitalId") UUID hospitalId);
+
+    /** QA D4180: the same columns for the platform's own entries (the national list). */
+    @Query("SELECT m.id, m.nameFr, m.form, m.strength, m.strengthUnit, m.active, h.id FROM MedicationCatalogItem m "
+         + "LEFT JOIN m.hospital h WHERE h IS NULL")
+    java.util.List<Object[]> identityOfPlatformEntries();
+
+    /**
      * Active catalog page with platform-catalog semantics (V95).
      *
      * <p>Returns:

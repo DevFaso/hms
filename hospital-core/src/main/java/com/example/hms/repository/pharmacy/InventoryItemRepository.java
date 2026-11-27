@@ -48,6 +48,13 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
     Optional<InventoryItem> findByPharmacyIdAndMedicationCatalogItemId(UUID pharmacyId, UUID medicationCatalogItemId);
 
+    /** QA D4183: the active, lot-tracked items of a pharmacy whose total differs from the sum of their lots. */
+    @Query("SELECT i FROM InventoryItem i LEFT JOIN FETCH i.medicationCatalogItem m WHERE i.pharmacy.id = :pharmacyId "
+         + "AND i.active = true AND EXISTS (SELECT l.id FROM StockLot l WHERE l.inventoryItem = i) "
+         + "AND i.quantityOnHand <> (SELECT COALESCE(SUM(l.remainingQuantity), 0) FROM StockLot l WHERE l.inventoryItem = i) "
+         + "ORDER BY m.nameFr, i.id")
+    List<InventoryItem> findWithLotBalanceDrift(@Param("pharmacyId") UUID pharmacyId);
+
     @Query("SELECT i FROM InventoryItem i WHERE i.pharmacy.id = :pharmacyId "
          + "AND i.active = true AND i.quantityOnHand <= i.reorderThreshold")
     List<InventoryItem> findBelowReorderThreshold(@Param("pharmacyId") UUID pharmacyId);

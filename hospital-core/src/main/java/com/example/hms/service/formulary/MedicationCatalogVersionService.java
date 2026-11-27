@@ -75,11 +75,14 @@ public class MedicationCatalogVersionService {
     private final RoleValidator roleValidator;
     private final MedicationCatalogApprovalPolicy policy;
     private final AuditEventLogService auditEventLogService;
+    /** QA D4180: the same medicine is not entered twice. */
+    private final MedicationCatalogDuplicates duplicates;
 
     /* ───────────────────────────── proposing ───────────────────────────── */
 
     /** A new entry: it is in the catalogue only once approved. {@code hospital} null is a platform entry. */
     public MedicationCatalogVersion proposeNewEntry(Hospital hospital, FormularySnapshot proposed, String reason) {
+        duplicates.requireNewAtProposal(hospital == null ? null : hospital.getId(), proposed, null);
         MedicationCatalogVersion version = MedicationCatalogVersion.builder()
             .hospitalId(hospital == null ? null : hospital.getId())
             .kind(MedicationCatalogVersionKind.FORMULARY)
@@ -100,6 +103,11 @@ public class MedicationCatalogVersionService {
         FormularySnapshot live = FormularySnapshot.of(item);
         boolean unchanged = proposed.clinicalDifferences(live).isEmpty();
         requireSomethingToApprove(unchanged, item.getFormularyApprovedVersion());
+        if (changesIdentity(proposed, live)) {
+            // QA D4180: renaming an entry (or changing its form or strength) into one that is already there.
+            duplicates.requireNewAtProposal(item.getHospital() == null ? null : item.getHospital().getId(),
+                proposed, item.getId());
+        }
         MedicationCatalogVersion version = versionOf(item, MedicationCatalogVersionKind.FORMULARY, unchanged);
         version.setItemLabel(proposed.label());
         version.setPayload(write(proposed));
@@ -122,6 +130,51 @@ public class MedicationCatalogVersionService {
         version.setPayload(write(proposed));
         version.setPreviousPayload(write(live));
         return savePending(version, reason);
+    }
+
+    /** Whether a version changes what an entry is compared by: its name, its form, its strength. */
+    private static boolean changesIdentity(FormularySnapshot proposed, FormularySnapshot before) {
+        return before == null || !MedicationCatalogDuplicates.exact(proposed, before);
+    }
+
+    /**
+     * QA D4190 (V426): the entry is taken out of the catalogue, now, and its history says so: who, when, why. The
+     * caller deactivates the row; this writes the line. A reason is required, as for any change to what is
+     * prescribed and dispensed.
+     */
+    public MedicationCatalogVersion recordWithdrawal(MedicationCatalogItem item, String reason, String reasonField) {
+        String why = FormularySnapshot.text(reason);
+        if (why == null) {
+            throw new FieldBusinessException(reasonField, "medication.catalog.withdrawal.reasonRequired");
+        }
+        if (why.length() > 1000) {
+            throw new FieldBusinessException(reasonField, "medication.catalog.withdrawal.reasonTooLong");
+        }
+        UUID author = roleValidator.getCurrentUserId();
+        if (author == null) {
+            throw new BusinessException("medication.catalog.version.authorUnknown");
+        }
+        FormularySnapshot live = FormularySnapshot.of(item);
+        LocalDateTime at = now();
+        MedicationCatalogVersion line = MedicationCatalogVersion.builder()
+            .hospitalId(item.getHospital() == null ? null : item.getHospital().getId())
+            .catalogItemId(item.getId())
+            .kind(MedicationCatalogVersionKind.FORMULARY)
+            .changeType(MedicationCatalogChangeType.WITHDRAWAL)
+            .versionNumber(versionRepository.highestVersionNumber(item.getId(), MedicationCatalogVersionKind.FORMULARY) + 1)
+            .status(MedicationCatalogVersionStatus.RECORDED)
+            .itemLabel(live.label())
+            .payload(write(live.withActive(false)))
+            .previousPayload(write(live))
+            .changeReason(why)
+            .proposedBy(author)
+            .proposedAt(at)
+            .decidedBy(author)
+            .decidedAt(at)
+            .build();
+        MedicationCatalogVersion saved = versionRepository.save(line);
+        audit(saved, "WITHDRAWN_FROM_CATALOGUE", author);
+        return saved;
     }
 
     /** Values already in force AND already approved: there is nothing for a second person to decide. */
@@ -172,6 +225,16 @@ public class MedicationCatalogVersionService {
         MedicationCatalogVersion version = pendingInScope(versionId);
         UUID approver = roleValidator.getCurrentUserId();
         MedicationCatalogDecisionBasis basis = policy.requireMayApprove(version, approver);
+
+        if (version.getKind() == MedicationCatalogVersionKind.FORMULARY) {
+            // QA D4180: its twin may have been approved while this one waited.
+            FormularySnapshot proposed = readFormulary(version.getPayload());
+            FormularySnapshot before = version.getPreviousPayload() == null ? null
+                : readFormulary(version.getPreviousPayload());
+            if (changesIdentity(proposed, before)) {
+                duplicates.requireNewAtApproval(version, proposed);
+            }
+        }
 
         LocalDateTime at = now();
         MedicationCatalogItem item = version.getChangeType() == MedicationCatalogChangeType.CREATE
@@ -303,7 +366,8 @@ public class MedicationCatalogVersionService {
         Page<MedicationCatalogVersion> page = versionRepository.findInScope(scope, status, kind, pageable);
         Map<UUID, String> names = namesOf(page.getContent());
         UUID caller = roleValidator.getCurrentUserId();
-        return page.map(version -> toDto(version, names, caller));
+        MedicationCatalogDuplicates.Known known = knownFor(page.getContent(), scope);
+        return page.map(version -> toDto(version, names, caller, known));
     }
 
     /** Every version of one entry, the latest first: who proposed what, when, why, and what became of it. */
@@ -320,7 +384,8 @@ public class MedicationCatalogVersionService {
         List<MedicationCatalogVersion> versions = versionRepository.findHistoryInScope(catalogItemId, owner);
         Map<UUID, String> names = namesOf(versions);
         UUID caller = roleValidator.getCurrentUserId();
-        return versions.stream().map(version -> toDto(version, names, caller)).toList();
+        MedicationCatalogDuplicates.Known known = knownFor(versions, owner);
+        return versions.stream().map(version -> toDto(version, names, caller, known)).toList();
     }
 
     /** The versions waiting on these entries, by entry then kind: one statement for a page of the catalogue. */
@@ -339,11 +404,19 @@ public class MedicationCatalogVersionService {
     }
 
     public MedicationCatalogVersionResponseDTO toDto(MedicationCatalogVersion version) {
-        return toDto(version, namesOf(List.of(version)), roleValidator.getCurrentUserId());
+        return toDto(version, namesOf(List.of(version)), roleValidator.getCurrentUserId(),
+            knownFor(List.of(version), version.getHospitalId()));
+    }
+
+    /** QA D4180: the catalogue to compare with, read only when one of the versions still waits for its decision. */
+    private MedicationCatalogDuplicates.Known knownFor(List<MedicationCatalogVersion> shown, UUID hospitalId) {
+        boolean anyWaiting = shown.stream().anyMatch(version -> version.getKind() == MedicationCatalogVersionKind.FORMULARY
+            && version.getStatus() == MedicationCatalogVersionStatus.PENDING_APPROVAL);
+        return anyWaiting ? duplicates.knownAt(hospitalId) : null;
     }
 
     private MedicationCatalogVersionResponseDTO toDto(MedicationCatalogVersion version, Map<UUID, String> names,
-                                                      UUID caller) {
+                                                      UUID caller, MedicationCatalogDuplicates.Known known) {
         boolean pending = version.getStatus() == MedicationCatalogVersionStatus.PENDING_APPROVAL;
         MedicationCatalogVersionResponseDTO dto = MedicationCatalogVersionResponseDTO.builder()
             .id(version.getId())
@@ -353,7 +426,10 @@ public class MedicationCatalogVersionService {
             .changeType(version.getChangeType())
             .versionNumber(version.getVersionNumber())
             .status(version.getStatus())
-            .itemLabel(version.getItemLabel())
+            // A formulary version is named from what it carries (QA D4189: a label stored with its strength
+            // twice is read right); dose limits keep the name they were proposed under.
+            .itemLabel(version.getKind() == MedicationCatalogVersionKind.FORMULARY
+                ? readFormulary(version.getPayload()).label() : version.getItemLabel())
             .changeReason(version.getChangeReason())
             .proposedById(version.getProposedBy())
             .proposedByName(names.get(version.getProposedBy()))
@@ -375,6 +451,9 @@ public class MedicationCatalogVersionService {
             dto.setFormulary(proposed);
             dto.setPreviousFormulary(previous);
             dto.setChangedFields(previous == null ? List.of() : proposed.clinicalDifferences(previous));
+            if (pending && known != null) {
+                dto.setSimilarEntries(known.similarTo(proposed, version.getCatalogItemId(), version.getId()));
+            }
         } else {
             DoseLimitSnapshot proposed = readDoseLimits(version.getPayload());
             DoseLimitSnapshot previous = version.getPreviousPayload() == null ? null
@@ -408,6 +487,17 @@ public class MedicationCatalogVersionService {
         return names;
     }
 
+    /**
+     * QA D4180: what already looks like the entry someone is about to propose, at the caller's hospital. The form
+     * asks before it sends, so the proposer sees the entry that is there instead of creating its twin.
+     */
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.medication.MedicationCatalogSimilarEntryDTO> similarEntries(
+            FormularySnapshot proposed, UUID ownItemId) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return duplicates.knownAt(scope).similarTo(proposed, ownItemId, null);
+    }
+
     /* ───────────────────────────── plumbing ───────────────────────────── */
 
     private static LocalDateTime now() {
@@ -422,7 +512,7 @@ public class MedicationCatalogVersionService {
         }
     }
 
-    private static FormularySnapshot readFormulary(String json) {
+    static FormularySnapshot readFormulary(String json) {
         try {
             return JSON.readValue(json, FormularySnapshot.class);
         } catch (JacksonException e) {
