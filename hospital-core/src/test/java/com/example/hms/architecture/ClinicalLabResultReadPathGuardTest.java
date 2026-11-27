@@ -91,6 +91,8 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#deleteLabResult", "laboratory write"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#requireNoLiveResult", "write guard"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#requireSupersedable", "write guard"),
+        Map.entry("com/example/hms/service/LabResultServiceImpl.java#addSupersededValue",
+            "QA D4143: the released value a correction replaced, on the read of that correction (same order, released rows only); the clinical view hides superseded rows by design"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#isSupersededByLiveResult", "write guard"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#clearSupersededBackLink", "laboratory write"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#acknowledgeLabResult", "acknowledgement write"),

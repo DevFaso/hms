@@ -99,7 +99,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             double measured = request.getMeasuredValue().doubleValue();
             double expected = expectedValue.doubleValue();
             passed = expected != 0 && Math.abs((measured - expected) / expected) <= 0.10
-                && !com.example.hms.service.lab.LabQcAcceptanceRule.rejectedByRule(sdFlag);
+                && !com.example.hms.service.lab.LabQcAcceptanceRule.outOfLimitsByRule(sdFlag);
         }
 
         UUID operatorId = roleValidator.getCurrentUserId();

@@ -27,13 +27,13 @@ public final class LabQcAcceptanceRule {
     }
 
     /** The run is out by rule: nobody accepts it. */
-    public static boolean rejectedByRule(String sdFlag) {
+    public static boolean outOfLimitsByRule(String sdFlag) {
         return LabQcStatistics.OUTSIDE_3SD.equals(sdFlag);
     }
 
     /** Refuses the acceptance of a run the rule rejects, saying how to record it instead. */
     public static void requireAcceptable(Boolean accepted, String sdFlag) {
-        if (Boolean.TRUE.equals(accepted) && rejectedByRule(sdFlag)) {
+        if (Boolean.TRUE.equals(accepted) && outOfLimitsByRule(sdFlag)) {
             throw new FieldBusinessException(FIELD_ACCEPTED, REFUSAL_KEY);
         }
     }

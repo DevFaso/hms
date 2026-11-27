@@ -1184,7 +1184,8 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         labResultRepository.findById(supersededId)
-            .filter(old -> old.getLabOrder() != null && correction.getLabOrder() != null
+            // Only a released value of the same order: what the clinician may have read and acted on.
+            .filter(old -> old.getReleasedAt() != null && old.getLabOrder() != null && correction.getLabOrder() != null
                 && Objects.equals(old.getLabOrder().getId(), correction.getLabOrder().getId()))
             .ifPresent(old -> {
                 response.setSupersededResultValue(old.getResultValue());
