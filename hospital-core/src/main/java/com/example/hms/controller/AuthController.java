@@ -280,7 +280,20 @@ public class AuthController {
         if (remainMs > 0) {
             long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
             log.warn("🔐 [LOGIN] Sign-in refused: account is locked.");
-            auditRefusedSignIn(AuditEventType.ACCOUNT_LOCKED, loginRequest.getUsername(), LOCKED_SIGN_IN_AUDIT);
+            // The name asked for is kept (an unknown name is locked out too);
+            // a known account's id files the row at its hospital as well.
+            UUID lockedAccountId = accountIdOf(loginRequest.getUsername());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.ACCOUNT_LOCKED)
+                    .eventDescription("Login rejected — account locked")
+                    .userName(loginRequest.getUsername())
+                    .userId(lockedAccountId)
+                    .resourceId(lockedAccountId == null ? null : lockedAccountId.toString())
+                    .entityType("USER")
+                    .ipAddress(com.example.hms.security.ClientAddress.current())
+                    .details(com.example.hms.security.ClientDevice.currentDetails())
+                    .status(AuditStatus.FAILURE)
+                    .build());
             return ResponseEntity.status(423)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.locked", remainMin)));
         }
@@ -557,25 +570,22 @@ public class AuthController {
     /** The sign-in refusal's code for a temporary password past its lifetime. */
     public static final String TEMPORARY_PASSWORD_EXPIRED_CODE = "temporary_password_expired";
     private static final String NO_ACTIVE_ROLE_AUDIT = "Login refused: no active role";
-    private static final String LOCKED_SIGN_IN_AUDIT = "Login rejected — account locked";
 
-    private void auditLoginFailure(String typedName, String description) {
-        auditRefusedSignIn(AuditEventType.LOGIN_FAILURE, typedName, description);
+    /** The one account a typed sign-in name names, or {@code null} (unknown, ambiguous or blank). */
+    private UUID accountIdOf(String typedName) {
+        if (typedName == null || typedName.isBlank()) {
+            return null;
+        }
+        List<UUID> ids = userRepository.findIdsByUsernameIgnoreCase(typedName);
+        return ids != null && ids.size() == 1 ? ids.get(0) : null;
     }
 
-    /**
-     * A refused sign-in or a refusal for a locked account, with the address it
-     * came from and the device. The audit service files it at a staff
-     * account's hospital, so its administrator reads it too.
-     */
-    private void auditRefusedSignIn(AuditEventType type, String typedName, String description) {
-        UUID accountId = null;
-        if (typedName != null && !typedName.isBlank()) {
-            List<UUID> ids = userRepository.findIdsByUsernameIgnoreCase(typedName);
-            accountId = ids != null && ids.size() == 1 ? ids.get(0) : null;
-        }
+    private void auditLoginFailure(String typedName, String description) {
+        UUID accountId = accountIdOf(typedName);
+        // With the address it came from and the device. The audit service
+        // files a staff account's row at its hospital too.
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(type)
+                .eventType(AuditEventType.LOGIN_FAILURE)
                 .eventDescription(description)
                 .userId(accountId)
                 .resourceId(accountId == null ? null : accountId.toString())
@@ -1433,15 +1443,15 @@ public class AuthController {
 
     /**
      * The key the screen lock of the presented session is kept under: the
-     * sign-in session of a native token, the provider's session of an
-     * identity-provider one. {@code null} when the request names no session.
+     * sign-in session of a native token; for an identity-provider token, its
+     * provider session ({@link com.example.hms.security.SessionLockGate#providerLockKey}).
+     * {@code null} when the request names none.
      */
     private String sessionLockKey(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication
                 instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider) {
-            return com.example.hms.security.SessionLockGate.providerSessionKey(
-                    provider.getToken().getClaimAsString("sid"));
+            return com.example.hms.security.SessionLockGate.providerLockKey(provider.getToken());
         }
         String bearer = request.getHeader("Authorization");
         if (bearer == null || !bearer.startsWith(BEARER_PREFIX)) {
@@ -1458,7 +1468,10 @@ public class AuthController {
      * The portal's idle lock, recorded for the session: from now on the
      * session may only unlock, read who it is, refresh and sign out
      * ({@link com.example.hms.security.SessionLockGate}), until its holder
-     * authenticates again. Locking a locked session changes nothing.
+     * authenticates again. Locking a locked password session changes
+     * nothing; for an identity-provider token the lock takes the time of the
+     * latest call, is also kept for the person, and only tokens signed in
+     * after it are let through.
      */
     @WriteAudited(skip = true, reason = "locks the caller's own screen; changes no record")
     @PostMapping("/session/lock")
@@ -1469,46 +1482,59 @@ public class AuthController {
     @ApiResponse(responseCode = "204", description = "Locked")
     public ResponseEntity<Void> lockSession(HttpServletRequest request) {
         String lockKey = sessionLockKey(request);
-        if (lockKey != null && !tokenBlacklistService.isSessionLocked(lockKey)) {
-            long now = System.currentTimeMillis();
-            tokenBlacklistService.lockSession(lockKey, now, now + jwtTokenProvider.getRefreshTokenExpirationMs());
+        long now = System.currentTimeMillis();
+        long until = now + jwtTokenProvider.getRefreshTokenExpirationMs();
+        if (SecurityContextHolder.getContext().getAuthentication()
+                instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider) {
+            String personKey = com.example.hms.security.SessionLockGate.providerPersonKey(provider.getToken());
+            if (lockKey != null) {
+                tokenBlacklistService.lockSession(lockKey, now, until);
+            }
+            if (personKey != null && !personKey.equals(lockKey)) {
+                tokenBlacklistService.lockSession(personKey, now, until);
+            }
+        } else if (lockKey != null && !tokenBlacklistService.isSessionLocked(lockKey)) {
+            tokenBlacklistService.lockSession(lockKey, now, until);
         }
         return ResponseEntity.noContent().build();
     }
 
     /**
-     * Unlocks a session signed in through the identity provider: accepted
-     * only with a token whose sign-in at the provider is later than the lock.
-     * A password session unlocks with {@code POST /auth/verify-password}.
+     * Confirms that a tab signed in through the identity provider may leave
+     * its lock screen: only for a provider token, only when the lock is on
+     * record (for the token's provider session; else, as a new sign-in may
+     * open a new provider session, the person's latest lock), and only when
+     * the token's sign-in at the provider is later than that lock. Everything
+     * else is refused with the lock's code, so the tab
+     * stays locked: a password session unlocks with
+     * {@code POST /auth/verify-password}; a token that names no person, a
+     * lock that never reached the server and a token with no sign-in time
+     * prove nothing. The lock record is kept: tokens signed in before it stay
+     * locked.
      */
     @WriteAudited(skip = true, reason = "unlocks the caller's own screen; changes no record")
     @PostMapping("/session/unlock")
     @Operation(summary = "Unlock the session's screen after a new sign-in at the identity provider")
-    @ApiResponse(responseCode = "204", description = "Unlocked (or was not locked)")
-    @ApiResponse(responseCode = "403", description = "The holder has not authenticated again since the lock")
+    @ApiResponse(responseCode = "204", description = "The sign-in at the provider is later than the lock")
+    @ApiResponse(responseCode = "403", description = "Nothing proves a sign-in later than the lock")
     public ResponseEntity<Object> unlockSession(HttpServletRequest request) {
-        String lockKey = sessionLockKey(request);
-        if (!tokenBlacklistService.isSessionLocked(lockKey)) {
-            return ResponseEntity.noContent().build();
-        }
-        // An unreadable lock time counts as "now": only a later sign-in lifts it.
-        long lockedAt = java.util.Optional.ofNullable(tokenBlacklistService.sessionLockedAt(lockKey))
-                .filter(at -> at > 0).orElseGet(System::currentTimeMillis);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        java.time.Instant signedInAt = authentication
-                instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider
-                ? provider.getToken().getClaimAsInstant("auth_time")
-                : null;
-        // Whole seconds at the provider: a sign-in in the second of the lock counts.
-        if (signedInAt == null || signedInAt.toEpochMilli() + 999 < lockedAt) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
-                    "status", 403,
-                    "error", "Forbidden",
-                    "code", com.example.hms.security.SessionLockGate.CODE,
-                    "message", MessageUtil.resolve(com.example.hms.security.SessionLockGate.MESSAGE_KEY)));
+        if (authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken provider) {
+            String lockKey = com.example.hms.security.SessionLockGate.providerLockKey(provider.getToken());
+            if (lockKey == null || !tokenBlacklistService.isSessionLocked(lockKey)) {
+                lockKey = com.example.hms.security.SessionLockGate.providerPersonKey(provider.getToken());
+            }
+            if (lockKey != null && tokenBlacklistService.isSessionLocked(lockKey)
+                    && !com.example.hms.security.SessionLockGate.providerLocked(
+                            tokenBlacklistService.sessionLockedAt(lockKey), provider.getToken())) {
+                return ResponseEntity.noContent().build();
+            }
         }
-        tokenBlacklistService.unlockSession(lockKey);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                "status", 403,
+                "error", "Forbidden",
+                "code", com.example.hms.security.SessionLockGate.CODE,
+                "message", MessageUtil.resolve(com.example.hms.security.SessionLockGate.MESSAGE_KEY)));
     }
 
     /**

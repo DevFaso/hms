@@ -20,39 +20,73 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ClientAddressTest {
 
-    @Test
-    @DisplayName("the first forwarded address wins over the proxy's own")
-    void firstForwardedAddress() {
+    private static MockHttpServletRequest from(String peer, String forwardedFor) {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("fd12:a9af::1");
-        request.addHeader("X-Forwarded-For", " 41.203.10.7 , 10.0.0.3");
+        request.setRemoteAddr(peer);
+        if (forwardedFor != null) {
+            request.addHeader("X-Forwarded-For", forwardedFor);
+        }
+        return request;
+    }
 
-        assertThat(ClientAddress.of(request)).isEqualTo("41.203.10.7");
+    @org.junit.jupiter.api.AfterEach
+    void noExtraHops() {
+        ClientAddress.trustAlso(List.of());
     }
 
     @Test
-    @DisplayName("without a forwarded address: X-Real-IP, then the connection")
-    void fallsBack() {
-        MockHttpServletRequest real = new MockHttpServletRequest();
-        real.setRemoteAddr("10.0.0.3");
-        real.addHeader("X-Real-IP", "2001:db8::7");
-        MockHttpServletRequest direct = new MockHttpServletRequest();
-        direct.setRemoteAddr("10.0.0.3");
+    @DisplayName("behind our own hops: the address the outermost of them recorded")
+    void theAddressOurOwnHopRecorded() {
+        assertThat(ClientAddress.of(from("10.0.0.5", "41.203.10.7, 10.0.0.3"))).isEqualTo("41.203.10.7");
+        assertThat(ClientAddress.of(from("fd12:a9af::1", "2001:db8::7, fd12:a9af::9"))).isEqualTo("2001:db8::7");
+        assertThat(ClientAddress.of(from("127.0.0.1", " 41.203.10.7 "))).isEqualTo("41.203.10.7");
+    }
 
-        assertThat(ClientAddress.of(real)).isEqualTo("2001:db8::7");
-        assertThat(ClientAddress.of(direct)).isEqualTo("10.0.0.3");
+    @Test
+    @DisplayName("an entry the caller put in front is never the answer")
+    void whatTheCallerSentIsNotBelieved() {
+        // Each hop appends what it saw: the caller's own entries are to the left of it.
+        assertThat(ClientAddress.of(from("10.0.0.5", "203.0.113.7, 41.203.10.7, 10.0.0.5")))
+            .isEqualTo("41.203.10.7");
+        assertThat(ClientAddress.of(from("10.0.0.5", "203.0.113.7, 198.51.100.9, 41.203.10.7")))
+            .isEqualTo("41.203.10.7");
+    }
+
+    @Test
+    @DisplayName("a connection from outside our network: its own address, whatever the headers say")
+    void aDirectConnectionIsItsOwnAddress() {
+        MockHttpServletRequest direct = from("41.203.10.7", "203.0.113.7");
+        direct.addHeader("X-Real-IP", "198.51.100.9");
+
+        assertThat(ClientAddress.of(direct)).isEqualTo("41.203.10.7");
+    }
+
+    @Test
+    @DisplayName("nothing forwarded, or only our own hops: the connection's address; X-Real-IP is not read")
+    void fallsBackToTheConnection() {
+        MockHttpServletRequest real = from("10.0.0.3", null);
+        real.addHeader("X-Real-IP", "203.0.113.7");
+
+        assertThat(ClientAddress.of(real)).isEqualTo("10.0.0.3");
+        assertThat(ClientAddress.of(from("10.0.0.3", "192.168.1.4, 10.0.0.9"))).isEqualTo("10.0.0.3");
         assertThat(ClientAddress.of(null)).isNull();
     }
 
     @Test
-    @DisplayName("a header that is not an address puts nothing in the row")
+    @DisplayName("a header that is not an address puts nothing in the row, and hides nothing to its left")
     void onlyAnAddressIsKept() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("10.0.0.3");
-        request.addHeader("X-Forwarded-For", "<script>alert(1)</script>, 10.0.0.9");
-        request.addHeader("X-Real-IP", "a-very-long-value-that-would-not-fit-the-column-and-is-no-address-at-all");
+        assertThat(ClientAddress.of(from("10.0.0.3", "<script>alert(1)</script>, 10.0.0.9"))).isEqualTo("10.0.0.3");
+        assertThat(ClientAddress.of(from("10.0.0.3", "203.0.113.7, not-an-address, 10.0.0.9"))).isEqualTo("10.0.0.3");
+    }
 
-        assertThat(ClientAddress.of(request)).isEqualTo("10.0.0.3");
+    @Test
+    @DisplayName("an edge on a public address is one of ours once it is configured")
+    void aConfiguredEdgeIsSkipped() {
+        MockHttpServletRequest request = from("10.0.0.5", "203.0.113.7, 41.203.10.7, 162.220.232.9");
+        assertThat(ClientAddress.of(request)).isEqualTo("162.220.232.9");
+
+        ClientAddress.trustAlso(List.of(" 162.220.232. "));
+        assertThat(ClientAddress.of(request)).isEqualTo("41.203.10.7");
     }
 
     private static final Set<String> MAY_READ_THE_CONNECTION = Set.of(

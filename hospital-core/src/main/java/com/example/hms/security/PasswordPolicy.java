@@ -154,10 +154,8 @@ public final class PasswordPolicy {
         private static Set<String> load() {
             Set<String> words = new HashSet<>(40_000);
             try (InputStream in = PasswordPolicy.class.getClassLoader().getResourceAsStream(LIST)) {
-                if (in == null) {
-                    throw new IllegalStateException("Missing resource " + LIST);
-                }
-                BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    java.util.Objects.requireNonNull(in, LIST), StandardCharsets.UTF_8));
                 for (String line = reader.readLine(); line != null; line = reader.readLine()) {
                     String word = line.trim();
                     if (!word.isEmpty() && word.charAt(0) != '#') {

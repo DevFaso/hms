@@ -202,12 +202,13 @@ class UsernameReminderServiceImplTest {
         }
 
         @Test
-        @DisplayName("D4271: two accounts under one identifier: nothing is sent and nothing is thrown")
-        void anAmbiguousIdentifierIsSilent() {
+        @DisplayName("D4271: two accounts under one identifier: nothing is sent; the failure goes to the caller, which logs it after answering")
+        void anAmbiguousIdentifierSendsNothing() {
             when(userRepository.findActiveByEmailOrPhone("john@example.com"))
                 .thenThrow(new org.springframework.dao.IncorrectResultSizeDataAccessException(1, 2));
 
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+            org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.dao.IncorrectResultSizeDataAccessException.class,
                 () -> service.sendReminder("john@example.com", locale, requestIp));
 
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());

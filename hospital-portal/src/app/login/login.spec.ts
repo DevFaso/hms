@@ -1,5 +1,6 @@
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -321,6 +322,25 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       .expectOne('/auth/username/reminder')
       .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
     expect(component.forgotUsernameAck).toBe('LOGIN.FU_ACK');
+  });
+
+  it("r81 D4271: pressing the reminder's submit with nothing typed marks the field and sends nothing", () => {
+    const fixture = TestBed.createComponent(Login);
+    const page = fixture.componentInstance;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    httpMock.match(() => true).forEach((pending) => pending.flush({}));
+    page.openForgotUsername();
+    fixture.detectChanges();
+    const sent = spyOn(TestBed.inject(HttpClient), 'post').and.callThrough();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="forgot-username-submit"]',
+      sent,
+    });
+
+    expect(marked).toContain('fu-identifier');
+    (fixture.nativeElement as HTMLElement).remove();
   });
 
   it('r81 D4271: an empty identifier posts nothing', () => {

@@ -39,7 +39,6 @@ public class FrontendAuditController {
     public ResponseEntity<Void> recordEvent(
         @Valid @RequestBody FrontendAuditEventRequestDTO request,
         HttpServletRequest httpRequest,
-        @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedIps,
         @RequestHeader(value = "User-Agent", required = false) String userAgent,
         Authentication authentication
     ) {
@@ -48,13 +47,8 @@ public class FrontendAuditController {
         // breadcrumb to someone else; the authenticated principal is the actor.
         request.setActor(authUtils.resolveUserId(authentication).map(UUID::toString).orElse(null));
         request.setIpAddress(null);
-        String ipAddress = resolveIpAddress(forwardedIps, httpRequest);
+        String ipAddress = com.example.hms.security.ClientAddress.of(httpRequest);
         frontendAuditService.recordEvent(request, ipAddress, userAgent);
         return ResponseEntity.accepted().build();
-    }
-
-    private String resolveIpAddress(String forwardedIps, HttpServletRequest request) {
-        String forwarded = com.example.hms.security.ClientAddress.first(forwardedIps);
-        return forwarded != null ? forwarded : com.example.hms.security.ClientAddress.of(request);
     }
 }

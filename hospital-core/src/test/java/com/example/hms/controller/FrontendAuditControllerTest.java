@@ -36,7 +36,7 @@ class FrontendAuditControllerTest {
         FrontendAuditEventRequestDTO body = FrontendAuditEventRequestDTO.builder()
             .type("SILENT_403").actor("someone-else").ipAddress("203.0.113.9").build();
 
-        controller.recordEvent(body, http, null, "ua", auth);
+        controller.recordEvent(body, http, "ua", auth);
 
         ArgumentCaptor<FrontendAuditEventRequestDTO> sent = ArgumentCaptor.forClass(FrontendAuditEventRequestDTO.class);
         verify(service).recordEvent(sent.capture(), eq("10.0.0.7"), eq("ua"));
@@ -45,12 +45,17 @@ class FrontendAuditControllerTest {
     }
 
     @Test
-    void forwardedForIsStillHonoured() {
+    void theAddressIsTheOneOurOwnHopRecorded() {
         Authentication auth = mock(Authentication.class);
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.empty());
         FrontendAuditEventRequestDTO body = FrontendAuditEventRequestDTO.builder().type("X").actor("forged").build();
 
-        controller.recordEvent(body, mock(HttpServletRequest.class), "198.51.100.4, 10.0.0.1", null, auth);
+        // The entry our own hop appended, never one the caller put in front of it.
+        HttpServletRequest http = mock(HttpServletRequest.class);
+        when(http.getRemoteAddr()).thenReturn("10.0.0.1");
+        when(http.getHeader("X-Forwarded-For")).thenReturn("203.0.113.7, 198.51.100.4, 10.0.0.1");
+
+        controller.recordEvent(body, http, null, auth);
 
         verify(service).recordEvent(body, "198.51.100.4", null);
         assertThat(body.getActor()).isNull();

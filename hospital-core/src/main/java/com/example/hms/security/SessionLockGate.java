@@ -12,9 +12,12 @@ import java.util.Set;
  * A session whose screen is locked (the portal's idle lock) uses no API until
  * its holder has authenticated again: the password at
  * {@code POST /auth/verify-password}, or a new sign-in at the identity
- * provider followed by {@code POST /auth/session/unlock}. The lock is kept on
- * the server, per sign-in session ({@link TokenBlacklistService#lockSession}),
- * so it does not depend on what the browser remembers. Both bearer filters
+ * provider (a token signed in there after the lock is not held by it;
+ * {@code POST /auth/session/unlock} tells the portal so). The lock is kept on
+ * the server ({@link TokenBlacklistService#lockSession}): per sign-in session
+ * for a password session, per provider session for an identity-provider one
+ * (with a copy per person, see {@link #providerPersonKey}). It does not
+ * depend on what the browser remembers. Both bearer filters
  * refuse every other request with a 403 whose {@code code} is {@link #CODE};
  * the portal shows its lock screen on that code.
  *
@@ -36,7 +39,10 @@ public final class SessionLockGate {
     public static final String MESSAGE_KEY = "auth.sessionLocked";
 
     /** The lock key of an identity-provider session: never a native session id (a bare UUID). */
-    public static final String PROVIDER_SESSION_PREFIX = "oidc:";
+    public static final String PROVIDER_SESSION_PREFIX = "oidc:sid:";
+
+    /** The lock key of a person signed in through the identity provider. */
+    public static final String PROVIDER_PERSON_PREFIX = "oidc:sub:";
 
     private static final Set<String> ADMITTED = Set.of(
         // Locking and unlocking.
@@ -66,11 +72,49 @@ public final class SessionLockGate {
         return ADMITTED;
     }
 
-    /** The lock key of an identity-provider session, or {@code null} when the token names none. */
-    public static String providerSessionKey(String providerSessionId) {
-        return providerSessionId == null || providerSessionId.isBlank()
-            ? null
-            : PROVIDER_SESSION_PREFIX + providerSessionId;
+    /**
+     * The key that holds an identity-provider token: its provider session
+     * ({@code sid}), so a lock in one browser does not hold the person's
+     * other sessions; the person when the token names no session;
+     * {@code null} when it names neither.
+     */
+    public static String providerLockKey(org.springframework.security.oauth2.jwt.Jwt token) {
+        if (token == null) {
+            return null;
+        }
+        String sid = token.getClaimAsString("sid");
+        return sid == null || sid.isBlank() ? providerPersonKey(token) : PROVIDER_SESSION_PREFIX + sid;
+    }
+
+    /**
+     * The copy of a provider lock kept per person, or {@code null} when the
+     * token names nobody. A new sign-in at the provider may open a new
+     * provider session; the unlock then proves the new sign-in against the
+     * person's latest lock ({@code POST /auth/session/unlock}).
+     */
+    public static String providerPersonKey(org.springframework.security.oauth2.jwt.Jwt token) {
+        String subject = token == null ? null : token.getSubject();
+        return subject == null || subject.isBlank() ? null : PROVIDER_PERSON_PREFIX + subject;
+    }
+
+    /**
+     * Whether an identity-provider token is held by a lock set at
+     * {@code lockedAtMs}: it is, unless it carries a sign-in time at the
+     * provider that is not earlier than the lock (whole seconds there: a
+     * sign-in in the second of the lock counts). No lock time, an unreadable
+     * one or no sign-in time: locked.
+     */
+    public static boolean providerLocked(Long lockedAtMs, org.springframework.security.oauth2.jwt.Jwt token) {
+        if (lockedAtMs == null || lockedAtMs <= 0 || token == null) {
+            return true;
+        }
+        java.time.Instant signedInAt;
+        try {
+            signedInAt = token.getClaimAsInstant("auth_time");
+        } catch (RuntimeException unreadable) {
+            signedInAt = null;
+        }
+        return signedInAt == null || signedInAt.toEpochMilli() + 999 < lockedAtMs;
     }
 
     /** Whether the request is one a locked session may still make. */

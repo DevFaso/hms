@@ -62,28 +62,24 @@ public class UsernameReminderServiceImpl implements UsernameReminderService {
     /**
      * The account an e-mail address or a phone number names. A phone number
      * is also tried in its international form, as the account stores it. Two
-     * accounts under one identifier: nobody, as for an unknown one.
+     * accounts under one identifier is a failure of the lookup: the caller,
+     * which answered long ago, logs it and sends nothing.
      */
     private Optional<User> resolve(String identifier) {
-        try {
-            Optional<User> typed = userRepository.findActiveByEmailOrPhone(identifier);
-            if (typed != null && typed.isPresent()) {
-                return typed;
-            }
-            if (identifier.contains("@")) {
-                return Optional.empty();
-            }
-            String e164 = com.example.hms.utility.PhoneNumbers.toE164(
-                identifier, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
-            if (e164 == null || e164.equals(identifier)) {
-                return Optional.empty();
-            }
-            Optional<User> international = userRepository.findActiveByEmailOrPhone(e164);
-            return international == null ? Optional.empty() : international;
-        } catch (org.springframework.dao.IncorrectResultSizeDataAccessException ambiguous) {
-            log.warn("Username reminder not sent: the identifier matches more than one account");
+        Optional<User> typed = userRepository.findActiveByEmailOrPhone(identifier);
+        if (typed != null && typed.isPresent()) {
+            return typed;
+        }
+        if (identifier.contains("@")) {
             return Optional.empty();
         }
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+            identifier, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+        if (e164 == null || e164.equals(identifier)) {
+            return Optional.empty();
+        }
+        Optional<User> international = userRepository.findActiveByEmailOrPhone(e164);
+        return international == null ? Optional.empty() : international;
     }
 
     /** At most one reminder per account every {@link #WINDOW_MS}. */

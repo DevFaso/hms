@@ -120,8 +120,10 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                 }
 
                 // ── Locked screen (SessionLockGate), as on the password path ──
-                String lockKey = SessionLockGate.providerSessionKey(jwtAuth.getToken().getClaimAsString("sid"));
+                String lockKey = SessionLockGate.providerLockKey(jwtAuth.getToken());
                 if (tokenBlacklistService != null && tokenBlacklistService.isSessionLocked(lockKey)
+                        && SessionLockGate.providerLocked(
+                            tokenBlacklistService.sessionLockedAt(lockKey), jwtAuth.getToken())
                         && !SessionLockGate.admits(request)) {
                     log.debug("[OIDC] Refusing request while the session's screen is locked");
                     HospitalContextHolder.clear();

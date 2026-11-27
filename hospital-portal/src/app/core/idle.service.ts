@@ -10,7 +10,7 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 
-import { tabBinding } from './browser-storage';
+import { ssoTabState, tabBinding } from './browser-storage';
 
 /** Reloads the page. An object so a spec can stand in for it. */
 export const PAGE_RELOAD = { reload: (): void => globalThis.location.reload() };
@@ -104,7 +104,10 @@ export class IdleService implements OnDestroy {
       if (sessionStorage.getItem(IdleService.IDLE_KEY) === 'true') {
         this.reloadOnUnlock = true;
         this.enterLock();
-        this.reportLock();
+        // A tab signed in at the identity provider may be coming back from the
+        // sign-in its lock screen asked for: the lock screen decides (a second
+        // report would move the lock past that sign-in).
+        if (ssoTabState() === null) this.reportLock();
       }
     } catch {
       /* no storage */

@@ -126,11 +126,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             return "user:" + auth.getName();
         }
-        // Only trust X-Forwarded-For when explicitly configured behind a trusted proxy
+        // Only read the forwarded chain when explicitly configured behind a trusted
+        // proxy, and then only the entry our own hop recorded (ClientAddress), never
+        // the caller's own claim at the left of it.
         if (trustProxy) {
-            String forwarded = request.getHeader("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                return "ip:" + forwarded.split(",")[0].trim();
+            String client = ClientAddress.of(request);
+            if (client != null) {
+                return "ip:" + client;
             }
         }
         return "ip:" + request.getRemoteAddr();

@@ -1891,7 +1891,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<ProxyResponseDTO> getMyProxies(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
         return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
-                .stream().map(this::toGrantorProxyDTO).toList();
+                .stream().map(this::toProxyResponseDTO).map(PatientPortalServiceImpl::asTheGrantorReadsIt).toList();
         // Expired-but-ACTIVE rows still list for the grantor (with EXPIRED shown
         // as the effective status in the DTO) so they can see and clean them up.
     }
@@ -1916,7 +1916,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 : userRepository.findByUsername(proxyUsername).filter(this::canUseFamilyAccess).orElse(null);
         if (proxyUser == null) {
             grantThrottle.refused(grantorKey);
-            throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.notGrantable");
+            throw new ResourceNotFoundException("portal.proxy.notGrantable");
         }
 
         // Prevent granting proxy to yourself
@@ -1945,7 +1945,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .notes(dto.getNotes())
                 .build();
 
-        return toGrantorProxyDTO(patientProxyRepository.save(proxy));
+        return asTheGrantorReadsIt(toProxyResponseDTO(patientProxyRepository.save(proxy)));
     }
 
     /** Refused family-access grants, per grantor (this instance's memory). */
@@ -1969,8 +1969,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * A grant as its grantor reads it: the identifier they typed and what
      * they chose. The holder's name and account id are not part of it.
      */
-    private ProxyResponseDTO toGrantorProxyDTO(PatientProxy p) {
-        ProxyResponseDTO dto = toProxyResponseDTO(p);
+    private static ProxyResponseDTO asTheGrantorReadsIt(ProxyResponseDTO dto) {
         dto.setProxyUserId(null);
         dto.setProxyDisplayName(dto.getProxyUsername());
         return dto;

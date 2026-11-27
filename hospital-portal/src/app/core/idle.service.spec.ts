@@ -189,3 +189,31 @@ describe('IdleService — the lock is reported to the server and hides the page'
     expect(idle.contentHidden()).toBeFalse();
   }));
 });
+
+describe('IdleService — a tab signed in at the identity provider (r81 F1)', () => {
+  afterEach(() => {
+    sessionStorage.removeItem('hms_idle_locked');
+    sessionStorage.removeItem('hms_lock_ts');
+    sessionStorage.removeItem('hms.session.sso');
+  });
+
+  it('a lock restored after a reload is shown but not reported again by the start-up: the lock screen decides', fakeAsync(() => {
+    sessionStorage.setItem('hms_idle_locked', 'true');
+    sessionStorage.setItem('hms.session.sso', 'bound');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    const idle = TestBed.inject(IdleService);
+    const http = TestBed.inject(HttpTestingController);
+
+    idle.start(60_000);
+
+    expect(idle.locked()).toBeTrue();
+    expect(idle.contentHidden()).toBeTrue();
+    http.expectNone('/auth/session/lock');
+    // The lock screen, when it is not coming back from a sign-in, reports it.
+    idle.ensureServerLock();
+    http.expectOne('/auth/session/lock').flush(null);
+    idle.stop();
+  }));
+});

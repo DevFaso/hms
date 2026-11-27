@@ -51,15 +51,23 @@ export class LockScreenComponent implements OnInit {
   readonly sso = ssoTabState() !== null;
 
   ngOnInit(): void {
-    // The lock is the server's to hold: tell it again if the first call was lost.
-    this.idle.ensureServerLock();
-    // Back from the provider: the server unlocks only a sign-in later than the lock.
-    if (this.sso) {
-      this.http.post('/auth/session/unlock', {}).subscribe({
-        next: () => this.idle.unlock(),
-        error: () => undefined,
-      });
+    const provider = this.sso ? this.injector.get(OidcAuthService) : null;
+    if (!provider?.reauthenticated()) {
+      // The lock is the server's to hold: tell it again if the first call was lost.
+      this.idle.ensureServerLock();
+      return;
     }
+    // Back from the sign-in this lock screen asked for, and only then: the
+    // server answers whether that sign-in is later than the lock. Any other
+    // answer leaves the screen locked.
+    provider.reauthenticated.set(false);
+    this.http.post('/auth/session/unlock', {}, { observe: 'response' }).subscribe({
+      next: (answer) => {
+        if (answer.status === 204) this.idle.unlock();
+        else this.idle.ensureServerLock();
+      },
+      error: () => this.idle.ensureServerLock(),
+    });
   }
 
   /** Sends the holder to the identity provider to sign in again. */

@@ -361,15 +361,14 @@ class PatientPortalServiceImplProxyTest {
         }
 
         @Test
-        @DisplayName("D4266: an identifier nobody holds is refused on its field, with the neutral sentence")
+        @DisplayName("D4266: an identifier nobody holds is refused with the neutral sentence")
         void unknownIdentifierIsRefusedNeutrally() {
             grantorSignedInFrench();
             when(userRepository.findByUsername("inconnu.xyz")).thenReturn(Optional.empty());
             ProxyGrantRequestDTO dto = grantTo(" inconnu.xyz ");
 
             assertThatThrownBy(() -> service.grantProxy(auth, dto))
-                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                        refused -> assertThat(refused.getField()).isEqualTo("proxyUsername"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
                     .hasMessage(NEUTRAL);
             verify(patientProxyRepository, never()).save(any());
         }
@@ -396,7 +395,7 @@ class PatientPortalServiceImplProxyTest {
             for (String username : List.of("dr.kone", "parti.x")) {
                 ProxyGrantRequestDTO dto = grantTo(username);
                 assertThatThrownBy(() -> service.grantProxy(auth, dto))
-                        .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                        .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
                         .hasMessage(NEUTRAL)
                         .hasMessageNotContaining("Mariam")
                         .hasMessageNotContaining("Koné");
