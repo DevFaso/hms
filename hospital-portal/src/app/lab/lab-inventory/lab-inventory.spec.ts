@@ -120,6 +120,22 @@ describe('LabInventoryComponent', () => {
     expect(row.querySelectorAll('td')[4].textContent).toContain('10');
   });
 
+  it('pluralizes counted units while leaving measured units unchanged', () => {
+    fixture.detectChanges();
+    flushItems({
+      ...PAGED,
+      content: [
+        mockItem({ id: 'vial', name: 'Reagent', quantity: 4, unit: 'flacon' }),
+        mockItem({ id: 'weight', name: 'Powder', quantity: 4, unit: 'mg' }),
+      ],
+    });
+    fixture.detectChanges();
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toContain('4 flacons');
+    expect(rows[1].textContent).toContain('4 mg');
+    expect(rows[1].textContent).not.toContain('4 mgs');
+  });
+
   it('searches across inventory pages and retains the search on navigation', () => {
     fixture.detectChanges();
     flushItems();

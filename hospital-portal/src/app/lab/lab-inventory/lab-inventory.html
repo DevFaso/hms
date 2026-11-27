@@ -183,8 +183,8 @@
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
-              <td>{{ item.quantity | labValue: item.unit }}</td>
-              <td>{{ item.reorderThreshold | labValue: item.unit }}</td>
+              <td>{{ item.quantity | countUnit: item.unit }}</td>
+              <td>{{ item.reorderThreshold | countUnit: item.unit }}</td>
               <td>
                 {{
                   item.expirationDate

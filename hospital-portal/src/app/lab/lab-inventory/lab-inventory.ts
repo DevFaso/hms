@@ -1,6 +1,6 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { LabValuePipe } from '../shared/lab-value.pipe';
+import { CountUnitPipe } from '../../shared/pipes/count-unit.pipe';
 import {
   Component,
   computed,
@@ -46,7 +46,7 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
     ModalDialogDirective,
     DatePipe,
     ServerTimePipe,
-    LabValuePipe,
+    CountUnitPipe,
     RouterModule,
     FormsModule,
     TranslateModule,
