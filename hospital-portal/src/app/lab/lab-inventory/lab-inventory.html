@@ -189,7 +189,8 @@
                     'PHARMACY.OUT_OF_STOCK' | translate
                   }}</span>
                 } @else if (item.lowStock) {
-                  <span class="status-badge low-stock">{{
+                  {{ ' '
+                  }}<span class="status-badge low-stock">{{
                     'LAB_INVENTORY.LOW_STOCK' | translate
                   }}</span>
                 } @else {
