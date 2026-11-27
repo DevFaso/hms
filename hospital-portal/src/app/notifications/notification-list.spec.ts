@@ -9,7 +9,7 @@ import { ToastService } from '../core/toast.service';
 it('shows a notification message once when its title is missing or repeats it', () => {
   const rows = [
     { id: '1', title: 'Same message', message: 'Same message' },
-    { id: '2', title: '', message: 'Message without title' },
+    { id: '2', title: '   ', message: 'Message without title' },
     { id: '3', title: 'Distinct title', message: 'Distinct details' },
   ].map((row) => ({
     ...row,
