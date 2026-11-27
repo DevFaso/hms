@@ -1594,9 +1594,12 @@
       <!-- QA D1304 (D1272 NOT_FIXED in round 28): the label is visible and
            starred, like the witness below it; an sr-only label showed the
            reader no marker. -->
-      <label class="mar-reason-label" for="mar-reason-input"
-        >{{ 'NURSE.MAR_REASON_LABEL' | translate }} *</label
-      >
+      <label class="mar-reason-label" for="mar-reason-input">
+        {{ 'NURSE.MAR_REASON_LABEL' | translate }} *
+        @if (reasonPrompt()?.action === 'GIVEN') {
+          <small>{{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}</small>
+        }
+      </label>
       <textarea
         id="mar-reason-input"
         class="reason-input"
