@@ -118,7 +118,7 @@
     </div>
   }
 
-  <form class="filter-bar" (ngSubmit)="search()">
+  <div class="filter-bar" role="search">
     <label for="lab-inventory-search">{{ 'COMMON.SEARCH' | translate }}</label>
     <input
       appFormControl
@@ -126,11 +126,12 @@
       name="search"
       type="search"
       [(ngModel)]="searchText"
+      (keydown.enter)="search()"
     />
-    <button type="submit" class="btn-secondary" [disabled]="loading()">
+    <button type="button" class="btn-secondary" [disabled]="loading()" (click)="search()">
       {{ 'COMMON.SEARCH' | translate }}
     </button>
-  </form>
+  </div>
 
   <!-- Loading -->
   @if (loading()) {

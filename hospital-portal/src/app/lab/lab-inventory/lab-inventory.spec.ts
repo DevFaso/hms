@@ -152,6 +152,26 @@ describe('LabInventoryComponent', () => {
     req.flush({ ...PAGED, number: 1, totalPages: 2 });
   });
 
+  it('searches with Enter and clears the filter with an empty search', () => {
+    fixture.detectChanges();
+    flushItems();
+    const host = fixture.nativeElement as HTMLElement;
+    const input = host.querySelector<HTMLInputElement>('#lab-inventory-search')!;
+    input.value = 'reagent';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    let req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.params.get('search')).toBe('reagent');
+    req.flush(PAGED);
+    fixture.detectChanges();
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    host.querySelector<HTMLButtonElement>('[role="search"] button')!.click();
+    req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.params.has('search')).toBeFalse();
+    req.flush(PAGED);
+  });
+
   it('should show loading state initially', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeTrue();
