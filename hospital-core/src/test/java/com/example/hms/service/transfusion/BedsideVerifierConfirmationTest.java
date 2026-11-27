@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -55,7 +56,7 @@ class BedsideVerifierConfirmationTest {
         verifier.setId(UUID.randomUUID());
         verifier.setPasswordHash("{bcrypt}hash");
         // The login counter runs the comparison it is handed, as the real one does for an unlocked account.
-        when(loginAttemptService.checkPassword(eq(verifier.getId()), any())).thenAnswer(call ->
+        when(loginAttemptService.checkColleaguePassword(eq(verifier.getId()), any())).thenAnswer(call ->
             ((BooleanSupplier) call.getArgument(1)).getAsBoolean()
                 ? LoginAttemptService.PasswordCheck.ACCEPTED : LoginAttemptService.PasswordCheck.REJECTED);
     }
@@ -82,7 +83,7 @@ class BedsideVerifierConfirmationTest {
     }
 
     @Test
-    void aWrongPasswordIsRefusedOnTheSecretField_countedInTheirSignInBucket_andAudited() {
+    void aWrongPasswordIsRefusedOnTheSecretField_countedInTheColleagueBucket_andAudited() {
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
 
         assertThatThrownBy(() -> confirmation.confirm(verifier, performer, hospitalId, "a guess"))
@@ -90,7 +91,7 @@ class BedsideVerifierConfirmationTest {
             .hasMessage("transfusion.verifier.invalid")
             .satisfies(refused -> assertThat(((FieldBusinessException) refused).getField()).isEqualTo("verifierSecret"));
 
-        verify(loginAttemptService).checkPassword(eq(verifier.getId()), any());
+        verify(loginAttemptService).checkColleaguePassword(eq(verifier.getId()), any());
         AuditEventRequestDTO event = audited();
         assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
         assertThat(event.getEventType()).isEqualTo(AuditEventType.MFA_FAILURE);
@@ -99,7 +100,7 @@ class BedsideVerifierConfirmationTest {
 
     @Test
     void aLockedAccountIsRefusedBeforeAnyComparison() {
-        when(loginAttemptService.checkPassword(eq(verifier.getId()), any()))
+        when(loginAttemptService.checkColleaguePassword(eq(verifier.getId()), any()))
             .thenReturn(LoginAttemptService.PasswordCheck.LOCKED);
 
         assertThatThrownBy(() -> confirmation.confirm(verifier, performer, hospitalId, "Their-Password-1"))
@@ -114,7 +115,7 @@ class BedsideVerifierConfirmationTest {
             .isInstanceOf(FieldBusinessException.class).hasMessage("transfusion.verifier.required");
         assertThatThrownBy(() -> confirmation.confirm(verifier, performer, hospitalId, null))
             .isInstanceOf(FieldBusinessException.class).hasMessage("transfusion.verifier.required");
-        verify(loginAttemptService, never()).checkPassword(any(), any());
+        verify(loginAttemptService, never()).checkColleaguePassword(any(), any());
     }
 
     @Test
@@ -125,7 +126,7 @@ class BedsideVerifierConfirmationTest {
         assertThat(confirmation.confirm(verifier, performer, hospitalId, " 123456 ")).isEqualTo("TOTP");
 
         verify(mfaService).requireStepUp(eq(verifier.getId()), eq("123456"), anyString(), eq(true));
-        verify(loginAttemptService, never()).checkPassword(any(), any());
+        verify(loginAttemptService, never()).checkColleaguePassword(any(), any());
     }
 
     @Test
@@ -173,6 +174,27 @@ class BedsideVerifierConfirmationTest {
         assignment.setRole(role);
         Staff staff = new Staff();
         staff.setAssignment(assignment);
+        com.example.hms.model.User account = new com.example.hms.model.User();
+        account.setId(java.util.UUID.randomUUID());
+        staff.setUser(account);
         return staff;
+    }
+
+    /** Review of QA D4141: a retired colleague is no second check, whatever their role says. */
+    @Test
+    void anInactiveAccountRecordOrAssignmentIsNotOfTheBedsideTeam() {
+        Staff disabledAccount = staffWith("ROLE_NURSE");
+        disabledAccount.getUser().setActive(false);
+        Staff deletedAccount = staffWith("ROLE_NURSE");
+        deletedAccount.getUser().setDeleted(true);
+        Staff retiredRecord = staffWith("ROLE_NURSE");
+        retiredRecord.setActive(false);
+        Staff endedAssignment = staffWith("ROLE_NURSE");
+        endedAssignment.getAssignment().setActive(false);
+        Staff noAccount = staffWith("ROLE_NURSE");
+        noAccount.setUser(null);
+
+        assertThat(List.of(disabledAccount, deletedAccount, retiredRecord, endedAssignment, noAccount))
+            .noneMatch(BedsideVerifierConfirmation::holdsBedsideRole);
     }
 }

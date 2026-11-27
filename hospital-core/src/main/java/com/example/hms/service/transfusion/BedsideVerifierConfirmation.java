@@ -68,6 +68,11 @@ public class BedsideVerifierConfirmation {
                 || staff.getAssignment().getRole().getCode() == null) {
             return false;
         }
+        // An active staff record, account and assignment: a retired colleague is no second check.
+        if (!staff.isActive() || Boolean.FALSE.equals(staff.getAssignment().getActive())
+                || staff.getUser() == null || !staff.getUser().isActive() || staff.getUser().isDeleted()) {
+            return false;
+        }
         return ControlledAdministrationWitness.WITNESS_ROLE_CODES
             .contains(staff.getAssignment().getRole().getCode().toUpperCase(Locale.ROOT));
     }
@@ -135,8 +140,9 @@ public class BedsideVerifierConfirmation {
     }
 
     private void requirePassword(User verifier, UUID performerUserId, UUID hospitalId, String password) {
-        // Counted in the CHECKER's sign-in bucket before it is compared, as every password check is (D2001).
-        LoginAttemptService.PasswordCheck check = loginAttemptService.checkPassword(verifier.getId(),
+        // Counted before it is compared, in a bucket of its own: wrong passwords typed at the bedside cap the
+        // confirmation, never the colleague's own sign-in (review of QA D4141).
+        LoginAttemptService.PasswordCheck check = loginAttemptService.checkColleaguePassword(verifier.getId(),
             () -> passwordEncoder.matches(password, verifier.getPasswordHash()));
         if (check == LoginAttemptService.PasswordCheck.LOCKED) {
             throw refused(verifier, performerUserId, hospitalId, METHOD_PASSWORD, "PASSWORD_LOCKED",

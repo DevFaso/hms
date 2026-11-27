@@ -182,7 +182,8 @@ public final class ClinicalRuleRegistry {
             "service.formulary.MedicationCatalogApprovalPolicy"),
         // QA D4140 (r81, V465): a nurse's or midwife's imaging request waits for a physician of the hospital.
         rule(ClinicalRuleSetKey.IMAGING_ORDER_PHYSICIAN_AUTHORISATION, "2026-11-27.1",
-            "service.imaging.ImagingOrderAuthorisation"));
+            "service.imaging.ImagingOrderAuthorisation",
+            "service.imaging.ImagingAuthorisationRequestFollowUp"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

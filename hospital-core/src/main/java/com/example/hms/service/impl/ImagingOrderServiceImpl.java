@@ -141,6 +141,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(imagingOrder);
         followUp(saved, preAuth);
+        // QA D4140 review: the physicians are told a request waits for them (urgent for a STAT one).
+        if (awaitingFollowUp != null && Boolean.TRUE.equals(saved.getPhysicianAuthorisationRequired())) {
+            awaitingFollowUp.requestPlaced(saved);
+        }
         if (duplicateOverride != null) {
             duplicateOverride.audit(saved, duplicateMatches);
         }
@@ -189,6 +193,20 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         boolean sameName = studyBefore != null && studyNow != null
             && studyBefore.trim().equalsIgnoreCase(studyNow.trim());
         return sameName ? itemBefore : null;
+    }
+
+    /** QA D4140 review: the physicians' task for a request that waits for them; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp awaitingFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAwaitingFollowUp(com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp awaitingFollowUp) {
+        this.awaitingFollowUp = awaitingFollowUp;
+    }
+
+    private void settleAwaiting(ImagingOrder saved) {
+        if (awaitingFollowUp != null) {
+            awaitingFollowUp.requestSettled(saved);
+        }
     }
 
     /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
@@ -286,6 +304,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         UUID visitBefore = order.getEncounterId();
+        ImagingOrderStatus statusBefore = order.getStatus();
         UUID catalogueItemBefore = order.getCatalogueItemId();
         String studyBefore = order.getStudyType();
         imagingOrderMapper.updateEntityFromRequest(order, request);
@@ -300,9 +319,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         List<ImagingOrder> duplicateMatches = reconcileDuplicateOnEdit(order, request, studyKeyBefore, callerUserId);
-        // QA D4140: an edit never sends a request that waits for a physician.
+        // QA D4140: an edit never moves a request that waits for a physician: it keeps the status it had (a
+        // pending draft stays a draft; an older order a nurse placed keeps its place in the workflow, whose
+        // transitions an edit does not make).
         if (authorisation().awaitsPhysician(order)) {
-            order.setStatus(ImagingOrderStatus.DRAFT);
+            order.setStatus(statusBefore);
         }
         // Provisional rule 1: an edit that records the number clears the flag.
         ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
@@ -394,6 +415,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
+        if (saved.getStatus() == ImagingOrderStatus.CANCELLED) {
+            settleAwaiting(saved);
+        }
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -427,6 +451,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, now);
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
+        settleAwaiting(saved);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -607,6 +632,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
+        // QA D4140 review: an authorised request no longer waits in the physicians' in-baskets.
+        settleAwaiting(saved);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 

@@ -2085,7 +2085,7 @@ class TransfusionServiceImplTest {
         service.recordCrossmatch(request.getId(), CrossmatchRequestDTO.builder()
             .bloodUnitId(bag.getId()).compatible(Boolean.FALSE).incompatibilityReason("Anti-K").build());
 
-        assertThat(bag.getStatus()).as("back to the lab").isEqualTo(BloodUnitStatus.RETURNED);
+        assertThat(bag.getStatus()).as("out until the laboratory records its return (QA D4178)").isEqualTo(BloodUnitStatus.ISSUED);
         TransfusionAdministrationRequestDTO hang = TransfusionAdministrationRequestDTO.builder()
             .requestId(request.getId()).bloodUnitId(bag.getId()).verifiedByStaffId(second.getId()).build();
         assertThatThrownBy(() -> service.startAdministration(hang)).isInstanceOf(FieldBusinessException.class);
@@ -2177,7 +2177,7 @@ class TransfusionServiceImplTest {
     }
 
     @Test
-    void aBagOutAndNotHungGoesBackAndTheRequesterIsTold() {
+    void aBagOutAndNotHungStaysOutAndTheRequesterIsTold() {
         TransfusionRequest request = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
         UUID doctor = UUID.randomUUID();
         request.setRequestedBy(requester(doctor));
@@ -2186,7 +2186,8 @@ class TransfusionServiceImplTest {
 
         service.recordCrossmatch(request.getId(), incompatible(bag));
 
-        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        // QA D4178 review: the bag is out; it comes back only through the laboratory's recorded return.
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
         var items = filedItems(1);
         assertThat(items.get(0).getRecipientUserId()).isEqualTo(doctor);
         assertThat(items.get(0).getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY);
@@ -2281,7 +2282,8 @@ class TransfusionServiceImplTest {
 
         service.recordCrossmatch(req.getId(), incompatible(bag));
 
-        assertThat(bag.getStatus()).as("the fact outlives the bag's status").isEqualTo(BloodUnitStatus.RETURNED);
+        // QA D4178 review: the bag is out; it comes back only through the laboratory's recorded return.
+        assertThat(bag.getStatus()).as("the fact outlives the bag's status").isEqualTo(BloodUnitStatus.ISSUED);
         assertTheResultStands(req, bag);
     }
 
@@ -2516,8 +2518,8 @@ class TransfusionServiceImplTest {
         service.recordCrossmatch(untyped.getId(), CrossmatchRequestDTO.builder()
             .bloodUnitId(other.getId()).compatible(Boolean.FALSE).incompatibilityReason("Agglutination").build());
 
-        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
-        assertThat(other.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(other.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }
 
     @Test
@@ -2967,5 +2969,34 @@ class TransfusionServiceImplTest {
         assertThatThrownBy(() -> service.discardUnit(bagId, "Sceau rompu"))
             .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("transfusion.unit.discardIssued");
         assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    @Test
+    void d4178_recordingTheReturnClosesTheTaskToRecoverTheBag() {
+        BloodUnit bag = issuedBagOfACancelledRequest();
+
+        service.recordUnitReturn(bag.getId(), returned(com.example.hms.enums.BloodUnitReturnOutcome.UNFIT_DESTROYED,
+            null, null, "Poche percée"));
+
+        verify(inBasketService).removeOpenItemsForReference(bag.getId(), TransfusionServiceImpl.UNIT_REFERENCE_TYPE);
+    }
+
+    @Test
+    void d4178_withNoLabDirectorTheLabManagersAreAskedToRecoverTheBag() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit issued = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        issued.setRequest(req);
+        when(unitRepository.findByRequest_IdOrderByUnitNumberAsc(req.getId())).thenReturn(List.of(issued));
+        com.example.hms.model.User manager = new com.example.hms.model.User();
+        manager.setId(UUID.randomUUID());
+        when(assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, java.util.Set.of("ROLE_LAB_DIRECTOR")))
+            .thenReturn(List.of());
+        when(assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, java.util.Set.of("ROLE_LAB_MANAGER")))
+            .thenReturn(List.of(manager));
+
+        service.cancelRequest(req.getId(), "Saignement maîtrisé");
+
+        assertThat(filedItems(1).get(0).getRecipientUserId()).isEqualTo(manager.getId());
     }
 }

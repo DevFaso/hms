@@ -651,7 +651,9 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     public static final String RECOVER_TITLE_KEY = "transfusion.unit.toRecover.inBasketTitle";
     public static final String RECOVER_BODY_KEY = "transfusion.unit.toRecover.inBasketBody";
-    static final String UNIT_REFERENCE_TYPE = "BLOOD_UNIT";
+    /** The reference of the « bag to recover » task, closed when the laboratory records the return. */
+    public static final String UNIT_REFERENCE_TYPE = "BLOOD_UNIT_TO_RECOVER";
+    private static final Set<String> LAB_MANAGER_ROLE_CODES = Set.of(SecurityConstants.ROLE_LAB_MANAGER);
 
     /**
      * QA D4178: a request was cancelled with a bag out of the laboratory. Each lab director is asked, after
@@ -660,7 +662,13 @@ public class TransfusionServiceImpl implements TransfusionService {
     private void fileBagsToRecoverAfterCommit(TransfusionRequest request, List<BloodUnit> units) {
         List<UUID> readers = labDirectors(request);
         if (readers.isEmpty()) {
-            log.warn("Transfusion request {} was cancelled with {} bag(s) out of the laboratory and no lab director to tell",
+            // A hospital with no lab director: its lab managers recover the bag.
+            readers = assignmentRepository
+                .findLiveUsersAtHospitalWithRoleCodes(request.getHospital().getId(), LAB_MANAGER_ROLE_CODES)
+                .stream().map(com.example.hms.model.User::getId).distinct().toList();
+        }
+        if (readers.isEmpty()) {
+            log.warn("Transfusion request {} was cancelled with {} bag(s) out of the laboratory and no lab director or manager to tell",
                 request.getId(), units.size());
             return;
         }
@@ -734,7 +742,14 @@ public class TransfusionServiceImpl implements TransfusionService {
         unit.setReturnRecordedByName(actorId == null ? null : userRepository.findById(actorId)
             .map(com.example.hms.mapper.TransfusionMapper::userName).orElse(null));
         unit.setReturnNote(note);
-        return mapper.toDto(unitRepository.save(unit));
+        BloodUnit saved = unitRepository.save(unit);
+        // The « bag to recover » task is done: the laboratory has recorded what became of the bag.
+        try {
+            inBasketService.removeOpenItemsForReference(saved.getId(), UNIT_REFERENCE_TYPE);
+        } catch (RuntimeException ex) {
+            log.warn("Recover task not closed for blood unit {}: {}", saved.getId(), ex.getClass().getSimpleName());
+        }
+        return mapper.toDto(saved);
     }
 
     // ── Crossmatch and issue ────────────────────────────────────────────
@@ -903,11 +918,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             // A running bag stays what it is: it is not back at the lab, and only the
             // clinician stops it. Stopping or finishing it closes it as any other. A bag whose
             // transfusion ended keeps its final status, and so does its request.
-            if (hung == null
-                    && (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED)) {
-                // A bag reserved here, or out and not hung, and now found incompatible goes
-                // back to the lab. Left as it was, nothing could ever release it: issue and
-                // hang refuse it, and it is hidden from the units that can be crossmatched.
+            // QA D4178 (class): a bag that was issued is out of the laboratory. An incompatible result does not
+            // bring it back: it stays ISSUED (hang refuses it), its release follow-up stays open, and it re-enters
+            // stock only through the laboratory's recorded return (recordUnitReturn).
+            if (hung == null && unit.getStatus() == BloodUnitStatus.CROSSMATCHED) {
+                // A bag reserved here, still in the laboratory's fridge, and now found incompatible is
+                // free again. Left as it was, nothing could ever release it: issue and hang refuse it,
+                // and it is hidden from the units that can be crossmatched.
                 unit.setStatus(BloodUnitStatus.RETURNED);
                 unitRepository.save(unit);
                 positiveAuthority.noteBagBack(unit.getId());

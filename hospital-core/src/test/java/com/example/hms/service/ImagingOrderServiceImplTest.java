@@ -3040,4 +3040,70 @@ class ImagingOrderServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.DRAFT);
     }
+
+    /** QA D4140 review: an older order a nurse placed keeps its place in the workflow when she edits it. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class, names = {"SCHEDULED", "IN_PROGRESS"})
+    void d4140_anEditOfAnOlderNursesOrderKeepsItsStatus(ImagingOrderStatus status) {
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = studyOfAnotherProvider(status);
+        order.setOrderingProviderUserId(nurse);
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        signInAs(nurse, NURSE_AUTHORITY);
+
+        imagingOrderService.updateOrder(orderId, requestWithVisit(null), nurse);
+
+        assertThat(order.getStatus()).isEqualTo(status);
+    }
+
+    /** QA D4140 review: the physicians are told a request waits for them. */
+    @Test
+    void d4140_aPendingRequestIsAnnouncedToThePhysicians_andAnAuthorisationSettlesIt() {
+        com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp followUp =
+            org.mockito.Mockito.mock(com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp.class);
+        imagingOrderService.setAwaitingFollowUp(followUp);
+        UUID nurse = UUID.randomUUID();
+        signer(nurse, "Awa", "Infirmière");
+        ImagingOrder order = stubCreate(null);
+        signInAs(nurse, NURSE_AUTHORITY);
+
+        imagingOrderService.createOrder(requestWithVisit(null), nurse);
+
+        verify(followUp).requestPlaced(order);
+    }
+
+    /** QA D4140 review: once a physician authorises the request, its task leaves the in-baskets. */
+    @Test
+    void d4140_anAuthorisationSettlesThePhysiciansTask() {
+        com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp followUp =
+            org.mockito.Mockito.mock(com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp.class);
+        imagingOrderService.setAwaitingFollowUp(followUp);
+        UUID nurse = UUID.randomUUID();
+        ImagingOrder order = nursesPendingRequest(nurse);
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "Un");
+        signInAs(doctor, DOCTOR_AUTHORITY);
+
+        imagingOrderService.captureProviderSignature(orderId,
+            ImagingOrderSignatureRequestDTO.builder().signatureStatement("Autorisée").build(), doctor);
+
+        verify(followUp).requestSettled(order);
+    }
+
+    /** QA D4140 review: a doctor's own order waits for nobody, and nobody is told. */
+    @Test
+    void d4140_aDoctorsOrderAnnouncesNothing() {
+        com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp followUp =
+            org.mockito.Mockito.mock(com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp.class);
+        imagingOrderService.setAwaitingFollowUp(followUp);
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "Un");
+        stubCreate(null).setStatus(ImagingOrderStatus.ORDERED);
+        signInAs(doctor, DOCTOR_AUTHORITY);
+
+        imagingOrderService.createOrder(requestWithVisit(null), doctor);
+
+        verify(followUp, never()).requestPlaced(any());
+    }
 }

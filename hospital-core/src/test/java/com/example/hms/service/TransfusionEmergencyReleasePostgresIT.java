@@ -799,7 +799,7 @@ class TransfusionEmergencyReleasePostgresIT {
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
         verify(inBasketService).createItemInNewTransaction(items.capture());
         assertThat(items.getValue().getRecipientUserId()).isEqualTo(directorUser);
-        assertThat(List.of(status(bagId))).containsExactly("RETURNED");
+        assertThat(List.of(status(bagId))).containsExactly("ISSUED"); // QA D4178 review: out until the laboratory records its return
     }
 
     // ── V380: the O positive authority rule, on the tables and constraints Liquibase built ──

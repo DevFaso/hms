@@ -1197,7 +1197,8 @@ class TransfusionEmergencyReleaseTest {
         verify(inBasketService).createItemInNewTransaction(item.capture());
         assertThat(item.getValue().getRecipientUserId()).isEqualTo(director);
         assertThat(item.getValue().getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY);
-        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        // QA D4178 review: out until the laboratory records its return.
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }
 
     // ── What the form is told ───────────────────────────────────────────
@@ -1487,6 +1488,23 @@ class TransfusionEmergencyReleaseTest {
         assertThat(rows).singleElement().satisfies(row -> assertThat(row.getAuthoriser().getId()).isEqualTo(director));
         assertThat(positive.decisions).singleElement()
             .satisfies(decision -> assertThat(decision.getDecidedByUserId()).isEqualTo(doctor));
+    }
+
+    @Test
+    @DisplayName("QA D4178 review: an incompatible result on an issued O positive bag never hung leaves it out, its release open")
+    void d4178_anIncompatibleResultDoesNotBringAnIssuedBagBack() {
+        adultMale();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.issueUnit(request.getId(), unit.getId());
+        when(positive.decisionRepository.findOpenIdsForUnit(unit.getId())).thenReturn(List.of(positive.last().getId()));
+
+        service.recordCrossmatch(request.getId(), com.example.hms.payload.dto.transfusion.CrossmatchRequestDTO.builder()
+            .bloodUnitId(unit.getId()).compatible(Boolean.FALSE).incompatibilityReason("Anti-K").build());
+
+        assertThat(unit.getStatus()).as("still on the ward").isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(unit.isAssignable()).isFalse();
+        verify(positive.decisionRepository, org.mockito.Mockito.never()).markNotGiven(any(), any(), any());
     }
 
     @Test
