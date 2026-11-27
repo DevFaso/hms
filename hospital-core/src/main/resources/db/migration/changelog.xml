@@ -4105,4 +4105,10 @@
     <changeSet id="V400-stock-transfer-counterpart-link" author="codex">
         <sqlFile path="V400__stock_transfer_counterpart_link.sql" relativeToChangelogFile="true" splitStatements="true"/>
     </changeSet>
+
+    <changeSet id="V394-lab-culture-definition-flag" author="codex" runOnChange="false">
+        <sqlFile path="V394__lab_culture_definition_flag.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

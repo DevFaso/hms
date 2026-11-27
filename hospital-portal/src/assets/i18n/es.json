@@ -4855,7 +4855,9 @@
       "REMOVE_RANGE": "Remove this range",
       "ADD_RANGE": "Add a range",
       "ADD": "Add a component"
-    }
+    },
+    "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
+    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",

@@ -545,10 +545,8 @@ public class LabResultServiceImpl implements LabResultService {
         // released is not work still outstanding — it is a record of what the
         // analyzer said first. Left counted, it would hold the order open for
         // ever, since nobody will ever release a superseded preliminary.
-        Set<UUID> superseded = SupersededLabResults.supersededRowIds(results, results);
-        boolean nothingOutstanding = results.stream()
-            .allMatch(result -> result.isReleased() || superseded.contains(result.getId()));
-        if (!results.isEmpty() && nothingOutstanding) {
+        if (com.example.hms.service.lab.LabOrderCompletion.allReleased(results,
+                labResultRepository.countPendingCulturesForOrder(orderId) == 0, false)) {
             // ...and #721's writer: the status is written by the compare-and-set
             // statement, decided on the value committed under the lock.
             moveStatus(orderId, committedStatus,
@@ -2222,6 +2220,10 @@ public class LabResultServiceImpl implements LabResultService {
         if (reflexDef == null) {
             LOG.warn("Reflex rule {} references unknown test definition {}",
                 rule.getId(), rule.getReflexTestDefinition().getId());
+            return;
+        }
+        if (!reflexDef.isOrderable()) {
+            LOG.warn("Reflex rule {} references an unavailable or unapproved test definition; no new order created", rule.getId());
             return;
         }
         LabOrder child = LabOrder.builder()

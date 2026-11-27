@@ -291,3 +291,58 @@
   font-size: 0.875rem;
   color: var(--text-secondary);
 }
+
+/* D3908: the blood-bank navigation and row actions use the same visible controls as the other worklists. */
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border, #dce5ec);
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+}
+
+.tab-btn,
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--primary, #007f79);
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary, #007f79);
+    outline-offset: 2px;
+  }
+}
+
+.tab-btn {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+
+  &.active {
+    background: var(--primary, #007f79);
+    color: #fff;
+  }
+}
+
+.action-link {
+  min-width: 2.5rem;
+  padding: 0.375rem;
+  background: var(--surface, #fff);
+  border-color: var(--color-border, #dce5ec);
+
+  &:hover {
+    background: var(--color-surface-alt, #eef6f5);
+  }
+
+  &.delete {
+    color: #b3261e;
+  }
+}

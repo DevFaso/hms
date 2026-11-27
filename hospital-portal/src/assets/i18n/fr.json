@@ -4855,7 +4855,9 @@
       "REMOVE_RANGE": "Retirer cet intervalle",
       "ADD_RANGE": "Ajouter un intervalle",
       "ADD": "Ajouter un composant"
-    }
+    },
+    "CULTURE": "Culture (rapport de culture et antibiogramme)",
+    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",
