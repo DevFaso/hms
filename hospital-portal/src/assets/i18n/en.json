@@ -5090,6 +5090,8 @@
     "CONFIRM_DEACTIVATE": "Are you sure you want to deactivate this instrument?"
   },
   "LAB_OUTBOX": {
+    "ORDERING_HOSPITAL": "Ordering hospital",
+    "HOSPITAL_REQUIRED": "This message has no ordering hospital; this action cannot be performed.",
     "TITLE": "Instrument Outbox",
     "SUBTITLE": "Outbound HL7 messages to the lab analyser interface",
     "PENDING_COUNT": "{{count}} pending",
@@ -11040,6 +11042,8 @@
     "DATE": "Date",
     "DAYS_AHEAD": "Days ahead",
     "DAYS_REMAINING": "Days Remaining",
+    "DAY_REMAINING_VALUE": "{{days}} day",
+    "DAYS_REMAINING_VALUE": "{{days}} days",
     "DECIDED_AT": "Decided At",
     "DELETE_MEDICATION_CONFIRM": "Are you sure you want to delete",
     "DELETE_MED_CONFIRM": "Delete this medication from the catalog?",

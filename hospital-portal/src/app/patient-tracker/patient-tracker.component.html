@@ -1,4 +1,10 @@
-<section class="tracker-container" [attr.aria-label]="'TRACKER.TITLE' | translate">
+<!--
+  P5: no accessible name here. A named <section> is a region landmark, and the
+  board below is already the region called « TRACKER.TITLE »: two landmarks
+  with one name cannot be told apart in a screen reader's landmark list. The
+  page's h1 names the page.
+-->
+<section class="tracker-container">
   <header class="tracker-header">
     <div>
       <p class="dashboard-eyebrow">{{ 'TRACKER.WORKSPACE' | translate }}</p>

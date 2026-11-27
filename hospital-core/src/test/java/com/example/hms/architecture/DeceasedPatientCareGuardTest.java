@@ -234,6 +234,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING), Map.entry("PharmacyRefund", BILLING),
         Map.entry("DispenseBillingDeferral", BILLING), Map.entry("HospitalBillingPolicy", BILLING),
         Map.entry("CashSession", BILLING),
+        Map.entry("StockCount", "physical pharmacy stock observations and reconciliations, no patient or care"),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),
         Map.entry("Mortality", "the death record, and its dispute, which is what lifts the block"),

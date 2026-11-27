@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { MorbidityComponent } from './morbidity';
@@ -80,6 +80,24 @@ describe('MorbidityComponent', () => {
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     expect(mockService.topDiagnoses).toHaveBeenCalledWith(expected);
     expect(component.month()).toBe(expected);
+  });
+
+  it('shows the selected month in the active language while keeping the API period', async () => {
+    await build();
+    component.month.set('2026-01');
+    const translate = TestBed.inject(TranslateService);
+    translate.use('fr');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.month-nav__label').textContent.trim()).toBe(
+      'janvier 2026',
+    );
+    translate.use('en');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.month-nav__label').textContent.trim()).toBe(
+      'January 2026',
+    );
+    component.load();
+    expect(mockService.topDiagnoses).toHaveBeenCalledWith('2026-01');
   });
 
   it('renders a hospital-scoped response without a breakdown', async () => {

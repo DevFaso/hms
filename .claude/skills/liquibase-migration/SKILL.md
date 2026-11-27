@@ -47,9 +47,12 @@ Always:
 - `runOnChange="false"` — migrations are immutable once shipped.
 - `relativeToChangelogFile="true"` — keeps the path local to
   `db/migration/`.
-- `splitStatements="true"` — Liquibase splits on `;`. If your file has
-  PL/pgSQL DO blocks, see the V93 / V77 pattern (DO `$$ ... $$;` works
-  inside `splitStatements="true"` because the body isn't split).
+- `splitStatements="true"` — Liquibase splits on `;`. A file with a
+  `DO $$ ... $$` block, or any dollar quoting, MUST be registered with
+  `splitStatements="false"` (copy the V93, V115 or V156 changeSet). With
+  `true` the body is cut at its inner semicolons and the deploy dies with
+  "Unterminated dollar quote" (V156, 2026-09-07). Only `LiquibaseSchemaIT`
+  on Postgres sees it: the H2 suite never reads the changelog.
 
 ## SQL file conventions
 
@@ -68,7 +71,10 @@ See V98 / V99 / V100 for current-style headers.
 
 ## Numbering
 
-- The next-free slot is whatever is highest on `develop` plus one.
+- Use the number your brief allocates. Several PRs are open at once and
+  each lane has a reserved range (the current `docs/plan/go-live-split-*.md`).
+  "Highest on `develop` plus one" collides. With no allocation, ask the
+  coordinator for one.
 - **Parallel feature branches** can produce gaps (V97 was reserved for
   schema-per-tenant while V98 shipped on the ORU branch). When you see
   a skipped number, do NOT renumber — leave the gap and add a comment
@@ -140,12 +146,23 @@ The same shape applies to any other text column where "blank" means
 
 Before opening a PR with a new migration:
 
-1. Run `./gradlew :hospital-core:test` — full suite. Integration tests
-   start the app + apply migrations against H2; missing changelog
-   registration fails here loudly.
+1. Run `MigrationRegistrationTest` and, with Docker, `LiquibaseSchemaIT`
+   (one Gradle run, `--no-daemon`). The full suite runs in CI on the draft
+   PR; wait for it on the pushed head.
 2. Verify `git diff origin/develop -- '*db/migration/*'` shows BOTH
    the SQL file AND the changelog.xml entry.
 3. Verify the JPA entity columns referenced are present in the SQL.
+4. Never edit a `V*.sql` that is on `develop`, not even its comments:
+   Liquibase checksums the file and the next deploy fails. A correction is
+   a new migration.
+5. Every column the entity maps is in the migration (`created_at` and
+   `updated_at` for a `BaseEntity`). H2 builds its tables from the entities,
+   so run `EntitySchemaValidationIT` (Docker) before pushing an entity change.
+6. After ANY merge of `develop`, conflicted or not, run
+   `python scripts/review/pr_mechanics.py <PR#>`: no conflict
+   marker, no text between changeSets (an XML parser accepts a stray
+   `=======`; Liquibase's schema does not, #1351), no duplicate id, every
+   `V*.sql` registered once.
 
 ## Reference files
 
@@ -154,4 +171,4 @@ Before opening a PR with a new migration:
 - `hospital-core/src/main/resources/db/migration/V99__adt_external_visit_reconciliation.sql`
 - `hospital-core/src/main/resources/db/migration/V100__patient_problem_loinc_binding.sql`
 - `hospital-core/src/main/resources/db/migration/V101__fhir_write_patient_idempotency.sql` — partial unique idx for FHIR conditional-create (row 20)
-- `hospital-core/src/main/resources/db/migration/V93__cds_rxnorm_bindings.sql` — DO-block pattern for CHECK constraint
+- `hospital-core/src/main/resources/db/migration/V93__cds_rxnorm_bindings.sql` — DO-block pattern for CHECK constraint (registered with `splitStatements="false"`)

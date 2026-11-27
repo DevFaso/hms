@@ -36,6 +36,7 @@ public class StockTransactionMapper {
             .poReference(entity.getPoReference())
             .expiryDate(entity.getExpiryDate())
             .unitCost(entity.getUnitCost())
+            .receiptDate(entity.getReceiptDate())
             .build();
     }
 

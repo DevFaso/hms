@@ -5090,6 +5090,8 @@
     "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?"
   },
   "LAB_OUTBOX": {
+    "ORDERING_HOSPITAL": "Hôpital prescripteur",
+    "HOSPITAL_REQUIRED": "Ce message n’a pas d’hôpital prescripteur ; cette action ne peut pas être effectuée.",
     "TITLE": "Boîte d’envoi des instruments",
     "SUBTITLE": "Messages HL7 sortants vers l’interface des analyseurs",
     "PENDING_COUNT": "{{count}} en attente",
@@ -11040,6 +11042,8 @@
     "DATE": "Date",
     "DAYS_AHEAD": "Jours à venir",
     "DAYS_REMAINING": "Jours restants",
+    "DAY_REMAINING_VALUE": "{{days}} jour",
+    "DAYS_REMAINING_VALUE": "{{days}} jours",
     "DECIDED_AT": "Décidé le",
     "DELETE_MEDICATION_CONFIRM": "Voulez-vous vraiment supprimer",
     "DELETE_MED_CONFIRM": "Supprimer ce médicament du catalogue ?",
