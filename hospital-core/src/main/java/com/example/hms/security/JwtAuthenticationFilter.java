@@ -314,6 +314,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
 
+        // ── Locked screen (SessionLockGate) ─────────────────────────────
+        // The session's screen is locked: until its holder authenticates
+        // again it may only unlock, read who it is, refresh and sign out.
+        if (!challenge && tokenBlacklistService.isSessionLocked(tokenProvider.getSessionId(jwt))
+                && !SessionLockGate.admits(request)) {
+            log.debug("[JWT] Refusing request on path={} while the session's screen is locked", path);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            SessionLockGate.writeRefusal(response);
+            return false;
+        }
+
         // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
         // After authentication has populated the HospitalContext, refuse
         // requests whose user is attached to an org in a non-active state

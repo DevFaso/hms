@@ -57,6 +57,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/me/complete-setup",
             "/api/auth/me/change-email",
             "/api/auth/password",
+            // Anonymous and able to send an SMS or an e-mail: the username
+            // reminder. The service adds a cooldown per account.
+            "/api/auth/username",
             // The MFA step-up endpoints (a code in X-Mfa-Token): enrolment or
             // replacement, and rewriting the MFA records. MfaService also locks
             // the step-up per user after repeated wrong codes.
@@ -123,14 +126,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             return "user:" + auth.getName();
         }
-        // Only trust X-Forwarded-For when explicitly configured behind a trusted proxy
-        if (trustProxy) {
-            String forwarded = request.getHeader("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                return "ip:" + forwarded.split(",")[0].trim();
-            }
-        }
-        return "ip:" + request.getRemoteAddr();
+        // Only read the forwarded chain when explicitly configured behind a trusted
+        // proxy, and then only the entry our own hop recorded (ClientAddress), never
+        // the caller's own claim at the left of it.
+        String peer = request.getRemoteAddr();
+        String client = trustProxy ? ClientAddress.of(request) : null;
+        return "ip:" + (client != null ? client : peer);
     }
 
     private Bucket createBucket() {

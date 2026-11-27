@@ -1310,6 +1310,14 @@ export class ProfileComponent implements OnInit {
             this.toast.error(locked);
             return;
           }
+          // The server's own reason for refusing the new password (too common,
+          // built on the account's name…), under the field it is about.
+          const refused = err?.status === 400 ? refusalReason(err) : null;
+          if (refused) {
+            refuseFields(this.host.nativeElement, ['pwdNew'], ['pwdNew'], refused);
+            this.toast.error(refused);
+            return;
+          }
           let key = 'PROFILE.PASSWORD_CHANGE_FAILED';
           if (err?.status === 401) {
             key = 'PROFILE.PASSWORD_CURRENT_WRONG';
@@ -1364,6 +1372,18 @@ export class ProfileComponent implements OnInit {
   /** QA D894: the activity's description in the reader's language, as on the audit log. */
   describeActivity(event: AuditEvent): string {
     return this.auditDescriptions.describe(event);
+  }
+
+  /** The device of a sign-in row ("Chrome, Windows"), which the server names in the row's details. */
+  activityDevice(event: AuditEvent): string {
+    const details = event.details ?? '';
+    return details.startsWith('device=') ? details.slice('device='.length).trim() : '';
+  }
+
+  /** The address a row came from, when it is one a person can recognise (never an internal one). */
+  activityAddress(event: AuditEvent): string {
+    const address = (event.ipAddress ?? '').trim();
+    return address && !isInternalAddress(address) ? address : '';
   }
 
   getActivityIcon(eventType: string): string {
@@ -1434,4 +1454,21 @@ export class ProfileComponent implements OnInit {
   private dateLocale(): string {
     return currentLocale();
   }
+}
+
+/** Loopback, private (RFC 1918), link-local and unique-local addresses: the platform's own network. */
+export function isInternalAddress(address: string): boolean {
+  const a = address.toLowerCase();
+  if (a === '::1' || a.startsWith('fc') || a.startsWith('fd') || a.startsWith('fe80:')) return true;
+  const v4 = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(a);
+  if (!v4) return false;
+  const first = Number(v4[1]);
+  const second = Number(v4[2]);
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 169 && second === 254)
+  );
 }

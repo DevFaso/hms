@@ -2,6 +2,7 @@
 // broadcast frame surfaces across every authenticated route.
 .emergency-broadcast {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 10px 18px;
@@ -27,7 +28,9 @@
   }
 
   .banner-body {
-    flex: 1;
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
     display: flex;
     flex-direction: column;
     gap: 2px;

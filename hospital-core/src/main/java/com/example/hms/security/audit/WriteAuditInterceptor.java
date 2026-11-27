@@ -175,7 +175,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             // afterCompletion threw "no session" and lost the row (dev, 2026-09-05).
             .assignmentId(assignment != null ? assignment.getId() : null)
             .roleName(roleNameOf(assignment, auth))
-            .ipAddress(request.getRemoteAddr())
+            .ipAddress(com.example.hms.security.ClientAddress.of(request))
             .eventDescription(request.getMethod().toUpperCase(Locale.ROOT) + " " + pattern)
             .details(detail != null ? detail.details() : null)
             .build());

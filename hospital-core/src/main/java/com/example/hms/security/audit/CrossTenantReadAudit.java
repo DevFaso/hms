@@ -7,7 +7,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.service.AuditEventLogService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -212,19 +211,7 @@ public class CrossTenantReadAudit {
      */
     private static String resolveClientIp() {
         try {
-            ServletRequestAttributes attrs =
-                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attrs == null) {
-                return null;
-            }
-            HttpServletRequest request = attrs.getRequest();
-            String forwarded = request.getHeader("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                // First hop is the original client when the proxy chain is
-                // honest; we trust whatever the upstream tier set here.
-                return forwarded.split(",")[0].trim();
-            }
-            return request.getRemoteAddr();
+            return com.example.hms.security.ClientAddress.current();
         } catch (RuntimeException ignored) {
             return null;
         }

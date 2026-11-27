@@ -36,6 +36,12 @@ public interface AuditEventLogRepository
 
     Page<AuditEventLog> findByUserId(UUID userId, Pageable pageable);
 
+    /** A user's rows without the event types in {@code hidden} (their own activity). */
+    @Query("select a from AuditEventLog a where a.user.id = :userId and a.eventType not in :hidden")
+    Page<AuditEventLog> findOwnActivity(@Param("userId") UUID userId,
+                                        @Param("hidden") java.util.Collection<com.example.hms.enums.AuditEventType> hidden,
+                                        Pageable pageable);
+
     Page<AuditEventLog> findByEventType(AuditEventType eventType, Pageable pageable);
 
     Page<AuditEventLog> findByEntityTypeIgnoreCaseAndResourceId(

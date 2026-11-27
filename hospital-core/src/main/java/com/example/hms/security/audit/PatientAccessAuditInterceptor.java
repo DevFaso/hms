@@ -209,7 +209,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             .userId(actorId)
             .userName(principal.getUsername())
             .roleName(roleNameOf(assignment, auth))
-            .ipAddress(request.getRemoteAddr())
+            .ipAddress(com.example.hms.security.ClientAddress.of(request))
             .eventDescription("Patient record viewed")
             .build());
     }

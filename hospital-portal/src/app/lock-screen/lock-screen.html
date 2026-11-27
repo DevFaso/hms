@@ -28,7 +28,9 @@
     </div>
 
     <p class="lock-message" id="lock-screen-title">{{ 'LOCK.SESSION_LOCKED' | translate }}</p>
-    <p class="lock-sub" id="lock-screen-hint">{{ 'LOCK.ENTER_PASSWORD' | translate }}</p>
+    <p class="lock-sub" id="lock-screen-hint">
+      {{ (sso ? 'LOCK.SSO_HINT' : 'LOCK.ENTER_PASSWORD') | translate }}
+    </p>
 
     @if (error) {
       <div class="error-banner" role="alert">
@@ -37,51 +39,58 @@
       </div>
     }
 
-    <form (ngSubmit)="unlock()" class="unlock-form">
-      <!-- QA D1304 (D1272 class): the required password has a visible, starred label. -->
-      <label class="unlock-label" for="unlock-password"
-        >{{ 'LOCK.PASSWORD_PLACEHOLDER' | translate }} *</label
-      >
-      <div class="input-wrapper">
-        <span class="material-symbols-outlined input-icon">lock</span>
-        <input
-          id="unlock-password"
-          required
-          [type]="showPassword ? 'text' : 'password'"
-          [(ngModel)]="password"
-          name="password"
-          [placeholder]="'LOCK.PASSWORD_PLACEHOLDER' | translate"
-          [disabled]="loading()"
-        />
-        <button
-          type="button"
-          class="toggle-password"
-          (click)="togglePassword()"
-          tabindex="-1"
-          [attr.aria-label]="'LOCK.TOGGLE_PASSWORD' | translate"
-        >
-          <span class="material-symbols-outlined">
-            {{ showPassword ? 'visibility_off' : 'visibility' }}
-          </span>
-        </button>
-      </div>
-
-      <button
-        type="submit"
-        class="btn-unlock"
-        [disabled]="loading()"
-        [appSubmitGuard]="!password"
-        [submitGuardFields]="['unlock-password']"
-      >
-        @if (loading()) {
-          <span class="spinner"></span>
-          <span>{{ 'LOCK.VERIFYING' | translate }}</span>
-        } @else {
-          <span class="material-symbols-outlined">lock_open</span>
-          <span>{{ 'LOCK.UNLOCK' | translate }}</span>
-        }
+    @if (sso) {
+      <button type="button" class="btn-unlock" [disabled]="loading()" (click)="reauthenticate()">
+        <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
+        <span>{{ 'LOCK.SSO_CONTINUE' | translate }}</span>
       </button>
-    </form>
+    } @else {
+      <form (ngSubmit)="unlock()" class="unlock-form">
+        <!-- QA D1304 (D1272 class): the required password has a visible, starred label. -->
+        <label class="unlock-label" for="unlock-password"
+          >{{ 'LOCK.PASSWORD_PLACEHOLDER' | translate }} *</label
+        >
+        <div class="input-wrapper">
+          <span class="material-symbols-outlined input-icon">lock</span>
+          <input
+            id="unlock-password"
+            required
+            [type]="showPassword ? 'text' : 'password'"
+            [(ngModel)]="password"
+            name="password"
+            [placeholder]="'LOCK.PASSWORD_PLACEHOLDER' | translate"
+            [disabled]="loading()"
+          />
+          <button
+            type="button"
+            class="toggle-password"
+            (click)="togglePassword()"
+            tabindex="-1"
+            [attr.aria-label]="'LOCK.TOGGLE_PASSWORD' | translate"
+          >
+            <span class="material-symbols-outlined">
+              {{ showPassword ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="submit"
+          class="btn-unlock"
+          [disabled]="loading()"
+          [appSubmitGuard]="!password"
+          [submitGuardFields]="['unlock-password']"
+        >
+          @if (loading()) {
+            <span class="spinner"></span>
+            <span>{{ 'LOCK.VERIFYING' | translate }}</span>
+          } @else {
+            <span class="material-symbols-outlined">lock_open</span>
+            <span>{{ 'LOCK.UNLOCK' | translate }}</span>
+          }
+        </button>
+      </form>
+    }
 
     <div class="lock-footer">
       <p class="footer-hint">{{ 'LOCK.NOT_USER' | translate: { name: userName } }}</p>
