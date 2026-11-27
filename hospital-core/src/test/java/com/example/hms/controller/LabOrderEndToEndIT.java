@@ -7,6 +7,7 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabResult;
+import com.example.hms.model.LabInventoryItem;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.Notification;
@@ -23,6 +24,7 @@ import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabSpecimenRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.LabInventoryItemRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.NotificationRepository;
@@ -139,6 +141,7 @@ class LabOrderEndToEndIT extends BaseIT {
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
+    @Autowired private LabInventoryItemRepository labInventoryItemRepository;
     @Autowired private LabResultRepository labResultRepository;
     @Autowired private NotificationRepository notificationRepository;
 
@@ -161,6 +164,27 @@ class LabOrderEndToEndIT extends BaseIT {
     private record Actor(User user, UserRoleHospitalAssignment assignment, String role) {
         UUID assignmentId() {
             return assignment.getId();
+        }
+    }
+
+    @Test
+    void inventorySearchScopesActiveItemsAndPaginatesByNameOrCode() {
+        var items = List.of(
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Alpha").itemCode("MATCH-A").build(),
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Beta").itemCode("MATCH-B").build(),
+            LabInventoryItem.builder().hospital(otherHospital).name("Reagent Foreign").itemCode("MATCH-F").build(),
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Inactive").itemCode("MATCH-I").active(false).build());
+        labInventoryItemRepository.saveAllAndFlush(items);
+        try {
+            var first = labInventoryItemRepository.searchActive(hospital.getId(), "REAGENT", org.springframework.data.domain.PageRequest.of(0, 1));
+            assertThat(first.getTotalElements()).isEqualTo(2);
+            assertThat(first.getContent()).hasSize(1);
+            var second = labInventoryItemRepository.searchActive(hospital.getId(), "match-b", org.springframework.data.domain.PageRequest.of(0, 10));
+            assertThat(second.getContent()).extracting(LabInventoryItem::getItemCode).containsExactly("MATCH-B");
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "foreign", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+        } finally {
+            labInventoryItemRepository.deleteAll(items);
+            labInventoryItemRepository.flush();
         }
     }
 
