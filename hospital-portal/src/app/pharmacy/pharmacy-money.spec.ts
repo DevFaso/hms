@@ -35,14 +35,12 @@ function money() {
 describe('Inventory pack size (QA D2674)', () => {
   function render(unitsPerPack: number | null) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'getReorderAlertsByPharmacy',
       'updateInventoryItem',
     ]);
-    svc.listPharmacies.and.returnValue(
-      of({ content: [{ id: 'ph-1', name: 'Pharmacie' }] }) as never,
-    );
+    svc.listStores.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Pharmacie' }] }) as never);
     svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
     svc.listInventoryByPharmacy.and.returnValue(
       of({
@@ -158,12 +156,12 @@ describe('Inventory pack size (QA D2674)', () => {
 describe('Stock return refund prompt (QA D2676)', () => {
   it('an empty refund reason is marked and nothing is sent', () => {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'listTransactionsByPharmacy',
       'listTransactionsByType',
     ]);
-    svc.listPharmacies.and.returnValue(of({ content: [] }) as never);
+    svc.listStores.and.returnValue(of({ content: [] }) as never);
     const m = money();
     TestBed.configureTestingModule({
       imports: [StockAdjustmentComponent, TranslateModule.forRoot()],

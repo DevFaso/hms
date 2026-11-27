@@ -31,7 +31,11 @@
   <div class="workspace-strip">
     <p>
       <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
-      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+      }}<span>{{
+        (queueLoading() ? 2 : workQueue().length)
+          | pluralKey: 'PHARMACY_WORKSPACE.LOADED_QUEUE'
+          | translate
+      }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -108,6 +112,11 @@
           {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ selectedPrescription?.patient | personName }}
         </span>
+        <!-- QA D4185 (r81): two patients with the same name are told apart at the counter. -->
+        <app-patient-id-line
+          [mrn]="selectedPrescription?.patient?.mrn"
+          [dateOfBirth]="selectedPrescription?.patient?.dateOfBirth"
+        />
       </div>
 
       <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
@@ -443,7 +452,10 @@
           <div class="form-row">
             <div class="field full-width" data-testid="dispense-defer">
               <span class="field-label">{{
-                'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate
+                (oneStepCharge() === 0 && oneStepUnpriced()
+                  ? 'PHARMACY_MONEY.DEFERRAL.ONESTEP_UNPRICED_TITLE'
+                  : 'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE'
+                ) | translate
               }}</span>
               @if (oneStepCharge() > 0) {
                 {{ ' '
@@ -456,6 +468,7 @@
                 #oneStepDeferral
                 idPrefix="dispense-deferral"
                 [prescriptionId]="form.prescriptionId"
+                [urgencyOnly]="oneStepCharge() === 0 && oneStepUnpriced()"
               />
             </div>
           </div>
@@ -551,6 +564,10 @@
           {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ action.rx.patient | personName }}
         </span>
+        <app-patient-id-line
+          [mrn]="action.rx.patient?.mrn"
+          [dateOfBirth]="action.rx.patient?.dateOfBirth"
+        />
         @if (isSubstitutedReady(action.rx)) {
           <p class="field-hint" role="note" data-testid="ready-substitution">
             <span class="badge badge-warning">{{ 'PHARMACY.SUBSTITUTION' | translate }}</span>
@@ -627,10 +644,20 @@
             @if (!(pay.status === 'UNPAID' && handOverNeedsDeferral())) {
               <p
                 class="handover-payment-status"
-                [class.handover-unpaid]="pay.status === 'UNPAID'"
+                [class.handover-unpaid]="pay.status === 'UNPAID' || pay.status === 'NOT_PRICED'"
+                [attr.role]="pay.status === 'NOT_PRICED' ? 'alert' : null"
                 data-testid="hand-over-payment-status"
               >
                 {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
+              </p>
+            }
+            <!-- QA D4181 (r81): a free fill shows the documented reason; an unpriced one cannot leave. -->
+            @if (pay.status === 'NO_CHARGE' && pay.freeOfChargeReason) {
+              <p class="handover-payment-status" data-testid="hand-over-free-reason">
+                {{
+                  'PHARMACY_MONEY.HANDOVER.FREE_REASON'
+                    | translate: { reason: pay.freeOfChargeReason }
+                }}
               </p>
             }
           } @else if (handOverPaymentFailed()) {
@@ -647,6 +674,7 @@
               #handOverDeferral
               idPrefix="hand-over-deferral"
               [prescriptionId]="readyAction()!.rx.id"
+              [urgencyOnly]="handOverPayment()?.status === 'NOT_PRICED'"
             />
           }
         </section>
@@ -803,6 +831,10 @@
           {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ action.rx.patient | personName }}
         </span>
+        <app-patient-id-line
+          [mrn]="action.rx.patient?.mrn"
+          [dateOfBirth]="action.rx.patient?.dateOfBirth"
+        />
       </div>
       <p id="claim-take-over-text" data-testid="claim-take-over-text">
         {{
@@ -928,7 +960,14 @@
           <tbody>
             @for (rx of workQueue(); track rx.id) {
               <tr>
-                <td>{{ rx.patient | personName }}</td>
+                <td class="patient-cell">
+                  {{ rx.patient | personName }}
+                  <!-- QA D4185 (r81): the search finds by record number; the row now shows it. -->
+                  <app-patient-id-line
+                    [mrn]="rx.patient?.mrn"
+                    [dateOfBirth]="rx.patient?.dateOfBirth"
+                  />
+                </td>
                 <td>
                   {{ rx.medicationName }}
                   @if (rx.heldForReview) {
@@ -983,7 +1022,7 @@
                     >
                     <span class="refill-note">{{
                       'PHARMACY.READY_SINCE'
-                        | translate: { date: (ready.readyAt | serverTime | date: 'short') }
+                        | translate: { date: (ready.readyAt | serverTime | dateTime) }
                     }}</span>
                     @if (preparedAsOther(rx)) {
                       <!-- QA D3942: the queue says what was prepared when it is not the order's name. -->
@@ -1057,7 +1096,9 @@
                       }}</span>
                     }
                     <span class="refill-note">{{
-                      'PHARMACY.REFILL_REMAINING' | translate: { count: refill.remaining ?? 0 }
+                      refill.remaining ?? 0
+                        | pluralKey: 'PHARMACY.REFILL_REMAINING'
+                        | translate: { count: refill.remaining ?? 0 }
                     }}</span>
                     @if (refill.lastProviderNotes) {
                       <span class="refill-note refill-note--quote">{{
@@ -1307,7 +1348,10 @@
           <tbody>
             @for (d of recentDispenses(); track d.id) {
               <tr>
-                <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
+                <td class="patient-cell" data-testid="recent-dispense-patient">
+                  {{ d.patientName || '—' }}
+                  <app-patient-id-line [mrn]="d.patientMrn" [dateOfBirth]="d.patientDateOfBirth" />
+                </td>
                 <td>{{ d.medicationName }}</td>
                 <td>{{ d.quantityDispensed | countUnit: d.unit }}</td>
                 <td>
@@ -1343,7 +1387,7 @@
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
-                <td>{{ d.dispensedAt ? (d.dispensedAt | serverTime | date: 'short') : '—' }}</td>
+                <td>{{ d.dispensedAt ? (d.dispensedAt | serverTime | dateTime) : '—' }}</td>
                 <td>
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->

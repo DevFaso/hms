@@ -92,6 +92,15 @@ public class InventoryItem extends BaseEntity {
     private BigDecimal unitPrice;
 
     /**
+     * QA D4181 (r81, V420): why this item is handed over at no charge at this pharmacy (a free national programme,
+     * a donation). Null on every item that is sold: a fill of an item with neither a selling price nor this reason
+     * is refused ({@code FillPriceGate}). Set, like the price, by the store manager or a hospital administrator.
+     */
+    @Size(max = 500)
+    @Column(name = "free_of_charge_reason", length = 500)
+    private String freeOfChargeReason;
+
+    /**
      * QA D2674 (r65, V311): how many of {@link #unit} one pack holds (a "plaquette de 10 comprimés" is 10), set when
      * stock received in packs is converted to the unit prescriptions are written in. Null on an item never converted.
      */

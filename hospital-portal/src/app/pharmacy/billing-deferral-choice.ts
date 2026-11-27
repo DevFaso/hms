@@ -55,6 +55,12 @@ export class BillingDeferralChoiceComponent {
   readonly prescriptionId = input.required<string>();
   /** Keeps the ids of the two hosts apart (the hand-over dialog and the one-step fill). */
   readonly idPrefix = input('deferral');
+  /**
+   * Review of #1380 (F3): the fill's medication has no selling price here. It leaves only on the account of an open
+   * stay or on a logged urgency override (never on a deferral, which is granted on an amount); the store manager is
+   * then asked to set the price.
+   */
+  readonly urgencyOnly = input(false);
 
   private readonly api = inject(BillingDeferralService);
   private readonly toast = inject(ToastService);
@@ -165,10 +171,10 @@ export class BillingDeferralChoiceComponent {
   choice(): BillingDeferralChoice | null {
     if (this.onOpenStay()) return {};
     const approved = this.approved();
-    if (this.mode() === 'approved' && approved?.canExecute) {
+    if (!this.urgencyOnly() && this.mode() === 'approved' && approved?.canExecute) {
       return { billingDeferralId: approved.id };
     }
-    if (this.mode() === 'urgency') {
+    if (this.urgencyOnly() || this.mode() === 'urgency') {
       const reason = this.urgencyReason.trim();
       if (!reason) {
         this.refuse('urgency-reason', 'PHARMACY_MONEY.DEFERRAL.URGENCY_REASON_REQUIRED');
