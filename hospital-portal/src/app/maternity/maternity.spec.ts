@@ -107,8 +107,21 @@ describe('MaternityComponent — tabs', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('fr', fr);
     create(['ROLE_NURSE']);
+    // QA r81 D4107: the empty list names the open list (« Haut risque »), not « Aucun antécédent maternel ».
     expect(host().querySelector('.empty-state h3')?.textContent?.trim()).toBe(
-      'Aucun dossier dans cette liste',
+      'Aucun dossier dans la liste « Haut risque »',
+    );
+  });
+
+  it('QA r81 D4107: an empty list says how many records « Tous » holds', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    maternity.search.and.returnValue(
+      of({ content: [], totalElements: 3, totalPages: 3, number: 0, size: 1 }),
+    );
+    create(['ROLE_NURSE']);
+    expect(host().querySelector('[data-testid="board-empty-hint"]')?.textContent?.trim()).toBe(
+      '3 dossiers dans « Tous » : choisissez une autre liste ci-dessus.',
     );
   });
 

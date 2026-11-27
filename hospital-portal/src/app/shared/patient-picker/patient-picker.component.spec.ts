@@ -153,6 +153,26 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('QA r81 D4116: a maternity picker does not offer the newborn as the mother', (done) => {
+    component.maternalOnly = true;
+    const baby = {
+      ...mockPatient('baby', 'Bébé TestTravail'),
+      dateOfBirth: new Date().toISOString().slice(0, 10),
+    };
+    const mother = {
+      ...mockPatient('mother', 'Awa TestTravail'),
+      gender: 'FEMALE',
+      dateOfBirth: '1996-04-02',
+    };
+    patientSpy.search.and.returnValue(of([baby, mother]));
+    component.ngOnInit();
+    component.onQueryChange('TestTravail');
+    setTimeout(() => {
+      expect(component.suggestions().map((p) => p.id)).toEqual(['mother']);
+      done();
+    }, 400);
+  });
+
   // QA D1274 (D1253 sibling, round 27): a birth date found nobody, in any format.
   it('QA D1274: a typed birth date is searched by birth date, never as a name or a phone', (done) => {
     component.hospitalId = 'h1';

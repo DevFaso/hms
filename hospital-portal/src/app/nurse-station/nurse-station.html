@@ -1882,12 +1882,14 @@
           />
         </div>
         <!-- Policy 2026-11-20 (provisional): optional additional concerns, read by the server's maternal early warning. -->
-        <div class="vitals-field vitals-field-full">
-          <app-maternal-concerns
-            [selected]="vitalsForm().maternalConcerns ?? []"
-            (selectedChange)="updateVitalsMaternalConcerns($event)"
-          />
-        </div>
+        @if (showVitalsMaternalConcerns()) {
+          <div class="vitals-field vitals-field-full">
+            <app-maternal-concerns
+              [selected]="vitalsForm().maternalConcerns ?? []"
+              (selectedChange)="updateVitalsMaternalConcerns($event)"
+            />
+          </div>
+        }
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea

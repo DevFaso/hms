@@ -2,6 +2,7 @@
   <div class="mode-picker">
     <app-patient-picker
       inputId="labor-patient"
+      maternalOnly
       [selected]="patient()"
       (selectedChange)="onPatientChange($event)"
     />
@@ -203,11 +204,21 @@
           }}
         </p>
       }
+      <!-- QA r81 D4113: a minor in labour carries a vigilance mark on her card, not only an in-basket task. -->
+      @if (episode.minorSafeguardingUnderYears) {
+        <p class="labor-safeguarding-mark" role="note" data-testid="labor-minor-safeguarding">
+          <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+          {{
+            'LABOR.MINOR_SAFEGUARDING' | translate: { years: episode.minorSafeguardingUnderYears }
+          }}
+        </p>
+      }
       <p class="muted">
         {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}
-        {{ episode.admittedAt | serverTime | date: 'short' }}
+        {{ episode.admittedAt | serverTime | dateTime }}
         @if (episode.gestationalAgeWeeks) {
-          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}{{ 'COMMON.COLON' | translate }}
+          <!-- QA r81 D4114: « Âge gestationnel (semaines) : 39 semaines » named the unit twice. -->
+          · {{ 'MATERNITY.GESTATIONAL_AGE_SHORT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ episode.gestationalAgeWeeks }}
           {{ 'MATERNITY.WEEKS' | translate }}
         }
@@ -476,7 +487,7 @@
           <tbody>
             @for (episode of episodes(); track episode.id) {
               <tr class="data-row">
-                <td>{{ episode.admittedAt | serverTime | date: 'short' }}</td>
+                <td>{{ episode.admittedAt | serverTime | dateTime }}</td>
                 <td>{{ 'LABOR.STATUS_' + episode.status | translate }}</td>
                 <td>
                   {{ episode.outcome ? ('LABOR.OUTCOME_' + episode.outcome | translate) : '—' }}

@@ -21,6 +21,7 @@ import {
   searchPatientsByTerm,
 } from '../../services/patient.service';
 import { patientSubline } from './patient-subline';
+import { isMaternalCandidate } from './maternal-candidate';
 import { rankPeopleByName } from '../person-search';
 import { birthDateQuery, isCompactDate } from '../patient-query';
 import { ListEscapeDirective } from '../a11y/list-escape.directive';
@@ -63,6 +64,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
    * query the cross-hospital lookup regardless of this input.
    */
   @Input() hospitalId: string | null = null;
+  /** QA r81 D4116: a maternity picker never offers a newborn or a man as the mother. */
+  @Input({ transform: booleanAttribute }) maternalOnly = false;
   @Input() set selected(value: PatientResponse | null) {
     this.searchRevision++;
     this.searchLoading.set(false);
@@ -159,7 +162,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         }
         // QA D1239: "Awa" filled the eight places with Sawadogos; a name that
         // starts with the query now comes before one that only contains it.
-        const items = rankPeopleByName(merged, this.query()).slice(0, SHOWN);
+        const offered = this.maternalOnly ? merged.filter((p) => isMaternalCandidate(p)) : merged;
+        const items = rankPeopleByName(offered, this.query()).slice(0, SHOWN);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
         // Nothing typed is not "no match".

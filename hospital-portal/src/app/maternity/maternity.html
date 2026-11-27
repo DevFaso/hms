@@ -176,14 +176,31 @@
     @if (!historiesLoading() && visibleHistories().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
-        <h3>
-          {{ (histories().length ? 'CARE_DASH.NO_MATCHES' : 'MATERNITY.NO_HISTORIES') | translate }}
+        <h3 data-testid="board-empty-title">
+          @if (histories().length) {
+            {{ 'CARE_DASH.NO_MATCHES' | translate }}
+          } @else {
+            {{
+              'MATERNITY.NO_HISTORIES_IN'
+                | translate: { list: (worklistLabelKey(worklist()) | translate) }
+            }}
+          }
         </h3>
-        <p>
-          {{
-            (histories().length ? 'CARE_DASH.PAGE_FILTERS' : 'MATERNITY.NO_HISTORIES_HINT')
-              | translate
-          }}
+        <p data-testid="board-empty-hint">
+          @if (histories().length) {
+            {{ 'CARE_DASH.PAGE_FILTERS' | translate }}
+          } @else if (recordsInOtherLists() > 0) {
+            {{
+              (recordsInOtherLists() === 1
+                ? 'MATERNITY.NO_HISTORIES_OTHER_ONE'
+                : 'MATERNITY.NO_HISTORIES_OTHER_MANY'
+              )
+                | translate
+                  : { count: recordsInOtherLists(), list: ('MATERNITY.WORKLIST_ALL' | translate) }
+            }}
+          } @else {
+            {{ 'MATERNITY.NO_HISTORIES_HINT' | translate }}
+          }
         </p>
       </div>
     }
@@ -777,6 +794,7 @@
               [hospitalId]="hospitalId"
               required
               inputId="history-patient"
+              maternalOnly
               [selected]="selectedPatient()"
               (selectedChange)="onHistoryPatientPicked($event)"
             />

@@ -2,6 +2,7 @@
   <div class="mode-picker">
     <app-patient-picker
       inputId="pp-patient"
+      maternalOnly
       [selected]="patient()"
       (selectedChange)="onPatientPicked($event)"
     />

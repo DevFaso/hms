@@ -658,3 +658,18 @@ details.care-maternity-guide > .material-symbols-outlined {
   font-size: 0.875em;
   font-variant-numeric: tabular-nums;
 }
+
+/* QA r81 D4113: the vigilance mark of a minor in labour, on her labour card. */
+.labor-safeguarding-mark {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--warning-text, #b45309);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning-text, #b45309) 10%, transparent);
+  color: var(--warning-text, #b45309);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

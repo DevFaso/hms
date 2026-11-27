@@ -96,7 +96,7 @@ import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
-import { offersHeadCircumference } from '../shared/patient-measures';
+import { isRecordedMale, offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
@@ -964,6 +964,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.vitalsForm.set({});
     this.glucoseMmol.set('');
     this.vitalsPatientDob.set(null);
+    this.vitalsPatientGender.set(null);
     this.patientLookup
       .getById(patientId, this.hospitalId() ?? undefined)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -971,12 +972,20 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         next: (p) => {
           if (this.vitalsCaptureFor()?.patientId === patientId) {
             this.vitalsPatientDob.set(p?.dateOfBirth ?? null);
+            this.vitalsPatientGender.set(p?.gender ?? null);
           }
         },
         // Unknown DOB keeps the field (the server's limits still apply).
         error: () => undefined,
       });
   }
+
+  /**
+   * QA r81 D4114: the pregnancy block was offered on a 66-year-old man's vitals. It is shown unless the
+   * patient is recorded male (an unknown sex keeps it, as the triage form does).
+   */
+  readonly vitalsPatientGender = signal<string | null>(null);
+  readonly showVitalsMaternalConcerns = computed(() => !isRecordedMale(this.vitalsPatientGender()));
 
   /** QA D530: glucose is typed in mmol/L, like the lab reports it; sent as mg/dL. */
   readonly glucoseMmol = signal('');

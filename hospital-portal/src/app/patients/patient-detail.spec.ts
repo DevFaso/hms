@@ -209,6 +209,31 @@ describe('PatientDetailComponent', () => {
     expect(component.getAge(dob.toISOString().slice(0, 10))).toBe('41 ans');
   });
 
+  it('QA r81 D4114: a newborn reads in days and a baby in months, never « 0 ans »', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      {
+        PATIENTS: {
+          AGE_YEARS: '{{count}} ans',
+          AGE_YEAR: '{{count}} an',
+          AGE_DAY: '{{count}} jour',
+          AGE_DAYS: '{{count}} jours',
+          AGE_MONTH: '{{count}} mois',
+          AGE_MONTHS: '{{count}} mois',
+        },
+      },
+      true,
+    );
+    translate.use('fr');
+    const now = new Date(2026, 10, 27, 12, 0);
+
+    expect(component.getAge('2026-11-27', now)).toBe('0 jour');
+    expect(component.getAge('2026-11-20', now)).toBe('7 jours');
+    expect(component.getAge('2026-02-10', now)).toBe('9 mois');
+    expect(component.getAge('2023-11-01', now)).toBe('3 ans');
+  });
+
   /** Pin the caller's roles on the spy (a single role becomes the active role, as the real service does). */
   function holdRoles(roles: string[]): void {
     (
