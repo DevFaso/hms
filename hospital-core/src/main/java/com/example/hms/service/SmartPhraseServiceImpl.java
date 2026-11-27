@@ -304,6 +304,9 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         } else if (request.getScope() == SmartPhraseScope.GLOBAL) {
             request.setHospitalId(null);
             request.setOwnerUserId(null);
+        } else if (request.getScope() == SmartPhraseScope.HOSPITAL) {
+            // r81: a hospital phrase belongs to the hospital, never to a user named in the body.
+            request.setOwnerUserId(null);
         }
     }
 

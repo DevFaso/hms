@@ -1459,6 +1459,40 @@ class ReceptionServiceImplTest {
                     .doesNotThrowAnyException();
         }
 
+        /** r81: a preferred clinician, or a department, of another hospital answers as an unknown id. */
+        @Test
+        @DisplayName("refuses a preferred clinician or a department of another hospital as unknown")
+        void refusesAnotherHospitalsClinicianOrDepartment() {
+            Hospital other = mock(Hospital.class);
+            when(other.getId()).thenReturn(UUID.randomUUID());
+            Staff foreignClinician = mock(Staff.class);
+            when(foreignClinician.getHospital()).thenReturn(other);
+            UUID clinicianId = UUID.randomUUID();
+            WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
+            req.setDepartmentId(departmentId);
+            req.setPatientId(patientId);
+            req.setPreferredProviderId(clinicianId);
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(staffRepo.findById(clinicianId)).thenReturn(Optional.of(foreignClinician));
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            Department foreignDepartment = mock(Department.class);
+            when(foreignDepartment.getHospital()).thenReturn(other);
+            UUID foreignDepartmentId = UUID.randomUUID();
+            when(departmentRepo.findById(foreignDepartmentId)).thenReturn(Optional.of(foreignDepartment));
+            WaitlistEntryRequestDTO elsewhere = new WaitlistEntryRequestDTO();
+            elsewhere.setDepartmentId(foreignDepartmentId);
+            elsewhere.setPatientId(patientId);
+            assertThatThrownBy(() -> service.addToWaitlist(elsewhere, hospitalId, "user"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
+        }
+
         @Test
         @DisplayName("refuses a patient not registered at this hospital")
         void refusesAnUnregisteredPatient() {
