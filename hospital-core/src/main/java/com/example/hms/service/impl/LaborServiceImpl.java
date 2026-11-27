@@ -783,6 +783,13 @@ public class LaborServiceImpl implements LaborService {
      * episode's risk notes so the chart shows why it was accepted.
      */
     private String resolveRecentDeliveryOverride(UUID patientId, LaborEpisodeRequestDTO request) {
+        // Even without a recent delivery, a supplied reason selects the prior pregnancy.
+        // Validate it before that selection so a short reason cannot bypass the rule.
+        String suppliedReason = request.getRecentDeliveryOverrideReason();
+        if (suppliedReason != null && !suppliedReason.isBlank()
+                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(suppliedReason)) {
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "clinical.override.reasonMin");
+        }
         LocalDateTime since = LocalDateTime.now().minusDays(MIN_DAYS_BETWEEN_DELIVERIES);
         if (!deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId, since)) {
             return request.getRiskNotes();

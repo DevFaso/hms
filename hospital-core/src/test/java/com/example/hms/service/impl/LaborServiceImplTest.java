@@ -1328,6 +1328,17 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void startEpisodeRejectsAShortReasonEvenWithoutARecentDelivery() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).recentDeliveryOverrideReason("ok").build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
     void startEpisodeRejectsShortRecentDeliveryOverrides() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
