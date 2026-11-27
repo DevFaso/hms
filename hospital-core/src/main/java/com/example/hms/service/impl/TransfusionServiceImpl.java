@@ -651,6 +651,7 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     public static final String RECOVER_TITLE_KEY = "transfusion.unit.toRecover.inBasketTitle";
     public static final String RECOVER_BODY_KEY = "transfusion.unit.toRecover.inBasketBody";
+    public static final String RECOVER_INCOMPATIBLE_BODY_KEY = "transfusion.unit.toRecover.incompatibleBody";
     /** The reference of the « bag to recover » task, closed when the laboratory records the return. */
     public static final String UNIT_REFERENCE_TYPE = "BLOOD_UNIT_TO_RECOVER";
     private static final Set<String> LAB_MANAGER_ROLE_CODES = Set.of(SecurityConstants.ROLE_LAB_MANAGER);
@@ -660,6 +661,14 @@ public class TransfusionServiceImpl implements TransfusionService {
      * the commit, to get the bag back and record what became of it. A task, not an alarm: nobody is in danger.
      */
     private void fileBagsToRecoverAfterCommit(TransfusionRequest request, List<BloodUnit> units) {
+        fileBagsToRecoverAfterCommit(request, units, RECOVER_BODY_KEY);
+    }
+
+    /**
+     * QA D4178 review: the same task when a bag issued and never hung is found incompatible. It stays out of
+     * stock with its release follow-up open; the laboratory gets it back and records its return.
+     */
+    private void fileBagsToRecoverAfterCommit(TransfusionRequest request, List<BloodUnit> units, String bodyKey) {
         List<UUID> readers = labDirectors(request);
         if (readers.isEmpty()) {
             // A hospital with no lab director: its lab managers recover the bag.
@@ -682,7 +691,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                     com.example.hms.enums.InBasketItemType.TASK, unit.getId(), UNIT_REFERENCE_TYPE);
                 item.setPriority(com.example.hms.enums.InBasketPriority.NORMAL);
                 item.setTitleKey(RECOVER_TITLE_KEY);
-                item.setBodyKey(RECOVER_BODY_KEY);
+                item.setBodyKey(bodyKey);
                 items.add(staffCopy(item, titleArgs, bodyArgs));
             }
         }
@@ -910,6 +919,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         } else {
             if ((unit.getStatus() == BloodUnitStatus.ISSUED || hung != null) && !alreadyIncompatible) {
                 notifySafely(() -> fileIncompatibleResultAfterCommit(transfusionRequest, unit, hung, saved), saved.getId());
+            }
+            // QA D4178 review: an issued bag never hung stays out of stock; the laboratory is asked to get it back.
+            if (hung == null && unit.getStatus() == BloodUnitStatus.ISSUED && !alreadyIncompatible) {
+                notifySafely(() -> fileBagsToRecoverAfterCommit(transfusionRequest, List.of(unit),
+                    RECOVER_INCOMPATIBLE_BODY_KEY), saved.getId());
             }
             // A running bag stays what it is: it is not back at the lab, and only the
             // clinician stops it. Stopping or finishing it closes it as any other. A bag whose

@@ -39,13 +39,16 @@ public class ImagingOrderMapper {
         this.roleValidator = roleValidator;
     }
 
-    /** The statuses in which an order nobody signed can still wait for a physician. */
+    /** The statuses in which an order nobody signed can still wait for a physician (before its report). */
     private static final java.util.Set<com.example.hms.enums.ImagingOrderStatus> BEFORE_THE_RESULT =
         java.util.EnumSet.of(com.example.hms.enums.ImagingOrderStatus.DRAFT,
             com.example.hms.enums.ImagingOrderStatus.ORDERED,
             com.example.hms.enums.ImagingOrderStatus.PENDING_AUTHORIZATION,
             com.example.hms.enums.ImagingOrderStatus.SCHEDULED,
-            com.example.hms.enums.ImagingOrderStatus.IN_PROGRESS);
+            com.example.hms.enums.ImagingOrderStatus.IN_PROGRESS,
+            // Review round 2: an older order done before anyone signed it still needs a physician before
+            // its report is written.
+            com.example.hms.enums.ImagingOrderStatus.COMPLETED);
 
     /**
      * QA D4140: the request waits for a physician. A flagged request waits while it is a draft; an order

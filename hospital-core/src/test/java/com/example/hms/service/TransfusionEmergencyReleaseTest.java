@@ -329,8 +329,12 @@ class TransfusionEmergencyReleaseTest {
         service.recordCrossmatch(request.getId(), result(unit, false));
 
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService, times(2)).createItemInNewTransaction(items.capture());
-        assertThat(items.getAllValues().get(0).getReferenceId()).isNotEqualTo(items.getAllValues().get(1).getReferenceId());
+        verify(inBasketService, org.mockito.Mockito.atLeast(2)).createItemInNewTransaction(items.capture());
+        // QA D4178 review: the « bag to recover » tasks ride beside the result notices; the notices are two.
+        List<CreateInBasketItemRequest> notices = items.getAllValues().stream()
+            .filter(item -> !TransfusionServiceImpl.UNIT_REFERENCE_TYPE.equals(item.getReferenceType())).toList();
+        assertThat(notices).hasSize(2);
+        assertThat(notices.get(0).getReferenceId()).isNotEqualTo(notices.get(1).getReferenceId());
     }
 
     @Test
@@ -1194,9 +1198,11 @@ class TransfusionEmergencyReleaseTest {
         service.recordCrossmatch(request.getId(), result(unit, false));
 
         ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService).createItemInNewTransaction(item.capture());
-        assertThat(item.getValue().getRecipientUserId()).isEqualTo(director);
-        assertThat(item.getValue().getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY);
+        verify(inBasketService, times(2)).createItemInNewTransaction(item.capture());
+        // The result notice, and (QA D4178 review) the task to bring the bag back.
+        assertThat(item.getAllValues()).allSatisfy(filed -> assertThat(filed.getRecipientUserId()).isEqualTo(director));
+        assertThat(item.getAllValues()).extracting(CreateInBasketItemRequest::getBodyKey).containsExactlyInAnyOrder(
+            TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY, TransfusionServiceImpl.RECOVER_INCOMPATIBLE_BODY_KEY);
         // QA D4178 review: out until the laboratory records its return.
         assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }

@@ -55,7 +55,7 @@ class ImagingOrderMapperAwaitingPhysicianTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ImagingOrderStatus.class, names = {"ORDERED", "SCHEDULED", "IN_PROGRESS"})
+    @EnumSource(value = ImagingOrderStatus.class, names = {"ORDERED", "SCHEDULED", "IN_PROGRESS", "COMPLETED"})
     void anOlderUnsignedNursesOrderWaits(ImagingOrderStatus status) {
         assertThat(mapper.toResponseDTO(order(status, null, nurse)).getAwaitingPhysicianAuthorisation()).isTrue();
     }

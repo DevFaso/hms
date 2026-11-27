@@ -2999,4 +2999,27 @@ class TransfusionServiceImplTest {
 
         assertThat(filedItems(1).get(0).getRecipientUserId()).isEqualTo(manager.getId());
     }
+
+    /** Review round 2 of QA D4178: an issued bag found incompatible gets an owner who brings it back. */
+    @Test
+    void d4178_anIncompatibleIssuedBagIsALabTaskToRecover() {
+        TransfusionRequest request = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
+        request.setRequestedBy(requester(UUID.randomUUID()));
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        bag.setRequest(request);
+        com.example.hms.model.User director = new com.example.hms.model.User();
+        director.setId(UUID.randomUUID());
+        when(assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, java.util.Set.of("ROLE_LAB_DIRECTOR")))
+            .thenReturn(List.of(director));
+
+        service.recordCrossmatch(request.getId(), incompatible(bag));
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(filedItems(2)).filteredOn(item -> TransfusionServiceImpl.UNIT_REFERENCE_TYPE.equals(item.getReferenceType()))
+            .singleElement().satisfies(item -> {
+                assertThat(item.getRecipientUserId()).isEqualTo(director.getId());
+                assertThat(item.getReferenceId()).isEqualTo(bag.getId());
+                assertThat(item.getBodyKey()).isEqualTo(TransfusionServiceImpl.RECOVER_INCOMPATIBLE_BODY_KEY);
+            });
+    }
 }

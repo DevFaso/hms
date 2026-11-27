@@ -797,8 +797,9 @@ class TransfusionEmergencyReleasePostgresIT {
         result(request.getId(), bagId, false);
 
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService).createItemInNewTransaction(items.capture());
-        assertThat(items.getValue().getRecipientUserId()).isEqualTo(directorUser);
+        // The result notice, and (QA D4178 review) the task to bring the bag back.
+        verify(inBasketService, org.mockito.Mockito.times(2)).createItemInNewTransaction(items.capture());
+        assertThat(items.getAllValues()).allSatisfy(item -> assertThat(item.getRecipientUserId()).isEqualTo(directorUser));
         assertThat(List.of(status(bagId))).containsExactly("ISSUED"); // QA D4178 review: out until the laboratory records its return
     }
 
