@@ -143,6 +143,32 @@ class PatientRecallServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    /** r81: a preferred clinician of another hospital answers as an unknown id; one of this hospital is kept. */
+    @Test
+    void createReadsAnotherHospitalsClinicianAsNotFound() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.Staff foreign = mock(com.example.hms.model.Staff.class);
+        when(foreign.getHospital()).thenReturn(other);
+        UUID clinicianId = UUID.randomUUID();
+        when(staffRepository.findById(clinicianId)).thenReturn(Optional.of(foreign));
+
+        RecallRequestDTO req = request();
+        req.setPreferredProviderId(clinicianId);
+        assertThatThrownBy(() -> service.createRecall(req, hospitalId, "reception1"))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(recallRepository, never()).save(any());
+
+        com.example.hms.model.Staff local = mock(com.example.hms.model.Staff.class);
+        when(local.getHospital()).thenReturn(hospital);
+        UUID localId = UUID.randomUUID();
+        when(staffRepository.findById(localId)).thenReturn(Optional.of(local));
+        RecallRequestDTO here = request();
+        here.setPreferredProviderId(localId);
+        service.createRecall(here, hospitalId, "reception1");
+        verify(recallRepository).save(org.mockito.ArgumentMatchers.argThat(r -> r.getPreferredProvider() == local));
+    }
+
     @Test
     void listMapsRowsForTheHospital() {
         PatientRecall recall = existingRecall(RecallStatus.PENDING);
