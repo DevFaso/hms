@@ -504,14 +504,15 @@ class ActingScopeResolverTest {
         }
 
         @Test
-        @DisplayName("X-Hospital-Id naming it is refused on a write, accepted on a read and on the patient portal")
+        @DisplayName("X-Hospital-Id naming it is ignored on a write (the live scope), applied on a read and on the portal")
         void theHeader() {
             HospitalContext live = live();
             assertThat(live.isTreatedOnlyAt(A)).isTrue();
             assertThat(live.isTreatedOnlyAt(B)).isFalse();
 
-            assertThat(resolver.withHeader(live, request("POST", "/encounters", A.toString())).getScopeRefusal())
-                .isEqualTo(ActingScope.Reason.NOT_PERMITTED);
+            HospitalContext write = resolver.withHeader(live, request("POST", "/encounters", A.toString()));
+            assertThat(ActingScopeResolver.isRefusedHeader(write)).isFalse();
+            assertThat(ActingScopeResolver.scopeOf(write)).isEqualTo(new ActingScope.Refused(ActingScope.Reason.AMBIGUOUS));
             assertThat(ActingScopeResolver.scopeOf(resolver.withHeader(live, request("GET", "/encounters", A.toString()))))
                 .isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.HEADER));
             assertThat(ActingScopeResolver.scopeOf(

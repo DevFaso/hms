@@ -52,7 +52,8 @@ public final class HospitalContextRequestOverrides {
      *       This also settles a caller holding several hospitals, who
      *       otherwise has none ({@code AMBIGUOUS}). On a write outside the
      *       patient portal, a hospital where a staff caller is only a patient
-     *       is not one of them ({@link #refusesStaffWriteAt}).</li>
+     *       is ignored: the request runs on the live scope
+     *       ({@link #refusesStaffWriteAt}).</li>
      *   <li>Anything else, including a malformed value and a principal whose
      *       permitted set is EMPTY (a patient, a Keycloak principal with no
      *       local account, a user whose assignments were revoked) → refused
@@ -87,13 +88,23 @@ public final class HospitalContextRequestOverrides {
         // No empty-set escape: a principal with no permitted hospital has no
         // hospital to name (see the javadoc above).
         boolean permitted = effective.isSuperAdmin()
-            || (effective.getPermittedHospitalIds().contains(requestedHospital)
-                && !refusesStaffWriteAt(effective, requestedHospital, request));
+            || effective.getPermittedHospitalIds().contains(requestedHospital);
 
         if (!permitted) {
             log.warn("[AUTH] Refusing {} {}: not in the caller's permitted scope",
                 HEADER_HOSPITAL_ID, requestedHospital);
             return refused(effective, requestedHospital);
+        }
+
+        if (refusesStaffWriteAt(effective, requestedHospital, request)) {
+            // A write by a staff caller naming a hospital where they are only a
+            // patient (a stale chip, a patient hospital made primary): the
+            // header is ignored, not refused. The request runs on the live
+            // scope, so a write about their own account still passes and a
+            // hospital-scoped write finds no acting hospital there.
+            log.info("[AUTH] Ignoring {} {} on a staff write: the caller is only a patient there",
+                HEADER_HOSPITAL_ID, requestedHospital);
+            return effective;
         }
 
         // Explicit: a super-admin is pinned by it, and the provisional

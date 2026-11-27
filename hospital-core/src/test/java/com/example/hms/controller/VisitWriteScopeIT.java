@@ -143,6 +143,7 @@ class VisitWriteScopeIT extends BaseIT {
             applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
         jdbc.update("DELETE FROM clinical.encounter_history");
         jdbc.update("DELETE FROM clinical.encounters");
+        jdbc.update("DELETE FROM clinical.patient_record_sharing_optouts");
         SharedClinicalRowsCleanup.deleteAll(applicationContext);
     }
 
@@ -254,8 +255,57 @@ class VisitWriteScopeIT extends BaseIT {
         assertThat(visitsOf(patientB, hospitalB)).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("naming the hospital where they are only a patient: their own opt-out passes, a visit there is 403")
+    void theHeaderOfAPatientOnlyHospitalIsIgnoredOnAWrite() throws Exception {
+        // r81 review round 2: B's doctor is a patient at A, and the session made A their selected hospital.
+        alsoAssign(doctorB.user(), hospitalA, "ROLE_PATIENT");
+        Patient own = savePatient("Bakary", "Selfcare", hospitalA, doctorB.user());
+
+        // The auth filters answer 403 for a refused header before any handler runs; this IT runs
+        // without them, so their decision is asserted here: the header is ignored, not refused.
+        org.springframework.mock.web.MockHttpServletRequest write =
+            new org.springframework.mock.web.MockHttpServletRequest("POST", API + "/patients/x/record-sharing/opt-out");
+        write.setContextPath(API);
+        write.addHeader("X-Hospital-Id", hospitalA.getId().toString());
+        HospitalContext applied = actingScopeResolver.withHeader(
+            actingScopeResolver.liveContext(doctorB.user().getId(), doctorB.user().getUsername()), write);
+        assertThat(com.example.hms.security.tenant.ActingScopeResolver.isRefusedHeader(applied))
+            .as("a staff write naming a hospital where the caller is only a patient is not refused at the filter")
+            .isFalse();
+
+        MvcResult optOut = mockMvc.perform(post(API + "/patients/{id}/record-sharing/opt-out", own.getId())
+                .with(actingLive(doctorB.user(), hospitalA.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andReturn();
+        MvcResult visitAtA = mockMvc.perform(post(API + "/encounters")
+                .with(actingLive(doctorB.user(), hospitalA.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(visit(hospitalA.getId(), patientA, doctorA, departmentA))))
+            .andReturn();
+        MvcResult visitUnnamed = mockMvc.perform(post(API + "/encounters")
+                .with(actingLive(doctorB.user(), hospitalA.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(visit(null, patientA, doctorA, departmentA))))
+            .andReturn();
+
+        assertThat(optOut.getResponse().getStatus()).as(optOut.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(visitAtA.getResponse().getStatus()).as(visitAtA.getResponse().getContentAsString()).isEqualTo(403);
+        assertThat(visitUnnamed.getResponse().getStatus()).as(visitUnnamed.getResponse().getContentAsString())
+            .isIn(403, 404);
+        assertSaysNothingOf(visitAtA, patientA);
+        assertSaysNothingOf(visitUnnamed, patientA);
+        assertThat(visitsOf(patientA, hospitalA)).isZero();
+    }
+
     /** The caller's context as the auth filters build it, from their live assignments, no header. */
     private RequestPostProcessor actingLive(User user) {
+        return actingLive(user, null);
+    }
+
+    /** The same, with {@code X-Hospital-Id} applied as the auth filters apply it. */
+    private RequestPostProcessor actingLive(User user, UUID header) {
         return request -> {
             Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_DOCTOR),
                 new SimpleGrantedAuthority("ROLE_PATIENT"));
@@ -264,8 +314,12 @@ class VisitWriteScopeIT extends BaseIT {
             Authentication auth = new UsernamePasswordAuthenticationToken(principal, user.getPasswordHash(), authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
             HospitalContextHolder.clear();
-            HospitalContextHolder.setContext(actingScopeResolver.liveContext(user.getId(), user.getUsername()));
             request.setContextPath(API);
+            if (header != null) {
+                request.addHeader("X-Hospital-Id", header.toString());
+            }
+            HospitalContextHolder.setContext(actingScopeResolver.withHeader(
+                actingScopeResolver.liveContext(user.getId(), user.getUsername()), request));
             request.setUserPrincipal(auth);
             return authentication(auth).postProcessRequest(request);
         };
@@ -403,8 +457,13 @@ class VisitWriteScopeIT extends BaseIT {
     }
 
     private Patient savePatient(String firstName, String lastName, Hospital hospital) {
+        return savePatient(firstName, lastName, hospital, null);
+    }
+
+    /** A patient registered at {@code hospital}, whose login is {@code login} (a new account when null). */
+    private Patient savePatient(String firstName, String lastName, Hospital hospital, User login) {
         String id = nextId();
-        User account = userRepository.save(User.builder()
+        User account = login != null ? login : userRepository.save(User.builder()
             .username("vspatient" + id).passwordHash("hashed-password").email("vspatient" + id + "@patient.test")
             .firstName(firstName).lastName(lastName).phoneNumber("+22676" + id).isActive(true).build());
         Patient saved = patientRepository.save(Patient.builder()
