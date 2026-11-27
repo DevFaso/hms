@@ -320,14 +320,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * QA D4308: the accounts a platform item is addressed to - every live,
-     * active account holding the platform administrator role, by an active
-     * assignment or by the role itself.
+     * active account holding the platform administrator role by an active
+     * assignment, the same test that makes a caller a platform administrator.
+     * The account's role link alone is not enough: it outlives a deactivated
+     * assignment.
      */
-    @Query("SELECT u FROM User u WHERE u.isDeleted = false AND u.isActive = true AND (EXISTS "
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false AND u.isActive = true AND EXISTS "
         + "(SELECT 1 FROM UserRoleHospitalAssignment a WHERE a.user = u AND a.active = true "
-        + "AND UPPER(a.role.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN')) OR EXISTS "
-        + "(SELECT 1 FROM UserRole ur WHERE ur.id.userId = u.id "
-        + "AND UPPER(ur.role.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN')))")
+        + "AND UPPER(a.role.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN'))")
     java.util.List<User> findActivePlatformAdministrators();
 
     interface DirectoryProfile { UUID getId(); String getProfileType(); }

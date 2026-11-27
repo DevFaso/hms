@@ -2,6 +2,7 @@ package com.example.hms.service.platform;
 
 import com.example.hms.enums.InBasketItemType;
 import com.example.hms.enums.InBasketPriority;
+import com.example.hms.exception.PlatformInboxUnavailableException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
 import com.example.hms.repository.UserRepository;
@@ -35,10 +36,12 @@ import java.util.UUID;
  * </ul>
  * An item is an inbox row only: nothing here sends an SMS or an e-mail.
  *
- * <p>An item is filed after the caller's transaction commits, in a transaction
+ * <p>An event is filed after the caller's transaction commits, in a transaction
  * of its own, and a failure to file is logged and never reaches the caller: the
  * verification, the delivery sweep or the health record it reports on must not
- * fail because the inbox could not be written.
+ * fail because the inbox could not be written. A hospital administrator's
+ * request is the exception: it exists only as these items, so it is filed at
+ * once and the sender is told when nobody received it.
  */
 @Service
 @RequiredArgsConstructor
@@ -93,13 +96,32 @@ public class PlatformInbox {
             "inbox.platform.webhook.body", new Object[] {text(hospitalName), failures}, null, null));
     }
 
-    /** A hospital administrator wrote to the platform. The message is shown as typed. */
+    /**
+     * A hospital administrator wrote to the platform. The message is shown as typed.
+     * Filed now, not after a commit: the request is nothing but these items.
+     *
+     * @throws PlatformInboxUnavailableException when no platform administrator
+     *     can receive it, or when not one item could be filed
+     */
     public void hospitalRequest(UUID requestId, UUID hospitalId, String hospitalName, String requesterName,
                                 String subject, String message) {
-        afterCommit(() -> file(hospitalId, InBasketItemType.MESSAGE, InBasketPriority.NORMAL, requestId,
+        List<User> administrators;
+        try {
+            administrators = userRepository.findActivePlatformAdministrators();
+        } catch (RuntimeException ex) {
+            throw new PlatformInboxUnavailableException("platformRequest.notFiled", ex);
+        }
+        if (administrators.isEmpty()) {
+            log.warn("Platform inbox: request {} not filed, no active platform administrator", requestId);
+            throw new PlatformInboxUnavailableException("platformRequest.noRecipient");
+        }
+        int filed = fileTo(administrators, hospitalId, InBasketItemType.MESSAGE, InBasketPriority.NORMAL, requestId,
             PLATFORM_REQUEST,
             "inbox.platform.request.title", new Object[] {text(hospitalName), subject},
-            null, null, message, requesterName));
+            null, null, message, requesterName);
+        if (filed == 0) {
+            throw new PlatformInboxUnavailableException("platformRequest.notFiled");
+        }
     }
 
     private void file(UUID hospitalId, InBasketItemType type, InBasketPriority priority, UUID referenceId,
@@ -113,6 +135,20 @@ public class PlatformInbox {
                 referenceType, referenceId, ex);
             return;
         }
+        if (administrators.isEmpty()) {
+            log.warn("Platform inbox: no item filed for {} {} (no active platform administrator)",
+                referenceType, referenceId);
+            return;
+        }
+        fileTo(administrators, hospitalId, type, priority, referenceId, referenceType, titleKey, titleArgs,
+            bodyKey, bodyArgs, body, senderName);
+    }
+
+    /** Files one item per administrator; answers how many were filed. */
+    private int fileTo(List<User> administrators, UUID hospitalId, InBasketItemType type, InBasketPriority priority,
+                       UUID referenceId, String referenceType, String titleKey, Object[] titleArgs, String bodyKey,
+                       Object[] bodyArgs, String body, String senderName) {
+        int filed = 0;
         for (User administrator : administrators) {
             try {
                 CreateInBasketItemRequest request = new CreateInBasketItemRequest();
@@ -131,11 +167,13 @@ public class PlatformInbox {
                 request.setReferenceType(referenceType);
                 request.setOrderingProviderName(senderName);
                 inBasketService.createItemInNewTransaction(request);
+                filed++;
             } catch (RuntimeException ex) {
                 log.warn("Platform inbox: item {} {} not filed for administrator {}",
                     referenceType, referenceId, administrator.getId(), ex);
             }
         }
+        return filed;
     }
 
     private static String render(String key, Object[] args) {

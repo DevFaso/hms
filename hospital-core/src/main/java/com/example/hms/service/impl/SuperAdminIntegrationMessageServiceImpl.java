@@ -106,6 +106,9 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
                     IntegrationDiagnosticText.localize(row.getErrorMessage(), LocaleContextHolder.getLocale()),
                     row.getLastAttemptedAt(), row.getReceivedAt()))
                 .toList();
+        Long attemptsTotal = event.getCorrelationId() == null
+            ? Long.valueOf(attempts.size())
+            : Long.valueOf(repository.countByCorrelationId(event.getCorrelationId()));
         boolean resolved = event.getStatus() == IntegrationMessageStatus.FAILED
             && !repository.findResolvedFailureIds(List.of(event.getId())).isEmpty();
         return mapBase(event)
@@ -113,6 +116,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .resolved(resolved)
             .organizationName(organizationNames(List.of(event)).get(event.getOrganizationId()))
             .attempts(attempts)
+            .attemptsTotal(attemptsTotal)
             .build();
     }
 

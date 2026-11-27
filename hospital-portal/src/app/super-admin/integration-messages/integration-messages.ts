@@ -2,7 +2,6 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
-  HostListener,
   OnInit,
   computed,
   inject,
@@ -30,6 +29,7 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { ToastService } from '../../core/toast.service';
 import { refusalReason } from '../../shared/refusal-reason';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -59,6 +59,7 @@ interface ReplayState {
     TranslateModule,
     DatePipe,
     OrgTextPipe,
+    ModalDialogDirective,
   ],
   templateUrl: './integration-messages.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -219,7 +220,6 @@ export class IntegrationMessagesComponent implements OnInit {
       });
   }
 
-  @HostListener('document:keydown.escape')
   closeDetail(): void {
     this.detailOpen.set(false);
     this.detail.set(null);

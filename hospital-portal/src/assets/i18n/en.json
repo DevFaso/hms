@@ -942,7 +942,8 @@
       "NO_PAYLOAD": "No content was recorded for this message.",
       "LOADING": "Loading the content…",
       "LOAD_ERROR": "The content of this message could not be loaded. Try again.",
-      "EXCHANGE": "Attempts of this exchange"
+      "EXCHANGE": "Attempts of this exchange",
+      "EXCHANGE_PREVIEW": "The first {{shown}} of {{total}} attempts."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1625,6 +1626,7 @@
     "TREND_BAR_TITLE": "{{count}} appointments"
   },
   "ANNOUNCEMENTS": {
+    "PLATFORM_WIDE": "Platform",
     "CREATE": "Create",
     "CREATE_ANNOUNCEMENT": "Create Announcement",
     "DELETE_ANNOUNCEMENT": "Delete Announcement",
@@ -10744,7 +10746,8 @@
       "send": "Send",
       "sending": "Sending…",
       "sent": "Request sent to the platform administrators.",
-      "failed": "The request could not be sent. Try again."
+      "failed": "The request could not be sent. Try again.",
+      "required": "This field is required."
     }
   },
   "common": {

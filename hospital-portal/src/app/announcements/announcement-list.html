@@ -38,11 +38,16 @@
             <div class="announcement-icon">
               <span class="material-symbols-outlined">campaign</span>
             </div>
+            @if (a.platformWide) {
+              <span class="announcement-scope" data-testid="announcement-platform-wide">{{
+                'ANNOUNCEMENTS.PLATFORM_WIDE' | translate
+              }}</span>
+            }
             <span class="announcement-date">{{ a.date | serverTime | dateTime }}</span>
           </div>
           <p class="announcement-text">{{ a.text }}</p>
           <div class="announcement-actions">
-            @if (canManage) {
+            @if (canEdit(a)) {
               <button
                 class="action-link edit"
                 [title]="'COMMON.EDIT' | translate"

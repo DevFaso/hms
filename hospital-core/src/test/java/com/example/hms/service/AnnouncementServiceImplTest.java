@@ -154,6 +154,25 @@ class AnnouncementServiceImplTest {
             assertEquals("Scoped", result.get(0).getText());
             verify(announcementRepository).findVisibleAtHospital(eq(hospitalId), any(Pageable.class));
         }
+
+        @Test
+        @DisplayName("a platform announcement listed at a hospital says it is one, so the page offers no change")
+        void platformAnnouncementIsMarkedPlatformWide() {
+            UUID hospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(hospitalId);
+            Announcement own = buildAnnouncement(UUID.randomUUID(), "Own", LocalDateTime.now());
+            own.setHospital(hospital);
+            Announcement platform = buildAnnouncement(UUID.randomUUID(), "Platform", LocalDateTime.now());
+            HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
+            when(announcementRepository.findVisibleAtHospital(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(List.of(own, platform));
+
+            List<AnnouncementResponseDTO> result = service.getAnnouncements(5);
+
+            org.junit.jupiter.api.Assertions.assertFalse(result.get(0).isPlatformWide());
+            org.junit.jupiter.api.Assertions.assertTrue(result.get(1).isPlatformWide());
+        }
     }
 
     // ═══════════════ getAnnouncement ═══════════════

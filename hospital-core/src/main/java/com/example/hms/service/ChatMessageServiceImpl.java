@@ -23,6 +23,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.springframework.security.access.AccessDeniedException;
+import com.example.hms.security.HmsRoles;
 import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -342,9 +343,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         // Real-world rules (C3): staff-to-staff is always allowed; the only
         // boundary is the patient one — a patient reaches only clinical care
         // roles, and only clinical care roles reach a patient.
-        boolean senderIsStaff = senderRoles.stream().anyMatch(r -> !ROLE_PATIENT.equals(r));
+        boolean senderIsStaff = senderRoles.stream().anyMatch(ChatMessageServiceImpl::isStaffRole);
         boolean senderIsClinical = senderRoles.stream().anyMatch(CLINICAL_CARE_ROLES::contains);
-        boolean recipientIsStaff = recipientRoles.stream().anyMatch(r -> !ROLE_PATIENT.equals(r));
+        boolean recipientIsStaff = recipientRoles.stream().anyMatch(ChatMessageServiceImpl::isStaffRole);
         boolean recipientIsClinical = recipientRoles.stream().anyMatch(CLINICAL_CARE_ROLES::contains);
 
         boolean allowed = recipientIsStaff
@@ -370,10 +371,23 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     /**
+     * Whether an authority makes its holder staff: one of the application's own
+     * roles other than the patient one. Any other authority (an identity
+     * provider's stock roles, for one) says nothing about who the holder is.
+     */
+    private static boolean isStaffRole(String authority) {
+        return authority != null && !ROLE_PATIENT.equals(authority) && HmsRoles.isHmsRole(authority);
+    }
+
+    /**
      * QA D4320: a staff member reaches a colleague - somebody holding an active
      * role at a hospital where the sender holds one too - and can answer anybody
      * who wrote to them first. A platform administrator reaches everybody. The
      * patient boundary keeps its own, stricter rule ({@link #validateMessageHierarchy}).
+     *
+     * <p>Somebody who is staff somewhere and a patient somewhere else keeps the
+     * care relationship of a patient: they reach a clinician of a hospital they are
+     * registered at, and that clinician reaches them.
      *
      * <p>The refusal is the unknown-recipient one, with the identifier as it was
      * sent, so it tells the sender nothing about the account behind it.
@@ -385,28 +399,37 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         boolean recipientIsStaff = recipient.getUserRoles().stream()
             .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
             .map(ur -> ur.getRole().getName())
-            .anyMatch(name -> !ROLE_PATIENT.equals(name.startsWith(ROLE_PREFIX) ? name : ROLE_PREFIX + name));
+            .anyMatch(name -> isStaffRole(name.startsWith(ROLE_PREFIX) ? name : ROLE_PREFIX + name));
         boolean senderIsStaff = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-            .anyMatch(a -> !ROLE_PATIENT.equals(a.getAuthority()));
+            .anyMatch(a -> isStaffRole(a.getAuthority()));
         if (!senderIsStaff || !recipientIsStaff) {
             return;
         }
         if (userRoleHospitalAssignmentRepository.sharesActiveHospital(sender.getId(), recipient.getId())
-                || chatMessageRepository.existsBySender_IdAndRecipient_Id(recipient.getId(), sender.getId())) {
+                || chatMessageRepository.existsBySender_IdAndRecipient_Id(recipient.getId(), sender.getId())
+                || sharesCareHospital(sender.getId(), recipient.getId())
+                || sharesCareHospital(recipient.getId(), sender.getId())) {
             return;
         }
         throw new ResourceNotFoundException("chat.recipient.notFound", requested);
     }
 
-    private void requireSharedHospital(UUID patientUserId, UUID staffUserId) {
-        boolean shared = patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientUserId)
+    /**
+     * QA D170: the patient holds an active registration at a hospital where the
+     * staff member holds an active assignment.
+     */
+    private boolean sharesCareHospital(UUID patientUserId, UUID staffUserId) {
+        return patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientUserId)
             .stream()
             .map(r -> r.getHospital() == null ? null : r.getHospital().getId())
             .filter(java.util.Objects::nonNull)
             .distinct()
             .anyMatch(hospitalId -> userRoleHospitalAssignmentRepository
                 .existsByUserIdAndHospitalIdAndActiveTrue(staffUserId, hospitalId));
-        if (!shared) {
+    }
+
+    private void requireSharedHospital(UUID patientUserId, UUID staffUserId) {
+        if (!sharesCareHospital(patientUserId, staffUserId)) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.careTeamOnly"));
         }

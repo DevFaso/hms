@@ -228,10 +228,10 @@
     <div class="drawer-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
     <aside
       class="drawer"
-      role="dialog"
-      aria-modal="true"
+      appModalDialog
       aria-labelledby="message-detail-title"
       data-test="message-detail"
+      (escaped)="closeDetail()"
     >
       <div class="drawer-header">
         <h2 id="message-detail-title">{{ 'INTEGRATION_MESSAGES.DETAIL.TITLE' | translate }}</h2>
@@ -321,6 +321,14 @@
               </li>
             }
           </ol>
+          @if (d.attemptsTotal && d.attemptsTotal > d.attempts.length) {
+            <p class="detail-note" data-test="detail-attempts-preview">
+              {{
+                'INTEGRATION_MESSAGES.DETAIL.EXCHANGE_PREVIEW'
+                  | translate: { shown: d.attempts.length, total: d.attemptsTotal }
+              }}
+            </p>
+          }
         }
 
         @if (canReplay(d)) {

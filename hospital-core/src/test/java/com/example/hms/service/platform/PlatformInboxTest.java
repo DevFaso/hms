@@ -185,6 +185,72 @@ class PlatformInboxTest {
         assertThat(item.getOrderingProviderName()).isEqualTo("Fatou Sawadogo");
     }
 
+    private PlatformRequestService requestServiceAt(UUID hospitalId) {
+        HospitalRepository hospitals = mock(HospitalRepository.class);
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        hospital.setName("Clinique A");
+        when(hospitals.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId).permittedHospitalIds(Set.of(hospitalId)).build());
+        return new PlatformRequestService(inbox, hospitals, users);
+    }
+
+    @Test
+    @DisplayName("a request nobody receives is refused, not answered as sent")
+    void aRequestNobodyReceivesIsNotAnsweredAsSent() {
+        PlatformRequestService service = requestServiceAt(UUID.randomUUID());
+        UUID requester = UUID.randomUUID();
+
+        when(users.findActivePlatformAdministrators()).thenReturn(List.of());
+        assertThatThrownBy(() -> service.send(requester, "Plan", "Texte"))
+            .isInstanceOfSatisfying(com.example.hms.exception.PlatformInboxUnavailableException.class,
+                refusal -> assertThat(refusal.getMessageKey()).isEqualTo("platformRequest.noRecipient"));
+
+        when(users.findActivePlatformAdministrators()).thenReturn(List.of(user(firstAdmin), user(secondAdmin)));
+        doThrow(new IllegalStateException("database down")).when(inBasket).createItemInNewTransaction(any());
+        assertThatThrownBy(() -> service.send(requester, "Plan", "Texte"))
+            .isInstanceOfSatisfying(com.example.hms.exception.PlatformInboxUnavailableException.class,
+                refusal -> assertThat(refusal.getMessageKey()).isEqualTo("platformRequest.notFiled"));
+    }
+
+    @Test
+    @DisplayName("the same request sent twice is filed once; past the hourly limit a request is refused")
+    void aRequestIsDeduplicatedAndRateLimited() {
+        PlatformRequestService service = requestServiceAt(UUID.randomUUID());
+        UUID requester = UUID.randomUUID();
+
+        UUID first = service.send(requester, "Plan", "Texte");
+        assertThat(service.send(requester, " Plan ", "Texte ")).isEqualTo(first);
+        filed(2);
+
+        for (int i = 1; i < PlatformRequestService.MAX_REQUESTS_PER_HOUR; i++) {
+            service.send(requester, "Plan " + i, "Texte");
+        }
+        assertThatThrownBy(() -> service.send(requester, "Encore", "Texte"))
+            .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+                refusal -> assertThat(refusal.getStatusCode().value()).isEqualTo(429));
+        // Another administrator is not held by this one's limit.
+        service.send(UUID.randomUUID(), "Encore", "Texte");
+    }
+
+    @Test
+    @DisplayName("an hour later the limit is free again, and an old duplicate is a new request")
+    void theHourlyLimitSlides() {
+        PlatformRequestService service = requestServiceAt(UUID.randomUUID());
+        java.time.Instant start = java.time.Instant.parse("2026-11-27T08:00:00Z");
+        service.setClock(java.time.Clock.fixed(start, java.time.ZoneOffset.UTC));
+        UUID requester = UUID.randomUUID();
+        UUID first = service.send(requester, "Plan", "Texte");
+        for (int i = 1; i < PlatformRequestService.MAX_REQUESTS_PER_HOUR; i++) {
+            service.send(requester, "Plan " + i, "Texte");
+        }
+
+        service.setClock(java.time.Clock.fixed(start.plus(java.time.Duration.ofMinutes(61)), java.time.ZoneOffset.UTC));
+
+        assertThat(service.send(requester, "Plan", "Texte")).isNotEqualTo(first);
+    }
+
     @Test
     @DisplayName("a request needs a subject and a message within their limits, each refusal naming its field")
     void aRequestIsValidatedFieldByField() {

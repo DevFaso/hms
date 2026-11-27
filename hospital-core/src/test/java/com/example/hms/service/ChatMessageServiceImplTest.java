@@ -400,6 +400,79 @@ class ChatMessageServiceImplTest {
             ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build(), Locale.ENGLISH));
     }
 
+    private void setSecurityContext(String... roles) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            "user", "pass", java.util.Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList()));
+    }
+
+    private void stubSave() {
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
+            .thenReturn(ChatMessageResponseDTO.builder().build());
+    }
+
+    /**
+     * Review of QA D4320: somebody who is staff at hospital B and a patient at
+     * hospital A writes to their doctor at A, and that doctor answers them. They
+     * share no staff assignment, but the care relationship holds.
+     */
+    @Test
+    void staffElsewhereAndPatientHere_reachesTheirClinician_andTheClinicianReachesThem() {
+        UUID nurseId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        User nursePatient = userWithRole(nurseId, "ROLE_NURSE");
+        nursePatient.getUserRoles().addAll(userWithRole(nurseId, "ROLE_PATIENT").getUserRoles());
+        User doctor = userWithRole(doctorId, "ROLE_DOCTOR");
+        when(userRepository.findById(nurseId)).thenReturn(Optional.of(nursePatient));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(doctor));
+        when(userRoleHospitalAssignmentRepository.sharesActiveHospital(any(), any())).thenReturn(false);
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(any())).thenReturn(true);
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(nurseId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(true);
+        stubSave();
+        ChatMessageServiceImpl service = spy(chatMessageService);
+
+        setSecurityContext("ROLE_NURSE", "ROLE_PATIENT");
+        doReturn(nurseId).when(service).getCurrentUserId();
+        assertNotNull(service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build(), Locale.ENGLISH));
+
+        setSecurityContext("ROLE_DOCTOR");
+        doReturn(doctorId).when(service).getCurrentUserId();
+        assertNotNull(service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(nurseId).content("hi").build(), Locale.ENGLISH));
+    }
+
+    /**
+     * An identity provider's stock roles (offline access, default realm roles)
+     * are not HMS roles: a patient holding them is still a patient, and keeps
+     * the patient boundary (QA D170).
+     */
+    @Test
+    void aPatientWithIdentityProviderStockRolesIsStillAPatient() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(userWithRole(patientId, "ROLE_PATIENT")));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(userWithRole(doctorId, "ROLE_DOCTOR")));
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(false);
+        setSecurityContext("ROLE_PATIENT", "ROLE_OFFLINE_ACCESS", "ROLE_UMA_AUTHORIZATION",
+            "ROLE_DEFAULT-ROLES-HMS");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build();
+
+        assertThrows(com.example.hms.exception.ClientSafeAccessDeniedException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).save(any());
+    }
+
     @Test
     void qaD197_patientToPatientIsAForbiddenNotAServerError() {
         UUID patientId = UUID.randomUUID();

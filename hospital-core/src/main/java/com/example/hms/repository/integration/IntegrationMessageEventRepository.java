@@ -111,6 +111,9 @@ public interface IntegrationMessageEventRepository
     /** QA D4302: the rows of one exchange, oldest first, for the detail view. */
     List<IntegrationMessageEvent> findTop50ByCorrelationIdOrderByReceivedAtAsc(String correlationId);
 
+    /** How many rows one exchange has (the detail view shows its first 50 and says so). */
+    long countByCorrelationId(String correlationId);
+
     /** Names of the organisations a page of messages belongs to: {@code [id, name]}. */
     @Query("SELECT o.id, o.name FROM Organization o WHERE o.id IN :ids")
     List<Object[]> findOrganizationNames(@Param("ids") Collection<UUID> ids);

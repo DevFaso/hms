@@ -942,7 +942,8 @@
       "NO_PAYLOAD": "Aucun contenu n’a été enregistré pour ce message.",
       "LOADING": "Chargement du contenu…",
       "LOAD_ERROR": "Impossible de charger le contenu de ce message. Réessayez.",
-      "EXCHANGE": "Tentatives de cet échange"
+      "EXCHANGE": "Tentatives de cet échange",
+      "EXCHANGE_PREVIEW": "Les {{shown}} premières tentatives sur {{total}}."
     }
   },
   "INTEGRATION_HEALTH": {
@@ -1625,6 +1626,7 @@
     "TREND_BAR_TITLE": "{{count}} rendez-vous"
   },
   "ANNOUNCEMENTS": {
+    "PLATFORM_WIDE": "Plateforme",
     "CREATE": "Créer",
     "CREATE_ANNOUNCEMENT": "Créer une annonce",
     "DELETE_ANNOUNCEMENT": "Supprimer l'annonce",
@@ -10744,7 +10746,8 @@
       "send": "Envoyer",
       "sending": "Envoi…",
       "sent": "Demande envoyée aux administrateurs de la plateforme.",
-      "failed": "La demande n’a pas pu être envoyée. Réessayez."
+      "failed": "La demande n’a pas pu être envoyée. Réessayez.",
+      "required": "Ce champ est obligatoire."
     }
   },
   "common": {

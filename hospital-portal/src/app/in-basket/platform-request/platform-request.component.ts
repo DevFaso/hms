@@ -1,10 +1,14 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { ToastService } from '../../core/toast.service';
 import { refusalReason } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+const SUBJECT_ID = 'platform-request-subject';
+const MESSAGE_ID = 'platform-request-message';
 
 /** The limits the server enforces (PlatformRequestService). */
 export const PLATFORM_REQUEST_SUBJECT_MAX = 120;
@@ -73,7 +77,7 @@ export const PLATFORM_REQUEST_MESSAGE_MAX = 2000;
             <button
               type="submit"
               class="btn-primary"
-              [disabled]="sending() || !subject.trim() || !message.trim()"
+              [disabled]="sending()"
               data-testid="platform-request-send"
             >
               {{
@@ -141,6 +145,7 @@ export class PlatformRequestComponent {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly subjectMax = PLATFORM_REQUEST_SUBJECT_MAX;
   readonly messageMax = PLATFORM_REQUEST_MESSAGE_MAX;
@@ -159,7 +164,14 @@ export class PlatformRequestComponent {
 
   send(): void {
     // One request per press: a second submit while one is in flight is ignored.
-    if (this.sending() || !this.subject.trim() || !this.message.trim()) return;
+    if (this.sending()) return;
+    const required = this.translate.instant('inBasket.platformRequest.required');
+    const blank = [
+      ...(this.subject.trim() ? [] : [SUBJECT_ID]),
+      ...(this.message.trim() ? [] : [MESSAGE_ID]),
+    ];
+    refuseFields(this.host.nativeElement, blank, [SUBJECT_ID, MESSAGE_ID], required);
+    if (blank.length > 0) return;
     this.sending.set(true);
     this.error.set(null);
     this.http

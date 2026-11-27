@@ -42,8 +42,16 @@ public record IntegrationMessageEventDTO(
      */
     boolean resolved,
     /** QA D4302: every row of the same exchange, oldest first. Detail view only; null in a list. */
-    List<Attempt> attempts
+    List<Attempt> attempts,
+    /**
+     * How many rows the exchange has. {@code attempts} is a preview of its first
+     * {@value #ATTEMPTS_PREVIEW}; the page says so when this is larger. Null in a list.
+     */
+    Long attemptsTotal
 ) {
+    /** The rows of an exchange the detail view lists. */
+    public static final int ATTEMPTS_PREVIEW = 50;
+
     /** One row of an exchange: the original, a sender's retry or an operator's replay. */
     public record Attempt(
         UUID id,

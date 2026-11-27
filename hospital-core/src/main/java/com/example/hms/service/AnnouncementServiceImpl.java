@@ -159,7 +159,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         return new AnnouncementResponseDTO(
             announcement.getId(),
             announcement.getText(),
-            announcement.getDate()
+            announcement.getDate(),
+            announcement.getHospital() == null
         );
     }
 

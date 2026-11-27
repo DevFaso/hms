@@ -1,15 +1,26 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AnnouncementService, AnnouncementResponse } from '../services/announcement.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+const TEXT_FIELD_ID = 'announcementText';
 
 @Component({
   selector: 'app-announcement-list',
@@ -31,12 +42,25 @@ export class AnnouncementListComponent implements OnInit {
   private readonly announcementService = inject(AnnouncementService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** True when the logged-in user has an admin-level role */
   get canManage(): boolean {
     const roles = this.auth.getUserProfile()?.roles ?? [];
     return roles.some((r) => ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'].includes(r));
+  }
+
+  /**
+   * Whether this reader may change this announcement. A platform one is listed at
+   * every hospital but changed only by a platform administrator in global view
+   * (the server answers anybody else as if it did not exist).
+   */
+  canEdit(announcement: AnnouncementResponse): boolean {
+    if (!this.canManage) return false;
+    if (!announcement.platformWide) return true;
+    return this.roleContext.isSuperAdmin() && this.roleContext.globalView();
   }
 
   announcements = signal<AnnouncementResponse[]>([]);
@@ -107,16 +131,21 @@ export class AnnouncementListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.formText.trim()) {
-      this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_REQUIRED'));
+      const message = this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_REQUIRED');
+      refuseFields(this.host.nativeElement, [TEXT_FIELD_ID], [TEXT_FIELD_ID], message);
+      this.toast.error(message);
       return;
     }
     // QA D4321: a pasted text can exceed what the field lets one type.
     if (this.formText.trim().length > this.maxTextLength) {
-      this.toast.error(
-        this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_TOO_LONG', { max: this.maxTextLength }),
-      );
+      const message = this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_TOO_LONG', {
+        max: this.maxTextLength,
+      });
+      refuseFields(this.host.nativeElement, [TEXT_FIELD_ID], [TEXT_FIELD_ID], message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], [TEXT_FIELD_ID]);
     this.saving.set(true);
     const existing = this.editing();
     const op = existing

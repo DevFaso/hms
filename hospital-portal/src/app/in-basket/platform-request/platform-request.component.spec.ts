@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { PlatformRequestComponent } from './platform-request.component';
 import { ToastService } from '../../core/toast.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 describe('PlatformRequestComponent (D4308)', () => {
   let fixture: ComponentFixture<PlatformRequestComponent>;
@@ -67,6 +68,16 @@ describe('PlatformRequestComponent (D4308)', () => {
     const error = fixture.nativeElement.querySelector('[data-testid="platform-request-error"]');
     expect(error.textContent.trim()).toBe('Le message ne peut pas dépasser 2000 caractères.');
     expect(component.open()).toBeTrue();
+  });
+
+  it('an empty request is refused on its fields and nothing is sent', () => {
+    document.body.appendChild(fixture.nativeElement);
+    component.open.set(true);
+    fixture.detectChanges();
+
+    expectEmptySubmitRefusal(fixture, { button: '[data-testid="platform-request-send"]' });
+    http.expectNone('/platform-requests');
+    (fixture.nativeElement as HTMLElement).remove();
   });
 
   it('sends nothing while a field is empty', () => {

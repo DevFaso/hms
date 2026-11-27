@@ -159,6 +159,11 @@ class R81PlatformQueriesRepositoryTest {
         assign(disabledAdmin, null, superAdmin, true);
         User formerAdmin = user("former-admin", true);
         assign(formerAdmin, null, superAdmin, false);
+        // Revoked by deactivating the assignment: the account keeps its role link and another role.
+        em.persist(com.example.hms.model.UserRole.builder()
+            .id(new com.example.hms.model.UserRoleId(formerAdmin.getId(), superAdmin.getId()))
+            .user(formerAdmin).role(superAdmin).build());
+        assign(formerAdmin, hospitalA, nurse, true);
         assign(user("nurse-a", true), hospitalA, nurse, true);
         em.flush();
 
