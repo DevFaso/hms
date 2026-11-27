@@ -93,6 +93,7 @@ class RequestBodyScopeAdviceTest {
     @AfterEach
     void clear() {
         HospitalContextHolder.clear();
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -132,6 +133,51 @@ class RequestBodyScopeAdviceTest {
 
         assertThatCode(() -> read("plain", body(FOREIGN, null, null))).doesNotThrowAnyException();
         assertThat(ActingScopeResolver.pinnedHospitalIdOf(HospitalContextHolder.getContextOrEmpty())).isEqualTo(OWN);
+    }
+
+    @Test
+    @DisplayName("an organisation admin's hospital of the organisation is not narrowed to, so no refusal is recorded")
+    void theOrganisationScopeIsCheckedBeforeAnyRefusal() {
+        actingAt(OWN, Set.of(OWN));
+        when(access.organisationHospitalIds()).thenReturn(Set.of(OWN, FOREIGN));
+
+        assertThatCode(() -> read("plain", body(FOREIGN, null, null))).doesNotThrowAnyException();
+        verify(resolver, never()).narrowTo(any());
+    }
+
+    @Test
+    @DisplayName("on a write, a hospital where a staff caller is only a patient is refused with 403")
+    void aHospitalWhereTheCallerIsOnlyAPatientIsRefusedOnAWrite() {
+        treatedAt(ALSO_HELD);
+        writing("/api/encounters");
+
+        assertThatThrownBy(() -> read("plain", body(ALSO_HELD, null, null)))
+            .isInstanceOf(HospitalScopeRefusedException.class);
+    }
+
+    @Test
+    @DisplayName("on a write, a patient is measured only against the hospitals where the caller works")
+    void aPatientIsMeasuredOnlyWhereTheCallerWorks() {
+        treatedAt(ALSO_HELD);
+        writing("/api/encounters");
+        UUID patient = UUID.randomUUID();
+        when(registrations.existsByPatientIdAndHospitalIdIn(eq(patient), any())).thenAnswer(call ->
+            call.<java.util.Collection<UUID>>getArgument(1).contains(ALSO_HELD));
+
+        assertThatThrownBy(() -> read("plain", body(null, patient, null)))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("the patient portal keeps the hospital where the caller is a patient")
+    void thePatientPortalKeepsTheCallersOwnHospital() {
+        treatedAt(ALSO_HELD);
+        writing("/api/me/patient/appointments");
+        when(resolver.narrowTo(ALSO_HELD))
+            .thenReturn(new ActingScope.Pinned(ALSO_HELD, ActingScope.Source.REQUESTED));
+
+        assertThatCode(() -> read("plain", body(ALSO_HELD, null, null))).doesNotThrowAnyException();
+        verify(resolver).narrowTo(ALSO_HELD);
     }
 
     @Test
@@ -254,6 +300,27 @@ class RequestBodyScopeAdviceTest {
             .activeHospitalId(hospitalId)
             .hospitalFacilityTypes(Map.of(hospitalId, FacilityType.HOSPITAL))
             .build());
+    }
+
+    /** A doctor of OWN who is also a patient at {@code patientAt}: several hospitals, none named. */
+    private static void treatedAt(UUID patientAt) {
+        HospitalContextHolder.clear();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(CALLER)
+            .permittedHospitalIds(Set.of(OWN, patientAt))
+            .staffHospitalIds(Set.of(OWN))
+            .hospitalRoles(Map.of(OWN, Set.of("ROLE_DOCTOR"), patientAt, Set.of("ROLE_PATIENT")))
+            .scopeRefusal(ActingScope.Reason.AMBIGUOUS)
+            .hospitalFacilityTypes(Map.of(OWN, FacilityType.HOSPITAL, patientAt, FacilityType.HOSPITAL))
+            .build());
+    }
+
+    private static void writing(String uri) {
+        org.springframework.mock.web.MockHttpServletRequest request =
+            new org.springframework.mock.web.MockHttpServletRequest("POST", uri);
+        request.setContextPath("/api");
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+            new org.springframework.web.context.request.ServletRequestAttributes(request));
     }
 
     private static EncounterRequestDTO body(UUID hospitalId, UUID patientId, UUID staffId) {

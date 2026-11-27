@@ -70,6 +70,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final com.example.hms.repository.StaffRepository staffRepository;
     private final ObgynReferralMapper referralMapper;
     private final ObjectMapper objectMapper;
     private final RecordAccessPolicy recordAccessPolicy;
@@ -184,6 +185,13 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             throw new FieldBusinessException("obgynUserId", "obgynReferral.acknowledge.obgynRequired");
         }
 
+        // r81: the obstetrician named is an active staff member of the referral's hospital;
+        // anyone else answers as an unknown user.
+        if (referral.getHospital() == null || staffRepository
+            .findByUserIdAndHospitalId(request.getObgynUserId(), referral.getHospital().getId())
+            .filter(com.example.hms.model.Staff::isActive).isEmpty()) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_WITH_ID, request.getObgynUserId());
+        }
         User assignedObgyn = userRepository.findByIdWithRolesAndProfiles(request.getObgynUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_WITH_ID, request.getObgynUserId()));
 

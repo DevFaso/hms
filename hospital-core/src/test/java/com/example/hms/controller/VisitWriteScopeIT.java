@@ -73,7 +73,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * A is refused (403 for a hospital not held, 404 for the patient and the clinician, as for an
  * unknown id), the answer carries nothing about the patient, and no visit exists afterwards. At
  * their own hospital both doctors still open a visit, and a doctor who holds both hospitals opens
- * one at the hospital the body names (not the one selected), recorded and audited there.
+ * one at the hospital the body names (not the one selected), recorded and audited there. A doctor
+ * who is only a patient at the other hospital cannot write there either.
  */
 @AutoConfigureMockMvc(addFilters = false)
 @DisplayName("r81 D4260: a visit is created only at the caller's own hospital")
@@ -99,6 +100,7 @@ class VisitWriteScopeIT extends BaseIT {
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private EncounterRepository encounterRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     private Organization organization;
     private Hospital hospitalA;
@@ -228,6 +230,47 @@ class VisitWriteScopeIT extends BaseIT {
             .containsOnly(hospitalB.getId());
     }
 
+    @Test
+    @DisplayName("a doctor of B who is a patient at A cannot open a visit at A (403); at B they still can")
+    void aDoctorWhoIsOnlyAPatientAtAHospitalCannotWriteThere() throws Exception {
+        // r81 review: B's doctor is registered as a patient at A, which gives a PATIENT role there.
+        alsoAssign(doctorB.user(), hospitalA, "ROLE_PATIENT");
+
+        MvcResult refused = mockMvc.perform(post(API + "/encounters")
+                .with(actingLive(doctorB.user()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(visit(hospitalA.getId(), patientA, doctorA, departmentA))))
+            .andReturn();
+        MvcResult created = mockMvc.perform(post(API + "/encounters")
+                .with(actingLive(doctorB.user()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(visit(hospitalB.getId(), patientB, doctorB, departmentB))))
+            .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).as(refused.getResponse().getContentAsString()).isEqualTo(403);
+        assertSaysNothingOf(refused, patientA);
+        assertThat(visitsOf(patientA, hospitalA)).isZero();
+        assertThat(created.getResponse().getStatus()).as(created.getResponse().getContentAsString()).isEqualTo(201);
+        assertThat(visitsOf(patientB, hospitalB)).isEqualTo(1);
+    }
+
+    /** The caller's context as the auth filters build it, from their live assignments, no header. */
+    private RequestPostProcessor actingLive(User user) {
+        return request -> {
+            Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_DOCTOR),
+                new SimpleGrantedAuthority("ROLE_PATIENT"));
+            CustomUserDetails principal = new CustomUserDetails(
+                user.getId(), user.getUsername(), user.getPasswordHash(), true, authorities);
+            Authentication auth = new UsernamePasswordAuthenticationToken(principal, user.getPasswordHash(), authorities);
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            HospitalContextHolder.clear();
+            HospitalContextHolder.setContext(actingScopeResolver.liveContext(user.getId(), user.getUsername()));
+            request.setContextPath(API);
+            request.setUserPrincipal(auth);
+            return authentication(auth).postProcessRequest(request);
+        };
+    }
+
     private long visitsOf(Patient patient, Hospital hospital) {
         return encounterRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId(),
             org.springframework.data.domain.Pageable.unpaged()).getTotalElements();
@@ -344,11 +387,17 @@ class VisitWriteScopeIT extends BaseIT {
 
     /** One more active DOCTOR assignment for {@code user}, at {@code hospital}. */
     private UserRoleHospitalAssignment alsoAssign(User user, Hospital hospital) {
-        Role role = roleRepository.findByCode(ROLE_DOCTOR)
-            .orElseGet(() -> roleRepository.save(Role.builder().name("DOCTOR").code(ROLE_DOCTOR)
-                .description(ROLE_DOCTOR).build()));
+        return alsoAssign(user, hospital, ROLE_DOCTOR);
+    }
+
+    /** One more active assignment in {@code roleCode} for {@code user}, at {@code hospital}. */
+    private UserRoleHospitalAssignment alsoAssign(User user, Hospital hospital, String roleCode) {
+        String name = roleCode.substring("ROLE_".length());
+        Role role = roleRepository.findByCode(roleCode)
+            .orElseGet(() -> roleRepository.save(Role.builder().name(name).code(roleCode)
+                .description(roleCode).build()));
         return assignmentRepository.save(UserRoleHospitalAssignment.builder()
-            .assignmentCode("ASSIGN-VS-" + nextId()).description("DOCTOR at " + hospital.getName())
+            .assignmentCode("ASSIGN-VS-" + nextId()).description(name + " at " + hospital.getName())
             .user(user).hospital(hospital).role(role).startDate(LocalDate.now())
             .assignedAt(LocalDateTime.now()).active(true).build());
     }

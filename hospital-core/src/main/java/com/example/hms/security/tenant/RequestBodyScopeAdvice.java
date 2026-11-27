@@ -7,6 +7,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.service.support.UserAccountAccess;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,6 +25,7 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,7 +40,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code hospitalId} path variable or request parameter.
  *
  * <ul>
- *   <li><b>{@code hospitalId}</b>: one the caller holds a role at. The request
+ *   <li><b>{@code hospitalId}</b>: one the caller holds a role at (on a write
+ *       outside the patient portal, a role other than PATIENT). The request
  *       then acts there (the scope is narrowed to it, so the write is recorded
  *       and audited at that hospital); any other hospital is refused with 403,
  *       audited. A hospital of the organisation an organisation admin
@@ -159,12 +162,14 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
         if (hospitalId.equals(ActingScopeResolver.pinnedHospitalIdOf(context))) {
             return;
         }
-        if (!context.getPermittedHospitalIds().contains(hospitalId)) {
+        if (!worksAt(context, hospitalId)) {
+            // A hospital of the organisation an organisation admin administers passes
+            // un-narrowed, before narrowTo: it is not a refusal, so none is audited.
+            if (insideOrganisationScope(hospitalId)) {
+                return;
+            }
             // Not held: narrowTo audits the refusal and leaves the scope as it was.
             if (resolver.narrowTo(hospitalId) instanceof ActingScope.Refused(ActingScope.Reason reason)) {
-                if (insideOrganisationScope(hospitalId)) {
-                    return;
-                }
                 throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason), hospitalId);
             }
             return;
@@ -174,6 +179,16 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
         }
         // Read or narrowed already, to another hospital the caller holds: the handler's
         // own resolveHospitalScope and its service decide, as they did before.
+    }
+
+    /**
+     * A hospital the caller may act at on this request: one they hold a role at,
+     * and on a write outside the patient portal not one where they are only a
+     * patient ({@link HospitalContextRequestOverrides#refusesStaffWriteAt}).
+     */
+    private static boolean worksAt(HospitalContext context, UUID hospitalId) {
+        return context.getPermittedHospitalIds().contains(hospitalId)
+            && !HospitalContextRequestOverrides.refusesStaffWriteAt(context, hospitalId);
     }
 
     private boolean insideOrganisationScope(UUID hospitalId) {
@@ -192,13 +207,22 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
         return exempt == null ? Set.of() : Set.of(exempt.fields());
     }
 
-    /** The pinned hospital, else (several held, none named) every hospital the caller holds. */
+    /** The pinned hospital, else (several held, none named) every hospital the caller may act at. */
     private static Set<UUID> actingHospitals(HospitalContext context) {
         UUID pinned = ActingScopeResolver.pinnedHospitalIdOf(context);
         if (pinned != null) {
             return Set.of(pinned);
         }
-        return context.getPermittedHospitalIds() == null ? Set.of() : context.getPermittedHospitalIds();
+        if (context.getPermittedHospitalIds() == null) {
+            return Set.of();
+        }
+        Set<UUID> held = new LinkedHashSet<>();
+        for (UUID hospitalId : context.getPermittedHospitalIds()) {
+            if (worksAt(context, hospitalId)) {
+                held.add(hospitalId);
+            }
+        }
+        return held;
     }
 
     private static boolean actsAtAProviderFacility(HospitalContext context, Set<UUID> hospitals) {

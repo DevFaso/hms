@@ -51,6 +51,9 @@ import static org.mockito.Mockito.when;
  * QA r81 D4260: a request body that names a hospital, a patient or a staff member is measured
  * against the hospital the caller acts at, on every handler, before the handler runs.
  *
+ * <p>A staff member is also named as a provider, a physician, a clinician or a user: those names are
+ * recorded too (r81 review).
+ *
  * <p>{@link RequestBodyScopeAdvice} is the one place that does it. This guard walks Spring's mapping
  * registry, finds every handler whose {@code @RequestBody} carries {@code hospitalId},
  * {@code patientId}, {@code staffId} or a {@code ...StaffId} (through nested request objects and
@@ -91,6 +94,21 @@ class RequestBodyScopeGuardTest {
     private static final String MERGE_IN_SCOPE = "EmpiServiceImpl merges two patients only inside the caller's scope";
     private static final String ANOTHER_HOSPITAL_BY_DESIGN = "names the OTHER hospital of a referral, a transfer or a"
         + " performing laboratory, never the hospital the row is written at";
+    private static final String PHYSICIAN_OF_THE_STAY = "AdmissionServiceImpl.requirePhysician: a physician at the"
+        + " stay's hospital (and, for the admitting or discharging one, the caller unless a super-admin)";
+    private static final String SUPER_ADMIN_AUDIT_FILTER = "a filter of the super-admin audit search (a read)";
+    private static final String AUTHOR_IS_THE_CALLER = "EncounterServiceImpl.resolveSessionNoteAuthor: the author is"
+        + " the signed-in user; any other id is refused";
+    private static final String RELEASE_AUTHORITY = "OPositiveReleaseAuthorityService / IncompatibleReleaseDecisions:"
+        + " an active holder of the required role at the release's hospital";
+    private static final String IGNORED_REGISTRAR = "not read: the registrar is the caller"
+        + " (UserRoleHospitalAssignmentServiceImpl.requireCallerAccount)";
+    private static final String HOLDER_IN_REACH = "UserRoleHospitalAssignmentServiceImpl: the holder must be in the"
+        + " caller's reach (UserAccountAccess.holderReach) and the grant passes requireMayGrant";
+    private static final String STAFF_OF_THE_HOSPITAL = "r81: the service resolves only a staff member of the acting"
+        + " hospital; any other answers 404 as an unknown id";
+    /** Fields whose rule is a follow-up of the r81 review; this list only shrinks. */
+    private static final String FOLLOW_UP = "follow-up of the r81 review: its rule is being settled";
 
     /** {@code Controller#handler} -> the fields it lifts and why. Frozen: it only shrinks. */
     private static final Map<String, String> LIFTED = Map.ofEntries(
@@ -145,10 +163,62 @@ class RequestBodyScopeGuardTest {
             + " registered from the delivery the assessment belongs to"),
         entry("GeneralReferralRequestDTO#receivingHospitalId", ANOTHER_HOSPITAL_BY_DESIGN),
         entry("LabOrderRequestDTO#performingHospitalId", ANOTHER_HOSPITAL_BY_DESIGN),
-        entry("LaborTransferRequestDTO#destinationHospitalId", ANOTHER_HOSPITAL_BY_DESIGN));
+        entry("LaborTransferRequestDTO#destinationHospitalId", ANOTHER_HOSPITAL_BY_DESIGN),
+        entry("AdmissionDischargeRequestDTO#dischargingProviderId", PHYSICIAN_OF_THE_STAY),
+        entry("AdmissionRequestDTO#admittingProviderId", PHYSICIAN_OF_THE_STAY),
+        entry("AdmissionRequestDTO#attendingPhysicianId", PHYSICIAN_OF_THE_STAY),
+        entry("AdmissionUpdateRequestDTO#attendingPhysicianId", PHYSICIAN_OF_THE_STAY),
+        entry("AdtIntakeProviderConfigRequestDTO#admittingProviderId", "AdtIntakeProviderConfigServiceImpl: an active"
+            + " staff member of the body's hospital holding an admitting role there"),
+        entry("AuditSearchRequestDTO#impersonatorUserId", SUPER_ADMIN_AUDIT_FILTER),
+        entry("AuditSearchRequestDTO#userId", SUPER_ADMIN_AUDIT_FILTER),
+        entry("DischargeSummaryRequestDTO#dischargingProviderId", "DischargeSummaryServiceImpl: a treating clinician"
+            + " of the acting hospital (TenantOwnership), the caller unless a super-admin"),
+        entry("EmergencyReleaseRequestDTO#authoriserUserId", RELEASE_AUTHORITY),
+        entry("EmergencyReleaseRequestDTO#biologistUserId", RELEASE_AUTHORITY),
+        entry("EmergencyReleaseRequestDTO#orderingPhysicianUserId", RELEASE_AUTHORITY),
+        entry("EncounterNoteAddendumRequestDTO#authorUserId", AUTHOR_IS_THE_CALLER),
+        entry("EncounterNoteRequestDTO#authorUserId", AUTHOR_IS_THE_CALLER),
+        entry("GeneralReferralRequestDTO#receivingProviderId", "GeneralReferralServiceImpl: a physician working at"
+            + " the receiving hospital, which is another hospital by design"),
+        entry("GeneralReferralRequestDTO#referringProviderId", "GeneralReferralServiceImpl.requireReferrerIsCaller:"
+            + " the caller, a prescriber of the sending hospital"),
+        entry("ImagingOrderSignatureRequestDTO#providerUserId", "ImagingOrderServiceImpl: the signer is the signed-in"
+            + " user; any other id is refused"),
+        entry("ImagingOrderStatusUpdateRequestDTO#performedByUserId", "not read: the performer is the signed-in user"
+            + " (ImagingExamRecord)"),
+        entry("ImagingReportUpsertRequestDTO#interpretingProviderId", "ImagingReportServiceImpl.resolveStaff: a staff"
+            + " member of the report's hospital"),
+        entry("ImpersonationStartRequestDTO#targetUserId", SUPER_ADMIN_ONLY),
+        entry("LabTestValidationStudyRequestDTO#performedByUserId", "CallerIdentity.resolveActorUserId: the caller,"
+            + " unless a verified super-admin"),
+        entry("NurseHandoffCreateRequestDTO#recipientUserId", "NurseTaskServiceImpl: an active holder of a hand-off"
+            + " role at the acting hospital"),
+        entry("NurseMedicationAdministrationRequestDTO#witnessUserId", "ControlledAdministrationWitness: an active"
+            + " holder of a witness role at the prescription's hospital"),
+        entry("ObgynReferralAcknowledgeRequestDTO#obgynUserId", "r81: ObgynReferralServiceImpl accepts only an active"
+            + " staff member of the referral's hospital; any other answers 404 as an unknown user"),
+        entry("PatientRequestDTO#userId", FOLLOW_UP),
+        entry("RecallRequestDTO#preferredProviderId", STAFF_OF_THE_HOSPITAL),
+        entry("RuleSignoffRequestDTO#signerUserId", "HospitalRuleSignoffService: an active staff member of the"
+            + " hospital"),
+        entry("SmartPhraseRequestDTO#ownerUserId", "SmartPhraseServiceImpl.applyOwnershipDefaults: the caller for a"
+            + " personal phrase, none for a hospital or global one"),
+        entry("StaffRequestDTO#userEmail", FOLLOW_UP),
+        entry("TransfusionAdministrationRequestDTO#verifiedByUserId", "TransfusionServiceImpl: an active staff member"
+            + " of the transfusion's hospital"),
+        entry("UserRoleAssignmentBulkImportRequestDTO#registeredByUserId", IGNORED_REGISTRAR),
+        entry("UserRoleAssignmentMultiRequestDTO#registeredByUserId", IGNORED_REGISTRAR),
+        entry("UserRoleAssignmentMultiRequestDTO#userId", HOLDER_IN_REACH),
+        entry("UserRoleAssignmentMultiRequestDTO#userIdentifier", HOLDER_IN_REACH),
+        entry("UserRoleHospitalAssignmentRequestDTO#registeredByUserId", IGNORED_REGISTRAR),
+        entry("UserRoleHospitalAssignmentRequestDTO#userId", HOLDER_IN_REACH),
+        entry("UserRoleHospitalAssignmentRequestDTO#userIdentifier", HOLDER_IN_REACH),
+        entry("WaitlistEntryRequestDTO#preferredProviderId", STAFF_OF_THE_HOSPITAL));
 
     private static final Pattern NAMES_A_TENANT_ROW = Pattern.compile(
-        "(?i).*(hospital|patient|staff)(Id|Identifier|Code|Username|Email|Mrn)$");
+        "(?i).*(hospital|patient|staff|provider|physician|clinician|doctor|nurse|practitioner|prescriber|surgeon"
+            + "|midwife|pharmacist|technician|user|assignee)(Id|Identifier|Code|Username|Email|Mrn)$");
 
     private static final JsonMapper JSON = JsonMapper.builder()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -238,6 +308,10 @@ class RequestBodyScopeGuardTest {
             .as("request body fields naming a hospital, a patient or a staff member that RequestBodyScopeAdvice does"
                 + " not read: record each in NAMED_OTHERWISE with the rule its service applies, or rename the field")
             .containsExactlyInAnyOrderElementsOf(NAMED_OTHERWISE.keySet());
+        assertThat(NAMED_OTHERWISE.entrySet().stream().filter(e -> FOLLOW_UP.equals(e.getValue()))
+            .map(Map.Entry::getKey).toList())
+            .as("fields still waiting for a bounded rule: this list only shrinks")
+            .isSubsetOf("PatientRequestDTO#userId", "StaffRequestDTO#userEmail");
     }
 
     /* ---------------------------------------------------------------------
