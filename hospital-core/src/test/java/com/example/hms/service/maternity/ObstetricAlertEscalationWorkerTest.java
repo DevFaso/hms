@@ -386,6 +386,14 @@ class ObstetricAlertEscalationWorkerTest {
         verify(inBasketService, never()).createItem(any());
         assertThat(owed.getAcknowledgedAt()).as("closed by the record").isEqualTo(NOW);
         assertThat(owed.getAcknowledgedBy()).isNull();
+
+        // The delivery that follows the commit re-reads the record too.
+        owed.setAcknowledgedAt(null);
+        assertThat(worker.deliverFirstNotice(owed.getId(), general(
+            ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE, "POSITIVE_CULTURE", List.of("drA")))).isFalse();
+        verify(notificationService, never()).createNotification(any(), any(), any(), any());
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+        assertThat(owed.getAcknowledgedAt()).isEqualTo(NOW);
     }
 
     // ── Scorecard K4: the first notice is owed until it is delivered ───────────────────

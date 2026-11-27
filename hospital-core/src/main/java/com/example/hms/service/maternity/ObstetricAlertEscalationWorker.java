@@ -236,6 +236,11 @@ public class ObstetricAlertEscalationWorker {
         if (row == null) {
             return false;
         }
+        if (currency.noLongerUrgent(row)) {
+            // Review of #1370 (F2): the record no longer supports the alert; nothing is sent.
+            closeNoLongerUrgent(row, now);
+            return false;
+        }
         sendFirstNotice(row, alert != null ? alert : alertOf(row), now);
         return true;
     }
