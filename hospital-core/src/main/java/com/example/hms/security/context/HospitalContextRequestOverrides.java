@@ -5,6 +5,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.UUID;
 
@@ -27,6 +29,9 @@ public final class HospitalContextRequestOverrides {
 
     public static final String HEADER_HOSPITAL_ID = "X-Hospital-Id";
 
+    /** The patient portal: the caller acts on their own record, as a patient. */
+    public static final String PATIENT_PORTAL_PATH = "/me/patient";
+
     private static final Logger log = LoggerFactory.getLogger(HospitalContextRequestOverrides.class);
 
     private HospitalContextRequestOverrides() {
@@ -41,7 +46,10 @@ public final class HospitalContextRequestOverrides {
      *       chip-scoped view).</li>
      *   <li>A hospital in the principal's live permitted set → acting at it.
      *       This also settles a caller holding several hospitals, who
-     *       otherwise has none ({@code AMBIGUOUS}).</li>
+     *       otherwise has none ({@code AMBIGUOUS}). Outside the patient
+     *       portal, a hospital where a staff caller is only a patient is
+     *       ignored: the request runs on the live scope
+     *       ({@link #actsOnlyAsPatientAt}).</li>
      *   <li>Anything else, including a malformed value and a principal whose
      *       permitted set is EMPTY (a patient, a Keycloak principal with no
      *       local account, a user whose assignments were revoked) → refused
@@ -84,9 +92,58 @@ public final class HospitalContextRequestOverrides {
             return refused(effective, requestedHospital);
         }
 
+        if (actsOnlyAsPatientAt(effective, requestedHospital, request)) {
+            // A staff caller naming a hospital where they are only a patient (a
+            // stale chip, a patient hospital made primary), outside the patient
+            // portal: the header is ignored, not refused. The request runs on
+            // the live scope, so a request about their own account still passes
+            // and nothing of that hospital is read or written as staff.
+            log.info("[AUTH] Ignoring {} {}: the caller is only a patient there",
+                HEADER_HOSPITAL_ID, requestedHospital);
+            return effective;
+        }
+
         // Explicit: a super-admin is pinned by it, and the provisional
         // refusal of a multi-hospital caller is settled by it.
         return effective.actingAt(requestedHospital);
+    }
+
+    /**
+     * True when {@code request} acts as staff at a hospital where the caller is
+     * only a patient ({@link HospitalContext#isTreatedOnlyAt}): outside the
+     * patient portal, a staff caller reads and writes where they work. The
+     * patient portal's own paths and a request outside HTTP keep the caller's
+     * whole permitted set. A caller who works at a provider facility (a
+     * pharmacy, a laboratory) is left to the provider confinement, whose answer
+     * for a hospital endpoint must stay that of an unmapped path.
+     */
+    public static boolean actsOnlyAsPatientAt(HospitalContext context, UUID hospitalId, HttpServletRequest request) {
+        return context != null && context.isTreatedOnlyAt(hospitalId)
+            && (context.getProviderFacilityTypes() == null || context.getProviderFacilityTypes().isEmpty())
+            && request != null && !isPatientPortalPath(request);
+    }
+
+    /** {@link #actsOnlyAsPatientAt} for the request being served. */
+    public static boolean actsOnlyAsPatientAt(HospitalContext context, UUID hospitalId) {
+        return actsOnlyAsPatientAt(context, hospitalId, currentRequest());
+    }
+
+    /** True for {@link #PATIENT_PORTAL_PATH} and below, relative to the servlet context. */
+    public static boolean isPatientPortalPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        if (path == null) {
+            return false;
+        }
+        String context = request.getContextPath();
+        if (context != null && !context.isEmpty() && path.startsWith(context)) {
+            path = path.substring(context.length());
+        }
+        return path.equals(PATIENT_PORTAL_PATH) || path.startsWith(PATIENT_PORTAL_PATH + "/");
+    }
+
+    private static HttpServletRequest currentRequest() {
+        return RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes
+            ? attributes.getRequest() : null;
     }
 
     private static HospitalContext refused(HospitalContext context, UUID requestedHospital) {

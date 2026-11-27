@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
@@ -41,6 +42,7 @@ public class PatientAccountLinkGuard {
     static final String ALREADY_LINKED_KEY = "userId:patient.account.alreadyLinked";
     private static final String PATIENT = "PATIENT";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
 
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -66,6 +68,22 @@ public class PatientAccountLinkGuard {
         if (linkedElsewhere) {
             throw new ConflictException(ALREADY_LINKED_KEY);
         }
+    }
+
+    /**
+     * {@link #requireLinkable(User, UUID)} for a record written at {@code hospitalId}: the account
+     * must also hold a role there, active or awaiting its activation (the desk's registration
+     * gives it its PATIENT role at that hospital first). Any other account answers 404, exactly as an unknown id does, before
+     * the 409s, so the answer says nothing about an account outside the hospital (r81).
+     * A {@code null} hospital asks only {@link #requireLinkable(User, UUID)}.
+     */
+    public void requireLinkable(User user, UUID patientId, UUID hospitalId) {
+        if (user != null && user.getId() != null && hospitalId != null
+            && !assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(user.getId(), hospitalId)
+            && !assignmentRepository.existsByUserIdAndHospitalIdAndActiveFalse(user.getId(), hospitalId)) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_KEY, user.getId());
+        }
+        requireLinkable(user, patientId);
     }
 
     /**

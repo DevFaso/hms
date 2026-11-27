@@ -175,6 +175,23 @@ public class HospitalContext {
         return activeHospitalId;
     }
 
+    /**
+     * True when the caller is treated at {@code hospitalId} but does not work
+     * there: every role they hold at it is PATIENT, while they also hold a role
+     * other than PATIENT (a patient-only caller and a verified super-admin
+     * answer false; their scope has its own rule). Such a hospital is not one
+     * the caller may read or write at as staff (r81).
+     */
+    public boolean isTreatedOnlyAt(UUID hospitalId) {
+        if (hospitalId == null || superAdmin || patientOwned || hospitalRoles == null) {
+            return false;
+        }
+        Set<String> roles = hospitalRoles.get(hospitalId);
+        return roles != null && !roles.isEmpty() && roles.stream().allMatch(ROLE_PATIENT::equals);
+    }
+
+    private static final String ROLE_PATIENT = "ROLE_PATIENT";
+
     /** A verified super-admin who named no hospital: reads span every tenant. */
     public boolean isGlobalView() {
         return superAdmin && !headerOverridden && scopeRefusal == null;

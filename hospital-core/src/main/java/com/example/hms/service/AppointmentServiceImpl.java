@@ -1598,12 +1598,16 @@ public class AppointmentServiceImpl implements AppointmentService {
             return permitted;
         }
 
-        if (!actualHospitalIds.isEmpty()) {
+        // r81: the fallback never reads a hospital where a staff caller is only a patient.
+        Set<UUID> working = actualHospitalIds.stream()
+            .filter(id -> !com.example.hms.security.context.HospitalContextRequestOverrides.actsOnlyAsPatientAt(context, id))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (!working.isEmpty()) {
             if (log.isDebugEnabled()) {
-                log.debug("resolveScope → falling back to assignment hospitals {}", actualHospitalIds);
-                logHospitalLookup("fallback", actualHospitalIds);
+                log.debug("resolveScope → falling back to assignment hospitals {}", working);
+                logHospitalLookup("fallback", working);
             }
-            return actualHospitalIds;
+            return working;
         }
 
         if (log.isDebugEnabled()) {
