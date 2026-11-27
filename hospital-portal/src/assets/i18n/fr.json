@@ -8218,6 +8218,8 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "CONTROLLED_STOCK_WITNESS": "Confirmation du témoin de stupéfiant",
+        "FAMILY_ACCESS": "Accès famille",
         "PRICE_LIST_ITEM": "Article de la grille tarifaire",
         "BILLING": "Facturation",
         "SAFEGUARDING": "Revue de vigilance protection de l’enfance",

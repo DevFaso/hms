@@ -8252,6 +8252,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "CONTROLLED_STOCK_WITNESS": "Confirmación del testigo de estupefaciente",
+        "FAMILY_ACCESS": "Acceso familiar",
         "PRICE_LIST_ITEM": "Artículo de la lista de precios",
         "BILLING": "Facturación",
         "SAFEGUARDING": "Revisión de vigilancia de protección infantil",

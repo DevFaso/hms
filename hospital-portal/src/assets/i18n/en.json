@@ -8252,6 +8252,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "CONTROLLED_STOCK_WITNESS": "Controlled-drug witness confirmation",
+        "FAMILY_ACCESS": "Family access",
         "PRICE_LIST_ITEM": "Price list item",
         "BILLING": "Billing",
         "SAFEGUARDING": "Child-protection vigilance review",

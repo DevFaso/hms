@@ -27,6 +27,7 @@ public class WitnessConfirmationRequestDTO {
 
     /** The colleague who confirms; never the caller. */
     @NotNull
+    @com.example.hms.validation.StockWitnessEligible
     private UUID witnessedBy;
 
     /** The witness's password, or the code of their authenticator. */

@@ -2068,7 +2068,7 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   // QA D3451 (r77): a read of part of the record through a family-access grant (the section only).
   {
     key: 'AUDIT.DESC.FAMILY_ACCESS_READ',
-    re: /^Record read through family access \((\S+)\)$/,
+    re: /^Record read through family access \((\S*)\)$/,
     params: ['section'],
   },
   // Policy 2026-11-20: staff verified that the holder of a family-access grant is the parent or guardian.

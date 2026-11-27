@@ -136,13 +136,14 @@ public class ControlledWitnessConfirmation {
         try {
             mfaService.requireStepUp(witness.getId(), code.trim(), ACTION, true);
         } catch (MfaStepUpRefusedException ex) {
-            String key = switch (ex.getReason()) {
-                case LOCKED -> "witnessConfirmation.locked";
-                case REUSED -> "witnessConfirmation.reused";
-                case NOT_ENROLLED, UNAVAILABLE, UNIDENTIFIED -> "witnessConfirmation.unavailable";
-                default -> "witnessConfirmation.invalid";
+            String reason = ex.getReason().name();
+            throw switch (ex.getReason()) {
+                case LOCKED -> refused(witness, performer, hospitalId, METHOD_TOTP, reason, "witnessConfirmation.locked");
+                case REUSED -> refused(witness, performer, hospitalId, METHOD_TOTP, reason, "witnessConfirmation.reused");
+                case NOT_ENROLLED, UNAVAILABLE, UNIDENTIFIED ->
+                    refused(witness, performer, hospitalId, METHOD_TOTP, reason, "witnessConfirmation.unavailable");
+                default -> refused(witness, performer, hospitalId, METHOD_TOTP, reason, "witnessConfirmation.invalid");
             };
-            throw refused(witness, performer, hospitalId, METHOD_TOTP, ex.getReason().name(), key);
         }
     }
 

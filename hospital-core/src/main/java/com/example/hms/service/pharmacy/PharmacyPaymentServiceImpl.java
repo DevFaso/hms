@@ -161,12 +161,14 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         // Billing plan PR 11 (QA D2430): the same checkout sent again after its answer was lost.
         PharmacyPayment keyed = findKeyedPayment(hospitalId, dispense, dto);
+        // A replay answers with a payment recorded earlier: the list price read now may not be the price it
+        // charged, so its receipt prints no price line (and no insurer share), as every later read does.
         if (keyed != null) {
-            return toReceiptResponse(keyed, true);
+            return toReceiptResponse(keyed, false);
         }
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
-            return toReceiptResponse(replay.get(), true);
+            return toReceiptResponse(replay.get(), false);
         }
         requireAmountIsPatientShare(dispense, dto.getAmount(), hospitalId);
 
