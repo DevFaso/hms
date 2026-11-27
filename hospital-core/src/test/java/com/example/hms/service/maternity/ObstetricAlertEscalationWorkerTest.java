@@ -274,8 +274,9 @@ class ObstetricAlertEscalationWorkerTest {
         assertThat(worker.escalateOne(r.getId())).isTrue();
 
         // The alert's own circle keeps its reminder, and the covering clinician is added to it.
+        // QA D4106 (r81): the notice says the alert was passed to the covering clinician, not « rappel 1 ».
         for (String u : List.of("drA", "mwB", "nurseC", "drCover")) {
-            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.REMINDER_KEY),
+            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_STEP_KEY),
                 org.mockito.ArgumentMatchers.any(), eq(u), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         }
         // The clinician the step adds gets the staff SMS: initials, nothing clinical.
@@ -716,15 +717,18 @@ class ObstetricAlertEscalationWorkerTest {
         verify(messageSource).getMessage(eq("patient.fallback.generic"), isNull(), any());
         // QA D659: the reminder still names the patient (here the keyed fallback), keyed per reader (D665).
         // QA D2582 (r65): the documenter's reminder never sends her to acknowledge in an in-basket she has no item in.
-        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_REMINDER_KEY),
+        // QA D4106 (r81): hers names no reminder number, only how long it has waited.
+        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_WAITING_KEY),
             org.mockito.ArgumentMatchers.any(), eq("documenter"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(notificationService, never()).createNotification(
-            eq(ObstetricAlertEscalationWorker.REMINDER_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
+            eq(ObstetricAlertEscalationWorker.LEAD_STEP_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
             org.mockito.ArgumentMatchers.any());
+        // The second step names the médecin-chef, and the minutes since the first notice.
         for (String u : List.of("drA", "mwB", "nurseC")) {
-            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.REMINDER_KEY),
-                org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && "2".equals(a[0]) && "".equals(a[1])
-                    && java.util.Map.of("key", "patient.fallback.generic").equals(a[2]) && "".equals(a[3])),
+            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.LEAD_STEP_KEY),
+                org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && "".equals(a[0])
+                    && java.util.Map.of("key", "patient.fallback.generic").equals(a[1]) && "".equals(a[2])
+                    && a[3] instanceof Long),
                 eq(u), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         }
     }
@@ -739,8 +743,8 @@ class ObstetricAlertEscalationWorkerTest {
         p.setLastName("Traore");
         when(patientRepository.findByIdUnscoped(PATIENT)).thenReturn(Optional.of(p));
         assertThat(worker.escalateOne(r.getId())).isTrue();
-        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.REMINDER_KEY),
-            org.mockito.ArgumentMatchers.argThat(a -> a[2] instanceof String n && n.contains("Awa")),
+        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_STEP_KEY),
+            org.mockito.ArgumentMatchers.argThat(a -> a[1] instanceof String n && n.contains("Awa")),
             eq("drA"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
     }
 

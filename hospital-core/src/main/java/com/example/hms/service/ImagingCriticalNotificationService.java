@@ -181,7 +181,15 @@ public class ImagingCriticalNotificationService {
     /** The incident of a finding a clinician has since acknowledged is closed, with that clinician's name on it. */
     private void closeAnsweredIncidents() {
         for (UrgentAlertIncident incident : ladder.openIncidents(UrgentAlertIncident.SOURCE_IMAGING_REPORT)) {
-            imagingReportRepository.findById(incident.getSourceId())
+            Optional<ImagingReport> source = imagingReportRepository.findById(incident.getSourceId());
+            if (source.filter(ImagingCriticalNotificationService::isSuperseded).isPresent()
+                    && source.get().getCriticalResultAcknowledgedAt() == null) {
+                // QA D4157 (r81): a corrected version replaced this one; the finding is answered on the newer one.
+                ladder.closeIncident(UrgentAlertIncident.SOURCE_IMAGING_REPORT, incident.getSourceId(),
+                    UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, LocalDateTime.now(clock));
+                continue;
+            }
+            source
                 .filter(report -> report.getCriticalResultAcknowledgedAt() != null)
                 .ifPresent(report -> {
                     User by = report.getCriticalResultAcknowledgedBy() == null
@@ -193,7 +201,19 @@ public class ImagingCriticalNotificationService {
         }
     }
 
+    /**
+     * QA D4157 (r81): a version a later one replaced (a corrected or amended report) is no longer what the
+     * clinician acts on. It leaves the ladder: the newer version carries its own alert if it is still critical,
+     * and one finding never asks for two acknowledgements.
+     */
+    static boolean isSuperseded(ImagingReport report) {
+        return Boolean.FALSE.equals(report.getLatestVersion());
+    }
+
     private boolean escalateOne(ImagingReport report, LocalDateTime now) {
+        if (isSuperseded(report)) {
+            return false;
+        }
         int level = report.getCriticalEscalationLevel() == null ? 0 : report.getCriticalEscalationLevel();
         UUID hospitalId = report.getHospital() != null ? report.getHospital().getId() : null;
         Optional<CriticalResultEscalationLadder.Step> due = ladder.due(level, report.getCriticalNotifiedAt(),

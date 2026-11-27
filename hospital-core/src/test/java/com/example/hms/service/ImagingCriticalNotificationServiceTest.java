@@ -377,6 +377,37 @@ class ImagingCriticalNotificationServiceTest {
     }
 
     @Test
+    void aSupersededVersionLeavesTheLadder() {
+        // QA D4157 (r81): v1 and its correction v3 escalated as two alerts. A version a later one replaced is not
+        // escalated; the newer version carries the finding.
+        ImagingReport superseded = flagged();
+        superseded.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
+        superseded.setLatestVersion(false);
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(superseded));
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+        assertThat(superseded.getCriticalEscalationLevel()).isNotEqualTo((short) 1);
+    }
+
+    @Test
+    void theIncidentOfASupersededVersionCloses() {
+        ImagingReport superseded = flagged();
+        superseded.setLatestVersion(false);
+        when(ladder.openIncidents(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT)).thenReturn(List.of(
+            com.example.hms.model.UrgentAlertIncident.builder().sourceId(superseded.getId()).build()));
+        when(imagingReportRepository.findById(superseded.getId())).thenReturn(Optional.of(superseded));
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of());
+
+        service.escalateOverdue();
+
+        verify(ladder).closeIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT),
+            eq(superseded.getId()), eq(com.example.hms.model.UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT),
+            org.mockito.ArgumentMatchers.isNull(), any());
+    }
+
+    @Test
     void anAcknowledgedFindingClosesItsIncident() {
         ImagingReport report = flagged();
         LocalDateTime acknowledgedAt = LocalDateTime.now().minusMinutes(2);

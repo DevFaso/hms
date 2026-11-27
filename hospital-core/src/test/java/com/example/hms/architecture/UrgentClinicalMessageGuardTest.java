@@ -222,7 +222,8 @@ class UrgentClinicalMessageGuardTest {
     void everyTextOfTheLadderExistsInEnglishAndFrench() {
         MessageSource bundles = TestMessageSources.bundles();
         Set<String> keys = new TreeSet<>(List.of(
-            "obstetric.alert.escalation", "urgent.alert.unresolved", UrgentEscalationSupport.ADMIN_FLAG_KEY,
+            "obstetric.alert.escalation", "urgent.alert.unresolved", "urgent.alert.step.cover",
+            "urgent.alert.step.lead", "urgent.alert.documenter.waiting", UrgentEscalationSupport.ADMIN_FLAG_KEY,
             UrgentEscalationSupport.SMS_KEY, "imaging.critical.unresolved", "pro.screening.unresolved",
             "transfusion.reaction.haemovigilance.inBasketTitle", "transfusion.reaction.haemovigilance.inBasketBody",
             "clinicalRules.rule.URGENT_ALERT_ESCALATION.title", "clinicalRules.rule.URGENT_ALERT_ESCALATION.description",

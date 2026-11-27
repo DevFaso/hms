@@ -140,7 +140,8 @@ class EarlyWarningEscalationGuardTest {
         assertThat(alert.alreadyNotified()).containsExactly("nurse_a", "dr_a", "dr_visit");
         assertThat(alert.alertMessageKey()).isEqualTo("news2.alert.msg.NEWS2_HIGH");
         assertThat(alert.alertMessage()).contains("NEWS2 15").contains("ÉLEVÉ");
-        assertThat(alert.notificationText()).startsWith("Alerte NEWS2 (NEWS2, élevé) pour Ousmane Test");
+        // QA D4118 (r81): the title names NEWS2 once, in the type.
+        assertThat(alert.notificationText()).startsWith("Alerte urgente (NEWS2, élevé) pour Ousmane Test");
     }
 
     @Test
