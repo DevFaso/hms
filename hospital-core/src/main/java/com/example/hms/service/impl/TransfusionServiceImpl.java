@@ -93,6 +93,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_BLOOD_UNIT_ID = "bloodUnitId";
     private static final String FIELD_REASON = "reason";
+    /** QA D3906: the « ajouter une unité » step a bag beyond the units requested needs. */
+    private static final String FIELD_ADDITIONAL_UNIT = "additionalUnit";
     /** The stop_reason and discard_reason columns. */
     private static final int MAX_REASON_LENGTH = 500;
 
@@ -194,6 +196,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID hospitalId = requireHospital();
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
         return antibodyScreen.recordWorkup(request, patient, hospitalRef(hospitalId));
+    }
+
+    /**
+     * QA D3905: closes the patient's blood-group lab orders a grouping answers. Setter injection; null in a
+     * hand-built unit test.
+     */
+    private com.example.hms.service.transfusion.BloodGroupingOrderCompletion groupingOrders;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setGroupingOrders(com.example.hms.service.transfusion.BloodGroupingOrderCompletion groupingOrders) {
+        this.groupingOrders = groupingOrders;
     }
 
     /** QA D4151: the severe reaction on record at any hospital; null in a hand-built unit test. */
@@ -311,6 +324,10 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         PatientBloodGroup saved = bloodGroupRepository.save(group);
         moveOpenRequestsOnto(saved);
+        if (groupingOrders != null) {
+            // QA D3905: the blood-group order this grouping answers leaves « En analyse »; one entry, one truth.
+            groupingOrders.closeAnsweredOrders(patient.getId(), hospitalId);
+        }
         if (saved.getAntibodyScreen() == AntibodyScreenResult.NEGATIVE || saved.getAntibodyScreen() == AntibodyScreenResult.POSITIVE) {
             // V380: the antibody screen a clinician asked for after an RhD positive exposure is now on record.
             // A grouping recorded with the screen not done is no screen.
@@ -1220,13 +1237,14 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     @Override
-    public BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId) {
+    public BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId, boolean additionalUnit) {
         requestRepository.lockById(requestId);
         unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
         com.example.hms.service.support.OrderReviewHoldGuard.refuseBloodRequestIfHeld(requestId, "requestId");
         BloodUnit unit = issuableUnit(request, unitId);
+        int unitNumberOnRequest = requireWithinRequestedOrAdded(request, unit, additionalUnit);
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unitId).orElse(null);
@@ -1257,7 +1275,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (crossmatchAfterwards) {
             notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
         }
-        return putOut(request, unit);
+        return putOut(request, unit, unitNumberOnRequest);
     }
 
     @Override
@@ -1290,6 +1308,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!AboGroup.isEmergencyRedCells(request.getProductType())) {
             throw new BusinessException("transfusion.emergency.redCellsOnly");
         }
+        int unitNumberOnRequest = requireWithinRequestedOrAdded(request, unit, Boolean.TRUE.equals(release.getAdditionalUnit()));
         // QA D3351: for an allo-immunised patient the emergency path belongs to an EMERGENCY request only.
         boolean crossmatchAfterwards = antibodyEmergencyPath(request);
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -1330,7 +1349,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
         askCrossmatchAfterwards(crossmatchAfterwards, release.getReleaseType(), request, unit);
-        return putOut(request, unit);
+        return putOut(request, unit, unitNumberOnRequest);
     }
 
     /** QA D3351: whether the antibody rule holds this request and lets it take the emergency path (it refuses otherwise). */
@@ -1396,14 +1415,82 @@ public class TransfusionServiceImpl implements TransfusionService {
             : crossmatchBasisRefusal(request, unit, crossmatch, now);
     }
 
+    /**
+     * QA D3906: a bag beyond the units the request asked for leaves only on the deliberate « ajouter une unité »
+     * step, never silently, whatever the path (crossmatched, uncrossmatched, O positive decision, incompatible
+     * release). It is a prompt, never a block: with the step taken the bag goes out at once, and the rules of its
+     * path apply unchanged. Bags that came back unused do not count: their replacement is within the request.
+     *
+     * @return the bag's number on the request (1 for the first), above {@code unitsRequested} when added
+     */
+    private int requireWithinRequestedOrAdded(TransfusionRequest request, BloodUnit unit, boolean additionalUnit) {
+        int alreadyOut = unitsOutOnRequest(request, unit.getId());
+        int requested = request.getUnitsRequested() == null ? 0 : request.getUnitsRequested();
+        if (alreadyOut >= requested && !additionalUnit) {
+            throw new FieldBusinessException(FIELD_ADDITIONAL_UNIT, "transfusion.issue.beyondRequested",
+                unit.getUnitNumber(), requested, alreadyOut);
+        }
+        return alreadyOut + 1;
+    }
+
+    /** The bags of this request the patient has or may have had: out, given, or never recovered. */
+    private int unitsOutOnRequest(TransfusionRequest request, UUID issuingUnitId) {
+        return (int) unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId()).stream()
+            .filter(bag -> !Objects.equals(bag.getId(), issuingUnitId))
+            .filter(this::reachedThePatientSide)
+            .count();
+    }
+
+    private boolean reachedThePatientSide(BloodUnit bag) {
+        BloodUnitStatus status = bag.getStatus();
+        if (status == BloodUnitStatus.ISSUED || status == BloodUnitStatus.TRANSFUSED) {
+            return true;
+        }
+        // Discarded after it went out: never recovered, or hung and then stopped (a reaction).
+        return status == BloodUnitStatus.DISCARDED
+            && (bag.getReturnOutcome() == com.example.hms.enums.BloodUnitReturnOutcome.NOT_RECOVERED
+                || administrationRepository.findByBloodUnit_Id(bag.getId()).isPresent());
+    }
+
+    /** QA D3906: the added bag's audit, after the commit and by ids only: who added which bag to which request. */
+    private void auditAddedUnit(TransfusionRequest request, BloodUnit unit, int unitNumberOnRequest) {
+        UUID actorUserId = roleValidator.getCurrentUserId();
+        UUID hospitalId = request.getHospital() != null ? request.getHospital().getId() : null;
+        UUID requestId = request.getId();
+        UUID unitId = unit.getId();
+        int requested = request.getUnitsRequested() == null ? 0 : request.getUnitsRequested();
+        String description = "Blood unit " + unitId + " added beyond the units requested on transfusion request "
+            + requestId + ": unit " + unitNumberOnRequest + " of " + requested + " requested";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .userId(actorUserId)
+                    .hospitalId(hospitalId)
+                    .eventType(com.example.hms.enums.AuditEventType.BLOOD_UNIT_ADDED_BEYOND_REQUEST)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .eventDescription(description)
+                    .entityType(REQUEST_ENTITY_TYPE)
+                    .resourceId(requestId.toString())
+                    .build());
+            } catch (RuntimeException ex) {
+                log.warn("Audit not written for the added unit {} on request {}: {}",
+                    unitId, requestId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
     /** The one place the bag leaves the lab. */
-    private BloodUnitResponseDTO putOut(TransfusionRequest request, BloodUnit unit) {
+    private BloodUnitResponseDTO putOut(TransfusionRequest request, BloodUnit unit, int unitNumberOnRequest) {
         // V381, the never event: whatever path led here, a red-cell bag the ABO group of the patient excludes stays.
         PatientBloodGroup screen = lookupScreen(request);
         positiveAuthority.requireAboCompatible(screen != null ? screen.getAboGroup() : null, unit);
         unit.setStatus(BloodUnitStatus.ISSUED);
         unit.setRequest(request);
         BloodUnit saved = unitRepository.save(unit);
+        Integer requested = request.getUnitsRequested();
+        if (requested != null && unitNumberOnRequest > requested) {
+            auditAddedUnit(request, saved, unitNumberOnRequest);
+        }
 
         if (request.getStatus() != TransfusionRequestStatus.ISSUED) {
             request.setStatus(TransfusionRequestStatus.ISSUED);

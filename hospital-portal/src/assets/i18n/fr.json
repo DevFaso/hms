@@ -2001,6 +2001,7 @@
       "INCOMPATIBLE_COUNTERSIGN_OVERDUE": "Contresignature d’une délivrance incompatible en retard, signalée au directeur du laboratoire (décision {{decision}})",
       "INCOMPATIBLE_PROTOCOL_CHANGED": "Réglage « libération incompatible sans médecin joignable » modifié",
       "EMERGENCY_BLOOD_RELEASED": "Délivrance en urgence sans épreuve de compatibilité de la poche {{unit}} pour la demande {{request}}",
+      "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Poche {{unit}} ajoutée au-delà des unités demandées sur la demande {{request}} : n° {{number}}, quantité demandée {{requested}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Délivrance d'urgence — sérologiquement incompatible, de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}, O négatif déclaré impossible à obtenir à temps, stock indiqué {{shown}}",
@@ -4970,7 +4971,9 @@
       "ADD": "Ajouter un composant"
     },
     "CULTURE": "Culture (rapport de culture et antibiogramme)",
-    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version."
+    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version.",
+    "BLOOD_GROUPING": "Groupe sanguin (ABO et Rh)",
+    "BLOOD_GROUPING_HINT": "La demande est close par le groupage saisi dans Banque de sang, où le groupe est saisi une seule fois. Les modifications suivent le circuit d’approbation du catalogue."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",
@@ -7821,6 +7824,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
+        "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Poche ajoutée au-delà de la demande",
         "O_POSITIVE_RELEASE_DECIDED": "Délivrance en urgence de O positif décidée",
         "O_POSITIVE_RELEASE_COUNTERSIGNED": "Délivrance en urgence de O positif contresignée",
         "O_POSITIVE_RELEASE_REVIEWED": "Délivrance en urgence de O positif revue",
@@ -14331,6 +14335,9 @@
     "CROSSMATCH_ERROR": "L'épreuve de compatibilité a été refusée. Vérifiez les groupes ABO et Rh et la recherche d'agglutinines irrégulières (RAI).",
     "UNIT_ISSUED": "Unité délivrée",
     "ISSUE_ERROR": "L'unité n'a pas pu être délivrée",
+    "ADD_UNIT_TITLE": "Ajouter une unité ?",
+    "ADD_UNIT_MESSAGE": "Cette demande a déjà toutes les unités demandées. L’ajout d’une unité supplémentaire est enregistré à votre nom dans le journal d’audit.",
+    "ADD_UNIT_CONFIRM": "Ajouter une unité",
     "HUNG": "Transfusion démarrée",
     "HANG_ERROR": "La transfusion n'a pas pu être démarrée",
     "REACTION_RECORDED": "Réaction enregistrée, transfusion arrêtée",

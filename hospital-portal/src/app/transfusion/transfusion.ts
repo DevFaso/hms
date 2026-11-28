@@ -376,6 +376,23 @@ export class TransfusionComponent implements OnInit {
   /** Until 'loaded' nothing says a bag is not already hung, so "hang" is not offered. */
   administrationsState = signal<'loading' | 'loaded' | 'failed'>('loading');
 
+  /**
+   * QA D3906: the server refused a bag beyond the units requested. The « ajouter une unité » step asks, with
+   * the server's reason, and sends the same issue again with the step taken; it never blocks the bag.
+   */
+  addUnitPrompt = signal<{ message: string | null; retry: () => void } | null>(null);
+
+  /** Whether a refusal is the « units requested » check, which the « ajouter une unité » step answers. */
+  private beyondRequested(err: unknown): boolean {
+    return (err as { error?: { field?: string } } | null)?.error?.field === 'additionalUnit';
+  }
+
+  confirmAddUnit(): void {
+    const prompt = this.addUnitPrompt();
+    this.addUnitPrompt.set(null);
+    prompt?.retry();
+  }
+
   completingAdministration = signal<TransfusionAdministrationResponse | null>(null);
   completeBusy = signal(false);
   completeVolumeMl: number | null = null;
@@ -1189,7 +1206,7 @@ export class TransfusionComponent implements OnInit {
     this.showEmergencyModal.set(false);
   }
 
-  submitEmergencyRelease(): void {
+  submitEmergencyRelease(additionalUnit = false): void {
     const request = this.selectedRequest();
     if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
     const documented = this.emergencyDecisionRequired();
@@ -1213,8 +1230,9 @@ export class TransfusionComponent implements OnInit {
           ...(physicianTier && this.emergencyBiologistId
             ? { biologistUserId: this.emergencyBiologistId }
             : {}),
+          ...(additionalUnit ? { additionalUnit: true } : {}),
         })
-      : this.transfusion.issueUnit(request.id, this.emergencyUnitId);
+      : this.transfusion.issueUnit(request.id, this.emergencyUnitId, additionalUnit);
     release.subscribe({
       next: () => {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
@@ -1224,6 +1242,13 @@ export class TransfusionComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.emergencySubmitting.set(false);
+        if (!additionalUnit && this.beyondRequested(err)) {
+          this.addUnitPrompt.set({
+            message: refusalReason(err),
+            retry: () => this.submitEmergencyRelease(true),
+          });
+          return;
+        }
         this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
         this.refreshEmergencyOptions(request);
       },
@@ -1296,7 +1321,7 @@ export class TransfusionComponent implements OnInit {
     );
   }
 
-  submitIncompatibleRelease(): void {
+  submitIncompatibleRelease(additionalUnit = false): void {
     const request = this.selectedRequest();
     if (!request || this.incompatibleFormIncomplete() || this.incompatibleSubmitting()) {
       return;
@@ -1331,6 +1356,7 @@ export class TransfusionComponent implements OnInit {
         this.emergencyOrderingId !== this.emergencyAuthoriserId
           ? { orderingPhysicianUserId: this.emergencyOrderingId }
           : {}),
+        ...(additionalUnit ? { additionalUnit: true } : {}),
       })
       .subscribe({
         next: () => {
@@ -1341,22 +1367,37 @@ export class TransfusionComponent implements OnInit {
         },
         error: (err: unknown) => {
           this.incompatibleSubmitting.set(false);
+          if (!additionalUnit && this.beyondRequested(err)) {
+            this.addUnitPrompt.set({
+              message: refusalReason(err),
+              retry: () => this.submitIncompatibleRelease(true),
+            });
+            return;
+          }
           this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
           this.refreshEmergencyOptions(request);
         },
       });
   }
 
-  issueUnit(unit: BloodUnitResponse): void {
+  issueUnit(unit: BloodUnitResponse, additionalUnit = false): void {
     const request = this.selectedRequest();
     if (!request) return;
-    this.transfusion.issueUnit(request.id, unit.id).subscribe({
+    this.transfusion.issueUnit(request.id, unit.id, additionalUnit).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
         this.refreshSelected();
       },
-      error: (err: unknown) =>
-        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR')),
+      error: (err: unknown) => {
+        if (!additionalUnit && this.beyondRequested(err)) {
+          this.addUnitPrompt.set({
+            message: refusalReason(err),
+            retry: () => this.issueUnit(unit, true),
+          });
+          return;
+        }
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+      },
     });
   }
 

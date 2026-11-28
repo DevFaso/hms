@@ -29,6 +29,7 @@ public class LabTestDefinitionMapper {
             .name(dto.getName())
             .category(dto.getCategory())
             .culture(Boolean.TRUE.equals(dto.getCulture()))
+            .bloodGrouping(Boolean.TRUE.equals(dto.getBloodGrouping()))
             .description(dto.getDescription())
             .sampleType(dto.getSampleType())
             .unit(dto.getUnit())
@@ -57,6 +58,7 @@ public class LabTestDefinitionMapper {
                 .description(entity.getDescription())
                 .category(entity.getCategory())
                 .culture(entity.isCulture())
+                .bloodGrouping(entity.isBloodGrouping())
                 .unit(entity.getUnit())
                 .loincCode(entity.getLoincCode())
                 .loincDisplay(entity.getLoincDisplay())
@@ -107,6 +109,9 @@ public class LabTestDefinitionMapper {
         }
         if (dto.getCulture() != null) {
             entity.setCulture(dto.getCulture());
+        }
+        if (dto.getBloodGrouping() != null) {
+            entity.setBloodGrouping(dto.getBloodGrouping());
         }
         if (dto.getActive() != null) {
             entity.setActive(dto.getActive());

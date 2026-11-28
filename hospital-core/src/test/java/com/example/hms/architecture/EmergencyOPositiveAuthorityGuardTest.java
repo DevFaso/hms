@@ -75,7 +75,7 @@ class EmergencyOPositiveAuthorityGuardTest {
             String body = method(source, signature);
             int authorised = body.indexOf("positiveAuthority.authorise(");
             int recorded = body.indexOf("recordRelease(");
-            int out = body.indexOf("putOut(request, unit)");
+            int out = body.indexOf("putOut(request, unit, unitNumberOnRequest)");
             assertThat(authorised).as(signature + " asks the decision service").isNotNegative();
             assertThat(recorded).as(signature + " records after it is authorised").isGreaterThan(authorised);
             assertThat(out).as(signature + " puts the bag out last").isGreaterThan(recorded);

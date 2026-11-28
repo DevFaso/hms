@@ -2001,6 +2001,7 @@
       "INCOMPATIBLE_COUNTERSIGN_OVERDUE": "Refrendo de una entrega incompatible con retraso, comunicado al director del laboratorio (decisión {{decision}})",
       "INCOMPATIBLE_PROTOCOL_CHANGED": "Ajuste « entrega incompatible sin médico localizable » modificado",
       "EMERGENCY_BLOOD_RELEASED": "Entrega de urgencia sin prueba cruzada de la unidad {{unit}} para la solicitud {{request}}",
+      "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Unit {{unit}} added beyond the units requested on request {{request}}: unit no. {{number}}, quantity requested {{requested}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Entrega de urgencia con decisión documentada O positivo de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED": "Entrega de urgencia con decisión documentada O positivo de la unidad {{unit}} para la solicitud {{request}}, O negativo declarado imposible de obtener a tiempo, existencias indicadas {{shown}}",
@@ -4970,7 +4971,9 @@
       "ADD": "Add a component"
     },
     "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
-    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión."
+    "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión.",
+    "BLOOD_GROUPING": "Blood group (ABO and Rh)",
+    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in Blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",
@@ -7855,6 +7858,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Verificación del proveedor revocada",
         "PROVIDER_VERIFIED": "Proveedor verificado",
         "EMERGENCY_BLOOD_RELEASED": "Sangre entregada de urgencia sin prueba cruzada",
+        "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Blood unit added beyond the request",
         "O_POSITIVE_RELEASE_DECIDED": "Entrega de urgencia de O positivo decidida",
         "O_POSITIVE_RELEASE_COUNTERSIGNED": "Entrega de urgencia de O positivo contrafirmada",
         "O_POSITIVE_RELEASE_REVIEWED": "Entrega de urgencia de O positivo revisada",
@@ -14331,6 +14335,9 @@
     "CROSSMATCH_ERROR": "La prueba fue rechazada. Compruebe los grupos ABO y Rh y el escrutinio de anticuerpos.",
     "UNIT_ISSUED": "Unidad entregada",
     "ISSUE_ERROR": "No se pudo entregar la unidad",
+    "ADD_UNIT_TITLE": "Add a unit?",
+    "ADD_UNIT_MESSAGE": "This request already has every unit it asked for. Adding one more is recorded in the audit log under your name.",
+    "ADD_UNIT_CONFIRM": "Add a unit",
     "HUNG": "Transfusión iniciada",
     "HANG_ERROR": "No se pudo iniciar la transfusión",
     "REACTION_RECORDED": "Reacción registrada y transfusión detenida",

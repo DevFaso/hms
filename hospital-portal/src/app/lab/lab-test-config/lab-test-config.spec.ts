@@ -438,6 +438,29 @@ describe('LabTestConfigComponent', () => {
     expect(component.defForm.culture).toBeFalse();
   });
 
+  it('D3905: the blood-group setting follows the catalogue approval lock and survives editing', async () => {
+    fixture.detectChanges();
+    flushInit();
+    const base = component.definitions()[0];
+    component.openEditDef({ ...base, bloodGrouping: true, approvalStatus: 'ACTIVE' } as never);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.defForm.bloodGrouping).toBeTrue();
+    const grouping = fixture.nativeElement.querySelector('#defBloodGrouping') as HTMLInputElement;
+    expect(grouping.checked).toBeTrue();
+    expect(grouping.disabled).toBeTrue();
+    component.openEditDef({ ...base, bloodGrouping: true, approvalStatus: 'DRAFT' } as never);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement.querySelector('#defBloodGrouping') as HTMLInputElement).disabled,
+    ).toBeFalse();
+    component.openCreateDef();
+    expect(component.defForm.bloodGrouping).toBeFalse();
+  });
+
   it('should close definition modal', () => {
     fixture.detectChanges();
     flushInit();

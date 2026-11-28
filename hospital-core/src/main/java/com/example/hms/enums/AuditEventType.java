@@ -301,6 +301,8 @@ public enum AuditEventType {
     // Blood bank. Past tense per the naming convention above. The row carries
     // who released it, the unit id and the request id only.
     EMERGENCY_BLOOD_RELEASED,
+    // QA D3906: a bag issued beyond the units requested, on the « ajouter une unité » step. Ids only.
+    BLOOD_UNIT_ADDED_BEYOND_REQUEST,
 
     // Emergency O RhD positive release authority (V380). Past tense; each row carries ids only.
     O_POSITIVE_RELEASE_DECIDED,

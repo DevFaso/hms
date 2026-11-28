@@ -66,8 +66,23 @@ class EmergencyBloodReleaseGuardTest {
         String source = read(SERVICE);
         assertThat(count(source, "setStatus(BloodUnitStatus.ISSUED)")).isEqualTo(1);
         assertThat(method(source, "private BloodUnitResponseDTO putOut(")).contains("setStatus(BloodUnitStatus.ISSUED)");
-        assertThat(count(source, "putOut(request, unit)")).as("issueUnit and emergencyRelease").isEqualTo(2);
+        assertThat(count(source, "putOut(request, unit, unitNumberOnRequest)")).as("issueUnit and emergencyRelease").isEqualTo(2);
         assertThat(method(source, "public BloodUnitResponseDTO issueUnit(")).contains("requireUncrossmatchedRelease(");
+    }
+
+    @Test
+    @DisplayName("QA D3906: both ways out check the units requested before the bag goes out, never after")
+    void everyWayOutChecksTheUnitsRequested() throws IOException {
+        String source = read(SERVICE);
+        for (String signature : List.of("public BloodUnitResponseDTO issueUnit(", "public BloodUnitResponseDTO emergencyRelease(")) {
+            String body = method(source, signature);
+            int checked = body.indexOf("requireWithinRequestedOrAdded(");
+            assertThat(checked).as(signature + " checks the units requested").isNotNegative();
+            assertThat(body.indexOf("putOut(")).as(signature + " checks before the bag goes out").isGreaterThan(checked);
+            assertThat(body.indexOf("recordRelease(") < 0 || body.indexOf("recordRelease(") > checked)
+                .as(signature + " checks before any release row is written").isTrue();
+        }
+        assertThat(method(source, "private BloodUnitResponseDTO putOut(")).contains("auditAddedUnit(");
     }
 
     @Test
