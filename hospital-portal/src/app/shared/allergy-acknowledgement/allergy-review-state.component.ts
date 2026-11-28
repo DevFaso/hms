@@ -13,6 +13,8 @@ import { AllergyReviewState } from './allergy-acknowledgement';
  * - awaiting review: an authorized prescriber must review the conflict first;
  * - CONTINUE: who reviewed it and when, with the prescriber's plan (and rationale) to give it under;
  * - STOP: the prescriber decided to stop, contact the prescriber.
+ * QA D3945: while it awaits review because an earlier review no longer counts (the allergy or the order
+ * changed after it), it says that a review existed, whose, when, what it decided and why it is void.
  * The plan and the rationale reach only a clinical reader of the order at its own hospital; the
  * server leaves them out otherwise, and nothing is shown for them then.
  */
@@ -44,6 +46,26 @@ import { AllergyReviewState } from './allergy-acknowledgement';
                       decision: decisionKey() | translate,
                     }
             }}
+          </p>
+        }
+        @if (r.state === 'AWAITING_REVIEW' && r.voidedDecision) {
+          <!-- QA D3945: a review is on record; it no longer answers the conflict, and this says why. -->
+          <p class="allergy-review-state__voided" data-testid="allergy-review-state-voided">
+            {{
+              (r.voidedReviewedByName
+                ? 'ALLERGY_REVIEW_STATE.VOIDED_BY'
+                : 'ALLERGY_REVIEW_STATE.VOIDED_BY_UNKNOWN'
+              )
+                | translate
+                  : {
+                      name: r.voidedReviewedByName,
+                      at: r.voidedReviewedAt | serverTime | dateTime,
+                      decision: voidedDecisionKey() | translate,
+                    }
+            }}
+          </p>
+          <p data-testid="allergy-review-state-void-reason">
+            {{ r.voidedBecauseText || (voidedBecauseKey() | translate) }}
           </p>
         }
         @if (r.state === 'CONTINUE' && r.plan) {
@@ -91,6 +113,20 @@ export class AllergyReviewStateComponent {
     this.review()?.state === 'CONTINUE'
       ? 'ALLERGY_REVIEW_STATE.DECISION_CONTINUE'
       : 'ALLERGY_REVIEW_STATE.DECISION_STOP',
+  );
+
+  /** QA D3945: what the review that no longer counts had decided. */
+  protected readonly voidedDecisionKey = computed(() =>
+    this.review()?.voidedDecision === 'CONTINUE'
+      ? 'ALLERGY_REVIEW_STATE.DECISION_CONTINUE'
+      : 'ALLERGY_REVIEW_STATE.DECISION_STOP',
+  );
+
+  /** QA D3945: why it no longer counts, when the server sent the code without its sentence. */
+  protected readonly voidedBecauseKey = computed(() =>
+    this.review()?.voidedBecause === 'ALLERGY_CHANGED'
+      ? 'ALLERGY_REVIEW_STATE.VOID_ALLERGY_CHANGED'
+      : 'ALLERGY_REVIEW_STATE.VOID_ALLERGY_OR_ORDER_CHANGED',
   );
 
   protected readonly titleKey = computed(() => {

@@ -1236,6 +1236,10 @@ public class EncounterServiceImpl implements EncounterService {
         // unknown one (provider plan AC-11).
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, hospitalId));
+        // A visit is written at the caller's acting hospital, however the request named
+        // it (an id, a name, a code): any other hospital answers as an unknown one.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            hospital, MSG_HOSPITAL_NOT_FOUND, hospitalId);
 
         // SECURITY: Verify the patient is registered at this hospital
         if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {

@@ -385,6 +385,8 @@ public enum AuditEventType {
     DISPENSE_BILLING_DEFERRAL_CANCELLED,
     /** Policy rule 6: a fill handed over unpaid on a logged urgency override; finance reviews it. */
     DISPENSE_BILLING_URGENCY_OVERRIDE,
+    /** Review of #1380: a fill of an item with no selling price left on an urgency override or an open stay. */
+    DISPENSE_RELEASED_UNPRICED,
     /** Policy rule 6: an urgency override reviewed by finance afterwards. */
     DISPENSE_BILLING_OVERRIDE_REVIEWED,
     /** Policy rule 6: an inpatient fill charged to the account of the open stay. */

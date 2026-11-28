@@ -48,6 +48,8 @@ public class PharmacySaleController {
     @PostMapping
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','HOSPITAL_ADMIN')")
     @Operation(summary = "Record a new OTC walk-in sale")
+    @com.example.hms.security.tenant.RequestBodyScopeExempt(fields = "patientId",
+        reason = "an over-the-counter sale: the patient is optional and the service resolves it through the hospital-scoped finder")
     public ResponseEntity<PharmacySaleResponseDTO> create(@Valid @RequestBody PharmacySaleRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(saleService.createSale(dto));
     }

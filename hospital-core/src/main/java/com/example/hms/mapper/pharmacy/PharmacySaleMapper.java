@@ -29,6 +29,7 @@ public class PharmacySaleMapper {
 
         return PharmacySaleResponseDTO.builder()
                 .id(sale.getId())
+                .receiptNumber(sale.getReceiptNumber())
                 .pharmacyId(sale.getPharmacy() != null ? sale.getPharmacy().getId() : null)
                 .pharmacyName(sale.getPharmacy() != null ? sale.getPharmacy().getName() : null)
                 .hospitalId(sale.getHospital() != null ? sale.getHospital().getId() : null)

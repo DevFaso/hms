@@ -24,6 +24,9 @@ public class PharmacyClaimResponseDTO {
     private UUID patientId;
     /** QA D992 class: the claims list names the patient instead of a slice of the id. */
     private String patientName;
+    /** QA D4185 (r81): the record number at the claim's hospital, and the date of birth, beside the name. */
+    private String patientMrn;
+    private java.time.LocalDate patientDateOfBirth;
     private UUID hospitalId;
     private String coverageReference;
     private String claimStatus;

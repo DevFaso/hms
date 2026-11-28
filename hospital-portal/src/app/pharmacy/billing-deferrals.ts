@@ -22,6 +22,7 @@ import { formatCfa } from '../shared/i18n/app-locale';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { ApiResponse } from '../services/pharmacy.service';
 import {
   BillingDeferral,
@@ -51,6 +52,7 @@ type Step = 'approve' | 'reject' | 'cancel' | 'review';
     DashPipe,
     KeyLabelPipe,
     ServerTimePipe,
+    DateTimePipe,
     SubmitGuardDirective,
     InlineSubFormDirective,
     InlineDiscardAskComponent,

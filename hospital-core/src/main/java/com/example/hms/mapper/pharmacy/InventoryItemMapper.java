@@ -31,6 +31,8 @@ public class InventoryItemMapper {
             .reorderThreshold(entity.getReorderThreshold())
             .reorderQuantity(entity.getReorderQuantity())
             .unitPrice(entity.getUnitPrice())
+            .freeOfCharge(com.example.hms.service.pharmacy.PharmacyListPrice.isFree(entity))
+            .freeOfChargeReason(entity.getFreeOfChargeReason())
             .unit(entity.getUnit())
             .unitsPerPack(entity.getUnitsPerPack())
             .packUnit(entity.getPackUnit())
