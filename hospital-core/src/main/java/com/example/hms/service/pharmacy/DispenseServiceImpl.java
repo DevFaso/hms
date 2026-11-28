@@ -1276,7 +1276,8 @@ public class DispenseServiceImpl implements DispenseService {
                 allergyAck);
         // QA D1163 (round 21): a "flacon" order is not filled from a tablet lot.
         if (stockLot != null && stockLot.getInventoryItem() != null) {
-            DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());
+            DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit(),
+                    stockLot.getInventoryItem().getUnitsPerPack());
         }
         requireWholeUnitsOfFill(dto, stockLot, prescription);
         // QA D4181 (r81): a fill that names no product is the order's own item (a dispensary that keeps no lots).
@@ -1954,7 +1955,8 @@ public class DispenseServiceImpl implements DispenseService {
                 .map(e -> withProduct(stockLotMapper.toResponseDTO(e.getKey()),
                         e.getKey().getInventoryItem().getMedicationCatalogItem(), e.getValue(),
                         // QA D3949: the fill's unit rule, decided here for the order's unit (the panel's default).
-                        DispenseUnitForms.fits(prescription.getQuantityUnit(), e.getKey().getInventoryItem().getUnit())))
+                        DispenseUnitForms.fits(prescription.getQuantityUnit(), e.getKey().getInventoryItem().getUnit(),
+                                e.getKey().getInventoryItem().getUnitsPerPack())))
                 .toList();
     }
 

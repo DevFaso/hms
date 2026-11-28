@@ -4142,6 +4142,15 @@ class DispenseServiceImplTest {
             prescription.setQuantityUnit("plaquette");
             StockLot packs = lot("paracetamol", "PCM-PQ", BigDecimal.valueOf(30));
             packs.getInventoryItem().setUnit("plaquette de 10 comprimés");
+            // Review F1: the bare « plaquette » fits only at the item's recorded pack size.
+            packs.getInventoryItem().setUnitsPerPack(10);
+            StockLot otherSize = lot("paracetamol", "PCM-PQ20", BigDecimal.valueOf(30));
+            otherSize.getInventoryItem().setUnit("plaquette de 20 comprimés");
+            otherSize.getInventoryItem().setUnitsPerPack(10);
+            otherSize.setExpiryDate(packs.getExpiryDate().plusMonths(3));
+            StockLot unknownSize = lot("paracetamol", "PCM-PQ?", BigDecimal.valueOf(30));
+            unknownSize.getInventoryItem().setUnit("plaquette de 10 comprimés");
+            unknownSize.setExpiryDate(packs.getExpiryDate().plusMonths(4));
             StockLot tablets = lot("paracetamol", "PCM-CP", BigDecimal.valueOf(300));
             tablets.getInventoryItem().setUnit("comprimé");
             tablets.setExpiryDate(packs.getExpiryDate().plusMonths(1));
@@ -4151,7 +4160,7 @@ class DispenseServiceImplTest {
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
-                    .thenReturn(new PageImpl<>(List.of(packs, tablets, noUnit)));
+                    .thenReturn(new PageImpl<>(List.of(packs, tablets, noUnit, otherSize, unknownSize)));
 
             List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> lots =
                     service.listDispensableLots(prescriptionId, pharmacyId);
@@ -4160,10 +4169,13 @@ class DispenseServiceImplTest {
                             com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getUnitFits)
                     .containsExactly(org.assertj.core.groups.Tuple.tuple("PCM-PQ", true),
                             org.assertj.core.groups.Tuple.tuple("PCM-CP", false),
-                            org.assertj.core.groups.Tuple.tuple("PCM-NU", true));
+                            org.assertj.core.groups.Tuple.tuple("PCM-NU", true),
+                            org.assertj.core.groups.Tuple.tuple("PCM-PQ20", false),
+                            org.assertj.core.groups.Tuple.tuple("PCM-PQ?", false));
             // The same answer as the fill's own check.
-            for (StockLot each : List.of(packs, tablets, noUnit)) {
-                assertThat(DispenseUnitForms.fits("plaquette", each.getInventoryItem().getUnit()))
+            for (StockLot each : List.of(packs, tablets, noUnit, otherSize, unknownSize)) {
+                assertThat(DispenseUnitForms.fits("plaquette", each.getInventoryItem().getUnit(),
+                        each.getInventoryItem().getUnitsPerPack()))
                         .isEqualTo(lots.stream().filter(l -> l.getLotNumber().equals(each.getLotNumber()))
                                 .findFirst().orElseThrow().getUnitFits());
             }

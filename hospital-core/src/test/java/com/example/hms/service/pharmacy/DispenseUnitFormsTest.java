@@ -40,32 +40,55 @@ class DispenseUnitFormsTest {
     }
 
     /**
-     * QA D3949 (r77): a unit that describes a pack's contents is that pack. A « plaquette » order was refused against
-     * a lot counted in « plaquette de 10 comprimés ».
+     * QA D3949 (r77), review F1: a pack with contents fits only the same pack with the same contents, whatever the
+     * case, accents, plurals, spacing or typographic apostrophe.
      */
     @ParameterizedTest(name = "{0} from a {1} lot is accepted")
-    @CsvSource({"plaquette, plaquette de 10 comprimés", "Plaquettes, Plaquette de 10 comprimés",
-        "plaquette de 10 comprimés, plaquette", "boîte, boîte de 24 comprimés", "boite, Boîtes de 24 comprimés",
-        "flacon, flacon de 100 ml", "sirop, flacon de 100 ml", "blister, blister (10 cp)", "box, box of 20 tablets",
-        "plaquette, plaquette x10", "plaquette, plaquette/10", "pot, pot de 30 gélules", "pot de 30 gélules, pot"})
-    void aPackDescribedWithItsContentsIsThatPack(String fill, String lot) {
+    @CsvSource({"plaquette de 10 comprimés, Plaquettes de 10 comprimés", "boîte de 24 comprimés, Boites de 24 comprimes",
+        "flacon de 100 ml, flacon de 100ml", "flacon de 100 ml, Flacons  de 100 mL", "box of 20 tablets, box of 20 tablet",
+        "blister (10 cp), blisters (10 cp)", "plaquette x10, plaquette x 10", "plaquette/10, plaquettes / 10",
+        "pot d’30 gélules, pot de 30 gélules", "'flacon de 2,5 ml', flacon de 2.5 ml"})
+    void theSamePackWithTheSameContentsFits(String fill, String lot) {
         assertThatCode(() -> DispenseUnitForms.requireCompatible(fill, lot)).doesNotThrowAnyException();
         assertThat(DispenseUnitForms.fits(fill, lot)).isTrue();
     }
 
-    /** QA D3949: reading the pack does not make its contents the unit: a tablet order is not a pack of tablets. */
-    @ParameterizedTest(name = "{0} from a {1} lot is still refused")
-    @CsvSource({"comprimé, plaquette de 10 comprimés", "comprimé, boîte de 24 comprimés", "ml, flacon de 100 ml",
-        "plaquette de 10 comprimés, comprimé", "gouttes, flacon de 20 ml", "dose, pot de 30 gélules"})
-    void aPackIsNotItsContents(String fill, String lot) {
+    /**
+     * Review F1: packs of another size, another pack, another family, or a pack against its contents are refused
+     * (develop refused all of these).
+     */
+    @ParameterizedTest(name = "{0} from a {1} lot is refused")
+    @CsvSource({"boîte de 24 comprimés, boîte de 12 comprimés", "flacon de 100 ml, flacon de 250 ml",
+        "plaquette de 10 comprimés, sirop", "sirop, plaquette de 10 comprimés", "plaquette de 10 comprimés, flacon",
+        "flacon, plaquette de 10 comprimés", "sirop, flacon de 100 ml", "plaquette de 10 comprimés, boîte de 10 comprimés",
+        "plaquette de 10 comprimés, plaquette de 10 gélules", "comprimé, plaquette de 10 comprimés",
+        "plaquette de 10 comprimés, comprimé", "ml, flacon de 100 ml", "gouttes, flacon de 20 ml",
+        "dose, pot de 30 gélules", "blister (10 cp), blister (20 cp)"})
+    void anotherPackOrAnotherSizeIsRefused(String fill, String lot) {
         assertThat(DispenseUnitForms.fits(fill, lot)).isFalse();
+        assertThat(DispenseUnitForms.fits(fill, lot, 10)).isFalse();
         assertThatThrownBy(() -> DispenseUnitForms.requireCompatible(fill, lot))
             .isInstanceOf(BusinessException.class);
     }
 
+    /**
+     * Review F1: the bare pack against that pack with its contents fits only when the lot's item records that pack
+     * size; unknown, it is refused.
+     */
+    @ParameterizedTest(name = "{0} from a {1} lot, pack size {2}: {3}")
+    @CsvSource(nullValues = "null", value = {
+        "plaquette, plaquette de 10 comprimés, null, false", "plaquette, plaquette de 10 comprimés, 10, true",
+        "plaquette, plaquette de 10 comprimés, 12, false", "Plaquettes, plaquette de 10 comprimés, 10, true",
+        "plaquette de 10 comprimés, plaquette, 10, true", "plaquette de 10 comprimés, plaquette, null, false",
+        "boîte, boîte de 24 comprimés, 24, true", "boîte, plaquette de 24 comprimés, 24, false",
+        "flacon, 'flacon de 2,5 ml', 2, false", "pot, pot de 30 gélules, null, false"})
+    void aBarePackFitsItsContentsOnlyAtTheRecordedPackSize(String fill, String lot, Integer perPack, boolean fits) {
+        assertThat(DispenseUnitForms.fits(fill, lot, perPack)).isEqualTo(fits);
+    }
+
     @ParameterizedTest(name = "\"{0}\" reads as \"{1}\"")
     @CsvSource({"Plaquette de 10 comprimés, plaquette", "Cuillère à café, cuillere a cafe", "solution buvable, solution buvable",
-        "(10 cp), (10 cp)", "boîte  de 24, boite", "flacon de, flacon de"})
+        "(10 cp), (10 cp)", "boîte  de 24, boite", "flacon de, flacon de", "pot d’30 gélules, pot"})
     void theKeyOfAUnit(String unit, String key) {
         assertThat(DispenseUnitForms.key(unit)).isEqualTo(key);
     }

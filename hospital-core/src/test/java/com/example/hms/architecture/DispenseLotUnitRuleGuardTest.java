@@ -35,9 +35,10 @@ class DispenseLotUnitRuleGuardTest {
     @Test
     void theFillAndTheDispensableLotsReadUseTheSameRule() throws IOException {
         String rule = SourceScan.stripComments(Files.readString(RULE));
-        int requireAt = rule.indexOf("public static void requireCompatible(");
+        int requireAt = rule.indexOf("public static void requireCompatible(String fillUnit, String lotUnit, Integer lotUnitsPerPack)");
+        assertThat(requireAt).isGreaterThanOrEqualTo(0);
         String require = rule.substring(requireAt, SourceScan.closingBrace(rule, rule.indexOf('{', requireAt)));
-        assertThat(require).as("the fill's check is fits()").contains("if (!fits(fillUnit, lotUnit))");
+        assertThat(require).as("the fill's check is fits()").contains("if (!fits(fillUnit, lotUnit, lotUnitsPerPack))");
 
         String service = SourceScan.stripComments(Files.readString(SERVICE));
         int readAt = service.indexOf("listDispensableLots(\n");
@@ -47,9 +48,11 @@ class DispenseLotUnitRuleGuardTest {
         assertThat(readAt).as("the dispensable-lots read").isGreaterThanOrEqualTo(0);
         String read = service.substring(readAt, SourceScan.closingBrace(service, service.indexOf('{', readAt)));
         assertThat(read).as("each lot is decided by the fill's rule for the order's unit")
-            .contains("DispenseUnitForms.fits(prescription.getQuantityUnit(), e.getKey().getInventoryItem().getUnit())");
+            .containsPattern("DispenseUnitForms\\.fits\\(prescription\\.getQuantityUnit\\(\\), e\\.getKey\\(\\)\\.getInventoryItem\\(\\)\\.getUnit\\(\\),"
+                + "\\s+e\\.getKey\\(\\)\\.getInventoryItem\\(\\)\\.getUnitsPerPack\\(\\)\\)");
         assertThat(service).contains("dto.setUnitFits(unitFits);")
-            .contains("DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());");
+            .containsPattern("DispenseUnitForms\\.requireCompatible\\(dto\\.getUnit\\(\\), stockLot\\.getInventoryItem\\(\\)\\.getUnit\\(\\),"
+                + "\\s+stockLot\\.getInventoryItem\\(\\)\\.getUnitsPerPack\\(\\)\\);");
     }
 
     @Test
