@@ -597,6 +597,8 @@ class QueueClaimConcurrencyPostgresIT {
         entityManager.persist(partner);
         InventoryItem item = InventoryItem.builder()
             .pharmacy(dispensary).medicationCatalogItem(amoxicillin)
+            // QA D4181 (r81): a fill leaves only from an item that is priced or documented as free.
+            .freeOfChargeReason("Programme national (fixture)")
             .quantityOnHand(BigDecimal.valueOf(100)).active(true).build();
         entityManager.persist(item);
         lot = StockLot.builder()

@@ -363,7 +363,7 @@
                         #priceInput
                         [id]="'price-input-' + item.id"
                         type="number"
-                        min="0"
+                        min="1"
                         step="1"
                         class="price-input"
                         [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
@@ -398,10 +398,56 @@
                       <app-inline-discard-ask [form]="priceForm" />
                     </span>
                   } @else {
-                    <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
-                      (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
-                    }}</span>
+                    <!-- QA D4181 (r81): an item is sold at a price or documented as free. One with neither
+                         is said so: a fill from it is refused until the price is set. -->
+                    @if (item.freeOfCharge) {
+                      <span
+                        class="badge badge-info"
+                        [title]="item.freeOfChargeReason || ''"
+                        [attr.data-testid]="'free-' + item.id"
+                        >{{ 'R81_DISPENSING.FREE.BADGE' | translate }}</span>{{ ' ' }}
+                      <span class="free-reason" [attr.data-testid]="'free-reason-' + item.id">{{
+                        item.freeOfChargeReason
+                      }}</span>
+                    } @else {
+                      <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
+                        (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
+                      }}</span>
+                      @if (!item.unitPrice) {
+                        {{ ' '
+                        }}<span
+                          class="badge badge-warning"
+                          role="note"
+                          [attr.data-testid]="'unpriced-' + item.id"
+                          >{{ 'R81_DISPENSING.FREE.UNPRICED' | translate }}</span
+                        >
+                      }
+                    }
                     @if (canSetPrice()) {
+                      <button
+                        type="button"
+                        class="btn-icon"
+                        [attr.aria-label]="
+                          (item.freeOfCharge
+                            ? 'R81_DISPENSING.FREE.WITHDRAW'
+                            : 'R81_DISPENSING.FREE.DECLARE'
+                          ) | translate
+                        "
+                        [title]="
+                          (item.freeOfCharge
+                            ? 'R81_DISPENSING.FREE.WITHDRAW'
+                            : 'R81_DISPENSING.FREE.DECLARE'
+                          ) | translate
+                        "
+                        [attr.data-testid]="'free-toggle-' + item.id"
+                        (click)="freeOfChargeFor.set(item)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">{{
+                          item.freeOfCharge ? 'sell' : 'money_off'
+                        }}</span>
+                      </button>
+                    }
+                    @if (canSetPrice() && !item.freeOfCharge) {
                       <button
                         type="button"
                         class="btn-icon price-edit"
@@ -713,7 +759,7 @@
                     type="number"
                     [(ngModel)]="createForm.unitPrice"
                     name="unitPrice"
-                    min="0"
+                    min="1"
                     step="1"
                   />
                 </div>
@@ -739,3 +785,27 @@
     </div>
   }
 </div>
+
+<!-- QA D4181 (r81): declaring an item free of charge, or withdrawing it, asks its reason (kept in the
+     price history). Store manager or hospital administrator; the server refuses anybody else. -->
+@if (freeOfChargeFor(); as item) {
+  <app-reason-dialog
+    data-testid="free-of-charge-dialog"
+    [titleKey]="
+      item.freeOfCharge ? 'R81_DISPENSING.FREE.WITHDRAW_TITLE' : 'R81_DISPENSING.FREE.DECLARE_TITLE'
+    "
+    [messageKey]="
+      item.freeOfCharge ? 'R81_DISPENSING.FREE.WITHDRAW_HINT' : 'R81_DISPENSING.FREE.DECLARE_HINT'
+    "
+    [confirmKey]="
+      item.freeOfCharge ? 'R81_DISPENSING.FREE.WITHDRAW' : 'R81_DISPENSING.FREE.DECLARE'
+    "
+    [busy]="freeOfChargeBusy()"
+    (confirmed)="saveFreeOfCharge(item, $event)"
+    (cancelled)="freeOfChargeFor.set(null)"
+  >
+    <p>
+      <strong>{{ item.medicationName }}</strong>
+    </p>
+  </app-reason-dialog>
+}

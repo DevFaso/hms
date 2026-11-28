@@ -2235,6 +2235,7 @@
       "DISPENSE_BILLING_DEFERRAL_REJECTED": "Deferred billing of a fill rejected",
       "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
+      "DISPENSE_RELEASED_UNPRICED": "Fill handed over with no selling price; price roles notified",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Aplazamiento cerrado: la receta salió de la farmacia sin nada pendiente",
@@ -7928,6 +7929,7 @@
         "DISPENSE_BILLING_DEFERRAL_REJECTED": "Deferred billing of a fill rejected",
         "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
         "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
+        "DISPENSE_RELEASED_UNPRICED": "Fill handed over with no selling price; price roles notified",
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
@@ -8071,6 +8073,7 @@
         "REORDER_ALERT": "Alerta de reabastecimiento",
         "SEVERE_HYPERTENSION": "Hipertensión grave",
         "PHARMACY_BILLING_DEFERRAL": "Deferred pharmacy billing",
+        "PHARMACY_PRICE_NEEDED": "Precio de venta por fijar",
         "MEWS_ESCALATION": "Alerta temprana materna (MEWS)"
       },
       "ORGANIZATION_TYPE": {
@@ -11228,9 +11231,9 @@
     "NO_TRANSACTIONS": "Sin transacciones",
     "OFFLINE_PENDING_MANY": "dispensaciones pendientes de sincronizar",
     "OFFLINE_PENDING_ONE": "dispensación pendiente de sincronizar",
-    "OFFLINE_SYNCED": "{{count}} dispenses synced",
-    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispenses synced — still queued: {{failed}}",
-    "OFFLINE_SYNC_FAILED": "Sync failed — {{count}} dispenses still queued",
+    "OFFLINE_SYNCED": "Dispensaciones sincronizadas: {{count}}",
+    "OFFLINE_SYNCED_WITH_PENDING": "Dispensaciones sincronizadas: {{count}} — pendientes: {{failed}}",
+    "OFFLINE_SYNC_FAILED": "Error de sincronización — dispensaciones aún en cola: {{count}}",
     "OFFLINE_SYNC_NOW": "Sincronizar ahora",
     "ON_FORMULARY": "En el formulario",
     "OUT_OF_STOCK": "Sin existencias",
@@ -11317,7 +11320,8 @@
     "REFILL": "Renovación",
     "REFILL_AWAITING_PICKUP": "Aprobada — pendiente de recogida",
     "REFILL_NONE": "Primera dispensación",
-    "REFILL_REMAINING": "{{count}} refills left",
+    "REFILL_REMAINING": "{{count}} renovaciones restantes",
+    "REFILL_REMAINING_ONE": "{{count}} renovación restante",
     "REGION": "Región",
     "REGISTRY_SUBTITLE": "Gestionar las farmacias registradas",
     "REGISTRY_TITLE": "Registro de farmacias",
@@ -11515,7 +11519,7 @@
     "SELECT_LOT_OPTION": "Seleccione un lote",
     "UNIT_PRICE": "Precio unitario (F CFA)",
     "PRICE_SAVED": "Precio guardado.",
-    "PRICE_INVALID": "El precio debe ser un número entero de francos, cero o más.",
+    "PRICE_INVALID": "El precio debe ser un número entero de francos, mayor que 0. Para un medicamento entregado sin coste, declárelo gratuito con un motivo.",
     "PRICE_SAVE_FAILED": "No se pudo guardar el precio.",
     "UNIT_COST_NEGATIVE": "El costo unitario no puede ser negativo.",
     "EDIT_PRICE": "Cambiar el precio unitario",
@@ -11770,7 +11774,6 @@
     },
     "TRIGGER_ALERTS_HINT": "Sends an alert now to the pharmacists and the store manager for each item under its threshold that was not reported yet.",
     "STOCK_PER_STORE_HINT": "The total adds up the hospital’s stores; a fill is taken from one store.",
-    "REFILL_REMAINING_ONE": "{{count}} refill left",
     "LOTS_OTHER_FORM_ONE": "{{count}} lot of this drug in another form is not offered: the order is written in \"{{unit}}\".",
     "OFFLINE_SYNCED_ONE": "{{count}} dispense synced",
     "OFFLINE_SYNCED_WITH_PENDING_ONE": "{{count}} dispense synced — still queued: {{failed}}",
@@ -15112,6 +15115,57 @@
       "SIGNATURE": "Firma y sello:"
     }
   },
+  "PATIENT_ID_LINE": {
+    "MRN": "N.º de historia {{mrn}}",
+    "BORN": "Fecha de nacimiento: {{date}}"
+  },
+  "R81_DISPENSING": {
+    "CHECKOUT": {
+      "SEARCH": "Buscar una dispensación",
+      "SEARCH_PLACEHOLDER": "Nombre del paciente, n.º de historia o medicamento",
+      "FILLS_SHOWN": "{{count}} dispensaciones por cobrar",
+      "FILLS_SHOWN_ONE": "{{count}} dispensación por cobrar",
+      "NOT_PRICED": "sin precio fijado"
+    },
+    "RECEIPT": {
+      "DUPLICATE": "Duplicado",
+      "VOIDED": "Pago anulado: este recibo ya no es válido.",
+      "PRICE_NOT_KEPT": "No conservado para este pago",
+      "CLOSE": "Cerrar el recibo",
+      "PRINT": "Imprimir el recibo"
+    },
+    "HISTORY": {
+      "TITLE": "Recibos y pagos",
+      "HINT": "Los pagos cobrados en esta farmacia, del más reciente al más antiguo. Reabra un recibo para leerlo o reimprimirlo: lleva la marca «Duplicado» y conserva los precios cobrados en su origen.",
+      "REFRESH": "Actualizar",
+      "LOAD_FAILED": "No se pudieron cargar los pagos.",
+      "EMPTY": "Ningún pago registrado en esta farmacia.",
+      "SEARCH": "Buscar un recibo",
+      "SEARCH_PLACEHOLDER": "N.º de recibo, paciente, n.º de historia o medicamento",
+      "SHOWN": "{{count}} recibos mostrados",
+      "SHOWN_ONE": "{{count}} recibo mostrado",
+      "COL_RECEIPT": "N.º de recibo",
+      "COL_AMOUNT": "Importe pagado",
+      "VOIDED": "Anulado",
+      "OPEN": "Reabrir el recibo",
+      "OPEN_NAMED": "Reabrir el recibo {{number}}",
+      "MORE": "Cargar pagos anteriores",
+      "OPEN_FAILED": "No se pudo reabrir el recibo."
+    },
+    "FREE": {
+      "BADGE": "Gratuito",
+      "UNPRICED": "Precio por fijar",
+      "DECLARE": "Declarar gratuito",
+      "WITHDRAW": "Retirar la gratuidad",
+      "DECLARE_TITLE": "Declarar gratuito este medicamento",
+      "WITHDRAW_TITLE": "Retirar la gratuidad de este medicamento",
+      "DECLARE_HINT": "El medicamento se entregará sin pago en esta farmacia. Indique el motivo (programa nacional, donación): se conserva en el historial de precios.",
+      "WITHDRAW_HINT": "El medicamento volverá a venderse a su precio de venta; sin precio, su dispensación se rechazará. Indique el motivo.",
+      "DECLARED": "Medicamento declarado gratuito.",
+      "WITHDRAWN": "Gratuidad retirada.",
+      "FAILED": "No se pudo guardar el cambio."
+    }
+  },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",
     "SUBTITLE": "Historial de sus pagos en farmacia",
@@ -15532,11 +15586,11 @@
     "LOADED_MOVEMENTS": "movements shown",
     "STOCK_HINT": "Each movement names its medicine, lot, reason and author.",
     "LOADED_QUEUE": "recetas en esta página de la cola",
+    "LOADED_QUEUE_ONE": "receta en esta página de la cola",
     "DISPENSE_HINT": "Verifique el paciente, el medicamento y la cantidad antes de la entrega.",
     "ROUTING_DECISION": "Elegir una derivación",
     "VISIBLE_INTERACTIONS": "interacciones que coinciden con los filtros",
-    "LOADED_MOVEMENTS_ONE": "movement shown",
-    "LOADED_QUEUE_ONE": "prescription on this page of the queue"
+    "LOADED_MOVEMENTS_ONE": "movement shown"
   },
   "LAB_EVOLUTION": {
     "TITLE": "Evolución del resultado",
@@ -15584,7 +15638,11 @@
     "DECISION_CONTINUE": "continuar",
     "DECISION_STOP": "detener",
     "PLAN": "Plan",
-    "RATIONALE": "Justificación"
+    "RATIONALE": "Justificación",
+    "VOIDED_BY": "Consta una revisión anterior del Dr. {{name}} ({{at}}: {{decision}}); ya no se aplica.",
+    "VOIDED_BY_UNKNOWN": "Consta una revisión anterior del prescriptor ({{at}}: {{decision}}); ya no se aplica.",
+    "VOID_ALLERGY_CHANGED": "La alergia del paciente se modificó después de esa revisión: se necesita una nueva revisión.",
+    "VOID_ALLERGY_OR_ORDER_CHANGED": "Las alergias del paciente o la prescripción (medicamento, dosis, vía o frecuencia) cambiaron después de esa revisión: se necesita una nueva revisión."
   },
   "ALLERGY_REVIEW": {
     "OPEN": "Revisar conflicto alérgico",
@@ -15982,11 +16040,12 @@
       "CLAIMED": "Covered (insurance)",
       "DUE": "Still due",
       "STATUS": {
-        "NO_CHARGE": "No price set: nothing to collect.",
+        "NO_CHARGE": "Dispensación gratuita: nada que cobrar.",
         "PAID": "Paid.",
         "COVERED": "Covered (payment and insurance).",
         "DEFERRED": "Already marked « to be billed ».",
-        "UNPAID": "Not paid: take the payment at the checkout first, or choose below on what basis it leaves."
+        "UNPAID": "Not paid: take the payment at the checkout first, or choose below on what basis it leaves.",
+        "NOT_PRICED": "Este medicamento no tiene precio de venta en esta farmacia. Solo sale en una urgencia (con un motivo registrado) o para un paciente hospitalizado, y entonces se avisa al responsable del almacén para fijar el precio. Si no, pida al responsable del almacén o a un administrador que fije su precio en el inventario, o que lo declare gratuito con un motivo."
       },
       "DEFER_LABEL": "Hand over « to be billed »: reason",
       "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
@@ -15995,7 +16054,8 @@
       "CLAIM_GAP": {
         "OWN_VOUCHER": "Se envió una cobertura para esta dispensación, pero usted es la única persona que responde de ella: otra persona de facturación o contabilidad debe confirmarla, u otra persona entrega la dispensación.",
         "NO_VOUCHER": "Se envió una cobertura para esta dispensación, pero nadie de facturación o contabilidad la ha confirmado todavía: no cubre la dispensación."
-      }
+      },
+      "FREE_REASON": "Motivo de la gratuidad: {{reason}}"
     },
     "PACK": {
       "TITLE": "Pack size: {{name}}",
@@ -16115,8 +16175,10 @@
       "PAGE_SUBTITLE": "A fill leaves the pharmacy unpaid only on a deferral somebody else approved, on the account of an open stay, or on a logged urgency override. Approve, reject and review them here.",
       "PROVISIONAL": "Provisional rule, pending approval by the hospital’s director and finance manager.",
       "INTRO": "This fill is not paid. The pharmacist does not grant credit: choose on what basis it leaves.",
+      "UNPRICED_INTRO": "This medication has no selling price here. It leaves unpriced only in an emergency: give the reason, logged under your name and reviewed afterwards by finance. The store manager is asked to set the price.",
       "LEGEND": "Basis for handing over unpaid",
       "OPEN_STAY": "Patient in hospital: what is due goes on the account of the stay. No approval is needed.",
+      "UNPRICED_OPEN_STAY": "Inpatient: the fill goes on the account of the stay, with no amount until the price is set. The store manager is asked to set the price.",
       "LOAD_FAILED": "The deferrals could not be loaded.",
       "USE_APPROVED": "Use the approved deferral",
       "APPROVED_BY": "approved by {{name}}",
@@ -16148,6 +16210,7 @@
       "URGENCY_REASON_REQUIRED": "Give the reason of the urgency.",
       "CHOICE_REQUIRED": "This fill is not paid: take the payment first, use an approved deferral, or record an urgency override.",
       "ONESTEP_TITLE": "This fill has a price and nothing is paid yet",
+      "ONESTEP_UNPRICED_TITLE": "This medication has no selling price at this pharmacy",
       "NONE": "Nothing to approve or review.",
       "STATUS": {
         "REQUESTED": "To decide",

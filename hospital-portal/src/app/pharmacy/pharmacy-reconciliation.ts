@@ -22,6 +22,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PluralKeyPipe } from '../shared/i18n/plural-key';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import {
   PharmacyMoneyService,
   PharmacyReconciliation,
@@ -52,6 +53,7 @@ function localIsoDate(d: Date): string {
     CfaPipe,
     DashPipe,
     ServerTimePipe,
+    DateTimePipe,
     KeyLabelPipe,
     SubmitGuardDirective,
     PluralKeyPipe,

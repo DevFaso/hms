@@ -9,7 +9,7 @@ import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 type LotsPage =
   ReturnType<PharmacyService['listLotsByInventoryItem']> extends Observable<infer T> ? T : never;
 type PharmaciesPage =
-  ReturnType<PharmacyService['listPharmacies']> extends Observable<infer T> ? T : never;
+  ReturnType<PharmacyService['listStores']> extends Observable<infer T> ? T : never;
 
 describe('StockAdjustmentComponent (D82 / D108)', () => {
   let svc: jasmine.SpyObj<PharmacyService>;
@@ -17,7 +17,7 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
   function create(): StockAdjustmentComponent {
     svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'listTransactionsByPharmacy',
       'listTransactionsByType',
@@ -40,7 +40,7 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
         ? T
         : never),
     );
-    svc.listPharmacies.and.returnValue(of({ content: [] } as unknown as PharmaciesPage));
+    svc.listStores.and.returnValue(of({ content: [] } as unknown as PharmaciesPage));
     svc.listLotsByInventoryItem.and.returnValue(
       of({
         data: { content: [{ id: 'lot-1', lotNumber: 'L1', remainingQuantity: 50 }] },
@@ -233,7 +233,7 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
     function withLedger() {
       const c = create();
-      svc.listPharmacies.and.returnValue(
+      svc.listStores.and.returnValue(
         of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never,
       );
       svc.listInventoryByPharmacy.and.returnValue(

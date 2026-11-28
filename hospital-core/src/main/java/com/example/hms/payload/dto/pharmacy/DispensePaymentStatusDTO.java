@@ -12,8 +12,10 @@ import java.util.UUID;
 
 /**
  * QA D2675 (r65): what a fill costs and how it is settled, read by the hand-over dialog. {@code due} is what the
- * patient still owes (charge less posted payments and live claims). {@code status}: NO_CHARGE (not priced, nothing
- * to collect), PAID, COVERED (a claim covers the rest), DEFERRED (« à facturer ») or UNPAID.
+ * patient still owes (charge less posted payments and live claims). {@code status}: NO_CHARGE (the
+ * pharmacy documented the item as free of charge: nothing to collect), NOT_PRICED (QA D4181: the item has neither a
+ * selling price nor a free-of-charge reason, and the fill cannot be handed over until it has one), PAID, COVERED (a
+ * claim covers the rest), DEFERRED (« à facturer ») or UNPAID.
  */
 @Getter
 @Setter
@@ -39,4 +41,8 @@ public class DispensePaymentStatusDTO {
      * {@code NO_VOUCHER} (no money desk recorded it yet), or null.
      */
     private String claimCoverGap;
+    /** QA D4181 (r81): PRICED, FREE or UNPRICED at the dispensing pharmacy ({@code FillPriceGate.Standing}). */
+    private String priceStanding;
+    /** QA D4181: on a FREE fill, the reason the pharmacy recorded on its inventory item. */
+    private String freeOfChargeReason;
 }

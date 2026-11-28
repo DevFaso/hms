@@ -50,11 +50,23 @@
         <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
         {{ 'PHARMACY_SALE.RECEIPT_TITLE' | translate }}
       </h2>
+      <!-- QA D4186 (r81): a sale opened again from the day list is a duplicate, and says so in print. -->
+      @if (receiptDuplicate()) {
+        <p class="receipt-duplicate" data-testid="sale-receipt-duplicate">
+          {{ 'R81_DISPENSING.RECEIPT.DUPLICATE' | translate }}
+        </p>
+      }
+      @if (r.pharmacyName) {
+        <p class="receipt-pharmacy">
+          <strong>{{ r.pharmacyName }}</strong>
+        </p>
+      }
       <dl class="receipt-meta">
         <dt>{{ 'PHARMACY_SALE.RECEIPT_NUMBER' | translate }}</dt>
-        <dd class="receipt-id">{{ r.id }}</dd>
+        <!-- QA D4186: the server's receipt number, never the sale's internal id. -->
+        <dd class="receipt-id" data-testid="sale-receipt-number">{{ r.receiptNumber || '—' }}</dd>
         <dt>{{ 'PHARMACY_SALE.RECEIPT_DATE' | translate }}</dt>
-        <dd>{{ r.saleDate | serverTime | date: 'short' }}</dd>
+        <dd>{{ r.saleDate | serverTime | dateTime }}</dd>
         <dt>{{ 'PHARMACY_SALE.PAYMENT_METHOD' | translate }}</dt>
         <dd>
           {{ methodLabelKey(r.paymentMethod) | translate }}
@@ -93,10 +105,30 @@
         <span>{{ 'PHARMACY_SALE.TOTAL_PAID' | translate }}</span>
         <strong data-testid="receipt-total">{{ r.totalAmount | cfa: r.currency }}</strong>
       </p>
-      <div class="form-actions">
-        <button type="button" class="btn-primary" data-testid="new-sale" (click)="newSale()">
-          <span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>
-          {{ 'PHARMACY_SALE.NEW_SALE' | translate }}
+      <div class="form-actions no-print">
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="print-sale-receipt"
+          (click)="printReceipt()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">print</span>
+          {{ 'R81_DISPENSING.RECEIPT.PRINT' | translate }}
+        </button>
+        <!-- One button whose label switches (QA D2100): closing a reopened receipt keeps the basket. -->
+        <button
+          type="button"
+          class="btn-primary"
+          [attr.data-testid]="receiptDuplicate() ? 'close-sale-receipt' : 'new-sale'"
+          (click)="receiptDuplicate() ? closeReceipt() : newSale()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">{{
+            receiptDuplicate() ? 'close' : 'add_shopping_cart'
+          }}</span>
+          {{
+            (receiptDuplicate() ? 'R81_DISPENSING.RECEIPT.CLOSE' : 'PHARMACY_SALE.NEW_SALE')
+              | translate
+          }}
         </button>
       </div>
     </section>
@@ -532,15 +564,21 @@
             <thead>
               <tr>
                 <th scope="col">{{ 'PHARMACY_SALE.COL_TIME' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY_SALE.RECEIPT_NUMBER' | translate }}</th>
                 <th scope="col">{{ 'PHARMACY_SALE.COL_ITEMS' | translate }}</th>
                 <th scope="col">{{ 'PHARMACY_SALE.PAYMENT_METHOD' | translate }}</th>
                 <th scope="col" class="num">{{ 'PHARMACY_SALE.COL_TOTAL' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
               @for (s of todaySales(); track s.id) {
                 <tr>
                   <td>{{ s.saleDate | serverTime | date: 'shortTime' }}</td>
+                  <!-- QA D4186 (r81): the day list names each receipt and reopens it. -->
+                  <td class="receipt-id" data-testid="today-receipt-number">
+                    {{ s.receiptNumber || '—' }}
+                  </td>
                   <td class="items-cell">{{ saleItems(s) }}</td>
                   <td>
                     {{ methodLabelKey(s.paymentMethod) | translate }}
@@ -549,6 +587,20 @@
                     }
                   </td>
                   <td class="num">{{ s.totalAmount | cfa: s.currency }}</td>
+                  <td class="col-actions">
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      data-testid="reopen-sale"
+                      [attr.aria-label]="
+                        'R81_DISPENSING.HISTORY.OPEN_NAMED'
+                          | translate: { number: s.receiptNumber || '—' }
+                      "
+                      (click)="reopenSale(s)"
+                    >
+                      {{ 'R81_DISPENSING.HISTORY.OPEN' | translate }}
+                    </button>
+                  </td>
                 </tr>
               }
             </tbody>

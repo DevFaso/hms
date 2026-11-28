@@ -50,6 +50,12 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
     expect(req.priceChangeReason).toBe('Nouveau tarif fournisseur');
     expect(toast.success).toHaveBeenCalled();
 
+    // Review of #1380 (F1): 0 is never a selling price; nothing is sent.
+    svc.updateInventoryItem.calls.reset();
+    c.savePrice(item, '0', 'gratuité');
+    expect(svc.updateInventoryItem).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.PRICE_INVALID');
+
     // The same price again is no price change: it needs no reason and sends none.
     svc.updateInventoryItem.calls.reset();
     c.savePrice({ ...item, unitPrice: 250 } as InventoryItemResponse, '250');
@@ -63,12 +69,12 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     priceSetter: (roles: string[]) => boolean = () => true,
   ) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'getReorderAlertsByPharmacy',
       'updateInventoryItem',
     ]);
-    svc.listPharmacies.and.returnValue(
+    svc.listStores.and.returnValue(
       of({ content: [{ id: 'ph-1', name: 'Pharmacie centrale' }] }) as never,
     );
     svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
@@ -230,10 +236,10 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
 describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
   function create(role: string) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'getReorderAlertsByPharmacy',
     ]);
-    svc.listPharmacies.and.returnValue(of({ content: [] }) as never);
+    svc.listStores.and.returnValue(of({ content: [] }) as never);
     svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
     TestBed.configureTestingModule({
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
@@ -371,11 +377,11 @@ describe('InventoryDashboard expiry day wording', () => {
 describe('InventoryDashboardComponent expiry report (QA D4184)', () => {
   it('names the medicine of each lot beside its number: lot numbers repeat across medicines', () => {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'getExpiringSoon',
     ]);
-    svc.listPharmacies.and.returnValue(
+    svc.listStores.and.returnValue(
       of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never,
     );
     svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);

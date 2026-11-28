@@ -85,6 +85,8 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryItemResponseDTO createInventoryItem(InventoryItemRequestDTO dto) {
         Pharmacy pharmacy = resolvePharmacy(dto.getPharmacyId());
         enforceHospitalScope(pharmacy);
+        // QA D4182 (r81): only one of the hospital's own stores holds its stock.
+        PharmacyStores.requireOwnStore(pharmacy, "pharmacyId");
         // D3943: transfer-created items and manually created items share this store lock.
         pharmacyRepository.findLockedByIdAndHospitalId(pharmacy.getId(), pharmacy.getHospital().getId())
             .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacy.getId()));
@@ -116,10 +118,13 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Review of #1239: a price is set by the store manager or a hospital admin, and kept in the history.
         PriceChange priceChange = priceChangeOf(null, dto, pharmacy);
+        FreeOfChargeChange freeChange = freeOfChargeChangeOf(null, dto, pharmacy);
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
         entity.setQuantityOnHand(java.math.BigDecimal.ZERO);
+        applyFreeOfCharge(entity, freeChange);
         InventoryItem saved = inventoryItemRepository.save(entity);
         keepPriceChange(saved, priceChange);
+        keepFreeOfChargeChange(saved, freeChange);
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
@@ -140,6 +145,13 @@ public class InventoryServiceImpl implements InventoryService {
      */
     private PriceChange priceChangeOf(InventoryItem existing, InventoryItemRequestDTO dto, Pharmacy pharmacy) {
         BigDecimal current = existing != null ? existing.getUnitPrice() : null;
+        // Review of #1380 (F1): 0 is never a new selling price. "Free" is said with the free-of-charge reason, which
+        // is kept in the history; a price of 0 read as "no price" was overwritten by a transfer. An item that
+        // already carries 0 (set before this rule) is still saved with its 0 unchanged.
+        if (dto.getUnitPrice() != null && dto.getUnitPrice().signum() == 0
+                && (current == null || current.signum() != 0)) {
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "pharmacy.price.zeroRefused");
+        }
         if (dto.getUnitPrice() == null || PharmacyPriceHistory.samePrice(current, dto.getUnitPrice())) {
             return null;
         }
@@ -162,6 +174,84 @@ public class InventoryServiceImpl implements InventoryService {
         }
         com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_PRICE_REASON);
         return new PriceChange(current, dto.getUnitPrice(), reason, userId);
+    }
+
+    /** QA D4181 (r81): a change of the free-of-charge standing asked for on the item form, checked. */
+    private record FreeOfChargeChange(boolean free, String reason, UUID changedBy) {
+    }
+
+    private static final String FIELD_FREE_REASON = "freeOfChargeReason";
+    /** How the price history words an item documented as free; the reason typed follows. */
+    static final String FREE_OF_CHARGE_PREFIX = "Gratuit : ";
+
+    /**
+     * QA D4181 (r81): an item with no selling price can no longer be handed over, so "free" is said out loud: the
+     * store manager or a hospital administrator documents it with a reason, and the same people withdraw it with
+     * one. Null when the request leaves the standing as it is (a pharmacist still edits thresholds and the unit).
+     */
+    private FreeOfChargeChange freeOfChargeChangeOf(InventoryItem existing, InventoryItemRequestDTO dto,
+                                                    Pharmacy pharmacy) {
+        boolean current = PharmacyListPrice.isFree(existing);
+        if (dto.getFreeOfCharge() == null) {
+            return null;
+        }
+        boolean wanted = dto.getFreeOfCharge();
+        String reason = trimmedOrEmpty(wanted ? dto.getFreeOfChargeReason() : dto.getPriceChangeReason());
+        if (wanted == current && (!wanted || reason.isEmpty() || reason.equals(existing.getFreeOfChargeReason()))) {
+            return null;
+        }
+        UUID hospitalId = pharmacy != null && pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
+        UUID userId = roleValidator.getCurrentUserId();
+        if (hospitalId == null || userId == null || !roleValidator.canSetPharmacyPrice(userId, hospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException("freeOfCharge", "pharmacy.price.roleRequired");
+        }
+        String field = wanted ? FIELD_FREE_REASON : FIELD_PRICE_REASON;
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(field,
+                    wanted ? "pharmacy.price.freeReasonRequired" : "pharmacy.price.reasonRequired");
+        }
+        if (reason.length() > 500 - FREE_OF_CHARGE_PREFIX.length()) {
+            throw new com.example.hms.exception.FieldBusinessException(field, "pharmacy.price.reasonTooLong");
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, field);
+        return new FreeOfChargeChange(wanted, reason, userId);
+    }
+
+    private static void applyFreeOfCharge(InventoryItem item, FreeOfChargeChange change) {
+        if (change != null) {
+            item.setFreeOfChargeReason(change.free() ? change.reason() : null);
+        }
+    }
+
+    /** The history row and the audit event of a free-of-charge change: free reads as "no price" from then on. */
+    private void keepFreeOfChargeChange(InventoryItem item, FreeOfChargeChange change) {
+        if (change == null) {
+            return;
+        }
+        BigDecimal listed = item.getUnitPrice() != null && item.getUnitPrice().signum() > 0 ? item.getUnitPrice() : null;
+        priceHistory.keep(item, change.free() ? listed : null, change.free() ? null : listed,
+                change.free() ? FREE_OF_CHARGE_PREFIX + change.reason() : change.reason(), change.changedBy(),
+                java.time.LocalDateTime.now(clock));
+        // The same event and wording as a price change: free of charge is a change of what the item costs.
+        logAudit(AuditEventType.PHARMACY_PRICE_CHANGED, "Pharmacy selling price changed", item.getId().toString());
+        if (change.free()) {
+            closePricingTask(item);
+        }
+    }
+
+    /** Review of #1380 (F3): the pricing task an unpriced fill raised. A unit test built by hand may omit it. */
+    private UnpricedFillRelease unpricedFillRelease;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setUnpricedFillRelease(UnpricedFillRelease unpricedFillRelease) {
+        this.unpricedFillRelease = unpricedFillRelease;
+    }
+
+    /** Review of #1380 (F3): the item is priced or documented as free; the task to price it is done. */
+    private void closePricingTask(InventoryItem item) {
+        if (unpricedFillRelease != null && item.getPharmacy() != null && item.getMedicationCatalogItem() != null) {
+            unpricedFillRelease.priced(item.getPharmacy().getId(), item.getMedicationCatalogItem().getId());
+        }
     }
 
     @Override
@@ -195,6 +285,9 @@ public class InventoryServiceImpl implements InventoryService {
                 java.time.LocalDateTime.now(clock));
         // Ids only: the prices and the reason stay on the history row.
         logAudit(AuditEventType.PHARMACY_PRICE_CHANGED, "Pharmacy selling price changed", item.getId().toString());
+        if (change.newPrice() != null && change.newPrice().signum() > 0) {
+            closePricingTask(item);
+        }
     }
 
     /**
@@ -265,9 +358,12 @@ public class InventoryServiceImpl implements InventoryService {
         }
         // Review of #1239: checked against the price the item has now, before the mapper overwrites it.
         PriceChange priceChange = priceChangeOf(item, dto, item.getPharmacy());
+        FreeOfChargeChange freeChange = freeOfChargeChangeOf(item, dto, item.getPharmacy());
         inventoryItemMapper.updateEntity(item, dto);
+        applyFreeOfCharge(item, freeChange);
         InventoryItem saved = inventoryItemRepository.save(item);
         keepPriceChange(saved, priceChange);
+        keepFreeOfChargeChange(saved, freeChange);
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
@@ -539,6 +635,8 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
+        // QA D4182 (r81): goods are received into the hospital's own stores, never a partner's.
+        PharmacyStores.requireOwnStore(item.getPharmacy(), "inventoryItemId");
         // Validate stock and pack metadata from the locked row, including legacy items not yet tracked by lot.
         inventoryItemRepository.lockById(item.getId());
         refreshIfManaged(item);

@@ -55,11 +55,15 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
          + "ORDER BY m.nameFr, i.id")
     List<InventoryItem> findWithLotBalanceDrift(@Param("pharmacyId") UUID pharmacyId);
 
+    // QA D4182 (r81): low stock is a matter of the hospital's own stores; an item left in a partner pharmacy's
+    // row raised an alert ("0 en stock, seuil 0") for a shelf the hospital does not keep.
     @Query("SELECT i FROM InventoryItem i WHERE i.pharmacy.id = :pharmacyId "
+         + "AND i.pharmacy.pharmacyType = com.example.hms.enums.PharmacyType.HOSPITAL_DISPENSARY "
          + "AND i.active = true AND i.quantityOnHand <= i.reorderThreshold")
     List<InventoryItem> findBelowReorderThreshold(@Param("pharmacyId") UUID pharmacyId);
 
     @Query("SELECT i FROM InventoryItem i WHERE i.pharmacy.hospital.id = :hospitalId "
+         + "AND i.pharmacy.pharmacyType = com.example.hms.enums.PharmacyType.HOSPITAL_DISPENSARY "
          + "AND i.active = true AND i.quantityOnHand <= i.reorderThreshold")
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"pharmacy", "pharmacy.hospital", "medicationCatalogItem"})
     List<InventoryItem> findBelowReorderThresholdByHospital(@Param("hospitalId") UUID hospitalId);

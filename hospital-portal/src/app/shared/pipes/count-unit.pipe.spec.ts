@@ -21,7 +21,7 @@ describe('countUnit (QA D2317)', () => {
     expect(countUnit(2, '10 mg/mL', 'fr-FR')).toBe('2 10 mg/mL');
   });
 
-  it('puts the pack of a pack unit in the plural and leaves what it holds (QA D4194)', () => {
+  it('QA D4194: of a pack named with its content, the pack takes the plural and the content stays as stored', () => {
     expect(countUnit(198, 'boîte de 12 gélules', 'fr-FR')).toBe('198 boîtes de 12 gélules');
     expect(countUnit(396, 'plaquette de 10 comprimés', 'fr-FR')).toBe(
       '396 plaquettes de 10 comprimés',
@@ -31,6 +31,13 @@ describe('countUnit (QA D2317)', () => {
     expect(countUnit(2, 'boîte de 10', 'fr-FR')).toBe('2 boîtes de 10');
     expect(countUnit(3, 'pack of 10 tablets', 'en-US')).toBe('3 packs of 10 tablets');
     expect(countUnit(5, "flacon d'un litre", 'fr-FR')).toBe("5 flacons d'un litre");
+    expect(countUnit(2, "flacon d'un litre", 'fr-FR')).toBe("2 flacons d'un litre");
+    expect(countUnit(3, 'bottle of 100 mL', 'en-US')).toBe('3 bottles of 100 mL');
+    // « de » inside a word is not the pack's « de ».
+    expect(countUnit(2, 'comprimé demi', 'fr-FR')).toBe('2 comprimés demis');
+    expect(countUnit(3, 'pack of 10', 'en-US')).toBe('3 packs of 10');
+    // An abbreviation or a measured head still stays as stored.
+    expect(countUnit(3, 'mL de sirop', 'fr-FR')).toBe('3 mL de sirop');
   });
 
   it('follows English counting and shows nothing for no unit', () => {

@@ -78,9 +78,14 @@ public class PharmacyRegistryController {
             + "see every active pharmacy across tenants.")
     public ResponseEntity<Page<PharmacyResponseDTO>> list(
             @RequestParam(required = false) UUID hospitalId,
+            @RequestParam(required = false, defaultValue = "false") boolean storesOnly,
             Pageable pageable,
             Authentication auth) {
-        return ResponseEntity.ok(pharmacyService.listByHospital(resolveRegistryScope(auth, hospitalId), pageable));
+        UUID scope = resolveRegistryScope(auth, hospitalId);
+        // QA D4182 (r81): a store picker asks for the hospital's own stores; the registry page lists them all.
+        return ResponseEntity.ok(storesOnly
+                ? pharmacyService.listStores(scope, pageable)
+                : pharmacyService.listByHospital(scope, pageable));
     }
 
     /**

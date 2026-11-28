@@ -163,7 +163,7 @@
                 <tbody>
                   @for (e of drug.entries; track e.transactionId) {
                     <tr>
-                      <td>{{ e.occurredAt | serverTime | date: 'short' }}</td>
+                      <td>{{ e.occurredAt | serverTime | dateTime }}</td>
                       <td>{{ e.movementType | enumLabel: 'stockTransactionType' }}</td>
                       <td [class.qty-in]="e.quantity > 0" [class.qty-out]="e.quantity < 0">
                         {{ signed(e.quantity) }}
@@ -194,7 +194,7 @@
                               | translate
                                 : {
                                     lot: e.reasonFillLot,
-                                    date: (e.reasonFillAt | serverTime | date: 'short'),
+                                    date: (e.reasonFillAt | serverTime | dateTime),
                                   }
                           }}
                         } @else {

@@ -335,7 +335,7 @@
           <p class="refund-meta">
             <em class="recon-reason">{{ r.reason }}</em>
             <span>{{ r.requestedByName | dash }}</span>
-            <span>{{ r.requestedAt | serverTime | date: 'short' }}</span>
+            <span>{{ r.requestedAt | serverTime | dateTime }}</span>
           </p>
           <div class="refund-actions">
             @if (r.canDecide) {

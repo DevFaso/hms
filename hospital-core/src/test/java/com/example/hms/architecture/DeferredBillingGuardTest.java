@@ -121,7 +121,12 @@ class DeferredBillingGuardTest {
         assertThat(service).as("the one gate call passes the fill's money")
             .contains("billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap, money)");
         assertThat(count(service, "new DispenseBillingDeferralService.FillMoney("))
-            .as("the hand-over and the one-step fill each tell the gate the fill's money").isEqualTo(2);
+            .as("the hand-over and the one-step fill each tell the gate the fill's money, and the release of an "
+                + "unpriced fill (review of #1380) tells it there is none").isEqualTo(3);
+        assertThat(between(service, "DispenseBillingDeferral releaseUnpriced(", "private void afterUnpricedRelease("))
+            .as("an unpriced fill leaves on an urgency override or an open stay, never on an approved deferral")
+            .contains("new DispenseBillingDeferralService.Choice(null, urgencyReason)")
+            .contains("new DispenseBillingDeferralService.FillMoney(BigDecimal.ZERO, BigDecimal.ZERO)");
         assertThat(between(service, "DispenseBillingDeferral requirePaidCoveredOrDeferred(",
                 "private void closeDeferralsOfSettledOrder("))
             .contains("new DispenseBillingDeferralService.FillMoney(settlement.charge(), settlement.paid())");
