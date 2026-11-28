@@ -86,6 +86,11 @@ export class LabOutboxComponent implements OnInit {
   detailLoading = signal(false);
   private detailRequest = 0;
 
+  /** D4168: the Order column shows only when the list carries an order code, patient or test. */
+  hasOrderColumn = computed(() =>
+    (this.page()?.content ?? []).some((r) => !!(r.labOrderCode || r.patientName || r.testName)),
+  );
+
   /** Display-only reading of the open message; null = show the raw text only. */
   detailSummary = computed(() => {
     const d = this.detail();

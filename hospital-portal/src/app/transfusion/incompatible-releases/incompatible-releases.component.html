@@ -210,7 +210,9 @@
           <dd data-testid="incompat-choice">
             {{
               (r.leastIncompatible
-                ? 'TRANSFUSION.INCOMPAT.CHOSEN_LEAST'
+                ? r.candidatesConsidered === 1
+                  ? 'TRANSFUSION.INCOMPAT.CHOSEN_LEAST_ONE'
+                  : 'TRANSFUSION.INCOMPAT.CHOSEN_LEAST'
                 : 'TRANSFUSION.INCOMPAT.CHOSEN_NOT_LEAST'
               ) | translate: { count: r.candidatesConsidered }
             }}

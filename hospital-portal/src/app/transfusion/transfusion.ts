@@ -60,7 +60,7 @@ import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { OPositiveReleasesComponent } from './o-positive-releases/o-positive-releases.component';
 import { IncompatibleReleasesComponent } from './incompatible-releases/incompatible-releases.component';
-type Tab = 'requests' | 'units' | 'opositive';
+type Tab = 'requests' | 'units' | 'opositive' | 'incompatible';
 
 /**
  * Blood bank workbench (Tier 2 item 28) — the first and only caller of every
@@ -353,7 +353,7 @@ export class TransfusionComponent implements OnInit {
   /* ── Bedside modals ── */
   showHangModal = signal(false);
   hangSubmitting = signal(false);
-  hangForm = { bloodUnitId: '', verifiedByUserId: '', verificationMethod: 'Wristband scan' };
+  hangForm = { bloodUnitId: '', verifiedByUserId: '', verificationMethod: '' };
   /** QA CX-008: colleagues the server accepts as the second check; a staff id was typed by hand. */
   verifierCandidates = signal<VerifierCandidate[]>([]);
   verifierCandidatesFailed = signal(false);
@@ -1249,7 +1249,7 @@ export class TransfusionComponent implements OnInit {
     this.hangForm = {
       bloodUnitId: unit.id,
       verifiedByUserId: '',
-      verificationMethod: 'Wristband scan',
+      verificationMethod: this.translate.instant('TRANSFUSION.VERIFICATION_METHOD_DEFAULT'),
     };
     this.verifierCandidatesFailed.set(false);
     this.transfusion

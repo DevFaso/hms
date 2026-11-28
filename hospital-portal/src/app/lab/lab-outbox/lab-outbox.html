@@ -94,6 +94,9 @@
         <thead>
           <tr>
             <th>{{ 'LAB_OUTBOX.ORDERING_HOSPITAL' | translate }}</th>
+            @if (hasOrderColumn()) {
+              <th>{{ 'LAB_OUTBOX.COL_ORDER' | translate }}</th>
+            }
             <th>{{ 'LAB_OUTBOX.COL_TYPE' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_STATUS' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_ATTEMPTS' | translate }}</th>
@@ -107,6 +110,19 @@
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'outbox-row-' + row.id">
               <td>{{ row.orderingHospitalName || '?' }}</td>
+              @if (hasOrderColumn()) {
+                <td class="order-cell" [attr.data-testid]="'outbox-order-' + row.id">
+                  @if (row.labOrderCode) {
+                    <span class="mono">{{ row.labOrderCode }}</span>
+                  }
+                  @if (row.patientName) {
+                    <div>{{ row.patientName }}</div>
+                  }
+                  @if (row.testName) {
+                    <div class="cell-secondary">{{ row.testName }}</div>
+                  }
+                </td>
+              }
               <td class="type-cell">
                 <span class="mono">{{ row.messageType }}</span>
                 @if (resultStatusKey(row.resultStatus); as rsKey) {

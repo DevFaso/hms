@@ -101,9 +101,40 @@
   justify-content: flex-end;
 }
 
+/* D4162: the open / all switch looks like the blood-bank tabs (view encapsulation keeps the page's .tab-btn out of this component). */
 .opos-toggle {
-  display: flex;
-  gap: 4px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border, #dce5ec);
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--primary, #007f79);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary, #007f79);
+    outline-offset: 2px;
+  }
+
+  &.active {
+    background: var(--primary, #007f79);
+    color: #fff;
+  }
 }
 
 .opos-card.tier-high {
