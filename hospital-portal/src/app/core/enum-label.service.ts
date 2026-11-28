@@ -1015,6 +1015,7 @@ export class EnumLabelService implements OnDestroy {
       REORDER_ALERT: 'Reorder Alert',
       SEVERE_HYPERTENSION: 'Severe hypertension',
       PHARMACY_BILLING_DEFERRAL: 'Deferred pharmacy billing',
+      PHARMACY_PRICE_NEEDED: 'Selling price to set',
       MEWS_ESCALATION: 'Maternal early warning (MEWS)',
     },
 

@@ -138,6 +138,40 @@ class PharmacyReceiptDetailsTest {
     }
 
     @Test
+    @DisplayName("QA D4186: a receipt reopened later prints the prices kept on the payment, marked as a duplicate, whatever the list price is today")
+    void aReprintShowsThePricesFirstCharged() {
+        payment.setChargedUnitPrice(new BigDecimal("25"));
+        payment.setChargedLineTotal(new BigDecimal("375"));
+        // The list price has changed since: it must not reach the reprint.
+        InventoryItem repriced = new InventoryItem();
+        repriced.setUnitPrice(new BigDecimal("40"));
+        when(inventory.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, catalogItemId))
+            .thenReturn(Optional.of(repriced));
+
+        PharmacyReceiptDetailsDTO reprint = PharmacyReceiptDetails.of(payment, inventory, false, true);
+
+        assertThat(reprint.isDuplicate()).isTrue();
+        assertThat(reprint.getUnitPrice()).isEqualByComparingTo("25");
+        assertThat(reprint.getLineTotal()).isEqualByComparingTo("375");
+        assertThat(reprint.getPatientMrn()).isEqualTo("CHW-000123");
+        assertThat(PharmacyReceiptDetails.of(payment, inventory, true).isDuplicate())
+            .as("the answer to the payment being recorded is the original").isFalse();
+        assertThat(PharmacyReceiptDetails.of(payment, inventory, true).getUnitPrice())
+            .as("the kept price wins over the list price even while recording").isEqualByComparingTo("25");
+    }
+
+    @Test
+    @DisplayName("QA D4186: what a payment being recorded charges is the list price read now, to be kept on it")
+    void thePriceToKeepIsReadWhenThePaymentIsTaken() {
+        PharmacyReceiptDetails.Charged charged = PharmacyReceiptDetails.chargedOf(payment, inventory, true);
+
+        assertThat(charged.unitPrice()).isEqualByComparingTo("25");
+        assertThat(charged.lineTotal()).isEqualByComparingTo("375");
+        assertThat(PharmacyReceiptDetails.chargedOf(payment, inventory, false))
+            .as("a payment taken before prices were kept has none to print").isNull();
+    }
+
+    @Test
     @DisplayName("an unpriced medication leaves the price lines out, not at zero")
     void unpricedHasNoPriceLine() {
         when(inventory.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, catalogItemId))

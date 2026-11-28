@@ -12,9 +12,10 @@ import java.math.BigDecimal;
  * pharmacy to go back to. Every line here is read on the server from the payment's own dispense, patient,
  * pharmacy and cashier, so the receipt never depends on what the checkout screen still holds.
  *
- * <p>The price lines ({@link #unitPrice}, {@link #lineTotal}, {@link #insurerShare}) are sent only on the
- * answer to the payment being recorded, when the price just charged is the price read: a later read of an old
- * payment would print today's list price beside yesterday's total.
+ * <p>The price lines ({@link #unitPrice}, {@link #lineTotal}, {@link #insurerShare}) are the prices kept on the
+ * payment when it was taken (QA D4186, V421), on the first answer and on every later read alike. A payment
+ * recorded before they were kept has none on a later read: today's list price is never printed beside
+ * yesterday's total.
  */
 @Getter
 @Builder
@@ -38,4 +39,14 @@ public class PharmacyReceiptDetailsDTO {
     private final String pharmacyName;
     private final String pharmacyAddress;
     private final String pharmacyPhone;
+
+    /** QA D4186 (r81): the patient, read from the payment, so a receipt reopened later still names them. */
+    private final String patientName;
+    private final java.time.LocalDate patientDateOfBirth;
+
+    /**
+     * QA D4186: true when this is a later read of a payment already answered (the history, a reprint): the
+     * receipt is then marked « Duplicata ». False on the answer to the payment being recorded.
+     */
+    private final boolean duplicate;
 }

@@ -1649,7 +1649,7 @@
     ],
     "control": "input"
   },
-  "src/app/pharmacy/inventory-dashboard.html::input::2c3d2e3a05d0b3e89116::0": {
+  "src/app/pharmacy/inventory-dashboard.html::input::92e5e129b73b4ea3c9cb::0": {
     "reason": "Existing module-specific control styling supplies padding via .price-input. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".price-input"],
     "control": "input"
