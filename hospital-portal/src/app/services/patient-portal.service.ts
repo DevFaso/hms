@@ -9,6 +9,8 @@ import type { BloodGroupStatus } from '../shared/blood-group-status/blood-group-
 
 /* ── DTOs matching backend PatientPortalController ── */
 
+import { PortalRights } from '../patient-portal/minor-rights';
+
 export interface PatientProfileDTO {
   nationalUniqueIdMasked?: string | null;
   /** The patient id, as the backend sends it. */
@@ -53,6 +55,8 @@ export interface PatientProfileDTO {
    * the record number THAT hospital gave them (they quote it at the desk).
    */
   hospitalRecords?: PatientHospitalRecord[];
+  /** QA D4269: what the account may do alone, by the patient's age (own profile only). */
+  portalRights?: PortalRights | null;
 }
 
 /** One hospital registration as the patient profile carries it. */
@@ -1137,6 +1141,8 @@ export interface ProxyResponse {
   revokedAt: string | null;
   notes: string | null;
   createdAt: string;
+  /** QA D4269: a verified parent's or guardian's access, which a 15–17 year old does not withdraw alone. */
+  verifiedParentOrGuardian?: boolean;
 }
 
 export interface ProxyGrantRequest {

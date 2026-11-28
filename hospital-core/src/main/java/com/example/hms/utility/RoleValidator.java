@@ -315,6 +315,15 @@ public class RoleValidator {
         return com.example.hms.security.CallerIdentity.isSuperAdminFor(hospitalId);
     }
 
+    /**
+     * QA D4270 review: the staff who collect any approved release-of-information copy of {@code hospitalId}: a
+     * doctor, a nurse or a midwife assigned THERE. Reception is not one (it reads no clinical content), and a role
+     * held at another hospital does not count.
+     */
+    public boolean collectsReleaseCopies(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
     /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
     public boolean ordersImaging(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);

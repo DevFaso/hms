@@ -292,4 +292,54 @@ class RecordAccessControllerTest {
 
         verify(postureService, never()).set(any(), any(), any());
     }
+
+    // ------------------------------------------------- QA D4269: a minor's own sharing setting
+
+    @MockitoBean private com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights;
+
+    private Patient ownRecordBorn(java.time.LocalDate dateOfBirth) {
+        Patient own = new Patient();
+        own.setId(patientId);
+        own.setDateOfBirth(dateOfBirth);
+        when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(own));
+        return own;
+    }
+
+    @Test
+    @DisplayName("QA D4269: a patient closing their own sharing is asked the age rule, and a refusal never reaches the service")
+    void aMinorsOwnOptOutGoesThroughTheAgeRule() throws Exception {
+        Patient own = ownRecordBorn(java.time.LocalDate.of(2017, 9, 2));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ClientSafeAccessDeniedException("read-only"))
+            .when(minorPortalRights).require(own, com.example.hms.service.recordaccess.MinorPortalRights.Action.CLOSE_SHARING);
+
+        mockMvc.perform(post("/patients/{id}/record-sharing/opt-out", patientId))
+            .andExpect(status().isForbidden());
+
+        verify(optOutService, never()).optOut(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D4269: a patient re-opening their own sharing is asked the age rule, and a refusal never reaches the service")
+    void aMinorsOwnReopeningGoesThroughTheAgeRule() throws Exception {
+        Patient own = ownRecordBorn(java.time.LocalDate.now().minusYears(16));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ClientSafeAccessDeniedException("desk"))
+            .when(minorPortalRights).require(own, com.example.hms.service.recordaccess.MinorPortalRights.Action.REOPEN_SHARING);
+
+        mockMvc.perform(delete("/patients/{id}/record-sharing/opt-out", patientId))
+            .andExpect(status().isForbidden());
+
+        verify(optOutService, never()).revoke(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D4269: staff acting at the desk for a patient are not asked the age rule")
+    void theDeskIsNotAskedTheAgeRule() throws Exception {
+        when(authUtils.hasAuthority(any(), eq("ROLE_RECEPTIONIST"))).thenReturn(true);
+        when(optOutService.optOut(eq(patientId), any(), eq(userId), any()))
+            .thenReturn(new RecordSharingOptOutDTO(patientId, true, LocalDateTime.now(), null, null));
+
+        mockMvc.perform(post("/patients/{id}/record-sharing/opt-out", patientId)).andExpect(status().isOk());
+
+        org.mockito.Mockito.verifyNoInteractions(minorPortalRights);
+    }
 }

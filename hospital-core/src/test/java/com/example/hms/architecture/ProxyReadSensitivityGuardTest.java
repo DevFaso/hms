@@ -155,6 +155,8 @@ class ProxyReadSensitivityGuardTest {
             "the proxy lists the grants they hold: grant rows only (names and scopes)"),
         Map.entry(PORTAL_SERVICE + "#toProxyResponseDTO", "maps a grant row: names, scope, dates"),
         Map.entry(PORTAL_SERVICE + "#isProxyExpired", "reads a grant's expiry"),
+        Map.entry(PORTAL_SERVICE + "#lapsedAtMajority",
+            "QA D4269: whether a grant given during minority ended at 18 (the grantor's birth date, the grant's date)"),
         Map.entry(PORTAL_SERVICE + "#" + GRANT_CHECK,
             "the grant check itself; every caller is a proxy read held to rule 3"),
         Map.entry(PORTAL_SERVICE + "#" + GRANTOR_RESOLVER,
@@ -484,7 +486,9 @@ class ProxyReadSensitivityGuardTest {
         "safety and logistics: blood group, what must not be given, where medicines are collected",
         // QA D3901: bloodGroup is the same blood group, declared beside the laboratory's, narrowed for a proxy
         // (PROFILE_NARROWED): its value only, no laboratory provenance, no antibody.
-        Set.of("bloodType", "bloodGroup", "allergies", "preferredPharmacy"));
+        Set.of("bloodType", "bloodGroup", "allergies", "preferredPharmacy"),
+        "QA D4269: what the patient may do on the portal alone, by age band: derived from the date of birth above",
+        Set.of("portalRights"));
 
     /**
      * QA D3901 (Rex P2): profile fields a proxy receives NARROWED, and the call in proxyProfileOf that narrows each.

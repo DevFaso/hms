@@ -2268,6 +2268,7 @@
       "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "MINOR_PORTAL_ACTION_REFUSED": "Acción rechazada en la cuenta del portal de un menor (regla de los derechos de los menores según la edad)",
       "AUDIT_RETENTION_PURGED": "Registros de auditoría que superan el plazo de conservación eliminados",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
@@ -7988,6 +7989,7 @@
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
         "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada",
+        "MINOR_PORTAL_ACTION_REFUSED": "Acción del portal rechazada a un menor",
         "AUDIT_RETENTION_PURGED": "Registros de auditoría eliminados tras el plazo de conservación"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
@@ -17070,6 +17072,12 @@
     "CODE_SENT_GENERIC": "Se envió un código.",
     "EXPIRES": "Válido hasta las {{time}}."
   },
+  "MINOR_RIGHTS": {
+    "UNDER_13": "Esta cuenta es de un niño menor de 13 años: es de solo lectura. Uno de los padres o el tutor legal realiza este trámite en la recepción del establecimiento.",
+    "AGE_13_14": "A los 13 y 14 años su cuenta es de solo lectura. Para este trámite, acuda a la recepción del establecimiento con uno de los padres o su tutor legal.",
+    "FAMILY_15_17": "Antes de los 18 años, dar a otro adulto acceso a su expediente se hace ante la administración del establecimiento, con uno de los padres o su tutor legal. Puede retirar usted mismo un acceso ya dado, salvo el de un padre o tutor verificado.",
+    "SHARING_15_17": "Antes de los 18 años, puede cerrar usted mismo el intercambio con otros hospitales. Para abrirlo de nuevo, acuda a la administración del establecimiento con uno de los padres o su tutor legal."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Acceder a mi expediente o corregirlo",
     "INTRO": "Solicite una copia o una corrección a su hospital. El personal revisa las solicitudes; este formulario nunca modifica el expediente clínico. Las fechas de respuesta son objetivos internos, no plazos legales.",
@@ -17089,6 +17097,11 @@
     "FAILED": "No se pudo completar esta acción. Inténtelo de nuevo.",
     "COMPLETE_CORRECTION": "Completar revisión de la corrección",
     "CORRECTION_HINT": "Revise la corrección en el proceso autorizado del expediente y explique el resultado. Esta decisión no sustituye datos clínicos.",
+    "DOWNLOAD": "Descargar mi copia (PDF)",
+    "DOWNLOAD_UNTIL": "Copia disponible hasta el",
+    "COPY_EXPIRED": "El plazo para descargar esta copia ha terminado. Haga una nueva solicitud.",
+    "DOWNLOAD_FAILED": "No se pudo descargar la copia. Inténtelo de nuevo.",
+    "DESK_COPY_EXPIRED": "Plazo de retirada de la copia terminado",
     "EXPORT": "Descargar copia aprobada (PDF)"
   },
   "URGENT_ALERTS": {

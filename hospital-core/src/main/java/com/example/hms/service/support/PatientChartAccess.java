@@ -153,6 +153,22 @@ public class PatientChartAccess {
     }
 
     /**
+     * QA D4270: the patient of a hospital's approved record copy. The patient collecting their own copy is bound
+     * by ownership and by being registered at the hospital that approved it; the staff chart gate (which asks
+     * whether a hospital's staff may open the chart) is the wrong question for them. Any other caller goes
+     * through {@link #require}, unchanged.
+     */
+    public Patient requireForRelease(UUID patientId, UUID hospitalId) {
+        if (patientId != null && hospitalId != null) {
+            Optional<Patient> own = patientRepository.findByIdUnscoped(patientId).filter(PatientChartAccess::ownedByCaller);
+            if (own.isPresent() && registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
+                return own.get();
+            }
+        }
+        return require(patientId, hospitalId);
+    }
+
+    /**
      * The caller is the patient: the chart is linked to the caller's own
      * account. Ownership is the whole bound (design Q1); it admits nobody's
      * chart but their own.

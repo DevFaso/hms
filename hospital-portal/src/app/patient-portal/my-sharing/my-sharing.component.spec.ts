@@ -10,6 +10,7 @@ import {
   RecordSharingOptOut,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { PortalRights } from '../minor-rights';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 /**
@@ -444,5 +445,56 @@ describe('MySharingComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('Médecin');
     expect(text).not.toContain('DOCTOR');
+  });
+
+  // ── QA D4269: a minor's own account ──
+
+  function minorRights(band: PortalRights['band']): PortalRights {
+    const narrows = band === 'AGE_15_17';
+    return {
+      band,
+      grantFamilyAccess: false,
+      revokeFamilyAccess: narrows,
+      closeSharing: narrows,
+      reopenSharing: false,
+      withdrawContactConsent: narrows,
+      giveContactConsent: false,
+    };
+  }
+
+  it('QA D4269: at 13 and 14 sharing is neither closed nor re-opened from the account, and the page says who does it', () => {
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: minorRights('AGE_13_14') } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+
+    expect(el('opt-out-enable')).toBeNull();
+    expect(el('opt-out-revoke')).toBeNull();
+    expect(el('minor-rights-notice')?.textContent).toContain('MINOR_RIGHTS.AGE_13_14');
+    component.openOptOutForm();
+    fixture.detectChanges();
+    expect(el('opt-out-form')).toBeNull();
+  });
+
+  it('QA D4269: at 15 to 17 sharing is closed alone', () => {
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: minorRights('AGE_15_17') } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+
+    expect(el('opt-out-enable')).not.toBeNull();
+    expect(el('minor-rights-notice')?.textContent).toContain('MINOR_RIGHTS.SHARING_15_17');
+  });
+
+  it('QA D4269: at 15 to 17 closed sharing is not re-opened from the account', async () => {
+    optOutResponse = () => of(optOutState(true));
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: minorRights('AGE_15_17') } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+
+    expect(el('opt-out-revoke')).toBeNull();
+    await component.revokeOptOut();
+    expect(portal.revokeOptOut).not.toHaveBeenCalled();
   });
 });

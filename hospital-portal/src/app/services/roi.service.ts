@@ -24,6 +24,10 @@ export interface RoiRequest {
   decidedAt?: string;
   decidedByName?: string;
   decisionNote?: string;
+  /** QA D4270: an approved full copy that can still be collected. */
+  copyDownloadable?: boolean | null;
+  /** QA D4270: the last day the approved copy can be collected (yyyy-MM-dd). */
+  copyAvailableUntil?: string | null;
 }
 
 export interface RoiPage {

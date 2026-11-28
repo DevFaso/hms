@@ -28,6 +28,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -72,6 +73,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 export class RoiComponent implements OnInit, OnDestroy {
   private readonly roiService = inject(RoiService);
   private readonly roleCtx = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -340,15 +342,41 @@ export class RoiComponent implements OnInit, OnDestroy {
     return row.requestKind === 'CORRECTION' ? 'RECORD_RIGHTS.CORRECTION' : 'RECORD_RIGHTS.COPY';
   }
 
+  /**
+   * QA D4270: the approved copy of this row can be produced by this user. The clinicians for any approved full
+   * copy of the hospital; a hospital administrator only for a request they approved (RoiRequestService.copyForExport
+   * decides the same). Not reception: the copy is the whole chart. Not once the collection period is over.
+   */
+  canExportRow(row: RoiRequest): boolean {
+    if (!this.canExport() || !this.isApprovedFullCopy(row) || row.copyDownloadable === false)
+      return false;
+    if (this.roleCtx.hasAnyActiveRole(RoiComponent.ANY_COPY_ROLES)) return true;
+    const me = this.auth.getUserId();
+    return !!me && row.decisionActorUserId === me;
+  }
+
+  /** The approved copy's collection period is over: said on the row instead of a button. */
+  copyExpired(row: RoiRequest): boolean {
+    return this.isApprovedFullCopy(row) && row.copyDownloadable === false;
+  }
+
+  private isApprovedFullCopy(row: RoiRequest): boolean {
+    return (
+      row.status === 'FULFILLED' &&
+      row.requestKind !== 'CORRECTION' &&
+      row.scopeDescription === 'FULL_RECORD'
+    );
+  }
+
+  private static readonly ANY_COPY_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_SUPER_ADMIN',
+  ];
+
   exportCopy(row: RoiRequest): void {
-    if (
-      !this.canExport() ||
-      this.exportingId() ||
-      row.status !== 'FULFILLED' ||
-      row.requestKind === 'CORRECTION' ||
-      row.scopeDescription !== 'FULL_RECORD'
-    )
-      return;
+    if (this.exportingId() || !this.canExportRow(row)) return;
     this.exportingId.set(row.id);
     this.roiService.downloadCopy(row.id).subscribe({
       next: (blob) => {

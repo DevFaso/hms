@@ -115,8 +115,137 @@ class RoiRequestServiceTest {
         org.mockito.Mockito.lenient().when(auditService.logRequiredEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
     }
 
+    private final UUID clinician = UUID.randomUUID();
+
     private void asClinicianAtHospital() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        // A doctor, nurse or midwife assigned at the request's hospital: collects any approved copy (QA D4270).
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(clinician);
+        org.mockito.Mockito.lenient().when(roleValidator.collectsReleaseCopies(clinician, hospitalId)).thenReturn(true);
+    }
+
+    /** A hospital administrator: none of the collecting roles, so only the requests they approved. */
+    private UUID asHospitalAdminAtHospital() {
+        UUID admin = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(admin);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(admin, hospitalId)).thenReturn(true);
+        return admin;
+    }
+
+    private RoiRequest approvedFullCopy(LocalDateTime decidedAt) {
+        RoiRequest row = pendingRequest();
+        row.setRequesterType(RoiRequesterType.PATIENT);
+        row.setScopeDescription("FULL_RECORD");
+        row.setStatus(RoiRequestStatus.FULFILLED);
+        row.setDecidedAt(decidedAt);
+        org.mockito.Mockito.lenient().when(roiRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        return row;
+    }
+
+    @Test
+    void anAdministratorCollectsOnlyTheCopiesTheyApproved_D4270() {
+        UUID admin = asHospitalAdminAtHospital();
+        RoiRequest row = approvedFullCopy(NOW.minusDays(1));
+        row.setDecisionActorUserId(UUID.randomUUID());
+        assertThatThrownBy(() -> service.copyForExport(row.getId()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        row.setDecisionActorUserId(admin);
+        assertThat(service.copyForExport(row.getId()))
+            .isEqualTo(new RoiRequestService.ApprovedCopy(patientId, row.getId(), hospitalId));
+    }
+
+    /**
+     * QA D4270 review: the collecting role is read AT the request's hospital. A nurse at another hospital who is
+     * anything else here (a receptionist, an administrator who did not approve) is refused; reception never
+     * collects a copy (it reads no clinical content); the verified super-admin acting there does.
+     */
+    @Test
+    void theCollectingRoleIsReadAtTheRequestsHospital_D4270() {
+        UUID caller = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(caller);
+        RoiRequest row = approvedFullCopy(NOW.minusDays(1));
+        row.setDecisionActorUserId(UUID.randomUUID());
+        // A clinical role held only elsewhere: the hospital-scoped check answers false here.
+        when(roleValidator.collectsReleaseCopies(caller, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.copyForExport(row.getId()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.mockito.Mockito.verify(roleValidator, org.mockito.Mockito.never()).hasAnyAuthority(any(String[].class));
+
+        when(roleValidator.isSuperAdminActingAt(hospitalId)).thenReturn(true);
+        assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
+    }
+
+    /**
+     * QA D4270 review: the approver collects only while they still administer the request's hospital. Demoted
+     * there, though still an administrator elsewhere (the token's roles are a union), they are refused.
+     */
+    @Test
+    void aDemotedApproverNoLongerCollectsTheCopy_D4270() {
+        UUID admin = asHospitalAdminAtHospital();
+        RoiRequest row = approvedFullCopy(NOW.minusDays(1));
+        row.setDecisionActorUserId(admin);
+        assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
+
+        when(roleValidator.isHospitalAdmin(admin, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.copyForExport(row.getId()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    void anApprovedCopyIsCollectableForThirtyDaysThenExpired_D4270() {
+        asClinicianAtHospital();
+        RoiRequest row = approvedFullCopy(NOW.minusDays(30));
+        assertThat(service.copyForExport(row.getId()).requestId()).isEqualTo(row.getId());
+        row.setDecidedAt(NOW.minusDays(31));
+        assertThatThrownBy(() -> service.copyForExport(row.getId())).isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("roi.request.copyExpired");
+        assertThatThrownBy(() -> service.copyForSelf(patient, row.getId())).isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("roi.request.copyExpired");
+    }
+
+    @Test
+    void thePatientCollectsOnlyTheirOwnApprovedFullCopy_D4270() {
+        RoiRequest row = approvedFullCopy(NOW.minusDays(2));
+        assertThat(service.copyForSelf(patient, row.getId()))
+            .isEqualTo(new RoiRequestService.ApprovedCopy(patientId, row.getId(), hospitalId, true));
+
+        Patient someoneElse = new Patient();
+        someoneElse.setId(UUID.randomUUID());
+        assertThatThrownBy(() -> service.copyForSelf(someoneElse, row.getId())).isInstanceOf(ResourceNotFoundException.class);
+
+        // A copy approved for a third party goes to that third party, not to the portal.
+        row.setRequesterType(RoiRequesterType.THIRD_PARTY);
+        assertThatThrownBy(() -> service.copyForSelf(patient, row.getId())).isInstanceOf(ResourceNotFoundException.class);
+        row.setRequesterType(RoiRequesterType.PATIENT);
+
+        for (RoiRequestStatus refusedStatus : new RoiRequestStatus[]{RoiRequestStatus.PENDING, RoiRequestStatus.DENIED, RoiRequestStatus.CANCELLED}) {
+            row.setStatus(refusedStatus);
+            assertThatThrownBy(() -> service.copyForSelf(patient, row.getId())).as(refusedStatus.name())
+                .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("roi.request.copyNotApproved");
+        }
+        row.setStatus(RoiRequestStatus.FULFILLED);
+        row.setScopeDescription("Labs 2025 only");
+        assertThatThrownBy(() -> service.copyForSelf(patient, row.getId())).isInstanceOf(BusinessException.class);
+        row.setScopeDescription("FULL_RECORD");
+        row.setRequestKind(com.example.hms.enums.RoiRequestKind.CORRECTION);
+        assertThatThrownBy(() -> service.copyForSelf(patient, row.getId())).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void thePatientsListSaysWhichCopyCanBeDownloadedAndUntilWhen_D4270() {
+        RoiRequest fresh = approvedFullCopy(NOW.minusDays(2));
+        RoiRequest old = approvedFullCopy(NOW.minusDays(45));
+        RoiRequest denied = pendingRequest();
+        denied.setStatus(RoiRequestStatus.DENIED);
+        when(roiRepository.findByPatientIdOrderByCreatedAtDesc(patientId)).thenReturn(List.of(fresh, old, denied));
+        var mine = service.requestsForSelf(patient);
+        assertThat(mine.get(0).getCopyDownloadable()).isTrue();
+        assertThat(mine.get(0).getCopyAvailableUntil()).isEqualTo(NOW.toLocalDate().minusDays(2).plusDays(30));
+        assertThat(mine.get(1).getCopyDownloadable()).isFalse();
+        assertThat(mine.get(2).getCopyDownloadable()).isNull();
+        assertThat(mine.get(2).getCopyAvailableUntil()).isNull();
     }
 
     private void auditSinkUp() {

@@ -2361,4 +2361,59 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(unknown).usingRecursiveComparison().ignoringFields("assignmentCode").isEqualTo(real);
         verify(assignmentRepository, never()).findByAssignmentCode(any());
     }
+
+    // ---- QA D4269: no portal account of their own for a child under 13
+
+    private com.example.hms.model.Patient patientInvitationBorn(java.time.LocalDate dateOfBirth) {
+        UUID patientId = pendingPatientInvitation();
+        com.example.hms.model.Patient patient = patientRepository.findByIdUnscoped(patientId).orElseThrow();
+        patient.setDateOfBirth(dateOfBirth);
+        lenient().when(patientRepository.findIdsByUserId(assignee.getId())).thenReturn(List.of(patientId));
+        service.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+            auditEventLogService, java.time.Clock.systemDefaultZone()));
+        return patient;
+    }
+
+    @Test
+    void verifyAssignmentByCode_doesNotActivateAChildUnder13sOwnAccount_D4269() {
+        patientInvitationBorn(java.time.LocalDate.now().minusYears(9));
+        assignment.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignment.getConfirmationVerifiedAt()).isNull();
+        verify(assignmentRepository, never()).save(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyAssignmentByCode_activatesFrom13_D4269() {
+        patientInvitationBorn(java.time.LocalDate.now().minusYears(13));
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.verifyAssignmentByCode(VALID_CODE, VALID_PIN).isConfirmationVerified()).isTrue();
+    }
+
+    @Test
+    void theDeskIsShownNoCodeAndResendsNoneForAChildUnder13_D4269() {
+        try {
+            deskCaller("ROLE_RECEPTIONIST");
+            com.example.hms.model.Patient child = patientInvitationBorn(java.time.LocalDate.now().minusYears(9));
+            UUID childId = child.getId();
+
+            assertThatThrownBy(() -> service.revealPatientActivationCode(childId, hospital.getId()))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+            assertThatThrownBy(() -> service.resendPatientActivation(childId, hospital.getId()))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
 }

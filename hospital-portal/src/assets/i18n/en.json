@@ -2268,6 +2268,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
+      "MINOR_PORTAL_ACTION_REFUSED": "Action refused on a minor’s portal account (minors’ rights rule, by age)",
       "AUDIT_RETENTION_PURGED": "Audit rows past the retention period removed",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
@@ -7988,6 +7989,7 @@
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
         "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set signed off",
         "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked",
+        "MINOR_PORTAL_ACTION_REFUSED": "Portal action refused to a minor",
         "AUDIT_RETENTION_PURGED": "Audit rows past retention removed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
@@ -17070,6 +17072,12 @@
     "CODE_SENT_GENERIC": "A code was sent.",
     "EXPIRES": "Valid until {{time}}."
   },
+  "MINOR_RIGHTS": {
+    "UNDER_13": "This account belongs to a child under 13: it is read-only. A parent or the legal guardian does this at the reception desk of the facility.",
+    "AGE_13_14": "At 13 and 14 your account is read-only. For this, go to the reception desk of the facility with a parent or your legal guardian.",
+    "FAMILY_15_17": "Before 18, giving another adult access to your record is done with the facility’s administration, with a parent or your legal guardian. You can withdraw an access already given yourself, except a verified parent’s or guardian’s.",
+    "SHARING_15_17": "Before 18, you can close sharing with other hospitals yourself. To open it again, contact the facility’s administration with a parent or your legal guardian."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Access or correct my record",
     "INTRO": "Ask your hospital for a copy or a correction. Staff review requests; this form never changes your clinical record. Response dates are internal targets, not statutory deadlines.",
@@ -17089,6 +17097,11 @@
     "FAILED": "Unable to complete this action. Try again.",
     "COMPLETE_CORRECTION": "Complete correction review",
     "CORRECTION_HINT": "Review the requested correction in the authorized record workflow and explain the outcome. This decision does not overwrite clinical data.",
+    "DOWNLOAD": "Download my copy (PDF)",
+    "DOWNLOAD_UNTIL": "Copy available until",
+    "COPY_EXPIRED": "The period for downloading this copy is over. Make a new request.",
+    "DOWNLOAD_FAILED": "The copy could not be downloaded. Try again.",
+    "DESK_COPY_EXPIRED": "Collection period of the copy is over",
     "EXPORT": "Download approved copy (PDF)"
   },
   "URGENT_ALERTS": {

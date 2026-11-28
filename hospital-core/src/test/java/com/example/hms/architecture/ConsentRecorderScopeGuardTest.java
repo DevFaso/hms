@@ -109,7 +109,8 @@ class ConsentRecorderScopeGuardTest {
             .replace(CR, "");
         String self = roi.substring(roi.indexOf("public List<RoiRequestResponseDTO> requestsForSelf("));
         self = self.substring(0, self.indexOf("\n    }\n"));
-        assertThat(self).contains("mapper::toPatientDto").doesNotContain("mapper::toDto");
+        // QA D4270: each row is mapped by the patient mapper, then told whether its copy can be downloaded.
+        assertThat(self).contains("mapper.toPatientDto(row)").doesNotContain("mapper::toDto").doesNotContain("mapper.toDto(");
         assertThat(Files.readString(MAIN.resolve("com/example/hms/mapper/RoiRequestMapper.java")))
             .contains("dto.setDecisionActorUserId(null);");
     }

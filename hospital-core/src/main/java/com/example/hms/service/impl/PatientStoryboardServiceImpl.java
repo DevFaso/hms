@@ -100,7 +100,9 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // See PatientChartAccess: the tenant-scoped findById 404'd the whole
         // storyboard for cross-hospital patients ("Impossible de charger le
         // résumé patient" on a chart that had otherwise rendered).
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        Patient patient = release
+            ? patientChartAccess.requireForRelease(patientId, hospitalId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         // E9 #59 — the hospitals this caller may read for this patient; the
         // acting hospital alone when the policy says so, more when the patient

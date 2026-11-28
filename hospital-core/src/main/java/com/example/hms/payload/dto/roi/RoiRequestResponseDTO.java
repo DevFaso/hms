@@ -38,4 +38,9 @@ public class RoiRequestResponseDTO {
     private LocalDateTime decidedAt;
     private String decidedByName;
     private String decisionNote;
+
+    /** QA D4270: an approved full copy that can still be collected (false once its collection period is over). */
+    private Boolean copyDownloadable;
+    /** QA D4270: the last day the approved copy can be collected. */
+    private LocalDate copyAvailableUntil;
 }

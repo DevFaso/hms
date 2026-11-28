@@ -332,6 +332,12 @@ final class ComputedKeys {
             "LaborServiceImpl.java|labor.alert.msg.");
         site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name()",
             "LaborServiceImpl.java|labor.alert.type.");
+        // QA D4269: the refusal of a minor's own portal action; the key is one of the literals of
+        // MinorPortalRights.refusalKey, and MinorPortalRightsTest resolves each in every bundle.
+        r.put("com/example/hms/service/recordaccess/MinorPortalRightsGuard.java|key",
+            new Open("one of the portal.minor.* literals returned by MinorPortalRights.refusalKey (messages-patient)"));
+        r.put("com/example/hms/service/recordaccess/MinorPortalRightsGuard.java|key #2",
+            new Open("portal.minor.noAccountUnder13, the one refusal of MinorPortalRights for ACTIVATE_ACCOUNT"));
         r.put("com/example/hms/security/context/ImpersonationLimits.java|refusalKey",
             new Open("one of the two constants ACCOUNT_CHANGE_REFUSED (messages-auth) and MONEY_WRITE_REFUSED"
                 + " (messages-billing), chosen by the constructor; ImpersonationLimitsTest resolves both"));

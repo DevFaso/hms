@@ -67,6 +67,13 @@ public class RoiRequestService {
     @org.springframework.beans.factory.annotation.Value("${hms.roi.response-target-days:30}")
     private int responseTargetDays = 30;
 
+    /**
+     * QA D4270: how long after the decision an approved copy stays collectable (by the patient, the clinicians and
+     * the approving administrator). Past it the request is expired: a new request is made and decided.
+     */
+    @org.springframework.beans.factory.annotation.Value("${hms.roi.copy-download-days:30}")
+    private int copyDownloadDays = 30;
+
 
     private final RoiRequestRepository roiRepository;
     private final PatientRepository patientRepository;
@@ -157,7 +164,7 @@ public class RoiRequestService {
         // cannot be persisted, the fulfilment above rolls back with it.
         if (request.getRequestKind() != com.example.hms.enums.RoiRequestKind.CORRECTION) emitDisclosureOrFail(request);
         emitAudit(AuditEventType.ROI_FULFILLED, request, "ROI request fulfilled");
-        return mapper.toDto(request);
+        return withCopyAvailability(mapper.toDto(request), request);
     }
 
     @Transactional
@@ -210,7 +217,7 @@ public class RoiRequestService {
         int boundedSize = Math.clamp(size, 1, MAX_WORKLIST_PAGE);
         return roiRepository.findByHospital_IdAndStatusOrderByRequestedOnAscCreatedAtAsc(
                 hospitalId, effective, PageRequest.of(Math.max(page, 0), boundedSize))
-            .map(mapper::toDto);
+            .map(row -> withCopyAvailability(mapper.toDto(row), row));
     }
 
     @Transactional(readOnly = true)
@@ -219,7 +226,7 @@ public class RoiRequestService {
         requirePatientInTenant(patientId, hospitalId);
         return roiRepository.findByPatientIdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId)
             .stream()
-            .map(mapper::toDto)
+            .map(row -> withCopyAvailability(mapper.toDto(row), row))
             .toList();
     }
 
@@ -230,7 +237,7 @@ public class RoiRequestService {
             return List.of();
         }
         return roiRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId()).stream()
-            .map(mapper::toPatientDto)
+            .map(row -> withCopyAvailability(mapper.toPatientDto(row), row))
             .toList();
     }
 
@@ -287,25 +294,99 @@ public class RoiRequestService {
         return reason;
     }
 
-    /** Resolve the PDF's patient only after the request's hospital, kind and release decision match. */
+    /**
+     * Resolve the PDF's patient only after the request's hospital, the caller's part in the release, the kind, the
+     * release decision and its collection period all match.
+     *
+     * <p>QA D4270: who collects an approved copy at the hospital. The clinical roles as before, held AT the
+     * request's hospital (a role held at another hospital does not count); the verified super-admin acting there;
+     * and the hospital administrator who approved THIS request. Another administrator is refused: approving a release
+     * is what entitles an administrator to produce it. Reception is refused: it reads no clinical content.
+     */
     @Transactional(readOnly = true)
     public ApprovedCopy copyForExport(UUID requestId) {
         UUID hospitalId = requireHospital();
         RoiRequest request = roiRepository.findById(requestId)
             .filter(row -> row.getHospital() != null && hospitalId.equals(row.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
-        if (request.getRequestKind() == com.example.hms.enums.RoiRequestKind.CORRECTION
-            || request.getStatus() != RoiRequestStatus.FULFILLED
-            || !"FULL_RECORD".equals(request.getScopeDescription())) throw new BusinessException("roi.request.copyNotApproved");
+        UUID caller = roleValidator.getCurrentUserId();
+        boolean collects = roleValidator.isSuperAdminActingAt(hospitalId)
+            || (caller != null && roleValidator.collectsReleaseCopies(caller, hospitalId));
+        if (!collects) {
+            // The approver collects only while they still administer the request's hospital: an administrator
+            // demoted there (but holding a role elsewhere) no longer produces its copies.
+            if (caller == null || !caller.equals(request.getDecisionActorUserId())
+                    || !roleValidator.isHospitalAdmin(caller, hospitalId)) {
+                throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("roi.request.copyApproverOnly"));
+            }
+        }
+        requireCollectable(request);
         return new ApprovedCopy(request.getPatientId(), request.getId(), hospitalId);
     }
 
+    /**
+     * QA D4270: the patient's own approved copy, from « Mes documents ». Only a request the patient filed
+     * themselves: a copy approved for a third party goes to that third party, not to the portal. Another patient's
+     * request answers exactly as a missing one.
+     */
+    @Transactional(readOnly = true)
+    public ApprovedCopy copyForSelf(Patient patient, UUID requestId) {
+        if (patient == null || patient.getId() == null || requestId == null) {
+            throw new ResourceNotFoundException("roi.request.notFound", requestId);
+        }
+        RoiRequest request = roiRepository.findById(requestId)
+            .filter(row -> patient.getId().equals(row.getPatientId())
+                && row.getRequesterType() == RoiRequesterType.PATIENT && row.getHospital() != null)
+            .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
+        requireCollectable(request);
+        return new ApprovedCopy(request.getPatientId(), request.getId(), request.getHospital().getId(), true);
+    }
+
+    private void requireCollectable(RoiRequest request) {
+        if (!isApprovedFullCopy(request)) {
+            throw new BusinessException("roi.request.copyNotApproved");
+        }
+        LocalDate until = copyAvailableUntil(request);
+        if (until != null && LocalDate.now(clock).isAfter(until)) {
+            throw new BusinessException("roi.request.copyExpired");
+        }
+    }
+
+    private static boolean isApprovedFullCopy(RoiRequest request) {
+        return request.getRequestKind() != com.example.hms.enums.RoiRequestKind.CORRECTION
+            && request.getStatus() == RoiRequestStatus.FULFILLED
+            && "FULL_RECORD".equals(request.getScopeDescription());
+    }
+
+    /** The last day an approved copy can be collected; null when the row carries no decision time. */
+    private LocalDate copyAvailableUntil(RoiRequest request) {
+        return request.getDecidedAt() == null ? null
+            : request.getDecidedAt().toLocalDate().plusDays(Math.clamp(copyDownloadDays, 1, 3650));
+    }
+
+    /** What the screens need to offer the download: an approved full copy, and until when. */
+    private RoiRequestResponseDTO withCopyAvailability(RoiRequestResponseDTO dto, RoiRequest request) {
+        if (dto == null || !isApprovedFullCopy(request)) {
+            return dto;
+        }
+        LocalDate until = copyAvailableUntil(request);
+        dto.setCopyAvailableUntil(until);
+        dto.setCopyDownloadable(until == null || !LocalDate.now(clock).isAfter(until));
+        return dto;
+    }
+
     /** The approved request, patient and owning hospital travel together to the release renderer. */
-    public record ApprovedCopy(UUID patientId, UUID requestId, UUID hospitalId) {
+    public record ApprovedCopy(UUID patientId, UUID requestId, UUID hospitalId, boolean selfService) {
         public ApprovedCopy {
             java.util.Objects.requireNonNull(patientId, "patientId");
             java.util.Objects.requireNonNull(requestId, "requestId");
             java.util.Objects.requireNonNull(hospitalId, "hospitalId");
+        }
+
+        /** A copy collected by staff acting at the hospital that approved it. */
+        public ApprovedCopy(UUID patientId, UUID requestId, UUID hospitalId) {
+            this(patientId, requestId, hospitalId, false);
         }
     }
 

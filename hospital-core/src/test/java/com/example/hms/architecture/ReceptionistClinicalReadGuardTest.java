@@ -69,7 +69,9 @@ class ReceptionistClinicalReadGuardTest {
         "EncounterController#checkOut",
         // QA D1431: ending a triage and declaring a patient ready to leave are clinical acts.
         "EncounterController#completeTriage",
-        "EncounterController#markReadyForDischarge");
+        "EncounterController#markReadyForDischarge",
+        // QA D4270 review: the approved release copy renders the whole chart (notes, results, imaging).
+        "RoiRecordExportController#download");
 
     /**
      * Type#field the role still receives, and why: what the desk's workflow reads
@@ -229,6 +231,62 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("TreatmentConsentRequestDTO#notes", "the desk records consents"),
         Map.entry("UserRecoveryContactRequestDTO#notes", "the caller's own account"),
         Map.entry("WaitlistEntryRequestDTO#reason", "the visit reason of the waitlist entry"));
+
+    /**
+     * QA D4270 review: a document answer (a PDF, a file, a byte stream) has no fields, so the field rule above
+     * cannot read it. Every one the role reaches is named here with what it renders, which must hold nothing
+     * clinical; a document that renders chart content refuses the role instead (and is listed in REFUSED).
+     */
+    private static final Map<String, String> DESK_DOCUMENTS = Map.ofEntries(
+        Map.entry("BillingInvoiceController#downloadInvoicePdf", "the invoice the desk issues: services and amounts"),
+        Map.entry("BillingInvoiceController#downloadReceiptPdf", "the receipt of a payment the desk takes"),
+        Map.entry("CashSessionController#sessionPdf", "the desk's own till: payments and totals"),
+        Map.entry("InvoiceRefundController#receipt", "the receipt of a refund paid at the till"),
+        Map.entry("PriceListController#exportCsv", "the hospital's tariffs: no patient"),
+        Map.entry("PrintLabelController#wristband", "the identity wristband: name, number and barcode, nothing clinical"),
+        Map.entry("PatientPhotoController#get", "the identity photo the desk takes at registration"),
+        Map.entry("ProfileImageController#profileImage", "an account's profile picture"),
+        Map.entry("ChatController#downloadAttachment", "a file in a conversation the caller takes part in"),
+        Map.entry("PatientDocumentStaffController#download",
+            "an upload the desk may open (insurance and identity papers, decision 2026-11-12), decided per document "
+                + "by PatientDocumentServiceImpl"),
+        Map.entry("PatientImagingPortalController#getProxyImagingImage",
+            "the caller's own family access (a grant they hold), not the desk's reach"));
+
+    /** A handler whose answer is a document rather than a JSON body. */
+    private static boolean answersADocument(org.springframework.web.servlet.mvc.method.RequestMappingInfo info,
+                                            HandlerMethod handler) {
+        String type = handler.getMethod().getGenericReturnType().getTypeName();
+        if (type.contains("byte[]") || type.contains("org.springframework.core.io.Resource")
+                || type.contains("InputStreamResource") || type.contains("ByteArrayResource")
+                || type.contains("StreamingResponseBody")) {
+            return true;
+        }
+        for (org.springframework.http.MediaType produced : info.getProducesCondition().getProducibleMediaTypes()) {
+            if (!produced.isCompatibleWith(org.springframework.http.MediaType.APPLICATION_JSON)
+                    && !produced.isWildcardType()
+                    && !produced.isCompatibleWith(org.springframework.http.MediaType.TEXT_PLAIN)
+                    && !produced.isCompatibleWith(org.springframework.http.MediaType.TEXT_EVENT_STREAM)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
+    @DisplayName("QA D4270 review: every document the role can download is named with what it renders")
+    void everyDocumentTheRoleReachesIsNamed() {
+        Set<String> reached = new TreeSet<>();
+        ControllerMappingRegistry.mapping().getHandlerMethods().forEach((info, handler) -> {
+            String admits = RoleExpression.admits(handler, RECEPTIONIST);
+            if ((RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))
+                    && answersADocument(info, handler)) {
+                reached.add(name(handler));
+            }
+        });
+        assertThat(reached).as("a document the desk downloads: refuse the role if it renders chart content, "
+            + "or say in DESK_DOCUMENTS what it renders").isEqualTo(new TreeSet<>(DESK_DOCUMENTS.keySet()));
+    }
 
     private static Map<String, HandlerMethod> handlers() {
         Map<String, HandlerMethod> out = new TreeMap<>();

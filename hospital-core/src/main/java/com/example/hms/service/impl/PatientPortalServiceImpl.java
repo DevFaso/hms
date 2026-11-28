@@ -272,6 +272,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** QA D3451 (proxy-read part): the audit row of a read through family access; null in a hand-built test. */
     private com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit;
 
+    /** QA D4269: what a minor may do alone on their own account; null only in a hand-built test. */
+    private com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMinorPortalRights(com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights) {
+        this.minorPortalRights = minorPortalRights;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setProxyReadAudit(com.example.hms.service.recordaccess.ProxyReadAudit proxyReadAudit) {
         this.proxyReadAudit = proxyReadAudit;
@@ -314,7 +322,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public PatientProfileDTO getMyProfile(Authentication auth) {
         Patient patient = findPatient(auth);
-        return toProfileDTO(patient);
+        return withPortalRights(toProfileDTO(patient), patient);
+    }
+
+    /** QA D4269: what this account may do alone, so the screens hide or explain the rest. Own profile only. */
+    private PatientProfileDTO withPortalRights(PatientProfileDTO profile, Patient patient) {
+        if (minorPortalRights != null && profile != null) {
+            profile.setPortalRights(minorPortalRights.rightsOf(patient));
+        }
+        return profile;
     }
 
     @Override
@@ -354,7 +370,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         addressHistoryRecorder.recordIfMoved(patient, before);
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
-        return toProfileDTO(patient);
+        return withPortalRights(toProfileDTO(patient), patient);
     }
 
     /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
@@ -435,6 +451,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
             Authentication auth) {
         return roiRequestService.requestsForSelf(findPatient(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.service.roi.RoiRequestService.ApprovedCopy myApprovedRoiCopy(
+            Authentication auth, UUID requestId) {
+        return roiRequestService.copyForSelf(findPatient(auth), requestId);
     }
 
     // ── Standardized PRO screenings (Tier 2 item 47) ─────────────────────
@@ -1900,6 +1923,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public ProxyResponseDTO grantProxy(Authentication auth, ProxyGrantRequestDTO dto) {
         Patient patient = findPatient(auth);
+        // QA D4269: before anything about the other account is looked up or said.
+        requireMinorMay(patient, com.example.hms.service.recordaccess.MinorPortalRights.Action.GRANT_FAMILY_ACCESS);
 
         // One answer for an identifier that names nobody and for one that
         // names an account that cannot use family access (it holds no patient
@@ -1924,11 +1949,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new BusinessException("portal.proxy.self");
         }
 
-        // Prevent duplicate active proxy
+        // Prevent duplicate active proxy. QA D4269 review: a grant that has ended (its date passed, or given during
+        // minority and lapsed at 18) opens nothing and does not block a new one: it is closed as expired here.
         patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
-            throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
+            if (!isProxyExpired(existing)) {
+                throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
+            }
+            existing.setStatus(ProxyStatus.EXPIRED);
+            patientProxyRepository.save(existing);
         });
 
         // QA D1464: told "access granted" while the row was born EXPIRED and the grantee had nothing.
@@ -1991,6 +2021,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (proxy.getStatus() == ProxyStatus.REVOKED) {
             throw new BusinessException("proxyGrant.alreadyRevoked");
         }
+        // QA D4269: a minor's own grant, once it is known to be theirs and still open.
+        requireMinorMay(proxy.getGrantorPatient(), proxy.isVerifiedParentOrGuardian()
+            ? com.example.hms.service.recordaccess.MinorPortalRights.Action.REVOKE_VERIFIED_GUARDIAN_ACCESS
+            : com.example.hms.service.recordaccess.MinorPortalRights.Action.REVOKE_FAMILY_ACCESS);
 
         proxy.setStatus(ProxyStatus.REVOKED);
         proxy.setRevokedAt(java.time.LocalDateTime.now());
@@ -2026,6 +2060,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .revokedAt(p.getRevokedAt())
                 .notes(p.getNotes())
                 .createdAt(p.getCreatedAt())
+                .verifiedParentOrGuardian(p.isVerifiedParentOrGuardian())
                 .build();
     }
 
@@ -2073,7 +2108,21 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private static boolean isProxyExpired(PatientProxy proxy) {
-        return proxy.getExpiresAt() != null && proxy.getExpiresAt().isBefore(java.time.LocalDateTime.now());
+        return (proxy.getExpiresAt() != null && proxy.getExpiresAt().isBefore(java.time.LocalDateTime.now()))
+            || lapsedAtMajority(proxy);
+    }
+
+    /** QA D4269: an access given while the patient was a minor no longer opens the record once they are 18. */
+    private static boolean lapsedAtMajority(PatientProxy proxy) {
+        Patient grantor = proxy.getGrantorPatient();
+        return grantor != null && com.example.hms.service.recordaccess.MinorPortalRights.lapsedAtMajority(
+            grantor.getDateOfBirth(), proxy.getCreatedAt(), java.time.LocalDate.now());
+    }
+
+    private void requireMinorMay(Patient patient, com.example.hms.service.recordaccess.MinorPortalRights.Action action) {
+        if (minorPortalRights != null) {
+            minorPortalRights.require(patient, action);
+        }
     }
 
     /**
