@@ -141,6 +141,7 @@ class ReceptionServiceImplTest {
         hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         lenient().when(hospital.getName()).thenReturn("Central Hospital");
+        // QA D4225: the fixture department is one of the fixture hospital's.
         lenient().when(department.getHospital()).thenReturn(hospital);
 
         // @Value field — never injected by Mockito, and a null language tag NPEs.
@@ -795,6 +796,56 @@ class ReceptionServiceImplTest {
             assertThat(result.getFullName()).isEqualTo("John Doe");
             assertThat(result.getPatientId()).isEqualTo(patientId);
             assertThat(result.getAlerts().isMissingInsurance()).isTrue();
+        }
+
+        @Test
+        @DisplayName("QA D4221: an emergency checked in at night is suggested the emergency night tariff the invoice bills")
+        void theDeskSuggestsTheTariffTheInvoiceBills_D4221() {
+            patient.setHospitalRegistrations(Collections.emptySet());
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(Collections.emptyList());
+            when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+            com.example.hms.model.Department emergency = new com.example.hms.model.Department();
+            emergency.setName("Urgences");
+            Hospital here = new Hospital();
+            here.setId(hospitalId);
+            Appointment appointment = new Appointment();
+            appointment.setId(UUID.randomUUID());
+            appointment.setHospital(here);
+            appointment.setPatient(patient);
+            appointment.setDepartment(emergency);
+            when(appointmentRepo.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+
+            com.example.hms.service.billing.TariffResolver tariffs =
+                    mock(com.example.hms.service.billing.TariffResolver.class);
+            when(tariffs.businessTimeOf(any())).thenReturn(java.time.LocalDateTime.of(2026, 11, 26, 23, 30));
+            when(tariffs.peek(eq(hospitalId), any(), any(), any())).thenReturn(Optional.empty());
+            when(tariffs.peek(eq(hospitalId), any(), eq("CONSULTATION_DEFAULT"), any())).thenReturn(Optional.of(
+                    new com.example.hms.service.billing.TariffResolver.Tariff(UUID.randomUUID(), UUID.randomUUID(),
+                            "Consultation", new java.math.BigDecimal("2000"))));
+            when(tariffs.peek(eq(hospitalId), any(), eq("CONSULTATION_EMERGENCY_NIGHT"), any())).thenReturn(Optional.of(
+                    new com.example.hms.service.billing.TariffResolver.Tariff(UUID.randomUUID(), UUID.randomUUID(),
+                            "Urgence de nuit", new java.math.BigDecimal("7500"))));
+            com.example.hms.service.billing.InvoiceCoverageService coverage =
+                    mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+            when(coverage.quote(any(), any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+            service.setTariffResolver(tariffs);
+            service.setInvoiceCoverage(coverage);
+
+            FrontDeskPatientSnapshotDTO atNight = service.getPatientSnapshot(patientId, hospitalId, appointment.getId());
+
+            assertThat(atNight.getInsurance().getConsultationFee()).isEqualByComparingTo("7500");
+            assertThat(atNight.getInsurance().getConsultationLabel()).isEqualTo("Urgence de nuit");
+            assertThat(atNight.getInsurance().getSuggestedCopay()).isEqualByComparingTo("7500");
+            // Without the appointment (or one of another hospital) the general consultation is suggested.
+            assertThat(service.getPatientSnapshot(patientId, hospitalId).getInsurance().getConsultationFee())
+                    .isEqualByComparingTo("2000");
+            here.setId(UUID.randomUUID());
+            assertThat(service.getPatientSnapshot(patientId, hospitalId, appointment.getId()).getInsurance()
+                    .getConsultationFee()).isEqualByComparingTo("2000");
         }
 
         @Test
@@ -1459,6 +1510,100 @@ class ReceptionServiceImplTest {
 
             assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
                     .isInstanceOf(ResourceNotFoundException.class);
+            verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
+        }
+
+        private WaitlistEntryRequestDTO aRequest() {
+            WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
+            req.setDepartmentId(departmentId);
+            req.setPatientId(patientId);
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(waitlistRepo.save(any(AppointmentWaitlist.class))).thenAnswer(i -> i.getArgument(0));
+            return req;
+        }
+
+        @Test
+        @DisplayName("QA D4225: a department that is not one of this hospital's is « not found », and nothing is saved")
+        void qaD4225_refusesADepartmentOfAnotherHospital() {
+            WaitlistEntryRequestDTO req = aRequest();
+            Hospital elsewhere = mock(Hospital.class);
+            when(elsewhere.getId()).thenReturn(UUID.randomUUID());
+            when(department.getHospital()).thenReturn(elsewhere);
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .extracting("messageKey").isEqualTo("department.notFound");
+            verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
+        }
+
+        @Test
+        @DisplayName("QA D4225: the refusal is the same for an id that exists nowhere")
+        void qaD4225_anUnknownDepartmentReadsTheSame() {
+            WaitlistEntryRequestDTO req = aRequest();
+            when(departmentRepo.findById(departmentId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .extracting("messageKey").isEqualTo("department.notFound");
+        }
+
+        @Test
+        @DisplayName("QA D4225: a preferred clinician who is unknown, inactive or of another hospital is refused")
+        void qaD4225_refusesAClinicianWhoIsNotOnThisHospitalsStaff() {
+            WaitlistEntryRequestDTO req = aRequest();
+            UUID unknown = UUID.randomUUID();
+            req.setPreferredProviderId(unknown);
+            when(staffRepo.findByIdAndActiveTrue(unknown)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .extracting("messageKey").isEqualTo("provider.notFound");
+
+            UUID foreign = UUID.randomUUID();
+            req.setPreferredProviderId(foreign);
+            Staff outsider = mock(Staff.class);
+            Hospital elsewhere = mock(Hospital.class);
+            when(elsewhere.getId()).thenReturn(UUID.randomUUID());
+            when(outsider.getHospital()).thenReturn(elsewhere);
+            when(staffRepo.findByIdAndActiveTrue(foreign)).thenReturn(Optional.of(outsider));
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .extracting("messageKey").isEqualTo("provider.notFound");
+            verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
+        }
+
+        @Test
+        @DisplayName("QA D4225: a clinician of this hospital's staff is kept on the entry")
+        void qaD4225_keepsAClinicianOfThisHospital() {
+            WaitlistEntryRequestDTO req = aRequest();
+            UUID staffId = UUID.randomUUID();
+            req.setPreferredProviderId(staffId);
+            Staff clinician = mock(Staff.class);
+            when(clinician.getHospital()).thenReturn(hospital);
+            when(staffRepo.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(clinician));
+            org.mockito.ArgumentCaptor<AppointmentWaitlist> saved =
+                org.mockito.ArgumentCaptor.forClass(AppointmentWaitlist.class);
+
+            assertThatCode(() -> service.addToWaitlist(req, hospitalId, "receptionist1")).doesNotThrowAnyException();
+
+            verify(waitlistRepo).save(saved.capture());
+            assertThat(saved.getValue().getPreferredProvider()).isSameAs(clinician);
+        }
+
+        @Test
+        @DisplayName("QA D4229: a patient already waiting for a department is not added to it twice")
+        void qaD4229_refusesASecondOpenRequestForTheSameDepartment() {
+            WaitlistEntryRequestDTO req = aRequest();
+            when(waitlistRepo.existsByHospital_IdAndPatient_IdAndDepartment_IdAndStatusIn(
+                    hospitalId, patientId, departmentId, List.of("WAITING", "OFFERED"))).thenReturn(true);
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("waitlist.entry.alreadyOpen");
             verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
         }
     }

@@ -4,7 +4,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import en from '../../assets/i18n/en.json';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
-import { AuditDescriptionService } from './audit-description.service';
+import {
+  AuditDescriptionService,
+  WRITE_ROUTE_KEYS,
+  auditRowDetail,
+} from './audit-description.service';
 import { AUDIT_DESCRIPTION_PATTERNS } from './audit-description-patterns';
 
 /**
@@ -485,6 +489,94 @@ describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
     for (const [sentence, key] of samples) {
       expect(of(key).re.test(sentence)).withContext(key).toBeTrue();
       expect(AUDIT_DESCRIPTION_PATTERNS.find((p) => p.re.test(sentence))?.key).toBe(key);
+    }
+  });
+});
+
+describe('AuditDescriptionService: routes that name their own action (QA D4226, round 81)', () => {
+  let translate: TranslateService;
+  let service: AuditDescriptionService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [TranslateModule.forRoot()] });
+    translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', en);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('es', es);
+    service = TestBed.inject(AuditDescriptionService);
+  });
+
+  it('a mailed invoice reads « Envoi de la facture par e-mail », not « Création : Facture »', () => {
+    translate.use('fr');
+    const row = { eventDescription: 'POST /billing-invoices/{id}/email', entityType: 'INVOICE' };
+    expect(service.describe(row)).toBe('Envoi de la facture par e-mail');
+    expect(
+      service.describe({ ...row, eventDescription: 'POST /api/billing-invoices/{id}/email' }),
+    ).toBe('Envoi de la facture par e-mail');
+    translate.use('en');
+    expect(service.describe(row)).toBe('Invoice sent by e-mail');
+  });
+
+  it('guard: every named route has its text in the three locales', () => {
+    const read = (bundle: unknown, key: string): unknown =>
+      key
+        .split('.')
+        .reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
+    for (const [route, key] of Object.entries(WRITE_ROUTE_KEYS)) {
+      expect(route)
+        .withContext(route)
+        .toMatch(/^(POST|PUT|PATCH|DELETE) \/\S+$/);
+      for (const bundle of [en, fr, es]) {
+        expect(typeof read(bundle, key))
+          .withContext(`${key}`)
+          .toBe('string');
+      }
+    }
+  });
+
+  it('another write on the invoice still reads as a generic write', () => {
+    translate.use('fr');
+    expect(
+      service.describe({ eventDescription: 'POST /billing-invoices/{id}/items', entityType: 'X' }),
+    ).not.toBe('Envoi de la facture par e-mail');
+  });
+
+  it('reads the masked recipients, their kind and the reason from the row details', () => {
+    const detail = auditRowDetail(
+      JSON.stringify({
+        invoiceEmailRecipients: [
+          { recipient: 'r***@wendpanga.test', recipientKind: 'GUARANTOR', guarantorId: 'g-1' },
+          { recipient: 'e***@autre-domaine.test', recipientKind: 'OTHER' },
+        ],
+        attachment: true,
+        reason: ' Employeur du patient ',
+      }),
+    );
+    expect(detail).toEqual({
+      recipients: [
+        { recipient: 'r***@wendpanga.test', recipientKind: 'GUARANTOR' },
+        { recipient: 'e***@autre-domaine.test', recipientKind: 'OTHER' },
+      ],
+      reason: 'Employeur du patient',
+      attachment: true,
+    });
+  });
+
+  it('a row with no details, broken details or nothing to show has no detail', () => {
+    expect(auditRowDetail(null)).toBeNull();
+    expect(auditRowDetail('')).toBeNull();
+    expect(auditRowDetail('not json')).toBeNull();
+    expect(auditRowDetail('{"count":3}')).toBeNull();
+    expect(auditRowDetail('[1,2]')).toBeNull();
+  });
+
+  it('every recipient kind the server writes has its label in the three locales', () => {
+    for (const kind of ['PATIENT', 'GUARANTOR', 'OTHER']) {
+      for (const bundle of [en, fr, es]) {
+        const kinds = (bundle as { AUDIT: { RECIPIENT_KIND: Record<string, string> } }).AUDIT
+          .RECIPIENT_KIND;
+        expect(kinds[kind]).withContext(kind).toBeTruthy();
+      }
     }
   });
 });

@@ -161,16 +161,20 @@ public class ActingScopeResolver {
             // registered them. Never AMBIGUOUS, never a guessed hospital.
             return builder.patientOwned(true).build();
         }
-        if (hospitals.size() == 1) {
-            UUID sole = hospitals.iterator().next();
+        // r81: the hospital acted at by default is the only one where the caller works; a
+        // hospital where they are only a patient is never it.
+        Set<UUID> worksAt = staffHospitalIds(assignments);
+        if (worksAt.size() == 1) {
+            UUID sole = worksAt.iterator().next();
             UUID organization = hospitalOrganizations.get(sole);
             if (organization != null) {
                 builder.activeOrganizationId(organization);
             }
             return builder.activeHospitalId(sole).build();
         }
+        // Several hospitals where they work: AMBIGUOUS until one is named; none: NO_HOSPITAL.
         return builder
-            .scopeRefusal(hospitals.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
+            .scopeRefusal(worksAt.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
             .build();
     }
 
@@ -426,8 +430,8 @@ public class ActingScopeResolver {
      * {@code ?hospitalId=}, a body field or a path variable) — design §3.3
      * step 1 and §3.4 step 2. A verified super-admin may name any hospital;
      * anyone else, receptionists included, only one in their live permitted
-     * set; on a write outside the patient portal, not one where a staff caller
-     * is only a patient ({@link HospitalContextRequestOverrides#refusesStaffWriteAt}).
+     * set; outside the patient portal, not one where a staff caller is only a
+     * patient ({@link HospitalContextRequestOverrides#actsOnlyAsPatientAt}).
      * A refusal is audited (hourly per actor, hospital and reason) and
      * returned; the context is left unchanged.
      *
@@ -445,7 +449,7 @@ public class ActingScopeResolver {
         HospitalContext context = ensureContext();
         boolean permitted = context.isSuperAdmin()
             || (context.getPermittedHospitalIds().contains(requestedHospitalId)
-                && !HospitalContextRequestOverrides.refusesStaffWriteAt(context, requestedHospitalId));
+                && !HospitalContextRequestOverrides.actsOnlyAsPatientAt(context, requestedHospitalId));
         if (!permitted) {
             ActingScope.Reason reason = classifyRefusal(context.getPrincipalUserId(), requestedHospitalId);
             recordRefusal(context, requestedHospitalId, reason, ActingScope.Source.REQUESTED);
@@ -532,10 +536,31 @@ public class ActingScopeResolver {
             return pinned == null ? Set.of() : Set.of(pinned);
         }
         if (!context.getPermittedHospitalIds().isEmpty()) {
-            return context.getPermittedHospitalIds();
+            return workingHospitalIds(context);
         }
         UUID active = context.getScopeRefusal() == null ? context.getActiveHospitalId() : null;
         return active == null ? Set.of() : Set.of(active);
+    }
+
+    /**
+     * r81: the permitted hospitals less those where a staff caller is only a
+     * patient, outside the patient portal
+     * ({@link HospitalContextRequestOverrides#actsOnlyAsPatientAt}). A staff
+     * caller reads a hospital's rows where they work; their own record is the
+     * patient portal's.
+     */
+    public static Set<UUID> workingHospitalIds(HospitalContext context) {
+        Set<UUID> permitted = context.getPermittedHospitalIds();
+        Set<UUID> working = null;
+        for (UUID hospitalId : permitted) {
+            if (HospitalContextRequestOverrides.actsOnlyAsPatientAt(context, hospitalId)) {
+                if (working == null) {
+                    working = new LinkedHashSet<>(permitted);
+                }
+                working.remove(hospitalId);
+            }
+        }
+        return working == null ? permitted : Collections.unmodifiableSet(working);
     }
 
     /** The user-facing sentence for a refusal. */

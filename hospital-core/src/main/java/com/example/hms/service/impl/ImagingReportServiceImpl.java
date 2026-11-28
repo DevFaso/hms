@@ -138,6 +138,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // QA D1098 (round 19): reports were written and signed FINAL on
         // cancelled orders. A cancelled order takes no result: place a new one.
         requireOrderNotCancelled(imagingOrder);
+        // QA D4140, D4142: a report is written on an exam that took place, on an order a physician stands behind.
+        new com.example.hms.service.imaging.ImagingOrderAuthorisation(roleValidator).requireExamTookPlace(imagingOrder);
         Hospital hospital = imagingOrder.getHospital();
         if (hospital == null) {
             throw new BusinessException("imaging.report.orderWithoutHospital");
@@ -227,6 +229,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new BusinessException("imaging.report.orderMustRemain");
         }
         requireOrderNotCancelled(imagingOrder);
+        // QA D4142: nor is a draft revised on an exam that never started.
+        new com.example.hms.service.imaging.ImagingOrderAuthorisation(roleValidator).requireExamTookPlace(imagingOrder);
         if (request.getImagingOrderId() != null
             && !Objects.equals(imagingOrder.getId(), request.getImagingOrderId())) {
             // Re-pointing a report at a different order would move it between
@@ -264,6 +268,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // QA D930 class: a colleague does not sign another clinician's read.
         requireReportAuthor(report);
         requireOrderNotCancelled(report.getImagingOrder());
+        // QA D4140, D4142: nor is a report signed on an exam that never started.
+        new com.example.hms.service.imaging.ImagingOrderAuthorisation(roleValidator)
+            .requireExamTookPlace(report.getImagingOrder());
 
         if (report.isSigned()) {
             throw new BusinessException("imaging.report.alreadySigned");

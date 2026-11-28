@@ -180,7 +180,7 @@ public class HospitalContext {
      * there: every role they hold at it is PATIENT, while they also hold a role
      * other than PATIENT (a patient-only caller and a verified super-admin
      * answer false; their scope has its own rule). Such a hospital is not one
-     * the caller may write at as staff (r81 review of D4260).
+     * the caller may read or write at as staff (r81).
      */
     public boolean isTreatedOnlyAt(UUID hospitalId) {
         if (hospitalId == null || superAdmin || patientOwned || hospitalRoles == null) {

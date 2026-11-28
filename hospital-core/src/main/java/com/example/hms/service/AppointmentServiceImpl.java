@@ -211,7 +211,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         ROLE_RECEPTIONIST_CODE, ROLE_DOCTOR_CODE, ROLE_NURSE_CODE, "ROLE_MIDWIFE");
 
     /** Allowed status transitions: current → set of valid next statuses. */
-    private static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
+    static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
     static {
         Map<AppointmentStatus, Set<AppointmentStatus>> m = new EnumMap<>(AppointmentStatus.class);
         m.put(AppointmentStatus.PENDING,     EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
@@ -248,6 +248,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         m.put(AppointmentStatus.UNKNOWN,     EnumSet.noneOf(AppointmentStatus.class));
         VALID_TRANSITIONS = Collections.unmodifiableMap(m);
     }
+
+    /**
+     * QA D4220: the statuses of a visit that is over. Guarded by
+     * {@code AppointmentStatusTransitionTest}: every status the state machine
+     * lets nothing, or only a rebooking, out of is here.
+     */
+    static final Set<AppointmentStatus> CLOSED_TO_MOVES = Collections.unmodifiableSet(EnumSet.of(
+        AppointmentStatus.CANCELLED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW,
+        AppointmentStatus.FAILED, AppointmentStatus.UNKNOWN));
 
     /** QA D1126 / D1132: the moves that drop a booked visit, and so need a reason. */
     private static final Set<AppointmentStatus> NEEDS_STATUS_REASON =
@@ -906,6 +915,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         // status never re-times it); a moved one takes the slot length where
         // it lands. The end time in the request is ignored.
         boolean moved = movesTheVisit(request, existing, staff);
+        // QA D4220: a visit that is over is not moved; refused before any slot is looked at.
+        requireOpenToBeMoved(existing, request, moved,
+            request.getStatus() != null && request.getStatus() != existing.getStatus());
         request.setEndTime(moved || existing.getEndTime() == null
             ? slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime())
             : existing.getEndTime());
@@ -1128,6 +1140,31 @@ public class AppointmentServiceImpl implements AppointmentService {
         return !request.getAppointmentDate().equals(existing.getAppointmentDate())
             || !request.getStartTime().equals(existing.getStartTime())
             || existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+    }
+
+    /**
+     * QA D4220 (round 81): a visit that is over (cancelled, completed, missed,
+     * failed) is history. An edit that leaves its status alone may still add a
+     * note, but it no longer moves the visit to another date, time, clinician
+     * or patient: the PUT used to answer 200 and re-date a cancelled or a
+     * finished visit, which stayed cancelled or finished. The one road back is
+     * a status move the state machine allows (a missed visit rebooked through
+     * RESCHEDULED), judged by {@link #requireValidStatusChange}.
+     */
+    private static void requireOpenToBeMoved(Appointment existing, AppointmentRequestDTO request,
+                                             boolean moved, boolean statusMoved) {
+        AppointmentStatus current = existing.getStatus();
+        if (statusMoved || current == null || !CLOSED_TO_MOVES.contains(current)) {
+            return;
+        }
+        boolean otherPatient = existing.getPatient() != null
+            && !existing.getPatient().getId().equals(request.getPatientId());
+        boolean otherHospital = existing.getHospital() != null
+            && !existing.getHospital().getId().equals(request.getHospitalId());
+        if (moved || otherPatient || otherHospital) {
+            throw new com.example.hms.exception.FieldBusinessException("appointmentDate",
+                "appointment.edit.closedCannotMove", AppointmentStatus.labelOf(current));
+        }
     }
 
     /** The clinician's schedule must cover the edited start. */
@@ -1598,12 +1635,16 @@ public class AppointmentServiceImpl implements AppointmentService {
             return permitted;
         }
 
-        if (!actualHospitalIds.isEmpty()) {
+        // r81: the fallback never reads a hospital where a staff caller is only a patient.
+        Set<UUID> working = actualHospitalIds.stream()
+            .filter(id -> !com.example.hms.security.context.HospitalContextRequestOverrides.actsOnlyAsPatientAt(context, id))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (!working.isEmpty()) {
             if (log.isDebugEnabled()) {
-                log.debug("resolveScope → falling back to assignment hospitals {}", actualHospitalIds);
-                logHospitalLookup("fallback", actualHospitalIds);
+                log.debug("resolveScope → falling back to assignment hospitals {}", working);
+                logHospitalLookup("fallback", working);
             }
-            return actualHospitalIds;
+            return working;
         }
 
         if (log.isDebugEnabled()) {

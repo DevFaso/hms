@@ -99,6 +99,17 @@ public class TransfusionAdministration extends BaseEntity {
     @Column(name = "verification_method", length = 60)
     private String verificationMethod;
 
+    /**
+     * QA D4141 (V466): when the second checker confirmed the check themselves, with their own factor, and
+     * which one (TOTP or PASSWORD). Null on an administration recorded before V466.
+     */
+    @Column(name = "verifier_confirmed_at")
+    private LocalDateTime verifierConfirmedAt;
+
+    @Size(max = 20)
+    @Column(name = "verifier_confirmation_method", length = 20)
+    private String verifierConfirmationMethod;
+
     @Size(max = 500)
     @Column(name = "stop_reason", length = 500)
     private String stopReason;

@@ -3,8 +3,12 @@
 .summary-cards {
   display: grid;
   /* QA D2231: 160px left « 13 550 F CFA » (one unbreakable amount) about 60px
-     of text room on six cards; 200px moves a card to the next row first. */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+     of text room on six cards; 200px moved a card to the next row first.
+     QA D3986 / D4235 (round 81): 200px still left about 108px, less than a
+     six-figure amount needs now that it is never cut: 280px leaves room for
+     « 99 999 999 F CFA » beside the icon, and seats six tiles three and three
+     on a wide screen (they sat five and one). */
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -65,6 +69,10 @@
   font-weight: 700;
   color: #1e293b;
   line-height: 1.2;
+  /* QA D3986 / D4235: an amount is one piece; it was cut « F C / FA ». */
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .card-label {
@@ -550,9 +558,8 @@
 }
 
 @media (max-width: 768px) {
-  .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  /* QA D3986 / D4235: the tiles keep their 280px floor here too (two columns
+     of a narrow tablet cut the amount); they fall to one column by themselves. */
   .detail-grid {
     grid-template-columns: 1fr;
   }
@@ -758,4 +765,58 @@
 .line-act select {
   width: 100%;
   max-width: 100%;
+}
+
+/* QA D4222 / D4223 (round 81): the addresses on file in the invoice e-mail dialog. */
+.email-on-file {
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color, #d8dee4);
+  border-radius: 8px;
+  min-width: 0;
+
+  legend {
+    padding: 0 0.35rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+}
+
+.email-on-file__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.email-on-file__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.email-on-file__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.email-on-file__address {
+  overflow-wrap: anywhere;
+}
+
+.email-on-file__relationship {
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #57606a);
+}
+
+.email-on-file__refusal {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--danger-text, #a40e26);
 }

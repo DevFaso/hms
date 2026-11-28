@@ -448,6 +448,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: a staff member's own leave request");
         CLINICAL_HANDLERS.put("POST /super-admin/platform/release-windows/{id}/cancel",
             "PlatformReleaseWindowCancelRequestDTO.reason -> service/impl/SuperAdminPlatformRegistryServiceImplTest#cancelReleaseWindowNeedsAReason");
+        // QA D4140: whoever placed an imaging request that waits for a physician withdraws it, with a reason.
+        CLINICAL_HANDLERS.put("POST /imaging/orders/{orderId}/withdrawal",
+            "ImagingOrderWithdrawalRequestDTO.cancellationReason -> service/ImagingOrderServiceImplTest#d4140_whoeverAskedWithdrawsHerOwnPendingRequest_andNothingElse");
         CLINICAL_HANDLERS.put("POST /imaging/images/{imageId}/withdraw",
             "WithdrawRequest.reason -> service/imaging/ImagingStudyImageServiceTest#aReasonIsRequiredAndAnUnlockedImageIsRemovedInstead");
         CLINICAL_HANDLERS.put("POST /break-glass/{sessionId}/revoke",

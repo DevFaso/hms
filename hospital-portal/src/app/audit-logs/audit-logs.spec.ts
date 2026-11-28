@@ -234,3 +234,77 @@ describe('AuditLogsComponent (QA D794: the server searches every page)', () => {
     expect(params['eventType']).toBeUndefined();
   });
 });
+
+describe('AuditLogsComponent: the detail of a row (QA D4226, round 81)', () => {
+  const mailed: AuditEventLog = {
+    userName: 'caissier',
+    hospitalName: 'H',
+    roleName: 'ROLE_BILLING_SPECIALIST',
+    eventType: 'DATA_EXPORT',
+    eventDescription: 'POST /billing-invoices/{id}/email',
+    details: JSON.stringify({
+      invoiceEmailRecipients: [{ recipient: 'r***@wendpanga.test', recipientKind: 'GUARANTOR' }],
+      attachment: true,
+      reason: 'Employeur du patient',
+    }),
+    eventTimestamp: '2026-11-27T05:40:00',
+    ipAddress: '10.0.0.1',
+    status: 'SUCCESS',
+    resourceId: 'i1',
+    resourceName: '',
+    entityType: 'INVOICE',
+  };
+  const plain: AuditEventLog = {
+    ...mailed,
+    userName: 'autre',
+    eventType: 'DATA_CREATE',
+    eventDescription: 'POST /referrals',
+    details: '',
+  };
+
+  function mount() {
+    TestBed.configureTestingModule({
+      imports: [AuditLogsComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: AuditLogService,
+          useValue: {
+            list: () => of({ content: [mailed, plain], totalElements: 2, totalPages: 1 }),
+            getEventTypeStatus: () => of([]),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(AuditLogsComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('a mailed invoice row opens a detail with the masked recipient, its kind and the reason', () => {
+    const fixture = mount();
+    const host = fixture.nativeElement as HTMLElement;
+    const toggles = host.querySelectorAll<HTMLButtonElement>('button.desc-toggle');
+    // Only the row that keeps a detail has something to open.
+    expect(toggles.length).toBe(1);
+    expect(toggles[0].getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('[data-testid="audit-detail"]')).toBeNull();
+
+    toggles[0].click();
+    fixture.detectChanges();
+
+    const detail = host.querySelector('[data-testid="audit-detail"]')!;
+    expect(toggles[0].getAttribute('aria-expanded')).toBe('true');
+    expect(toggles[0].getAttribute('aria-controls')).toBe(detail.id);
+    expect(detail.textContent).toContain('r***@wendpanga.test');
+    expect(detail.textContent).toContain('AUDIT.RECIPIENT_KIND.GUARANTOR');
+    expect(detail.textContent).toContain('Employeur du patient');
+
+    toggles[0].click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="audit-detail"]')).toBeNull();
+  });
+});

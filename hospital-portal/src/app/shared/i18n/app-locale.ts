@@ -226,9 +226,14 @@ export function formatCfa(
   }
   // QA D1008: Spanish groups only from five digits by default ("8225" next to
   // "19.875"); an explicit true means "always" (ECMA-402 NumberFormat v3).
+  // QA D2734 / D4235 (round 81): French groups thousands with a NARROW
+  // no-break space (U+202F), which all but disappears in bold: « 17 500 » read
+  // « 17500 ». The amount keeps a full no-break space (U+00A0) instead.
   const digits = new Intl.NumberFormat(locale, {
     maximumFractionDigits: 0,
     useGrouping: true,
-  }).format(value);
+  })
+    .format(value)
+    .replaceAll('\u202f', '\u00a0');
   return `${digits}\u00a0F\u00a0CFA`;
 }
