@@ -196,6 +196,14 @@ public class TransfusionServiceImpl implements TransfusionService {
         return antibodyScreen.recordWorkup(request, patient, hospitalRef(hospitalId));
     }
 
+    /** QA D4151: the severe reaction on record at any hospital; null in a hand-built unit test. */
+    private com.example.hms.service.transfusion.SevereTransfusionReactionLookup severeReactions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSevereReactions(com.example.hms.service.transfusion.SevereTransfusionReactionLookup severeReactions) {
+        this.severeReactions = severeReactions;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO getAntibodyStatus(UUID patientId) {
@@ -212,6 +220,15 @@ public class TransfusionServiceImpl implements TransfusionService {
             status.setRhdPositiveExposedAt(exposure.issuedAt());
             status.setRhdPositiveExposedHospitalName(exposure.hospitalName());
             status.setRhdPositiveExposureConfirmed(exposure.confirmed());
+        }
+        // QA D4151: a severe reaction on record, at any hospital, warns whoever asks for blood again.
+        if (status != null && severeReactions != null) {
+            severeReactions.shownAt(patient.getId(), hospitalId).ifPresent(reaction -> {
+                status.setSevereTransfusionReaction(true);
+                status.setSevereTransfusionReactionType(reaction.type());
+                status.setSevereTransfusionReactionAt(reaction.onsetAt());
+                status.setSevereTransfusionReactionHospitalName(reaction.hospitalName());
+            });
         }
         return status;
     }

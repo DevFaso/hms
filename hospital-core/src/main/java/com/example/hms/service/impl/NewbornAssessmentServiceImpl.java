@@ -444,7 +444,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     }
 
     /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
-    private void notifyDocumenter(NewbornAssessmentAlert alert, User documentedBy, String fullName, String messageKey) {
+    private void notifyDocumenter(NewbornAssessmentAlert alert, User documentedBy, String fullName, String messageKey,
+                                  java.util.List<Object> messageArgs, String measured) {
         // Read by the documenting clinician, in her language (QA D665).
         // QA D216: the type is a translated label, never the raw enum.
         Object typeKey = alert.getType() == null ? ""
@@ -454,7 +455,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             notificationService.createNotification("newborn.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
+                        messageKey, messageArgs, measured)}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
         }
@@ -464,8 +465,22 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                     String fullName, boolean notifyDocumenter) {
         // QA D665: the alert sentence travels as its key, rendered per reader.
         String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode();
+        // QA D4105: with what was measured and when; the item gives the value, not only the rule.
+        com.example.hms.service.escalation.UrgentAlertReading reading =
+            com.example.hms.service.escalation.UrgentAlertReading.newborn(
+                alert.getType() == null ? null : alert.getType().name(), assessment.getTemperatureCelsius(),
+                assessment.getHeartRateBpm(), assessment.getRespirationsPerMin(),
+                assessment.getOxygenSaturationPercent(), assessment.getGlucoseMgDl(),
+                new Integer[]{assessment.getApgarOneMinute(), assessment.getApgarFiveMinute(),
+                    assessment.getApgarTenMinute()},
+                com.example.hms.service.escalation.UrgentAlertReading.timeOf(assessment.getAssessmentTime(),
+                    assessment.getHospital()));
+        com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence = reading.wrap(messageKey, null);
+        String wordedKey = sentence == null ? null : sentence.key();
+        java.util.List<Object> wordedArgs = sentence == null ? null : sentence.args();
+        String measured = reading.text(messageSource, NotificationLocales.STAFF, alert.getMessage());
         if (notifyDocumenter) {
-            notifyDocumenter(alert, documentedBy, fullName, messageKey);
+            notifyDocumenter(alert, documentedBy, fullName, wordedKey, wordedArgs, measured);
         }
         if (obstetricAlertEscalation != null && assessment.getHospital() != null && assessment.getPatient() != null) {
             // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
@@ -475,12 +490,12 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             String typeLabel = alert.getType() == null ? ""
                 : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
             String message = messageSource.getMessage("newborn.alert.notification",
-                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+                new Object[]{typeLabel, patientName, measured}, locale);
             obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
                 assessment.getHospital().getId(), assessment.getPatient().getId(), patientName,
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
-                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
-                documentedBy == null ? null : documentedBy.getId(), message, messageKey, null));
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, measured,
+                documentedBy == null ? null : documentedBy.getId(), message, wordedKey, wordedArgs));
         }
     }
 

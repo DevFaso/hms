@@ -162,6 +162,9 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
             "service.lab.CriticalResultEscalationSettingsService"),
+        // QA D4147 (r81): the 1-3s rejection rule of internal quality control.
+        rule(ClinicalRuleSetKey.LAB_QC_REJECTION, "2026-11-27.1",
+            "service.lab.LabQcAcceptanceRule"),
         // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
         // Review of #1380 (QA r81 D4181), coordinator decision: a missing price never blocks care.
         rule(ClinicalRuleSetKey.UNPRICED_FILL_RELEASE, "2026-11-27.1",
@@ -183,8 +186,10 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.NEWS2_ESCALATION, "2026-11-26.2",
             "service.vitals.News2EscalationService", "service.vitals.News2CareTeam"),
         // Scorecard K4 (V386): one ladder for every urgent clinical alert: cover, médecin-chef, incident, no cap.
-        rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-26.1",
-            "service.escalation.UrgentEscalationSupport"),
+        // QA D4103 (r81, 2026-11-27.1): an alert raised from a vital set closes on a later reading the raising rule
+        // no longer judges urgent, as an adult's NEWS2 already did.
+        rule(ClinicalRuleSetKey.URGENT_ALERT_ESCALATION, "2026-11-27.1",
+            "service.escalation.UrgentEscalationSupport", "service.vitals.VitalSetAlertCurrency"),
         // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
         rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
             "service.formulary.MedicationCatalogApprovalPolicy"),

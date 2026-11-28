@@ -43,6 +43,24 @@
       }
     </span>
   }
+  @if (severeReaction()) {
+    <span class="bgs-antibody" data-testid="blood-group-severe-reaction">
+      <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+      @if (severeReactionTypeKey(); as typeKey) {
+        {{
+          'BLOOD_GROUP.SEVERE_REACTION'
+            | translate
+              : {
+                  type: typeKey | translate,
+                  date: (status()?.severeTransfusionReactionAt | serverTime | date: 'shortDate'),
+                  hospital: status()?.severeTransfusionReactionHospitalName ?? '',
+                }
+        }}
+      } @else {
+        {{ 'BLOOD_GROUP.SEVERE_REACTION_UNTYPED' | translate }}
+      }
+    </span>
+  }
   @if (rhdExposed()) {
     <span class="bgs-antibody" data-testid="blood-group-rhd-exposed">
       <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>

@@ -70,11 +70,33 @@ public final class UrgentAlerts {
         String patientName = subject.patientName() == null || subject.patientName().isBlank()
             ? MessageUtil.resolve(staffLocale, "patient.fallback.generic") : subject.patientName();
         Object[] args = messageArgs == null ? new Object[0] : messageArgs;
-        List<Object> storedArgs = NotificationLocalizer.storable(args);
+        return worded(new Subject(subject.hospitalId(), subject.patientId(), patientName), sourceType, sourceId,
+            alertType, new Wording(messageKey, NotificationLocalizer.storable(args),
+                MessageUtil.resolve(staffLocale, messageKey, args)), documentedByUserId);
+    }
+
+    /**
+     * The sentence of an alert as it travels and as the row stores it: its key, the arguments a row may store
+     * (numbers, text, other keys) and the staff-language text.
+     */
+    public record Wording(String messageKey, List<Object> storedArgs, String staffText) {
+    }
+
+    /**
+     * QA D4105 (r81): the same, for a sentence whose arguments are themselves keys (the rule's sentence with the
+     * measured values, {@link UrgentAlertReading}): the caller renders the staff text, which a plain message format
+     * cannot.
+     */
+    public static UrgentAlert worded(Subject subject, String sourceType, UUID sourceId, String alertType,
+                                     Wording wording, UUID documentedByUserId) {
+        Locale staffLocale = NotificationLocales.STAFF;
+        String patientName = subject.patientName() == null || subject.patientName().isBlank()
+            ? MessageUtil.resolve(staffLocale, "patient.fallback.generic") : subject.patientName();
+        List<Object> storedArgs = wording.storedArgs() == null ? List.of() : wording.storedArgs();
         String typeLabel = MessageUtil.resolve(staffLocale, TYPE_PREFIX + alertType);
-        String message = MessageUtil.resolve(staffLocale, messageKey, args);
-        String title = MessageUtil.resolve(staffLocale, NOTICE_KEY, typeLabel, patientName, message);
+        String title = MessageUtil.resolve(staffLocale, NOTICE_KEY, typeLabel, patientName, wording.staffText());
         return new UrgentAlert(subject.hospitalId(), subject.patientId(), patientName, sourceType, sourceId, alertType,
-            typeLabel, message, documentedByUserId, title, messageKey, storedArgs.isEmpty() ? null : storedArgs);
+            typeLabel, wording.staffText(), documentedByUserId, title, wording.messageKey(),
+            storedArgs.isEmpty() ? null : storedArgs);
     }
 }

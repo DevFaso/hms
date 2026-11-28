@@ -46,12 +46,17 @@ function mockPage(items: InBasketItem[] = [mockItem()]): InBasketPage {
   return { content: items, totalElements: items.length, totalPages: 1, number: 0, size: 20 };
 }
 
+import { UrgentAlertsService } from '../../services/urgent-alerts.service';
+import { UrgentAlertsStub, urgentAlertsStub } from '../../testing/urgent-alerts.stub';
+
 describe('InBasketPanelComponent', () => {
   let component: InBasketPanelComponent;
   let fixture: ComponentFixture<InBasketPanelComponent>;
   let inBasketSpy: jasmine.SpyObj<InBasketService>;
+  let urgentAlerts: UrgentAlertsStub;
 
   beforeEach(async () => {
+    urgentAlerts = urgentAlertsStub();
     inBasketSpy = jasmine.createSpyObj('InBasketService', [
       'getItems',
       'getSummary',
@@ -68,6 +73,7 @@ describe('InBasketPanelComponent', () => {
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: InBasketService, useValue: inBasketSpy },
+        { provide: UrgentAlertsService, useValue: urgentAlerts },
         provideRouter([]),
       ],
     }).compileComponents();
@@ -183,6 +189,64 @@ describe('InBasketPanelComponent', () => {
 
     component.markRead(component.items()[0]);
     expect(inBasketSpy.markAsRead).not.toHaveBeenCalled();
+  });
+
+  it('QA D4100: the « Critique » filter shows the urgent items of every type, with the count still to acknowledge', () => {
+    inBasketSpy.getItems.and.returnValue(
+      of(
+        mockPage([
+          mockItem({ id: 'r', itemType: 'RESULT', priority: 'NORMAL' }),
+          mockItem({ id: 'a', itemType: 'MESSAGE', priority: 'CRITICAL' }),
+          mockItem({ id: 'b', itemType: 'TASK', priority: 'CRITICAL', status: 'ACKNOWLEDGED' }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+
+    const tab: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[data-testid="in-basket-critical-filter"]',
+    );
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="in-basket-critical-count"]').textContent,
+    ).toContain('1');
+    tab.click();
+    fixture.detectChanges();
+
+    expect(component.filteredItems().map((i) => i.id)).toEqual(['a', 'b']);
+    expect(tab.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('QA D4104: a copy somebody else acknowledged says who, and has no active acknowledge button', () => {
+    inBasketSpy.getItems.and.returnValue(
+      of(
+        mockPage([
+          mockItem({
+            id: 'copy',
+            priority: 'CRITICAL',
+            status: 'ACKNOWLEDGED',
+            acknowledgedAt: '2026-11-27T06:33:00',
+            acknowledgedByOther: true,
+            acknowledgedByName: 'Test Infirmière A',
+          }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+
+    const by = fixture.nativeElement.querySelector('[data-testid="in-basket-acknowledged-by"]');
+    expect(by?.textContent).toContain('inBasket.acknowledgedBy');
+    expect(fixture.nativeElement.querySelector('.btn-acknowledge')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.acknowledged-badge')).not.toBeNull();
+  });
+
+  it('QA D4101: an acknowledgement refreshes the count of urgent alerts and the patients marks', () => {
+    inBasketSpy.acknowledge.and.returnValue(of(mockItem({ status: 'ACKNOWLEDGED' })));
+    fixture.detectChanges();
+
+    component.acknowledgeItem(component.items()[0]);
+
+    expect(urgentAlerts.refreshMine).toHaveBeenCalled();
+    expect(urgentAlerts.refreshMarks).toHaveBeenCalled();
   });
 
   it('should acknowledge item', () => {

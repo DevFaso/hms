@@ -140,8 +140,8 @@ class EarlyWarningEscalationGuardTest {
         assertThat(alert.alreadyNotified()).containsExactly("nurse_a", "dr_a", "dr_visit");
         assertThat(alert.alertMessageKey()).isEqualTo("news2.alert.msg.NEWS2_HIGH");
         assertThat(alert.alertMessage()).contains("NEWS2 15").contains("ÉLEVÉ");
-        // QA r81 D4118: the source is named once (was « Alerte NEWS2 (NEWS2, élevé) »).
-        assertThat(alert.notificationText()).startsWith("Alerte d’aggravation (NEWS2, élevé) pour Ousmane Test");
+        // QA D4118 (r81): the title names NEWS2 once, in the type.
+        assertThat(alert.notificationText()).startsWith("Alerte urgente (NEWS2, élevé) pour Ousmane Test");
     }
 
     @Test
@@ -194,7 +194,10 @@ class EarlyWarningEscalationGuardTest {
         assertThat(filed.getAllValues()).allSatisfy(alert -> {
             assertThat(alert.sourceType()).isEqualTo(ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN);
             assertThat(alert.sourceId()).isEqualTo(vital.getId());
-            assertThat(alert.alertMessageKey()).startsWith("newborn.alert.msg.");
+            // QA D4105: the rule's sentence travels inside the sentence that adds the measured value.
+            assertThat(alert.alertMessageKey())
+                .isEqualTo(com.example.hms.service.escalation.UrgentAlertReading.WITH_READING_KEY);
+            assertThat(com.example.hms.service.escalation.UrgentAlertReading.ruleKey(alert.alertMessageKey(), alert.alertMessageArgs())).startsWith("newborn.alert.msg.");
             assertThat(alert.alreadyNotified()).contains("dr_a");
         });
     }

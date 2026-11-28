@@ -252,11 +252,7 @@ class ObstetricAlertEscalationWorkerTest {
             org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && Long.valueOf(2880L).equals(a[3])),
             eq("drA"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT), eq(r.getId()),
-            eq(HOSPITAL), eq(NOW), eq(2880L), eq(3));
-        // QA r81 D4106: the documenter reads « non résolue » at the same step, never « rappel 41 ».
-        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_UNRESOLVED_KEY),
-            org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && Long.valueOf(2880L).equals(a[0])),
-            eq("documenter"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
+            eq(HOSPITAL), eq(NOW), eq(2880L), eq(3), eq(true));
     }
 
     @Test
@@ -278,14 +274,15 @@ class ObstetricAlertEscalationWorkerTest {
         assertThat(worker.escalateOne(r.getId())).isTrue();
 
         // The alert's own circle keeps its reminder, and the covering clinician is added to it.
+        // QA D4106 (r81): the notice says the alert was passed to the covering clinician, not « rappel 1 ».
         for (String u : List.of("drA", "mwB", "nurseC", "drCover")) {
-            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_KEY),
+            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_STEP_KEY),
                 org.mockito.ArgumentMatchers.any(), eq(u), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         }
         // The clinician the step adds gets the staff SMS: initials, nothing clinical.
         verify(ladder).smsAfterCommit(eq(java.util.Set.of("drCover")), eq("AT"), eq(r.getId()));
         verify(ladder, never()).openIncident(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(),
-            org.mockito.ArgumentMatchers.anyInt());
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyBoolean());
 
         // The last step: « non résolue », with the médecin-chef, and the incident.
         when(ladder.due(org.mockito.ArgumentMatchers.anyInt(), any(), any(), any(), any()))
@@ -301,7 +298,75 @@ class ObstetricAlertEscalationWorkerTest {
         verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.UNRESOLVED_KEY),
             org.mockito.ArgumentMatchers.any(), eq("drChef"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT), eq(last.getId()),
-            eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(), eq(5));
+            eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(), eq(5), eq(true));
+    }
+
+    @Test
+    void theAdministratorsAreNotFlaggedAgainForAnotherAlertOfTheSamePatient() {
+        // QA D4102: eighteen alerts of one mother and her baby were eighteen identical flags.
+        com.example.hms.service.escalation.UrgentEscalationSupport ladder =
+            ladder(com.example.hms.service.lab.CriticalResultEscalationLadder.Step.UNRESOLVED);
+        ObstetricAlertEscalation second = row((short) 2);
+        when(escalationRepository.findById(second.getId())).thenReturn(Optional.of(second));
+        when(escalationRepository.claimRound(eq(second.getId()), eq((short) 2), eq((short) 3), any())).thenReturn(1);
+        when(ladder.incidentOpenForPatient(HOSPITAL, second.getPatientId())).thenReturn(true);
+
+        assertThat(worker.escalateOne(second.getId())).isTrue();
+
+        // The incident is on the register all the same; only the flag is not repeated.
+        verify(ladder).openIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_URGENT_ALERT),
+            eq(second.getId()), eq(HOSPITAL), eq(NOW), org.mockito.ArgumentMatchers.anyLong(),
+            org.mockito.ArgumentMatchers.anyInt(), eq(false));
+    }
+
+    @Test
+    void oneAcknowledgementMarksEveryOtherRecipientsCopyAcknowledged() {
+        // QA D4104: the nurse acknowledged; the doctor's copy stayed CRITIQUE, unread, with an active tick.
+        ObstetricAlertEscalation acked = row((short) 1);
+        when(escalationRepository.findById(acked.getId())).thenReturn(Optional.of(acked));
+        InBasketItem ack = new InBasketItem();
+        UUID nurse = UUID.randomUUID();
+        ack.setAcknowledgedAt(NOW.minusMinutes(3));
+        ack.setAcknowledgedBy(nurse);
+        when(inBasketItemRepository.findAcknowledgedForReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, DOCUMENTER)).thenReturn(List.of(ack));
+
+        assertThat(worker.itemAcknowledged(acked.getId())).isTrue();
+
+        assertThat(acked.getAcknowledgedBy()).isEqualTo(nurse);
+        assertThat(acked.getAcknowledgedAt()).isEqualTo(NOW.minusMinutes(3));
+        verify(inBasketItemRepository).acknowledgeOpenByReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, nurse, NOW.minusMinutes(3));
+    }
+
+    @Test
+    void theSweepMarksTheOtherCopiesTooWhenItFindsTheAcknowledgement() {
+        ObstetricAlertEscalation acked = row((short) 1);
+        when(escalationRepository.findById(acked.getId())).thenReturn(Optional.of(acked));
+        InBasketItem ack = new InBasketItem();
+        UUID by = UUID.randomUUID();
+        ack.setAcknowledgedAt(NOW.minusMinutes(1));
+        ack.setAcknowledgedBy(by);
+        when(inBasketItemRepository.findAcknowledgedForReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, DOCUMENTER)).thenReturn(List.of(ack));
+
+        assertThat(worker.escalateOne(acked.getId())).isFalse();
+
+        verify(inBasketItemRepository).acknowledgeOpenByReference(acked.getId(),
+            ObstetricAlertEscalationWorker.REFERENCE_TYPE, by, NOW.minusMinutes(1));
+    }
+
+    @Test
+    void anAlertOnlyItsRecordClosesKeepsEveryCopyOpenAfterAnAcknowledgement() {
+        // A countersignature past its deadline: « seen » by one reader closes nothing for the others.
+        ObstetricAlertEscalation overdue = row((short) 1);
+        overdue.setSourceType(ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN);
+        when(escalationRepository.findById(overdue.getId())).thenReturn(Optional.of(overdue));
+
+        assertThat(worker.itemAcknowledged(overdue.getId())).isFalse();
+
+        verify(inBasketItemRepository, never()).acknowledgeOpenByReference(any(), any(), any(), any());
+        assertThat(overdue.getAcknowledgedAt()).isNull();
     }
 
     @Test
@@ -652,16 +717,18 @@ class ObstetricAlertEscalationWorkerTest {
         verify(messageSource).getMessage(eq("patient.fallback.generic"), isNull(), any());
         // QA D659: the reminder still names the patient (here the keyed fallback), keyed per reader (D665).
         // QA D2582 (r65): the documenter's reminder never sends her to acknowledge in an in-basket she has no item in.
-        // QA r81 D4106: the second step says it went to the médecin-chef, to the team and to the documenter.
-        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_LEAD_KEY),
+        // QA D4106 (r81): hers names no reminder number, only how long it has waited.
+        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_WAITING_KEY),
             org.mockito.ArgumentMatchers.any(), eq("documenter"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         verify(notificationService, never()).createNotification(
-            eq(ObstetricAlertEscalationWorker.LEAD_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
+            eq(ObstetricAlertEscalationWorker.LEAD_STEP_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
             org.mockito.ArgumentMatchers.any());
+        // The second step names the médecin-chef, and the minutes since the first notice.
         for (String u : List.of("drA", "mwB", "nurseC")) {
-            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.LEAD_KEY),
-                org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && a[0] instanceof Long && "".equals(a[1])
-                    && java.util.Map.of("key", "patient.fallback.generic").equals(a[2]) && "".equals(a[3])),
+            verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.LEAD_STEP_KEY),
+                org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && "".equals(a[0])
+                    && java.util.Map.of("key", "patient.fallback.generic").equals(a[1]) && "".equals(a[2])
+                    && a[3] instanceof Long),
                 eq(u), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
         }
     }
@@ -676,8 +743,8 @@ class ObstetricAlertEscalationWorkerTest {
         p.setLastName("Traore");
         when(patientRepository.findByIdUnscoped(PATIENT)).thenReturn(Optional.of(p));
         assertThat(worker.escalateOne(r.getId())).isTrue();
-        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_KEY),
-            org.mockito.ArgumentMatchers.argThat(a -> a[2] instanceof String n && n.contains("Awa")),
+        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.COVER_STEP_KEY),
+            org.mockito.ArgumentMatchers.argThat(a -> a[1] instanceof String n && n.contains("Awa")),
             eq("drA"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
     }
 

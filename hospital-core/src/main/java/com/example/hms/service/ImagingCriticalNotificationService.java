@@ -181,7 +181,15 @@ public class ImagingCriticalNotificationService {
     /** The incident of a finding a clinician has since acknowledged is closed, with that clinician's name on it. */
     private void closeAnsweredIncidents() {
         for (UrgentAlertIncident incident : ladder.openIncidents(UrgentAlertIncident.SOURCE_IMAGING_REPORT)) {
-            imagingReportRepository.findById(incident.getSourceId())
+            Optional<ImagingReport> source = imagingReportRepository.findById(incident.getSourceId());
+            if (source.filter(this::handedOverToANewerVersion).isPresent()
+                    && source.get().getCriticalResultAcknowledgedAt() == null) {
+                // QA D4157 (r81): a newer signed version carries the critical finding on its own ladder.
+                ladder.closeIncident(UrgentAlertIncident.SOURCE_IMAGING_REPORT, incident.getSourceId(),
+                    UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, LocalDateTime.now(clock));
+                continue;
+            }
+            source
                 .filter(report -> report.getCriticalResultAcknowledgedAt() != null)
                 .ifPresent(report -> {
                     User by = report.getCriticalResultAcknowledgedBy() == null
@@ -193,7 +201,38 @@ public class ImagingCriticalNotificationService {
         }
     }
 
+    /**
+     * QA D4157 (r81): a critical version a later one replaced leaves the ladder only when a newer SIGNED version of
+     * the same order is itself flagged critical and was notified: that version's own ladder carries the finding, and
+     * one finding does not ask for two acknowledgements. A newer draft, or a signed version without the critical
+     * flag, says nothing about the finding (QA D1930): the older version keeps escalating until a clinician
+     * acknowledges it.
+     */
+    boolean handedOverToANewerVersion(ImagingReport report) {
+        if (!Boolean.FALSE.equals(report.getLatestVersion()) || report.getImagingOrder() == null
+                || report.getImagingOrder().getId() == null) {
+            return false;
+        }
+        Integer version = report.getReportVersion();
+        return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(report.getImagingOrder().getId())
+            .stream()
+            .filter(other -> other != null && !java.util.Objects.equals(other.getId(), report.getId()))
+            .filter(other -> isNewer(other, version))
+            .anyMatch(other -> other.isReleasedToPatient() && other.isCriticalFlagged()
+                && other.getCriticalNotifiedAt() != null);
+    }
+
+    private static boolean isNewer(ImagingReport other, Integer version) {
+        if (version != null && other.getReportVersion() != null) {
+            return other.getReportVersion() > version;
+        }
+        return Boolean.TRUE.equals(other.getLatestVersion());
+    }
+
     private boolean escalateOne(ImagingReport report, LocalDateTime now) {
+        if (handedOverToANewerVersion(report)) {
+            return false;
+        }
         int level = report.getCriticalEscalationLevel() == null ? 0 : report.getCriticalEscalationLevel();
         UUID hospitalId = report.getHospital() != null ? report.getHospital().getId() : null;
         Optional<CriticalResultEscalationLadder.Step> due = ladder.due(level, report.getCriticalNotifiedAt(),

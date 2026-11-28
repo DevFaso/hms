@@ -75,6 +75,8 @@ import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
+import { UrgentAlertsBannerComponent } from '../shared/urgent-alerts/urgent-alerts-banner.component';
+import { UrgentAlertsService } from '../services/urgent-alerts.service';
 import { EncounterService } from '../services/encounter.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { RefillApprovalService } from '../services/refill-approval.service';
@@ -168,6 +170,7 @@ export { currentMedications };
     DoctorResultsPanelComponent,
     PatientSnapshotDrawerComponent,
     InBasketPanelComponent,
+    UrgentAlertsBannerComponent,
     EnumLabelPipe,
     CredentialRenewalComponent,
     CfaPipe,
@@ -459,6 +462,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   unacknowledgedAlerts = computed(() => this.alerts().filter((a) => !a.acknowledged));
+  /**
+   * QA D4101 (r81): the « alertes » tile counts the urgent alerts of the escalation ladder that wait on the
+   * reader too. It said « 0 alertes » beside twenty-one unread urgent items in her in-basket.
+   */
+  readonly urgentAlertsWaiting = inject(UrgentAlertsService).waiting;
+  readonly alertsWaiting = computed(
+    () => this.unacknowledgedAlerts().length + this.urgentAlertsWaiting(),
+  );
   criticalAlerts = computed(() =>
     this.unacknowledgedAlerts().filter((a) => a.severity === 'CRITICAL'),
   );

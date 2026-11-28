@@ -266,9 +266,12 @@ public class VitalSignJudgement {
             ? Objects.toString(saved.getPatient().getFullName(), "") : "";
         Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
         for (NewbornAlertRules.Finding finding : urgent) {
+            // QA D4105: with what was measured and when.
+            com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence =
+                newbornReading(saved, finding).wrap(ALERT_MSG_PREFIX + finding.code(), null);
             // QA D665: each reader gets the notice in her own language.
             Object[] args = {NotificationLocalizer.key(TYPE_PREFIX + finding.type().name()), patientArg,
-                ObstetricAlertEscalationWorker.alertMessageArg(ALERT_MSG_PREFIX + finding.code(), null, "")};
+                ObstetricAlertEscalationWorker.alertMessageArg(sentence.key(), sentence.args(), "")};
             Set<String> rang = new java.util.LinkedHashSet<>();
             for (String recipient : recipients) {
                 try {
@@ -314,17 +317,35 @@ public class VitalSignJudgement {
                 ? messageSource.getMessage("patient.fallback.generic", null, staff) : fullName;
             String messageKey = ALERT_MSG_PREFIX + finding.code();
             String typeLabel = messageSource.getMessage(TYPE_PREFIX + finding.type().name(), null, staff);
-            String message = messageSource.getMessage(messageKey, null, finding.code(), staff);
+            // QA D4105: the sentence of the rule, the value and the time of the set.
+            com.example.hms.service.escalation.UrgentAlertReading reading = newbornReading(saved, finding);
+            com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence = reading.wrap(messageKey, null);
+            String message = reading.text(messageSource, staff,
+                messageSource.getMessage(messageKey, null, finding.code(), staff));
             String title = messageSource.getMessage(NOTICE_KEY, new Object[]{typeLabel, patientName, message}, staff);
             com.example.hms.model.Staff recorder = saved.getRecordedByStaff();
             UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
             urgentAlerts.get().raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
                 hospitalId, patientId, patientName,
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN, saved.getId(),
-                finding.type().name(), typeLabel, message, recorderUserId, title, messageKey, null, rang));
+                finding.type().name(), typeLabel, message, recorderUserId, title, sentence.key(), sentence.args(),
+                rang));
         } catch (RuntimeException ex) {
             log.error("Newborn vitals alert not filed for acknowledgement: {}", ex.getClass().getSimpleName());
         }
+    }
+
+    /** QA D4105: the value a newborn finding of a vital set is about, and the time of the set. */
+    private static com.example.hms.service.escalation.UrgentAlertReading newbornReading(PatientVitalSign saved,
+                                                                                   NewbornAlertRules.Finding finding) {
+        String time = saved == null ? "" : com.example.hms.service.escalation.UrgentAlertReading.timeOf(
+            saved.getRecordedAt(), saved.getHospital());
+        if (saved == null) {
+            return com.example.hms.service.escalation.UrgentAlertReading.none(time);
+        }
+        return com.example.hms.service.escalation.UrgentAlertReading.newborn(finding.type().name(),
+            saved.getTemperatureCelsius(), saved.getHeartRateBpm(), saved.getRespiratoryRateBpm(),
+            saved.getSpo2Percent(), saved.getBloodGlucoseMgDl(), null, time);
     }
 
     /**
@@ -435,11 +456,23 @@ public class VitalSignJudgement {
         }
         com.example.hms.model.Staff recorder = saved.getRecordedByStaff();
         UUID recorderUserId = recorder == null || recorder.getUser() == null ? null : recorder.getUser().getId();
-        urgentAlerts.get().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.withSentence(
+        // QA D4105: the pressure that was measured and when, with the sentence of the rule.
+        java.util.Locale staff = com.example.hms.service.i18n.NotificationLocales.STAFF;
+        com.example.hms.service.escalation.UrgentAlertReading reading =
+            com.example.hms.service.escalation.UrgentAlertReading.bloodPressure(saved.getSystolicBpMmHg(),
+                saved.getDiastolicBpMmHg(), com.example.hms.service.escalation.UrgentAlertReading.timeOf(
+                    saved.getRecordedAt(), saved.getHospital()));
+        com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence =
+            reading.wrap(bloodPressure.messageKey(), null);
+        String staffText = messageSource == null ? ""
+            : reading.text(messageSource, staff, messageSource.getMessage(bloodPressure.messageKey(), null, staff));
+        com.example.hms.service.escalation.UrgentAlerts.Wording wording =
+            new com.example.hms.service.escalation.UrgentAlerts.Wording(sentence.key(), sentence.args(), staffText);
+        urgentAlerts.get().raiseAfterCommit(com.example.hms.service.escalation.UrgentAlerts.worded(
                 new com.example.hms.service.escalation.UrgentAlerts.Subject(hospitalId, patientId, fullName),
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION,
                 saved.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_URGENT_HYPERTENSION,
-                bloodPressure.messageKey(), null, recorderUserId)
+                wording, recorderUserId)
             .withAlreadyNotified(rang));
     }
 

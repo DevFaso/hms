@@ -375,6 +375,7 @@
                       @if (bed.occupant; as o) {
                         <div class="occupant">
                           <span class="occupant-name">{{ o.patientName }}</span>
+                          <app-urgent-alert-mark [patientId]="o.patientId" />
                           @if (o.mrn) {
                             <span class="occupant-mrn">{{ o.mrn }}</span>
                           }

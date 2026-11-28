@@ -4,10 +4,12 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -15,19 +17,37 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ElapsedPipe } from '../../shared/pipes/elapsed.pipe';
 import { Subscription } from 'rxjs';
 import { DoctorWorklistItem } from '../../services/dashboard.service';
+import { UrgentAlertsService } from '../../services/urgent-alerts.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { UrgentAlertMarkComponent } from '../../shared/urgent-alerts/urgent-alert-mark.component';
+import { URGENT_ALERT_READER_ROLES } from '../../shared/urgent-alerts/urgent-alert-age';
 
 type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
 
 @Component({
   selector: 'app-doctor-worklist',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, ElapsedPipe],
+  imports: [CommonModule, RouterLink, TranslateModule, ElapsedPipe, UrgentAlertMarkComponent],
   templateUrl: './doctor-worklist.html',
   styleUrl: './doctor-worklist.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DoctorWorklistComponent implements OnInit, OnDestroy {
   private readonly translate = inject(TranslateService);
+  private readonly urgentAlerts = inject(UrgentAlertsService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * QA D4101 (r81): the patients with an urgent alert nobody has acknowledged are read with the list, and again
+   * each time the list is: a row carries the mark of its patient (how many alerts wait, the oldest age).
+   */
+  private readonly marksFollowTheList = effect(() => {
+    this.items();
+    untracked(() => {
+      if (!this.roleContext.hasAnyActiveRole(URGENT_ALERT_READER_ROLES)) return;
+      this.urgentAlerts.refreshMarks();
+    });
+  });
 
   // Bumped on every language change so computed labels re-evaluate.
   private readonly langTick = signal(0);

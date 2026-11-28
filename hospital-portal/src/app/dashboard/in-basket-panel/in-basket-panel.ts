@@ -14,6 +14,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
+import { UrgentAlertsService } from '../../services/urgent-alerts.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { currentLocale } from '../../shared/i18n/app-locale';
@@ -38,6 +39,9 @@ export const NOTE_TO_SIGN_REFERENCE = 'ENCOUNTER_NOTE_SIGNATURE';
  */
 export const IMAGING_PREAUTH_REFERENCE = 'IMAGING_PREAUTH';
 
+/** QA D4100 (r81): the filter of the urgent items, beside the type filters. */
+export const CRITICAL_FILTER = 'CRITICAL';
+
 const SERVER_TIME = new ServerTimePipe();
 
 @Component({
@@ -60,6 +64,7 @@ export class InBasketPanelComponent {
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
   private readonly router = inject(Router);
+  private readonly urgentAlerts = inject(UrgentAlertsService);
 
   /** Only the latest load may write: a response issued under the previous scope is dropped. */
   private loadRequest = 0;
@@ -85,8 +90,16 @@ export class InBasketPanelComponent {
     const filter = this.activeFilter();
     const all = this.items();
     if (!filter) return all;
+    // QA D4100: « Critique » is a priority, across every type; the other tabs are types.
+    if (filter === CRITICAL_FILTER) return all.filter((i) => i.priority === 'CRITICAL');
     return all.filter((i) => i.itemType === filter);
   });
+
+  /** QA D4100 (r81): the urgent items nobody has acknowledged yet, whatever their type. */
+  criticalOpen = computed(
+    () =>
+      this.items().filter((i) => i.priority === 'CRITICAL' && i.status !== 'ACKNOWLEDGED').length,
+  );
 
   badgeCount = computed(() => this.summary().totalUnread);
 
@@ -211,6 +224,9 @@ export class InBasketPanelComponent {
       next: (updated) => {
         this.patchItem(updated);
         this.loadSummary();
+        // QA D4101: the dashboards' count and the patients' marks follow the acknowledgement.
+        this.urgentAlerts.refreshMine();
+        this.urgentAlerts.refreshMarks();
         this.toast.success(this.translate.instant('inBasket.acknowledged') || 'Item acknowledged');
       },
       // K4: the server says why an acknowledgement is refused (a critical result needs its

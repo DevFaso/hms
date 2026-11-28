@@ -173,7 +173,10 @@ class NewbornAssessmentServiceImplTest {
         // QA D605: each URGENT neonatal alert reaches the on-call team too.
         verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
             hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(a.sourceType())
-                && a.alertMessageKey() != null && a.alertMessageKey().startsWith("newborn.alert.msg.newborn-")));
+                // QA D4105: the rule's sentence travels inside the sentence that adds the measured value.
+                && a.alertMessageKey() != null
+                && com.example.hms.service.escalation.UrgentAlertReading.ruleKey(a.alertMessageKey(), a.alertMessageArgs()).startsWith("newborn.alert.msg.newborn-")
+));
 
         ArgumentCaptor<NewbornAssessment> assessmentCaptor = ArgumentCaptor.forClass(NewbornAssessment.class);
         verify(assessmentRepository).save(assessmentCaptor.capture());
@@ -557,7 +560,11 @@ class NewbornAssessmentServiceImplTest {
             org.mockito.ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
         verify(obstetricAlertEscalation).raiseAfterCommit(raised.capture());
         assertEquals("DANGER_SIGN", raised.getValue().alertType());
-        assertEquals("newborn.alert.msg." + code, raised.getValue().alertMessageKey());
+        // QA D4105: a danger sign has no number behind it; its sentence travels with the time of the assessment.
+        assertEquals(com.example.hms.service.escalation.UrgentAlertReading.WITH_TIME_KEY,
+            raised.getValue().alertMessageKey());
+        assertEquals("newborn.alert.msg." + code,
+            com.example.hms.service.escalation.UrgentAlertReading.ruleKey(raised.getValue().alertMessageKey(), raised.getValue().alertMessageArgs()));
     }
 
     @org.junit.jupiter.params.ParameterizedTest

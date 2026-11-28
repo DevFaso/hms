@@ -407,8 +407,20 @@ final class ComputedKeys {
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|verdict.messageKey()", severeHypertensionMessages());
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + f.code()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
-        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + finding.code()",
+        // QA D4105 (r81): the same code, worded with the measured value (UrgentAlertReading).
+        site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence = newbornReading(saved, finding).wrap(ALERT_MSG_PREFIX + finding.code(), null)",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|sentence.key()",
+            values("", List.of(com.example.hms.service.escalation.UrgentAlertReading.WITH_READING_KEY,
+                com.example.hms.service.escalation.UrgentAlertReading.WITH_TIME_KEY)));
+        r.put("com/example/hms/service/escalation/UrgentAlertReading.java|valuesKey",
+            values("", com.example.hms.service.escalation.UrgentAlertReading.KEYS));
+        r.put("com/example/hms/service/escalation/UrgentAlertReading.java|valuesKey #2",
+            values("", com.example.hms.service.escalation.UrgentAlertReading.KEYS));
+        // QA D4102 (r81): the kind of record behind a line of the incident register.
+        r.put("com/example/hms/service/escalation/UrgentAlertOverviewService.java|SOURCE_LABEL_PREFIX + source",
+            values(com.example.hms.service.escalation.UrgentAlertOverviewService.SOURCE_LABEL_PREFIX,
+                com.example.hms.service.escalation.UrgentAlertOverviewService.REGISTER_SOURCES));
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|TYPE_PREFIX + finding.type().name()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.type.");
         // QA D3862: an URGENT newborn finding on a vital set, filed for acknowledgement with its own code and type.
@@ -473,6 +485,9 @@ final class ComputedKeys {
             values("urgentAlert.msg.", com.example.hms.service.escalation.UrgentAlerts.TYPES_WITH_OWN_SENTENCE));
         // K4: an adult's urgent hypertension filed for acknowledgement, with the sentence of its own rule.
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #2",
+            severeHypertensionMessages());
+        // QA D4105 (r81): the same sentence, in the staff text that carries the measured pressure.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #3",
             severeHypertensionMessages());
         r.put("com/example/hms/service/maternity/ObstetricAlertText.java|keyPrefix + code",
             new Open("prefix + code: the *.alert.msg. and *.alert.trigger. keys, enumerated at the services' entries"));

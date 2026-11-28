@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { InBasketPanelComponent } from '../dashboard/in-basket-panel/in-basket-panel';
 import { LabResultsInboxComponent } from './lab-results-inbox/lab-results-inbox';
 import { LAB_RESULT_REVIEW_ROLES } from './lab-result-review-access';
 import { RoleContextService } from '../core/role-context.service';
 import { WardNotificationsComponent } from './ward-notifications/ward-notifications.component';
+import { UrgentAlertsBannerComponent } from '../shared/urgent-alerts/urgent-alerts-banner.component';
 import { PlatformRequestComponent } from './platform-request/platform-request.component';
 
 @Component({
@@ -15,6 +16,7 @@ import { PlatformRequestComponent } from './platform-request/platform-request.co
     InBasketPanelComponent,
     LabResultsInboxComponent,
     WardNotificationsComponent,
+    UrgentAlertsBannerComponent,
     PlatformRequestComponent,
   ],
   template: `
@@ -23,6 +25,11 @@ import { PlatformRequestComponent } from './platform-request/platform-request.co
         <h1>{{ 'inBasket.pageTitle' | translate }}</h1>
         <p class="page-subtitle">{{ 'inBasket.pageSubtitle' | translate }}</p>
       </header>
+      <!--
+        QA D4100 (r81): the urgent alerts the escalation ladder is waiting on come first, each with its own
+        « Acquitter », above the laboratory results. They were under the whole results table.
+      -->
+      <app-urgent-alerts-banner mode="list" (acknowledged)="onUrgentAlertAcknowledged()" />
       <!--
         B7 — the lab-results category. Gated here rather than on the route:
         /in-basket also admits nurses, midwives and two lab roles, and
@@ -83,6 +90,12 @@ export class InBasketPageComponent {
     this.roleContext.hasAnyActiveRole(LAB_RESULT_REVIEW_ROLES),
   );
 
+  private readonly panel = viewChild(InBasketPanelComponent);
+
+  /** An alert was acknowledged from the top block: the list below shows it acknowledged too. */
+  onUrgentAlertAcknowledged(): void {
+    this.panel()?.refresh();
+  }
   /** QA D4308: `POST /platform-requests` admits hospital administrators only. */
   readonly canWriteToPlatform = computed(() =>
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN']),

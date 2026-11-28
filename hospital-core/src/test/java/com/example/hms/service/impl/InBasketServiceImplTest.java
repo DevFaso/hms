@@ -103,6 +103,34 @@ class InBasketServiceImplTest {
     class GetItems {
 
         @Test
+        void anItemSomebodyElseAcknowledgedSaysWho() {
+            // QA D4104: the doctor's copy of an alert the nurse acknowledged reads « acquittée par … ».
+            Pageable pageable = PageRequest.of(0, 20);
+            UUID nurseId = UUID.randomUUID();
+            User nurse = new User();
+            nurse.setId(nurseId);
+            nurse.setFirstName("Test");
+            nurse.setLastName("Infirmière A");
+            dto.setStatus("ACKNOWLEDGED");
+            dto.setAcknowledgedBy(nurseId);
+            InBasketItemDTO own = InBasketItemDTO.builder().id(UUID.randomUUID()).status("ACKNOWLEDGED")
+                .acknowledgedBy(userId).build();
+            InBasketItem ownItem = InBasketItem.builder().recipientUser(user).hospital(hospital).build();
+            when(inBasketItemRepository.findByRecipientFiltered(userId, hospitalId, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(item, ownItem)));
+            when(inBasketMapper.toDto(item)).thenReturn(dto);
+            when(inBasketMapper.toDto(ownItem)).thenReturn(own);
+            when(userRepository.findAllById(java.util.Set.of(nurseId))).thenReturn(List.of(nurse));
+
+            service.getItems(userId, hospitalId, null, null, pageable);
+
+            assertThat(dto.isAcknowledgedByOther()).isTrue();
+            assertThat(dto.getAcknowledgedByName()).isEqualTo("Test Infirmière A");
+            assertThat(own.isAcknowledgedByOther()).isFalse();
+            assertThat(own.getAcknowledgedByName()).isNull();
+        }
+
+        @Test
         void returnsMappedPage() {
             Pageable pageable = PageRequest.of(0, 20);
             Page<InBasketItem> page = new PageImpl<>(List.of(item));
@@ -211,6 +239,48 @@ class InBasketServiceImplTest {
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
                     java.util.Arrays.stream(roles)
                         .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+        }
+
+        @Test
+        void acknowledgingAnUrgentAlertItemTellsTheLadderSoEveryCopyIsAnswered() {
+            // QA D4104: one acknowledgement answers the alert for every recipient, at once.
+            signInAs("ROLE_NURSE");
+            UUID alertId = UUID.randomUUID();
+            item.setItemType(InBasketItemType.MESSAGE);
+            item.setReferenceId(alertId);
+            item.setReferenceType(com.example.hms.service.maternity.ObstetricAlertEscalationWorker.REFERENCE_TYPE);
+            com.example.hms.service.maternity.ObstetricAlertEscalationWorker ladder =
+                org.mockito.Mockito.mock(com.example.hms.service.maternity.ObstetricAlertEscalationWorker.class);
+            @SuppressWarnings("unchecked")
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationWorker>
+                provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+            when(provider.getIfAvailable()).thenReturn(ladder);
+            service.setUrgentAlertLadder(provider);
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+            when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
+
+            service.acknowledge(itemId, userId);
+
+            verify(ladder).itemAcknowledged(alertId);
+        }
+
+        @Test
+        void acknowledgingAnyOtherItemLeavesTheLadderAlone() {
+            signInAs("ROLE_DOCTOR");
+            item.setReferenceId(UUID.randomUUID());
+            item.setReferenceType("IMAGING_REPORT");
+            @SuppressWarnings("unchecked")
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.ObstetricAlertEscalationWorker>
+                provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+            service.setUrgentAlertLadder(provider);
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+            when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
+
+            service.acknowledge(itemId, userId);
+
+            org.mockito.Mockito.verifyNoInteractions(provider);
         }
 
         @Test

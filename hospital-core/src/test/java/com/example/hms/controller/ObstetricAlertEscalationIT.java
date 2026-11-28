@@ -446,6 +446,124 @@ class ObstetricAlertEscalationIT extends BaseIT {
 
     // ── helpers ──────────────────────────────────────────────────────────
 
+    private String getAs(Actor actor, String path) throws Exception {
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(API + path)
+                .contextPath(API).param("hospitalId", hospital.getId().toString()).with(signedInAs(actor)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    @Test
+    @DisplayName("QA D4104, D4101: one acknowledgement answers the alert for every recipient, and the counts follow")
+    void oneAcknowledgementAnswersTheAlertForEveryRecipient() throws Exception {
+        UUID episodeId = startEpisode();
+        PartographEntryRequestDTO entry = new PartographEntryRequestDTO();
+        entry.setObservationTime(LocalDateTime.now().withNano(0));
+        entry.setFetalHeartRateBpm(95);
+        postEntry(episodeId, entry);
+        List<ObstetricAlertEscalation> rows = escalationRepository.findAll();
+        assertThat(rows).hasSize(1);
+        // Nobody acknowledges: the first step files the nurse's copy beside the doctor's.
+        backdate(rows);
+        sweep();
+        assertThat(inBasketOf(doctor)).hasSize(1);
+        assertThat(inBasketOf(nurse)).hasSize(1);
+
+        // D4101: what waits on each reader, and the patient's mark.
+        var doctorMine = objectMapper.readTree(getAs(doctor, "/urgent-alerts/mine"));
+        assertThat(doctorMine.get("toAcknowledge").asLong()).isEqualTo(1);
+        assertThat(doctorMine.get("items")).hasSize(1);
+        var midwifeMine = objectMapper.readTree(getAs(midwife, "/urgent-alerts/mine"));
+        assertThat(midwifeMine.get("toAcknowledge").asLong()).as("the documenter has nothing to acknowledge").isZero();
+        assertThat(midwifeMine.get("documentedWaiting").asLong()).isEqualTo(1);
+        var marks = objectMapper.readTree(getAs(nurse, "/urgent-alerts/patients"));
+        assertThat(marks).hasSize(1);
+        assertThat(marks.get(0).get("patientId").asString()).isEqualTo(patient.getId().toString());
+        assertThat(marks.get(0).get("open").asLong()).isEqualTo(1);
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get(API + "/urgent-alerts/patients").contextPath(API).with(signedInAs(foreignDoctor)))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json("[]"));
+
+        // The nurse acknowledges her copy.
+        mockMvc.perform(put(API + "/in-basket/{id}/acknowledge", inBasketOf(nurse).get(0).getId()).contextPath(API)
+                .with(signedInAs(nurse)).with(csrf()))
+            .andExpect(status().isOk());
+
+        // The alert is closed at once, by her; the doctor's copy says so and is no longer to acknowledge.
+        ObstetricAlertEscalation closed = escalationRepository.findAll().get(0);
+        assertThat(closed.getAcknowledgedAt()).isNotNull();
+        assertThat(closed.getAcknowledgedBy()).isEqualTo(nurse.user().getId());
+        InBasketItem doctorCopy = inBasketOf(doctor).get(0);
+        assertThat(doctorCopy.getStatus()).isEqualTo(com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED);
+        assertThat(doctorCopy.getAcknowledgedBy()).isEqualTo(nurse.user().getId());
+        assertThat(doctorCopy.getAcknowledgedAt()).isNotNull();
+        var listed = objectMapper.readTree(getAs(doctor, "/in-basket")).get("content").get(0);
+        assertThat(listed.get("status").asString()).isEqualTo("ACKNOWLEDGED");
+        assertThat(listed.get("acknowledgedByOther").asBoolean()).isTrue();
+        assertThat(listed.get("acknowledgedByName").asString()).isNotBlank();
+        mockMvc.perform(put(API + "/in-basket/{id}/acknowledge", doctorCopy.getId()).contextPath(API)
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().is4xxClientError());
+        assertThat(objectMapper.readTree(getAs(doctor, "/urgent-alerts/mine")).get("toAcknowledge").asLong()).isZero();
+        assertThat(objectMapper.readTree(getAs(midwife, "/urgent-alerts/mine")).get("documentedWaiting").asLong())
+            .isZero();
+        assertThat(objectMapper.readTree(getAs(nurse, "/urgent-alerts/patients"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D4103, D4105: a later normal pressure closes an adult's urgent hypertension, whose text gives the reading")
+    void laterNormalPressureClosesAnAdultsUrgentHypertension() throws Exception {
+        com.example.hms.repository.PatientVitalSignRepository vitals =
+            applicationContext.getBean(com.example.hms.repository.PatientVitalSignRepository.class);
+        LocalDateTime takenAt = LocalDateTime.now().minusMinutes(50).withNano(0);
+        com.example.hms.model.PatientVitalSign severe = vitals.save(com.example.hms.model.PatientVitalSign.builder()
+            .patient(patient).hospital(hospital).recordedAt(takenAt).systolicBpMmHg(192).diastolicBpMmHg(124)
+            .clinicallySignificant(true).build());
+        com.example.hms.service.escalation.UrgentAlertReading reading =
+            com.example.hms.service.escalation.UrgentAlertReading.bloodPressure(192, 124, "05:51");
+        String rule = com.example.hms.service.vitals.SevereHypertension.ADULT_URGENT_MESSAGE_KEY;
+        com.example.hms.service.escalation.UrgentAlertReading.Sentence sentence = reading.wrap(rule, null);
+        org.springframework.context.MessageSource messages =
+            applicationContext.getBean(org.springframework.context.MessageSource.class);
+        String staffText = reading.text(messages, com.example.hms.service.i18n.NotificationLocales.STAFF,
+            messages.getMessage(rule, null, com.example.hms.service.i18n.NotificationLocales.STAFF));
+        applicationContext.getBean(ObstetricAlertEscalationWorker.class).raise(
+            com.example.hms.service.escalation.UrgentAlerts.worded(
+                new com.example.hms.service.escalation.UrgentAlerts.Subject(hospital.getId(), patient.getId(), "Awa Femme"),
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION,
+                severe.getId(), com.example.hms.service.escalation.UrgentAlerts.TYPE_URGENT_HYPERTENSION,
+                new com.example.hms.service.escalation.UrgentAlerts.Wording(sentence.key(), sentence.args(), staffText),
+                nurse.user().getId()));
+
+        // D4105: the doctor's item gives the measured pressure and the time, in the reader's language.
+        assertThat(inBasketOf(doctor)).hasSize(1);
+        String listed = getAs(doctor, "/in-basket");
+        assertThat(listed).contains("192/124 mmHg").contains("05:51");
+
+        // Nothing later on the chart: the alert takes its step.
+        backdate(escalationRepository.findAll());
+        sweep();
+        assertThat(escalationRepository.findAll()).allSatisfy(r -> {
+            assertThat(r.getAcknowledgedAt()).isNull();
+            assertThat(r.getEscalationLevel()).isEqualTo((short) 1);
+        });
+
+        // D4103: 132/84 is recorded; at the next step the alert closes, by the record, and nothing is sent.
+        vitals.save(com.example.hms.model.PatientVitalSign.builder().patient(patient).hospital(hospital)
+            .recordedAt(takenAt.plusMinutes(49)).systolicBpMmHg(132).diastolicBpMmHg(84).build());
+        long doctorBefore = notificationsOf(doctor).size();
+        backdate(escalationRepository.findAll());
+        sweep();
+        assertThat(escalationRepository.findAll()).allSatisfy(r -> {
+            assertThat(r.getAcknowledgedAt()).isNotNull();
+            assertThat(r.getAcknowledgedBy()).as("closed by the record, not a person").isNull();
+            assertThat(r.getEscalationLevel()).isEqualTo((short) 1);
+        });
+        assertThat(notificationsOf(doctor)).hasSize((int) doctorBefore);
+        assertThat(inBasketOf(doctor)).as("the withdrawn alert's open item goes").isEmpty();
+    }
+
     private UUID startEpisode() throws Exception {
         LaborEpisodeRequestDTO request = new LaborEpisodeRequestDTO();
         request.setLaborOnsetAt(LocalDateTime.now().minusHours(3).withNano(0));

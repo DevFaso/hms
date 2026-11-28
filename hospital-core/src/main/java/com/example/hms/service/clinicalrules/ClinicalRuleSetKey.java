@@ -52,6 +52,8 @@ public enum ClinicalRuleSetKey {
     SAME_DAY_PRICE_CORRECTION(ClinicalRuleArea.BILLING),
     TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
     CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB),
+    /** QA D4147 (r81): a control more than 3 SD from its target is rejected, never accepted by the operator. */
+    LAB_QC_REJECTION(ClinicalRuleArea.LAB),
     /** QA D3940 (r77): the product dispensed is the prescribed one, or a substitute of the same ingredient and strength. */
     DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING),
     /** Owner decision 2026-11-25 (V380): who decides an emergency O RhD positive release, by patient tier. */
