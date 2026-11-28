@@ -1,3 +1,4 @@
+@use '../shared/styles/diagnostics-header' as lane-header;
 @use '../shared/styles/page-common';
 
 /* ── Blood group and unit identity ── */
@@ -346,3 +347,4 @@
     color: #b3261e;
   }
 }
+@include lane-header.header;

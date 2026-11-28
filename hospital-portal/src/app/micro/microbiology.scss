@@ -1,3 +1,4 @@
+@use '../shared/styles/diagnostics-header' as lane-header;
 .micro-page {
   display: flex;
   flex-direction: column;
@@ -468,3 +469,4 @@
     padding-left: 1rem;
   }
 }
+@include lane-header.header;

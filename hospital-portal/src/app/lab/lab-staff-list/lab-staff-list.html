@@ -1,8 +1,11 @@
 <div class="lab-staff-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">badge</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">badge</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_STAFF.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_STAFF.SUBTITLE' | translate }}</p>
       </div>
@@ -52,7 +55,7 @@
   <!-- Staff table -->
   @if (!loading() && !error() && staff().length > 0) {
     <div class="table-wrap">
-      <table class="staff-table">
+      <table class="staff-table" data-cards-tablet>
         <thead>
           <tr>
             <th>{{ 'LAB_STAFF.NAME' | translate }}</th>

@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'TRANSFUSION.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'TRANSFUSION.SUBTITLE' | translate }}</p>
     </div>
@@ -817,7 +821,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-1-title">{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
-          <button class="modal-close" (click)="closeNewRequest()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeNewRequest()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <!-- QA D1304 (D1272 class): the required picker shows a visible, starred label. -->
@@ -1077,7 +1087,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-2-title">{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
-          <button class="modal-close" (click)="closeGroupModal()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeGroupModal()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           @if (groupNeedsPatient()) {
@@ -1182,7 +1198,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-3-title">{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
-          <button class="modal-close" (click)="closeUnitModal()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeUnitModal()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <div class="field">
@@ -1280,7 +1302,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-4-title">{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
-          <button class="modal-close" (click)="closeCrossmatch()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeCrossmatch()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           @if (lateResultUnit(); as unitNumber) {
@@ -1412,7 +1440,13 @@
           <h2 id="transfusion-dialog-antibody-title">
             {{ 'TRANSFUSION.ANTIBODY_RECORD' | translate }}
           </h2>
-          <button class="modal-close" (click)="showAntibodyModal.set(false)" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="showAntibodyModal.set(false)"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint">{{ 'TRANSFUSION.ANTIBODY_RECORD_HINT' | translate }}</p>
@@ -1520,7 +1554,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-7-title">{{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}</h2>
-          <button class="modal-close" (click)="closeEmergencyRelease()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeEmergencyRelease()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.EMERGENCY_RELEASE_HINT' | translate }}</p>
@@ -1697,7 +1737,13 @@
           <h2 id="transfusion-dialog-8-title">
             {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
           </h2>
-          <button class="modal-close" (click)="closeIncompatibleRelease()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeIncompatibleRelease()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.INCOMPATIBLE_RELEASE_HINT' | translate }}</p>
@@ -1953,7 +1999,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-5-title">{{ 'TRANSFUSION.HANG' | translate }}</h2>
-          <button class="modal-close" (click)="closeHang()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeHang()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
@@ -2018,7 +2070,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-6-title">{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
-          <button class="modal-close" (click)="closeReaction()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button
+            class="modal-close"
+            (click)="closeReaction()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.REACTION_HINT' | translate }}</p>

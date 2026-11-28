@@ -995,7 +995,10 @@
         <button
           class="modal-close"
           (click)="closeStatusUpdate()"
-         [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <p class="modal-hint">{{ 'IMAGING.VOID_HINT' | translate }}</p>
@@ -1063,7 +1066,10 @@
         <button
           class="modal-close"
           (click)="closeReportModal()"
-         [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <!-- QA D1923 (r53): the report is written for this patient. -->
@@ -1610,7 +1616,13 @@
               : ('IMAGING.NEW_IMAGING_ORDER' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()" [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        <button
+          class="modal-close"
+          (click)="closeModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
@@ -2006,7 +2018,10 @@
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"
-         [attr.aria-label]="'COMMON.CLOSE' | translate"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="delete-warning">

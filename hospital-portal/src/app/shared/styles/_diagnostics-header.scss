@@ -1,0 +1,52 @@
+﻿// D4162: one page-header style for the laboratory lane. The "ESPACE DIAGNOSTIC"
+// band (an eyebrow with an icon, the title, a subtitle) is the one most of the
+// lane already uses (Laboratoire, Resultats, Imagerie, File de validation, CQ,
+// Configuration, built by diagnostics-workspace). The screens that are not a
+// diagnostics workspace (Inventaire, Instruments, Boite d'envoi, Personnel,
+// Tableau de bord operationnel, Microbiologie, Banque de sang) include this at
+// the END of their stylesheet so their header reads the same.
+@mixin header {
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #dce5ec;
+  }
+  .page-title,
+  .page-header h1 {
+    margin: 0;
+    font-size: clamp(23px, 2vw, 30px);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+  }
+  .page-subtitle,
+  .page-header .subtitle {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #52677a;
+  }
+  .diagnostics-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: #087168;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+  }
+  .diagnostics-eyebrow .material-symbols-outlined {
+    font-size: 18px;
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+}

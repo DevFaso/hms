@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -113,8 +114,8 @@ describe('LabInstrumentsComponent', () => {
     });
     fixture.detectChanges();
     const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr')!;
-    expect(row.textContent).toContain('15/03/2025');
-    expect(row.textContent).toContain('21/04/2025');
+    expect(row.textContent).toContain(formatDate('2025-03-15', 'mediumDate', 'en-US'));
+    expect(row.textContent).toContain(formatDate('2025-04-21', 'mediumDate', 'en-US'));
     expect(row.textContent).toContain('LAB_INSTRUMENTS.OVERDUE');
   });
 

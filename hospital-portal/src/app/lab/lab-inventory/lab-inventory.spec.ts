@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -197,12 +198,12 @@ describe('LabInventoryComponent', () => {
     req.flush(PAGED);
   });
 
-  it('shows expiration dates in day/month/year order', () => {
+  it("shows expiration dates in the reader's order, with the year", () => {
     fixture.detectChanges();
     flushItems({ ...PAGED, content: [mockItem({ expirationDate: '2025-03-15' })] });
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('tbody tr')!.textContent).toContain(
-      '15/03/2025',
+      formatDate('2025-03-15', 'mediumDate', 'en-US'),
     );
   });
 

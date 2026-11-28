@@ -1,8 +1,11 @@
 <div class="lab-outbox-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">outbox</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">outbox</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_OUTBOX.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_OUTBOX.SUBTITLE' | translate }}</p>
       </div>
@@ -90,7 +93,7 @@
     </div>
   } @else {
     <div class="table-wrap">
-      <table class="outbox-table">
+      <table class="outbox-table" data-cards-tablet>
         <thead>
           <tr>
             <th>{{ 'LAB_OUTBOX.ORDERING_HOSPITAL' | translate }}</th>

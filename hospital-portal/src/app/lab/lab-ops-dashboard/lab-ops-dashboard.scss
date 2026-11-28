@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-header' as lane-header;
 .lab-ops-dashboard {
   padding: 1.5rem;
   max-width: 1280px;
@@ -239,3 +240,4 @@
     grid-template-columns: 80px 1fr 40px 45px;
   }
 }
+@include lane-header.header;

@@ -1,8 +1,11 @@
 <div class="lab-inventory-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">inventory_2</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_INVENTORY.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_INVENTORY.SUBTITLE' | translate }}</p>
       </div>
@@ -193,7 +196,7 @@
               <td>
                 {{
                   item.expirationDate
-                    ? (item.expirationDate | serverTime | date: 'dd/MM/yyyy')
+                    ? (item.expirationDate | serverTime | date: 'mediumDate')
                     : '—'
                 }}
               </td>
