@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { InBasketItem } from './in-basket.service';
 
 /** The reader's urgent alerts of the escalation ladder at the acting hospital (GET /urgent-alerts/mine). */
@@ -50,6 +50,17 @@ const NONE: UrgentAlertsMine = {
   items: [],
 };
 
+/** An answer of another shape (an empty page, nothing) reads as « none », never as a broken screen. */
+function readMine(mine: Partial<UrgentAlertsMine> | null | undefined): UrgentAlertsMine {
+  if (!mine) return NONE;
+  return {
+    toAcknowledge: typeof mine.toAcknowledge === 'number' ? mine.toAcknowledge : 0,
+    documentedWaiting: typeof mine.documentedWaiting === 'number' ? mine.documentedWaiting : 0,
+    oldestRaisedAt: mine.oldestRaisedAt ?? null,
+    items: Array.isArray(mine.items) ? mine.items : [],
+  };
+}
+
 /**
  * QA D4100, D4101 (r81): the urgent alerts the escalation ladder is waiting on. One copy of the reader's alerts
  * and of the patients' marks is held here, so the dashboard, the in-basket, the worklist and the bed board show
@@ -79,7 +90,7 @@ export class UrgentAlertsService {
     const request = ++this.mineRequest;
     this.http.get<UrgentAlertsMine>(`${this.baseUrl}/mine`).subscribe({
       next: (mine) => {
-        if (request === this.mineRequest) this.mineState.set(mine ?? NONE);
+        if (request === this.mineRequest) this.mineState.set(readMine(mine));
       },
       error: () => undefined,
     });
@@ -91,7 +102,9 @@ export class UrgentAlertsService {
     this.http.get<UrgentAlertPatientMark[]>(`${this.baseUrl}/patients`).subscribe({
       next: (marks) => {
         if (request !== this.marksRequest) return;
-        this.marksState.set(new Map((marks ?? []).map((mark) => [mark.patientId, mark])));
+        this.marksState.set(
+          new Map((Array.isArray(marks) ? marks : []).map((mark) => [mark.patientId, mark])),
+        );
       },
       error: () => undefined,
     });
@@ -110,6 +123,8 @@ export class UrgentAlertsService {
   }
 
   incidents(): Observable<UrgentAlertIncident[]> {
-    return this.http.get<UrgentAlertIncident[]>(`${this.baseUrl}/incidents`);
+    return this.http
+      .get<UrgentAlertIncident[]>(`${this.baseUrl}/incidents`)
+      .pipe(map((lines) => (Array.isArray(lines) ? lines : [])));
   }
 }
