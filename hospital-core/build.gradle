@@ -73,7 +73,7 @@ dependencies {
     // HAPI FHIR (R4) — interoperability layer (mounted at /fhir/*)
     implementation 'ca.uhn.hapi.fhir:hapi-fhir-base:9.0.0'
     implementation 'ca.uhn.hapi.fhir:hapi-fhir-server:8.12.1'
-    implementation 'ca.uhn.hapi.fhir:hapi-fhir-structures-r4:8.12.1'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-structures-r4:9.0.0'
 
     // Apache Commons
     implementation 'commons-io:commons-io:2.22.0'
