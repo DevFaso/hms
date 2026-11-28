@@ -4973,7 +4973,7 @@
     "CULTURE": "Culture (rapport de culture et antibiogramme)",
     "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version.",
     "BLOOD_GROUPING": "Groupe sanguin (ABO et Rh)",
-    "BLOOD_GROUPING_HINT": "La demande est close par le groupage saisi dans Banque de sang, où le groupe est saisi une seule fois. Les modifications suivent le circuit d’approbation du catalogue."
+    "BLOOD_GROUPING_HINT": "La demande est close par le groupage saisi à la banque de sang, où le groupe est saisi une seule fois. Les modifications suivent le circuit d’approbation du catalogue."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",

@@ -4973,7 +4973,7 @@
     "CULTURE": "Culture (culture and susceptibility report)",
     "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version.",
     "BLOOD_GROUPING": "Blood group (ABO and Rh)",
-    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in Blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
+    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in the blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Save correction",

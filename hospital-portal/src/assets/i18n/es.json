@@ -4973,7 +4973,7 @@
     "CULTURE": "Cultivo (informe de cultivo y antibiograma)",
     "CULTURE_HINT": "Los cambios siguen el proceso de aprobación del catálogo. Para una definición activa, cree una nueva versión.",
     "BLOOD_GROUPING": "Blood group (ABO and Rh)",
-    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in Blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
+    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in the blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Guardar corrección",
