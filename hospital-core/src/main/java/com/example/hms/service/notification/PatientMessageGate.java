@@ -222,12 +222,17 @@ public class PatientMessageGate {
      * whole send: a mail the patient refused is not sent to anyone, and the caller tells the clerk why. Failures
      * of the mail service propagate.
      *
-     * @return false when the patient refused it or their address is not verified (and the trace was written)
+     * <p>QA D4222 (round 81): the answer says WHY nothing was sent, with the code the trace row carries. It used
+     * to be one {@code false} for both reasons, which the clerk was told as « the patient turned e-mails off »
+     * when the address was only unverified.
+     *
+     * @return empty when the mail was sent; else why it was not (and the trace was written)
      */
-    public boolean emailWithAttachment(Patient patient, Notice notice, OutgoingMail mail, byte[] attachment,
-                                       String filename, String contentType) {
+    public java.util.Optional<AttachmentMailRefusal> emailWithAttachment(Patient patient, Notice notice,
+                                                                         OutgoingMail mail, byte[] attachment,
+                                                                         String filename, String contentType) {
         if (addressesPatient(patient, mail) && !allows(patient, notice, NotificationChannel.EMAIL)) {
-            return false;
+            return java.util.Optional.of(AttachmentMailRefusal.OPTED_OUT);
         }
         if (addressesPatient(patient, mail)) {
             List<String> own = Stream.of(patient.getEmail(), patient.getUser() != null ? patient.getUser().getEmail() : null)
@@ -235,11 +240,54 @@ public class PatientMessageGate {
             boolean unverified = Stream.of(mail.to(), mail.cc(), mail.bcc()).flatMap(List::stream)
                 .filter(StringUtils::hasText).filter(address -> own.contains(normalised(address)))
                 .anyMatch(address -> !verifiedNow(patient, notice, address));
-            if (unverified) return false;
+            if (unverified) return java.util.Optional.of(AttachmentMailRefusal.RECIPIENT_UNVERIFIED);
         }
         emailService.sendWithAttachment(mail.to(), mail.cc(), mail.bcc(), mail.subject(), mail.html(),
             attachment, filename, contentType);
-        return true;
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * QA D4222: why a mail with an attachment to the patient's own address was not sent. Each reason is the code
+     * of the trace row ({@link #ledgerCode()}), so what the clerk reads and what the ledger records cannot differ.
+     */
+    public enum AttachmentMailRefusal {
+        /** The patient turned this kind of e-mail off. */
+        OPTED_OUT(PatientNotificationErrorCode.OPTED_OUT),
+        /** The patient's address has not been verified. */
+        RECIPIENT_UNVERIFIED(PatientNotificationErrorCode.RECIPIENT_UNVERIFIED);
+
+        private final PatientNotificationErrorCode ledgerCode;
+
+        AttachmentMailRefusal(PatientNotificationErrorCode ledgerCode) {
+            this.ledgerCode = ledgerCode;
+        }
+
+        public PatientNotificationErrorCode ledgerCode() {
+            return ledgerCode;
+        }
+    }
+
+    /**
+     * QA D4222 / D4223: whether a mail with an attachment could go to the patient's own {@code address} now, by
+     * the same two rules as {@link #emailWithAttachment} (the patient's choice, then the proof of the address).
+     * A question only: nothing is sent and no trace row is written, so a dialog can ask it before offering the
+     * address.
+     *
+     * @return empty when the address can be used; else why a send to it would be refused
+     */
+    public java.util.Optional<AttachmentMailRefusal> ownAddressRefusal(Patient patient, Notice notice,
+                                                                       String address) {
+        if (patient == null || !StringUtils.hasText(address)) {
+            return java.util.Optional.empty();
+        }
+        UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
+        if (!consent.decision(userId, notice.event().preferenceType(), NotificationChannel.EMAIL).allowed()) {
+            return java.util.Optional.of(AttachmentMailRefusal.OPTED_OUT);
+        }
+        boolean verified = verification.allows(patient, NotificationChannel.EMAIL, address)
+            && patient.getId() != null && currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, address);
+        return verified ? java.util.Optional.empty() : java.util.Optional.of(AttachmentMailRefusal.RECIPIENT_UNVERIFIED);
     }
 
     private static boolean addressesPatient(Patient patient, OutgoingMail mail) {

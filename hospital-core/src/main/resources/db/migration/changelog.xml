@@ -4201,4 +4201,10 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- V450 (QA D4221): the starter price list's consultation and observation items take their system links; no price and no invoice changes. -->
+    <changeSet id="V450-consultation-tariff-links" author="hms-team" runOnChange="false">
+        <sqlFile path="V450__consultation_tariff_links.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

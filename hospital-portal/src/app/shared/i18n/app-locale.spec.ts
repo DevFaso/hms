@@ -68,3 +68,17 @@ describe('formatCfa — the Central African CFA franc (QA r65 D2501)', () => {
     expect(formatCfa(4000, 'EUR', 'fr-FR')).toContain('€');
   });
 });
+
+/** QA D2734 / D4235 (round 81): the thousands separator is wide enough to be seen in bold. */
+describe('formatCfa — the thousands separator (QA D2734)', () => {
+  it('never uses the narrow no-break space, and never a breakable one', () => {
+    for (const locale of ['fr-FR', 'en-US', 'es-ES']) {
+      for (const amount of [17500, 639401, 1234567]) {
+        const text = formatCfa(amount, 'XOF', locale);
+        expect(text).withContext(`${locale} ${amount}`).not.toContain('\u202f');
+        expect(text).withContext(`${locale} ${amount}`).not.toContain(' ');
+      }
+    }
+    expect(formatCfa(17500, 'XOF', 'fr-FR')).toBe('17\u00a0500\u00a0F\u00a0CFA');
+  });
+});

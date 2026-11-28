@@ -167,3 +167,67 @@
     color: #92400e;
   }
 }
+
+/* QA D4226 (round 81): a row's detail (the recipients of a mailed invoice, the reason). */
+.desc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    flex: none;
+    font-size: 1.125rem;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--focus-ring, #0b5fff);
+    outline-offset: 2px;
+  }
+}
+
+.desc-toggle__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline dotted;
+}
+
+.detail-row td {
+  background: var(--surface-muted, #f6f8fa);
+  white-space: normal;
+}
+
+.audit-detail {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+
+  dt {
+    font-weight: 600;
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.audit-detail__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
