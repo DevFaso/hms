@@ -53,6 +53,27 @@ class PatientAccountLinkGuardTest {
     }
 
     @Test
+    @DisplayName("r81: an account of another hospital holding no role at the record's hospital answers as an unknown user")
+    void anAccountOfAnotherHospitalIsUnknown() {
+        UUID hospital = UUID.randomUUID();
+        assertThatCode(() -> guard.requireLinkable(user, null, hospital))
+            .as("an account bound to no hospital yet").doesNotThrowAnyException();
+
+        com.example.hms.model.UserRoleHospitalAssignment elsewhere = new com.example.hms.model.UserRoleHospitalAssignment();
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(UUID.randomUUID());
+        elsewhere.setHospital(other);
+        when(assignmentRepository.findByUserId(user.getId())).thenReturn(java.util.List.of(elsewhere));
+        assertThatThrownBy(() -> guard.requireLinkable(user, null, hospital))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveFalse(user.getId(), hospital)).thenReturn(true);
+        assertThatCode(() -> guard.requireLinkable(user, null, hospital))
+            .as("an account whose PATIENT role there awaits its activation").doesNotThrowAnyException();
+        assertThatCode(() -> guard.requireLinkable(user, null, null)).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("the QA case: an account with a RECEPTIONIST assignment is refused (409 on userId)")
     void aReceptionistAccountIsRefused() {
         when(assignmentRepository.existsByUserIdAndRole_CodeNot(user.getId(), "ROLE_PATIENT")).thenReturn(true);

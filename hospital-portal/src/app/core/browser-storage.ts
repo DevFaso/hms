@@ -21,12 +21,17 @@
  * a `sessionStorage` write whose key is not in {@link SESSION_SCOPED_KEYS}.
  */
 
-/** The only `localStorage` keys the portal writes: device preferences, never user data. */
+/**
+ * The only `localStorage` keys the portal writes: device preferences, never user data.
+ * QA D4224 (round 81): `hms.appointmentCalendar.statusFilter` is the calendar's status filter
+ * (all, active, cancelled, absent).
+ */
 export const LOCAL_STORAGE_ALLOWLIST: readonly string[] = [
   'lang',
   'hms.nav.order',
   'hms.sidebar.width',
   'hms.pharmacy.queueClaimFilter',
+  'hms.appointmentCalendar.statusFilter',
   'super_admin_audit_saved_searches_migrated',
   'hms.login.rememberedUsername',
 ];

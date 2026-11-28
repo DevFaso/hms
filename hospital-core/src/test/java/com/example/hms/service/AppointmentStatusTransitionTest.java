@@ -913,6 +913,87 @@ class AppointmentStatusTransitionTest {
         org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
     }
 
+    // ── QA D4220 (round 81): a visit that is over is not moved ──
+
+    private com.example.hms.payload.dto.AppointmentRequestDTO unchangedEditOfAClosedVisit() {
+        Patient patient = appointment.getPatient();
+        Staff staff = appointment.getStaff();
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospital.getId()))
+            .thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findActiveStaffAssignment(any(), any()))
+            .thenReturn(Optional.of(appointment.getAssignment()));
+        org.mockito.Mockito.lenient().when(staffAvailabilityService.isStaffAvailable(any(), any())).thenReturn(true);
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        edit.setPatientId(patient.getId());
+        edit.setStaffId(staff.getId());
+        edit.setHospitalId(hospital.getId());
+        edit.setAppointmentDate(appointment.getAppointmentDate());
+        edit.setStartTime(appointment.getStartTime());
+        return edit;
+    }
+
+    private void refusedAsClosed(com.example.hms.payload.dto.AppointmentRequestDTO edit, AppointmentStatus status) {
+        LocalDate dateBefore = appointment.getAppointmentDate();
+        LocalTime startBefore = appointment.getStartTime();
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.FRENCH, "doctor_b"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(ex -> {
+                BusinessException refused = (BusinessException) ex;
+                org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())
+                    .isEqualTo("appointment.edit.closedCannotMove");
+                org.assertj.core.api.Assertions.assertThat(refused.getArgs())
+                    .containsExactly(AppointmentStatus.labelOf(status));
+            });
+        verify(appointmentRepository, never()).save(any());
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        verify(slotInventoryService, never()).releaseForAppointment(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(status);
+        org.assertj.core.api.Assertions.assertThat(appointment.getAppointmentDate()).isEqualTo(dateBefore);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStartTime()).isEqualTo(startBefore);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+        names = {"CANCELLED", "COMPLETED", "NO_SHOW", "FAILED", "UNKNOWN"})
+    void qaD4220_aVisitThatIsOverIsNotMovedToAnotherDate(AppointmentStatus closed) {
+        // The QA call: PUT with a new date and time and no status. It answered 200
+        // and the cancelled (or finished) visit sat at its new time, still cancelled.
+        givenAppointment(closed, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = unchangedEditOfAClosedVisit();
+        edit.setAppointmentDate(LocalDate.now().plusDays(2));
+        edit.setStartTime(LocalTime.of(14, 7));
+
+        refusedAsClosed(edit, closed);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+        names = {"CANCELLED", "COMPLETED", "NO_SHOW", "FAILED", "UNKNOWN"})
+    void qaD4220_norReTimedWithItsOwnStatusSentBack(AppointmentStatus closed) {
+        // A client that sends the status it read: unchanged, so no transition is judged.
+        givenAppointment(closed, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = unchangedEditOfAClosedVisit();
+        edit.setStatus(closed);
+        edit.setStartTime(LocalTime.of(15, 20));
+
+        refusedAsClosed(edit, closed);
+    }
+
+    @Test
+    void qaD4220_norGivenToAnotherPatient() {
+        givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = unchangedEditOfAClosedVisit();
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        edit.setPatientId(other.getId());
+
+        refusedAsClosed(edit, AppointmentStatus.COMPLETED);
+    }
+
     private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {
         BusinessException refused = (BusinessException) ex;
         org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())

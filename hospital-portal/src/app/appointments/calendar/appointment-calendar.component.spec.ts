@@ -2,7 +2,7 @@ import { computed } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import type { CalendarApi, FullCalendarComponent } from '@fullcalendar/angular';
 
@@ -39,6 +39,27 @@ describe('AppointmentCalendarComponent', () => {
     status: 'SCHEDULED',
     reason: 'Follow-up',
   };
+
+  // QA D4224 (round 81): the same slot, in the two statuses that no longer
+  // hold it.
+  const cancelled: AppointmentCalendarEvent = {
+    ...sample,
+    id: 'a-2',
+    patientName: 'Carl Gone',
+    title: 'Carl Gone',
+    status: 'CANCELLED',
+  };
+  const noShow: AppointmentCalendarEvent = {
+    ...sample,
+    id: 'a-3',
+    patientName: 'Nora Away',
+    title: 'Nora Away',
+    status: 'NO_SHOW',
+  };
+  const STATUS_FILTER_KEY = 'hms.appointmentCalendar.statusFilter';
+
+  beforeEach(() => localStorage.removeItem(STATUS_FILTER_KEY));
+  afterEach(() => localStorage.removeItem(STATUS_FILTER_KEY));
 
   async function configure(activeHospital: string | null = 'h1'): Promise<void> {
     calendarSvc = jasmine.createSpyObj<AppointmentCalendarService>('AppointmentCalendarService', [
@@ -131,6 +152,182 @@ describe('AppointmentCalendarComponent', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
   }
+
+  describe('appointment statuses (QA D4224, round 81)', () => {
+    const VIEWS = ['timeGridWeek', 'timeGridDay', 'dayGridMonth'];
+
+    /** Renders the calendar over one planned, one cancelled and one absent appointment. */
+    async function renderStatuses(): Promise<HTMLElement> {
+      await configure('h1');
+      calendarSvc.getRange.and.returnValue(of([sample, cancelled, noShow]));
+      // The texts this page composes itself; the status words come from the
+      // portal's own enum labels.
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        APPOINTMENT_CALENDAR: {
+          EVENT_TITLE_WITH_STATUS: '{{status}} — {{title}}',
+          TIMED_SLOTS: 'Time slots',
+          LEGEND: 'Legend',
+        },
+      });
+      translate.use('en');
+      fixture = TestBed.createComponent(AppointmentCalendarComponent);
+      fixture.detectChanges();
+      await calendarReady();
+      return grid() as HTMLElement;
+    }
+
+    /** The text of each event drawn with the given class, in the grid now. */
+    function drawn(selector: string): string[] {
+      return Array.from((grid() as HTMLElement).querySelectorAll(selector)).map(
+        (el) => el.textContent ?? '',
+      );
+    }
+
+    function pickStatus(value: string): void {
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+        '[data-testid="appointment-calendar-status"]',
+      );
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    for (const view of VIEWS) {
+      it(`draws a cancelled and an absent appointment apart from a planned one (${view})`, async () => {
+        const host = await renderStatuses();
+        api().changeView(view, nine);
+        fixture.detectChanges();
+
+        const cancelledEvents = drawn('.cal-event--cancelled');
+        expect(cancelledEvents.length).toBe(1);
+        // The status is in the text, not only in the colour (WCAG 1.4.1).
+        expect(cancelledEvents[0]).toContain('Cancelled — Carl Gone');
+
+        const absentEvents = drawn('.cal-event--no-show');
+        expect(absentEvents.length).toBe(1);
+        expect(absentEvents[0]).toContain('No Show — Nora Away');
+
+        // The planned one keeps the plain look and its bare title.
+        expect(host.textContent).toContain('Alice Patient');
+        expect(drawn('.cal-event').join('|')).not.toContain('Alice Patient');
+        expect(host.textContent).not.toContain('— Alice Patient');
+      });
+    }
+
+    it('strikes through a cancelled and an absent appointment, never a planned one', async () => {
+      const host = await renderStatuses();
+      for (const selector of ['.cal-event--cancelled', '.cal-event--no-show']) {
+        const el = host.querySelector(selector) as HTMLElement;
+        expect(getComputedStyle(el).textDecorationLine).withContext(selector).toBe('line-through');
+      }
+      const planned = Array.from(host.querySelectorAll<HTMLElement>('a, [role="button"]')).find(
+        (el) => (el.textContent ?? '').includes('Alice Patient'),
+      ) as HTMLElement;
+      expect(planned).toBeDefined();
+      expect(getComputedStyle(planned).textDecorationLine).toBe('none');
+    });
+
+    it('shows every status by default, the cancelled and absent ones included', async () => {
+      const host = await renderStatuses();
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+        '[data-testid="appointment-calendar-status"]',
+      );
+      expect(select.value).toBe('ALL');
+      expect(Array.from(select.options).map((o) => o.value)).toEqual([
+        'ALL',
+        'ACTIVE',
+        'CANCELLED',
+        'NO_SHOW',
+      ]);
+      // A real label, tied to the control.
+      expect(fixture.nativeElement.querySelector(`label[for="${select.id}"]`)).not.toBeNull();
+      for (const name of ['Alice Patient', 'Carl Gone', 'Nora Away']) {
+        expect(host.textContent).toContain(name);
+      }
+    });
+
+    it('filters the loaded appointments by status without fetching again', async () => {
+      const host = await renderStatuses();
+      const shown = (): string[] =>
+        ['Alice Patient', 'Carl Gone', 'Nora Away'].filter((n) =>
+          (host.textContent ?? '').includes(n),
+        );
+
+      pickStatus('ACTIVE');
+      expect(shown()).toEqual(['Alice Patient']);
+
+      pickStatus('CANCELLED');
+      expect(shown()).toEqual(['Carl Gone']);
+
+      pickStatus('NO_SHOW');
+      expect(shown()).toEqual(['Nora Away']);
+
+      pickStatus('ALL');
+      expect(shown()).toEqual(['Alice Patient', 'Carl Gone', 'Nora Away']);
+
+      expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the status filter over a refetch and another view', async () => {
+      const host = await renderStatuses();
+      pickStatus('ACTIVE');
+
+      api().refetchEvents();
+      fixture.detectChanges();
+      expect(host.textContent).toContain('Alice Patient');
+      expect(host.textContent).not.toContain('Carl Gone');
+
+      api().changeView('dayGridMonth', nine);
+      fixture.detectChanges();
+      expect(host.textContent).toContain('Alice Patient');
+      expect(host.textContent).not.toContain('Carl Gone');
+      expect(host.textContent).not.toContain('Nora Away');
+    });
+
+    it('opens on the status filter last picked in this browser', async () => {
+      await renderStatuses();
+      pickStatus('CANCELLED');
+      expect(localStorage.getItem(STATUS_FILTER_KEY)).toBe('CANCELLED');
+
+      TestBed.resetTestingModule();
+      const host = await renderStatuses();
+      expect(host.textContent).toContain('Carl Gone');
+      expect(host.textContent).not.toContain('Alice Patient');
+    });
+
+    it('explains the event styles in a legend', async () => {
+      await renderStatuses();
+      const legend: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="appointment-calendar-legend"]',
+      );
+      expect(legend).not.toBeNull();
+      expect(legend.querySelector('h2')?.textContent).toContain('Legend');
+
+      const items = Array.from(legend.querySelectorAll('li'));
+      expect(items.length).toBe(4);
+      const text = items.map((li) => (li.textContent ?? '').trim());
+      expect(text).toContain('Completed');
+      expect(text).toContain('Cancelled');
+      expect(text).toContain('No Show');
+      // Each swatch carries the class its events do.
+      for (const cls of ['cal-event--completed', 'cal-event--cancelled', 'cal-event--no-show']) {
+        expect(legend.querySelector(`.cal-legend-swatch.${cls}`))
+          .withContext(cls)
+          .not.toBeNull();
+      }
+      // The list is named by its heading.
+      const list = legend.querySelector('ul') as HTMLElement;
+      expect(list.getAttribute('aria-labelledby')).toBe(legend.querySelector('h2')?.id ?? '-');
+    });
+
+    it('names the time grid for screen readers in the portal language (QA D4237)', async () => {
+      const host = await renderStatuses();
+      // FullCalendar's own default is the English word "Timed".
+      expect(host.textContent).toContain('Time slots');
+      expect(host.textContent).not.toContain('Timed');
+    });
+  });
 
   it('renders the calendar shell when a hospital is active', async () => {
     await render('h1');

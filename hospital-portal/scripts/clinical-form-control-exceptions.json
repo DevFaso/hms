@@ -2046,11 +2046,6 @@
     "evidence": [".order-set-picker__search"],
     "control": "order-set-picker-search"
   },
-  "src/app/appointments/calendar/appointment-calendar.component.ts::AppointmentCalendarComponent::select::99c1d7265ba24f499b1c::0": {
-    "reason": "Existing module-specific control styling supplies padding via .cal-page__filter select. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": [".cal-page__filter select"],
-    "control": "provider-filter"
-  },
   "src/app/billing/cash-closing/cash-closing.component.ts::CashClosingComponent::input::7f8e4f312d27a9c9321b::0": {
     "reason": "Unrouted legacy CashClosingComponent: the live billing route renders CashSessionComponent instead. This inactive component has no page to restyle or screenshot; retain until explicit retirement. Its existing cash-closing-controls layout remains present; the guard separately verifies that no template mounts its selector.",
     "evidence": [".cash-closing-controls"]

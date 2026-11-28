@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
@@ -41,6 +42,7 @@ public class PatientAccountLinkGuard {
     static final String ALREADY_LINKED_KEY = "userId:patient.account.alreadyLinked";
     private static final String PATIENT = "PATIENT";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
 
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -66,6 +68,31 @@ public class PatientAccountLinkGuard {
         if (linkedElsewhere) {
             throw new ConflictException(ALREADY_LINKED_KEY);
         }
+    }
+
+    /**
+     * {@link #requireLinkable(User, UUID)} for a record written at {@code hospitalId}: an account
+     * that holds a role at another hospital must also hold one here, active or awaiting its
+     * activation (the desk's registration gives it its PATIENT role at that hospital first); an
+     * account bound to no hospital yet may be linked. Any other account answers 404, exactly as
+     * an unknown id does, before the 409s, so the answer says nothing about an account outside
+     * the hospital (r81).
+     * A {@code null} hospital asks only {@link #requireLinkable(User, UUID)}.
+     */
+    public void requireLinkable(User user, UUID patientId, UUID hospitalId) {
+        if (user != null && user.getId() != null && hospitalId != null && belongsElsewhere(user.getId(), hospitalId)) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_KEY, user.getId());
+        }
+        requireLinkable(user, patientId);
+    }
+
+    /** The account holds a role at some hospital, and none (active or awaiting activation) at this one. */
+    private boolean belongsElsewhere(UUID userId, UUID hospitalId) {
+        if (assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)
+            || assignmentRepository.existsByUserIdAndHospitalIdAndActiveFalse(userId, hospitalId)) {
+            return false;
+        }
+        return assignmentRepository.findByUserId(userId).stream().anyMatch(a -> a.getHospital() != null);
     }
 
     /**

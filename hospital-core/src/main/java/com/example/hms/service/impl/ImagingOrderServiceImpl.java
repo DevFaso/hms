@@ -114,6 +114,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.model.User orderingUser = resolveOrderingUser(orderingUserId);
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
+        // QA D4140: a request placed by a nurse or a midwife is not an order yet. It is kept pending, with who
+        // asked, until a physician of this hospital authorises it (ImagingOrderAuthorisation, provisional).
+        if (authorisation().stampRequest(imagingOrder, imagingOrder.getOrderingProviderUserId(),
+                imagingOrder.getOrderingProviderName())) {
+            imagingOrder.setStatus(ImagingOrderStatus.DRAFT);
+        }
 
         // QA D3450 / D3254: the duplicate rule compares the order as it is stored: with a catalogue exam, the
         // exam's own modality and body region, not what the form displayed.
@@ -136,6 +142,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(imagingOrder);
         followUp(saved, preAuth);
+        // QA D4140 review: the physicians are told a request waits for them (urgent for a STAT one).
+        if (awaitingFollowUp != null && Boolean.TRUE.equals(saved.getPhysicianAuthorisationRequired())) {
+            awaitingFollowUp.requestPlaced(saved);
+        }
         if (duplicateOverride != null) {
             duplicateOverride.audit(saved, duplicateMatches);
         }
@@ -184,6 +194,20 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         boolean sameName = studyBefore != null && studyNow != null
             && studyBefore.trim().equalsIgnoreCase(studyNow.trim());
         return sameName ? itemBefore : null;
+    }
+
+    /** QA D4140 review: the physicians' task for a request that waits for them; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp awaitingFollowUp;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAwaitingFollowUp(com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp awaitingFollowUp) {
+        this.awaitingFollowUp = awaitingFollowUp;
+    }
+
+    private void settleAwaiting(ImagingOrder saved) {
+        if (awaitingFollowUp != null) {
+            awaitingFollowUp.requestSettled(saved);
+        }
     }
 
     /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
@@ -281,6 +305,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         UUID visitBefore = order.getEncounterId();
+        ImagingOrderStatus statusBefore = order.getStatus();
         UUID catalogueItemBefore = order.getCatalogueItemId();
         String studyBefore = order.getStudyType();
         imagingOrderMapper.updateEntityFromRequest(order, request);
@@ -295,6 +320,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         List<ImagingOrder> duplicateMatches = reconcileDuplicateOnEdit(order, request, studyKeyBefore, callerUserId);
+        // QA D4140: an edit never moves a request that waits for a physician: it keeps the status it had (a
+        // pending draft stays a draft; an older order a nurse placed keeps its place in the workflow, whose
+        // transitions an edit does not make).
+        if (authorisation().awaitsPhysician(order)) {
+            order.setStatus(statusBefore);
+        }
         // Provisional rule 1: an edit that records the number clears the flag.
         ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, LocalDateTime.now());
 
@@ -325,6 +356,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // signed report. A routine study needing pre-authorisation starts with
         // its number; an urgent or STAT one starts without it (provisional rule 1).
         com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
+        // QA D4140 (provisional): a request placed by a nurse or a midwife is not scheduled or started before a
+        // physician of the hospital has authorised it. It can only be kept pending, declined or withdrawn.
+        authorisation().requireAuthorisedFor(order, request.getStatus());
         // Policy rule 3 (provisional): a technician starts, completes or discontinues the exam; the
         // order itself (its schedule, its pre-authorisation, calling it off before it starts) is not theirs.
         // QA D2915: what the caller is counts at the order's hospital (ImagingRoleScope), never
@@ -382,7 +416,52 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
+        if (saved.getStatus() == ImagingOrderStatus.CANCELLED) {
+            settleAwaiting(saved);
+        }
         return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D4140: whoever placed a request that still waits for a physician withdraws it herself, with a
+     * reason. A nurse or a midwife holds no role on the status endpoint (she never starts, schedules or
+     * cancels an order), so the withdrawal has its own door: her own pending request, nothing else.
+     */
+    @Override
+    public ImagingOrderResponseDTO withdrawPendingRequest(UUID orderId, String reason) {
+        ImagingOrder order = getOrderInScope(orderId);
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
+        // A request that waits has no result; the shared rule says so for every cancellation (QA D1098).
+        com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(order.getStatus(),
+            ImagingOrderStatus.CANCELLED, RESULTED_STATES);
+        roles().requireOrderer(order);
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        requireAuthor(order, actorId);
+        String cancellationReason =
+            com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, "cancellationReason");
+        com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
+        LocalDateTime now = LocalDateTime.now();
+        order.setStatus(ImagingOrderStatus.CANCELLED);
+        order.setStatusUpdatedAt(now);
+        order.setStatusUpdatedBy(actorId);
+        order.setCancellationReason(cancellationReason);
+        order.setCancelledAt(now);
+        order.setCancelledByUserId(actorId);
+        order.setCancelledByName(actor != null ? displayName(actor) : null);
+        ImagingPreAuthorisationPolicy.FollowUp preAuth = ImagingPreAuthorisationPolicy.reconcile(order, now);
+        ImagingOrder saved = imagingOrderRepository.save(order);
+        followUp(saved, preAuth);
+        settleAwaiting(saved);
+        return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /** QA D4140: only whoever placed a request that still waits withdraws it (ImagingOrderAuthorisation#mayWithdraw). */
+    private void requireAuthor(ImagingOrder order, UUID actorId) {
+        if (!authorisation().mayWithdraw(order, actorId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.withdrawForbidden"));
+        }
     }
 
     /**
@@ -424,6 +503,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
         UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         if (caller != null && hospitalId != null && roleValidator.hasRole(caller, hospitalId, "RADIOLOGIST")) {
+            return;
+        }
+        // QA D4140: a physician of the hospital declines a request a nurse or a midwife placed.
+        if (authorisation().mayDecline(order, caller)) {
             return;
         }
         throw new com.example.hms.exception.ClientSafeAccessDeniedException(
@@ -550,6 +633,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         followUp(saved, preAuth);
+        // QA D4140 review: an authorised request no longer waits in the physicians' in-baskets.
+        settleAwaiting(saved);
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
@@ -680,6 +765,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         com.example.hms.service.support.ImagingExamRecord.requireCheckInOpen(order.getStatus());
+        // QA D4140: no patient is checked in on a request no physician has authorised.
+        authorisation().requireAuthorised(order);
         // Whoever holds no exam role at the order's hospital is refused here; the answer itself changes nothing.
         roles().actsAsTechnician(order);
         if (order.getCheckedInAt() != null) {
@@ -706,6 +793,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         com.example.hms.service.support.ImagingExamRecord.requireRecordOpen(order.getStatus());
+        // QA D4140: nor is an exam recorded on one.
+        authorisation().requireAuthorised(order);
         if (roles().actsAsTechnician(order)) {
             roles().requireMayPerform(order);
         }
@@ -724,6 +813,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     /** QA D2915: what the caller is at the order's hospital; never the role their token names. */
     private ImagingRoleScope roles() {
         return new ImagingRoleScope(roleValidator);
+    }
+
+    /** QA D4140: whether a request waits for a physician, and who may authorise, decline or withdraw it. */
+    private com.example.hms.service.imaging.ImagingOrderAuthorisation authorisation() {
+        return new com.example.hms.service.imaging.ImagingOrderAuthorisation(roleValidator);
     }
 
     /** The exam record's own audit row; setter-injected so the unit tests that build this service keep working. */

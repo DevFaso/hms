@@ -125,9 +125,10 @@ public class ReceptionController {
     @Operation(summary = "Front-desk patient snapshot: demographics, insurance, billing alerts")
     @RestrictedChartPolicy(value = RestrictedChartPolicy.Mode.MASK,
         reason = "the desk snapshot: identity, appointments and balance; clinical fields masked")
-    public ResponseEntity<FrontDeskPatientSnapshotDTO> getPatientSnapshot(@PathVariable UUID patientId) {
+    public ResponseEntity<FrontDeskPatientSnapshotDTO> getPatientSnapshot(@PathVariable UUID patientId,
+            @RequestParam(required = false) UUID appointmentId) {
         UUID hospitalId = resolveHospitalId();
-        return ResponseEntity.ok(receptionService.getPatientSnapshot(patientId, hospitalId));
+        return ResponseEntity.ok(receptionService.getPatientSnapshot(patientId, hospitalId, appointmentId));
     }
 
     // ── MVP 10: Insurance Issues ──────────────────────────────────────────────
