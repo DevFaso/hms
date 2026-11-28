@@ -2355,6 +2355,18 @@
   />
 }
 <!-- QA CX-008: both of these end the transfusion, so each asks first. -->
+@if (addUnitPrompt(); as prompt) {
+  <!-- QA D3906: a bag beyond the units requested goes out only on this deliberate step. -->
+  <app-confirm-dialog
+    data-testid="add-unit-prompt"
+    titleKey="TRANSFUSION.ADD_UNIT_TITLE"
+    [messageText]="prompt.message"
+    messageKey="TRANSFUSION.ADD_UNIT_MESSAGE"
+    confirmKey="TRANSFUSION.ADD_UNIT_CONFIRM"
+    (confirmed)="confirmAddUnit()"
+    (cancelled)="addUnitPrompt.set(null)"
+  />
+}
 @if (completingAdministration(); as a) {
   <app-confirm-dialog
     titleKey="TRANSFUSION.ADMIN_COMPLETE_TITLE"

@@ -4295,4 +4295,10 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V408 (QA D3905 / D4144): blood-group test definitions are flagged, so the blood-bank grouping closes their order. -->
+    <changeSet id="V408-lab-blood-grouping-definition-flag" author="hms-team" runOnChange="false">
+        <sqlFile path="V408__lab_blood_grouping_definition_flag.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

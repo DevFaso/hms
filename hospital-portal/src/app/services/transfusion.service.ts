@@ -581,6 +581,8 @@ export interface EmergencyReleaseRequest {
   biologistUserId?: string;
   /** An incompatible O positive release: the physician who ordered O positive, when not its authoriser. */
   orderingPhysicianUserId?: string;
+  /** QA D3906: the « ajouter une unité » step, for a bag beyond the units requested. */
+  additionalUnit?: boolean;
 }
 
 export interface TransfusionAdministrationRequest {
@@ -781,10 +783,19 @@ export class TransfusionService {
     return this.http.get<CrossmatchResponse[]>(`${this.baseUrl}/requests/${requestId}/crossmatch`);
   }
 
-  issueUnit(requestId: string, unitId: string): Observable<BloodUnitResponse> {
+  /**
+   * QA D3906: {@link additionalUnit} is the deliberate « ajouter une unité » step, for a bag beyond the units
+   * the request asked for; the server refuses such a bag without it, on the field `additionalUnit`.
+   */
+  issueUnit(
+    requestId: string,
+    unitId: string,
+    additionalUnit = false,
+  ): Observable<BloodUnitResponse> {
     return this.http.post<BloodUnitResponse>(
       `${this.baseUrl}/requests/${requestId}/issue/${unitId}`,
       null,
+      additionalUnit ? { params: { additionalUnit: 'true' } } : {},
     );
   }
 

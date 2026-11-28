@@ -73,6 +73,12 @@ public class EmergencyReleaseRequestDTO {
     private Boolean negativeUnobtainable;
 
     /**
+     * QA D3906: the deliberate « ajouter une unité » step, for a bag beyond the units the request asked for.
+     * Without it such a bag is refused on this field; a bag within the request never needs it.
+     */
+    private Boolean additionalUnit;
+
+    /**
      * A serologically incompatible release names who authorises it, or states that no physician can be reached
      * (V381: the decision service then says whether the hospital allows it). An O positive decision may name
      * nobody (V380: the issuer under the protocol, or no physician reachable).

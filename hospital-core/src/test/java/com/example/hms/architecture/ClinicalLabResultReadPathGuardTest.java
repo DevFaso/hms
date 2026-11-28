@@ -64,6 +64,8 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/DoctorWorklistServiceImpl.java", "a count, no values"),
         Map.entry("com/example/hms/service/InstrumentOutboxServiceImpl.java", "instrument transmit"),
         Map.entry("com/example/hms/service/LabOrderServiceImpl.java", "existence check for a performer change"),
+        Map.entry("com/example/hms/service/transfusion/BloodGroupingOrderCompletion.java",
+            "QA D3905: order completion after a blood-bank grouping; release state only, no value leaves it"),
         Map.entry("com/example/hms/service/LabSpecimenServiceImpl.java", "existence check barring a specimen rejection (#975), no values"),
         Map.entry("com/example/hms/service/SuperAdminDashboardServiceImpl.java", "a count, no values"),
         Map.entry("com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java", "HL7 ingest"),

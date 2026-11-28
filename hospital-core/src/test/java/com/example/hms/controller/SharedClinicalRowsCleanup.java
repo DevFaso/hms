@@ -81,6 +81,8 @@ final class SharedClinicalRowsCleanup {
         cultureRows.update("DELETE FROM lab.micro_isolates");
         cultureRows.update("DELETE FROM lab.micro_culture_corrections");
         cultureRows.update("DELETE FROM lab.micro_culture_results");
+        // QA D3905: a blood-bank grouping (and the antibody follow-up it may open) pins the patient and the hospital.
+        cultureRows.update("DELETE FROM clinical.patient_blood_groups");
         context.getBean(LabSpecimenRepository.class).deleteAll();
         context.getBean(LabOrderRepository.class).deleteAll();
         context.getBean(LabTestDefinitionRepository.class).deleteAll();

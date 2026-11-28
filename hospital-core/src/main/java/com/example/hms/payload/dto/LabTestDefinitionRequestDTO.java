@@ -41,6 +41,8 @@ public class LabTestDefinitionRequestDTO {
 
     private Boolean culture;
 
+    private Boolean bloodGrouping;
+
     @Size(max = 2048)
     private String description;
 

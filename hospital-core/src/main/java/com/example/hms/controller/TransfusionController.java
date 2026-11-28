@@ -262,12 +262,14 @@ public class TransfusionController {
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
     @Operation(summary = "Issue a unit from the lab to the ward",
                description = "Requires a compatible, unexpired crossmatch — except group O red cells on an "
-                   + "EMERGENCY request, as the emergency release rules allow.")
+                   + "EMERGENCY request, as the emergency release rules allow. A unit beyond the units requested "
+                   + "needs additionalUnit=true, the « ajouter une unité » step, and is audited.")
     public ResponseEntity<BloodUnitResponseDTO> issueUnit(
         @PathVariable UUID requestId,
-        @PathVariable UUID unitId
+        @PathVariable UUID unitId,
+        @RequestParam(name = "additionalUnit", defaultValue = "false") boolean additionalUnit
     ) {
-        return ResponseEntity.ok(transfusionService.issueUnit(requestId, unitId));
+        return ResponseEntity.ok(transfusionService.issueUnit(requestId, unitId, additionalUnit));
     }
 
     @GetMapping("/requests/{requestId}/emergency-release/options")

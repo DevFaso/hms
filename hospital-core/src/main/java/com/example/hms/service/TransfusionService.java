@@ -110,7 +110,14 @@ public interface TransfusionService {
     /** A held request stopped from the order review: the requester need not be the reviewer. */
     void stopHeldRequest(UUID requestId, String reason);
 
+    /** Issue a bag within the units requested: one beyond them is refused, naming the « ajouter une unité » step. */
     BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId);
+
+    /**
+     * QA D3906: {@code additionalUnit} is the deliberate « ajouter une unité » step. A bag beyond the units
+     * requested goes out only on it, and is audited as such; it never blocks a bag within the request.
+     */
+    BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId, boolean additionalUnit);
 
     /**
      * Issue a red-cell bag on a documented emergency decision: O positive where the rules ask for a

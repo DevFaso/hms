@@ -1918,6 +1918,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['unit', 'request'],
   },
   {
+    // QA D3906: the « ajouter une unité » step; ids and counts only.
+    key: 'AUDIT.DESC.BLOOD_UNIT_ADDED_BEYOND_REQUEST',
+    re: /^Blood unit (\S+) added beyond the units requested on transfusion request (\S+): unit (\d+) of (\d+) requested$/,
+    params: ['unit', 'request', 'number', 'requested'],
+  },
+  {
     key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED',
     re: /^Emergency release on a documented O positive decision of blood unit (\S+) against transfusion request (\S+), O negative stated not obtainable in time, stock shown (\S+)$/,
     params: ['unit', 'request', 'shown'],

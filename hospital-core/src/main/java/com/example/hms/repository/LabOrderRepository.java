@@ -85,6 +85,22 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
      */
     @Query("SELECT o.status FROM LabOrder o WHERE o.id = :id")
     LabOrderStatus findStatusById(@Param("id") UUID id);
+
+    /**
+     * QA D3905: the patient's blood-group orders this hospital orders or performs, in one of {@code statuses}.
+     * The blood-bank grouping recorded here answers them.
+     */
+    @Query("""
+        SELECT o.id FROM LabOrder o
+        WHERE o.patient.id = :patientId
+          AND o.labTestDefinition.bloodGrouping = true
+          AND (o.hospital.id = :hospitalId OR o.performingHospital.id = :hospitalId)
+          AND o.status IN :statuses
+        ORDER BY o.id
+    """)
+    List<UUID> findOpenBloodGroupingOrderIds(@Param("patientId") UUID patientId,
+                                             @Param("hospitalId") UUID hospitalId,
+                                             @Param("statuses") java.util.Collection<LabOrderStatus> statuses);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
     boolean existsByLabTestDefinition_Id(UUID labTestDefinitionId);

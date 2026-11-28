@@ -2026,6 +2026,7 @@
       "INCOMPATIBLE_COUNTERSIGN_OVERDUE": "Countersignature of an incompatible release overdue, escalated to the laboratory director (decision {{decision}})",
       "INCOMPATIBLE_PROTOCOL_CHANGED": "Setting « incompatible release with no physician reachable » changed",
       "EMERGENCY_BLOOD_RELEASED": "Emergency uncrossmatched release of unit {{unit}} against request {{request}}",
+      "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Unit {{unit}} added beyond the units requested on request {{request}}: unit no. {{number}}, quantity requested {{requested}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Emergency release on a documented O positive decision of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Emergency release — serologically incompatible, of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED": "Emergency release on a documented O positive decision of unit {{unit}} against request {{request}}, O negative stated not obtainable in time, stock shown {{shown}}",
@@ -5036,7 +5037,9 @@
       "ADD": "Add a component"
     },
     "CULTURE": "Culture (culture and susceptibility report)",
-    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version."
+    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version.",
+    "BLOOD_GROUPING": "Blood group (ABO and Rh)",
+    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in the blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Save correction",
@@ -7971,6 +7974,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
+        "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Blood unit added beyond the request",
         "O_POSITIVE_RELEASE_DECIDED": "Emergency O positive release decided",
         "O_POSITIVE_RELEASE_COUNTERSIGNED": "Emergency O positive release countersigned",
         "O_POSITIVE_RELEASE_REVIEWED": "Emergency O positive release reviewed",
@@ -14554,6 +14558,9 @@
     "CROSSMATCH_ERROR": "The crossmatch was refused. Check the ABO and Rh groups and the antibody screen.",
     "UNIT_ISSUED": "Unit issued",
     "ISSUE_ERROR": "The unit could not be issued",
+    "ADD_UNIT_TITLE": "Add a unit?",
+    "ADD_UNIT_MESSAGE": "This request already has every unit it asked for. Adding one more is recorded in the audit log under your name.",
+    "ADD_UNIT_CONFIRM": "Add a unit",
     "HUNG": "Transfusion started",
     "HANG_ERROR": "The transfusion could not be started",
     "REACTION_RECORDED": "Reaction recorded and transfusion stopped",

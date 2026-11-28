@@ -31,6 +31,7 @@ public class LabTestDefinitionResponseDTO {
     private String category;
 
     private boolean culture;
+    private boolean bloodGrouping;
     private String unit;
     private String loincCode;
     private String loincDisplay;
