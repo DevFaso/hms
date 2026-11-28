@@ -431,4 +431,88 @@ class InvoiceEmailServiceTest {
         verifyNoInteractions(emailService);
         assertThat(k4bDetail()).isNull();
     }
+
+    // ---------- QA D4222 / D4223 (round 81): the refusal says why, and the dialog knows before it sends ----------
+
+    @Test
+    @DisplayName("QA D4222: an unverified patient address is refused as unverified, not as « e-mails turned off »")
+    void qaD4222_anUnverifiedPatientAddressIsRefusedAsUnverified() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        invoice.getPatient().setVerifiedEmailRecipient(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        UUID id = invoice.getId();
+        EmailInvoiceRequest toPatient = new EmailInvoiceRequest(List.of("seydou@example.test"), null, null, null,
+            null, false);
+
+        assertThatThrownBy(() -> service.emailInvoice(id, toPatient))
+            .isInstanceOf(BusinessException.class).extracting("messageKey")
+            .isEqualTo("billing.invoice.emailUnverified");
+        verify(emailService, never()).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());
+        // The trace row and the clerk's message carry the same reason.
+        verify(ledger).recordUnverified(PatientNotificationEvent.INVOICE, hospitalA, invoice.getPatient().getId(), id,
+            NotificationChannel.EMAIL);
+        verify(ledger, never()).recordOptOut(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D4222: the dialog is told the patient's address would be refused, and why, with no trace written")
+    void qaD4222_theDialogKnowsAnUnverifiedAddressBeforeSending() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        invoice.getPatient().setVerifiedEmailRecipient(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+
+        var options = service.recipientOptions(invoice.getId());
+
+        assertThat(options.patient().address()).isEqualTo("seydou@example.test");
+        assertThat(options.patient().usable()).isFalse();
+        assertThat(options.patient().refusalCode()).isEqualTo("RECIPIENT_UNVERIFIED");
+        verifyNoInteractions(emailService, ledger);
+    }
+
+    @Test
+    @DisplayName("QA D4223: the dialog is offered the verified patient address and the active guarantors on file")
+    void qaD4223_theDialogIsOfferedTheAddressesOnFile() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+
+        var options = service.recipientOptions(invoice.getId());
+
+        assertThat(options.patient().usable()).isTrue();
+        assertThat(options.patient().refusalCode()).isNull();
+        assertThat(options.guarantors()).singleElement().satisfies(guarantor -> {
+            assertThat(guarantor.guarantorId()).isEqualTo(guarantorId);
+            assertThat(guarantor.fullName()).isEqualTo("Issa Ouédraogo");
+            assertThat(guarantor.address()).isEqualTo("Billing@Example.test");
+        });
+        assertThat(options.maxRecipients()).isEqualTo(EmailInvoiceRequest.MAX_RECIPIENTS);
+        assertThat(options.reasonMaxLength()).isEqualTo(500);
+        verifyNoInteractions(emailService, ledger);
+    }
+
+    @Test
+    @DisplayName("QA D4223: a patient who turned billing e-mails off is offered as refused for that reason")
+    void qaD4223_anOptedOutPatientIsOfferedAsRefused() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        when(consent.decision(invoice.getPatient().getUser().getId(), NotificationType.BILLING,
+            NotificationChannel.EMAIL))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
+
+        var options = service.recipientOptions(invoice.getId());
+
+        assertThat(options.patient().usable()).isFalse();
+        assertThat(options.patient().refusalCode()).isEqualTo("OPTED_OUT");
+        verifyNoInteractions(ledger);
+    }
+
+    @Test
+    @DisplayName("QA D4223: another hospital's invoice offers nothing (404)")
+    void qaD4223_anotherHospitalsInvoiceOffersNothing() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        UUID id = invoice.getId();
+
+        assertThatThrownBy(() -> service.recipientOptions(id)).isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(guarantorRepository);
+    }
 }

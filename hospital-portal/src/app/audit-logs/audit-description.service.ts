@@ -16,6 +16,75 @@ const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
   PATCH: 'AUDIT.WRITE_PATCH',
   DELETE: 'AUDIT.WRITE_DELETE',
 };
+/**
+ * QA D4226 (round 81): a write whose route says more than « created: entity ».
+ * Mailing an invoice is a POST on the invoice, so the journal read
+ * « Création : Facture » for a copy of the invoice sent outside the hospital.
+ * A route listed here reads as what was done. The server-side guard
+ * (WriteAuditDetailRouteLabelGuardTest) fails when a handler states details
+ * on its audit row and its route is not named here.
+ */
+export const WRITE_ROUTE_KEYS: Readonly<Record<string, string>> = {
+  'POST /billing-invoices/{id}/email': 'AUDIT.WRITE_ROUTE.INVOICE_EMAILED',
+};
+
+/** A write description without the API prefix some rows carry: « POST /api/x » reads as « POST /x ». */
+function routeOf(description: string): string {
+  return description.replace(/^([A-Z]+)\s+\/api\//, '$1 /');
+}
+
+/** One recipient of a mailed invoice, as the audit row keeps it (the address is masked). */
+export interface AuditMailRecipient {
+  recipient: string;
+  /** PATIENT, GUARANTOR or OTHER. */
+  recipientKind: string;
+}
+
+/**
+ * QA D4226: what an audit row keeps beyond its description, read from its
+ * `details` JSON for the row's detail panel.
+ */
+export interface AuditRowDetail {
+  recipients: AuditMailRecipient[];
+  reason: string | null;
+  /** Whether the invoice PDF was attached; null when the row does not say. */
+  attachment: boolean | null;
+}
+
+/**
+ * The detail of a row, or null when it keeps none the panel can show. Only
+ * the fields listed here are read: ids and anything unknown stay out.
+ */
+export function auditRowDetail(details: string | null | undefined): AuditRowDetail | null {
+  if (!details) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(details);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const data = parsed as Record<string, unknown>;
+  const recipients: AuditMailRecipient[] = [];
+  if (Array.isArray(data['invoiceEmailRecipients'])) {
+    for (const entry of data['invoiceEmailRecipients'] as unknown[]) {
+      if (!entry || typeof entry !== 'object') continue;
+      const one = entry as Record<string, unknown>;
+      if (typeof one['recipient'] === 'string') {
+        recipients.push({
+          recipient: one['recipient'],
+          recipientKind: typeof one['recipientKind'] === 'string' ? one['recipientKind'] : 'OTHER',
+        });
+      }
+    }
+  }
+  const reason =
+    typeof data['reason'] === 'string' && data['reason'].trim() ? data['reason'].trim() : null;
+  const attachment = typeof data['attachment'] === 'boolean' ? data['attachment'] : null;
+  if (recipients.length === 0 && !reason) return null;
+  return { recipients, reason, attachment };
+}
+
 /** A raw enum token in free text: ROLE_PATIENT, SUBMIT_FOR_QA, PENDING_QA_REVIEW. */
 const RAW_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 const CODE = /^[A-Z][A-Z0-9_]*$/;
@@ -87,6 +156,9 @@ export class AuditDescriptionService {
     // QA D330: a generic write row reads as the action and the entity; the
     // route stays in the tooltip.
     const write = WRITE_DESCRIPTION.exec(description);
+    // QA D4226: a route that names its own action reads as that action.
+    const routeKey = WRITE_ROUTE_KEYS[routeOf(description)];
+    if (routeKey) return this.translate.instant(routeKey);
     if (write) {
       const entity = row.entityType
         ? this.entityLabel(row.entityType)

@@ -84,6 +84,10 @@ public interface TransfusionService {
 
     BloodUnitResponseDTO discardUnit(UUID unitId, String reason);
 
+    /** QA D4178: the laboratory records what became of a bag it issued and that was never hung. */
+    BloodUnitResponseDTO recordUnitReturn(UUID unitId,
+        com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO request);
+
     // ── Requests ────────────────────────────────────────────────────────
 
     TransfusionRequestResponseDTO createRequest(TransfusionRequestRequestDTO request);

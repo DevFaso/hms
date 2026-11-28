@@ -110,7 +110,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (l of logs(); track l.eventTimestamp + l.userName) {
+          @for (l of logs(); track l.eventTimestamp + l.userName; let i = $index) {
             <tr class="data-row">
               <td class="time-cell">
                 {{ l.eventTimestamp ? (l.eventTimestamp | serverTime | dateTime) : '--' }}
@@ -124,7 +124,27 @@
                   l.eventType | enumLabel: 'auditEventType'
                 }}</span>
               </td>
-              <td class="desc-cell" [title]="l.eventDescription || ''">{{ describe(l) }}</td>
+              <td class="desc-cell" [title]="l.eventDescription || ''">
+                <!-- QA D4226 (round 81): a row that keeps a detail opens it,
+                     by mouse and by keyboard. -->
+                @if (detailOf(l)) {
+                  <button
+                    type="button"
+                    class="desc-toggle"
+                    [attr.aria-expanded]="openDetail() === i"
+                    [attr.aria-controls]="'audit-detail-' + i"
+                    (click)="toggleDetail(i)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">{{
+                      openDetail() === i ? 'expand_less' : 'expand_more'
+                    }}</span>
+                    <span class="desc-toggle__text">{{ describe(l) }}</span>
+                    <span class="sr-only">{{ 'AUDIT.DETAIL_OPEN' | translate }}</span>
+                  </button>
+                } @else {
+                  {{ describe(l) }}
+                }
+              </td>
               <td>{{ entityLabel(l.entityType) }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(l.status) }}">{{
@@ -133,6 +153,36 @@
               </td>
               <td class="ip-cell">{{ l.ipAddress || '--' }}</td>
             </tr>
+            @if (openDetail() === i && detailOf(l); as detail) {
+              <tr class="detail-row" [id]="'audit-detail-' + i" data-testid="audit-detail">
+                <td colspan="7">
+                  <dl class="audit-detail">
+                    @if (detail.recipients.length > 0) {
+                      <dt>{{ 'AUDIT.DETAIL_RECIPIENTS' | translate }}</dt>
+                      <dd>
+                        <ul class="audit-detail__list">
+                          @for (r of detail.recipients; track $index) {
+                            <li>
+                              <span class="audit-detail__address">{{ r.recipient }}</span>
+                              —
+                              {{ 'AUDIT.RECIPIENT_KIND.' + r.recipientKind | translate }}
+                            </li>
+                          }
+                        </ul>
+                      </dd>
+                    }
+                    @if (detail.reason) {
+                      <dt>{{ 'AUDIT.DETAIL_REASON' | translate }}</dt>
+                      <dd class="audit-detail__reason">{{ detail.reason }}</dd>
+                    }
+                    @if (detail.attachment !== null) {
+                      <dt>{{ 'AUDIT.DETAIL_ATTACHMENT' | translate }}</dt>
+                      <dd>{{ (detail.attachment ? 'COMMON.YES' : 'COMMON.NO') | translate }}</dd>
+                    }
+                  </dl>
+                </td>
+              </tr>
+            }
           }
         </tbody>
       </table>

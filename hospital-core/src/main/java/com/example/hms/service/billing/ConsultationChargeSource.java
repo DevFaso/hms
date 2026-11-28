@@ -86,8 +86,7 @@ public class ConsultationChargeSource implements VisitChargeSource {
             }
         }
         if (services.isEmpty() && !plannedAdmission(visit) && !billedOnTheEmergencyVisit(visit)) {
-            Optional<TariffResolver.Tariff> tariff =
-                visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.CONSULTATION_DEFAULT.name());
+            Optional<TariffResolver.Tariff> tariff = consultationTariff(visit);
             if (tariff.isPresent()) {
                 lines.add(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, 1)
                     .coveredAs(PriceListCategory.CONSULTATION));
@@ -103,6 +102,25 @@ public class ConsultationChargeSource implements VisitChargeSource {
                 .coveredAs(PriceListCategory.CONSULTATION));
         }
         return lines;
+    }
+
+    /**
+     * QA D4221 (round 81): the consultation tariff of this visit, the most specific its hospital's price list holds
+     * ({@link ConsultationTariffContext}): the emergency night tariff for an emergency seen at night, a specialty's
+     * for a visit of its department, the default consultation otherwise. The hour is the patient's arrival (else
+     * the visit's date) on the hospital's clock.
+     */
+    static Optional<TariffResolver.Tariff> consultationTariff(Visit visit) {
+        java.time.LocalDateTime arrived = visit.encounter().getArrivalTimestamp() != null
+            ? visit.encounter().getArrivalTimestamp() : visit.encounter().getEncounterDate();
+        for (PriceListSystemKey key
+                : ConsultationTariffContext.keysFor(visit.encounter(), visit.tariffs().businessTime(arrived))) {
+            Optional<TariffResolver.Tariff> tariff = visit.tariff(PriceListLinkType.SYSTEM, key.name());
+            if (tariff.isPresent()) {
+                return tariff;
+            }
+        }
+        return Optional.empty();
     }
 
     /** QA D3980: the category of a hospital's own service billed with no tariff, by the words of its name. */

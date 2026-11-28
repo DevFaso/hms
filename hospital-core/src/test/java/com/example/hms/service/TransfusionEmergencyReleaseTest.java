@@ -329,8 +329,12 @@ class TransfusionEmergencyReleaseTest {
         service.recordCrossmatch(request.getId(), result(unit, false));
 
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService, times(2)).createItemInNewTransaction(items.capture());
-        assertThat(items.getAllValues().get(0).getReferenceId()).isNotEqualTo(items.getAllValues().get(1).getReferenceId());
+        verify(inBasketService, org.mockito.Mockito.atLeast(2)).createItemInNewTransaction(items.capture());
+        // QA D4178 review: the « bag to recover » tasks ride beside the result notices; the notices are two.
+        List<CreateInBasketItemRequest> notices = items.getAllValues().stream()
+            .filter(item -> !TransfusionServiceImpl.UNIT_REFERENCE_TYPE.equals(item.getReferenceType())).toList();
+        assertThat(notices).hasSize(2);
+        assertThat(notices.get(0).getReferenceId()).isNotEqualTo(notices.get(1).getReferenceId());
     }
 
     @Test
@@ -792,6 +796,13 @@ class TransfusionEmergencyReleaseTest {
     private void hang(TransfusionRequest request, BloodUnit unit) {
         Staff nurse = staff(UUID.randomUUID());
         Staff second = staff(UUID.randomUUID());
+        // QA D4141: the second checker is of the bedside team and confirms themselves (BedsideVerifierConfirmationTest).
+        com.example.hms.model.Role nurseRole = new com.example.hms.model.Role();
+        nurseRole.setCode("ROLE_NURSE");
+        com.example.hms.model.UserRoleHospitalAssignment secondAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        secondAssignment.setRole(nurseRole);
+        second.setAssignment(secondAssignment);
+        service.setBedsideVerifier(org.mockito.Mockito.mock(com.example.hms.service.transfusion.BedsideVerifierConfirmation.class));
         when(staffRepository.findByUserIdAndHospitalId(issuer, hospitalId)).thenReturn(Optional.of(nurse));
         when(staffRepository.findById(second.getId())).thenReturn(Optional.of(second));
         when(administrationRepository.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -1187,10 +1198,13 @@ class TransfusionEmergencyReleaseTest {
         service.recordCrossmatch(request.getId(), result(unit, false));
 
         ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasketService).createItemInNewTransaction(item.capture());
-        assertThat(item.getValue().getRecipientUserId()).isEqualTo(director);
-        assertThat(item.getValue().getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY);
-        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        verify(inBasketService, times(2)).createItemInNewTransaction(item.capture());
+        // The result notice, and (QA D4178 review) the task to bring the bag back.
+        assertThat(item.getAllValues()).allSatisfy(filed -> assertThat(filed.getRecipientUserId()).isEqualTo(director));
+        assertThat(item.getAllValues()).extracting(CreateInBasketItemRequest::getBodyKey).containsExactlyInAnyOrder(
+            TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY, TransfusionServiceImpl.RECOVER_INCOMPATIBLE_BODY_KEY);
+        // QA D4178 review: out until the laboratory records its return.
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }
 
     // ── What the form is told ───────────────────────────────────────────
@@ -1483,7 +1497,24 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
-    @DisplayName("pr1346: hanging the bag writes « given » on its release; a bag that comes back or is discarded unused closes it")
+    @DisplayName("QA D4178 review: an incompatible result on an issued O positive bag never hung leaves it out, its release open")
+    void d4178_anIncompatibleResultDoesNotBringAnIssuedBagBack() {
+        adultMale();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.issueUnit(request.getId(), unit.getId());
+        when(positive.decisionRepository.findOpenIdsForUnit(unit.getId())).thenReturn(List.of(positive.last().getId()));
+
+        service.recordCrossmatch(request.getId(), com.example.hms.payload.dto.transfusion.CrossmatchRequestDTO.builder()
+            .bloodUnitId(unit.getId()).compatible(Boolean.FALSE).incompatibilityReason("Anti-K").build());
+
+        assertThat(unit.getStatus()).as("still on the ward").isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(unit.isAssignable()).isFalse();
+        verify(positive.decisionRepository, org.mockito.Mockito.never()).markNotGiven(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("pr1346: hanging the bag writes « given » on its release; a bag the laboratory records as back and destroyed closes it")
     void whatBecomesOfTheBagIsWrittenOnItsRelease() {
         adultMale();
         TransfusionRequest request = emergency();
@@ -1496,7 +1527,14 @@ class TransfusionEmergencyReleaseTest {
         TransfusionRequest second = emergency();
         service.issueUnit(second.getId(), unused.getId());
         when(positive.decisionRepository.findOpenIdsForUnit(unused.getId())).thenReturn(List.of(positive.last().getId()));
-        service.discardUnit(unused.getId(), "Broken seal");
+        // QA D4178: a bag that is out is not written off from the stock list; the laboratory records that it
+        // came back and was destroyed, and that is what closes its release.
+        UUID unusedId = unused.getId();
+        assertThatThrownBy(() -> service.discardUnit(unusedId, "Broken seal"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(positive.decisionRepository, org.mockito.Mockito.never()).markNotGiven(any(), any(), any());
+        service.recordUnitReturn(unusedId, com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO.builder()
+            .outcome(com.example.hms.enums.BloodUnitReturnOutcome.UNFIT_DESTROYED).note("Broken seal").build());
         verify(positive.decisionRepository).markNotGiven(eq(List.of(positive.last().getId())),
             eq(com.example.hms.enums.OPositiveBagDisposition.RETURNED_UNUSED), any());
         verify(positive.inBasket).removeOpenItemsForReference(positive.last().getId(), "TRANSFUSION_RHD_EXPOSURE_FOLLOW_UP");

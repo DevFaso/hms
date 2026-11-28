@@ -10,6 +10,16 @@ import java.util.UUID;
 
 public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> {
 
+    /**
+     * QA D2709: an invoice's lines in the order they were posted (created, then id), the order the coverage
+     * calculation and the PDF already use. The query had no order, so the list came back in the table's physical
+     * order, which changes when a row is updated: the lines of a draft were shuffled once the invoice was issued.
+     */
+    @Query("""
+           SELECT ii FROM InvoiceItem ii
+            WHERE ii.billingInvoice.id = :invoiceId
+            ORDER BY ii.createdAt ASC, ii.id ASC
+           """)
     List<InvoiceItem> findByBillingInvoice_Id(UUID invoiceId);
 
     @Query("""
@@ -21,6 +31,12 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> 
 
     void deleteByBillingInvoice_Id(UUID invoiceId);
 
+    /** QA D2709: in posting order, as {@link #findByBillingInvoice_Id}. */
+    @Query("""
+           SELECT ii FROM InvoiceItem ii
+            WHERE ii.billingInvoice.id = :invoiceId
+            ORDER BY ii.createdAt ASC, ii.id ASC
+           """)
     List<InvoiceItem> findByBillingInvoiceId(UUID invoiceId);
 
     /**

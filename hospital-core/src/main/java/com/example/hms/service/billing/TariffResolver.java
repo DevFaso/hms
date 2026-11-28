@@ -174,6 +174,14 @@ public class TariffResolver {
         return serverTime.atZone(ZoneId.systemDefault()).withZoneSameInstant(businessZone).toLocalDate();
     }
 
+    /** QA D4221: a server timestamp on the business clock (the hour a night tariff is judged on); null stays null. */
+    public LocalDateTime businessTimeOf(LocalDateTime serverTime) {
+        if (serverTime == null) {
+            return null;
+        }
+        return serverTime.atZone(ZoneId.systemDefault()).withZoneSameInstant(businessZone).toLocalDateTime();
+    }
+
     /** Today in the hospital's business zone. */
     public LocalDate today() {
         return LocalDate.now(clock.withZone(businessZone));
@@ -224,6 +232,11 @@ public class TariffResolver {
 
         public LocalDate day() {
             return day;
+        }
+
+        /** QA D4221: a server timestamp on the hospital's business clock; as given when there is no price list. */
+        public LocalDateTime businessTime(LocalDateTime serverTime) {
+            return resolver == null ? serverTime : resolver.businessTimeOf(serverTime);
         }
     }
 }

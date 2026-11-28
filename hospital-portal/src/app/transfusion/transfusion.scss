@@ -348,3 +348,17 @@
   }
 }
 @include lane-header.header;
+
+/* QA D4178: the three outcomes of a returned unit, as one group with the look of a field. */
+.return-outcomes {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+
+  legend {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    padding: 0;
+  }
+}

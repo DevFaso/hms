@@ -68,6 +68,8 @@ class CancelledOrderLockGuardTest {
     /** Status writes judged safe without the check, each with why. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "UltrasoundServiceImpl#createOrder", 1, "a new order: it has no earlier status",
+        "ImagingOrderServiceImpl#createOrder", 1,
+        "a new order, with no earlier status: a nurse's or midwife's request is kept pending (QA D4140)",
         "GeneralReferralServiceImpl#createReferral", 1, "a new referral: it has no earlier status",
         "LabOrderServiceImpl#applyRequestedStatus", 1,
         "the create branch only (an update ignores the requested status and points to the transition endpoint)",
