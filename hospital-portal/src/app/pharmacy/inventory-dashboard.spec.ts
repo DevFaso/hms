@@ -381,9 +381,7 @@ describe('InventoryDashboardComponent expiry report (QA D4184)', () => {
       'listInventoryByPharmacy',
       'getExpiringSoon',
     ]);
-    svc.listStores.and.returnValue(
-      of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never,
-    );
+    svc.listStores.and.returnValue(of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never);
     svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     const lot = {
       lotNumber: 'R81-A-1',

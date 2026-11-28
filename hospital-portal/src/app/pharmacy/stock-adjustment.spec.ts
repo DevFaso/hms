@@ -233,9 +233,7 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
     function withLedger() {
       const c = create();
-      svc.listStores.and.returnValue(
-        of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never,
-      );
+      svc.listStores.and.returnValue(of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never);
       svc.listInventoryByPharmacy.and.returnValue(
         of({ data: { content: [{ id: 'i-9', medicationName: 'Sirop Paracétamol' }] } }) as never,
       );
