@@ -4133,49 +4133,48 @@ class DispenseServiceImplTest {
 
         /**
          * QA D3949 (r77): each lot says whether the fill's unit rule accepts it for the order's unit, so the panel
-         * offers what the fill accepts: a « plaquette » order found « Aucun lot » for a lot counted in « plaquette de
-         * 10 comprimés », which the fill took.
+         * offers exactly what the fill accepts. Review F1/F2: a pack with contents fits only the same pack with the
+         * same contents; a bare pack never fits it, whatever the item's units per pack.
          */
         @Test
         void eachLotSaysWhetherTheOrdersUnitFitsByTheFillsRule() {
             prescription.setMedicationName("Paracétamol 500 mg comprimé");
-            prescription.setQuantityUnit("plaquette");
-            StockLot packs = lot("paracetamol", "PCM-PQ", BigDecimal.valueOf(30));
-            packs.getInventoryItem().setUnit("plaquette de 10 comprimés");
-            // Review F1: the bare « plaquette » fits only at the item's recorded pack size.
-            packs.getInventoryItem().setUnitsPerPack(10);
-            StockLot otherSize = lot("paracetamol", "PCM-PQ20", BigDecimal.valueOf(30));
-            otherSize.getInventoryItem().setUnit("plaquette de 20 comprimés");
-            otherSize.getInventoryItem().setUnitsPerPack(10);
-            otherSize.setExpiryDate(packs.getExpiryDate().plusMonths(3));
-            StockLot unknownSize = lot("paracetamol", "PCM-PQ?", BigDecimal.valueOf(30));
-            unknownSize.getInventoryItem().setUnit("plaquette de 10 comprimés");
-            unknownSize.setExpiryDate(packs.getExpiryDate().plusMonths(4));
+            prescription.setQuantityUnit("Plaquettes de 10 comprimés");
+            StockLot same = lot("paracetamol", "PCM-PQ10", BigDecimal.valueOf(30));
+            same.getInventoryItem().setUnit("plaquette de 10 comprimés");
             StockLot tablets = lot("paracetamol", "PCM-CP", BigDecimal.valueOf(300));
             tablets.getInventoryItem().setUnit("comprimé");
-            tablets.setExpiryDate(packs.getExpiryDate().plusMonths(1));
+            tablets.setExpiryDate(same.getExpiryDate().plusMonths(1));
             StockLot noUnit = lot("paracetamol", "PCM-NU", BigDecimal.valueOf(5));
-            noUnit.setExpiryDate(packs.getExpiryDate().plusMonths(2));
+            noUnit.setExpiryDate(same.getExpiryDate().plusMonths(2));
+            StockLot otherSize = lot("paracetamol", "PCM-PQ20", BigDecimal.valueOf(30));
+            otherSize.getInventoryItem().setUnit("plaquette de 20 comprimés");
+            otherSize.setExpiryDate(same.getExpiryDate().plusMonths(3));
+            // Review F2: an item counted in bare plaquettes, 10 of them per carton, is not « plaquette de 10 ».
+            StockLot bare = lot("paracetamol", "PCM-PQ", BigDecimal.valueOf(30));
+            bare.getInventoryItem().setUnit("plaquette");
+            bare.getInventoryItem().setUnitsPerPack(10);
+            bare.setExpiryDate(same.getExpiryDate().plusMonths(4));
+            List<StockLot> all = List.of(same, tablets, noUnit, otherSize, bare);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
-                    .thenReturn(new PageImpl<>(List.of(packs, tablets, noUnit, otherSize, unknownSize)));
+                    .thenReturn(new PageImpl<>(all));
 
             List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> lots =
                     service.listDispensableLots(prescriptionId, pharmacyId);
 
             assertThat(lots).extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber,
                             com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getUnitFits)
-                    .containsExactly(org.assertj.core.groups.Tuple.tuple("PCM-PQ", true),
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("PCM-PQ10", true),
                             org.assertj.core.groups.Tuple.tuple("PCM-CP", false),
                             org.assertj.core.groups.Tuple.tuple("PCM-NU", true),
                             org.assertj.core.groups.Tuple.tuple("PCM-PQ20", false),
-                            org.assertj.core.groups.Tuple.tuple("PCM-PQ?", false));
+                            org.assertj.core.groups.Tuple.tuple("PCM-PQ", false));
             // The same answer as the fill's own check.
-            for (StockLot each : List.of(packs, tablets, noUnit, otherSize, unknownSize)) {
-                assertThat(DispenseUnitForms.fits("plaquette", each.getInventoryItem().getUnit(),
-                        each.getInventoryItem().getUnitsPerPack()))
+            for (StockLot each : all) {
+                assertThat(DispenseUnitForms.fits("Plaquettes de 10 comprimés", each.getInventoryItem().getUnit()))
                         .isEqualTo(lots.stream().filter(l -> l.getLotNumber().equals(each.getLotNumber()))
                                 .findFirst().orElseThrow().getUnitFits());
             }

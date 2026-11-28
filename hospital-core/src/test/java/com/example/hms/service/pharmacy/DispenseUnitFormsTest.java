@@ -66,24 +66,23 @@ class DispenseUnitFormsTest {
         "dose, pot de 30 gélules", "blister (10 cp), blister (20 cp)"})
     void anotherPackOrAnotherSizeIsRefused(String fill, String lot) {
         assertThat(DispenseUnitForms.fits(fill, lot)).isFalse();
-        assertThat(DispenseUnitForms.fits(fill, lot, 10)).isFalse();
         assertThatThrownBy(() -> DispenseUnitForms.requireCompatible(fill, lot))
             .isInstanceOf(BusinessException.class);
     }
 
     /**
-     * Review F1: the bare pack against that pack with its contents fits only when the lot's item records that pack
-     * size; unknown, it is refused.
+     * Review F2: a bare pack never fits a pack with contents, either way, whatever the item's units per pack (which
+     * counts units per pack, not what one unit holds). A plaquette of 30 took an order for « 1 plaquette de 10 ».
      */
-    @ParameterizedTest(name = "{0} from a {1} lot, pack size {2}: {3}")
-    @CsvSource(nullValues = "null", value = {
-        "plaquette, plaquette de 10 comprimés, null, false", "plaquette, plaquette de 10 comprimés, 10, true",
-        "plaquette, plaquette de 10 comprimés, 12, false", "Plaquettes, plaquette de 10 comprimés, 10, true",
-        "plaquette de 10 comprimés, plaquette, 10, true", "plaquette de 10 comprimés, plaquette, null, false",
-        "boîte, boîte de 24 comprimés, 24, true", "boîte, plaquette de 24 comprimés, 24, false",
-        "flacon, 'flacon de 2,5 ml', 2, false", "pot, pot de 30 gélules, null, false"})
-    void aBarePackFitsItsContentsOnlyAtTheRecordedPackSize(String fill, String lot, Integer perPack, boolean fits) {
-        assertThat(DispenseUnitForms.fits(fill, lot, perPack)).isEqualTo(fits);
+    @ParameterizedTest(name = "{0} from a {1} lot is refused")
+    @CsvSource({"plaquette, plaquette de 10 comprimés", "plaquette de 10 comprimés, plaquette",
+        "Plaquettes, plaquette de 10 comprimés", "plaquette de 10 comprimés, Plaquettes", "boîte, boîte de 24 comprimés",
+        "boîte de 24 comprimés, boîte", "flacon, flacon de 100 ml", "flacon de 100 ml, flacon",
+        "pot, pot de 30 gélules", "blister, blister (10 cp)"})
+    void aBarePackNeverFitsAPackWithContents(String fill, String lot) {
+        assertThat(DispenseUnitForms.fits(fill, lot)).isFalse();
+        assertThatThrownBy(() -> DispenseUnitForms.requireCompatible(fill, lot))
+            .isInstanceOf(BusinessException.class);
     }
 
     @ParameterizedTest(name = "\"{0}\" reads as \"{1}\"")

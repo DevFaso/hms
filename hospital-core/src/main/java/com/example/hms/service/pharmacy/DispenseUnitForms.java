@@ -38,10 +38,10 @@ import java.util.regex.Pattern;
  *   <li>both sides name contents: the same pack and the same contents (count
  *       and what it counts, or volume), case, accents, plurals and spacing
  *       aside. « boîte de 24 » is not « boîte de 12 »;</li>
- *   <li>one side is the bare pack (« plaquette » against « plaquette de 10
- *       comprimés »): only when the lot's item records that pack size
- *       ({@code InventoryItem#unitsPerPack}) and the contents state it;
- *       unknown, it is refused;</li>
+ *   <li>a bare pack never fits a pack with contents, either way (« plaquette »
+ *       against « plaquette de 10 comprimés »): what one bare pack holds is not
+ *       known (an item's {@code unitsPerPack} counts its units per pack, not a
+ *       unit's contents). The two units must be typed alike;</li>
  *   <li>a pack with contents never fits another pack or another family
  *       (« plaquette de 10 comprimés » is not a « sirop » nor a « flacon »).</li>
  * </ul>
@@ -59,7 +59,7 @@ public final class DispenseUnitForms {
     private static final List<String> CONTENTS_WORDS = List.of("de", "d'", "of", "con", "x");
 
     /** QA D3949: a unit read as its pack (or the whole unit) and, when it states them, the pack's contents. */
-    private record PackUnit(String name, String contents, Integer count) {
+    private record PackUnit(String name, String contents) {
     }
 
     private static final Map<String, Form> FORMS = Map.ofEntries(
@@ -105,12 +105,7 @@ public final class DispenseUnitForms {
      * required before this, QA D1141).
      */
     public static void requireCompatible(String fillUnit, String lotUnit) {
-        requireCompatible(fillUnit, lotUnit, null);
-    }
-
-    /** As {@link #requireCompatible(String, String)}, knowing the lot item's pack size ({@code unitsPerPack}). */
-    public static void requireCompatible(String fillUnit, String lotUnit, Integer lotUnitsPerPack) {
-        if (!fits(fillUnit, lotUnit, lotUnitsPerPack)) {
+        if (!fits(fillUnit, lotUnit)) {
             throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.dispense.unitMismatch", fillUnit.trim(), lotUnit.trim());
         }
     }
@@ -121,30 +116,18 @@ public final class DispenseUnitForms {
      * each lot, so the panel offers exactly the lots the fill accepts.
      */
     public static boolean fits(String fillUnit, String lotUnit) {
-        return fits(fillUnit, lotUnit, null);
-    }
-
-    /**
-     * As {@link #fits(String, String)}, knowing the lot item's pack size ({@code unitsPerPack}, null when none is
-     * recorded): a bare pack fits that pack with its contents only when the contents are that size.
-     */
-    public static boolean fits(String fillUnit, String lotUnit, Integer lotUnitsPerPack) {
         if (fillUnit == null || fillUnit.isBlank() || lotUnit == null || lotUnit.isBlank()) {
             return true;
         }
-        return compatible(fillUnit, lotUnit, lotUnitsPerPack);
+        return compatible(fillUnit, lotUnit);
     }
 
     /** Whether a fill counted in {@code fillUnit} may come from a lot counted in {@code lotUnit}. */
     static boolean compatible(String fillUnit, String lotUnit) {
-        return compatible(fillUnit, lotUnit, null);
-    }
-
-    private static boolean compatible(String fillUnit, String lotUnit, Integer lotUnitsPerPack) {
         PackUnit fillPack = packUnit(fillUnit);
         PackUnit lotPack = packUnit(lotUnit);
         if (fillPack.contents() != null || lotPack.contents() != null) {
-            return samePack(fillPack, lotPack, lotUnitsPerPack);
+            return samePack(fillPack, lotPack);
         }
         if (key(fillUnit).equals(key(lotUnit))) {
             return true;
@@ -173,18 +156,12 @@ public final class DispenseUnitForms {
     }
 
     /**
-     * QA D3949: a unit with contents fits only the same pack. Both with contents: the same contents. One bare: the
-     * other's contents are the lot item's recorded pack size; unknown, refused.
+     * QA D3949: a unit with contents fits only the same pack with the same contents. Review F2: a bare pack never
+     * fits a pack with contents, either way: what one bare pack holds is not known.
      */
-    private static boolean samePack(PackUnit fill, PackUnit lot, Integer lotUnitsPerPack) {
-        if (!fill.name().equals(lot.name())) {
-            return false;
-        }
-        if (fill.contents() != null && lot.contents() != null) {
-            return fill.contents().equals(lot.contents());
-        }
-        Integer stated = fill.contents() != null ? fill.count() : lot.count();
-        return stated != null && lotUnitsPerPack != null && stated.equals(lotUnitsPerPack);
+    private static boolean samePack(PackUnit fill, PackUnit lot) {
+        return fill.contents() != null && lot.contents() != null
+            && fill.name().equals(lot.name()) && fill.contents().equals(lot.contents());
     }
 
     /**
@@ -206,13 +183,13 @@ public final class DispenseUnitForms {
         return SPACES.matcher(plain).replaceAll(" ");
     }
 
-    /** The unit's pack name (singular) and, when it states them, its contents (normalised) and their count. */
+    /** The unit's pack name (singular) and, when it states them, its contents (normalised). */
     private static PackUnit packUnit(String unit) {
         String plain = plain(unit);
         int end = packNameEnd(plain);
         String name = plain.substring(0, end).trim();
         if (name.isEmpty() || end >= plain.length()) {
-            return new PackUnit(singularWords(plain), null, null);
+            return new PackUnit(singularWords(plain), null);
         }
         String rest = plain.substring(end).trim();
         if (rest.startsWith("(")) {
@@ -236,11 +213,7 @@ public final class DispenseUnitForms {
         }
         String amount = rest.substring(0, digits).replace(',', '.');
         String what = singularWords(rest.substring(digits).trim());
-        Integer count = null;
-        if (!amount.isEmpty() && amount.indexOf('.') < 0 && amount.length() < 9) {
-            count = Integer.valueOf(amount);
-        }
-        return new PackUnit(singularWords(name), (amount + " " + what).trim(), count);
+        return new PackUnit(singularWords(name), (amount + " " + what).trim());
     }
 
     /** Each word without a plural « s » or « x » (« boîtes » is « boite », « comprimés » is « comprime »). */
