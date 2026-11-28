@@ -2,6 +2,7 @@ package com.example.hms.service.pharmacy;
 
 
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -29,6 +30,23 @@ import java.util.regex.Pattern;
  *       is never silently compatible.</li>
  * </ul>
  * {@code DispenseUnitFormsTest} walks every pair of groups.
+ *
+ * <p>QA D3949 (r77): a unit may describe a pack and its contents (« plaquette de
+ * 10 comprimés », « boîte de 24 comprimés », « flacon de 100 ml », « box of 20
+ * tablets », « blister (10 cp) »). Such a unit is never matched by kind:
+ * <ul>
+ *   <li>both sides name contents: the same pack and the same contents (count
+ *       and what it counts, or volume), case, accents, plurals and spacing
+ *       aside. « boîte de 24 » is not « boîte de 12 »;</li>
+ *   <li>a bare pack never fits a pack with contents, either way (« plaquette »
+ *       against « plaquette de 10 comprimés »): what one bare pack holds is not
+ *       known (an item's {@code unitsPerPack} counts its units per pack, not a
+ *       unit's contents). The two units must be typed alike;</li>
+ *   <li>a pack with contents never fits another pack or another family
+ *       (« plaquette de 10 comprimés » is not a « sirop » nor a « flacon »).</li>
+ * </ul>
+ * The dispensing panel does not re-implement this: {@link #fits} decides each
+ * lot of the dispensable-lots read on the server ({@code StockLotResponseDTO#unitFits}).
  */
 public final class DispenseUnitForms {
 
@@ -37,6 +55,12 @@ public final class DispenseUnitForms {
 
     private static final Pattern MARKS = Pattern.compile("\\p{M}");
     private static final Pattern SPACES = Pattern.compile("\\s+");
+    /** QA D3949: what a pack holds, after the pack's own name: « de 10 comprimés », « of 10 », « x 10 », « (10 cp) ». */
+    private static final List<String> CONTENTS_WORDS = List.of("de", "d'", "of", "con", "x");
+
+    /** QA D3949: a unit read as its pack (or the whole unit) and, when it states them, the pack's contents. */
+    private record PackUnit(String name, String contents) {
+    }
 
     private static final Map<String, Form> FORMS = Map.ofEntries(
         Map.entry("comprime", Form.SOLID_DOSE), Map.entry("cp", Form.SOLID_DOSE),
@@ -81,16 +105,30 @@ public final class DispenseUnitForms {
      * required before this, QA D1141).
      */
     public static void requireCompatible(String fillUnit, String lotUnit) {
-        if (fillUnit == null || fillUnit.isBlank() || lotUnit == null || lotUnit.isBlank()) {
-            return;
-        }
-        if (!compatible(fillUnit, lotUnit)) {
+        if (!fits(fillUnit, lotUnit)) {
             throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.dispense.unitMismatch", fillUnit.trim(), lotUnit.trim());
         }
     }
 
+    /**
+     * Whether a fill counted in {@code fillUnit} may come from a lot counted in {@code lotUnit}, as the fill decides
+     * it: a blank unit on either side leaves nothing to compare. QA D3949: the dispensable-lots read answers this for
+     * each lot, so the panel offers exactly the lots the fill accepts.
+     */
+    public static boolean fits(String fillUnit, String lotUnit) {
+        if (fillUnit == null || fillUnit.isBlank() || lotUnit == null || lotUnit.isBlank()) {
+            return true;
+        }
+        return compatible(fillUnit, lotUnit);
+    }
+
     /** Whether a fill counted in {@code fillUnit} may come from a lot counted in {@code lotUnit}. */
     static boolean compatible(String fillUnit, String lotUnit) {
+        PackUnit fillPack = packUnit(fillUnit);
+        PackUnit lotPack = packUnit(lotUnit);
+        if (fillPack.contents() != null || lotPack.contents() != null) {
+            return samePack(fillPack, lotPack);
+        }
         if (key(fillUnit).equals(key(lotUnit))) {
             return true;
         }
@@ -117,10 +155,122 @@ public final class DispenseUnitForms {
         return form;
     }
 
-    /** Lower-case, accent-free, single-spaced: "Cuillère à café" and "cuillere a cafe" alike. */
-    private static String key(String unit) {
+    /**
+     * QA D3949: a unit with contents fits only the same pack with the same contents. Review F2: a bare pack never
+     * fits a pack with contents, either way: what one bare pack holds is not known.
+     */
+    private static boolean samePack(PackUnit fill, PackUnit lot) {
+        return fill.contents() != null && lot.contents() != null
+            && fill.name().equals(lot.name()) && fill.contents().equals(lot.contents());
+    }
+
+    /**
+     * Lower-case, accent-free, single-spaced: "Cuillère à café" and "cuillere a cafe" alike. QA D3949: a pack
+     * described with its contents is keyed by its pack: "Plaquette de 10 comprimés" is "plaquette" (its contents
+     * are compared apart, {@link #samePack}).
+     */
+    static String key(String unit) {
+        String plain = plain(unit);
+        String pack = plain.substring(0, packNameEnd(plain)).trim();
+        return pack.isEmpty() ? plain : pack;
+    }
+
+    /** Lower-case, accent-free, single-spaced; the typographic apostrophe read as « ' ». */
+    private static String plain(String unit) {
         String plain = Normalizer.normalize(unit == null ? "" : unit, Normalizer.Form.NFD);
-        plain = MARKS.matcher(plain).replaceAll("").toLowerCase(Locale.ROOT).replace("µ", "u").replace('-', ' ').trim();
+        plain = MARKS.matcher(plain).replaceAll("").toLowerCase(Locale.ROOT).replace("µ", "u").replace('-', ' ')
+            .replace('\u2019', '\'').trim();
         return SPACES.matcher(plain).replaceAll(" ");
+    }
+
+    /** The unit's pack name (singular) and, when it states them, its contents (normalised). */
+    private static PackUnit packUnit(String unit) {
+        String plain = plain(unit);
+        int end = packNameEnd(plain);
+        String name = plain.substring(0, end).trim();
+        if (name.isEmpty() || end >= plain.length()) {
+            return new PackUnit(singularWords(plain), null);
+        }
+        String rest = plain.substring(end).trim();
+        if (rest.startsWith("(")) {
+            rest = rest.substring(1, rest.endsWith(")") ? rest.length() - 1 : rest.length());
+        } else if (rest.startsWith("/")) {
+            rest = rest.substring(1);
+        } else {
+            for (String word : CONTENTS_WORDS) {
+                if (rest.startsWith(word)) {
+                    rest = rest.substring(word.length());
+                    break;
+                }
+            }
+        }
+        rest = rest.trim();
+        int digits = 0;
+        while (digits < rest.length() && (Character.isDigit(rest.charAt(digits))
+            || ((rest.charAt(digits) == ',' || rest.charAt(digits) == '.') && digits + 1 < rest.length()
+                && Character.isDigit(rest.charAt(digits + 1))))) {
+            digits++;
+        }
+        String amount = rest.substring(0, digits).replace(',', '.');
+        String what = singularWords(rest.substring(digits).trim());
+        return new PackUnit(singularWords(name), (amount + " " + what).trim());
+    }
+
+    /** Each word without a plural « s » or « x » (« boîtes » is « boite », « comprimés » is « comprime »). */
+    private static String singularWords(String words) {
+        StringBuilder out = new StringBuilder();
+        for (String word : words.split(" ")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            String one = word.length() > 2 && (word.endsWith("s") || word.endsWith("x"))
+                ? word.substring(0, word.length() - 1) : word;
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append(one);
+        }
+        return out.toString();
+    }
+
+    /**
+     * QA D3949: where a pack's own name ends in a single-spaced unit, before what it holds: « (10 cp) », « /10 »,
+     * or a word « de », « d' », « of », « con », « x » followed by a number. The whole unit when nothing follows the
+     * name. One pass over the words (no backtracking pattern on a typed value).
+     */
+    private static int packNameEnd(String plain) {
+        int end = plain.length();
+        int paren = plain.indexOf('(');
+        if (paren >= 0) {
+            end = paren;
+        }
+        int slash = plain.indexOf('/');
+        if (slash >= 0 && slash < end && startsWithDigit(plain, slash + 1)) {
+            end = slash;
+        }
+        int wordStart = plain.indexOf(' ') + 1;
+        while (wordStart > 0 && wordStart < end) {
+            if (introducesContents(plain, wordStart)) {
+                return wordStart - 1;
+            }
+            wordStart = plain.indexOf(' ', wordStart) + 1;
+        }
+        return end;
+    }
+
+    /** Whether the word at {@code at} is « de », « d' », « of », « con » or « x » followed by a number. */
+    private static boolean introducesContents(String plain, int at) {
+        for (String word : CONTENTS_WORDS) {
+            if (plain.startsWith(word, at) && startsWithDigit(plain, at + word.length())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a digit comes at {@code at}, after at most one space. */
+    private static boolean startsWithDigit(String plain, int at) {
+        int i = at < plain.length() && plain.charAt(at) == ' ' ? at + 1 : at;
+        return i < plain.length() && Character.isDigit(plain.charAt(i));
     }
 }

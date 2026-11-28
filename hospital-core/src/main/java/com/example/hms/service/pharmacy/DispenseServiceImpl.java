@@ -1952,15 +1952,18 @@ public class DispenseServiceImpl implements DispenseService {
                         .thenComparing(e -> e.getKey().getExpiryDate())
                         .thenComparing(e -> e.getKey().getLotNumber(), java.util.Comparator.nullsLast(String::compareTo)))
                 .map(e -> withProduct(stockLotMapper.toResponseDTO(e.getKey()),
-                        e.getKey().getInventoryItem().getMedicationCatalogItem(), e.getValue()))
+                        e.getKey().getInventoryItem().getMedicationCatalogItem(), e.getValue(),
+                        // QA D3949: the fill's unit rule, decided here for the order's unit (the panel's default).
+                        DispenseUnitForms.fits(prescription.getQuantityUnit(), e.getKey().getInventoryItem().getUnit())))
                 .toList();
     }
 
     /** QA D3940: the lot's product, strength, form and match, so the picker shows what it offers. */
     private static com.example.hms.payload.dto.pharmacy.StockLotResponseDTO withProduct(
             com.example.hms.payload.dto.pharmacy.StockLotResponseDTO dto, MedicationCatalogItem item,
-            DispensedProductMatch match) {
+            DispensedProductMatch match, boolean unitFits) {
         dto.setProductName(DispenseVerificationService.describeProduct(item));
+        dto.setUnitFits(unitFits);
         dto.setStrength(ProductStrength.labelOf(item).orElse(null));
         dto.setForm(item.getForm());
         dto.setProductMatch(match.name());

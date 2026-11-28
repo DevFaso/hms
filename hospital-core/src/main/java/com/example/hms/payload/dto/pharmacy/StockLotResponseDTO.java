@@ -55,6 +55,11 @@ public class StockLotResponseDTO {
     private String form;
     /** PRESCRIBED, EQUIVALENT or SUBSTITUTE ({@code DispensedProductMatch}); a substitute needs a recorded reason. */
     private String productMatch;
+    /**
+     * QA D3949 (r77): whether a fill in the order's unit may come from this lot, by the fill's own rule
+     * ({@code DispenseUnitForms#fits}). The dispensable-lots read's only; the panel does not compare units itself.
+     */
+    private Boolean unitFits;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
