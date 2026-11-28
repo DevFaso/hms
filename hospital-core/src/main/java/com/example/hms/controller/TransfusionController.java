@@ -176,6 +176,19 @@ public class TransfusionController {
         return ResponseEntity.ok(transfusionService.discardUnit(unitId, reason));
     }
 
+    @PostMapping("/units/{unitId}/return")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
+    @Operation(summary = "Record the return of an issued unit",
+               description = "What became of a bag that was issued and never hung: back and fit for stock (the "
+                   + "laboratory states that the cold chain was kept and that the bag is intact), back and "
+                   + "destroyed, or not recovered. The only way an issued bag re-enters stock.")
+    public ResponseEntity<BloodUnitResponseDTO> recordUnitReturn(
+        @PathVariable UUID unitId,
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO request
+    ) {
+        return ResponseEntity.ok(transfusionService.recordUnitReturn(unitId, request));
+    }
+
     // ── Requests ────────────────────────────────────────────────────────
 
     @PostMapping("/requests")
@@ -401,8 +414,9 @@ public class TransfusionController {
     @PostMapping("/administrations")
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
     @Operation(summary = "Hang an issued unit",
-               description = "Requires a second clinician who independently verified the unit against "
-                   + "the patient. The two cannot be the same person.")
+               description = "Requires a second clinician of the bedside team who independently verified the "
+                   + "unit against the patient and confirms it with their own authenticator code or password "
+                   + "(verifierSecret). The two cannot be the same person.")
     public ResponseEntity<TransfusionAdministrationResponseDTO> startAdministration(
         @Valid @RequestBody TransfusionAdministrationRequestDTO request
     ) {

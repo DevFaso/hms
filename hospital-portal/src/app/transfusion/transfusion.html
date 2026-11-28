@@ -243,9 +243,30 @@
                   <span class="status-badge {{ statusClass(u.status) }}">{{
                     'TRANSFUSION.UNIT_STATUS_' + u.status | translate
                   }}</span>
+                  @if (u.awaitingReturn) {
+                    {{ ' '
+                    }}<span
+                      class="status-badge status-preliminary"
+                      [attr.data-testid]="'unit-awaiting-return-' + u.id"
+                      >{{ 'TRANSFUSION.RETURN.AWAITING' | translate }}</span
+                    >
+                  }
                 </td>
                 <td>
-                  @if (canStock && u.status !== 'TRANSFUSED' && u.status !== 'DISCARDED') {
+                  <!-- QA D4178: a bag that is out comes back through a recorded return, never a write-off. -->
+                  @if (canRecordReturn(u)) {
+                    <button
+                      type="button"
+                      class="action-link"
+                      [attr.data-testid]="'unit-return-' + u.id"
+                      (click)="openReturn(u)"
+                      [title]="'TRANSFUSION.RETURN.ACTION' | translate"
+                      [attr.aria-label]="'TRANSFUSION.RETURN.ACTION' | translate"
+                    >
+                      <span class="material-symbols-outlined">assignment_return</span>
+                    </button>
+                  }
+                  @if (canDiscard(u)) {
                     <button
                       class="action-link delete"
                       (click)="discardUnit(u)"
@@ -1954,6 +1975,7 @@
               id="hang-verifier"
               data-testid="hang-verifier"
               [(ngModel)]="hangForm.verifiedByUserId"
+              (ngModelChange)="onHangVerifierChange()"
             >
               <option value="">{{ 'COMMON.SELECT' | translate }}</option>
               @for (c of verifierCandidates(); track c.userId) {
@@ -1968,6 +1990,40 @@
               }
             </small>
           </div>
+          <!-- QA D4141: the second checker confirms the check themselves, with their own factor. -->
+          @if (hangVerifierMethod(); as method) {
+            @if (method === 'UNAVAILABLE') {
+              <p class="field-hint" role="alert" data-testid="hang-verifier-unavailable">
+                {{ 'TRANSFUSION.VERIFIER_CONFIRM.UNAVAILABLE' | translate }}
+              </p>
+            } @else {
+              <div class="field">
+                <label for="hang-verifier-secret"
+                  >{{
+                    (method === 'TOTP'
+                      ? 'TRANSFUSION.VERIFIER_CONFIRM.CODE_LABEL'
+                      : 'TRANSFUSION.VERIFIER_CONFIRM.PASSWORD_LABEL'
+                    ) | translate
+                  }}
+                  *</label
+                >
+                <input
+                  required
+                  id="hang-verifier-secret"
+                  data-testid="hang-verifier-secret"
+                  data-server-field="verifierSecret"
+                  [type]="method === 'TOTP' ? 'text' : 'password'"
+                  [attr.inputmode]="method === 'TOTP' ? 'numeric' : null"
+                  [attr.autocomplete]="method === 'TOTP' ? 'one-time-code' : 'off'"
+                  maxlength="256"
+                  [(ngModel)]="hangForm.verifierSecret"
+                />
+                <small class="field-hint">{{
+                  'TRANSFUSION.VERIFIER_CONFIRM.HINT' | translate
+                }}</small>
+              </div>
+            }
+          }
           <div class="field">
             <label for="hang-method">{{ 'TRANSFUSION.VERIFICATION_METHOD' | translate }}</label>
             <input id="hang-method" type="text" [(ngModel)]="hangForm.verificationMethod" />
@@ -1981,8 +2037,12 @@
             class="btn-primary"
             (click)="submitHang()"
             [disabled]="hangSubmitting()"
-            [appSubmitGuard]="!hangForm.verifiedByUserId"
-            [submitGuardFields]="['hang-verifier']"
+            [appSubmitGuard]="hangIncomplete()"
+            [submitGuardFields]="
+              hangForm.verifiedByUserId && hangVerifierMethod() !== 'UNAVAILABLE'
+                ? ['hang-verifier-secret']
+                : ['hang-verifier']
+            "
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
@@ -2086,6 +2146,119 @@
     (confirmed)="confirmCancelRequest(r, $event)"
     (cancelled)="cancellingRequest.set(null)"
   />
+}
+<!-- QA D4178: the laboratory records what became of a bag it had issued. -->
+@if (returningUnit(); as u) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    appBackdropClose
+    (backdropClose)="closeReturn()"
+    (keydown.escape)="closeReturn()"
+  >
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-return-title"
+      (escaped)="closeReturn()"
+      data-testid="unit-return-dialog"
+    >
+      <div class="modal-header">
+        <h2 id="transfusion-return-title">
+          {{ 'TRANSFUSION.RETURN.TITLE' | translate: { unit: u.unitNumber } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeReturn()"
+          [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">{{ 'TRANSFUSION.RETURN.HINT' | translate }}</p>
+        <fieldset class="field return-outcomes">
+          <legend>{{ 'TRANSFUSION.RETURN.OUTCOME' | translate }} *</legend>
+          @for (outcome of returnOutcomes; track outcome) {
+            <label class="checkbox-field">
+              <input
+                type="radio"
+                name="return-outcome"
+                [id]="'return-outcome-' + outcome"
+                [attr.data-testid]="'return-outcome-' + outcome"
+                [value]="outcome"
+                [(ngModel)]="returnForm.outcome"
+              />
+              {{ 'TRANSFUSION.RETURN.OUTCOME_' + outcome | translate }}
+            </label>
+          }
+        </fieldset>
+        @if (returnForm.outcome === 'FIT_FOR_STOCK') {
+          <label class="checkbox-field">
+            <input
+              required
+              id="return-cold-chain"
+              data-testid="return-cold-chain"
+              data-server-field="coldChainKept"
+              type="checkbox"
+              [(ngModel)]="returnForm.coldChainKept"
+            />
+            {{ 'TRANSFUSION.RETURN.COLD_CHAIN' | translate }} *
+          </label>
+          <label class="checkbox-field">
+            <input
+              required
+              id="return-intact"
+              data-testid="return-intact"
+              data-server-field="bagIntact"
+              type="checkbox"
+              [(ngModel)]="returnForm.bagIntact"
+            />
+            {{ 'TRANSFUSION.RETURN.INTACT' | translate }} *
+          </label>
+        }
+        @if (returnForm.outcome === 'NOT_RECOVERED') {
+          <p class="field-hint" role="status">
+            {{ 'TRANSFUSION.RETURN.NOT_RECOVERED_HINT' | translate }}
+          </p>
+        }
+        <div class="field">
+          <label for="return-note"
+            >{{ 'TRANSFUSION.RETURN.NOTE' | translate }}
+            @if (returnForm.outcome && returnForm.outcome !== 'FIT_FOR_STOCK') {
+              *
+            }
+          </label>
+          <textarea
+            id="return-note"
+            data-testid="return-note"
+            data-server-field="note"
+            rows="2"
+            maxlength="500"
+            [required]="!!returnForm.outcome && returnForm.outcome !== 'FIT_FOR_STOCK'"
+            [(ngModel)]="returnForm.note"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReturn()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="return-submit"
+          (click)="submitReturn()"
+          [disabled]="returnBusy()"
+          submitGuardRequired
+          [appSubmitGuard]="returnIncomplete()"
+          [submitGuardFields]="returnMissingFields()"
+        >
+          {{ 'TRANSFUSION.RETURN.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
 }
 @if (discardingUnit(); as u) {
   <app-reason-dialog

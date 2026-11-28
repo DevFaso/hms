@@ -107,6 +107,8 @@ public class ImagingStudyImageService {
         if (order.getHospital() == null) {
             throw new BusinessException("imaging.report.orderWithoutHospital");
         }
+        // QA D4140, D4142: an image of the study belongs to an exam that took place.
+        new ImagingOrderAuthorisation(roleValidator).requireExamTookPlace(order);
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId);
         ImagingReport report = null;
         // Policy rule 3 (provisional): a technician attaches images to the study, never to a

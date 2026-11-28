@@ -26,6 +26,49 @@ public class ImagingOrderMapper {
     /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
     private static final String OWNER = "ImagingOrder";
 
+    /**
+     * QA D4140 review: who placed an order written before V465 (no flag) is read from the roles, so the
+     * portal shows a nurse's unsigned order of that time as waiting, as the server treats it. Optional:
+     * the mappers built by hand in tests have none, and then only the flag counts.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.utility.RoleValidator> roleValidator;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRoleValidator(
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.utility.RoleValidator> roleValidator) {
+        this.roleValidator = roleValidator;
+    }
+
+    /** The statuses in which an order nobody signed can still wait for a physician (before its report). */
+    private static final java.util.Set<com.example.hms.enums.ImagingOrderStatus> BEFORE_THE_RESULT =
+        java.util.EnumSet.of(com.example.hms.enums.ImagingOrderStatus.DRAFT,
+            com.example.hms.enums.ImagingOrderStatus.ORDERED,
+            com.example.hms.enums.ImagingOrderStatus.PENDING_AUTHORIZATION,
+            com.example.hms.enums.ImagingOrderStatus.SCHEDULED,
+            com.example.hms.enums.ImagingOrderStatus.IN_PROGRESS,
+            // Review round 2: an older order done before anyone signed it still needs a physician before
+            // its report is written.
+            com.example.hms.enums.ImagingOrderStatus.COMPLETED);
+
+    /**
+     * QA D4140: the request waits for a physician. A flagged request waits while it is a draft; an order
+     * written before the flag existed waits when nobody signed it and a nurse or a midwife of its hospital
+     * placed it (the server's own reading, {@code ImagingOrderAuthorisation#awaitsPhysician}).
+     */
+    boolean awaitingPhysician(ImagingOrder order) {
+        if (order.getProviderSignedAt() != null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(order.getPhysicianAuthorisationRequired())) {
+            return order.getStatus() == com.example.hms.enums.ImagingOrderStatus.DRAFT;
+        }
+        if (order.getPhysicianAuthorisationRequired() != null || !BEFORE_THE_RESULT.contains(order.getStatus())) {
+            return false;
+        }
+        com.example.hms.utility.RoleValidator roles = roleValidator == null ? null : roleValidator.getIfAvailable();
+        return roles != null && new com.example.hms.service.imaging.ImagingOrderAuthorisation(roles).awaitsPhysician(order);
+    }
+
     public ImagingOrder toEntity(ImagingOrderRequestDTO dto, Patient patient, Hospital hospital) {
         if (dto == null) {
             return null;
@@ -215,6 +258,10 @@ public class ImagingOrderMapper {
             .orderingProviderNpi(order.getOrderingProviderNpi())
             .orderingProviderUserId(order.getOrderingProviderUserId())
             .providerSignedAt(order.getProviderSignedAt())
+            .requestedByUserId(order.getRequestedByUserId())
+            .requestedByName(order.getRequestedByName())
+            .physicianAuthorisationRequired(order.getPhysicianAuthorisationRequired())
+            .awaitingPhysicianAuthorisation(awaitingPhysician(order))
             .providerSignatureStatement(order.getProviderSignatureStatement())
             .encounterId(order.getEncounterId())
             .duplicateOfRecentOrder(order.getDuplicateOfRecentOrder())

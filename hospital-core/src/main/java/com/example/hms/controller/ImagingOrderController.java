@@ -95,6 +95,21 @@ public class ImagingOrderController {
 	}
 
 	/**
+	 * QA D4140: a request placed by a nurse or a midwife waits for a physician of the hospital. Whoever
+	 * placed it withdraws it here, with a reason, while it still waits; the service refuses anybody else
+	 * and any order that is not such a request. (A physician declines it through the status endpoint.)
+	 */
+	@PostMapping("/orders/{orderId}/withdrawal")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
+	@Operation(summary = "Withdraw one's own imaging request that still waits for a physician")
+	public ResponseEntity<ImagingOrderResponseDTO> withdrawPendingRequest(
+		@PathVariable UUID orderId,
+		@Valid @RequestBody com.example.hms.payload.dto.imaging.ImagingOrderWithdrawalRequestDTO request
+	) {
+		return ResponseEntity.ok(imagingOrderService.withdrawPendingRequest(orderId, request.getCancellationReason()));
+	}
+
+	/**
 	 * Provisional rule 1 (2026-11-15): the pre-authorisation number obtained
 	 * after an urgent study, at any status the study reached. The status
 	 * endpoint's roles: whoever may start a study records its number.

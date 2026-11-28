@@ -195,10 +195,10 @@ class PasswordChecksCountInLoginBucketGuardTest {
         return new Result(uncounted, counted);
     }
 
-    /** The argument list of every {@code checkPassword(...)} call, as [open, close] offsets. */
+    /** The argument list of every {@code checkPassword(...)} or {@code checkColleaguePassword(...)} call (review of QA D4141), as [open, close] offsets. */
     private static List<int[]> checkPasswordArguments(String source) {
         List<int[]> spans = new ArrayList<>();
-        Matcher call = Pattern.compile("\\bcheckPassword\\s*\\(").matcher(source);
+        Matcher call = Pattern.compile("\\bcheck(?:Colleague)?Password\\s*\\(").matcher(source);
         while (call.find()) {
             int depth = 0;
             for (int k = call.end() - 1; k < source.length(); k++) {

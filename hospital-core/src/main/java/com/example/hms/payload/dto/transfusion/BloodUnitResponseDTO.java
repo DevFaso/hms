@@ -35,5 +35,15 @@ public class BloodUnitResponseDTO {
     private BloodUnitStatus status;
     private String discardReason;
     private String notes;
+    /**
+     * QA D4178: issued, never hung, and its request is closed: the bag is out of the laboratory and waits
+     * for the laboratory to record its return.
+     */
+    private boolean awaitingReturn;
+    /** QA D4178: what the laboratory recorded when the bag came back from an issue (or did not). */
+    private com.example.hms.enums.BloodUnitReturnOutcome returnOutcome;
+    private LocalDateTime returnRecordedAt;
+    private String returnRecordedByName;
+    private String returnNote;
     private LocalDateTime createdAt;
 }

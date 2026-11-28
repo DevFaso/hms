@@ -11,7 +11,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 // FullCalendar 7: the plugins are entrypoints of the Angular wrapper (the
@@ -40,9 +40,49 @@ import {
 } from '../../services/appointment-calendar.service';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { EnumLabelService } from '../../core/enum-label.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { storedLang, SupportedLang } from '../../shared/i18n/app-locale';
 
 type State = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * QA D4224 (round 81): which appointments the grid shows, by status. `ALL`
+ * (the default) keeps the cancelled and absent ones on screen, drawn apart
+ * from those that hold a slot; `ACTIVE` hides both.
+ */
+type StatusFilter = 'ALL' | 'ACTIVE' | 'CANCELLED' | 'NO_SHOW';
+
+const STATUS_FILTERS: readonly StatusFilter[] = ['ALL', 'ACTIVE', 'CANCELLED', 'NO_SHOW'];
+
+/** Where the status filter is remembered, per browser. */
+const STATUS_FILTER_STORAGE_KEY = 'hms.appointmentCalendar.statusFilter';
+
+/**
+ * QA D4224 (round 81): the statuses drawn apart from an appointment that
+ * holds its slot. Each gets a class (see the stylesheet), an event colour,
+ * and its translated status in front of the title, so the difference never
+ * rests on colour alone (WCAG 1.4.1). Every other status keeps the plain look.
+ */
+const DISTINCT_STATUS: Readonly<
+  Record<string, { className: string; color: string; contrastColor: string }>
+> = {
+  CANCELLED: {
+    className: 'cal-event cal-event--cancelled',
+    color: 'var(--cal-event-cancelled)',
+    contrastColor: 'var(--cal-event-muted-contrast)',
+  },
+  NO_SHOW: {
+    className: 'cal-event cal-event--no-show',
+    color: 'var(--cal-event-no-show)',
+    contrastColor: 'var(--cal-event-muted-contrast)',
+  },
+  COMPLETED: {
+    className: 'cal-event cal-event--completed',
+    color: 'var(--cal-event-completed)',
+    contrastColor: 'var(--cal-event-muted-contrast)',
+  },
+};
 
 /**
  * FullCalendar's locale for each portal language, loaded on demand so only
@@ -70,7 +110,7 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
 @Component({
   selector: 'app-appointment-calendar',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, FullCalendarModule],
+  imports: [FormsModule, RouterLink, TranslateModule, FullCalendarModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cal-page" data-testid="appointment-calendar">
@@ -86,23 +126,48 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
         </div>
       </header>
 
-      <div class="cal-page__filter">
-        <label for="provider-filter">{{
-          'APPOINTMENT_CALENDAR.FILTER_PROVIDER' | translate
-        }}</label>
-        <select
-          id="provider-filter"
-          [ngModel]="selectedStaffId"
-          (ngModelChange)="onProviderChange($event)"
-          data-testid="appointment-calendar-provider"
-        >
-          <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
-          @for (s of providers(); track s) {
-            <option [ngValue]="s.id">
-              {{ s.name }}
+      <div class="cal-page__filters">
+        <div class="cal-page__filter">
+          <label for="provider-filter">{{
+            'APPOINTMENT_CALENDAR.FILTER_PROVIDER' | translate
+          }}</label>
+          <select
+            id="provider-filter"
+            class="filter-select"
+            [ngModel]="selectedStaffId"
+            (ngModelChange)="onProviderChange($event)"
+            data-testid="appointment-calendar-provider"
+          >
+            <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
+            @for (s of providers(); track s) {
+              <option [ngValue]="s.id">
+                {{ s.name }}
+              </option>
+            }
+          </select>
+        </div>
+
+        <!-- QA D4224 (round 81): narrows the appointments already loaded, by
+             status; nothing is fetched again. -->
+        <div class="cal-page__filter">
+          <label for="status-filter">{{ 'APPOINTMENT_CALENDAR.FILTER_STATUS' | translate }}</label>
+          <select
+            id="status-filter"
+            class="filter-select"
+            [ngModel]="statusFilter()"
+            (ngModelChange)="onStatusFilterChange($event)"
+            data-testid="appointment-calendar-status"
+          >
+            <option value="ALL">{{ 'APPOINTMENT_CALENDAR.STATUS_ALL' | translate }}</option>
+            <option value="ACTIVE">{{ 'APPOINTMENT_CALENDAR.STATUS_ACTIVE' | translate }}</option>
+            <option value="CANCELLED">
+              {{ 'APPOINTMENT_CALENDAR.STATUS_CANCELLED_ONLY' | translate }}
             </option>
-          }
-        </select>
+            <option value="NO_SHOW">
+              {{ 'APPOINTMENT_CALENDAR.STATUS_NO_SHOW_ONLY' | translate }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <!-- Always present and of fixed height, so the grid never moves when
@@ -133,6 +198,36 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
 
       @if (calendarOptions(); as opts) {
         <full-calendar [options]="opts" data-testid="appointment-calendar-grid" />
+
+        <!-- QA D4224 (round 81): what each event style means. The swatches
+             carry the very classes the events do, so the two cannot drift. -->
+        <div class="cal-page__legend" data-testid="appointment-calendar-legend">
+          <h2 class="cal-page__legend-title" id="cal-legend-title">
+            {{ 'APPOINTMENT_CALENDAR.LEGEND' | translate }}
+          </h2>
+          <ul class="cal-page__legend-list" aria-labelledby="cal-legend-title">
+            <li>
+              <span class="cal-legend-swatch" aria-hidden="true"></span>
+              {{ 'APPOINTMENT_CALENDAR.LEGEND_ACTIVE' | translate }}
+            </li>
+            <li>
+              <span class="cal-legend-swatch cal-event--completed" aria-hidden="true"></span>
+              {{ 'COMPLETED' | enumLabel: 'appointmentStatus' }}
+            </li>
+            <li>
+              <span class="cal-legend-swatch cal-event--cancelled" aria-hidden="true"></span>
+              <span class="cal-legend-struck">{{
+                'CANCELLED' | enumLabel: 'appointmentStatus'
+              }}</span>
+            </li>
+            <li>
+              <span class="cal-legend-swatch cal-event--no-show" aria-hidden="true"></span>
+              <span class="cal-legend-struck">{{
+                'NO_SHOW' | enumLabel: 'appointmentStatus'
+              }}</span>
+            </li>
+          </ul>
+        </div>
       }
     </section>
   `,
@@ -146,11 +241,15 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   protected readonly state = signal<State>('idle');
   protected readonly providers = signal<StaffResponse[]>([]);
   protected selectedStaffId = '';
+  /** QA D4224 (round 81): the status filter; everything is shown by default. */
+  protected readonly statusFilter = signal<StatusFilter>(readStoredStatusFilter());
 
   private readonly calendarSvc = inject(AppointmentCalendarService);
   private readonly staffSvc = inject(StaffService);
   private readonly roleContext = inject(RoleContextService);
   private readonly router = inject(Router);
+  private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   private inFlight?: Subscription;
   private destroyed = false;
@@ -205,6 +304,25 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     api?.refetchEvents();
   }
 
+  /**
+   * QA D4224 (round 81): shows or hides the events already in the grid; the
+   * range is not fetched again. The pick is remembered for the next visit
+   * when the browser allows it.
+   */
+  protected onStatusFilterChange(filter: StatusFilter): void {
+    this.statusFilter.set(filter);
+    try {
+      localStorage.setItem(STATUS_FILTER_STORAGE_KEY, filter);
+    } catch {
+      // Storage refused (private window, blocked site data): the filter
+      // still applies for this visit.
+    }
+    for (const event of this.calendar?.getApi().getEvents() ?? []) {
+      const status = (event.extendedProps as { status?: string | null }).status;
+      event.setProp('display', displayFor(status, filter));
+    }
+  }
+
   protected retry(): void {
     this.calendar?.getApi().refetchEvents();
   }
@@ -223,6 +341,9 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       nowIndicator: true,
       height: 'auto',
       allDaySlot: false,
+      // QA D4237 (round 81): the time grid's screen-reader label. No
+      // FullCalendar locale sets it, so it stayed the English "Timed".
+      timedText: this.translate.instant('APPOINTMENT_CALENDAR.TIMED_SLOTS'),
       slotMinTime: '06:00:00',
       slotMaxTime: '21:00:00',
       eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
@@ -269,25 +390,50 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       .getRange(hid, from, to, this.selectedStaffId || undefined)
       .subscribe({
         next: (rows) => {
-          const events: EventInput[] = (rows ?? []).map((r: AppointmentCalendarEvent) => ({
-            id: r.id,
-            title: r.title,
-            start: r.start,
-            end: r.end,
-            extendedProps: {
-              status: r.status,
-              reason: r.reason,
-              patientId: r.patientId,
-              resourceId: r.resourceId,
-              resourceName: r.resourceName,
-            },
-          }));
+          const events: EventInput[] = (rows ?? []).map((r: AppointmentCalendarEvent) =>
+            this.toEventInput(r),
+          );
           this.state.set('ready');
           this.retryOnNextView = false;
           success(events);
         },
         error: (err: unknown) => failure(toError(err)),
       });
+  }
+
+  /**
+   * One appointment as FullCalendar draws it, in every view (month, week and
+   * day share the event). QA D4224 (round 81): a cancelled, absent or
+   * completed one carries its own class and colours and its translated status
+   * in front of the title (« Annulé — Adama … »), and the status filter in
+   * force decides whether it is displayed.
+   */
+  private toEventInput(r: AppointmentCalendarEvent): EventInput {
+    const distinct = r.status ? DISTINCT_STATUS[r.status] : undefined;
+    const event: EventInput = {
+      id: r.id,
+      title: r.title,
+      start: r.start,
+      end: r.end,
+      display: displayFor(r.status, this.statusFilter()),
+      extendedProps: {
+        status: r.status,
+        reason: r.reason,
+        patientId: r.patientId,
+        resourceId: r.resourceId,
+        resourceName: r.resourceName,
+      },
+    };
+    if (distinct) {
+      event.title = this.translate.instant('APPOINTMENT_CALENDAR.EVENT_TITLE_WITH_STATUS', {
+        status: this.enumLabels.transform(r.status, 'appointmentStatus'),
+        title: r.title,
+      });
+      event.className = distinct.className;
+      event.color = distinct.color;
+      event.contrastColor = distinct.contrastColor;
+    }
+    return event;
   }
 
   private openAppointment(id: string): void {
@@ -302,6 +448,28 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     if (!allDay) queryParams['time'] = toIsoTime(date);
     this.router.navigate(['/appointments/new'], { queryParams });
   }
+}
+
+/** The status filter last picked in this browser, or `ALL`. */
+function readStoredStatusFilter(): StatusFilter {
+  try {
+    const stored = localStorage.getItem(STATUS_FILTER_STORAGE_KEY);
+    return STATUS_FILTERS.find((f) => f === stored) ?? 'ALL';
+  } catch {
+    return 'ALL';
+  }
+}
+
+/**
+ * FullCalendar's `display` for an appointment under a status filter: `auto`
+ * draws it, `none` keeps it loaded but off the grid. QA D4224 (round 81).
+ */
+function displayFor(status: string | null | undefined, filter: StatusFilter): 'auto' | 'none' {
+  const dropped = status === 'CANCELLED' || status === 'NO_SHOW';
+  let shown = true;
+  if (filter === 'ACTIVE') shown = !dropped;
+  else if (filter !== 'ALL') shown = status === filter;
+  return shown ? 'auto' : 'none';
 }
 
 /**

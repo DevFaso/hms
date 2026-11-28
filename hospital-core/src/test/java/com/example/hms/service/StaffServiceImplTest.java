@@ -406,6 +406,28 @@ class StaffServiceImplTest {
         assertThat(resolved).isSameAs(user);
     }
 
+    /** r81: an edit keeps the record's account; naming another account is refused on its field. */
+    @Test
+    void updateStaff_refusesAnotherAccount() {
+        User someoneElse = new User();
+        someoneElse.setId(UUID.randomUUID());
+        someoneElse.setEmail("other@test.com");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("other@test.com")).thenReturn(Optional.of(someoneElse));
+        StaffRequestDTO dto = new StaffRequestDTO();
+        dto.setUserEmail("other@test.com");
+        dto.setHospitalName("Test Hospital");
+        dto.setJobTitle("DOCTOR");
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, refused -> {
+                assertThat(refused.getField()).isEqualTo("userEmail");
+                assertThat(refused.getMessageKey()).isEqualTo("staff.user.unchangeable");
+            });
+        org.mockito.Mockito.verify(staffRepository, org.mockito.Mockito.never()).save(any());
+        assertThat(staff.getUser()).isSameAs(user);
+    }
+
     @Test
     void updateStaffDepartment_updatesSuccessfully() {
         Department dept = new Department();

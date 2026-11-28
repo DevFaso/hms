@@ -61,6 +61,15 @@
   --fc-classic-small-dot-width: 8px;
   --fc-classic-large-dot-width: 10px;
 
+  /* QA D4224 (round 81): the fills of the appointments that are over or no
+     longer hold their slot. The component hands them to FullCalendar as each
+     event's colour; the text on all three is the body text colour (at least
+     11:1 on each fill). */
+  --cal-event-cancelled: var(--border);
+  --cal-event-no-show: var(--surface-page);
+  --cal-event-completed: var(--primary-tint);
+  --cal-event-muted-contrast: var(--text-primary);
+
   /* neutral backgrounds: tints of the body text colour
      (fallbacks = --text-primary #1e293b at 4/8/14%) */
   --fc-classic-background: #fff;
@@ -121,11 +130,21 @@
     gap: 1rem;
   }
 
+  /* The provider and status filters sit side by side and wrap onto their
+     own lines on a narrow screen (QA D4224, round 81). */
+  &__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
   &__filter {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    gap: 0.25rem 0.75rem;
+    min-width: 0;
 
     label {
       font-size: 0.8125rem;
@@ -138,10 +157,111 @@
       /* a control's boundary needs 3:1 (WCAG 1.4.11): --border is 1.23:1 */
       border: 1px solid var(--text-secondary);
       border-radius: 6px;
+      max-width: 100%;
     }
   }
 
   &__error {
     color: var(--cal-error);
   }
+
+  /* QA D4224 (round 81): what the event styles mean. The entries wrap, so
+     the legend never widens the page. */
+  &__legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+  }
+
+  &__legend-title {
+    margin: 0;
+    font-size: inherit;
+    font-weight: 600;
+  }
+
+  &__legend-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+  }
+}
+
+/*
+ * QA D4224 (round 81): an appointment that is cancelled, that the patient
+ * missed, or that is over must not look like one that holds its slot. The
+ * component puts these classes on the event (and its fill in
+ * --fc-event-color); the same classes dress the legend's swatches.
+ *
+ * They are not scoped under .cal-page: the month view's "+N more" popover is
+ * rendered in <body>, and its events must be dressed too. Two classes each,
+ * so they outrank the theme's single hashed class.
+ *
+ * Colour is never the only cue: the title starts with the status, and the
+ * cancelled and absent ones are struck through as well.
+ */
+.cal-event.cal-event--cancelled,
+.cal-event.cal-event--no-show {
+  text-decoration: line-through;
+}
+
+.cal-event.cal-event--cancelled,
+.cal-event.cal-event--completed {
+  border: 1px solid var(--fc-classic-strong-border);
+}
+
+/* cancelled: hatched */
+.cal-event.cal-event--cancelled,
+.cal-legend-swatch.cal-event--cancelled {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    var(--fc-classic-strong-border) 5px 6px
+  );
+}
+
+/* absent: a dashed outline (--text-secondary is 4.76:1 on white) */
+.cal-event.cal-event--no-show {
+  border: 1px dashed var(--text-secondary);
+}
+
+.cal-legend-swatch {
+  flex: none;
+  display: inline-block;
+  width: 1.5rem;
+  height: 0.875rem;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  background-color: var(--primary);
+
+  &.cal-event--completed {
+    border-color: var(--fc-classic-strong-border);
+    background-color: var(--cal-event-completed);
+  }
+
+  &.cal-event--cancelled {
+    border-color: var(--fc-classic-strong-border);
+    background-color: var(--cal-event-cancelled);
+  }
+
+  &.cal-event--no-show {
+    border: 1px dashed var(--text-secondary);
+    background-color: var(--cal-event-no-show);
+  }
+}
+
+.cal-legend-struck {
+  text-decoration: line-through;
 }

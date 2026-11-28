@@ -307,6 +307,19 @@ public class BillingInvoiceController {
             .body(content);
     }
 
+    /**
+     * QA D4222 / D4223 (round 81): the addresses on file an invoice may be mailed to, and whether the patient's
+     * own would be refused. Same roles and same hospital scope as the send itself.
+     */
+    @GetMapping("/{id}/email-recipients")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Addresses on file a billing invoice may be e-mailed to")
+    public ResponseEntity<com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO> emailRecipients(
+        @PathVariable UUID id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(invoiceEmailService.recipientOptions(id));
+    }
+
     @PostMapping("/{id}/email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Email Billing Invoice")

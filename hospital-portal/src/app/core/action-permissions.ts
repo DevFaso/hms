@@ -75,6 +75,16 @@ export const ACTION_PERMISSIONS = {
     // Policy rule 3 (provisional): the imaging technician starts, completes or discontinues the exam.
     roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN'],
   },
+  /** QA D4140 (provisional): a physician authorises (signs) a request a nurse or a midwife placed. */
+  imagingOrderSign: {
+    endpoint: 'ImagingOrderController#captureSignature',
+    roles: ['ROLE_DOCTOR'],
+  },
+  /** QA D4140: whoever placed a request that still waits for a physician withdraws it. */
+  imagingOrderWithdraw: {
+    endpoint: 'ImagingOrderController#withdrawPendingRequest',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
   /** Provisional rule 1: the pre-authorisation number of a study done without it. Never the technician. */
   imagingOrderAuthorization: {
     endpoint: 'ImagingOrderController#recordAuthorization',
