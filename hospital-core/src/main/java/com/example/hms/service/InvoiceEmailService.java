@@ -56,16 +56,7 @@ public class InvoiceEmailService {
 
     @Transactional(readOnly = true)
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
-        // Load invoice with patient & hospital to avoid LazyInitialization issues
-        var invoice = billingInvoiceRepository.findByIdWithRefs(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND, invoiceId));
-        // QA D755: the invoice id is a claim. Another hospital's invoice is
-        // "not found" (404, as GET answers), never mailed to an outside address.
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && (invoice.getHospital() == null
-                || !activeHospitalId.equals(invoice.getHospital().getId()))) {
-            throw new ResourceNotFoundException(NOT_FOUND, invoiceId);
-        }
+        var invoice = invoiceOfTheActingHospital(invoiceId);
         // QA D758: mailing is not issuing. A draft is issued on purpose
         // (status SENT) before it leaves the hospital; it never flips here.
         if (invoice.getStatus() == null || invoice.getStatus() == InvoiceStatus.DRAFT) {
@@ -102,15 +93,73 @@ public class InvoiceEmailService {
 
         // QA D2201 class: the patient's BILLING e-mail choice applies when the patient is among
         // the recipients; a refused mail is not sent to anyone, and staff see why.
-        boolean sent = patientMessageGate.emailWithAttachment(invoice.getPatient(),
-            new PatientMessageGate.Notice(PatientNotificationEvent.INVOICE,
-                invoice.getHospital() != null ? invoice.getHospital().getId() : null, invoice.getId()),
+        // QA D4222 (round 81): the clerk is told the reason the trace row records, not always « opted out ».
+        java.util.Optional<PatientMessageGate.AttachmentMailRefusal> refused = patientMessageGate.emailWithAttachment(
+            invoice.getPatient(), noticeOf(invoice),
             new PatientMessageGate.OutgoingMail(req.to(), req.cc(), req.bcc(), subject, body),
             pdf, "invoice-" + invoice.getInvoiceNumber() + ".pdf", "application/pdf");
-        if (!sent) {
-            throw new BusinessException("billing.invoice.emailOptedOut");
+        if (refused.isPresent()) {
+            throw new BusinessException(refusalKey(refused.get()));
         }
         auditRecipients(invoice, recipients, req);
+    }
+
+    /**
+     * QA D4222: the refusal the clerk reads for each reason the message gate gives, one text per reason. A switch
+     * with no default: a reason added to the gate does not compile until it has its own text here
+     * ({@code InvoiceMailRefusalReasonsTest} holds each text to its ledger code).
+     */
+    public static String refusalKey(PatientMessageGate.AttachmentMailRefusal refusal) {
+        return switch (refusal) {
+            case OPTED_OUT -> "billing.invoice.emailOptedOut";
+            case RECIPIENT_UNVERIFIED -> "billing.invoice.emailUnverified";
+        };
+    }
+
+    private static PatientMessageGate.Notice noticeOf(BillingInvoice invoice) {
+        return new PatientMessageGate.Notice(PatientNotificationEvent.INVOICE,
+            invoice.getHospital() != null ? invoice.getHospital().getId() : null, invoice.getId());
+    }
+
+    /** The invoice with its patient and hospital, when it is the acting hospital's; else « not found » (QA D755). */
+    private BillingInvoice invoiceOfTheActingHospital(UUID invoiceId) {
+        // Load invoice with patient & hospital to avoid LazyInitialization issues
+        var invoice = billingInvoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND, invoiceId));
+        // QA D755: the invoice id is a claim. Another hospital's invoice is
+        // "not found" (404, as GET answers), never mailed to an outside address.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && (invoice.getHospital() == null
+                || !activeHospitalId.equals(invoice.getHospital().getId()))) {
+            throw new ResourceNotFoundException(NOT_FOUND, invoiceId);
+        }
+        return invoice;
+    }
+
+    /**
+     * QA D4222 / D4223 (round 81): what the send dialog offers. The addresses the hospital holds for this invoice
+     * (the patient's own, the active guarantors' at this hospital), whether a send to the patient's would be
+     * refused and why, and the limits of the form. The dialog pre-filled the patient's address even when the
+     * send was sure to be refused, and a guarantor's address had to be known by heart. Read-only: nothing is
+     * sent and no trace row is written.
+     */
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO recipientOptions(UUID invoiceId) {
+        BillingInvoice invoice = invoiceOfTheActingHospital(invoiceId);
+        com.example.hms.model.Patient patient = invoice.getPatient();
+        com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO.PatientAddress own = null;
+        String address = patient == null ? null : patient.getEmail();
+        if (address != null && !address.isBlank()) {
+            java.util.Optional<PatientMessageGate.AttachmentMailRefusal> refusal =
+                patientMessageGate.ownAddressRefusal(patient, noticeOf(invoice), address);
+            own = new com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO.PatientAddress(
+                address.trim(), refusal.isEmpty(),
+                refusal.map(r -> r.ledgerCode().name()).orElse(null),
+                refusal.map(r -> com.example.hms.utility.MessageUtil.resolve(refusalKey(r))).orElse(null));
+        }
+        return new com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO(own,
+            recipientPolicy.guarantorsOnFile(invoice), EmailInvoiceRequest.MAX_RECIPIENTS,
+            EmailInvoiceRequest.MAX_REASON_LENGTH, EmailInvoiceRequest.MAX_MESSAGE_LENGTH);
     }
 
     /**

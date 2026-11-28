@@ -446,6 +446,9 @@ class CancelVoidReasonGuardTest {
             "NOT A WITHDRAWAL: a temporary reservation of a free slot");
         CLINICAL_HANDLERS.put("PATCH /staff/scheduling/leaves/{leaveId}/cancel",
             "NOT A CLINICAL RECORD: a staff member's own leave request");
+        // QA D4140: whoever placed an imaging request that waits for a physician withdraws it, with a reason.
+        CLINICAL_HANDLERS.put("POST /imaging/orders/{orderId}/withdrawal",
+            "ImagingOrderWithdrawalRequestDTO.cancellationReason -> service/ImagingOrderServiceImplTest#d4140_whoeverAskedWithdrawsHerOwnPendingRequest_andNothingElse");
         CLINICAL_HANDLERS.put("POST /imaging/images/{imageId}/withdraw",
             "WithdrawRequest.reason -> service/imaging/ImagingStudyImageServiceTest#aReasonIsRequiredAndAnUnlockedImageIsRemovedInstead");
         CLINICAL_HANDLERS.put("POST /break-glass/{sessionId}/revoke",

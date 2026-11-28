@@ -385,7 +385,8 @@ public class PatientServiceImpl implements PatientService {
 
         // QA D819: a staff account, or one that already logs in to another
         // record, is refused (409) instead of becoming this patient's login.
-        accountLinkGuard.requireLinkable(user, null);
+        // r81: and the account holds a role at the record's hospital.
+        accountLinkGuard.requireLinkable(user, null, hospital.getId());
         Patient mapped = patientMapper.toPatient(dto, user);
         normalizePhones(mapped, hospital);
         var identityChange = prepareNationalUniqueId(mapped, dto.getNationalUniqueId(),
@@ -468,7 +469,8 @@ public class PatientServiceImpl implements PatientService {
         // create's; keeping the account it already has is not re-checked.
         UUID currentUserId = patient.getUser() != null ? patient.getUser().getId() : null;
         if (!Objects.equals(currentUserId, user.getId())) {
-            accountLinkGuard.requireLinkable(user, patient.getId());
+            // r81: the new account holds a role at the hospital the edit is made at.
+            accountLinkGuard.requireLinkable(user, patient.getId(), dto.getHospitalId());
         }
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
@@ -1057,8 +1059,9 @@ public class PatientServiceImpl implements PatientService {
         // account became a patient's login. A staff account, or one already
         // linked to another record (which used to be re-used silently, the
         // typed fields thrown away: QA D725), is a 409. A second hospital links
-        // the existing record through POST /registrations.
-        accountLinkGuard.requireLinkable(user, null);
+        // the existing record through POST /registrations. r81: the account holds a
+        // role at this hospital (the registration gave it its PATIENT role here).
+        accountLinkGuard.requireLinkable(user, null, hospitalId);
         var duplicateDecision = duplicateReview.prepare(dto, hospitalId);
         Patient mapped = patientMapper.toPatient(dto, user);
         if (!writesClinicalFields()) {

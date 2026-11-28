@@ -13,7 +13,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuditTabsComponent } from '../super-admin/audit-tabs.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
-import { AuditDescriptionService } from './audit-description.service';
+import {
+  AuditDescriptionService,
+  AuditRowDetail,
+  auditRowDetail,
+} from './audit-description.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
@@ -54,6 +58,22 @@ export class AuditLogsComponent implements OnInit {
   /** QA D330 / D774 / D894: the description in the reader's language. */
   describe(log: AuditEventLog): string {
     return this.descriptions.describe(log);
+  }
+
+  /**
+   * QA D4226 (round 81): what a row keeps beyond its description (the masked
+   * recipients of a mailed invoice, their kind, the clerk's reason); null for
+   * a row that keeps nothing to show, which then has no detail to open.
+   */
+  detailOf(log: AuditEventLog): AuditRowDetail | null {
+    return auditRowDetail(log.details);
+  }
+
+  /** The row whose detail is open, by its place in the page; null when none. */
+  openDetail = signal<number | null>(null);
+
+  toggleDetail(index: number): void {
+    this.openDetail.update((open) => (open === index ? null : index));
   }
 
   logs = signal<AuditEventLog[]>([]);

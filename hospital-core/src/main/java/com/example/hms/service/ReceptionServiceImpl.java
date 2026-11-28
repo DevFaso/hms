@@ -226,6 +226,11 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     public FrontDeskPatientSnapshotDTO getPatientSnapshot(UUID patientId, UUID hospitalId) {
+        return getPatientSnapshot(patientId, hospitalId, null);
+    }
+
+    @Override
+    public FrontDeskPatientSnapshotDTO getPatientSnapshot(UUID patientId, UUID hospitalId, UUID appointmentId) {
         // Unscoped lookup plus an explicit registration check — the pattern
         // PatientRepository.findByIdUnscoped's javadoc prescribes.
         //
@@ -264,7 +269,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (primary == null) {
             primary = snapshotCoverage(insurances);
         }
-        CheckInCoverage checkIn = checkInCoverage(patientId, hospitalId, today);
+        CheckInCoverage checkIn = checkInCoverage(patientId, hospitalId, today,
+                checkedInAppointment(appointmentId, patientId, hospitalId));
 
         FrontDeskPatientSnapshotDTO.InsuranceSummary insuranceSummary = FrontDeskPatientSnapshotDTO.InsuranceSummary.builder()
                 .insuranceId(primary != null ? primary.getId() : null)
@@ -852,17 +858,32 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
     }
 
+    /**
+     * QA D4225 (round 81): a department named in a desk request is one of the acting hospital. Any other id, known
+     * elsewhere or not, is the same « not found ».
+     */
+    private Department departmentOfHospital(UUID departmentId, UUID hospitalId) {
+        return departmentRepo.findById(departmentId)
+                .filter(d -> d.getHospital() != null && hospitalId != null
+                        && hospitalId.equals(d.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+    }
+
+    /** QA D4225: a clinician named in a desk request is an active member of the acting hospital's staff. */
+    private Staff clinicianOfHospital(UUID staffId, UUID hospitalId) {
+        return staffRepo.findByIdAndActiveTrue(staffId)
+                .filter(s -> s.getHospital() != null && hospitalId != null
+                        && hospitalId.equals(s.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", staffId));
+    }
+
     @Override
     @Transactional
     public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
                                                    String actorUsername) {
         Hospital hospital = hospitalRepo.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-        // r81: the department and the preferred clinician are those of this hospital; any
-        // other answers as an unknown id.
-        Department department = departmentRepo.findById(req.getDepartmentId())
-                .filter(d -> d.getHospital() != null && hospitalId.equals(d.getHospital().getId()))
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", req.getDepartmentId()));
+        Department department = departmentOfHospital(req.getDepartmentId(), hospitalId);
         // Same fix as the snapshot above: a waitlist entry for a patient whose
         // first hospital is elsewhere would otherwise be impossible to create.
         Patient patient = patientRepo.findByIdUnscoped(req.getPatientId())
@@ -876,10 +897,14 @@ public class ReceptionServiceImpl implements ReceptionService {
                 registrationRepo, req.getPatientId(), hospitalId);
         requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
-                ? staffRepo.findById(req.getPreferredProviderId())
-                    .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", req.getPreferredProviderId()))
+                ? clinicianOfHospital(req.getPreferredProviderId(), hospitalId)
                 : null;
+        // QA D4229 (round 81): one open request per patient and department; the desk added the same one twice.
+        if (waitlistRepo.existsByHospital_IdAndPatient_IdAndDepartment_IdAndStatusIn(hospitalId, patient.getId(),
+                department.getId(), List.of(WAITLIST_STATUS_WAITING, WAITLIST_STATUS_OFFERED))) {
+            throw new com.example.hms.exception.FieldBusinessException("departmentId", "waitlist.entry.alreadyOpen",
+                department.getName());
+        }
 
         AppointmentWaitlist entry = AppointmentWaitlist.builder()
                 .hospital(hospital)
@@ -1429,19 +1454,45 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     /**
-     * QA D3258 (r70): the check-in dialog showed no coverage and no expected patient share, so the desk typed the
-     * copay with nothing to go by. The suggestion is the patient's share of the hospital's default consultation
-     * tariff under the coverage an invoice would bill ({@link InvoiceCoverageService#quote}); the whole tariff when
-     * no coverage applies; nothing when the hospital has no consultation tariff. A suggestion only: the desk types
-     * what it takes.
+     * The appointment the check-in dialog is about, when it names one of this patient here; else null (the
+     * snapshot then suggests the general consultation).
      */
-    private CheckInCoverage checkInCoverage(UUID patientId, UUID hospitalId, LocalDate day) {
+    private Appointment checkedInAppointment(UUID appointmentId, UUID patientId, UUID hospitalId) {
+        if (appointmentId == null) {
+            return null;
+        }
+        return appointmentRepo.findById(appointmentId)
+                .filter(a -> a.getHospital() != null && a.getHospital().getId().equals(hospitalId))
+                .filter(a -> a.getPatient() != null && a.getPatient().getId().equals(patientId))
+                .orElse(null);
+    }
+
+    /**
+     * QA D3258 (r70): the check-in dialog showed no coverage and no expected patient share, so the desk typed the
+     * copay with nothing to go by. The suggestion is the patient's share of the consultation tariff under the
+     * coverage an invoice would bill ({@link InvoiceCoverageService#quote}); the whole tariff when no coverage
+     * applies; nothing when the hospital has no consultation tariff. A suggestion only: the desk types what it takes.
+     *
+     * <p>QA D4221 (r81): the tariff is the one the invoice will bill for this visit
+     * ({@link com.example.hms.service.billing.ConsultationTariffContext}), not always the general consultation: the
+     * visit check-in opens (a consultation of the appointment's department, arriving now on the hospital's clock),
+     * the most specific key the price list holds.
+     */
+    private CheckInCoverage checkInCoverage(UUID patientId, UUID hospitalId, LocalDate day, Appointment appointment) {
         if (tariffResolver == null || invoiceCoverage == null) {
             return new CheckInCoverage(null, null, null);
         }
-        java.util.Optional<TariffResolver.Tariff> tariff = tariffResolver.peek(hospitalId,
-                com.example.hms.enums.PriceListLinkType.SYSTEM,
-                com.example.hms.enums.PriceListSystemKey.CONSULTATION_DEFAULT.name(), day);
+        com.example.hms.model.Department department = appointment == null ? null : appointment.getDepartment();
+        java.util.Optional<TariffResolver.Tariff> tariff = java.util.Optional.empty();
+        for (com.example.hms.enums.PriceListSystemKey key : com.example.hms.service.billing.ConsultationTariffContext
+                .keysFor(EncounterType.CONSULTATION, department == null ? null : department.getName(),
+                        department == null ? null : department.getCode(),
+                        tariffResolver.businessTimeOf(LocalDateTime.now()))) {
+            tariff = tariffResolver.peek(hospitalId, com.example.hms.enums.PriceListLinkType.SYSTEM, key.name(), day);
+            if (tariff.isPresent()) {
+                break;
+            }
+        }
         BigDecimal fee = tariff.map(TariffResolver.Tariff::unitPrice).orElse(null);
         java.util.Optional<InvoiceCoverageService.CoverageQuote> quote = invoiceCoverage.quote(patientId, hospitalId,
                 day, fee != null ? fee : BigDecimal.ZERO, com.example.hms.enums.PriceListCategory.CONSULTATION,

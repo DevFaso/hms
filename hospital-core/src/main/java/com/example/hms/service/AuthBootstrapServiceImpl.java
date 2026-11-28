@@ -65,8 +65,15 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
         boolean isHospitalAdmin = roles.stream()
                 .anyMatch(r -> r.equalsIgnoreCase("ROLE_HOSPITAL_ADMIN"));
 
+        // r81: a user who works somewhere is offered the hospitals where they work; one where they
+        // are only registered as a patient is theirs through the patient portal, which reads no
+        // hospital list. A patient-only user keeps every hospital that registered them.
+        boolean worksSomewhere = assignments.stream()
+                .anyMatch(a -> a.active() && a.roleCode() != null && !a.roleCode().isBlank()
+                        && !isPatientRole(a.roleCode()));
         List<UUID> permittedHospitalIds = assignments.stream()
                 .filter(TenantRoleAssignment::active)
+                .filter(a -> !worksSomewhere || !isPatientRole(a.roleCode()))
                 .map(TenantRoleAssignment::hospitalId)
                 .filter(Objects::nonNull)
                 .distinct()

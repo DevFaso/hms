@@ -14,7 +14,12 @@ import { PAYMENT_RETRY_DELAY_MS } from '../shared/payment-request-key';
 
 import { BillingComponent, lineQuantityMessageKey } from './billing';
 import { markServerFieldErrors, scopeOf } from '../shared/forms/server-field-errors';
-import { BillingService, BillingInvoiceResponse, InvoicePage } from '../services/billing.service';
+import {
+  BillingService,
+  BillingInvoiceResponse,
+  InvoiceMailRecipientOptions,
+  InvoicePage,
+} from '../services/billing.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -49,6 +54,26 @@ function mockPage(content: BillingInvoiceResponse[]): InvoicePage {
   } as InvoicePage;
 }
 
+/** QA D4222 / D4223: the addresses on file of the mock invoice's patient. */
+function mailOptions(over: Partial<InvoiceMailRecipientOptions> = {}): InvoiceMailRecipientOptions {
+  return {
+    patient: { address: 'john@example.com', usable: true, refusalCode: null, refusalMessage: null },
+    guarantors: [
+      {
+        guarantorId: 'g1',
+        fullName: 'Issa Ouédraogo',
+        relationship: 'Père',
+        address: 'garant@example.test',
+        primary: true,
+      },
+    ],
+    maxRecipients: 3,
+    reasonMaxLength: 500,
+    messageMaxLength: 2000,
+    ...over,
+  };
+}
+
 describe('BillingComponent', () => {
   let component: BillingComponent;
   let fixture: ComponentFixture<BillingComponent>;
@@ -64,6 +89,7 @@ describe('BillingComponent', () => {
       'deleteInvoice',
       'getInvoicePdf',
       'emailInvoice',
+      'emailRecipients',
       'recordPayment',
       'getInvoice',
       'getInvoiceItems',
@@ -85,6 +111,8 @@ describe('BillingComponent', () => {
       'getRefundQueue',
     ]);
     billingSpy.listAdjustments.and.returnValue(of([]));
+    // QA D4222 / D4223: the addresses on file the e-mail dialog reads when it opens.
+    billingSpy.emailRecipients.and.returnValue(of(mailOptions()));
     // Billing-money plan PR 8: the refunds panel on the detail, and the approvers' queue.
     billingSpy.listRefunds.and.returnValue(of([]));
     billingSpy.listPayerShares.and.returnValue(of([]));
@@ -750,6 +778,134 @@ describe('BillingComponent', () => {
     );
   });
 
+  // ── QA D4222 / D4223 (round 81): the invoice e-mail dialog ──
+
+  it('QA D4222: an unverified patient address is not pre-filled, and says why it cannot be used', () => {
+    billingSpy.emailRecipients.and.returnValue(
+      of(
+        mailOptions({
+          patient: {
+            address: 'john@example.com',
+            usable: false,
+            refusalCode: 'RECIPIENT_UNVERIFIED',
+            refusalMessage: 'Adresse non vérifiée',
+          },
+        }),
+      ),
+    );
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(component.emailTo()).toBe('');
+    expect(host.querySelector('[data-testid="email-patient-refusal"]')?.textContent).toContain(
+      'Adresse non vérifiée',
+    );
+    // The refused address has no « Ajouter » button; the guarantor's has one.
+    expect(host.querySelectorAll('[data-testid="email-on-file"] button').length).toBe(1);
+
+    // Typed by hand all the same: refused here with the server's reason, nothing is sent.
+    component.emailTo.set('John@Example.com');
+    component.sendEmail();
+    expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('Adresse non vérifiée');
+  });
+
+  it('QA D4222: a verified patient address is pre-filled', () => {
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    expect(component.emailTo()).toBe('john@example.com');
+  });
+
+  it('QA D4223: an active guarantor on file is offered and added with one press, with no reason asked', () => {
+    billingSpy.emailInvoice.and.returnValue(of({}) as never);
+    billingSpy.emailRecipients.and.returnValue(of(mailOptions({ patient: null })));
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const add = host.querySelector<HTMLButtonElement>('[data-testid="email-on-file"] button')!;
+
+    add.click();
+    fixture.detectChanges();
+
+    expect(component.emailTo()).toBe('garant@example.test');
+    expect(add.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('#email-reason')).toBeNull();
+    component.sendEmail();
+    const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
+    expect(payload.to).toEqual(['garant@example.test']);
+    expect(payload.reason).toBeUndefined();
+  });
+
+  it('QA D4223: an address on no file shows the reason field, requires it, and sends it', () => {
+    billingSpy.emailInvoice.and.returnValue(of({}) as never);
+    fixture.detectChanges();
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      component.openEmail(component.invoices()[0]);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('#email-reason')).toBeNull();
+
+      component.emailTo.set('john@example.com, Autre@Ailleurs.test');
+      fixture.detectChanges();
+      const reason = host.querySelector<HTMLTextAreaElement>('#email-reason')!;
+      expect(reason).not.toBeNull();
+      expect(reason.getAttribute('maxlength')).toBe('500');
+      expect(component.emailOffFile()).toEqual(['Autre@Ailleurs.test']);
+
+      component.sendEmail();
+      expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+      expect(reason.getAttribute('aria-invalid')).toBe('true');
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.EMAIL_REASON_REQUIRED');
+
+      component.emailReason.set('  Employeur du patient, à sa demande  ');
+      component.sendEmail();
+      const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
+      expect(payload.reason).toBe('Employeur du patient, à sa demande');
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
+  });
+
+  it('QA D4223: more addresses than the server takes are refused before sending', () => {
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    component.emailTo.set('john@example.com, garant@example.test');
+    component.emailCc.set('a@x.test b@x.test');
+    component.emailReason.set('motif');
+    component.sendEmail();
+    expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('BILLING.EMAIL_TOO_MANY');
+  });
+
+  it('QA D4223: the dialog no longer says that sending marks the invoice as sent', () => {
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector('.modal')!.textContent ?? '';
+    expect(text).not.toContain('EMAIL_SENT_NOTE');
+    expect(text).toContain('BILLING.EMAIL_LIMIT_NOTE');
+  });
+
+  it('QA D4223: when the addresses on file cannot be read the reason field is offered and the server judges', () => {
+    billingSpy.emailRecipients.and.returnValue(throwError(() => ({ status: 500 })) as never);
+    billingSpy.emailInvoice.and.returnValue(of({}) as never);
+    fixture.detectChanges();
+    component.openEmail(component.invoices()[0]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(component.emailTo()).toBe('');
+    expect(host.querySelector('#email-reason')).not.toBeNull();
+    component.emailTo.set('autre@ailleurs.test');
+    component.emailReason.set('motif');
+    component.sendEmail();
+    const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
+    expect(payload.reason).toBe('motif');
+  });
+
   it('sendEmail requires at least one recipient', () => {
     component.emailInv.set(mockInvoice());
     component.emailTo.set('  ');
@@ -795,6 +951,8 @@ describe('BillingComponent', () => {
     component.openEmail(component.invoices()[0]);
     expect(component.emailTo()).toBe('john@example.com');
     component.emailTo.set('a@x.test, b@x.test');
+    // QA D4223: neither address is on file, so the send carries its reason.
+    component.emailReason.set('motif');
     component.sendEmail();
     const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
     expect(payload.to).toEqual(['a@x.test', 'b@x.test']);

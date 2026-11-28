@@ -4177,6 +4177,22 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V465 (QA D4140, r81): an imaging request placed by a nurse or a midwife waits for a physician. Who
+         placed the request and whether it needs a physician, on clinical.imaging_orders. Additive.
+         Range V465-V469 is reserved for the r81 lab lane. -->
+    <changeSet id="V465-imaging-order-physician-authorisation" author="hms-team" runOnChange="false">
+        <sqlFile path="V465__imaging_order_physician_authorisation.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V466 (QA D4141, D4178, r81): the second bedside checker's own confirmation on
+         clinical.transfusion_administrations, and the laboratory's record of an issued bag's return on
+         clinical.blood_units. Additive. -->
+    <changeSet id="V466-transfusion-bedside-confirmation-and-unit-return" author="hms-team" runOnChange="false">
+        <sqlFile path="V466__transfusion_bedside_confirmation_and_unit_return.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- =================================================================
          V420 — QA r81 D4181: an inventory item is sold at a price or documented as free of charge.
          Adds clinical.inventory_items.free_of_charge_reason (IF NOT EXISTS) and gives each item a stock
@@ -4199,6 +4215,12 @@
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
+    </changeSet>
+
+    <!-- V450 (QA D4221): the starter price list's consultation and observation items take their system links; no price and no invoice changes. -->
+    <changeSet id="V450-consultation-tariff-links" author="hms-team" runOnChange="false">
+        <sqlFile path="V450__consultation_tariff_links.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
     </changeSet>
 
 </databaseChangeLog>

@@ -58,6 +58,8 @@ class InBasketRecipientGuardTest {
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
             rolesOf(constant(TransfusionController.class, "BEDSIDE")),
             codes(setConstant(TransfusionServiceImpl.class, "LAB_DIRECTOR_ROLE_CODES")),
+            // QA D4178: the lab managers recover an issued bag when the hospital has no lab director.
+            codes(setConstant(TransfusionServiceImpl.class, "LAB_MANAGER_ROLE_CODES")),
             codes(EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES))),
         // QA D3351: the hospital's biologists, for a positive antibody screen and a crossmatch afterwards.
         Map.entry("PositiveAntibodyScreenService.java",
@@ -123,6 +125,9 @@ class InBasketRecipientGuardTest {
         // for the hospital's billing staff, who obtain the authorisation afterwards.
         Map.entry("ImagingPreAuthorisationFollowUp.java", codes(setConstant(
             com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp.class, "BILLING_ROLE_CODES"))),
+        // QA D4140 (provisional): a nurse's or a midwife's imaging request waits for the hospital's physicians.
+        Map.entry("ImagingAuthorisationRequestFollowUp.java", codes(setConstant(
+            com.example.hms.service.imaging.ImagingAuthorisationRequestFollowUp.class, "PHYSICIAN_ROLE_CODES"))),
         // Policy rule 2 (2026-11-20, provisional): a newborn a midwife placed in a NICU cot, for the hospital's
         // physicians, who review it.
         Map.entry("MidwifeNewbornCare.java", codes(setConstant(

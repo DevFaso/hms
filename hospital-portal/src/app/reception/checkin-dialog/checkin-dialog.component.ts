@@ -114,7 +114,7 @@ export class CheckinDialogComponent implements OnInit {
       this.coverageLoaded.set(true);
       return;
     }
-    this.receptionService.getPatientSnapshot(patientId).subscribe({
+    this.receptionService.getPatientSnapshot(patientId, this.queueItem?.appointmentId).subscribe({
       next: (snapshot) => {
         this.coverage.set(snapshot?.insurance ?? null);
         this.coverageLoaded.set(true);
