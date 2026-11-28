@@ -680,6 +680,9 @@ public class InsurerClaimBatchService {
     private static InsurerClaimLineDTO liveLine(InsurerClaimLine line, InsurerClaimBatch batch,
                                                 InsurerClaimLineReader.ShareFacts share,
                                                 InsurerClaimLineReader.Act act) {
+        // A live line always belongs to a loaded draft batch; its period is read before amounts(),
+        // which also serves lines read without their batch.
+        List<String> warnings = share.warnings(act, batch.getPeriodFrom(), batch.getPeriodTo());
         return amounts(line, batch)
             .patientName(share.patientName())
             .patientMrn(share.patientMrn())
@@ -698,7 +701,7 @@ public class InsurerClaimBatchService {
             .grossAmount(act.grossAmount())
             .patientAmount(act.patientAmount())
             .preAuthorisationNumber(act.preAuthorisationNumber())
-            .warnings(share.warnings(act, batch.getPeriodFrom(), batch.getPeriodTo()))
+            .warnings(warnings)
             .build();
     }
 
