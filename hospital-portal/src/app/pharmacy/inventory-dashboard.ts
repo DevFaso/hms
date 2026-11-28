@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
@@ -33,6 +34,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
+import { PluralKeyPipe } from '../shared/i18n/plural-key';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { PharmacyMoneyService } from '../services/pharmacy-money.service';
@@ -40,10 +42,12 @@ import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 /** The add-item field the form may refuse (QA D1306). */
 const CI_FIELD_IDS = ['ciMed'];
 
+import { CatalogFormPipe } from './catalog-label';
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
+    CatalogFormPipe,
     DashPipe,
     SubmitGuardDirective,
     FocusOnRenderDirective,
@@ -56,6 +60,8 @@ const CI_FIELD_IDS = ['ciMed'];
     CfaPipe,
     ModalDialogDirective,
     CountUnitPipe,
+    PluralKeyPipe,
+    RouterLink,
     ReasonDialogComponent,
   ],
   templateUrl: './inventory-dashboard.html',
@@ -264,13 +270,23 @@ export class InventoryDashboardComponent implements OnInit {
     });
   }
 
+  /** A second click while the first send is on its way sends nothing more. */
+  readonly triggeringAlerts = signal(false);
+
   triggerReorderAlerts(): void {
+    if (this.triggeringAlerts()) return;
+    this.triggeringAlerts.set(true);
     this.svc.triggerReorderAlerts().subscribe({
-      next: () => this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED')),
-      error: (err: unknown) =>
+      next: () => {
+        this.triggeringAlerts.set(false);
+        this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED'));
+      },
+      error: (err: unknown) => {
+        this.triggeringAlerts.set(false);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED'),
-        ),
+        );
+      },
     });
   }
 

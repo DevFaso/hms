@@ -22,4 +22,22 @@ public interface StockCountRepository extends JpaRepository<StockCount, UUID> {
         + "AND c.inventoryItem.pharmacy.id = :pharmacyId ORDER BY c.recordedAt DESC, c.id DESC")
     Page<StockCount> findForPharmacy(@Param("hospitalId") UUID hospitalId,
         @Param("pharmacyId") UUID pharmacyId, Pageable pageable);
+
+    /** QA D4191: a recount closes the counts of the same item (no lot) that still wait. */
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE StockCount c SET c.closedAt = :at, c.closedBy = :by, c.closedByName = :name, c.closeReason = :reason "
+        + "WHERE c.hospital.id = :hospitalId AND c.inventoryItem.id = :itemId AND c.stockLot IS NULL "
+        + "AND c.appliedAt IS NULL AND c.closedAt IS NULL AND c.id <> :keepId")
+    int closeOpenItemCounts(@Param("hospitalId") UUID hospitalId, @Param("itemId") UUID itemId, @Param("keepId") UUID keepId,
+        @Param("at") java.time.LocalDateTime at, @Param("by") com.example.hms.model.User by,
+        @Param("name") String name, @Param("reason") String reason);
+
+    /** QA D4191: a recount closes the counts of the same lot that still wait. */
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE StockCount c SET c.closedAt = :at, c.closedBy = :by, c.closedByName = :name, c.closeReason = :reason "
+        + "WHERE c.hospital.id = :hospitalId AND c.inventoryItem.id = :itemId AND c.stockLot.id = :lotId "
+        + "AND c.appliedAt IS NULL AND c.closedAt IS NULL AND c.id <> :keepId")
+    int closeOpenLotCounts(@Param("hospitalId") UUID hospitalId, @Param("itemId") UUID itemId, @Param("lotId") UUID lotId,
+        @Param("keepId") UUID keepId, @Param("at") java.time.LocalDateTime at, @Param("by") com.example.hms.model.User by,
+        @Param("name") String name, @Param("reason") String reason);
 }

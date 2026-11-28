@@ -369,11 +369,27 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void deactivateInventoryItem(UUID id) {
+    public void deactivateInventoryItem(UUID id, String reason) {
         InventoryItem item = resolveInventoryItem(id);
         enforceHospitalScope(item.getPharmacy());
+        // QA D4197 (r81): 40 units on the shelf left the active inventory in one call, with no reason and no trace.
+        // An item that still holds stock is deactivated only with its reason, and the refusal says what it holds.
+        String why = reason == null ? "" : reason.trim();
+        BigDecimal onHand = item.getQuantityOnHand() == null ? BigDecimal.ZERO : item.getQuantityOnHand();
+        if (onHand.signum() > 0 && why.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "inventoryItem.deactivate.reasonRequired",
+                com.example.hms.utility.DisplayNumbers.quantity(onHand));
+        }
+        if (why.length() > 300) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "inventoryItem.deactivate.reasonTooLong");
+        }
+        boolean wasActive = item.isActive();
         item.setActive(false);
         inventoryItemRepository.save(item);
+        if (wasActive) {
+            // Ids and the quantity only: the reason is the user's own text, kept as they wrote it.
+            logDeactivation(item, onHand, why);
+        }
     }
 
     /**
@@ -902,6 +918,15 @@ public class InventoryServiceImpl implements InventoryService {
             tx.setReceiptNotes(receipt.getNotes());
         }
         stockTransactionRepository.save(tx);
+    }
+
+    /** QA D4197: who deactivated an item, what it still held, and why, on the audit trail. */
+    private void logDeactivation(InventoryItem item, BigDecimal onHand, String reason) {
+        logAudit(AuditEventType.CONFIGURATION_CHANGED,
+            "Inventory item deactivated with "
+                + com.example.hms.utility.DisplayNumbers.quantity(onHand, java.util.Locale.ENGLISH) + " on hand"
+                + (reason.isEmpty() ? "" : "; reason: " + reason),
+            item.getId() == null ? null : item.getId().toString());
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

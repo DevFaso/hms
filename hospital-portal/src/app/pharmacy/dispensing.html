@@ -32,8 +32,8 @@
     <p>
       <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
       }}<span>{{
-        (queueLoading() ? 2 : workQueue().length)
-          | pluralKey: 'PHARMACY_WORKSPACE.LOADED_QUEUE'
+        'PHARMACY_WORKSPACE.LOADED_QUEUE'
+          | pluralKey: (queueLoading() ? 2 : workQueue().length)
           | translate
       }}</span>
     </p>
@@ -238,6 +238,7 @@
               {{ ' '
               }}<small class="field-hint" data-testid="other-form-lots">{{
                 'PHARMACY.LOTS_OTHER_FORM'
+                  | pluralKey: otherFormLots()
                   | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
               }}</small>
             }
@@ -1096,8 +1097,8 @@
                       }}</span>
                     }
                     <span class="refill-note">{{
-                      refill.remaining ?? 0
-                        | pluralKey: 'PHARMACY.REFILL_REMAINING'
+                      'PHARMACY.REFILL_REMAINING'
+                        | pluralKey: refill.remaining ?? 0
                         | translate: { count: refill.remaining ?? 0 }
                     }}</span>
                     @if (refill.lastProviderNotes) {

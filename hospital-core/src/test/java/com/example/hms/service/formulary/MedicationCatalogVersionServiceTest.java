@@ -68,7 +68,8 @@ class MedicationCatalogVersionServiceTest {
     private final MedicationCatalogApprovalPolicy policy =
         new MedicationCatalogApprovalPolicy(assignments, hospitals, roleValidator);
     private final MedicationCatalogVersionService service = new MedicationCatalogVersionService(
-        versions, catalogue, hospitals, users, roleValidator, policy, audit);
+        versions, catalogue, hospitals, users, roleValidator, policy, audit,
+        new MedicationCatalogDuplicates(catalogue, versions));
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID itemId = UUID.randomUUID();
@@ -119,6 +120,14 @@ class MedicationCatalogVersionServiceTest {
             .filter(v -> v.getKind() == call.getArgument(1))
             .mapToInt(MedicationCatalogVersion::getVersionNumber).max().orElse(0));
 
+        // QA D4180: the waiting proposals a new one is compared with, from the same in-memory table.
+        when(versions.findInScope(any(), any(), any(), any())).thenAnswer(call -> new org.springframework.data.domain.PageImpl<>(
+            stored.stream()
+                .filter(v -> java.util.Objects.equals(v.getHospitalId(), call.getArgument(0)))
+                .filter(v -> call.getArgument(1) == null || v.getStatus() == call.getArgument(1))
+                .filter(v -> call.getArgument(2) == null || v.getKind() == call.getArgument(2))
+                .toList()));
+
         when(assignments.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_PHARMACIST")).thenReturn(2L);
         holdsAt(pharmacist, "ROLE_PHARMACIST");
         holdsAt(otherPharmacist, "ROLE_PHARMACIST");
@@ -146,6 +155,28 @@ class MedicationCatalogVersionServiceTest {
                 Set<String> wanted = call.getArgument(2);
                 return wanted.contains(role);
             });
+    }
+
+    /** Review of #1383: a withdrawn entry put back is compared, as its twin may have entered meanwhile. */
+    @Test
+    void puttingBackAWithdrawnEntryWhoseTwinIsInTheCatalogue_isRefusedOnItsName() {
+        actingAs(admin);
+        item.setActive(false);
+        theCatalogueHolds(
+            new Object[] {itemId, "Paracétamol", "TABLET", "500", "mg", false, hospitalId},
+            new Object[] {UUID.randomUUID(), "Paracétamol", "TABLET", "500", "mg", true, hospitalId});
+        FormularySnapshot back = FormularySnapshot.of(item).withActive(true);
+
+        assertThatThrownBy(() -> service.proposeFormulary(item, back, "Remise au livret"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicate");
+        assertThat(stored).isEmpty();
+
+        // Without a twin, it is put back as before.
+        theCatalogueHolds(new Object[] {itemId, "Paracétamol", "TABLET", "500", "mg", false, hospitalId});
+        assertThat(service.proposeFormulary(item, back, "Remise au livret").getStatus())
+            .isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
     }
 
     private void actingAs(UUID user) {
@@ -301,6 +332,149 @@ class MedicationCatalogVersionServiceTest {
         assertThat(entry.getFormularyApprovedVersion()).isEqualTo(1);
         assertThat(approved.getCatalogItemId()).isEqualTo(entry.getId());
         assertThat(approved.getDecisionReason()).isEqualTo("Conforme à la LNME");
+    }
+
+    // ── QA D4180 (r81): the same medicine is not entered twice ──
+
+    private static FormularySnapshot cefixime(String name, String strength, String unit) {
+        return new FormularySnapshot(name, "Cefixime", null, null, "TABLET", strength, unit, null, null, "ORAL",
+            false, true, null, false, null, null);
+    }
+
+    /** The catalogue the hospital sees: {@code [id, nameFr, form, strength, strengthUnit, active, hospitalId]}. */
+    private void theCatalogueHolds(Object[]... rows) {
+        when(catalogue.identityOfEntriesVisibleAt(hospitalId)).thenReturn(List.of(rows));
+    }
+
+    @Test
+    void aSecondProposalOfTheSameMedicine_isRefusedOnItsName_whileTheFirstWaits() {
+        actingAs(admin);
+        service.proposeNewEntry(hospital, cefixime("Céfixime", "200", "mg"), "Ajout");
+
+        // Same name, form and strength, written another way: still the same medicine.
+        assertThatThrownBy(() -> service.proposeNewEntry(hospital, cefixime("  cefixime ", "200 MG", null), "Ajout"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicatePending");
+        assertThat(stored).hasSize(1);
+    }
+
+    @Test
+    void aProposalOfAMedicineAlreadyInTheCatalogue_isRefusedOnItsName_namingTheEntry() {
+        actingAs(admin);
+        theCatalogueHolds(new Object[] {UUID.randomUUID(), "Céfixime", "TABLET", "200", "mg", true, hospitalId});
+
+        assertThatThrownBy(() -> service.proposeNewEntry(hospital, cefixime("Céfixime", "200", "mg"), "Ajout"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicate");
+        assertThat(stored).isEmpty();
+    }
+
+    @Test
+    void anEntryOfThePlatformsList_alsoRefusesItsTwinAtAHospital() {
+        actingAs(admin);
+        theCatalogueHolds(new Object[] {UUID.randomUUID(), "Céfixime", "TABLET", "200", "mg", true, null});
+
+        assertThatThrownBy(() -> service.proposeNewEntry(hospital, cefixime("Céfixime", "200", "mg"), "Ajout"))
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicate");
+    }
+
+    @Test
+    void anotherStrengthOfTheSameMedicine_isAccepted_andTheApproverIsShownTheEntryThatLooksLikeIt() {
+        actingAs(admin);
+        UUID existing = UUID.randomUUID();
+        theCatalogueHolds(new Object[] {existing, "Céfixime", "TABLET", "200", "mg", true, hospitalId});
+
+        MedicationCatalogVersion version = service.proposeNewEntry(hospital, cefixime("Céfixime", "400", "mg"), "Ajout");
+
+        actingAs(pharmacist);
+        MedicationCatalogVersionResponseDTO shown = service.toDto(version);
+        assertThat(shown.getSimilarEntries()).singleElement().satisfies(similar -> {
+            assertThat(similar.catalogItemId()).isEqualTo(existing);
+            assertThat(similar.exact()).isFalse();
+            assertThat(similar.state()).isEqualTo("IN_CATALOGUE");
+            assertThat(similar.label()).isEqualTo("Céfixime 200 mg (TABLET)");
+        });
+    }
+
+    @Test
+    void aProposalWhoseTwinWasApprovedWhileItWaited_isRefusedAtApproval() {
+        actingAs(admin);
+        MedicationCatalogVersion version = service.proposeNewEntry(hospital, cefixime("Céfixime", "200", "mg"), "Ajout");
+        // Its twin entered the catalogue meanwhile (a proposal made before the check existed, or another path).
+        theCatalogueHolds(new Object[] {UUID.randomUUID(), "Céfixime", "TABLET", "200", "mg", true, hospitalId});
+
+        actingAs(pharmacist);
+        assertThatThrownBy(() -> service.approve(version.getId(), null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicateAtApproval");
+        verify(catalogue, never()).save(any());
+        assertThat(version.getStatus()).isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
+    }
+
+    @Test
+    void aWithdrawnEntry_neverRefusesANewOne_butIsShownAsWithdrawn() {
+        actingAs(admin);
+        theCatalogueHolds(new Object[] {UUID.randomUUID(), "Céfixime", "TABLET", "200", "mg", false, hospitalId});
+
+        MedicationCatalogVersion version = service.proposeNewEntry(hospital, cefixime("Céfixime", "200", "mg"), "Ajout");
+
+        assertThat(service.toDto(version).getSimilarEntries()).singleElement()
+            .satisfies(similar -> assertThat(similar.state()).isEqualTo("WITHDRAWN"));
+    }
+
+    @Test
+    void renamingAnEntryIntoOneThatIsAlreadyThere_isRefused_anUnrelatedChangeIsNot() {
+        actingAs(admin);
+        theCatalogueHolds(
+            new Object[] {itemId, "Paracétamol", "TABLET", "500", "mg", true, hospitalId},
+            new Object[] {UUID.randomUUID(), "Paracétamol", "TABLET", "1000", "mg", true, hospitalId});
+
+        // 500 mg → 1000 mg would make it the twin of the other entry.
+        assertThatThrownBy(() -> service.proposeFormulary(item, liveWith("1000", false), "Nouveau dosage"))
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.duplicate");
+        // A change that leaves name, form and strength alone is never compared (an old twin does not block it).
+        assertThat(service.proposeFormulary(item, liveWith("500", true), "Classement").getStatus())
+            .isEqualTo(MedicationCatalogVersionStatus.PENDING_APPROVAL);
+    }
+
+    @Test
+    void theLookAlikeReadRefusesAValueLongerThanAnyCatalogueColumn_onItsField() {
+        actingAs(admin);
+        assertThatThrownBy(() -> service.similarEntries(cefixime("x".repeat(256), "200", "mg"), null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "nameFr")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.similar.tooLong");
+        assertThat(service.similarEntries(cefixime("x".repeat(255), "200", "mg"), null)).isEmpty();
+    }
+
+    // ── QA D4190 (r81): a withdrawal is a line of the entry's history ──
+
+    @Test
+    void aWithdrawalIsRecordedOnTheHistory_withWhoWhenAndWhy_andNeedsItsReason() {
+        actingAs(admin);
+        assertThatThrownBy(() -> service.recordWithdrawal(item, "  ", "reason"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "reason")
+            .hasFieldOrPropertyWithValue("messageKey", "medication.catalog.withdrawal.reasonRequired");
+        assertThat(stored).isEmpty();
+
+        MedicationCatalogVersion line = service.recordWithdrawal(item, "Rappel de lot", "reason");
+
+        assertThat(line.getChangeType()).isEqualTo(MedicationCatalogChangeType.WITHDRAWAL);
+        assertThat(line.getStatus()).isEqualTo(MedicationCatalogVersionStatus.RECORDED);
+        assertThat(line.getChangeReason()).isEqualTo("Rappel de lot");
+        assertThat(line.getProposedBy()).isEqualTo(admin);
+        assertThat(line.getDecidedBy()).isEqualTo(admin);
+        assertThat(line.getDecidedAt()).isNotNull();
+        assertThat(line.getVersionNumber()).isEqualTo(1);
+        MedicationCatalogVersionResponseDTO shown = service.toDto(line);
+        assertThat(shown.getChangedFields()).containsExactly("active");
+        assertThat(shown.getFormulary().active()).isFalse();
+        assertThat(shown.getPreviousFormulary().active()).isTrue();
+        assertThat(shown.isCallerMayApprove()).isFalse();
     }
 
     @Test

@@ -1730,14 +1730,6 @@
     ],
     "control": "select"
   },
-  "src/app/pharmacy/stock-adjustment.html::select::1baa8a24b96b1d462987::0": {
-    "reason": "Existing module-specific control styling supplies padding via .filter-bar select, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": [
-      ".filter-bar select",
-      "input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea"
-    ],
-    "control": "txFilterType"
-  },
   "src/app/pharmacy/stock-routing.html::input::1140ec869c6564d7487d::0": {
     "reason": "Existing module-specific control styling supplies padding via .form-control, input:not([type=checkbox]):not([type=radio]),\nselect,\ntextarea. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [

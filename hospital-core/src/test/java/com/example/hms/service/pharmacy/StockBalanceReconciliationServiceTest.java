@@ -35,11 +35,13 @@ class StockBalanceReconciliationServiceTest {
     @Mock ControlledStockWitness witness;
     @Mock EntityManager entityManager;
     @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Mock StockCountService access;
+    @Mock com.example.hms.repository.pharmacy.PharmacyRepository pharmacies;
     StockBalanceReconciliationService service;
     UUID hospitalId = UUID.randomUUID(), itemId = UUID.randomUUID(), userId = UUID.randomUUID(), lotId = UUID.randomUUID();
     InventoryItem item;
     @BeforeEach void setup() {
-        service = new StockBalanceReconciliationService(items, lots, ledger, users, roles, witness, entityManager, jdbc);
+        service = new StockBalanceReconciliationService(items, lots, ledger, users, roles, witness, entityManager, jdbc, access, pharmacies);
         var hospital = new Hospital(); hospital.setId(hospitalId);
         var pharmacy = Pharmacy.builder().hospital(hospital).build();
         item = InventoryItem.builder().pharmacy(pharmacy).unit("tablet").quantityOnHand(new BigDecimal("20")).build();

@@ -51,7 +51,8 @@ class PartnerPharmacyNotAStoreGuardTest {
         Map.entry("ControlledDrugRegisterService.java", "pharmacyRepository.findById(pharmacyId)"),
         Map.entry("QuarantineDestructionService.java", "pharmacyRepository.findById(pharmacyId)"),
         Map.entry("StockCountService.java", "pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)"),
-        Map.entry("PharmacyConsumptionService.java", "pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)")));
+        Map.entry("PharmacyConsumptionService.java", "pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)"),
+        Map.entry("StockBalanceReconciliationService.java", "pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)")));
 
     @Test
     @DisplayName("every pharmacy lookup under service/pharmacy says how a partner is kept out")

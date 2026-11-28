@@ -194,6 +194,98 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     expect(svc.receiveStock.calls.mostRecent().args[0].witnessedBy).toBe('u-2');
   });
 
+  describe('QA D4184: the movement list names what moved', () => {
+    const ledger = [
+      {
+        id: 't-1',
+        inventoryItemId: 'i-1',
+        transactionType: 'TRANSFER',
+        quantity: 20,
+        stockLotNumber: 'R81-A-1',
+        medicationName: 'Métronidazole 250 mg',
+        form: 'TABLET',
+        unit: 'comprimé',
+        counterpartPharmacyName: 'Réserve de service',
+        reason: 'TRANSFER to Réserve de service',
+        createdAt: '2026-11-27T05:41:00',
+      },
+      {
+        id: 't-2',
+        inventoryItemId: 'i-2',
+        transactionType: 'DISPENSE',
+        quantity: 1,
+        stockLotNumber: 'R81-A-1',
+        medicationName: 'Métronidazole 500 mg',
+        form: 'CAPSULE',
+        unit: 'gélule',
+        reason: 'Dispense for prescription 4f0c',
+        createdAt: '2026-11-20T09:00:00',
+      },
+      {
+        id: 't-3',
+        inventoryItemId: 'i-9',
+        transactionType: 'ADJUSTMENT',
+        quantity: -2,
+        reason: 'DAMAGE: flacon cassé au déballage, constaté par le magasinier',
+        createdAt: '2026-11-10T09:00:00',
+      },
+    ];
+
+    function withLedger() {
+      const c = create();
+      svc.listStores.and.returnValue(of({ content: [{ id: 'p-1', name: 'Pharmacie' }] }) as never);
+      svc.listInventoryByPharmacy.and.returnValue(
+        of({ data: { content: [{ id: 'i-9', medicationName: 'Sirop Paracétamol' }] } }) as never,
+      );
+      svc.listTransactionsByPharmacy.and.returnValue(of({ data: { content: ledger } }) as never);
+      const fixture = TestBed.createComponent(StockAdjustmentComponent);
+      fixture.detectChanges();
+      return {
+        c: fixture.componentInstance,
+        fixture,
+        el: fixture.nativeElement as HTMLElement,
+        unused: c,
+      };
+    }
+
+    it('each row names its medicine and form, its unit and a transfer its destination; the reason is whole', () => {
+      const { el } = withLedger();
+      const rows = Array.from(el.querySelectorAll('[data-testid="ledger-row"]')).map((row) =>
+        row.textContent!.replace(/\s+/g, ' '),
+      );
+      // The same lot number on two medicines: each row says which.
+      expect(rows[0]).toContain('Métronidazole 250 mg');
+      expect(rows[0]).toContain('PHARMACY.FORM_OPTION.TABLET');
+      expect(rows[0]).toContain('-20 comprimés');
+      expect(rows[1]).toContain('Métronidazole 500 mg');
+      expect(rows[1]).toContain('-1 gélule');
+      expect(el.querySelector('[data-testid="ledger-transfer-store"]')!.textContent).toContain(
+        'PHARMACY.LEDGER.TRANSFER_TO',
+      );
+      // A movement from a server that sends no name falls back to the store's own item list.
+      expect(rows[2]).toContain('Sirop Paracétamol');
+      expect(rows[2]).toContain('flacon cassé au déballage, constaté par le magasinier');
+      expect(el.querySelector('.reason-cell')!.hasAttribute('title')).toBeFalse();
+    });
+
+    it('filters by medicine or lot and by period, and says when nothing matches', () => {
+      const { c, fixture, el } = withLedger();
+      c.filterMedicine = '500';
+      expect(c.visibleTransactions().map((tx) => tx.id)).toEqual(['t-2']);
+      c.filterMedicine = 'r81-a-1';
+      expect(c.visibleTransactions().length).toBe(2);
+      c.filterMedicine = '';
+      c.filterFrom = '2026-11-15';
+      c.filterTo = '2026-11-25';
+      expect(c.visibleTransactions().map((tx) => tx.id)).toEqual(['t-2']);
+      c.filterMedicine = 'aucun';
+      fixture.detectChanges();
+      expect(el.querySelector('[data-testid="ledger-no-match"]')).not.toBeNull();
+      c.clearLedgerFilters();
+      expect(c.visibleTransactions().length).toBe(3);
+    });
+  });
+
   it('QA D158: the ledger signs receipts positive and an adjustment by its own sign', () => {
     const c = create();
     expect(c.signedQuantity({ transactionType: 'RECEIPT', quantity: 20 } as never)).toBe('+20');

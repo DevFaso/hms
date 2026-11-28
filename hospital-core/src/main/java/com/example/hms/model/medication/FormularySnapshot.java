@@ -86,10 +86,21 @@ public record FormularySnapshot(
             sensitivityCategory);
     }
 
-    /** The entry as a queue names it: name, strength and unit, form. */
+    /** Whether the name already writes {@code text}, whatever the case and the spacing. */
+    private boolean nameStates(String text) {
+        return nameFr != null && compact(nameFr).contains(compact(text));
+    }
+
+    private static String compact(String text) {
+        return text.toLowerCase(java.util.Locale.ROOT).replaceAll("\\s+", "");
+    }
+
+    /** The entry as a queue names it: name, strength and unit (unless the name states them), form. */
     public String label() {
         StringBuilder label = new StringBuilder(nameFr == null ? "" : nameFr);
-        if (strength != null) {
+        // QA D4189 (r81): « Sirop Paracétamol 120 mg/5 mL 120 mg/5 mL ». A name that already states the strength
+        // is not followed by it a second time.
+        if (strength != null && !nameStates(strength + (strengthUnit == null ? "" : strengthUnit))) {
             label.append(' ').append(strength);
             if (strengthUnit != null) {
                 label.append(' ').append(strengthUnit);

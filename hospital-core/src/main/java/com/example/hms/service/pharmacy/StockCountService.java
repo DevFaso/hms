@@ -69,19 +69,21 @@ public class StockCountService {
         }
         requireCountedUnits(item, request.countedQuantity());
         User actor = actor();
+        UUID countId = UUID.randomUUID();
         // The unique request is hospital-scoped. Concurrent retries never create a second observation.
-        jdbc.update("""
+        int inserted = jdbc.update("""
             INSERT INTO clinical.pharmacy_stock_counts
                 (id, hospital_id, inventory_item_id, stock_lot_id, client_request_id, book_quantity,
                  counted_quantity, variance, unit, reason, medication_name_fr, medication_name_en, lot_number,
                  recorded_by_user_id, recorded_by_name, recorded_at, book_item_revision, book_lot_revision)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (hospital_id, client_request_id) DO NOTHING
-            """, UUID.randomUUID(), hospitalId, item.getId(), lot == null ? null : lot.getId(), request.clientRequestId(),
+            """, countId, hospitalId, item.getId(), lot == null ? null : lot.getId(), request.clientRequestId(),
             book, request.countedQuantity(), request.countedQuantity().subtract(book), item.getUnit(), request.reason().trim(),
             DrugDisplayNames.forReader(item.getMedicationCatalogItem(), Locale.FRENCH),
             DrugDisplayNames.forReader(item.getMedicationCatalogItem(), Locale.ENGLISH), lot == null ? null : lot.getLotNumber(),
             actor.getId(), actorName(actor), LocalDateTime.now(clock), item.getStockRevision(), lot == null ? null : lot.getStockRevision());
+        if (inserted == 1) closeEarlierCounts(hospitalId, item, lot, countId, actor);
         StockCount saved = counts.findByHospitalIdAndClientRequestId(hospitalId, request.clientRequestId()).orElseThrow();
         return sameRequest(saved, request);
     }
@@ -94,6 +96,7 @@ public class StockCountService {
             throw new FieldBusinessException("confirmed", "stockCount.confirmRequired");
         }
         if (count.getAppliedAt() != null) return response(count);
+        if (count.getClosedAt() != null) throw new BusinessException("stockCount.closed");
         InventoryItem item = ownedItem(count.getInventoryItem().getId(), hospitalId);
         StockLot lot = ownedLot(count.getStockLot() == null ? null : count.getStockLot().getId(), item);
         lockStock(item, lot);
@@ -123,11 +126,57 @@ public class StockCountService {
         return response(counts.save(count));
     }
 
+    /**
+     * QA D4191: a count that will never be applied (the stock moved since, a mistake) leaves the waiting list, with
+     * who closed it and why. Nothing moves in the stock; an applied count is never closed.
+     */
+    @Transactional
+    public StockCountResponseDTO close(UUID id, StockCountClosureDTO closure) {
+        UUID hospitalId = requireScope(true);
+        StockCount count = counts.findLocked(id, hospitalId).orElseThrow(() -> notFound(id));
+        String reason = closure == null || closure.reason() == null ? "" : closure.reason().trim();
+        if (reason.isEmpty() || reason.length() > 300) throw new FieldBusinessException("reason", "stockCount.closeReasonRequired");
+        if (count.getAppliedAt() != null) throw new BusinessException("stockCount.alreadyApplied");
+        if (count.getClosedAt() != null) return response(count);
+        User actor = actor();
+        count.setClosedAt(LocalDateTime.now(clock));
+        count.setClosedBy(actor);
+        count.setClosedByName(actorName(actor));
+        count.setCloseReason(reason);
+        return response(counts.save(count));
+    }
+
+    /** A recount replaces the counts of the same item and lot that still wait: one open count per shelf line. */
+    private void closeEarlierCounts(UUID hospitalId, InventoryItem item, StockLot lot, UUID keepId, User actor) {
+        LocalDateTime at = LocalDateTime.now(clock);
+        String reason = MessageUtil.resolve("stockCount.supersededReason");
+        if (lot == null) {
+            counts.closeOpenItemCounts(hospitalId, item.getId(), keepId, at, actor, actorName(actor), reason);
+        } else {
+            counts.closeOpenLotCounts(hospitalId, item.getId(), lot.getId(), keepId, at, actor, actorName(actor), reason);
+        }
+    }
+
     @Transactional(readOnly = true)
     public Page<StockCountResponseDTO> list(UUID pharmacyId, Pageable pageable) {
         UUID hospitalId = requireScope(false);
         pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId).orElseThrow(() -> notFound(pharmacyId));
-        return counts.findForPharmacy(hospitalId, pharmacyId, pageable).map(StockCountService::response);
+        return counts.findForPharmacy(hospitalId, pharmacyId, pageable).map(this::response);
+    }
+
+    /**
+     * QA D4183: the stores of the caller's hospital that hold its own stock, by name. A partner pharmacy is not
+     * one: nothing of the hospital is counted there.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<StockStoreDTO> stores() {
+        UUID hospitalId = requireScope(false);
+        return pharmacies.findByHospitalIdAndPharmacyTypeAndActiveTrue(hospitalId,
+                com.example.hms.enums.PharmacyType.HOSPITAL_DISPENSARY).stream()
+            .map(store -> new StockStoreDTO(store.getId(), store.getName()))
+            .sorted(java.util.Comparator.comparing(StockStoreDTO::pharmacyName,
+                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+            .toList();
     }
 
     private UUID requireScope(boolean write) {
@@ -219,7 +268,7 @@ public class StockCountService {
         }
     }
 
-    private static StockCountResponseDTO sameRequest(StockCount count, StockCountRequestDTO request) {
+    private StockCountResponseDTO sameRequest(StockCount count, StockCountRequestDTO request) {
         UUID lotId = count.getStockLot() == null ? null : count.getStockLot().getId();
         if (!count.getInventoryItem().getId().equals(request.inventoryItemId()) || !Objects.equals(lotId, request.stockLotId())
                 || count.getBookQuantity().compareTo(request.expectedBookQuantity()) != 0 || !Objects.equals(count.getUnit(), request.expectedUnit())
@@ -236,13 +285,30 @@ public class StockCountService {
             && (lot == null ? lotRevision == null : lotRevision != null && Objects.equals(lot.getStockRevision(), lotRevision));
     }
 
-    private static StockCountResponseDTO response(StockCount count) {
+    /** PENDING, APPLIED, CLOSED, or OUTDATED when the stock moved since the count and it can no longer be applied. */
+    static String statusOf(StockCount count) {
+        if (count.getAppliedAt() != null) return "APPLIED";
+        if (count.getClosedAt() != null) return "CLOSED";
+        InventoryItem item = count.getInventoryItem();
+        StockLot lot = count.getStockLot();
+        BigDecimal current = lot == null ? item.getQuantityOnHand() : lot.getRemainingQuantity();
+        boolean applicable = sameRevision(item, lot, count.getItemRevision(), count.getLotRevision())
+            && current != null && current.compareTo(count.getBookQuantity()) == 0 && Objects.equals(item.getUnit(), count.getUnit());
+        return applicable ? "PENDING" : "OUTDATED";
+    }
+
+    private StockCountResponseDTO response(StockCount count) {
+        UUID caller = roles.getCurrentUserId();
+        InventoryItem counted = count.getInventoryItem();
+        boolean controlled = counted.getMedicationCatalogItem() != null && counted.getMedicationCatalogItem().isControlled();
         String name = "en".equals(com.example.hms.utility.DisplayNumbers.requestLocale().getLanguage())
             ? count.getMedicationNameEn() : count.getMedicationNameFr();
         return new StockCountResponseDTO(count.getId(), count.getInventoryItem().getId(),
             count.getStockLot() == null ? null : count.getStockLot().getId(), name, count.getLotNumber(), count.getUnit(),
             count.getBookQuantity(), count.getCountedQuantity(), count.getVariance(), count.getReason(), count.getRecordedByName(),
-            count.getRecordedAt(), count.getAppliedAt(), count.getAppliedByName(), count.getAdjustmentId(), count.getSamePersonConfirmation());
+            count.getRecordedAt(), count.getAppliedAt(), count.getAppliedByName(), count.getAdjustmentId(), count.getSamePersonConfirmation(),
+            statusOf(count), count.getClosedAt(), count.getClosedByName(), count.getCloseReason(),
+            caller != null && count.getRecordedBy() != null && caller.equals(count.getRecordedBy().getId()), controlled);
     }
 
     private static ResourceNotFoundException notFound(UUID id) {

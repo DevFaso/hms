@@ -16,7 +16,13 @@ public class StockLotMapper {
             return null;
         }
 
+        com.example.hms.model.medication.MedicationCatalogItem medicine =
+            entity.getInventoryItem() == null ? null : entity.getInventoryItem().getMedicationCatalogItem();
         return StockLotResponseDTO.builder()
+            // QA D4184: a lot is never listed without its product; lot numbers repeat across medicines.
+            .productName(com.example.hms.service.pharmacy.StockProductLabel.nameOf(medicine))
+            .strength(com.example.hms.service.pharmacy.StockProductLabel.strengthOf(medicine))
+            .form(com.example.hms.service.pharmacy.StockProductLabel.formOf(medicine))
             .id(entity.getId())
             .inventoryItemId(entity.getInventoryItem() != null ? entity.getInventoryItem().getId() : null)
             .lotNumber(entity.getLotNumber())

@@ -14,6 +14,76 @@ output.loading-state {
   max-width: 70ch;
 }
 
+// QA D4188 (r81): the view switch, as the other tab bars of the pharmacy pages.
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tab-btn {
+  min-height: 44px;
+  margin-bottom: -2px;
+  padding: 0.625rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  &.active {
+    border-bottom-color: var(--primary);
+    color: var(--success-text);
+    font-weight: 600;
+  }
+}
+
+// QA D4180 (r81): the entries that look like the proposal.
+.similar-warning {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f3d08a;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #5c3a05;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+
+  p {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0;
+  }
+
+  ul {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+  }
+
+  li {
+    margin: 0.25rem 0;
+  }
+
+  .chip {
+    margin-left: 0.25rem;
+  }
+
+  .chip-exact {
+    background: #ffedf0;
+    color: #a61f32;
+    font-weight: 700;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
 .version-list {
   list-style: none;
   margin: 1rem 0 0;

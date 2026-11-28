@@ -104,6 +104,18 @@
   }
 }
 
+// QA D4184 (r81): the product of a lot, in the expiry report.
+.lot-product {
+  min-width: 11rem;
+  white-space: normal;
+}
+
+.lot-form {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
 // Alerts tab
 .alerts-header {
   margin-bottom: 1rem;

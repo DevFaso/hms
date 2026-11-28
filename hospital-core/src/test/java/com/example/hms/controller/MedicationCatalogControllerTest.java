@@ -226,10 +226,12 @@ class MedicationCatalogControllerTest {
     @Test
     void deactivate_returnsNoContent() throws Exception {
         mockMvc.perform(delete("/medication-catalog/{id}", itemId)
-                        .param("hospitalId", hospitalId.toString()))
+                        .param("hospitalId", hospitalId.toString())
+                        .param("reason", "Rappel de lot"))
                 .andExpect(status().isNoContent());
 
-        verify(catalogService).deactivate(itemId, hospitalId);
+        // QA D4190: the reason reaches the service, which requires it and keeps it on the entry's history.
+        verify(catalogService).deactivate(itemId, hospitalId, "Rappel de lot");
     }
 
     // r66 D2901: what the portal sends. Neither call names a hospital; both answered 4xx.
@@ -239,7 +241,7 @@ class MedicationCatalogControllerTest {
         mockMvc.perform(delete("/medication-catalog/{id}", itemId))
                 .andExpect(status().isNoContent());
 
-        verify(catalogService).deactivate(itemId, null);
+        verify(catalogService).deactivate(itemId, null, null);
     }
 
     @Test

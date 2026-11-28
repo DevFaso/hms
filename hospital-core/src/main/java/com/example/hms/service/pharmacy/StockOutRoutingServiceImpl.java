@@ -163,6 +163,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         List<MedicationCatalogItem> catalogItems = resolveCatalogItems(prescription, orderHospitalId);
 
         BigDecimal totalOnHand = BigDecimal.ZERO;
+        // QA D4193: the same stock, store by store (insertion order: the order the stores are read in).
+        java.util.Map<UUID, StockCheckResultDTO.StoreStock> perStore = new java.util.LinkedHashMap<>();
 
         // One query per resolved item (almost always one) for hospital-wide
         // on-hand stock, which avoids N+1 across dispensaries.
@@ -175,6 +177,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                         && item.getPharmacy().getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY
                         && item.getQuantityOnHand() != null) {
                     totalOnHand = totalOnHand.add(item.getQuantityOnHand());
+                    perStore.merge(item.getPharmacy().getId(),
+                        new StockCheckResultDTO.StoreStock(item.getPharmacy().getId(), item.getPharmacy().getName(),
+                            item.getQuantityOnHand(), item.getUnit()),
+                        (held, more) -> new StockCheckResultDTO.StoreStock(held.pharmacyId(), held.pharmacyName(),
+                            held.quantityOnHand().add(more.quantityOnHand()), held.unit()));
                 }
             }
         }
@@ -210,9 +217,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             }
         }
 
-        // pharmacyName/pharmacyId are intentionally null: quantityOnHand is the aggregate
-        // across all hospital dispensaries. A per-dispensary breakdown is out of scope.
+        // pharmacyName/pharmacyId are intentionally null: quantityOnHand is the total across the hospital's own
+        // stores; `stores` says what each one holds (QA D4193).
         return StockCheckResultDTO.builder()
+                .stores(perStore.values().stream()
+                    .sorted(java.util.Comparator.comparing(StockCheckResultDTO.StoreStock::pharmacyName,
+                        java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                    .toList())
                 .medicationName(prescription.getMedicationName())
                 .pharmacyName(null)
                 .pharmacyId(null)

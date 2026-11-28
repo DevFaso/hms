@@ -26,7 +26,7 @@ public interface MedicationCatalogItemService {
 
     MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto);
 
-    void deactivate(UUID id, UUID hospitalId);
+    void deactivate(UUID id, UUID hospitalId, String reason);
 
     /**
      * Round 18 (QA D935): the hospital pharmacy sets, or approves, an item's

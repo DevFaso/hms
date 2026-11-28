@@ -1593,6 +1593,41 @@ export const routes: Routes = [
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
       },
       {
+        // QA D4183 (r81): the physical stock counts, their confirmation and the balance
+        // reconciliation; roles mirror the reads of pharmacy.StockCountController (the accountant
+        // reads; each write is offered from action-permissions.ts).
+        path: 'pharmacy/stock-count',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./pharmacy/stock-count').then((m) => m.StockCountComponent),
+      },
+      {
+        // QA D4183 (r81): the consumption report; roles mirror StockCountController#consumption.
+        path: 'pharmacy/consumption',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-consumption').then((m) => m.StockConsumptionComponent),
+      },
+      {
         // QA D967: the controlled-drug register; roles mirror ControlledRegisterController.
         path: 'pharmacy/controlled-register',
         canActivate: [RoleGuard],

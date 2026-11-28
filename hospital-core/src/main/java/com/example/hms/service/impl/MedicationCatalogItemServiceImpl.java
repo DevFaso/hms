@@ -167,6 +167,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         // awaiting approval and the row keeps the values in force. The rest is edited directly, at once.
         boolean withdrawn = existing.isActive() && !dto.isActive();
         if (withdrawn) {
+            // QA D4190: a withdrawal says why, and is a line of the entry's history.
+            versionService.recordWithdrawal(existing, dto.getChangeReason(), "changeReason");
             existing.deactivate();
         }
         FormularySnapshot live = FormularySnapshot.of(existing);
@@ -294,8 +296,13 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     }
 
     @Override
-    public void deactivate(UUID id, UUID hospitalId) {
+    public void deactivate(UUID id, UUID hospitalId, String reason) {
         MedicationCatalogItem item = requireWritable(id, hospitalId);
+        if (item.isActive()) {
+            // QA D4190 (r81): who withdrew it, when and why, on the entry's own history. It asked no reason and
+            // left no line. An entry already withdrawn is not withdrawn a second time.
+            versionService.recordWithdrawal(item, reason, "reason");
+        }
         item.deactivate();
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());

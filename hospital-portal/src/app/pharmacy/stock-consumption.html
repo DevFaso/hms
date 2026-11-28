@@ -1,0 +1,174 @@
+<div class="page-container pharmacy-workspace">
+  <div class="page-header">
+    <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
+      <h1 class="page-title">{{ 'STOCK_CONSUMPTION.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'STOCK_CONSUMPTION.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <!-- Offered once there is something to export; never a disabled button that hides why. -->
+      @if (!loading() && visible().length > 0) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="consumption-export"
+          (click)="exportCsv()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">table</span>
+          {{ 'STOCK_CONSUMPTION.EXPORT' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (storesFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadStores()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (storesLoaded() && stores().length === 0) {
+    <p class="muted" role="status" data-testid="no-store-hint">
+      {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+    </p>
+  } @else {
+    <div class="consumption-filters" data-testid="consumption-filters">
+      <div class="filter-field">
+        <label for="consumptionStore">{{ 'STOCK_CONSUMPTION.STORE' | translate }}</label>
+        <select
+          appFormControl
+          id="consumptionStore"
+          name="consumptionStore"
+          [(ngModel)]="selectedStoreId"
+          (ngModelChange)="load()"
+        >
+          @for (store of stores(); track store.pharmacyId) {
+            <option [value]="store.pharmacyId">{{ store.pharmacyName }}</option>
+          }
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="consumptionFrom">{{ 'STOCK_CONSUMPTION.FROM' | translate }}</label>
+        <input
+          appFormControl
+          id="consumptionFrom"
+          type="date"
+          name="consumptionFrom"
+          [max]="to"
+          [(ngModel)]="from"
+          (ngModelChange)="load()"
+        />
+      </div>
+      <div class="filter-field">
+        <label for="consumptionTo">{{ 'STOCK_CONSUMPTION.TO' | translate }}</label>
+        <input
+          appFormControl
+          id="consumptionTo"
+          type="date"
+          name="consumptionTo"
+          [min]="from"
+          [(ngModel)]="to"
+          (ngModelChange)="load()"
+        />
+      </div>
+      <div class="filter-field filter-search">
+        <label for="consumptionSearch">{{ 'STOCK_CONSUMPTION.MEDICINE' | translate }}</label>
+        <input
+          appFormControl
+          id="consumptionSearch"
+          type="search"
+          name="consumptionSearch"
+          [placeholder]="'STOCK_CONSUMPTION.MEDICINE_PLACEHOLDER' | translate"
+          [(ngModel)]="search"
+        />
+      </div>
+    </div>
+    <p class="workspace-note">{{ 'STOCK_CONSUMPTION.EXPLAIN' | translate }}</p>
+
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (failure(); as message) {
+      <div class="workspace-error" role="alert" data-testid="consumption-error">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <p>{{ message }}</p>
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (visible().length === 0) {
+      <div class="empty-state" data-testid="consumption-empty">
+        <span class="material-symbols-outlined empty-icon" aria-hidden="true">query_stats</span>
+        <h3>
+          {{
+            ((report()?.items?.length ?? 0) === 0
+              ? 'STOCK_CONSUMPTION.EMPTY'
+              : 'STOCK_CONSUMPTION.EMPTY_SEARCH'
+            ) | translate
+          }}
+        </h3>
+        <p>{{ 'STOCK_CONSUMPTION.EMPTY_HINT' | translate }}</p>
+      </div>
+    } @else {
+      <p class="consumption-count" role="status" data-testid="consumption-count">
+        {{
+          'STOCK_CONSUMPTION.COUNT'
+            | pluralKey: visible().length
+            | translate
+              : {
+                  count: visible().length,
+                  from: (report()?.from | serverTime | date: 'mediumDate'),
+                  to: (report()?.to | serverTime | date: 'mediumDate'),
+                }
+        }}
+      </p>
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'STOCK_CONSUMPTION.TITLE' | translate"
+      >
+        <table class="data-table consumption-table" data-testid="consumption-table">
+          <thead>
+            <tr>
+              <th scope="col">{{ 'STOCK_CONSUMPTION.COL.MEDICINE' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_CONSUMPTION.COL.ISSUED' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_CONSUMPTION.COL.RETURNED' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_CONSUMPTION.COL.NET' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_CONSUMPTION.COL.MOVEMENTS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of visible(); track line.inventoryItemId + '|' + (line.unit ?? '')) {
+              <tr data-testid="consumption-row" [class.unit-unknown]="!line.unitHistoryComparable">
+                <th scope="row" class="medicine-cell">
+                  <span class="med-name">{{ line.medicationName | dash }}</span>
+                  @if (line.form) {
+                    {{ ' ' }}<small class="cell-sub">{{ line.form | catalogForm }}</small>
+                  }
+                  <!-- QA D4192: said, never left blank and never guessed from the unit of today. -->
+                  @if (!line.unitHistoryComparable) {
+                    {{ ' '
+                    }}<small class="unit-note" data-testid="consumption-unit-unknown">{{
+                      'STOCK_CONSUMPTION.UNIT_NOT_RECORDED_NOTE' | translate
+                    }}</small>
+                  }
+                </th>
+                <td class="num">{{ quantity(line.issuedQuantity, line) }}</td>
+                <td class="num">{{ quantity(line.returnedQuantity, line) }}</td>
+                <td class="num">
+                  <strong>{{ quantity(net(line), line) }}</strong>
+                </td>
+                <td class="num">{{ line.sourceMovements }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

@@ -79,6 +79,11 @@ class PharmacyPageEndpointRolesTest {
             // who decide (not the store manager); an entry is submitted as it stands by whoever manages it.
             Map.entry("medication-catalog#listCatalogVersions", "canSeeApprovals()"),
             Map.entry("medication-catalog#requestCatalogApproval", "canSubmitAsIs(hItem)"),
+            // QA D4183 (r81): the count sheet and the confirmation are offered to the counting roles only;
+            // the accountant reads the recorded counts and the reconciliation.
+            Map.entry("stock-count#listInventoryByPharmacy", "@if (canCount()) {"),
+            Map.entry("stock-count#listLotsByPharmacy", "@if (canCount()) {"),
+            Map.entry("stock-count#listWitnessCandidates", "@if (canCount() && (count.status === 'PENDING'"),
             Map.entry("pharmacy-registry#createPharmacy", "canManage()"),
             Map.entry("pharmacy-registry#updatePharmacy", "canManage()"),
             Map.entry("pharmacy-registry#deletePharmacy", "canManage()"),

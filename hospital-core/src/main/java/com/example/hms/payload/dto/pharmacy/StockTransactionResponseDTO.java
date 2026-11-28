@@ -36,6 +36,21 @@ public class StockTransactionResponseDTO {
     private String stockLotNumber;
     private LocalDateTime createdAt;
 
+    /*
+     * QA D4184 (r81): a movement names what moved. The list showed a type, a quantity and a lot number, and lot
+     * numbers repeat across medicines, so « Transfert −20 R81-A-1 » could not be attributed.
+     */
+    /** The product in the reader's language, with its strength. */
+    private String medicationName;
+    /** The product's strength as written ("500 mg"), when the catalogue states one. */
+    private String strength;
+    /** The product's dosage form as the catalogue records it. */
+    private String form;
+    /** The unit the movement was recorded in; null on movements older than the unit snapshot (V398). */
+    private String unit;
+    /** A transfer's other store: where the stock went (TRANSFER) or where it came from (the paired RECEIPT). */
+    private String counterpartPharmacyName;
+
     // ── FU-2 (P-06 backend): first-class RECEIPT fields ──
     private String lotNumber;
     private String supplier;

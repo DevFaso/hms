@@ -67,4 +67,10 @@ public class MedicationCatalogVersionResponseDTO {
     private boolean callerMayReject;
     /** Whether the caller proposed it (and may take it back while it waits). */
     private boolean ownProposal;
+
+    /**
+     * QA D4180 (r81): for a formulary version still waiting, the entries of the catalogue (and the other waiting
+     * proposals) that look like it, so that the approver sees a duplicate before approving it.
+     */
+    private List<MedicationCatalogSimilarEntryDTO> similarEntries;
 }

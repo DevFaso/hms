@@ -40,7 +40,7 @@ class PharmacyConsumptionServiceTest {
     }
 
     @Test
-    void differentRecordedUnitsStaySeparateAndLegacyUnknownUnitsAreNotInventedOrShownAsZero() {
+    void differentRecordedUnitsStaySeparateAndLegacyMovementsKeepTheirQuantitiesWithNoInventedUnit() {
         when(pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(new Pharmacy()));
         UUID item = UUID.randomUUID();
         var medicine = MedicationCatalogItem.builder().nameFr("Synthetic medicine").genericName("Synthetic medicine").build();
@@ -54,9 +54,13 @@ class PharmacyConsumptionServiceTest {
         var report = service.report(pharmacyId, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 25));
         assertThat(report.items()).hasSize(3);
         var unknown = report.items().stream().filter(row -> !row.unitHistoryComparable()).findFirst().orElseThrow();
-        assertThat(unknown.issuedQuantity()).isNull();
-        assertThat(unknown.returnedQuantity()).isNull();
+        // QA D4192 (r81): the quantities of movements older than the unit snapshot are given (the line was blank);
+        // their unit is never guessed from the item's unit of today.
+        assertThat(unknown.unit()).isNull();
+        assertThat(unknown.issuedQuantity()).isEqualByComparingTo("150");
+        assertThat(unknown.returnedQuantity()).isEqualByComparingTo("0");
         assertThat(unknown.sourceMovements()).isEqualTo(7);
+        assertThat(unknown.medicationName()).isEqualTo("Synthetic medicine");
         assertThat(report.items().stream().filter(row -> "tablet".equals(row.unit())).findFirst().orElseThrow().issuedQuantity())
             .isEqualByComparingTo("20");
         verify(movements).consumptionByRecordedUnit(pharmacyId, LocalDateTime.of(2026, 11, 1, 0, 0),

@@ -20,6 +20,7 @@ import {
   PharmacyService,
   MedicationCatalogItemRequest,
   MedicationCatalogItemResponse,
+  MedicationCatalogSimilarEntry,
   PediatricDosingRequest,
   PediatricWeightBand,
 } from '../services/pharmacy.service';
@@ -30,6 +31,8 @@ import { missingRequiredMessage } from '../shared/required-fields';
 import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
 import { allRows } from '../shared/all-pages';
 import { MedicationCatalogApprovalsComponent } from './medication-catalog-approvals';
+import { catalogLabel } from './catalog-label';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import {
   SensitivityCategory,
@@ -68,6 +71,7 @@ const APPROVED_FIELDS = [
     TranslateModule,
     EnumLabelPipe,
     ModalDialogDirective,
+    KeyLabelPipe,
   ],
   templateUrl: './medication-catalog.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -268,6 +272,17 @@ export class MedicationCatalogComponent implements OnInit {
   deletingItem = signal<MedicationCatalogItemResponse | null>(null);
   deleting = signal(false);
 
+  /**
+   * QA D4180 (r81): what the catalogue already holds that looks like the entry in the editor, asked
+   * before a proposal is sent. The same medicine was proposed and approved twice with no word to
+   * anyone. An exact one is refused (by the server too); a similar one is shown once, and the
+   * proposer sends again knowingly.
+   */
+  readonly similar = signal<MedicationCatalogSimilarEntry[]>([]);
+  /** The name, form and strength `similar` was read for; any change of them asks again. */
+  private similarFor = '';
+  readonly checkingSimilar = signal(false);
+
   ngOnInit(): void {
     this.loadItems();
     this.refreshPendingApprovals();
@@ -385,6 +400,41 @@ export class MedicationCatalogComponent implements OnInit {
   closeModal(): void {
     this.showModal.set(false);
     this.editing.set(null);
+    this.similar.set([]);
+    this.similarFor = '';
+  }
+
+  /** What the editor's entry is compared by: its name, its form, its strength. */
+  private identityKey(): string {
+    const text = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+    return [this.form.nameFr, this.form.form, this.form.strength, this.form.strengthUnit]
+      .map(text)
+      .join('|');
+  }
+
+  /** The look-alikes of the entry as it is typed now; none once the name, form or strength changed. */
+  similarEntries(): MedicationCatalogSimilarEntry[] {
+    return this.similarFor === this.identityKey() ? this.similar() : [];
+  }
+
+  /** An exact one, in the catalogue or waiting: the proposal would be refused. */
+  hasExactDuplicate(): boolean {
+    return this.similarEntries().some((entry) => entry.exact && entry.state !== 'WITHDRAWN');
+  }
+
+  /** A catalogue label with its dosage form in the reader's words (QA D4187). */
+  catalogLabel(label: string): string {
+    return catalogLabel(this.translate, label);
+  }
+
+  /** Whether the entry in the editor is new, or renames an entry (its name, form or strength). */
+  private changesIdentity(): boolean {
+    const existing = this.editing();
+    if (!existing) return true;
+    const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+    return (['nameFr', 'form', 'strength', 'strengthUnit'] as const).some(
+      (field) => text(this.form[field]) !== text(existing[field]),
+    );
   }
 
   /**
@@ -445,6 +495,15 @@ export class MedicationCatalogComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.CATALOG_APPROVAL.CHANGE_REASON_REQUIRED'));
       return;
     }
+    // QA D4180: a proposal that names a new medicine is compared with the catalogue first.
+    if (proposes && this.changesIdentity() && this.similarFor !== this.identityKey()) {
+      this.checkSimilarThenSubmit();
+      return;
+    }
+    if (this.hasExactDuplicate()) {
+      this.refuseDuplicate();
+      return;
+    }
     this.saving.set(true);
     const existing = this.editing();
     const body = this.withSensitivity(this.form);
@@ -480,6 +539,59 @@ export class MedicationCatalogComponent implements OnInit {
     });
   }
 
+  /**
+   * Asks the server what looks like the entry. Nothing found: the proposal goes. Something found: it is
+   * shown above the reason and the proposer decides (an exact one cannot be sent). The check failing
+   * does not hold a proposal back: the server refuses an exact duplicate whatever this page knows.
+   */
+  private checkSimilarThenSubmit(): void {
+    const key = this.identityKey();
+    this.checkingSimilar.set(true);
+    this.svc
+      .similarMedications(
+        {
+          nameFr: this.form.nameFr.trim(),
+          form: this.form.form,
+          strength: this.form.strength,
+          strengthUnit: this.form.strengthUnit,
+        },
+        this.editing()?.id,
+      )
+      .subscribe({
+        next: (found) => {
+          this.checkingSimilar.set(false);
+          this.similar.set(found ?? []);
+          this.similarFor = key;
+          if (this.similarEntries().length === 0) {
+            this.submitForm();
+          } else if (this.hasExactDuplicate()) {
+            this.refuseDuplicate();
+          } else {
+            this.toast.error(this.translate.instant('PHARMACY.CATALOG_DUPLICATE.SIMILAR_TOAST'));
+          }
+        },
+        error: () => {
+          this.checkingSimilar.set(false);
+          this.similar.set([]);
+          this.similarFor = key;
+          this.submitForm();
+        },
+      });
+  }
+
+  /** The name is marked, with the entry that is already there. */
+  private refuseDuplicate(): void {
+    const twin = this.similarEntries().find((entry) => entry.exact && entry.state !== 'WITHDRAWN');
+    const message = this.translate.instant(
+      twin?.state === 'PENDING'
+        ? 'PHARMACY.CATALOG_DUPLICATE.EXACT_PENDING'
+        : 'PHARMACY.CATALOG_DUPLICATE.EXACT_IN_CATALOGUE',
+      { label: this.catalogLabel(twin?.label ?? '') },
+    );
+    refuseFields(this.host.nativeElement, ['nameFr'], MED_REQUIRED_IDS, message);
+    this.toast.error(message);
+  }
+
   confirmDelete(item: MedicationCatalogItemResponse): void {
     this.deletingItem.set(item);
     this.showDeleteConfirm.set(true);
@@ -490,11 +602,12 @@ export class MedicationCatalogComponent implements OnInit {
     this.deletingItem.set(null);
   }
 
-  executeDelete(): void {
+  /** QA D4190 (r81): a withdrawal says why; who, when and why are then on the entry's history. */
+  executeDelete(reason: string): void {
     const item = this.deletingItem();
     if (!item) return;
     this.deleting.set(true);
-    this.svc.deleteMedication(item.id).subscribe({
+    this.svc.deleteMedication(item.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.MED_DELETED'));
         this.cancelDelete();

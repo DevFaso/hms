@@ -69,7 +69,11 @@
         @if (reconciled()) {
           {{ 'PHARMACY_MONEY.RECON.RECONCILED' | translate }}
         } @else {
-          {{ 'PHARMACY_MONEY.RECON.DIFFERENCES' | translate: { count: d.differences.length } }}
+          {{
+            'PHARMACY_MONEY.RECON.DIFFERENCES'
+              | pluralKey: d.differences.length
+              | translate: { count: d.differences.length }
+          }}
         }
       </p>
 
@@ -78,7 +82,9 @@
           <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.SALES' | translate }}</span>
           <strong data-testid="recon-sales">{{ d.money.salesTotal | cfa: 'XOF' }}</strong>
           <small>{{
-            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.salesCount }
+            'PHARMACY_MONEY.RECON.COUNT'
+              | pluralKey: d.money.salesCount
+              | translate: { count: d.money.salesCount }
           }}</small>
           @for (m of salesMethods(); track m[0]) {
             <small
@@ -93,7 +99,9 @@
             d.money.dispensePaymentsTotal | cfa: 'XOF'
           }}</strong>
           <small>{{
-            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.dispensePaymentsCount }
+            'PHARMACY_MONEY.RECON.COUNT'
+              | pluralKey: d.money.dispensePaymentsCount
+              | translate: { count: d.money.dispensePaymentsCount }
           }}</small>
           @for (m of paymentMethods(); track m[0]) {
             <small
@@ -106,7 +114,9 @@
           <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.REFUNDS' | translate }}</span>
           <strong>{{ d.money.refundsPaid | cfa: 'XOF' }}</strong>
           <small>{{
-            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.refundsCount }
+            'PHARMACY_MONEY.RECON.COUNT'
+              | pluralKey: d.money.refundsCount
+              | translate: { count: d.money.refundsCount }
           }}</small>
         </div>
         <div class="recon-tile recon-tile-net">

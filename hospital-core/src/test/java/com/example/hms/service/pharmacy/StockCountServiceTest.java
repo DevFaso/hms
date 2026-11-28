@@ -196,6 +196,79 @@ class StockCountServiceTest {
         verifyNoInteractions(movements, jdbc, users);
     }
 
+    // ── QA D4191 (r81): a count that will never be applied can be closed ──
+
+    @Test
+    void aWaitingCountIsClosedWithWhoAndWhy_andNothingMovesInTheStock() {
+        when(counts.findLocked(count.getId(), hospital.getId())).thenReturn(Optional.of(count));
+        when(users.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(counts.save(count)).thenReturn(count);
+        assertThat(StockCountService.statusOf(count)).isEqualTo("PENDING");
+
+        var closed = service.close(count.getId(), new StockCountClosureDTO("  Comptage saisi par erreur  "));
+
+        assertThat(closed.getStatus()).isEqualTo("CLOSED");
+        assertThat(closed.getCloseReason()).isEqualTo("Comptage saisi par erreur");
+        assertThat(closed.getClosedByName()).isEqualTo("Synthetic Counter");
+        assertThat(closed.getClosedAt()).isEqualTo(LocalDateTime.of(2026, 11, 26, 8, 0));
+        assertThat(item.getQuantityOnHand()).isEqualByComparingTo("20");
+        verifyNoInteractions(movements, jdbc);
+        // Closing twice changes nothing; a closed count is never applied afterwards.
+        assertThat(service.close(count.getId(), new StockCountClosureDTO("autre")).getCloseReason())
+            .isEqualTo("Comptage saisi par erreur");
+        verify(counts, times(1)).save(count);
+        assertThatThrownBy(() -> service.confirm(count.getId(), new StockCountConfirmationDTO(true, null)))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.closed");
+        verifyNoInteractions(movements);
+    }
+
+    @Test
+    void closingNeedsAReason_andAnAppliedCountIsNeverClosed() {
+        when(counts.findLocked(count.getId(), hospital.getId())).thenReturn(Optional.of(count));
+        assertThatThrownBy(() -> service.close(count.getId(), new StockCountClosureDTO("   ")))
+            .isInstanceOf(FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "reason")
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.closeReasonRequired");
+        count.setAppliedAt(LocalDateTime.of(2026, 11, 26, 7, 0));
+        assertThatThrownBy(() -> service.close(count.getId(), new StockCountClosureDTO("Erreur")))
+            .hasFieldOrPropertyWithValue("messageKey", "stockCount.alreadyApplied");
+        assertThat(count.getClosedAt()).isNull();
+        verify(counts, never()).save(any());
+    }
+
+    @Test
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aCountWhoseStockMovedSinceIsListedAsOutdated_notAsWaiting() {
+        assertThat(StockCountService.statusOf(count)).isEqualTo("PENDING");
+        item.setQuantityOnHand(new BigDecimal("19"));
+        assertThat(StockCountService.statusOf(count)).isEqualTo("OUTDATED");
+        item.setQuantityOnHand(new BigDecimal("20"));
+        item.setStockRevision(3L);
+        assertThat(StockCountService.statusOf(count)).isEqualTo("OUTDATED");
+        count.setAppliedAt(LocalDateTime.of(2026, 11, 26, 7, 0));
+        assertThat(StockCountService.statusOf(count)).isEqualTo("APPLIED");
+    }
+
+    @Test
+    void aRecountClosesTheCountsOfTheSameStockThatStillWait_andARetryClosesNothing() {
+        stock();
+        when(users.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(counts.findByHospitalIdAndClientRequestId(hospital.getId(), count.getClientRequestId()))
+            .thenReturn(Optional.empty(), Optional.of(count));
+        when(jdbc.update(contains("INSERT INTO clinical.pharmacy_stock_counts"), any(Object[].class))).thenReturn(1);
+
+        service.record(request());
+
+        verify(counts).closeOpenItemCounts(eq(hospital.getId()), eq(item.getId()), any(UUID.class),
+            eq(LocalDateTime.of(2026, 11, 26, 8, 0)), eq(actor), eq("Synthetic Counter"),
+            eq("Replaced by a new count of the same stock."));
+        // The same request again: the observation exists, nothing is inserted, nothing is closed.
+        clearInvocations(counts);
+        when(counts.findByHospitalIdAndClientRequestId(hospital.getId(), count.getClientRequestId()))
+            .thenReturn(Optional.of(count));
+        service.record(request());
+        verify(counts, never()).closeOpenItemCounts(any(), any(), any(), any(), any(), any(), any());
+    }
+
     @Test
     void anotherHospitalsItemIsNotFoundAndIsNeverLocked() {
         when(items.findById(item.getId())).thenReturn(Optional.of(item));

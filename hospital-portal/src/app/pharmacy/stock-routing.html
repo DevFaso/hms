@@ -188,6 +188,21 @@
           <span class="value" [class.text-danger]="!stockResult()!.sufficient">
             {{ stockResult()!.quantityOnHand | number: '1.0-2' }}
           </span>
+          <!-- QA D4193 (r81): the total is not what one store can fill from. 118 was shown for an order
+               the dispensing pharmacy held 83 of; each store's own stock is said under the total. -->
+          @if ((stockResult()!.stores?.length ?? 0) > 1) {
+            <ul class="store-stock" data-testid="stock-per-store">
+              @for (store of stockResult()!.stores; track store.pharmacyId) {
+                <li>
+                  <span class="store-name">{{ store.pharmacyName }}</span>{{
+                    'COMMON.COLON' | translate
+                  }}
+                  <strong>{{ store.quantityOnHand | countUnit: store.unit }}</strong>
+                </li>
+              }
+            </ul>
+            <small class="field-hint">{{ 'PHARMACY.STOCK_PER_STORE_HINT' | translate }}</small>
+          }
         </div>
         <div class="stock-info">
           <span class="label"

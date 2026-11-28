@@ -24,6 +24,7 @@ import { allRows } from '../shared/all-pages';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { refusalReason } from '../shared/refusal-reason';
+import { catalogFormLabel, catalogLabel, catalogRouteLabel } from './catalog-label';
 
 /** One line of a version: a field, what was in force and what is proposed. */
 export interface VersionLine {
@@ -206,7 +207,20 @@ export class MedicationCatalogApprovalsComponent {
     if (typeof value === 'boolean') {
       return this.translate.instant(value ? 'COMMON.YES' : 'COMMON.NO');
     }
+    // QA D4187 (r81): the form and the route in the reader's words, as the catalogue table writes them.
+    if (field === 'form') return catalogFormLabel(this.translate, value as string | null);
+    if (field === 'route') return catalogRouteLabel(this.translate, value as string | null);
     return value == null || value === '' ? '—' : String(value);
+  }
+
+  /** The entry a version is about, its dosage form in the reader's words (QA D4187). */
+  label(text: string | null | undefined): string {
+    return catalogLabel(this.translate, text);
+  }
+
+  /** A version still waiting; a decided one shows what it replaced, not what is in force now (QA D4189). */
+  waiting(version: MedicationCatalogVersion): boolean {
+    return version.status === 'PENDING_APPROVAL';
   }
 
   private doseValue(snapshot: DoseLimitSnapshot, field: keyof DoseLimitSnapshot): string {
@@ -229,7 +243,27 @@ export class MedicationCatalogApprovalsComponent {
     return value == null || value === '' ? '—' : String(value);
   }
 
-  approve(version: MedicationCatalogVersion): void {
+  /**
+   * QA D4189 (r81): « Valider » acted on one click, and a decided version cannot be undone. The approver is
+   * asked once, with the entry named and, when the catalogue already holds one that looks like it (QA D4180),
+   * that entry said again.
+   */
+  async approve(version: MedicationCatalogVersion): Promise<void> {
+    const similar = version.similarEntries ?? [];
+    const sure = await this.confirm.ask({
+      titleKey: 'PHARMACY.CATALOG_APPROVAL.APPROVE_CONFIRM_TITLE',
+      messageKey:
+        similar.length > 0
+          ? 'PHARMACY.CATALOG_APPROVAL.APPROVE_CONFIRM_SIMILAR'
+          : 'PHARMACY.CATALOG_APPROVAL.APPROVE_CONFIRM_MESSAGE',
+      params: {
+        label: this.label(version.itemLabel),
+        similar: similar.map((entry) => this.label(entry.label)).join(' ; '),
+      },
+      confirmKey: 'PHARMACY.CATALOG_APPROVAL.APPROVE',
+      dismissKey: 'COMMON.BACK',
+    });
+    if (!sure) return;
     this.act(version, this.svc.approveCatalogVersion(version.id), 'APPROVED_TOAST');
   }
 
