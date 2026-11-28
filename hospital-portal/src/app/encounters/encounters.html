@@ -501,7 +501,7 @@
                       @if (n.authorName) {
                         {{ n.authorName }} —
                       }
-                      {{ n.changedAt | serverTime | date: 'short' }}
+                      {{ n.changedAt | serverTime | dateTime }}
                     </span>
                     @for (section of n.sections; track section.labelKey) {
                       <p class="notes-content">
@@ -608,10 +608,10 @@
                     @if (view.entry.authorName) {
                       <strong>{{ view.entry.authorName }}</strong> —
                     }
-                    {{ view.entry.documentedAt | serverTime | date: 'short' }} ·
+                    {{ view.entry.documentedAt | serverTime | dateTime }} ·
                     @if (view.entry.signedAt) {
                       {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
-                      {{ view.entry.signedAt | serverTime | date: 'short' }}
+                      {{ view.entry.signedAt | serverTime | dateTime }}
                     } @else {
                       {{ 'ENCOUNTERS.NOTE_UNSIGNED' | translate }}
                     }
@@ -697,7 +697,7 @@
               @if (note.signedAt) {
                 <p class="note-meta" data-testid="note-signed-line">
                   {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
-                  {{ note.signedAt | serverTime | date: 'short' }}
+                  {{ note.signedAt | serverTime | dateTime }}
                   @if (note.signedByName) {
                     — {{ note.signedByName }}
                   }
@@ -734,7 +734,7 @@
                 @if (note.cosignedAt) {
                   <p class="note-meta" data-testid="note-cosigned-line">
                     {{ 'ENCOUNTERS.NOTE_COSIGNED_AT' | translate }}
-                    {{ note.cosignedAt | serverTime | date: 'short' }}
+                    {{ note.cosignedAt | serverTime | dateTime }}
                     @if (note.cosignedByName) {
                       — {{ note.cosignedByName }}
                     }

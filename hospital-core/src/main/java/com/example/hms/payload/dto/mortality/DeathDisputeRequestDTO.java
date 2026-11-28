@@ -15,15 +15,15 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeathDisputeRequestDTO {
 
-    @NotBlank
-    @Size(max = 1000)
+    @NotBlank(message = "{mortality.dispute.reasonRequired}")
+    @Size(max = 1000, message = "{validation.reason.size1000}")
     private String reason;
 
     /** The doctor has assessed the patient as alive. */
-    @NotNull
+    @NotNull(message = "{mortality.dispute.assessedAliveRequired}")
     private Boolean assessedAlive;
 
     /** The doctor has verified the patient's identity: the death entry could belong to another person. */
-    @NotNull
+    @NotNull(message = "{mortality.dispute.identityVerifiedRequired}")
     private Boolean identityVerified;
 }

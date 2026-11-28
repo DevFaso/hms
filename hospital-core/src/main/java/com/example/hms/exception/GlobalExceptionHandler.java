@@ -697,7 +697,7 @@ public class GlobalExceptionHandler {
      * than the validator's own phrase (QA D4158). ValidationWordingGuardTest
      * fails when the code uses a constraint missing from this set.
      */
-    static final java.util.Set<String> HOUSE_WORDED_CONSTRAINTS = java.util.Set.of(
+    public static final java.util.Set<String> HOUSE_WORDED_CONSTRAINTS = java.util.Set.of(
         "NotNull", "NotBlank", "NotEmpty", "Null", "AssertTrue", "AssertFalse",
         "Min", "Max", "DecimalMin", "DecimalMax", "Positive", "PositiveOrZero", "Negative", "NegativeOrZero",
         "Size", "Digits", "Pattern", "Email",

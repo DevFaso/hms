@@ -68,6 +68,11 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
             throw new com.example.hms.exception.FieldBusinessException("reason", "cds.acknowledgement.overrideReasonRequired");
         }
 
+        if (request.getAction() == CdsAcknowledgementAction.OVERRIDDEN
+                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getReason())) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "clinical.override.reasonMin");
+        }
+
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("request.userContext.unavailable"));
         User user = userRepository.findById(userId)
@@ -103,7 +108,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
                 .cardSummary(request.getCardSummary())
                 .indicator(request.getIndicator())
                 .action(request.getAction())
-                .reason(request.getReason() != null ? request.getReason().trim() : null)
+                .reason(com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getReason()))
                 .expiresAt(expiryAfter(ttl))
                 .build();
 

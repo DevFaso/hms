@@ -54,6 +54,11 @@ export interface LaborEpisodeResponse {
   registrationId: string | null;
   maternalHistoryId: string | null;
   admittedByStaffName: string | null;
+  /**
+   * QA r81 D4113: set when she was under the hospital's safeguarding age at admission (provisional
+   * rule, under 13 by default); a safeguarding review is open for her.
+   */
+  minorSafeguardingUnderYears?: number | null;
   laborOnsetAt: string | null;
   admittedAt: string;
   membraneStatus: MembraneStatus | null;
@@ -242,6 +247,14 @@ export class LaborService {
 
   startEpisode(patientId: string, req: LaborEpisodeRequest): Observable<LaborEpisodeResponse> {
     return this.http.post<LaborEpisodeResponse>(`${this.base(patientId)}/episodes`, req);
+  }
+
+  /**
+   * QA D3868: every woman in labour at the hospital the request is scoped to, newest admission first. Not paged:
+   * the list is the labour ward's beds, a handful of rows.
+   */
+  activeEpisodes(): Observable<LaborEpisodeResponse[]> {
+    return this.http.get<LaborEpisodeResponse[]>('/labor/episodes/active');
   }
 
   episodes(patientId: string, limit = 10): Observable<LaborEpisodeResponse[]> {

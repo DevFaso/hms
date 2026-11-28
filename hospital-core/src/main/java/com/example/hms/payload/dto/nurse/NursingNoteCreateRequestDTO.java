@@ -94,4 +94,32 @@ public class NursingNoteCreateRequestDTO {
     private List<NursingNoteInterventionDTO> interventionEntries = new ArrayList<>();
 
     private String shiftLabel;
+
+    /**
+     * QA D3860: a note needs one written part (a DAR or SOAPIE part, a summary,
+     * the narrative or an entry). The attestations and the signature are not
+     * content. Checked with the other fields, reported on the first one.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{nursingNote.contentRequired}")
+    @com.example.hms.validation.ReportedOn("dataSubjective")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @io.swagger.v3.oas.annotations.Hidden
+    public boolean isContentWritten() {
+        boolean written = java.util.stream.Stream.of(dataSubjective, dataObjective, dataAssessment, dataPlan,
+                dataImplementation, dataEvaluation, actionSummary, responseSummary, educationSummary, narrative)
+            .anyMatch(text -> text != null && !text.isBlank());
+        // An entry counts as the service keeps it: one with nothing in it is dropped.
+        boolean taught = educationEntries != null && educationEntries.stream().anyMatch(e -> e != null
+            && anyText(e.getTopic(), e.getTeachingMethod(),
+                e.getPatientUnderstanding(), e.getReinforcementActions(), e.getEducationSummary()));
+        boolean done = interventionEntries != null && interventionEntries.stream().anyMatch(i -> i != null
+            && (anyText(i.getDescription(), i.getFollowUpActions())
+                || i.getLinkedOrderId() != null || i.getLinkedMedicationTaskId() != null));
+        return written || taught || done;
+    }
+
+    private static boolean anyText(Object... values) {
+        return java.util.Arrays.stream(values)
+            .anyMatch(v -> v != null && !v.toString().isBlank());
+    }
 }

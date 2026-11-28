@@ -1,8 +1,10 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   ElementRef,
   OnInit,
+  effect,
   inject,
   input,
   signal,
@@ -39,48 +41,62 @@ import { blobRefusalReason } from '../../shared/blob-refusal';
         <h2 id="record-rights-title">{{ 'RECORD_RIGHTS.TITLE' | translate }}</h2>
         <p>{{ 'RECORD_RIGHTS.INTRO' | translate }}</p>
         @if (error()) {
-          <p role="alert">{{ error() }}</p>
+          <p class="rights-message rights-error" role="alert">{{ error() }}</p>
         }
         @if (sent()) {
-          <p role="status">{{ 'RECORD_RIGHTS.SENT' | translate }}</p>
+          <p class="rights-message rights-sent" role="status">
+            {{ 'RECORD_RIGHTS.SENT' | translate }}
+          </p>
         }
+        <!-- QA D4025: the house form (.field, .btn-primary), not bare browser controls. -->
         <form (ngSubmit)="submit()" novalidate>
-          <label for="rights-hospital">{{ 'RECORD_RIGHTS.HOSPITAL' | translate }} *</label>
-          <select id="rights-hospital" name="hospitalId" [(ngModel)]="hospitalId" required>
-            <option value="">{{ 'COMMON.SELECT' | translate }}</option>
-            @for (hospital of hospitals(); track hospital.hospitalId) {
-              <option [value]="hospital.hospitalId">{{ hospital.hospitalName }}</option>
-            }
-          </select>
-          <label for="rights-kind">{{ 'RECORD_RIGHTS.KIND' | translate }}</label>
-          <select id="rights-kind" name="requestKind" [(ngModel)]="kind">
-            <option value="COPY">{{ 'RECORD_RIGHTS.COPY' | translate }}</option>
-            <option value="CORRECTION">{{ 'RECORD_RIGHTS.CORRECTION' | translate }}</option>
-          </select>
-          <label for="rights-purpose">{{ 'RECORD_RIGHTS.PURPOSE' | translate }} *</label>
-          <textarea
-            id="rights-purpose"
-            name="purpose"
-            [(ngModel)]="purpose"
-            maxlength="500"
-            required
-            rows="2"
-          ></textarea>
-          @if (kind === 'CORRECTION') {
-            <label for="rights-description">{{ 'RECORD_RIGHTS.DESCRIPTION' | translate }} *</label>
+          <div class="field">
+            <label for="rights-hospital">{{ 'RECORD_RIGHTS.HOSPITAL' | translate }} *</label>
+            <select id="rights-hospital" name="hospitalId" [(ngModel)]="hospitalId" required>
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (hospital of hospitals(); track hospital.hospitalId) {
+                <option [value]="hospital.hospitalId">{{ hospital.hospitalName }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="rights-kind">{{ 'RECORD_RIGHTS.KIND' | translate }}</label>
+            <select id="rights-kind" name="requestKind" [(ngModel)]="kind">
+              <option value="COPY">{{ 'RECORD_RIGHTS.COPY' | translate }}</option>
+              <option value="CORRECTION">{{ 'RECORD_RIGHTS.CORRECTION' | translate }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rights-purpose">{{ 'RECORD_RIGHTS.PURPOSE' | translate }} *</label>
             <textarea
-              id="rights-description"
-              name="description"
-              [(ngModel)]="description"
+              id="rights-purpose"
+              name="purpose"
+              [(ngModel)]="purpose"
               maxlength="500"
               required
-              rows="3"
+              rows="2"
             ></textarea>
+          </div>
+          @if (kind === 'CORRECTION') {
+            <div class="field">
+              <label for="rights-description"
+                >{{ 'RECORD_RIGHTS.DESCRIPTION' | translate }} *</label
+              >
+              <textarea
+                id="rights-description"
+                name="description"
+                [(ngModel)]="description"
+                maxlength="500"
+                required
+                rows="3"
+              ></textarea>
+            </div>
           } @else {
-            <p>{{ 'RECORD_RIGHTS.FULL_RECORD' | translate }}</p>
+            <p class="rights-hint">{{ 'RECORD_RIGHTS.FULL_RECORD' | translate }}</p>
           }
           <button
             type="submit"
+            class="btn-primary"
             data-testid="record-rights-submit"
             [disabled]="saving()"
             [appSubmitGuard]="refusal()"
@@ -93,7 +109,9 @@ import { blobRefusalReason } from '../../shared/blob-refusal';
         @if (loading()) {
           <p role="status">{{ 'COMMON.LOADING' | translate }}</p>
         } @else if (loadFailed()) {
-          <button type="button" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+          <button type="button" class="btn-secondary btn-sm" (click)="load()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
         } @else if (requests().length === 0) {
           <p>{{ 'RECORD_RIGHTS.EMPTY' | translate }}</p>
         }
@@ -180,20 +198,46 @@ import { blobRefusalReason } from '../../shared/blob-refusal';
         width: 100%;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 0.6rem;
+        gap: 0.875rem;
         max-width: 40rem;
       }
-      select,
-      textarea,
-      button {
-        box-sizing: border-box;
+      .field {
         min-width: 0;
-        overflow-wrap: anywhere;
-        white-space: normal;
+      }
+      .field select,
+      .field textarea {
+        width: 100%;
+        min-width: 0;
         min-height: 44px;
-        max-width: 100%;
-        padding: 0.6rem;
         font: inherit;
+      }
+      button[type='submit'] {
+        justify-self: start;
+        max-width: 100%;
+        min-height: 44px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .rights-hint {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+      }
+      .rights-message {
+        margin: 0 0 0.75rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+      }
+      .rights-error {
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      .rights-sent {
+        border: 1px solid #a7f3d0;
+        background: #ecfdf5;
+        color: #065f46;
       }
       article {
         padding-block: 1rem;
@@ -212,6 +256,18 @@ export class RecordRightsComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly translate = inject(TranslateService);
   private readonly roles = inject(RoleContextService);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  constructor() {
+    // QA D4025: a patient of one hospital does not have to pick it.
+    effect(() => {
+      const hospitals = this.hospitals();
+      if (!this.hospitalId && hospitals.length === 1) {
+        this.hospitalId = hospitals[0].hospitalId;
+        this.cdr.markForCheck();
+      }
+    });
+  }
   canRequest(): boolean {
     return this.roles.hasAnyActiveRole(actionRoles('patientRecordRequest'));
   }

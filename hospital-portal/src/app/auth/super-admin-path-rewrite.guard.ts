@@ -2,7 +2,6 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router, UrlTree } from '@angular/router';
 
 import { AuthService } from './auth.service';
-import { RoleContextService } from '../core/role-context.service';
 
 /**
  * MVP-5b: when the active role is SUPER_ADMIN, rewrite a legacy
@@ -24,14 +23,8 @@ import { RoleContextService } from '../core/role-context.service';
 export function superAdminPathRewriteGuard(targetPath: string): CanActivateFn {
   return (): boolean | UrlTree => {
     const auth = inject(AuthService);
-    const roleContext = inject(RoleContextService);
     const router = inject(Router);
 
-    const activeRole = roleContext.activeRole;
-    const isSuperAdmin = activeRole
-      ? activeRole === 'ROLE_SUPER_ADMIN'
-      : auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
-
-    return isSuperAdmin ? router.parseUrl(targetPath) : true;
+    return auth.isActiveSuperAdmin() ? router.parseUrl(targetPath) : true;
   };
 }

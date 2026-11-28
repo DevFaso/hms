@@ -77,6 +77,14 @@ public class LabTestDefinition extends BaseEntity {
     @Builder.Default
     private boolean culture = false;
 
+    /**
+     * QA D3905: a blood-group (ABO/Rh) test. Its order is closed by the grouping the blood bank records for the
+     * patient, the one place a group is entered; changed through catalogue approval.
+     */
+    @Column(name = "blood_grouping", nullable = false)
+    @Builder.Default
+    private boolean bloodGrouping = false;
+
     @Size(max = 2048)
     @Column(name = "description", length = 2048)
     private String description;

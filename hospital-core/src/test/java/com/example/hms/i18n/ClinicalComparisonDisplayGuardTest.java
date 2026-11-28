@@ -29,6 +29,16 @@ class ClinicalComparisonDisplayGuardTest {
     }
 
     @Test
+    void newsAdvisoryDoesNotMislabelMediumRiskAsHigh() {
+        var source = TestMessageSources.bundles();
+        assertThat(source.getMessage("cds.bpa.NEWS2_EWS.summary", null, Locale.FRENCH))
+            .contains("NEWS2 qui n\u00e9cessite une \u00e9valuation")
+            .doesNotContain("NEWS2 \u00e9lev\u00e9");
+        assertThat(source.getMessage("cds.bpa.NEWS2_EWS.summary", null, Locale.ENGLISH))
+            .contains("requires assessment").doesNotContain("an elevated National Early Warning Score");
+    }
+
+    @Test
     void everyEnglishBpaVariantPreservesItsExistingThresholds() throws Exception {
         var source = TestMessageSources.bundles();
         var expected = java.util.Map.of(

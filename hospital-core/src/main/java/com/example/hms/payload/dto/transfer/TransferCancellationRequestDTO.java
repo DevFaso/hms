@@ -20,8 +20,8 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TransferCancellationRequestDTO {
 
-    @NotBlank
-    @Size(max = 500)
+    @NotBlank(message = "{transfer.validation.cancellationReasonRequired}")
+    @Size(max = 500, message = "{validation.reason.size}")
     private String cancellationReason;
 
     private UUID cancelledByStaffId;

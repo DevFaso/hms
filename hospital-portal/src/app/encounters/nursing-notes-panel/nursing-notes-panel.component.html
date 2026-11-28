@@ -57,7 +57,7 @@
             <span class="nursing-notes__template">{{
               note.template | enumLabel: 'noteTemplate'
             }}</span>
-            {{ note.documentedAt | serverTime | date: 'short' }}
+            {{ note.documentedAt | serverTime | dateTime }}
             @if (note.authorName) {
               — {{ note.authorName }}
               @if (note.authorCredentials) {

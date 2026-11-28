@@ -1473,6 +1473,32 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void recordMedicationAdministrationWithoutVerificationRejectsShortOverrideReasons() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient mockPatient = mock(Patient.class);
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = mock(Prescription.class);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        // No overrideReason and no prior verify — must throw.
+
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            request.setOverrideReason(reason);
+            assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(marRepository, never()).save(any());
+    }
+
+    @Test
     void recordMedicationAdministrationWithHeldStatus() {
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -3191,6 +3217,37 @@ class NurseTaskServiceImplTest {
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.fiveRightsFailedOverrideRequired")
             .satisfies(e -> assertThat(((BusinessException) e).getArgs()[0].toString()).contains("ROUTE"));
+    }
+
+    @Test
+    void administerGivenWithRouteMismatchRejectsShortOverrideReasons() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        // The nurse scanned IV at the bedside but the prescription is PO —
+        // the persisted scanned route must drive the re-check, not the
+        // prescription's own route. Without the routeScanValue fix this
+        // test would silently pass because mar.getRoute() == "PO".
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("IV");
+        mar.setFiveRightsStatus(FiveRightsStatus.NOT_VERIFIED);
+
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+        // No overrideReason — must throw because ROUTE fails on re-check.
+
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            req.setOverrideReason(reason);
+            assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(marRepository, never()).save(any());
     }
 
     @Test

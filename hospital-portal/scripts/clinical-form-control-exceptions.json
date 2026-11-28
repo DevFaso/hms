@@ -2070,26 +2070,6 @@
     "evidence": [".escalation-settings__grid input,\n.escalation-settings__grid select"],
     "control": "esc-chief"
   },
-  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::select::29816b6013c5ed48f56b::0": {
-    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": ["select,\ntextarea,\nbutton"],
-    "control": "rights-hospital"
-  },
-  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::select::e145a1470f2768c55b79::0": {
-    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": ["select,\ntextarea,\nbutton"],
-    "control": "rights-kind"
-  },
-  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::textarea::382c557c417e667b8e97::0": {
-    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": ["select,\ntextarea,\nbutton"],
-    "control": "rights-purpose"
-  },
-  "src/app/patient-portal/my-records/record-rights.component.ts::RecordRightsComponent::textarea::e4acd886fe5302f807c0::0": {
-    "reason": "Existing module-specific control styling supplies padding via select,\ntextarea,\nbutton. Preserve this established field layout rather than applying a second visual skin.",
-    "evidence": ["select,\ntextarea,\nbutton"],
-    "control": "rights-description"
-  },
   "src/app/shared/card-sort/card-sort.component.ts::CardSortComponent::select::71676353002235a642b9::0": {
     "reason": "Existing module-specific control styling supplies padding via .card-sort__select. Preserve this established field layout rather than applying a second visual skin.",
     "evidence": [".card-sort__select"],

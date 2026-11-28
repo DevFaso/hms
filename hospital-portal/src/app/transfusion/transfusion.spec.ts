@@ -1197,7 +1197,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
 
       component.emergencyUnitId = 'oneg';
       component.submitEmergencyRelease();
-      expect(txSpy.issueUnit).toHaveBeenCalledWith('req-1', 'oneg');
+      expect(txSpy.issueUnit).toHaveBeenCalledWith('req-1', 'oneg', false);
       expect(toastSpy.success).toHaveBeenCalled();
       expect(component.showEmergencyModal()).toBeFalse();
     });

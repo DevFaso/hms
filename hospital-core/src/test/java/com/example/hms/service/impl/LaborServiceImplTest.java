@@ -449,6 +449,26 @@ class LaborServiceImplTest {
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
     }
 
+    /** QA r81 D4113: a 12-year-old in labour carries the vigilance mark on her card; an adult does not. */
+    @Test
+    void startEpisodeMarksAMinorForSafeguarding() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        service.setMinorLabourSafeguarding(new com.example.hms.service.safeguarding.MinorLabourSafeguarding(
+            org.mockito.Mockito.mock(com.example.hms.service.safeguarding.SafeguardingReviewWorker.class)));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        patient.setDateOfBirth(LocalDate.now().minusYears(12).minusMonths(3));
+        assertThat(service.startEpisode(patientId, recorderUserId, request).getMinorSafeguardingUnderYears())
+            .isEqualTo(13);
+        patient.setDateOfBirth(LocalDate.now().minusYears(25));
+        assertThat(service.startEpisode(patientId, recorderUserId, request).getMinorSafeguardingUnderYears())
+            .isNull();
+    }
+
     /** QA D629: the screen names nobody, so the recorder is the admitting clinician. */
     @Test
     void startEpisodeWithNoAdmittingStaffNamesTheRecorder() {
@@ -610,13 +630,13 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        verify(notificationService).created(contains("Alerte obstétricale (progression du travail)"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
         // QA D605: the on-call team is told too, not only the documenter.
         verify(obstetricAlertEscalation, org.mockito.Mockito.atLeastOnce()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
             hospitalId.equals(a.hospitalId()) && patientId.equals(a.patientId())
                 && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH.equals(a.sourceType())
                 && recorderUserId.equals(a.documentedByUserId())
-                && a.notificationText().contains("Alerte de travail")));
+                && a.notificationText().contains("Alerte obstétricale (progression du travail)")));
     }
 
     @Test
@@ -876,6 +896,20 @@ class LaborServiceImplTest {
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.delivery.recentDelivery");
         verify(deliveryRecordRepository, never()).save(any());
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void recordDeliveryRejectsShortRecentDeliveryOverrides() {
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        for (String reason : java.util.List.of("ok", "          ", "123456789")) {
+            DeliveryRecordRequestDTO request = deliveryRequest();
+            request.setRecentDeliveryOverrideReason(reason);
+            assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(deliveryRecordRepository, never()).save(any());
     }
 
     @Test
@@ -1310,6 +1344,32 @@ class LaborServiceImplTest {
             .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
                 .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.episode.recentDelivery");
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void startEpisodeRejectsAShortReasonEvenWithoutARecentDelivery() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).recentDeliveryOverrideReason("ok").build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void startEpisodeRejectsShortRecentDeliveryOverrides() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+        for (String reason : java.util.List.of("ok", "          ", "123456789")) {
+            LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+                .laborOnsetAt(LocalDateTime.now().minusHours(2)).recentDeliveryOverrideReason(reason).build();
+            assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+                .isInstanceOf(BusinessException.class);
+        }
         verify(episodeRepository, never()).save(any());
     }
 
@@ -3057,5 +3117,29 @@ class LaborServiceImplTest {
         // The pressure alerts are unchanged either way.
         assertThat(maternalAlertCodes(null, 145, 92, null)).containsExactly("labor-hypertension");
         assertThat(maternalAlertCodes(null, 164, 104, null)).containsExactly("labor-severe-hypertension");
+    }
+
+    /* QA D3868: the Labour tab's list of the women in labour at this hospital. */
+
+    @Test
+    void activeEpisodesAtListsThisHospitalsActiveLabours() {
+        episode.setId(episodeId);
+        when(episodeRepository.findByHospital_IdAndStatusOrderByAdmittedAtDesc(hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(List.of(episode));
+        when(entryRepository.countByEpisode_Id(episodeId)).thenReturn(3L);
+
+        List<LaborEpisodeResponseDTO> rows = service.getActiveEpisodesAt(hospitalId);
+
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getPatientId()).isEqualTo(patientId);
+            assertThat(row.getEntryCount()).isEqualTo(3L);
+        });
+    }
+
+    @Test
+    void activeEpisodesAtNeedsAHospital() {
+        assertThatThrownBy(() -> service.getActiveEpisodesAt(null))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never()).findByHospital_IdAndStatusOrderByAdmittedAtDesc(any(), any());
     }
 }

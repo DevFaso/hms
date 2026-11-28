@@ -1111,6 +1111,65 @@ class LabOrderEndToEndIT extends BaseIT {
         assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
     }
 
+    // ── QA D3905: the blood-bank grouping answers the blood-group order ─────────
+
+    private UUID receivedOrder() throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        String specimenId = jsonData(mockMvc.perform(post(LAB_ORDER_SPECIMENS, orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(LabSpecimenRequestDTO.builder().specimenType("BLOOD").build()))
+                .with(signedInAs(technician)).with(csrf()))
+            .andExpect(status().isCreated()).andReturn(), "id");
+        mockMvc.perform(post(SPECIMEN_RECEIVE, specimenId).contextPath(API).with(signedInAs(technician)).with(csrf()))
+            .andExpect(status().isOk());
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.RECEIVED);
+        return orderId;
+    }
+
+    private void recordGrouping() throws Exception {
+        mockMvc.perform(post(API + "/transfusions/blood-groups").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(com.example.hms.payload.dto.transfusion.PatientBloodGroupRequestDTO.builder()
+                    .patientId(patient.getId())
+                    .aboGroup(com.example.hms.enums.AboGroup.O)
+                    .rhFactor(com.example.hms.enums.RhFactor.NEGATIVE)
+                    .antibodyScreen(com.example.hms.enums.AntibodyScreenResult.NEGATIVE)
+                    .build()))
+                .with(signedInAs(scientist)).with(csrf()))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("QA D3905: the grouping recorded in the blood bank closes the received blood-group order")
+    void theBloodBankGroupingClosesTheReceivedBloodGroupOrder() throws Exception {
+        testDefinition.setBloodGrouping(true);
+        labTestDefinitionRepository.saveAndFlush(testDefinition);
+        UUID received = receivedOrder();
+        // An order still awaiting its sample is left for the grouping of that sample.
+        UUID awaiting = placeOrder(LocalDateTime.now().minusMinutes(10));
+
+        recordGrouping();
+
+        assertThat(orderStatus(received)).isEqualTo(LabOrderStatus.COMPLETED);
+        assertThat(orderStatus(awaiting)).isEqualTo(LabOrderStatus.ORDERED);
+    }
+
+    @Test
+    @DisplayName("QA D3905: a grouping closes no other test's order, and no order holding an unreleased result")
+    void theGroupingClosesOnlyAnsweredBloodGroupOrders() throws Exception {
+        UUID ordinary = receivedOrder();
+        recordGrouping();
+        assertThat(orderStatus(ordinary)).isEqualTo(LabOrderStatus.RECEIVED);
+
+        testDefinition.setBloodGrouping(true);
+        labTestDefinitionRepository.saveAndFlush(testDefinition);
+        UUID resulted = receivedOrder();
+        postResult(scientist, resulted, NORMAL_VALUE).andExpect(status().isCreated());
+        assertThat(orderStatus(resulted)).isEqualTo(LabOrderStatus.RESULTED);
+        recordGrouping();
+        assertThat(orderStatus(resulted)).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
     private void finalizeCultureReport(UUID cultureId) throws Exception {
         mockMvc.perform(post(API + "/micro-cultures/{id}/finalize", cultureId).contextPath(API)
             .with(signedInAs(scientist)).with(csrf())).andExpect(status().isOk());

@@ -13,6 +13,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeathRecordEnteredInErrorDTO {
 
-    @NotBlank
+    @NotBlank(message = "{mortality.enteredInError.reasonRequired}")
     private String reason;
 }

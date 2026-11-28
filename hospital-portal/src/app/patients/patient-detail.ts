@@ -880,10 +880,28 @@ export class PatientDetailComponent implements OnInit {
     return `${p.firstName?.charAt(0) ?? ''}${p.lastName?.charAt(0) ?? ''}`.toUpperCase();
   }
 
-  getAge(dob?: string): string {
+  getAge(dob?: string, now: Date = new Date()): string {
     if (!dob) return '—';
     const birth = serverDateOrInstant(dob);
-    const now = new Date();
+    // QA r81 D4114: a newborn read « 0 ans »; under a month in days, under two years in months.
+    let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
+    if (now.getDate() < birth.getDate()) months--;
+    const singular = (n: number) =>
+      n === 1 || (n === 0 && (this.translate.currentLang || 'fr').toLowerCase().startsWith('fr'));
+    if (months < 1) {
+      const days = Math.max(0, Math.floor((now.getTime() - birth.getTime()) / 86_400_000));
+      return this.translate.instant(singular(days) ? 'PATIENTS.AGE_DAY' : 'PATIENTS.AGE_DAYS', {
+        count: days,
+      });
+    }
+    if (months < 24) {
+      return this.translate.instant(
+        singular(months) ? 'PATIENTS.AGE_MONTH' : 'PATIENTS.AGE_MONTHS',
+        {
+          count: months,
+        },
+      );
+    }
     let age = now.getFullYear() - birth.getFullYear();
     if (
       now.getMonth() < birth.getMonth() ||

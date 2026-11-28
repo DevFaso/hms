@@ -1099,9 +1099,8 @@ dialog.modal-panel {
       font-size: 0.8125rem;
       font-weight: 600;
       color: var(--primary-deep);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .chip-sub {

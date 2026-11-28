@@ -22,6 +22,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@com.example.hms.validation.SelfRequestHospitalChosen(message = "{patientPortal.request.chooseHospital}")
 public class RoiSelfRequestCreateDTO {
 
     @Builder.Default

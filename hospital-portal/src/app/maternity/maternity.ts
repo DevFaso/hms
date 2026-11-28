@@ -283,6 +283,14 @@ export class MaternityComponent implements OnInit {
     ),
   );
   historiesLoading = signal(false);
+  /**
+   * QA r81 D4107: « Haut risque 0 » was the open list while « Tous 3 » sat beside it, and the empty
+   * list said « Aucun antécédent maternel ». The empty list names the open list and how many
+   * records « Tous » holds.
+   */
+  readonly recordsInOtherLists = computed(() =>
+    this.worklist() === 'all' ? 0 : (this.boardCounts.values()['all'] ?? 0),
+  );
   boardPage = signal(0);
   boardTotalPages = signal(0);
   boardTotal = signal(0);
@@ -477,6 +485,10 @@ export class MaternityComponent implements OnInit {
     );
   }
 
+  worklistLabelKey(w: BoardWorklist): string {
+    return 'MATERNITY.WORKLIST_' + w.toUpperCase().replaceAll('-', '_');
+  }
+
   setWorklist(w: BoardWorklist): void {
     this.worklist.set(w);
     this.boardPage.set(0);
@@ -518,6 +530,10 @@ export class MaternityComponent implements OnInit {
         ]),
       ),
     );
+  }
+
+  isFrench(): boolean {
+    return (this.translate.currentLang || 'fr').toLowerCase().startsWith('fr');
   }
 
   loadBoard(refreshCounts = true): void {

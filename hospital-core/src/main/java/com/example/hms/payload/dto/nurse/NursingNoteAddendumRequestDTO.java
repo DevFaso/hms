@@ -13,16 +13,16 @@ import java.time.OffsetDateTime;
 @Setter
 public class NursingNoteAddendumRequestDTO {
 
-    @NotBlank
-    @Size(max = 4000)
+    @NotBlank(message = "{addendum.validation.contentRequired}")
+    @Size(max = 4000, message = "{addendum.validation.contentTooLong4000}")
     private String content;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mmXXX")
     private OffsetDateTime eventOccurredAt;
 
-    @NotNull
+    @NotNull(message = "{addendum.validation.attestAccuracyRequired}")
     private Boolean attestAccuracy;
 
-    @NotNull
+    @NotNull(message = "{addendum.validation.attestNoAbbreviationsRequired}")
     private Boolean attestNoAbbreviations;
 }

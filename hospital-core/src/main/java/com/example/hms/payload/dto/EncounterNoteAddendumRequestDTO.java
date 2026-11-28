@@ -18,8 +18,8 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EncounterNoteAddendumRequestDTO {
 
-    @NotBlank
-    @Size(max = 8000)
+    @NotBlank(message = "{addendum.validation.contentRequired}")
+    @Size(max = 8000, message = "{addendum.validation.contentTooLong8000}")
     private String content;
 
     private LocalDateTime eventOccurredAt;

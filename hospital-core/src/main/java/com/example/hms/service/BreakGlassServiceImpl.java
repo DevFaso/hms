@@ -112,6 +112,9 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // unprivileged caller could tell an existing patient id (403) from an
         // unknown one (404) at any hospital.
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getReason())) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "clinical.override.reasonMin");
+        }
         // D624 (user decision): break-the-glass reaches only a patient the
         // caller's patient search already finds (same tenant scope). An id
         // outside that scope and an unknown id get the SAME 403, same key, no
@@ -130,7 +133,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .user(caller)
             .patient(patient)
             .hospital(hospital)
-            .reason(request.getReason())
+            .reason(com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(request.getReason()))
             .startedAt(now)
             .expiresAt(now.plusMinutes(ttl))
             .auditCount(0)

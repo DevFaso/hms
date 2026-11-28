@@ -980,8 +980,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new com.example.hms.exception.FieldBusinessException("overrideReason", "nurse.mar.fiveRightsFailedOverrideRequired",
                 check.failedChecks().stream().map(Enum::name).toList().toString());
         }
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(overrideReason)) {
+            throw new com.example.hms.exception.FieldBusinessException("overrideReason", "clinical.override.reasonMin");
+        }
         mar.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
-        mar.setOverrideReason(overrideReason);
+        mar.setOverrideReason(com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(overrideReason));
         mar.setFiveRightsOverrides(serializeOverrides(check.failedChecks()));
     }
 
@@ -1923,8 +1926,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (overrideReason == null || overrideReason.isBlank()) {
                 throw new BusinessException("nurse.mar.overrideRequired");
             }
+            if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(overrideReason)) {
+                throw new com.example.hms.exception.FieldBusinessException("overrideReason", "clinical.override.reasonMin");
+            }
             marRecord.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
-            marRecord.setOverrideReason(overrideReason);
+            marRecord.setOverrideReason(com.example.hms.service.clinicalrules.ClinicalOverrideReason.trim(overrideReason));
             marRecord.setFiveRightsOverrides(serializeOverrides(EnumSet.allOf(FiveRightsCheck.class)));
             marRecord.setScanVerifiedAt(LocalDateTime.now());
         }

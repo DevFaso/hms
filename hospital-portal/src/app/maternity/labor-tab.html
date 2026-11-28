@@ -2,6 +2,7 @@
   <div class="mode-picker">
     <app-patient-picker
       inputId="labor-patient"
+      maternalOnly
       [selected]="patient()"
       (selectedChange)="onPatientChange($event)"
     />
@@ -15,6 +16,68 @@
 </div>
 
 @if (!patient()) {
+  <!-- QA D3868: the women in labour at this hospital, so the tab is never a blank search box. -->
+  @if (wardState() !== 'idle') {
+    <section
+      class="view-section labor-ward"
+      data-testid="labor-ward"
+      aria-labelledby="labor-ward-title"
+    >
+      <h3 id="labor-ward-title" class="section-heading">{{ 'LABOR.WARD_TITLE' | translate }}</h3>
+      @switch (wardState()) {
+        @case ('loading') {
+          <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+        }
+        @case ('failed') {
+          <div class="labor-ward-failed" role="alert">
+            <p>{{ 'LABOR.WARD_FAILED' | translate }}</p>
+            <button type="button" class="btn-secondary btn-sm" (click)="loadWard()">
+              {{ 'COMMON.RETRY' | translate }}
+            </button>
+          </div>
+        }
+        @default {
+          @if (ward().length === 0) {
+            <p class="muted" data-testid="labor-ward-empty">{{ 'LABOR.WARD_EMPTY' | translate }}</p>
+          } @else {
+            <ul class="labor-ward-list">
+              @for (row of ward(); track row.id) {
+                <li class="labor-ward-row" data-testid="labor-ward-row">
+                  <div class="labor-ward-info">
+                    <strong>{{ row.patientName || ('COMMON.UNKNOWN' | translate) }}</strong>{{ ' '
+                    }}<span class="muted">
+                      {{
+                        'LABOR.WARD_ADMITTED'
+                          | translate: { time: (row.admittedAt | serverTime | dateTime) }
+                      }}
+                      @if (row.gestationalAgeWeeks) {
+                        · {{ 'LABOR.WARD_WEEKS' | translate: { weeks: row.gestationalAgeWeeks } }}
+                      }
+                      ·
+                      {{
+                        row.entryCount
+                          | pluralKey: 'LABOR.WARD_ENTRIES'
+                          | translate: { count: row.entryCount }
+                      }}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    data-testid="labor-ward-open"
+                    [disabled]="openingWardPatientId() !== null"
+                    (click)="openFromWard(row)"
+                  >
+                    {{ 'LABOR.WARD_OPEN' | translate }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        }
+      }
+    </section>
+  }
   <div class="empty-state">
     <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
     <h3>{{ 'LABOR.PICK_PATIENT_HINT' | translate }}</h3>
@@ -22,6 +85,10 @@
 }
 
 @if (patient()) {
+  <!-- QA D3868: a record opened from the list takes the keyboard (the list's button is gone). -->
+  <h2 class="sr-only" tabindex="-1" appFocusOnRender data-testid="labor-record-heading">
+    {{ 'LABOR.WARD_RECORD_HEADING' | translate: { name: patientDisplayName() } }}
+  </h2>
   @if (episodesLoading()) {
     <div class="loading-state">
       <div class="spinner"></div>
@@ -37,7 +104,13 @@
 
   <!-- ══ Start episode form ══ -->
   @if (startFormOpen()) {
-    <div class="view-section action-form" data-submit-scope>
+    <div
+      class="view-section action-form"
+      data-submit-scope
+      appInlineSubForm
+      #startSub="inlineSubForm"
+      (dismissed)="cancelStart()"
+    >
       <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
       <div class="form-row">
         <div class="field">
@@ -101,9 +174,11 @@
         ></textarea>
         <p id="labor-override-hint" class="muted">
           {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+          {{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}
         </p>
       </div>
       <p class="muted">{{ 'LABOR.SNAPSHOT_HINT' | translate }}</p>
+      <app-inline-discard-ask [form]="startSub" />
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
@@ -202,11 +277,21 @@
           }}
         </p>
       }
+      <!-- QA r81 D4113: a minor in labour carries a vigilance mark on her card, not only an in-basket task. -->
+      @if (episode.minorSafeguardingUnderYears) {
+        <p class="labor-safeguarding-mark" role="note" data-testid="labor-minor-safeguarding">
+          <span class="material-symbols-outlined" aria-hidden="true">shield_person</span>
+          {{
+            'LABOR.MINOR_SAFEGUARDING' | translate: { years: episode.minorSafeguardingUnderYears }
+          }}
+        </p>
+      }
       <p class="muted">
         {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}
-        {{ episode.admittedAt | serverTime | date: 'short' }}
+        {{ episode.admittedAt | serverTime | dateTime }}
         @if (episode.gestationalAgeWeeks) {
-          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}{{ 'COMMON.COLON' | translate }}
+          <!-- QA r81 D4114: « Âge gestationnel (semaines) : 39 semaines » named the unit twice. -->
+          · {{ 'MATERNITY.GESTATIONAL_AGE_SHORT' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ episode.gestationalAgeWeeks }}
           {{ 'MATERNITY.WEEKS' | translate }}
         }
@@ -475,7 +560,7 @@
           <tbody>
             @for (episode of episodes(); track episode.id) {
               <tr class="data-row">
-                <td>{{ episode.admittedAt | serverTime | date: 'short' }}</td>
+                <td>{{ episode.admittedAt | serverTime | dateTime }}</td>
                 <td>{{ 'LABOR.STATUS_' + episode.status | translate }}</td>
                 <td>
                   {{ episode.outcome ? ('LABOR.OUTCOME_' + episode.outcome | translate) : '—' }}
@@ -1025,6 +1110,7 @@
           ></textarea>
           <p id="dl-override-hint" class="muted">
             {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+            {{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}
           </p>
         </div>
         @if (bornBeforeArrivalOffered()) {

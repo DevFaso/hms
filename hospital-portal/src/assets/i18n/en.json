@@ -1,4 +1,5 @@
 {
+  "CLINICAL_OVERRIDE": { "MIN_REASON_HINT": "At least 10 non-whitespace characters." },
   "API_TIMEOUT": {
     "TITLE": "The server is taking too long to respond",
     "MESSAGE": "The request timed out. Retry the action when the connection is available, or reload the page to load its data again.",
@@ -220,6 +221,7 @@
     "FHR": "FHR (bpm)",
     "INFANT_SEX": "Sex",
     "LATENT_PHASE": "Latent phase",
+    "MINOR_SAFEGUARDING": "Minor patient (under {{years}} at admission): safeguarding to be reviewed. Provisional rule.",
     "LATE_ENTRY": "Late entry",
     "LIQUOR": "Liquor",
     "LIQUOR_ABSENT": "Absent",
@@ -345,7 +347,17 @@
     "BABY_OUTCOME_STILLBORN": "Stillborn (no signs of life)",
     "BABY_OUTCOME_UNKNOWN": "Not recorded",
     "BABY_OUTCOMES": "Outcome of each baby",
-    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
+    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register.",
+    "WARD_TITLE": "Women in labour at this hospital",
+    "WARD_EMPTY": "No woman is in labour at this hospital right now.",
+    "WARD_FAILED": "The list of women in labour could not be loaded.",
+    "WARD_ADMITTED": "Admitted {{time}}",
+    "WARD_WEEKS": "{{weeks}} weeks",
+    "WARD_ENTRIES_ONE": "{{count}} partograph observation",
+    "WARD_ENTRIES": "{{count}} partograph observations",
+    "WARD_OPEN": "Open the labour record",
+    "WARD_OPEN_FAILED": "This patient's record could not be opened.",
+    "WARD_RECORD_HEADING": "Labour record of {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Operator",
@@ -2024,6 +2036,7 @@
       "INCOMPATIBLE_COUNTERSIGN_OVERDUE": "Countersignature of an incompatible release overdue, escalated to the laboratory director (decision {{decision}})",
       "INCOMPATIBLE_PROTOCOL_CHANGED": "Setting « incompatible release with no physician reachable » changed",
       "EMERGENCY_BLOOD_RELEASED": "Emergency uncrossmatched release of unit {{unit}} against request {{request}}",
+      "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Unit {{unit}} added beyond the units requested on request {{request}}: unit no. {{number}}, quantity requested {{requested}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Emergency release on a documented O positive decision of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Emergency release — serologically incompatible, of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED": "Emergency release on a documented O positive decision of unit {{unit}} against request {{request}}, O negative stated not obtainable in time, stock shown {{shown}}",
@@ -5034,7 +5047,9 @@
       "ADD": "Add a component"
     },
     "CULTURE": "Culture (culture and susceptibility report)",
-    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version."
+    "CULTURE_HINT": "Changes follow the catalogue approval workflow. For an active definition, create a new version.",
+    "BLOOD_GROUPING": "Blood group (ABO and Rh)",
+    "BLOOD_GROUPING_HINT": "The order is closed by the grouping recorded in the blood bank, where the group is entered once. Changes follow the catalogue approval workflow."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Save correction",
@@ -6544,6 +6559,10 @@
     "ZIP_CODE": "Zip Code",
     "AGE_YEARS": "{{count}} years",
     "AGE_YEAR": "{{count}} year",
+    "AGE_DAY": "{{count}} day",
+    "AGE_DAYS": "{{count}} days",
+    "AGE_MONTH": "{{count}} month",
+    "AGE_MONTHS": "{{count}} months",
     "CHART_UNAVAILABLE_TITLE": "This chart cannot be opened here",
     "PHONE_GUARDIAN_HINT": "For a child, you may leave this blank and give the parent's or guardian's phone under Emergency contact.",
     "PHONE_FROM_GUARDIAN": "Left blank: the parent's or guardian's phone (Emergency contact) will be recorded as this patient's contact.",
@@ -7919,7 +7938,7 @@
         "MEDICATION_DEACTIVATED": "Medication Deactivated",
         "MFA_BACKUP_USED": "MFA Backup Code Used",
         "MFA_CHALLENGE": "MFA Challenge",
-        "MFA_ENROLLED": "MFA Enrolled",
+        "MFA_ENROLLED": "Two-step verification setup started",
         "MFA_FAILURE": "MFA Failure",
         "MFA_VERIFIED": "MFA Verified",
         "MTM_INTERVENTION_RECORDED": "Medication Intervention Recorded",
@@ -7965,6 +7984,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
         "PROVIDER_VERIFIED": "Provider Verified",
         "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
+        "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Blood unit added beyond the request",
         "O_POSITIVE_RELEASE_DECIDED": "Emergency O positive release decided",
         "O_POSITIVE_RELEASE_COUNTERSIGNED": "Emergency O positive release countersigned",
         "O_POSITIVE_RELEASE_REVIEWED": "Emergency O positive release reviewed",
@@ -12708,9 +12728,13 @@
     "WORKLIST_SPECIALIST_REFERRAL": "Specialist referral",
     "WORKLIST_PSYCHOSOCIAL": "Psychosocial",
     "WORKLIST_ALL": "All",
+    "RECORD_ONE": "record",
     "RECORDS": "records",
-    "NO_HISTORIES": "No maternal histories",
+    "NO_HISTORIES": "No records in this worklist",
     "NO_HISTORIES_HINT": "Records matching this worklist will appear here.",
+    "NO_HISTORIES_IN": "No records in the “{{list}}” list",
+    "NO_HISTORIES_OTHER_ONE": "{{count}} record in “{{list}}”: choose another list above.",
+    "NO_HISTORIES_OTHER_MANY": "{{count}} records in “{{list}}”: choose another list above.",
     "PATIENT": "Patient",
     "RECORDED": "Recorded",
     "VERSION": "Version",
@@ -12822,6 +12846,7 @@
     "STATUS_CANCELLED": "Cancelled",
     "REFERRALS_LOAD_ERROR": "Failed to load referrals",
     "GESTATIONAL_AGE": "Gestational age (weeks)",
+    "GESTATIONAL_AGE_SHORT": "Gestational age",
     "REFERRAL_REASON": "Referral reason",
     "CLINICAL_INDICATION": "Clinical indication",
     "HISTORY_SUMMARY": "History summary",
@@ -14040,7 +14065,7 @@
     "NO_RUNS": "No runs yet for this report",
     "WEEK_LABEL": "Week {{week}}, {{year}}",
     "PERIOD_TOKEN": "Period",
-    "ROWS": "Rows",
+    "ROWS": "Data rows",
     "GENERATED_AT": "Generated",
     "ERROR": "Error",
     "TYPE_ENCOUNTER_ACTIVITY": "Encounter activity",
@@ -14052,7 +14077,15 @@
     "RUN_GENERATING": "Generating",
     "RUN_SUCCEEDED": "Sent",
     "RUN_FAILED": "Failed",
-    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
+    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address.",
+    "RUN_TITLE": "Run « {{name}} »",
+    "RUN_PERIOD": "Period to send",
+    "RUN_PERIOD_HINT": "Only closed periods are offered. A period already sent cannot be sent again.",
+    "RUN_ALREADY_SENT": "already sent",
+    "RUN_CONFIRM": "Generate and send",
+    "RUN_NOTICE_ONE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data row.",
+    "RUN_NOTICE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data rows.",
+    "RUN_ALREADY_SENT_REFUSAL": "The report for this period was already sent: choose another period."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retire this session template?",
@@ -14543,6 +14576,9 @@
     "CROSSMATCH_ERROR": "The crossmatch was refused. Check the ABO and Rh groups and the antibody screen.",
     "UNIT_ISSUED": "Unit issued",
     "ISSUE_ERROR": "The unit could not be issued",
+    "ADD_UNIT_TITLE": "Add a unit?",
+    "ADD_UNIT_MESSAGE": "This request already has every unit it asked for. Adding one more is recorded in the audit log under your name.",
+    "ADD_UNIT_CONFIRM": "Add a unit",
     "HUNG": "Transfusion started",
     "HANG_ERROR": "The transfusion could not be started",
     "REACTION_RECORDED": "Reaction recorded and transfusion stopped",
@@ -15969,7 +16005,8 @@
     "CONFIRM_DUPLICATE": "This identifier is already in use. Tick « Save anyway » and give a reason, or correct the identifier.",
     "REASON_REQUIRED": "Give the reason for saving a duplicate identifier.",
     "WAIT_CHECK": "The identifier is still being checked. Try again in a moment.",
-    "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
+    "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it.",
+    "SEARCH_EXACT_TOGGLE": "Search by national unique identifier (UI) only"
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Patient notifications",

@@ -58,6 +58,11 @@ public class ImagingDuplicateOverride {
                 && blank(request.getDuplicateOverrideNote())) {
             throw new FieldBusinessException("duplicateOverrideNote", "imaging.order.duplicateOverride.noteRequired");
         }
+        // QA r81 D4108 class: a written explanation is at least 10 non-whitespace characters (provisional rule).
+        if (request.getDuplicateOverrideReason() == ImagingDuplicateOverrideReason.OTHER
+                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(request.getDuplicateOverrideNote())) {
+            throw new FieldBusinessException("duplicateOverrideNote", "clinical.override.reasonMin");
+        }
     }
 
     /**

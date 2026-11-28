@@ -190,9 +190,13 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       this.toast.error(this.translate.instant('BREAK_GLASS.MISSING_CONTEXT'));
       return;
     }
-    if (reason.length < 10) {
+    const nonWhitespace = Array.from(reason).filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return !/\s/u.test(ch) && (code < 28 || code > 31);
+    }).length;
+    if (nonWhitespace < 10) {
       // QA D1281 class: the short justification is marked where it is typed.
-      const message = this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT');
+      const message = this.translate.instant('CLINICAL_OVERRIDE.MIN_REASON_HINT');
       refuseFields(this.host.nativeElement, ['bgReason'], ['bgReason'], message);
       this.toast.error(message);
       return;

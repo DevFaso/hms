@@ -182,6 +182,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .name(current.getName())
             .category(current.getCategory())
             .culture(current.isCulture())
+            .bloodGrouping(current.isBloodGrouping())
             .description(current.getDescription())
             .sampleType(current.getSampleType())
             .unit(current.getUnit())
@@ -1173,6 +1174,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             return;
         }
         boolean changed = (dto.getCulture() != null && dto.getCulture() != definition.isCulture())
+            || (dto.getBloodGrouping() != null && dto.getBloodGrouping() != definition.isBloodGrouping())
             || (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
             || !sameText(definition.getUnit(), dto.getUnit())
             || !sameText(definition.getSampleType(), dto.getSampleType())

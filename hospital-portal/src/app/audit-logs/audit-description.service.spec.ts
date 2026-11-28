@@ -449,6 +449,11 @@ describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
         'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
       ],
       [
+        // QA D3906: the « ajouter une unité » step.
+        'Blood unit u added beyond the units requested on transfusion request r: unit 2 of 1 requested',
+        'AUDIT.DESC.BLOOD_UNIT_ADDED_BEYOND_REQUEST',
+      ],
+      [
         'Emergency O positive release decision recorded for blood unit u against transfusion request r',
         'AUDIT.DESC.O_POSITIVE_RELEASE_DECIDED',
       ],

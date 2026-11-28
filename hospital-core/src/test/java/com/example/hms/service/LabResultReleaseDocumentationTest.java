@@ -191,6 +191,22 @@ class LabResultReleaseDocumentationTest {
     }
 
     @Test
+    void rejectedQcCannotBeOverriddenWithAShortReason() {
+        gradedAs("NORMAL");
+        LabQcEvent rejected = LabQcEvent.builder().passed(false).build();
+        rejected.setId(UUID.randomUUID());
+        when(qcReleaseGate.blockingRun(result.getLabOrder())).thenReturn(Optional.of(rejected));
+        for (String reason : java.util.List.of("ok", "          ", "123456789")) {
+            assertThatThrownBy(() -> service.releaseLabResult(result.getId(), false, false,
+                LabResultReleaseRequestDTO.builder().qcOverrideReason(reason).build(), Locale.ENGLISH))
+                .isInstanceOfSatisfying(FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("qcOverrideReason"));
+        }
+        assertThat(result.isReleased()).isFalse();
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
     void aDocumentedOverrideReleasesAndRecordsTheRunWhoAndWhy() {
         gradedAs("NORMAL");
         LabQcEvent rejected = LabQcEvent.builder().passed(false).build();

@@ -862,6 +862,19 @@ class MortalityServiceImplTest {
     }
 
     @Test
+    void anAmendmentRefusesUnchangedDetailsAndTheUneditableDeathTime() {
+        DeathRecord record = persisted();
+        for (DeathRecordAmendmentDTO request : List.of(
+                DeathRecordAmendmentDTO.builder().amendmentReason("Review").build(),
+                DeathRecordAmendmentDTO.builder().amendmentReason("Review").immediateCause(record.getImmediateCause()).build(),
+                DeathRecordAmendmentDTO.builder().amendmentReason("Review").underlyingCause("New cause").diedAt(record.getDiedAt().plusHours(1)).build())) {
+            assertThatThrownBy(() -> service.amendDeathRecord(record.getId(), request)).isInstanceOf(BusinessException.class);
+        }
+        verify(deathRecordRepository, never()).save(any());
+        assertThat(record.isAmended()).isFalse();
+    }
+
+    @Test
     void anAmendmentRequiresAReason() {
         UUID recordId = persisted().getId();
         DeathRecordAmendmentDTO blankReason =

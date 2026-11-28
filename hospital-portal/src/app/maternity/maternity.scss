@@ -658,3 +658,55 @@ details.care-maternity-guide > .material-symbols-outlined {
   font-size: 0.875em;
   font-variant-numeric: tabular-nums;
 }
+
+/* QA r81 D4113: the vigilance mark of a minor in labour, on her labour card. */
+.labor-safeguarding-mark {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--warning-text, #b45309);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning-text, #b45309) 10%, transparent);
+  color: var(--warning-text, #b45309);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* QA D3868: the women in labour at this hospital, above the picker's hint. */
+.labor-ward-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+.labor-ward-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  min-width: 0;
+
+  & + & {
+    border-top: 1px solid #f1f5f9;
+  }
+}
+.labor-ward-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+}
+.labor-ward-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}

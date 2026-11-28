@@ -4,6 +4,8 @@ import { of, Subject, throwError } from 'rxjs';
 
 import { PatientPickerComponent } from './patient-picker.component';
 import { PatientService, PatientResponse } from '../../services/patient.service';
+import fr from '../../../assets/i18n/fr.json';
+import en from '../../../assets/i18n/en.json';
 
 function mockPatient(id: string, firstName: string): PatientResponse {
   return { id, firstName, lastName: 'Doe', active: true } as PatientResponse;
@@ -149,6 +151,41 @@ describe('PatientPickerComponent', () => {
       expect(patientSpy.lookup).not.toHaveBeenCalled();
       expect(component.suggestions().map((p) => p.id)).toEqual(['p1', 'p2']);
       expect(component.dropdownOpen()).toBeTrue();
+      done();
+    }, 400);
+  });
+
+  it('QA r81 D4116: a maternity picker does not offer the newborn as the mother', (done) => {
+    component.maternalOnly = true;
+    const baby = {
+      ...mockPatient('baby', 'Bébé TestTravail'),
+      dateOfBirth: new Date().toISOString().slice(0, 10),
+    };
+    const mother = {
+      ...mockPatient('mother', 'Awa TestTravail'),
+      gender: 'FEMALE',
+      dateOfBirth: '1996-04-02',
+    };
+    patientSpy.search.and.returnValue(of([baby, mother]));
+    component.ngOnInit();
+    component.onQueryChange('TestTravail');
+    setTimeout(() => {
+      expect(component.suggestions().map((p) => p.id)).toEqual(['mother']);
+      done();
+    }, 400);
+  });
+
+  it('review of #1378 F5: without maternalOnly a patient recorded male is still offered', (done) => {
+    const recordedMale = {
+      ...mockPatient('m', 'Awa TestEcho'),
+      gender: 'M',
+      dateOfBirth: '1996-04-02',
+    };
+    patientSpy.search.and.returnValue(of([recordedMale]));
+    component.ngOnInit();
+    component.onQueryChange('TestEcho');
+    setTimeout(() => {
+      expect(component.suggestions().map((p) => p.id)).toEqual(['m']);
       done();
     }, 400);
   });
@@ -367,6 +404,18 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('keeps a long selected patient name readable in a narrow picker', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Pengdwendé-LongueIdentité'));
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.width = '180px';
+    fixture.detectChanges();
+    const name = host.querySelector('.chip-name') as HTMLElement;
+    expect(name.textContent).toContain('Pengdwendé-LongueIdentité');
+    expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1);
+    expect(name.getBoundingClientRect().height).toBeGreaterThan(20);
+  });
+
   it('a required picker marks its input required and blank while no patient is picked (QA D1245)', () => {
     const fixture = TestBed.createComponent(PatientPickerComponent);
     fixture.componentRef.setInput('required', true);
@@ -381,5 +430,23 @@ describe('PatientPickerComponent', () => {
     fixture.componentRef.setInput('selected', mockPatient('p1', 'Anna'));
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('#rx-patient')).toBeNull();
+  });
+
+  it('D2595 / D3868: the exact-identifier option names no digit count until it is chosen', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const toggle = host.querySelector('.picker-exact-toggle span')!.textContent!.trim();
+    // A record number (7 characters) and a name work in the box: the option beside it is not its instruction.
+    expect(toggle).toBe('NATIONAL_IU.SEARCH_EXACT_TOGGLE');
+    for (const bundle of [fr, en]) {
+      expect(bundle.NATIONAL_IU.SEARCH_EXACT_TOGGLE).not.toMatch(/\d/);
+    }
+    // Once chosen, the box itself says what it takes.
+    fixture.componentInstance.setNationalUniqueIdMode(true);
+    fixture.detectChanges();
+    expect(host.querySelector('input.picker-input')!.getAttribute('placeholder')).toBe(
+      'NATIONAL_IU.SEARCH_EXACT',
+    );
   });
 });

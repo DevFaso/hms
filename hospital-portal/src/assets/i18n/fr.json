@@ -1,4 +1,5 @@
 {
+  "CLINICAL_OVERRIDE": { "MIN_REASON_HINT": "Au moins 10 caractères hors espaces." },
   "API_TIMEOUT": {
     "TITLE": "Le serveur met trop de temps à répondre",
     "MESSAGE": "Le délai de la requête est dépassé. Réessayez l’action lorsque la connexion est disponible, ou rechargez la page pour charger ses données.",
@@ -220,6 +221,7 @@
     "FHR": "BCF (bpm)",
     "INFANT_SEX": "Sexe",
     "LATENT_PHASE": "Phase de latence",
+    "MINOR_SAFEGUARDING": "Patiente mineure (moins de {{years}} ans à l’admission) : situation de protection à revoir. Règle provisoire.",
     "LATE_ENTRY": "Saisie tardive",
     "LIQUOR": "Liquide amniotique",
     "LIQUOR_ABSENT": "Absent",
@@ -345,7 +347,17 @@
     "BABY_OUTCOME_STILLBORN": "Mort-né(e) (sans signe de vie)",
     "BABY_OUTCOME_UNKNOWN": "Non renseigné",
     "BABY_OUTCOMES": "Issue de chaque bébé",
-    "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité."
+    "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité.",
+    "WARD_TITLE": "Femmes en travail dans cet hôpital",
+    "WARD_EMPTY": "Aucune femme n'est en travail dans cet hôpital en ce moment.",
+    "WARD_FAILED": "La liste des femmes en travail n'a pas pu être chargée.",
+    "WARD_ADMITTED": "Admise le {{time}}",
+    "WARD_WEEKS": "{{weeks}} SA",
+    "WARD_ENTRIES_ONE": "{{count}} observation au partogramme",
+    "WARD_ENTRIES": "{{count}} observations au partogramme",
+    "WARD_OPEN": "Ouvrir le dossier de travail",
+    "WARD_OPEN_FAILED": "Le dossier de cette patiente n'a pas pu être ouvert.",
+    "WARD_RECORD_HEADING": "Dossier de travail de {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Opérateur",
@@ -1322,7 +1334,7 @@
         "CANCELLED": "Annulée",
         "PRELIMINARY": "Préliminaire",
         "FINAL": "Finale",
-        "ADDENDUM": "Complément",
+        "ADDENDUM": "Addendum",
         "CORRECTED": "Corrigée",
         "AMENDED": "Amendée"
       },
@@ -2024,6 +2036,7 @@
       "INCOMPATIBLE_COUNTERSIGN_OVERDUE": "Contresignature d’une délivrance incompatible en retard, signalée au directeur du laboratoire (décision {{decision}})",
       "INCOMPATIBLE_PROTOCOL_CHANGED": "Réglage « libération incompatible sans médecin joignable » modifié",
       "EMERGENCY_BLOOD_RELEASED": "Délivrance en urgence sans épreuve de compatibilité de la poche {{unit}} pour la demande {{request}}",
+      "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Poche {{unit}} ajoutée au-delà des unités demandées sur la demande {{request}} : n° {{number}}, quantité demandée {{requested}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Délivrance d'urgence — sérologiquement incompatible, de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}, O négatif déclaré impossible à obtenir à temps, stock indiqué {{shown}}",
@@ -5034,7 +5047,9 @@
       "ADD": "Ajouter un composant"
     },
     "CULTURE": "Culture (rapport de culture et antibiogramme)",
-    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version."
+    "CULTURE_HINT": "Les modifications suivent le circuit d’approbation du catalogue. Pour une définition active, créez une nouvelle version.",
+    "BLOOD_GROUPING": "Groupe sanguin (ABO et Rh)",
+    "BLOOD_GROUPING_HINT": "La demande est close par le groupage saisi à la banque de sang, où le groupe est saisi une seule fois. Les modifications suivent le circuit d’approbation du catalogue."
   },
   "LAB_RESULTS": {
     "SAVE_CORRECTION": "Enregistrer la correction",
@@ -6544,6 +6559,10 @@
     "ZIP_CODE": "Code postal",
     "AGE_YEARS": "{{count}} ans",
     "AGE_YEAR": "{{count}} an",
+    "AGE_DAY": "{{count}} jour",
+    "AGE_DAYS": "{{count}} jours",
+    "AGE_MONTH": "{{count}} mois",
+    "AGE_MONTHS": "{{count}} mois",
     "CHART_UNAVAILABLE_TITLE": "Ce dossier ne peut pas être ouvert ici",
     "PHONE_GUARDIAN_HINT": "Pour un enfant, vous pouvez laisser ce champ vide et saisir le téléphone du parent ou du tuteur dans « Contact d'urgence ».",
     "PHONE_FROM_GUARDIAN": "Laissé vide : le téléphone du parent ou du tuteur (« Contact d'urgence ») sera enregistré comme contact de ce patient.",
@@ -7404,7 +7423,7 @@
         "ABNORMAL_LOW": "Anormal - bas",
         "ACKNOWLEDGED": "Pris en compte",
         "ACTIVE": "Actif",
-        "ADDENDUM": "Complément",
+        "ADDENDUM": "Addendum",
         "AMENDED": "Amendé",
         "APPROVED": "Approuvé",
         "ARRIVED": "Arrivé",
@@ -7596,7 +7615,7 @@
         "SCHEDULED": "Planifiée"
       },
       "CONSULTATION_URGENCY": {
-        "EMERGENCY": "Urgence",
+        "EMERGENCY": "Urgence vitale",
         "ROUTINE": "Routine",
         "STAT": "Immédiate (STAT)",
         "URGENT": "Urgente"
@@ -7756,7 +7775,7 @@
         "SUBMITTED": "Soumise"
       },
       "REFERRAL_URGENCY": {
-        "EMERGENCY": "Urgence",
+        "EMERGENCY": "Urgence vitale",
         "PRIORITY": "Prioritaire",
         "ROUTINE": "Routine",
         "URGENT": "Urgente"
@@ -7885,7 +7904,7 @@
         "MEDICATION_DEACTIVATED": "Médicament désactivé",
         "MFA_BACKUP_USED": "Code de secours utilisé",
         "MFA_CHALLENGE": "Validation en deux étapes demandée",
-        "MFA_ENROLLED": "Validation en deux étapes configurée",
+        "MFA_ENROLLED": "Configuration de la validation en deux étapes commencée",
         "MFA_FAILURE": "Échec de la validation en deux étapes",
         "MFA_VERIFIED": "Validation en deux étapes réussie",
         "MTM_INTERVENTION_RECORDED": "Intervention pharmaceutique enregistrée",
@@ -7931,6 +7950,7 @@
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
         "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
+        "BLOOD_UNIT_ADDED_BEYOND_REQUEST": "Poche ajoutée au-delà de la demande",
         "O_POSITIVE_RELEASE_DECIDED": "Délivrance en urgence de O positif décidée",
         "O_POSITIVE_RELEASE_COUNTERSIGNED": "Délivrance en urgence de O positif contresignée",
         "O_POSITIVE_RELEASE_REVIEWED": "Délivrance en urgence de O positif revue",
@@ -8449,7 +8469,7 @@
       "ADMISSION_TYPE": {
         "EMERGENCY": "Urgence",
         "ELECTIVE": "Programmée",
-        "URGENT": "Urgente",
+        "URGENT": "Semi-urgente",
         "NEWBORN": "Nouveau-né",
         "TRANSFER": "Transfert",
         "OBSERVATION": "Observation",
@@ -9578,7 +9598,7 @@
     "ELIGIBILITY_VERIFIED": "Éligibilité vérifiée",
     "ELIGIBILITY_VERIFIED_SUCCESS": "Éligibilité vérifiée",
     "EMAIL": "E-mail",
-    "EMERGENCY": "Urgence",
+    "EMERGENCY": "Urgence vitale",
     "ENTRY_CLOSED": "Entrée de la liste d'attente fermée",
     "EXPIRED": "Expiré",
     "EXPIRED_INSURANCE": "Assurance expirée",
@@ -12708,9 +12728,13 @@
     "WORKLIST_SPECIALIST_REFERRAL": "Orientation spécialiste",
     "WORKLIST_PSYCHOSOCIAL": "Psychosocial",
     "WORKLIST_ALL": "Tous",
+    "RECORD_ONE": "dossier",
     "RECORDS": "dossiers",
-    "NO_HISTORIES": "Aucun antécédent maternel",
+    "NO_HISTORIES": "Aucun dossier dans cette liste",
     "NO_HISTORIES_HINT": "Les dossiers correspondant à cette liste apparaîtront ici.",
+    "NO_HISTORIES_IN": "Aucun dossier dans la liste « {{list}} »",
+    "NO_HISTORIES_OTHER_ONE": "{{count}} dossier dans « {{list}} » : choisissez une autre liste ci-dessus.",
+    "NO_HISTORIES_OTHER_MANY": "{{count}} dossiers dans « {{list}} » : choisissez une autre liste ci-dessus.",
     "PATIENT": "Patiente",
     "RECORDED": "Enregistré",
     "VERSION": "Version",
@@ -12822,6 +12846,7 @@
     "STATUS_CANCELLED": "Annulée",
     "REFERRALS_LOAD_ERROR": "Échec du chargement des orientations",
     "GESTATIONAL_AGE": "Âge gestationnel (semaines)",
+    "GESTATIONAL_AGE_SHORT": "Âge gestationnel",
     "REFERRAL_REASON": "Motif de l'orientation",
     "CLINICAL_INDICATION": "Indication clinique",
     "HISTORY_SUMMARY": "Résumé des antécédents",
@@ -14040,7 +14065,7 @@
     "NO_RUNS": "Aucune exécution pour ce rapport",
     "WEEK_LABEL": "Semaine {{week}}, {{year}}",
     "PERIOD_TOKEN": "Période",
-    "ROWS": "Lignes",
+    "ROWS": "Lignes de données",
     "GENERATED_AT": "Généré le",
     "ERROR": "Erreur",
     "TYPE_ENCOUNTER_ACTIVITY": "Activité des consultations",
@@ -14052,7 +14077,15 @@
     "RUN_GENERATING": "En cours",
     "RUN_SUCCEEDED": "Envoyé",
     "RUN_FAILED": "Échec",
-    "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide."
+    "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide.",
+    "RUN_TITLE": "Exécuter « {{name}} »",
+    "RUN_PERIOD": "Période à envoyer",
+    "RUN_PERIOD_HINT": "Seules les périodes terminées sont proposées. Une période déjà envoyée ne peut pas être renvoyée.",
+    "RUN_ALREADY_SENT": "déjà envoyée",
+    "RUN_CONFIRM": "Générer et envoyer",
+    "RUN_NOTICE_ONE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} ligne de données.",
+    "RUN_NOTICE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} lignes de données.",
+    "RUN_ALREADY_SENT_REFUSAL": "Le rapport de cette période a déjà été envoyé : choisissez une autre période."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retirer ce modèle de séance ?",
@@ -14543,6 +14576,9 @@
     "CROSSMATCH_ERROR": "L'épreuve de compatibilité a été refusée. Vérifiez les groupes ABO et Rh et la recherche d'agglutinines irrégulières (RAI).",
     "UNIT_ISSUED": "Unité délivrée",
     "ISSUE_ERROR": "L'unité n'a pas pu être délivrée",
+    "ADD_UNIT_TITLE": "Ajouter une unité ?",
+    "ADD_UNIT_MESSAGE": "Cette demande a déjà toutes les unités demandées. L’ajout d’une unité supplémentaire est enregistré à votre nom dans le journal d’audit.",
+    "ADD_UNIT_CONFIRM": "Ajouter une unité",
     "HUNG": "Transfusion démarrée",
     "HANG_ERROR": "La transfusion n'a pas pu être démarrée",
     "REACTION_RECORDED": "Réaction enregistrée, transfusion arrêtée",
@@ -15497,11 +15533,11 @@
     "RESPONSE": "Réponse :",
     "SUBJECTIVE": "Subjectif :",
     "TITLE": "Notes de soins infirmiers",
-    "ADD_ADDENDUM": "Ajouter un complément",
-    "ADDENDUM_LABEL": "Complément",
-    "ADDENDUM_ATTEST": "J'atteste que ce complément est exact et sans abréviation",
-    "ADDENDUM_SAVED": "Complément enregistré sous la note de soins.",
-    "ADDENDUM_FAILED": "Le complément n'a pas pu être enregistré.",
+    "ADD_ADDENDUM": "Ajouter un addendum",
+    "ADDENDUM_LABEL": "Addendum",
+    "ADDENDUM_ATTEST": "J'atteste que cet addendum est exact et sans abréviation",
+    "ADDENDUM_SAVED": "Addendum enregistré sous la note de soins.",
+    "ADDENDUM_FAILED": "L'addendum n'a pas pu être enregistré.",
     "EMPTY_PATIENT": "Aucune note de soins pour ce patient.",
     "TAB": "Notes de soins",
     "OPEN": "Notes de soins"
@@ -15969,7 +16005,8 @@
     "CONFIRM_DUPLICATE": "Cet identifiant est déjà utilisé. Cochez « Enregistrer quand même » et indiquez un motif, ou corrigez l’identifiant.",
     "REASON_REQUIRED": "Indiquez le motif d’enregistrement d’un identifiant en double.",
     "WAIT_CHECK": "L’identifiant est en cours de vérification. Réessayez dans un instant.",
-    "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
+    "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir.",
+    "SEARCH_EXACT_TOGGLE": "Chercher seulement par identifiant national (UI)"
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Notifications aux patients",

@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request to revoke an active break-the-glass session before its TTL expires.")
 public class BreakGlassRevokeRequestDTO {
 
-    @Size(max = 1024)
+    @Size(max = 1024, message = "{breakGlass.validation.revokeReasonTooLong}")
     @Schema(description = "Optional reason for revoking early (e.g. 'patient regained consciousness, consent obtained').",
             example = "Patient consent now obtained.")
     private String reason;

@@ -29,10 +29,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class DeathRecordRequestDTO {
 
-    @NotNull
+    @NotNull(message = "{mortality.validation.patientRequired}")
     private UUID patientId;
 
-    @NotNull
+    @NotNull(message = "{mortality.validation.diedAtRequired}")
     private LocalDateTime diedAt;
 
     private PlaceOfDeath placeOfDeath;
@@ -40,11 +40,11 @@ public class DeathRecordRequestDTO {
     private MannerOfDeath mannerOfDeath;
 
     /** What finally stopped the heart. */
-    @NotBlank
-    @Size(max = 500)
+    @NotBlank(message = "{mortality.validation.immediateCauseRequired}")
+    @Size(max = 500, message = "{mortality.validation.causeTooLong}")
     private String immediateCause;
 
-    @Size(max = 20)
+    @Size(max = 20, message = "{mortality.validation.causeCodeTooLong}")
     private String immediateCauseCode;
 
     /**
@@ -52,13 +52,13 @@ public class DeathRecordRequestDTO {
      * actually count. An immediate cause of "cardiac arrest" on its own tells
      * the register nothing.
      */
-    @Size(max = 500)
+    @Size(max = 500, message = "{mortality.validation.causeTooLong}")
     private String underlyingCause;
 
-    @Size(max = 20)
+    @Size(max = 20, message = "{mortality.validation.causeCodeTooLong}")
     private String underlyingCauseCode;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{mortality.validation.contributingTooLong}")
     private String contributingCauses;
 
     private Boolean maternalDeath;
@@ -94,6 +94,6 @@ public class DeathRecordRequestDTO {
     /** The clinician certifying, who is often not the person entering this. */
     private UUID certifiedByStaffId;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{validation.notes.size1000}")
     private String notes;
 }

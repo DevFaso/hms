@@ -1308,9 +1308,44 @@ class PrescriptionServiceImplTest {
         when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
+        // QA r81 review F4: the refusal names its source once (« Alerte allergie : » not twice).
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy alert");
+            .hasMessageContaining("Allergy alert")
+            .satisfies(e -> assertThat(e.getMessage().split("Allergy alert", -1)).hasSize(2));
+    }
+
+    @Test
+    void createPrescriptionWithSevereAllergyRefusesShortOverrideReasons() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+
+        UUID currentUser = staff.getUser().getId();
+
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Ibuprofen");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        allergy.setReaction("Anaphylaxis");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId))
+            .thenReturn(List.of(allergy));
+
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            request.setOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
@@ -1629,8 +1664,11 @@ class PrescriptionServiceImplTest {
             com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
                 .allergyOverrideReason("   ").doseExceptionToken(token).build();
 
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, blank, Locale.FRENCH))
-            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            blank.setAllergyOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, blank, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
     }
 
@@ -4050,8 +4088,11 @@ class PrescriptionServiceImplTest {
         when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(softStop));
 
-        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            request.setOverrideReason(reason);
+            assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -5129,7 +5170,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Allergy alert");
+            .hasMessage("Enter a reason with at least 10 non-whitespace characters.");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -7491,7 +7532,7 @@ class PrescriptionServiceImplTest {
             com.example.hms.cdshooks.CdsCriticalBlockException.class,
             () -> prescriptionService.signPrescription(id, cr01_urgent(null, null), Locale.ENGLISH));
 
-        prescriptionService.signPrescription(id, cr01_urgent("Sepsis", asked.getCards().get(0).exceptionKey()), Locale.ENGLISH);
+        prescriptionService.signPrescription(id, cr01_urgent("Sepsis, urgent care", asked.getCards().get(0).exceptionKey()), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
     }
@@ -7559,12 +7600,12 @@ class PrescriptionServiceImplTest {
         prescriptionService.setUrgentReviewBasket(basket);
 
         String token = cr02_tokenOfARefusal(rx);
-        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonAlone = cr02_exception("Décision", null);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonAlone = cr02_exception("Décision clinique", null);
         assertThatThrownBy(() -> prescriptionService.signPrescription(id, reasonAlone, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
 
-        prescriptionService.signPrescription(id, cr02_exception("Décision", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(id, cr02_exception("Décision clinique", token), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getOverrideReason()).contains("Décision");
@@ -7581,7 +7622,7 @@ class PrescriptionServiceImplTest {
         UUID id = rx.getId();
         String token = cr02_tokenOfARefusal(rx);
         cr02_findings(paed_aboveLimit("paedAbove:mgPerKg:25.0:15"));
-        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale = cr02_exception("Décision", token);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale = cr02_exception("Décision clinique", token);
 
         assertThatThrownBy(() -> prescriptionService.signPrescription(id, stale, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
@@ -7689,7 +7730,7 @@ class PrescriptionServiceImplTest {
         cr02_mapsTheSave();
         prescriptionService.setUrgentReviewBasket(basket);
         String token = cr02_tokenOfARefusal(rx);
-        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise, seul sur place", token), Locale.ENGLISH);
         return rx;
     }
 
@@ -7790,7 +7831,7 @@ class PrescriptionServiceImplTest {
         prescriptionService.setUrgentReviewBasket(basket);
         String token = cr02_tokenOfARefusal(rx);
 
-        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise, seul sur place", token), Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();
@@ -7999,6 +8040,24 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void policy4_aContinueRationaleShorterThanTenCharactersIsRefused() {
+        // QA r81 D4108 class: « ok » does not justify continuing despite an allergy.
+        UUID doctorUserId = UUID.randomUUID();
+        Prescription rx = policy4_conflictingOrder(doctorUserId);
+        UUID rxId = rx.getId();
+        String token = policy4_currentToken(rx);
+
+        assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, policy4_review(
+                com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe 30 min", "ok", token)))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("rationale");
+                assertThat(e.getMessageKey()).isEqualTo("clinical.override.reasonMin");
+            });
+        assertThat(rx.getAllergyReviewDecision()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void policy4_theReviewNeedsADecisionARationaleAndForContinueAPlan() {
         UUID doctorUserId = UUID.randomUUID();
         Prescription rx = policy4_conflictingOrder(doctorUserId);
@@ -8041,7 +8100,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.isSigningPhysician(doctorUserId, rx.getHospital().getId())).thenReturn(true);
         String token = policy4_currentToken(rx);
         UUID rxId = rx.getId();
-        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated", token);
+        var request = policy4_review(com.example.hms.enums.AllergyReviewDecision.CONTINUE, "Observe", "Tolerated before without reaction", token);
 
         rx.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
         assertThatThrownBy(() -> prescriptionService.reviewAllergyConflict(rxId, request))

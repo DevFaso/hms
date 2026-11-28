@@ -1467,6 +1467,40 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public String selfRequestHospitalRefusal(Authentication auth, UUID requestedHospitalId) {
+        UUID userId = authUtils.resolveUserId(auth).orElse(null);
+        Patient patient = userId == null ? null
+                : LinkedPatientLookup.linkedPatient(patientRepository, userId).orElse(null);
+        // No patient: the request is refused for that reason by the service, not here.
+        return patient == null ? null : writeHospitalRefusal(patient, requestedHospitalId);
+    }
+
+    /**
+     * QA D4025: the message key {@link #writeHospitalFor} would refuse with, or {@code null} when it resolves a
+     * hospital, so the body's validation can name the hospital with its other refusals.
+     */
+    private String writeHospitalRefusal(Patient patient, UUID requestedHospitalId) {
+        if (requestedHospitalId != null) {
+            return isRegisteredAt(patient.getId(), requestedHospitalId)
+                    ? null : "patientPortal.request.hospitalNotRegistered";
+        }
+        List<UUID> active = activeRegistrationHospitals(patient);
+        if (active.size() == 1 || (patient.getHospitalId() != null && active.contains(patient.getHospitalId()))) {
+            return null;
+        }
+        return active.isEmpty() ? "patientPortal.request.noHospitalRegistration" : "patientPortal.request.chooseHospital";
+    }
+
+    private List<UUID> activeRegistrationHospitals(Patient patient) {
+        return registrationRepository.findByPatientId(patient.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> reg.getHospital().getId())
+                .distinct()
+                .toList();
+    }
+
     /**
      * The hospital a patient-initiated write is filed at, when the record it
      * acts on does not carry one: the hospital the request names, checked
@@ -1483,11 +1517,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             }
             return requestedHospitalId;
         }
-        List<UUID> active = registrationRepository.findByPatientId(patient.getId()).stream()
-                .filter(reg -> reg.isActive() && reg.getHospital() != null)
-                .map(reg -> reg.getHospital().getId())
-                .distinct()
-                .toList();
+        List<UUID> active = activeRegistrationHospitals(patient);
         if (active.size() == 1) {
             return active.get(0);
         }

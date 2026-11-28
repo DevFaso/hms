@@ -157,6 +157,18 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
+        void refusesReasonsWithFewerThanTenNonWhitespaceCharacters() {
+            stubAuthenticatedDoctor();
+            for (String reason : List.of("ok", "          ", "123456789   ")) {
+                var req = BreakGlassDeclareRequestDTO.builder().patientId(patientId)
+                    .hospitalId(hospitalId).reason(reason).build();
+                assertThatThrownBy(() -> service.declare(req))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            }
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("D409/D410: a patient unknown to the reader's hospital can be broken into, and is told")
         void declareForAPatientRegisteredElsewhere() {
             // The tenant-scoped findById is never asked: it answered 404 for

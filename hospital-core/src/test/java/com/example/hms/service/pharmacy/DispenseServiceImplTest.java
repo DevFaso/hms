@@ -2014,6 +2014,26 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA r81 D4108: a CRITICAL CDS override reason shorter than 10 characters blocks the dispense")
+        void shouldBlockOnCriticalCdsWithAShortOverrideReason() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setCdsOverrideReason("  ok  ");
+
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(cdsCheckService.checkAtDispense(prescription, patientId)).thenReturn(
+                    new CdsAlertResult(CdsAlertSeverity.CRITICAL,
+                            java.util.List.of("[CONTRAINDICATED] Drug A ↔ Drug B"), true));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                    .hasMessageContaining("10");
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
         @DisplayName("P-08: should proceed when CRITICAL CDS alert is overridden with a reason")
         void shouldProceedOnCriticalCdsWithOverride() {
             DispenseRequestDTO dto = buildRequest();

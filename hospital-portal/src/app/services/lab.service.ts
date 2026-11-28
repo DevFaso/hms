@@ -239,6 +239,8 @@ export interface LabResultTrendPoint {
 
 export interface LabTestDefinition {
   culture?: boolean;
+  /** QA D3905: a blood-group test, whose order the blood-bank grouping closes. */
+  bloodGrouping?: boolean;
   id: string;
   testCode: string;
   testName: string;
@@ -503,6 +505,7 @@ export interface LabResultRequest {
 
 export interface LabTestDefinitionRequest {
   culture?: boolean;
+  bloodGrouping?: boolean;
   testCode: string;
   testName: string;
   category?: string;

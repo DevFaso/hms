@@ -17,7 +17,7 @@ public class TransferCompletionRequestDTO {
 
     private UUID completedByStaffId;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{validation.notes.size1000}")
     private String notes;
 
     /**
