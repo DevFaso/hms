@@ -426,6 +426,26 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Filed at the hospital the request names (checked against the
         // patient's registrations), else at the patient's own hospital: the
         // request lands on that facility's triage worklist. Never a guess.
+        // QA D4025: an empty request is refused once, naming the hospital
+        // too when it must be chosen, and a correction's description by its
+        // own name (it is what to correct, not a scope).
+        String hospitalRefusal = writeHospitalRefusal(patient, dto.getHospitalId());
+        boolean correction = dto.getRequestKind() == com.example.hms.enums.RoiRequestKind.CORRECTION;
+        com.example.hms.exception.RequiredFields missing = com.example.hms.exception.RequiredFields.check();
+        if (hospitalRefusal != null) {
+            missing.require(false, FIELD_HOSPITAL_ID, hospitalRefusal);
+        }
+        int max = com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO.TEXT_MAX;
+        missing.requireValue(dto.getPurpose(), "purpose", "roiSelfRequest.purpose.required")
+                .requireValue(dto.getScopeDescription(), "scopeDescription", correction
+                        ? "roiSelfRequest.correctionDescription.required"
+                        : "roiSelfRequest.scopeDescription.required")
+                .require(withinLength(dto.getPurpose(), max), "purpose", "roiSelfRequest.text.tooLong", max)
+                .require(withinLength(dto.getScopeDescription(), max), "scopeDescription",
+                        "roiSelfRequest.text.tooLong", max)
+                .require(withinLength(dto.getRequesterContact(), max), "requesterContact",
+                        "roiSelfRequest.text.tooLong", max)
+                .orThrow();
         UUID hospitalId = writeHospitalFor(patient, dto.getHospitalId());
         return roiRequestService.createForSelf(patient, hospitalId, dto);
     }
@@ -1444,6 +1464,34 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
+    private static boolean withinLength(String text, int max) {
+        return text == null || text.length() <= max;
+    }
+
+    /**
+     * QA D4025: the message key {@link #writeHospitalFor} would refuse with, or {@code null} when it resolves a
+     * hospital, so a request can name the hospital with its other missing fields in one refusal.
+     */
+    private String writeHospitalRefusal(Patient patient, UUID requestedHospitalId) {
+        if (requestedHospitalId != null) {
+            return isRegisteredAt(patient.getId(), requestedHospitalId)
+                    ? null : "patientPortal.request.hospitalNotRegistered";
+        }
+        List<UUID> active = activeRegistrationHospitals(patient);
+        if (active.size() == 1 || (patient.getHospitalId() != null && active.contains(patient.getHospitalId()))) {
+            return null;
+        }
+        return active.isEmpty() ? "patientPortal.request.noHospitalRegistration" : "patientPortal.request.chooseHospital";
+    }
+
+    private List<UUID> activeRegistrationHospitals(Patient patient) {
+        return registrationRepository.findByPatientId(patient.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> reg.getHospital().getId())
+                .distinct()
+                .toList();
+    }
+
     /**
      * The hospital a patient-initiated write is filed at, when the record it
      * acts on does not carry one: the hospital the request names, checked
@@ -1460,11 +1508,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             }
             return requestedHospitalId;
         }
-        List<UUID> active = registrationRepository.findByPatientId(patient.getId()).stream()
-                .filter(reg -> reg.isActive() && reg.getHospital() != null)
-                .map(reg -> reg.getHospital().getId())
-                .distinct()
-                .toList();
+        List<UUID> active = activeRegistrationHospitals(patient);
         if (active.size() == 1) {
             return active.get(0);
         }

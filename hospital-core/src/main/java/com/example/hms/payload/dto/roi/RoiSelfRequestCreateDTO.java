@@ -1,7 +1,5 @@
 package com.example.hms.payload.dto.roi;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -27,16 +25,22 @@ public class RoiSelfRequestCreateDTO {
     @Builder.Default
     private com.example.hms.enums.RoiRequestKind requestKind = com.example.hms.enums.RoiRequestKind.COPY;
 
+    /**
+     * QA D4025: this body carries no bean constraint on purpose. Every rule (the hospital when the patient must
+     * choose one, the purpose, the description, each text at most {@link #TEXT_MAX} characters) is checked by
+     * {@code PatientPortalServiceImpl#createRoiRequest} in one pass, so an empty request is refused once with
+     * every missing field named. Bean validation runs first and could not name the hospital, which depends on
+     * the patient's registrations.
+     */
+    public static final int TEXT_MAX = 500;
+
     /** Where the copy should go — optional; defaults to the contact on file. */
-    @Size(max = 500)
     private String requesterContact;
 
-    @NotBlank(message = "{roiSelfRequest.purpose.required}")
-    @Size(max = 500)
+    /** Required (checked by the service, see {@link #TEXT_MAX}). */
     private String purpose;
 
-    @NotBlank(message = "{roiSelfRequest.scopeDescription.required}")
-    @Size(max = 500)
+    /** Required: what is asked for, or for a correction, what to correct (checked by the service). */
     private String scopeDescription;
 
     /** Optional — defaults to today. */

@@ -179,53 +179,56 @@
                     </td>
                   }
                   <td class="actions-cell">
-                    @if (
-                      canExport() &&
-                      row.status === 'FULFILLED' &&
-                      row.requestKind !== 'CORRECTION' &&
-                      row.scopeDescription === 'FULL_RECORD'
-                    ) {
-                      <button
-                        type="button"
-                        class="btn-link"
-                        [disabled]="!!exportingId()"
-                        (click)="exportCopy(row)"
-                        data-testid="roi-export-copy"
-                      >
-                        {{ 'RECORD_RIGHTS.EXPORT' | translate }}
-                      </button>
-                    }
-                    @if (row.status === 'PENDING') {
-                      @if (canDecide()) {
+                    <!-- QA D4024: the buttons wrap inside the cell; the cell stays a table cell. -->
+                    <div class="row-actions">
+                      @if (
+                        canExport() &&
+                        row.status === 'FULFILLED' &&
+                        row.requestKind !== 'CORRECTION' &&
+                        row.scopeDescription === 'FULL_RECORD'
+                      ) {
                         <button
                           type="button"
                           class="btn-link"
-                          data-testid="fulfil-btn"
-                          (click)="openDecision(row, 'fulfil', $event)"
+                          [disabled]="!!exportingId()"
+                          (click)="exportCopy(row)"
+                          data-testid="roi-export-copy"
                         >
-                          {{
-                            (row.requestKind === 'CORRECTION'
-                              ? 'RECORD_RIGHTS.COMPLETE_CORRECTION'
-                              : 'ROI.FULFIL'
-                            ) | translate
-                          }}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-link danger"
-                          (click)="openDecision(row, 'deny', $event)"
-                        >
-                          {{ 'ROI.DENY' | translate }}
+                          {{ 'RECORD_RIGHTS.EXPORT' | translate }}
                         </button>
                       }
-                      <button
-                        type="button"
-                        class="btn-link"
-                        (click)="openDecision(row, 'cancel', $event)"
-                      >
-                        {{ 'ROI.CANCEL' | translate }}
-                      </button>
-                    }
+                      @if (row.status === 'PENDING') {
+                        @if (canDecide()) {
+                          <button
+                            type="button"
+                            class="btn-link"
+                            data-testid="fulfil-btn"
+                            (click)="openDecision(row, 'fulfil', $event)"
+                          >
+                            {{
+                              (row.requestKind === 'CORRECTION'
+                                ? 'RECORD_RIGHTS.COMPLETE_CORRECTION'
+                                : 'ROI.FULFIL'
+                              ) | translate
+                            }}
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-link danger"
+                            (click)="openDecision(row, 'deny', $event)"
+                          >
+                            {{ 'ROI.DENY' | translate }}
+                          </button>
+                        }
+                        <button
+                          type="button"
+                          class="btn-link"
+                          (click)="openDecision(row, 'cancel', $event)"
+                        >
+                          {{ 'ROI.CANCEL' | translate }}
+                        </button>
+                      }
+                    </div>
                   </td>
                 </tr>
               }

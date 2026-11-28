@@ -18,6 +18,7 @@ import {
 } from './reports.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PluralKeyPipe } from '../shared/pipes/plural-key.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -39,6 +40,65 @@ const SERVER_REPORT_FIELDS = [
   ['period', 'rep-period'],
 ] as const;
 
+/** QA D4023: how many closed periods the run dialog offers, newest first. */
+const RUN_PERIOD_CHOICES: Readonly<Record<ReportPeriod, number>> = {
+  DAILY: 31,
+  WEEKLY: 12,
+  MONTHLY: 12,
+};
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/**
+ * QA D4023: the tokens of the periods that have closed by {@code today}, newest first, in the server's format
+ * (ReportGenerationService.priorPeriodToken): 2026-11-27 for a day, 2026-W47 for an ISO week, 202610 for a month.
+ * The first one is the period the server runs when none is named.
+ */
+export function closedPeriodTokens(period: ReportPeriod, today: Date, count: number): string[] {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const day = today.getDate();
+  const tokens: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    if (period === 'MONTHLY') {
+      const first = new Date(Date.UTC(year, month - i, 1));
+      tokens.push(`${first.getUTCFullYear()}${pad(first.getUTCMonth() + 1)}`);
+    } else if (period === 'DAILY') {
+      const date = new Date(Date.UTC(year, month, day - i));
+      tokens.push(
+        `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`,
+      );
+    } else {
+      // ISO 8601: the week of the Thursday of that week, in the Thursday's year.
+      const date = new Date(Date.UTC(year, month, day - 7 * i));
+      const weekday = (date.getUTCDay() + 6) % 7;
+      date.setUTCDate(date.getUTCDate() - weekday + 3);
+      const weekYear = date.getUTCFullYear();
+      const firstThursday = new Date(Date.UTC(weekYear, 0, 4));
+      const week =
+        1 +
+        Math.round(
+          ((date.getTime() - firstThursday.getTime()) / 86400000 -
+            3 +
+            ((firstThursday.getUTCDay() + 6) % 7)) /
+            7,
+        );
+      tokens.push(`${weekYear}-W${pad(week)}`);
+    }
+  }
+  return tokens;
+}
+
+/** QA D4023: what « Exécuter » did, said on the page and not only in a toast. */
+export interface RunNotice {
+  definitionId: string;
+  name: string;
+  period: string;
+  rows: number;
+}
+
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
  * reports emailed each closed period. First caller of every /reports
@@ -51,6 +111,7 @@ const SERVER_REPORT_FIELDS = [
   imports: [
     SubmitGuardDirective,
     ServerTimePipe,
+    PluralKeyPipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -76,6 +137,14 @@ export class ReportsComponent implements OnInit {
   expandedId = signal<string | null>(null);
   runs = signal<ReportRunResponse[]>([]);
   runsLoading = signal(false);
+
+  /* ── Run dialog (QA D4023) ──── */
+  /** The report whose period is being chosen; null when the dialog is closed. */
+  runFor = signal<ReportDefinitionResponse | null>(null);
+  runToken = signal('');
+  /** The periods already sent for the report in the dialog: the server refuses them again. */
+  runSentTokens = signal<ReadonlySet<string>>(new Set());
+  runNotice = signal<RunNotice | null>(null);
 
   /* ── Create modal ───────────── */
   showCreate = signal(false);
@@ -271,18 +340,70 @@ export class ReportsComponent implements OnInit {
     });
   }
 
-  runNow(definition: ReportDefinitionResponse): void {
+  /** The closed periods the run dialog offers for this report, newest first. */
+  runChoices(definition: ReportDefinitionResponse): string[] {
+    return closedPeriodTokens(definition.period, new Date(), RUN_PERIOD_CHOICES[definition.period]);
+  }
+
+  /**
+   * QA D4023: « Exécuter » asks which period. A second run of the same period was refused with « Choisissez une
+   * autre période » on a page that had no period choice. Periods already sent are marked and cannot be picked.
+   */
+  openRun(definition: ReportDefinitionResponse): void {
+    if (this.actingOnId()) return;
+    const choices = this.runChoices(definition);
+    this.runFor.set(definition);
+    this.runSentTokens.set(new Set());
+    this.runToken.set(choices[0]);
+    this.reportsService.runs(definition.id).subscribe({
+      next: (list) => {
+        if (this.runFor()?.id !== definition.id) return;
+        const sent = new Set(
+          list.filter((run) => run.status !== 'FAILED').map((run) => run.periodToken),
+        );
+        this.runSentTokens.set(sent);
+        // Start on the newest period not sent yet.
+        const open = choices.find((token) => !sent.has(token));
+        if (open && sent.has(this.runToken())) this.runToken.set(open);
+      },
+      // The marks are a help: the server still refuses a period already sent.
+      error: () => undefined,
+    });
+  }
+
+  closeRun(): void {
+    this.runFor.set(null);
+  }
+
+  confirmRun(): void {
+    const definition = this.runFor();
+    const token = this.runToken();
+    if (!definition || !token || this.runSentTokens().has(token)) return;
+    this.runFor.set(null);
+    this.runNow(definition, token);
+  }
+
+  runNow(definition: ReportDefinitionResponse, periodToken?: string): void {
     if (this.actingOnId()) return;
     this.actingOnId.set(definition.id);
-    this.reportsService.runNow(definition.id).subscribe({
+    this.runNotice.set(null);
+    this.reportsService.runNow(definition.id, periodToken).subscribe({
       next: (run) => {
         this.actingOnId.set(null);
         if (run.status === 'SUCCEEDED') {
           this.toast.success(this.translate.instant('REPORTS.RUN_SENT'));
+          this.runNotice.set({
+            definitionId: definition.id,
+            name: definition.name,
+            period: this.periodLabel(run.periodToken, definition.period),
+            rows: run.rowCount ?? 0,
+          });
         } else {
           this.toast.error(run.errorMessage ?? this.translate.instant('REPORTS.RUN_NOW_FAILED'));
         }
-        if (this.expandedId() === definition.id) this.toggleRuns(definition);
+        // The new run is in the history: open it there (reload it when it is already open).
+        if (this.expandedId() === definition.id) this.expandedId.set(null);
+        this.toggleRuns(definition);
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? this.translate.instant('REPORTS.RUN_NOW_FAILED'));

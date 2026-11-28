@@ -155,6 +155,29 @@
     gap: 8px;
     margin-top: 16px;
   }
+
+  /* QA D4027: a checkbox and its label on one line, the label wrapping beside the box. */
+  .filter-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+
+    input {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      margin: 2px 0 0;
+    }
+
+    span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
 }
 
 .state-panel {

@@ -59,6 +59,13 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
                                              @org.springframework.data.repository.query.Param("status") LaborStatus status,
                                              @org.springframework.data.repository.query.Param("patientIds") java.util.Collection<UUID> patientIds);
 
+    /**
+     * QA D3868: the women in labour at this hospital, newest admission first, for the maternity Labour tab's list
+     * (the tab opened empty and the midwife had to know an identifier). One hospital only: the caller's scope.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "hospital"})
+    List<LaborEpisode> findByHospital_IdAndStatusOrderByAdmittedAtDesc(UUID hospitalId, LaborStatus status);
+
     /** Tenant guard — single-row lookups go through id + hospital. */
     Optional<LaborEpisode> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 

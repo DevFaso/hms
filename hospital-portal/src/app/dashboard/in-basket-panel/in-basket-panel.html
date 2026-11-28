@@ -193,7 +193,7 @@
             @if (isAllergyReview(item)) {
               <button
                 type="button"
-                class="btn-review"
+                class="btn-secondary btn-sm btn-review"
                 data-testid="in-basket-allergy-review"
                 (click)="allergyReviewFor.set(item.referenceId)"
               >
@@ -209,7 +209,7 @@
             @if (platformLink(item)) {
               <button
                 type="button"
-                class="btn-review"
+                class="btn-secondary btn-sm btn-review"
                 data-testid="in-basket-open-platform-item"
                 (click)="openPlatformItem(item)"
               >
@@ -219,7 +219,7 @@
             @if (isNoteToSign(item)) {
               <button
                 type="button"
-                class="btn-review"
+                class="btn-secondary btn-sm btn-review"
                 data-testid="in-basket-open-visit"
                 (click)="openVisit(item)"
               >

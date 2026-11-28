@@ -3058,4 +3058,28 @@ class LaborServiceImplTest {
         assertThat(maternalAlertCodes(null, 145, 92, null)).containsExactly("labor-hypertension");
         assertThat(maternalAlertCodes(null, 164, 104, null)).containsExactly("labor-severe-hypertension");
     }
+
+    /* QA D3868: the Labour tab's list of the women in labour at this hospital. */
+
+    @Test
+    void activeEpisodesAtListsThisHospitalsActiveLabours() {
+        episode.setId(episodeId);
+        when(episodeRepository.findByHospital_IdAndStatusOrderByAdmittedAtDesc(hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(List.of(episode));
+        when(entryRepository.countByEpisode_Id(episodeId)).thenReturn(3L);
+
+        List<LaborEpisodeResponseDTO> rows = service.getActiveEpisodesAt(hospitalId);
+
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getPatientId()).isEqualTo(patientId);
+            assertThat(row.getEntryCount()).isEqualTo(3L);
+        });
+    }
+
+    @Test
+    void activeEpisodesAtNeedsAHospital() {
+        assertThatThrownBy(() -> service.getActiveEpisodesAt(null))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never()).findByHospital_IdAndStatusOrderByAdmittedAtDesc(any(), any());
+    }
 }

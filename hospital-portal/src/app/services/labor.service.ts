@@ -244,6 +244,14 @@ export class LaborService {
     return this.http.post<LaborEpisodeResponse>(`${this.base(patientId)}/episodes`, req);
   }
 
+  /**
+   * QA D3868: every woman in labour at the hospital the request is scoped to, newest admission first. Not paged:
+   * the list is the labour ward's beds, a handful of rows.
+   */
+  activeEpisodes(): Observable<LaborEpisodeResponse[]> {
+    return this.http.get<LaborEpisodeResponse[]>('/labor/episodes/active');
+  }
+
   episodes(patientId: string, limit = 10): Observable<LaborEpisodeResponse[]> {
     const params = new HttpParams().set('limit', limit);
     return this.http.get<LaborEpisodeResponse[]>(`${this.base(patientId)}/episodes`, { params });

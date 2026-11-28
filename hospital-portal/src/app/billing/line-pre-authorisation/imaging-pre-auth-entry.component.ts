@@ -35,7 +35,7 @@ import { PRE_AUTH_MAX, PRE_AUTH_PATTERN } from './line-pre-authorisation.compone
     @if (!editing()) {
       <button
         type="button"
-        class="btn-review"
+        class="btn-secondary btn-sm btn-review"
         data-testid="in-basket-pre-auth"
         (click)="editing.set(true)"
       >

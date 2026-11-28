@@ -30,12 +30,17 @@ import {
 import { HospitalService, HospitalDirectoryEntry } from '../services/hospital.service';
 import { actionRoles } from '../core/action-permissions';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { PatientResponse } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import {
+  labelledRefusalReason,
+  refusalReason,
+  refusedFieldReasons,
+} from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { PluralKeyPipe } from '../shared/pipes/plural-key.pipe';
 import { bloodPressureReversed } from '../shared/vital-sign-limits';
 import { PartographChartComponent } from './partograph-chart.component';
 
@@ -215,6 +220,7 @@ const DELIVERY_IDS = [
     MaternityStayComponent,
     PatientSafetyHeaderComponent,
     BloodRequestLinkComponent,
+    PluralKeyPipe,
   ],
   templateUrl: './labor-tab.html',
   styleUrl: './maternity.scss',
@@ -227,8 +233,54 @@ export class LaborTabComponent {
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
   private readonly hospitalService = inject(HospitalService);
+  private readonly patientService = inject(PatientService);
 
   patient = signal<PatientResponse | null>(null);
+
+  /**
+   * QA D3868: the women in labour at this hospital. The tab opened empty, so the midwife had to know an exact
+   * identifier to reach a woman delivering on a labour bed. 'idle' when no hospital is in scope (a super-admin in
+   * global view): the list is one hospital's.
+   */
+  readonly ward = signal<LaborEpisodeResponse[]>([]);
+  readonly wardState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+  /** The woman whose record is being opened from the list. */
+  readonly openingWardPatientId = signal<string | null>(null);
+
+  constructor() {
+    this.loadWard();
+  }
+
+  loadWard(): void {
+    if (!this.roleContext.hasHospitalScope()) {
+      this.wardState.set('idle');
+      return;
+    }
+    this.wardState.set('loading');
+    this.laborService.activeEpisodes().subscribe({
+      next: (rows) => {
+        this.ward.set(rows);
+        this.wardState.set('loaded');
+      },
+      error: () => this.wardState.set('failed'),
+    });
+  }
+
+  /** Opens a woman of the list as if she had been picked: her record first, for the safety header. */
+  openFromWard(row: LaborEpisodeResponse): void {
+    if (this.openingWardPatientId()) return;
+    this.openingWardPatientId.set(row.patientId);
+    this.patientService.getById(row.patientId).subscribe({
+      next: (patient) => {
+        this.openingWardPatientId.set(null);
+        this.onPatientChange(patient);
+      },
+      error: (err) => {
+        this.openingWardPatientId.set(null);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.WARD_OPEN_FAILED'));
+      },
+    });
+  }
   episodes = signal<LaborEpisodeResponse[]>([]);
   episodesLoading = signal(false);
   entries = signal<PartographEntryResponse[]>([]);
@@ -363,6 +415,9 @@ export class LaborTabComponent {
     this.deliveryFormOpen.set(false);
     if (patient) {
       this.loadEpisodes(patient.id);
+    } else {
+      // Back to the list: it may have changed while a record was open.
+      this.loadWard();
     }
   }
 

@@ -69,10 +69,10 @@
   white-space: nowrap;
   color: var(--text-secondary);
 }
-.actions-cell {
+.actions-cell .row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  white-space: nowrap;
 }
 .error-cell {
   max-width: 260px;
@@ -110,23 +110,29 @@
   color: var(--text-secondary);
 }
 
-/* Buttons */
-.btn-sm {
-  padding: 3px 10px;
-  font-size: 0.78rem;
-  border-radius: 4px;
-  cursor: pointer;
-  border: none;
+/* QA D4023: what « Exécuter » did. */
+.run-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.875rem;
+
+  > span:not(.material-symbols-outlined) {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
 }
-.btn-sm.btn-primary {
-  padding: 3px 10px;
-  font-size: 0.78rem;
-  border-radius: 4px;
-}
-.btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border-color, #e2e8f0);
+.muted {
+  margin: 0;
   color: var(--text-secondary);
+  font-size: 0.8rem;
 }
 
 /* Modal */

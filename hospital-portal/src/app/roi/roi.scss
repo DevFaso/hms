@@ -255,17 +255,20 @@ table {
   }
 }
 
+/* QA D4024: the purpose wraps in its column instead of being cut at the cell's edge. */
 .scope-cell {
+  min-width: 12rem;
   max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.actions-cell {
+/* QA D4024: a td with display:flex is no longer a table cell (the row lost its layout at 768 px). The buttons sit
+   in a .row-actions group inside the cell, which wraps them. */
+.actions-cell .row-actions {
   display: flex;
-  gap: 0.625rem;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 9rem;
 }
 
 @include operations-dashboard.layout;
@@ -321,7 +324,16 @@ table {
   font-size: 12px;
   line-height: 1.5;
 }
+/* QA D4024: the heading's icon keeps its own box (it was clipped at the card's edge at 768 px). */
+.directory-heading > div {
+  min-width: 0;
+}
 .directory-icon {
+  flex: none;
+  box-sizing: content-box;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
   color: #086d5e;
   background: #e6f3ee;
   padding: 10px;
@@ -434,7 +446,15 @@ table {
   color: #805012;
   font-size: 12px;
 }
+/* QA D4024: below its natural width (a 768 px screen with the sidebar) the table scrolls inside .table-scroll,
+   it is no longer squeezed until the headers hyphenate (« De-mand-le ») and the buttons are cut. Its headers keep
+   whole words. */
+.request-directory table {
+  min-width: 780px;
+}
 .request-directory table th {
+  white-space: nowrap !important;
+  hyphens: manual;
   padding: 14px 20px;
   background: #f6f9fb;
   font-size: 11px;
@@ -457,6 +477,7 @@ table {
   gap: 8px;
 }
 .patient-link .material-symbols-outlined {
+  flex: none;
   color: #086d5e;
   background: #e7f4ef;
   padding: 7px;
@@ -523,9 +544,6 @@ select:focus-visible,
   }
   .directory-icon {
     display: none;
-  }
-  .request-directory table {
-    min-width: 780px;
   }
   .queue-empty {
     padding: 32px 16px;

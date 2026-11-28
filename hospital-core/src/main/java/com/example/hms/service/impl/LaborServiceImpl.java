@@ -845,6 +845,25 @@ public class LaborServiceImpl implements LaborService {
             .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<LaborEpisodeResponseDTO> getActiveEpisodesAt(UUID hospitalId) {
+        // QA D3868: the hospital's own labour ward. Never a cross-hospital list: a woman in labour elsewhere is
+        // reached through her own record (getEpisodes), with its sharing rule and its accounting.
+        if (hospitalId == null) {
+            throw new BusinessException("maternity.labor.hospitalRequiredToList");
+        }
+        // Not paged: one hospital's active labours are its labour ward.
+        return episodeRepository
+            .findByHospital_IdAndStatusOrderByAdmittedAtDesc(hospitalId, LaborStatus.ACTIVE)
+            .stream()
+            .map(episode -> laborMapper.toEpisodeResponse(
+                episode,
+                entryRepository.countByEpisode_Id(episode.getId()),
+                deliveryRecordRepository.existsByEpisode_Id(episode.getId())))
+            .toList();
+    }
+
     /* ═══════════════════════ Partograph entries ═══════════════════════ */
 
     @Override

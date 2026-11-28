@@ -32,6 +32,13 @@ describe('LaborService', () => {
     req.flush([]);
   });
 
+  it('D3868: GETs every active labour of the scoped hospital, unpaged', () => {
+    service.activeEpisodes().subscribe();
+    const req = httpMock.expectOne('/labor/episodes/active');
+    expect(req.request.method).toBe('GET');
+    req.flush([]);
+  });
+
   it('POSTs a partograph entry under its episode', () => {
     service.addEntry('p1', 'e1', { cervicalDilationCm: 6, fetalHeartRateBpm: 140 }).subscribe();
     const req = httpMock.expectOne('/patients/p1/labor/episodes/e1/entries');

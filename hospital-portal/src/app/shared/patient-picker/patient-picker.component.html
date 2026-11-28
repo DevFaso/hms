@@ -24,7 +24,7 @@
       [checked]="nationalUniqueIdMode()"
       (change)="setNationalUniqueIdMode($any($event.target).checked)"
     />
-    <span>{{ 'NATIONAL_IU.SEARCH_EXACT' | translate }}</span>
+    <span>{{ 'NATIONAL_IU.SEARCH_EXACT_TOGGLE' | translate }}</span>
   </label>
   @if (showMrnHint && !nationalUniqueIdMode()) {
     <p class="hint" [id]="inputId + '-mrn-hint'">{{ 'CARE_DASH.MRN_HINT' | translate }}</p>

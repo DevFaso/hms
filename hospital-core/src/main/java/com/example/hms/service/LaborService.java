@@ -17,6 +17,9 @@ public interface LaborService {
 
     List<LaborEpisodeResponseDTO> getEpisodes(UUID patientId, UUID hospitalId, int limit);
 
+    /** QA D3868: every active labour episode at one hospital, newest admission first. */
+    List<LaborEpisodeResponseDTO> getActiveEpisodesAt(UUID hospitalId);
+
     PartographEntryResponseDTO addEntry(UUID patientId, UUID episodeId, UUID recorderUserId,
                                         PartographEntryRequestDTO request);
 

@@ -15,6 +15,26 @@
     {{ 'REPORTS.AGGREGATE_ONLY_NOTE' | translate }}
   </div>
 
+  @if (runNotice(); as notice) {
+    <!-- QA D4023: « Exécuter » says what it did, on the page. -->
+    <div class="run-notice" role="status" data-testid="report-run-notice">
+      <span class="material-symbols-outlined" aria-hidden="true">mark_email_read</span>
+      <span>{{
+        notice.rows
+          | pluralKey: 'REPORTS.RUN_NOTICE'
+          | translate: { name: notice.name, period: notice.period, rows: notice.rows }
+      }}</span>
+      <button
+        type="button"
+        class="btn-icon-close"
+        (click)="runNotice.set(null)"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+  }
+
   @if (loading()) {
     <div class="loading-row">
       <span class="material-symbols-outlined spin">progress_activity</span>
@@ -52,25 +72,34 @@
                 </span>
               </td>
               <td class="actions-cell">
-                <button
-                  class="btn-sm btn-primary"
-                  type="button"
-                  [disabled]="actingOnId() === def.id"
-                  (click)="runNow(def)"
-                >
-                  {{ 'REPORTS.RUN_NOW' | translate }}
-                </button>
-                <button class="btn-sm btn-ghost" type="button" (click)="toggleRuns(def)">
-                  {{ 'REPORTS.HISTORY' | translate }}
-                </button>
-                <button
-                  class="btn-sm btn-ghost"
-                  type="button"
-                  [disabled]="actingOnId() === def.id"
-                  (click)="toggleActive(def)"
-                >
-                  {{ (def.active ? 'REPORTS.DEACTIVATE' : 'REPORTS.REACTIVATE') | translate }}
-                </button>
+                <!-- QA D4023: three buttons of the house system, wrapping inside the cell at 390 px. -->
+                <div class="row-actions">
+                  <button
+                    class="btn-primary btn-sm"
+                    type="button"
+                    data-testid="report-run"
+                    [disabled]="actingOnId() === def.id"
+                    (click)="openRun(def)"
+                  >
+                    {{ 'REPORTS.RUN_NOW' | translate }}
+                  </button>
+                  <button
+                    class="btn-secondary btn-sm"
+                    type="button"
+                    [attr.aria-expanded]="expandedId() === def.id"
+                    (click)="toggleRuns(def)"
+                  >
+                    {{ 'REPORTS.HISTORY' | translate }}
+                  </button>
+                  <button
+                    class="btn-secondary btn-sm"
+                    type="button"
+                    [disabled]="actingOnId() === def.id"
+                    (click)="toggleActive(def)"
+                  >
+                    {{ (def.active ? 'REPORTS.DEACTIVATE' : 'REPORTS.REACTIVATE') | translate }}
+                  </button>
+                </div>
               </td>
             </tr>
             @if (expandedId() === def.id) {
@@ -128,6 +157,74 @@
     </div>
   }
 </div>
+
+<!-- QA D4023: run one report for a period chosen here. -->
+@if (runFor(); as def) {
+  <div
+    class="modal-backdrop"
+    (click)="closeRun()"
+    (keydown.enter)="closeRun()"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'COMMON.CANCEL' | translate"
+  ></div>
+  <div
+    appModalDialog
+    (escaped)="closeRun()"
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="report-run-title"
+    data-testid="report-run-dialog"
+  >
+    <div class="modal-header">
+      <h2 id="report-run-title">{{ 'REPORTS.RUN_TITLE' | translate: { name: def.name } }}</h2>
+      <button
+        class="btn-icon-close"
+        type="button"
+        (click)="closeRun()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="rep-run-period">{{ 'REPORTS.RUN_PERIOD' | translate }}</label>
+        <select
+          id="rep-run-period"
+          aria-describedby="rep-run-period-hint"
+          [ngModel]="runToken()"
+          (ngModelChange)="runToken.set($event)"
+        >
+          @for (token of runChoices(def); track token) {
+            <option [value]="token" [disabled]="runSentTokens().has(token)">
+              {{ periodLabel(token, def.period) }}
+              @if (runSentTokens().has(token)) {
+                — {{ 'REPORTS.RUN_ALREADY_SENT' | translate }}
+              }
+            </option>
+          }
+        </select>
+        <p id="rep-run-period-hint" class="muted">{{ 'REPORTS.RUN_PERIOD_HINT' | translate }}</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" type="button" (click)="closeRun()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        type="button"
+        data-testid="report-run-confirm"
+        [disabled]="!runToken() || runSentTokens().has(runToken())"
+        (click)="confirmRun()"
+      >
+        {{ 'REPORTS.RUN_CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}
 
 <!-- Create Report Modal -->
 @if (showCreate()) {
