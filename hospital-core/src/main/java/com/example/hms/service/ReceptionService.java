@@ -27,6 +27,12 @@ public interface ReceptionService {
 
     FrontDeskPatientSnapshotDTO getPatientSnapshot(UUID patientId, UUID hospitalId);
 
+    /**
+     * The snapshot for the check-in of {@code appointmentId} (null: none): the suggested copay is the patient's share
+     * of the consultation tariff that visit will be billed.
+     */
+    FrontDeskPatientSnapshotDTO getPatientSnapshot(UUID patientId, UUID hospitalId, UUID appointmentId);
+
     // ── MVP 10 ────────────────────────────────────────────────────────────────
     List<InsuranceIssueDTO> getInsuranceIssues(LocalDate date, UUID hospitalId);
 

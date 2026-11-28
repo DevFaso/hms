@@ -229,4 +229,38 @@ class LoginAttemptServiceTest {
         fail("nurse", 4);
         assertThat(service.isLocked("nurse")).isFalse();
     }
+
+    // ── Review of QA D4141: a colleague's password typed at a bedside ──
+
+    @Test
+    @DisplayName("D4141 review: wrong colleague passwords lock the confirmation, never the colleague's sign-in")
+    void colleaguePasswordsHaveTheirOwnBucket() {
+        UUID id = UUID.randomUUID();
+        account("nurse", id);
+        for (int i = 1; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            assertThat(service.checkColleaguePassword(id, () -> false))
+                .isEqualTo(LoginAttemptService.PasswordCheck.REJECTED);
+        }
+        assertThat(service.checkColleaguePassword(id, () -> false))
+            .isEqualTo(LoginAttemptService.PasswordCheck.REJECTED_NOW_LOCKED);
+        boolean[] compared = {false};
+        assertThat(service.checkColleaguePassword(id, () -> compared[0] = true))
+            .isEqualTo(LoginAttemptService.PasswordCheck.LOCKED);
+        assertThat(compared[0]).isFalse();
+        // The colleague's own sign-in is untouched.
+        assertThat(service.isLocked("nurse")).isFalse();
+        assertThat(service.remainingAccountLockMs(id)).isZero();
+    }
+
+    @Test
+    @DisplayName("D4141 review: an account whose sign-in is locked confirms nothing as a colleague")
+    void aLockedAccountConfirmsNothing() {
+        UUID id = UUID.randomUUID();
+        account("nurse", id);
+        fail("nurse", 5);
+        boolean[] compared = {false};
+        assertThat(service.checkColleaguePassword(id, () -> compared[0] = true))
+            .isEqualTo(LoginAttemptService.PasswordCheck.LOCKED);
+        assertThat(compared[0]).isFalse();
+    }
 }

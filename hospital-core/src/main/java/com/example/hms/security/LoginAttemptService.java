@@ -105,7 +105,26 @@ public class LoginAttemptService {
      */
     public PasswordCheck checkPassword(UUID userId, BooleanSupplier matcher) {
         java.util.Objects.requireNonNull(userId);
-        String key = USER_KEY_PREFIX + userId;
+        return countedCheck(USER_KEY_PREFIX + userId, matcher);
+    }
+
+    static final String COLLEAGUE_KEY_PREFIX = "colleague:";
+
+    /**
+     * QA D4141 review: the password a colleague types on somebody else's screen to confirm a second check
+     * (the bedside check of a transfusion). Guesses there are capped in a bucket of their own, so that
+     * wrong passwords typed at a bedside can lock the confirmation for a while but never the colleague's
+     * own sign-in. An account whose sign-in is locked confirms nothing either.
+     */
+    public PasswordCheck checkColleaguePassword(UUID userId, BooleanSupplier matcher) {
+        java.util.Objects.requireNonNull(userId);
+        if (store.remainingLockMs(USER_KEY_PREFIX + userId) > 0) {
+            return PasswordCheck.LOCKED;
+        }
+        return countedCheck(COLLEAGUE_KEY_PREFIX + userId, matcher);
+    }
+
+    private PasswordCheck countedCheck(String key, BooleanSupplier matcher) {
         if (store.remainingLockMs(key) > 0) {
             return PasswordCheck.LOCKED;
         }

@@ -1485,6 +1485,76 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA D4222 / D4223 (round 81): the addresses the hospital holds for
+             this invoice. One the server would refuse is shown with its
+             reason and cannot be picked. -->
+        @if (emailOptionsLoading()) {
+          <p class="muted-note" role="status">{{ 'BILLING.EMAIL_ON_FILE_LOADING' | translate }}</p>
+        }
+        @if (emailOptions(); as options) {
+          <fieldset class="email-on-file" data-testid="email-on-file">
+            <legend>{{ 'BILLING.EMAIL_ON_FILE' | translate }}</legend>
+            @if (!options.patient && options.guarantors.length === 0) {
+              <p class="muted-note">{{ 'BILLING.EMAIL_ON_FILE_NONE' | translate }}</p>
+            }
+            <ul class="email-on-file__list">
+              @if (options.patient; as own) {
+                <li class="email-on-file__row" [class.email-on-file__row--refused]="!own.usable">
+                  <span class="email-on-file__who">
+                    <strong>{{ 'BILLING.EMAIL_ON_FILE_PATIENT' | translate }}</strong>
+                    <span class="email-on-file__address">{{ own.address }}</span>
+                    @if (!own.usable) {
+                      <span class="email-on-file__refusal" data-testid="email-patient-refusal">{{
+                        own.refusalMessage || ('BILLING.EMAIL_PATIENT_REFUSED' | translate)
+                      }}</span>
+                    }
+                  </span>
+                  @if (own.usable) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [attr.aria-pressed]="emailHasRecipient(own.address)"
+                      (click)="toggleEmailRecipient(own.address)"
+                    >
+                      {{
+                        (emailHasRecipient(own.address)
+                          ? 'BILLING.EMAIL_ON_FILE_REMOVE'
+                          : 'BILLING.EMAIL_ON_FILE_ADD'
+                        ) | translate
+                      }}
+                    </button>
+                  }
+                </li>
+              }
+              @for (g of options.guarantors; track g.guarantorId) {
+                <li class="email-on-file__row">
+                  <span class="email-on-file__who">
+                    <strong>{{
+                      'BILLING.EMAIL_ON_FILE_GUARANTOR' | translate: { name: g.fullName }
+                    }}</strong>
+                    @if (g.relationship) {
+                      <span class="email-on-file__relationship">{{ g.relationship }}</span>
+                    }
+                    <span class="email-on-file__address">{{ g.address }}</span>
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [attr.aria-pressed]="emailHasRecipient(g.address)"
+                    (click)="toggleEmailRecipient(g.address)"
+                  >
+                    {{
+                      (emailHasRecipient(g.address)
+                        ? 'BILLING.EMAIL_ON_FILE_REMOVE'
+                        : 'BILLING.EMAIL_ON_FILE_ADD'
+                      ) | translate
+                    }}
+                  </button>
+                </li>
+              }
+            </ul>
+          </fieldset>
+        }
         <div class="field">
           <label for="email-to">{{ 'BILLING.EMAIL_TO' | translate }} *</label>
           <input
@@ -1527,7 +1597,39 @@
           />
           <span>{{ 'BILLING.EMAIL_ATTACH_PDF' | translate }}</span>
         </label>
-        <p class="muted-note">{{ 'BILLING.EMAIL_SENT_NOTE' | translate }}</p>
+        <!-- QA D4223: the reason the server asks for an address on no file.
+             Shown as soon as one is typed (always, when the list on file
+             could not be read). -->
+        @if (emailOffFile().length > 0 || (!emailOptions() && !emailOptionsLoading())) {
+          <div class="field">
+            <label for="email-reason"
+              >{{ 'BILLING.EMAIL_REASON' | translate }}
+              @if (emailOffFile().length > 0) {
+                *
+              }
+            </label>
+            <textarea
+              id="email-reason"
+              rows="2"
+              [attr.maxlength]="emailOptions()?.reasonMaxLength ?? 500"
+              [required]="emailOffFile().length > 0"
+              aria-describedby="email-reason-hint"
+              [ngModel]="emailReason()"
+              (ngModelChange)="emailReason.set($event)"
+            ></textarea>
+            <p class="muted-note" id="email-reason-hint">
+              {{
+                emailOffFile().length > 0
+                  ? ('BILLING.EMAIL_REASON_HINT'
+                    | translate: { addresses: emailOffFile().join(', ') })
+                  : ('BILLING.EMAIL_REASON_HINT_UNKNOWN' | translate)
+              }}
+            </p>
+          </div>
+        }
+        <p class="muted-note">
+          {{ 'BILLING.EMAIL_LIMIT_NOTE' | translate: { max: emailOptions()?.maxRecipients ?? 3 } }}
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeEmail()">

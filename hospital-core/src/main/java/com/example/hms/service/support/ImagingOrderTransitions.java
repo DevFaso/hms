@@ -56,6 +56,22 @@ public final class ImagingOrderTransitions {
     private ImagingOrderTransitions() {
     }
 
+    /** QA D4142: a study that has started, is done, or is already read (an addendum is written on that one). */
+    private static final Set<ImagingOrderStatus> EXAM_STARTED = EnumSet.of(ImagingOrderStatus.IN_PROGRESS,
+        ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
+
+    /**
+     * QA D4142 (r81): a report describes an exam. One was written and signed on an order nobody had checked in
+     * or started: the order jumped from placed to resulted, its completion time was filled with no performer,
+     * and the pre-authorisation a routine study needs before it starts was never asked. A report, its signature
+     * and an image of the study wait for the start of the exam.
+     */
+    public static void requireExamStarted(ImagingOrderStatus status) {
+        if (status == null || !EXAM_STARTED.contains(status)) {
+            throw new FieldBusinessException("imagingOrderId", "imaging.report.examNotStarted");
+        }
+    }
+
     public static boolean isAllowed(ImagingOrderStatus from, ImagingOrderStatus to) {
         if (to == null) {
             return false;

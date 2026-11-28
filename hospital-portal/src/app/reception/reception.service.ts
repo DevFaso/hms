@@ -287,8 +287,19 @@ export class ReceptionService {
     return this.http.get<ReceptionQueueItem[]>(`${this.base}/queue`, { params });
   }
 
-  getPatientSnapshot(patientId: string): Observable<FrontDeskPatientSnapshot> {
-    return this.http.get<FrontDeskPatientSnapshot>(`${this.base}/patients/${patientId}/snapshot`);
+  /**
+   * QA D4221: with the appointment being checked in, the suggested copay is the share of the consultation tariff
+   * that visit will be billed (an emergency at night, a specialty), not the general consultation.
+   */
+  getPatientSnapshot(
+    patientId: string,
+    appointmentId?: string | null,
+  ): Observable<FrontDeskPatientSnapshot> {
+    const url = `${this.base}/patients/${patientId}/snapshot`;
+    if (!appointmentId) return this.http.get<FrontDeskPatientSnapshot>(url);
+    return this.http.get<FrontDeskPatientSnapshot>(url, {
+      params: new HttpParams().set('appointmentId', appointmentId),
+    });
   }
 
   getInsuranceIssues(date?: string): Observable<InsuranceIssue[]> {

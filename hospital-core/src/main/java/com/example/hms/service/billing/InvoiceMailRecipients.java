@@ -84,6 +84,29 @@ public class InvoiceMailRecipients {
         return List.copyOf(out);
     }
 
+    /**
+     * QA D4223 (round 81): the guarantors the send dialog offers: the ones {@link #classify} accepts with no
+     * reason (active, of this patient, at the invoice's hospital, with an address), the primary first.
+     */
+    public List<com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO.GuarantorAddress> guarantorsOnFile(
+            BillingInvoice invoice) {
+        if (invoice.getPatient() == null || invoice.getPatient().getId() == null
+            || invoice.getHospital() == null || invoice.getHospital().getId() == null) {
+            return List.of();
+        }
+        Map<String, com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO.GuarantorAddress> out =
+            new LinkedHashMap<>();
+        guarantorRepository.findByPatient_IdAndHospital_IdAndActiveTrue(
+                invoice.getPatient().getId(), invoice.getHospital().getId()).stream()
+            .filter(guarantor -> StringUtils.hasText(guarantor.getEmail()))
+            .sorted(java.util.Comparator.comparing((PatientGuarantor guarantor) -> !guarantor.isPrimary()))
+            .forEach(guarantor -> out.putIfAbsent(normalised(guarantor.getEmail()),
+                new com.example.hms.payload.dto.billing.InvoiceMailRecipientOptionsDTO.GuarantorAddress(
+                    guarantor.getId(), guarantor.getFullName(), guarantor.getRelationship(),
+                    guarantor.getEmail().trim(), guarantor.isPrimary())));
+        return List.copyOf(out.values());
+    }
+
     /** The active guarantors of the invoice's patient at the invoice's hospital, by normalised address. */
     private Map<String, UUID> guarantorAddresses(BillingInvoice invoice) {
         Map<String, UUID> out = new LinkedHashMap<>();

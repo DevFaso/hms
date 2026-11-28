@@ -368,6 +368,63 @@ class ImagingReportServiceImplTest {
         assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
 
+    /**
+     * QA D4142 (r81): a report was written and signed on an order nobody had checked in or started, which
+     * jumped from placed to resulted and skipped the pre-authorisation a routine study needs before it starts.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class,
+        names = {"IN_PROGRESS", "COMPLETED", "RESULTS_AVAILABLE", "CANCELLED"},
+        mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+    void d4142_noReportIsWrittenRevisedOrSignedBeforeTheExamStarts(ImagingOrderStatus notStarted) {
+        imagingOrder.setStatus(notStarted);
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        ImagingReportUpsertRequestDTO create = ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("x").build();
+        ImagingReportUpsertRequestDTO revise = ImagingReportUpsertRequestDTO.builder().findings("revised").build();
+        assertThatThrownBy(() -> imagingReportService.createReport(create))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, revise))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.examNotStarted");
+        assertThat(report.getSignedAt()).isNull();
+        assertThat(imagingOrder.getStatus()).as("the order does not jump to resulted").isEqualTo(notStarted);
+    }
+
+    /**
+     * Review round 2 of QA D4140: an order a nurse placed before V465, done before anybody signed it, is reported
+     * once a physician of the hospital authorises it, and not before.
+     */
+    @Test
+    void d4140_anOlderNursesCompletedOrderIsReportedOnceAPhysicianAuthorisesIt() {
+        UUID nurse = UUID.randomUUID();
+        imagingOrder.setStatus(ImagingOrderStatus.COMPLETED);
+        imagingOrder.setOrderingProviderUserId(nurse);
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        when(imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(Optional.empty());
+        when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId)).thenReturn(Optional.empty());
+        ImagingReportUpsertRequestDTO create = ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("Pas de lésion").build();
+
+        assertThatThrownBy(() -> imagingReportService.createReport(create))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.awaitingPhysician");
+
+        // A physician of the hospital authorises it (the signature makes them its prescriber).
+        imagingOrder.setOrderingProviderUserId(UUID.randomUUID());
+        imagingOrder.setProviderSignedAt(java.time.LocalDateTime.now());
+
+        imagingReportService.createReport(create);
+
+        assertThat(capturedNewReport().getFindings()).isEqualTo("Pas de lésion");
+    }
+
     // ── Signing ──────────────────────────────────────────────────────────
 
     /** QA D1930 (r54): signing a revision keeps its kind; only an original read becomes FINAL. */
