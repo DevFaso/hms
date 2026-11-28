@@ -29,6 +29,13 @@ import java.util.regex.Pattern;
  *       is never silently compatible.</li>
  * </ul>
  * {@code DispenseUnitFormsTest} walks every pair of groups.
+ *
+ * <p>QA D3949 (r77): a lot counted in « plaquette de 10 comprimés » is a lot of
+ * plaquettes. A unit that describes a pack's contents (« boîte de 24
+ * comprimés », « flacon de 100 ml », « pack of 10 tablets », « blister (10 cp) »)
+ * is read as its pack, the words before the contents. The dispensing panel
+ * does not re-implement this: {@link #fits} decides each lot of the
+ * dispensable-lots read on the server ({@code StockLotResponseDTO#unitFits}).
  */
 public final class DispenseUnitForms {
 
@@ -37,6 +44,9 @@ public final class DispenseUnitForms {
 
     private static final Pattern MARKS = Pattern.compile("\\p{M}");
     private static final Pattern SPACES = Pattern.compile("\\s+");
+    /** QA D3949: what a pack holds, after the pack's own name: « de 10 comprimés », « of 10 », « x 10 », « (10 cp) ». */
+    private static final Pattern PACK_CONTENTS =
+        Pattern.compile("^([^(/]+?)\\s*(?:\\s(?:de|d'|of|con|x)\\s*\\d.*|\\(.*\\)|/\\s*\\d.*)$");
 
     private static final Map<String, Form> FORMS = Map.ofEntries(
         Map.entry("comprime", Form.SOLID_DOSE), Map.entry("cp", Form.SOLID_DOSE),
@@ -81,12 +91,21 @@ public final class DispenseUnitForms {
      * required before this, QA D1141).
      */
     public static void requireCompatible(String fillUnit, String lotUnit) {
-        if (fillUnit == null || fillUnit.isBlank() || lotUnit == null || lotUnit.isBlank()) {
-            return;
-        }
-        if (!compatible(fillUnit, lotUnit)) {
+        if (!fits(fillUnit, lotUnit)) {
             throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.dispense.unitMismatch", fillUnit.trim(), lotUnit.trim());
         }
+    }
+
+    /**
+     * Whether a fill counted in {@code fillUnit} may come from a lot counted in {@code lotUnit}, as the fill decides
+     * it: a blank unit on either side leaves nothing to compare. QA D3949: the dispensable-lots read answers this for
+     * each lot, so the panel offers exactly the lots the fill accepts.
+     */
+    public static boolean fits(String fillUnit, String lotUnit) {
+        if (fillUnit == null || fillUnit.isBlank() || lotUnit == null || lotUnit.isBlank()) {
+            return true;
+        }
+        return compatible(fillUnit, lotUnit);
     }
 
     /** Whether a fill counted in {@code fillUnit} may come from a lot counted in {@code lotUnit}. */
@@ -117,10 +136,15 @@ public final class DispenseUnitForms {
         return form;
     }
 
-    /** Lower-case, accent-free, single-spaced: "Cuillère à café" and "cuillere a cafe" alike. */
-    private static String key(String unit) {
+    /**
+     * Lower-case, accent-free, single-spaced: "Cuillère à café" and "cuillere a cafe" alike. QA D3949: a pack
+     * described with its contents is its pack: "Plaquette de 10 comprimés" is "plaquette".
+     */
+    static String key(String unit) {
         String plain = Normalizer.normalize(unit == null ? "" : unit, Normalizer.Form.NFD);
         plain = MARKS.matcher(plain).replaceAll("").toLowerCase(Locale.ROOT).replace("µ", "u").replace('-', ' ').trim();
-        return SPACES.matcher(plain).replaceAll(" ");
+        plain = SPACES.matcher(plain).replaceAll(" ");
+        java.util.regex.Matcher pack = PACK_CONTENTS.matcher(plain);
+        return pack.matches() ? pack.group(1).trim() : plain;
     }
 }

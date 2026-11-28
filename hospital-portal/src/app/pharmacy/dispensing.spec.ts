@@ -4,7 +4,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { DispensingComponent, sameDispenseUnit } from './dispensing';
+import { DispensingComponent, lotFitsOrderUnit } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -2539,9 +2539,10 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     it('QA D1163: a "flacon" order is not offered tablet lots, and says why', async () => {
       await openWithLots();
       component.orderUnit.set('flacon');
+      // QA D3949: the server says which lots fit the order's unit; the panel follows it.
       component.stockLots.set([
-        { ...lot('cp', '2098-01-31', 100), unit: 'comprimé' },
-        { ...lot('fl', '2099-01-31', 10), unit: 'Flacons' },
+        { ...lot('cp', '2098-01-31', 100), unit: 'comprimé', unitFits: false },
+        { ...lot('fl', '2099-01-31', 10), unit: 'Flacons', unitFits: true },
       ]);
       fixture.detectChanges();
       const options = Array.from(
@@ -2551,10 +2552,39 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       ).map((o) => o.value);
       expect(options).toEqual(['', 'fl']);
       expect(exists('other-form-lots')).toBeTrue();
-      // A lot whose unit the server does not send is still offered (the server checks).
-      expect(sameDispenseUnit(undefined, 'flacon')).toBeTrue();
-      expect(sameDispenseUnit('Comprimés', 'comprimé')).toBeTrue();
-      expect(sameDispenseUnit('comprimé', 'flacon')).toBeFalse();
+      // A lot the server sends no answer for is still offered (the fill checks).
+      expect(lotFitsOrderUnit({})).toBeTrue();
+      expect(lotFitsOrderUnit({ unitFits: null })).toBeTrue();
+      expect(lotFitsOrderUnit({ unitFits: false })).toBeFalse();
+    });
+
+    it('QA D3949: a « plaquette » order is offered the lot the server accepts, counted in « plaquette de 10 comprimés »', async () => {
+      await openWithLots();
+      component.orderUnit.set('plaquette');
+      component.stockLots.set([
+        { ...lot('pq', '2099-01-31', 30), unit: 'plaquette de 10 comprimés', unitFits: true },
+      ]);
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#stockLot option',
+        ),
+      ).map((o) => o.value);
+      // The panel used to compare « plaquette » with « plaquette de 10 comprimés » itself: « Aucun lot ».
+      expect(options).toEqual(['', 'pq']);
+      expect(exists('other-form-lots')).toBeFalse();
+    });
+
+    it('QA D3949: the panel never compares units itself (a lot refused by the server is kept off the list)', async () => {
+      await openWithLots();
+      component.orderUnit.set('comprimé');
+      // Same words, but the server decided against it: the server's answer wins.
+      component.stockLots.set([
+        { ...lot('same', '2099-01-31', 30), unit: 'comprimé', unitFits: false },
+      ]);
+      fixture.detectChanges();
+      expect(component.dispensableLots().map((l) => l.id)).toEqual([]);
+      expect(component.otherFormLots()).toBe(1);
     });
 
     it('QA D3940: a substitute lot is never preselected, is labelled, and ticks the substitution', async () => {

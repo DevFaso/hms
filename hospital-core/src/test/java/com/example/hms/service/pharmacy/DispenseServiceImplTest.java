@@ -4131,6 +4131,44 @@ class DispenseServiceImplTest {
             assertThat(lots.get(0).getProductMatch()).isEqualTo("PRESCRIBED");
         }
 
+        /**
+         * QA D3949 (r77): each lot says whether the fill's unit rule accepts it for the order's unit, so the panel
+         * offers what the fill accepts: a « plaquette » order found « Aucun lot » for a lot counted in « plaquette de
+         * 10 comprimés », which the fill took.
+         */
+        @Test
+        void eachLotSaysWhetherTheOrdersUnitFitsByTheFillsRule() {
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            prescription.setQuantityUnit("plaquette");
+            StockLot packs = lot("paracetamol", "PCM-PQ", BigDecimal.valueOf(30));
+            packs.getInventoryItem().setUnit("plaquette de 10 comprimés");
+            StockLot tablets = lot("paracetamol", "PCM-CP", BigDecimal.valueOf(300));
+            tablets.getInventoryItem().setUnit("comprimé");
+            tablets.setExpiryDate(packs.getExpiryDate().plusMonths(1));
+            StockLot noUnit = lot("paracetamol", "PCM-NU", BigDecimal.valueOf(5));
+            noUnit.setExpiryDate(packs.getExpiryDate().plusMonths(2));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(packs, tablets, noUnit)));
+
+            List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> lots =
+                    service.listDispensableLots(prescriptionId, pharmacyId);
+
+            assertThat(lots).extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber,
+                            com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getUnitFits)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("PCM-PQ", true),
+                            org.assertj.core.groups.Tuple.tuple("PCM-CP", false),
+                            org.assertj.core.groups.Tuple.tuple("PCM-NU", true));
+            // The same answer as the fill's own check.
+            for (StockLot each : List.of(packs, tablets, noUnit)) {
+                assertThat(DispenseUnitForms.fits("plaquette", each.getInventoryItem().getUnit()))
+                        .isEqualTo(lots.stream().filter(l -> l.getLotNumber().equals(each.getLotNumber()))
+                                .findFirst().orElseThrow().getUnitFits());
+            }
+        }
+
         @Test
         void withoutAnActiveHospitalNothingIsListed() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);

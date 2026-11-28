@@ -364,6 +364,12 @@ export interface StockLotResponse {
   strength?: string | null;
   form?: string | null;
   productMatch?: 'PRESCRIBED' | 'EQUIVALENT' | 'SUBSTITUTE' | null;
+  /**
+   * QA D3949: whether a fill in the order's unit may come from this lot, decided
+   * by the server's fill rule (a « plaquette » order from a lot counted in
+   * « plaquette de 10 comprimés »). The dispensable-lots read's only.
+   */
+  unitFits?: boolean | null;
   createdAt: string;
   updatedAt: string;
 }

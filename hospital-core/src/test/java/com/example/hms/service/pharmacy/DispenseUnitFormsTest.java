@@ -40,6 +40,43 @@ class DispenseUnitFormsTest {
     }
 
     /**
+     * QA D3949 (r77): a unit that describes a pack's contents is that pack. A « plaquette » order was refused against
+     * a lot counted in « plaquette de 10 comprimés ».
+     */
+    @ParameterizedTest(name = "{0} from a {1} lot is accepted")
+    @CsvSource({"plaquette, plaquette de 10 comprimés", "Plaquettes, Plaquette de 10 comprimés",
+        "plaquette de 10 comprimés, plaquette", "boîte, boîte de 24 comprimés", "boite, Boîtes de 24 comprimés",
+        "flacon, flacon de 100 ml", "sirop, flacon de 100 ml", "blister, blister (10 cp)", "box, box of 20 tablets",
+        "plaquette, plaquette x10", "pot, pot de 30 gélules", "pot de 30 gélules, pot"})
+    void aPackDescribedWithItsContentsIsThatPack(String fill, String lot) {
+        assertThatCode(() -> DispenseUnitForms.requireCompatible(fill, lot)).doesNotThrowAnyException();
+        assertThat(DispenseUnitForms.fits(fill, lot)).isTrue();
+    }
+
+    /** QA D3949: reading the pack does not make its contents the unit: a tablet order is not a pack of tablets. */
+    @ParameterizedTest(name = "{0} from a {1} lot is still refused")
+    @CsvSource({"comprimé, plaquette de 10 comprimés", "comprimé, boîte de 24 comprimés", "ml, flacon de 100 ml",
+        "plaquette de 10 comprimés, comprimé", "gouttes, flacon de 20 ml", "dose, pot de 30 gélules"})
+    void aPackIsNotItsContents(String fill, String lot) {
+        assertThat(DispenseUnitForms.fits(fill, lot)).isFalse();
+        assertThatThrownBy(() -> DispenseUnitForms.requireCompatible(fill, lot))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @ParameterizedTest(name = "\"{0}\" reads as \"{1}\"")
+    @CsvSource({"Plaquette de 10 comprimés, plaquette", "Cuillère à café, cuillere a cafe", "solution buvable, solution buvable",
+        "(10 cp), (10 cp)", "boîte  de 24, boite", "flacon de, flacon de"})
+    void theKeyOfAUnit(String unit, String key) {
+        assertThat(DispenseUnitForms.key(unit)).isEqualTo(key);
+    }
+
+    @Test
+    void aBlankUnitFitsAnyLot() {
+        assertThat(DispenseUnitForms.fits(null, "comprimé")).isTrue();
+        assertThat(DispenseUnitForms.fits("flacon", " ")).isTrue();
+    }
+
+    /**
      * The guard: every pair of unit groups is decided here, and only the pairs
      * listed as compatible are. A new group fails until its row is written.
      */

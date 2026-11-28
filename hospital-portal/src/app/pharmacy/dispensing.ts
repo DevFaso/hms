@@ -164,29 +164,16 @@ export const UNRECOGNISED_ATTENTION = {
   labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
 };
 
-/** A unit read for comparison: case, accents and a plural "s" do not matter. */
-function unitKey(unit: string | null | undefined): string {
-  return (unit ?? '')
-    .normalize('NFD')
-    .replaceAll(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/s$/, '');
-}
-
 /**
- * QA D1163: whether a lot can fill an order written in `orderUnit`. An infant
- * "1 flacon" order was filled from a tablet lot. Either side unknown (an old
- * order, a server that does not send the lot's unit) leaves the lot offered:
- * the server's check is the control.
+ * QA D1163: whether a lot can fill the open order (an infant "1 flacon" order
+ * was filled from a tablet lot). QA D3949 (r77): the panel compared the units
+ * itself and refused « plaquette » against « plaquette de 10 comprimés », a lot
+ * the server accepts. The server now decides each lot of the dispensable-lots
+ * read by the fill's own rule (`unitFits`); the panel compares no unit. A lot
+ * the server sends no answer for stays offered: the fill's check is the control.
  */
-export function sameDispenseUnit(
-  lotUnit: string | null | undefined,
-  orderUnit: string | null | undefined,
-): boolean {
-  const lot = unitKey(lotUnit);
-  const order = unitKey(orderUnit);
-  return lot === '' || order === '' || lot === order;
+export function lotFitsOrderUnit(lot: Pick<StockLotResponse, 'unitFits'>): boolean {
+  return lot.unitFits !== false;
 }
 
 import { WitnessConfirmComponent } from './witness-confirm/witness-confirm.component';
@@ -761,7 +748,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   readonly dispensableLots = computed(() =>
     this.stockLots()
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
-      .filter((lot) => sameDispenseUnit(lot.unit, this.orderUnit()))
+      .filter((lot) => lotFitsOrderUnit(lot))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
 
@@ -791,9 +778,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** QA D1163: lots of the drug in another form than the order, kept off the list. */
   readonly otherFormLots = computed(
     () =>
-      this.stockLots().filter(
-        (lot) => lot.remainingQuantity > 0 && !sameDispenseUnit(lot.unit, this.orderUnit()),
-      ).length,
+      this.stockLots().filter((lot) => lot.remainingQuantity > 0 && !lotFitsOrderUnit(lot)).length,
   );
 
   /**
