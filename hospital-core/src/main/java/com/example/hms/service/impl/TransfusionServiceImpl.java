@@ -1279,6 +1279,12 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     @Override
+    public BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId) {
+        // Declared here, not as an interface default: the class's transaction applies to it.
+        return issueUnit(requestId, unitId, false);
+    }
+
+    @Override
     public BloodUnitResponseDTO emergencyRelease(UUID requestId, EmergencyReleaseRequestDTO release) {
         String reason = release.getReason() == null ? "" : release.getReason().trim();
         if (reason.isEmpty()) {

@@ -111,9 +111,7 @@ public interface TransfusionService {
     void stopHeldRequest(UUID requestId, String reason);
 
     /** Issue a bag within the units requested: one beyond them is refused, naming the « ajouter une unité » step. */
-    default BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId) {
-        return issueUnit(requestId, unitId, false);
-    }
+    BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId);
 
     /**
      * QA D3906: {@code additionalUnit} is the deliberate « ajouter une unité » step. A bag beyond the units
