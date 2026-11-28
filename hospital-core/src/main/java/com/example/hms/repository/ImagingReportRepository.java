@@ -82,7 +82,6 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
     @org.springframework.data.jpa.repository.Query(
         "SELECT r FROM ImagingReport r WHERE r.criticalResultFlaggedAt IS NOT NULL "
         + "AND r.criticalResultAcknowledgedAt IS NULL "
-        + "AND (r.latestVersion IS NULL OR r.latestVersion = true) "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
         + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
     List<ImagingReport> findCriticalAwaitingEscalation(

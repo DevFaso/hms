@@ -134,6 +134,10 @@ class UrgentAlertOverviewServiceTest {
         assertThat(line.patientId()).isNull();
         assertThat(line.patientName()).isNull();
         assertThat(line.caseKey()).doesNotContain(PATIENT.toString());
+        // Review of #1393 (F3): the key cannot be recomputed from the hospital, a patient id and the date.
+        assertThat(line.caseKey()).isEqualTo(line.id().toString())
+            .isNotEqualTo(UUID.nameUUIDFromBytes((HOSPITAL + ":" + PATIENT + ":" + line.openedAt().toLocalDate())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());
         assertThat(line.source()).isEqualTo(ObstetricAlertEscalationService.SOURCE_NEWS2);
         assertThat(line.stepsTaken()).isEqualTo(3);
         assertThat(line.minutesUnacknowledged()).isEqualTo(60);

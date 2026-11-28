@@ -1149,13 +1149,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // QA D4102 (r81): the register of unresolved urgent alerts. Mirrors the /urgent-alerts/incidents RoleGuard.
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SURGEON'])) {
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'])) {
       items.push({
         icon: 'emergency',
         label: 'Unresolved urgent alerts',
         translationKey: 'NAV.URGENT_INCIDENTS',
         route: '/urgent-alerts/incidents',
-        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SURGEON'],
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'],
       });
     }
     // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.

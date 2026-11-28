@@ -1381,7 +1381,7 @@ export const routes: Routes = [
         path: 'urgent-alerts/incidents',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SURGEON'],
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'],
         },
         loadComponent: () =>
           import('./urgent-alerts/urgent-incident-register.component').then(

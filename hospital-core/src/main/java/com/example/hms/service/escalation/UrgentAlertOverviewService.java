@@ -176,15 +176,17 @@ public class UrgentAlertOverviewService {
             }
         }
         List<UrgentAlertIncidentDTO> lines = new ArrayList<>();
+        Map<String, String> caseKeys = new HashMap<>();
         for (UrgentAlertIncident incident : register) {
             ObstetricAlertEscalation row = rows.get(incident.getSourceId());
             String source = row != null ? row.getSourceType() : incident.getSourceType();
             UUID patientId = lead && row != null ? row.getPatientId() : null;
-            // One case per patient and day. The key is the first incident's own id for anything else, and says
-            // nothing of the patient: an administrator reads which lines belong together, never whose they are.
-            String caseKey = row == null ? incident.getId().toString()
-                : UUID.nameUUIDFromBytes((hospitalId + ":" + row.getPatientId() + ":"
-                    + incident.getOpenedAt().toLocalDate()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+            // One case per patient and day, keyed by the id of the first incident of the case in this register:
+            // an administrator reads which lines belong together, never whose they are. Review of #1393 (F3): the
+            // key is never derived from the patient, so nothing outside the server can recompute it.
+            String caseKey = row == null || incident.getOpenedAt() == null ? incident.getId().toString()
+                : caseKeys.computeIfAbsent(row.getPatientId() + ":" + incident.getOpenedAt().toLocalDate(),
+                    group -> incident.getId().toString());
             lines.add(new UrgentAlertIncidentDTO(incident.getId(), caseKey, source, sourceLabel(source, locale),
                 patientId, patientId == null ? null : patientNames.get(patientId),
                 row == null ? null : row.getFirstNoticeFiledAt(), incident.getOpenedAt(),

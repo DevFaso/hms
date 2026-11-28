@@ -376,34 +376,74 @@ class ImagingCriticalNotificationServiceTest {
         verify(smsService, never()).send(anyString(), anyString());
     }
 
-    @Test
-    void aSupersededVersionLeavesTheLadder() {
-        // QA D4157 (r81): v1 and its correction v3 escalated as two alerts. A version a later one replaced is not
-        // escalated; the newer version carries the finding.
-        ImagingReport superseded = flagged();
-        superseded.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
-        superseded.setLatestVersion(false);
-        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(superseded));
-
-        assertThat(service.escalateOverdue()).isZero();
-
-        verify(notificationService, never()).created(anyString(), anyString(), anyString());
-        assertThat(superseded.getCriticalEscalationLevel()).isNotEqualTo((short) 1);
+    /** v1 of the order, critical, notified 20 minutes ago and replaced by {@code newer}. */
+    private ImagingReport supersededBy(ImagingReport newer) {
+        ImagingReport v1 = flagged();
+        v1.setReportVersion(1);
+        v1.setLatestVersion(false);
+        v1.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
+        newer.setReportVersion(2);
+        newer.setLatestVersion(true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId()))
+            .thenReturn(List.of(newer, v1));
+        return v1;
     }
 
     @Test
-    void theIncidentOfASupersededVersionCloses() {
-        ImagingReport superseded = flagged();
-        superseded.setLatestVersion(false);
+    void aDraftAddendumNeverSilencesTheCriticalFinding() {
+        // Review of #1393 (F1): an unsigned addendum opened without the critical flag says nothing about the
+        // finding; v1 keeps escalating until a clinician acknowledges it (QA D1930).
+        ImagingReport v1 = supersededBy(report());
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(v1));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        assertThat(v1.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    void aSignedAddendumWithoutTheCriticalFlagNeverSilencesTheFinding() {
+        ImagingReport addendum = report();
+        addendum.setSignedAt(LocalDateTime.now().minusMinutes(5));
+        ImagingReport v1 = supersededBy(addendum);
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(v1));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        assertThat(v1.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    void aSignedCriticalNewerVersionTakesTheFindingOverAndTheOlderLeaves() {
+        // QA D4157 (r81): v1 and its correction v3 escalated as two alerts. Once a newer signed version carries the
+        // critical finding on its own ladder, v1 leaves; the newer one escalates.
+        ImagingReport corrected = flagged();
+        corrected.setSignedAt(LocalDateTime.now().minusMinutes(19));
+        corrected.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(19));
+        ImagingReport v1 = supersededBy(corrected);
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(v1, corrected));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        assertThat(v1.getCriticalEscalationLevel()).isNotEqualTo((short) 1);
+        assertThat(corrected.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    void theIncidentOfAnOlderVersionClosesOnlyWhenANewerSignedCriticalVersionCarriesIt() {
+        ImagingReport draft = report();
+        ImagingReport v1 = supersededBy(draft);
         when(ladder.openIncidents(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT)).thenReturn(List.of(
-            com.example.hms.model.UrgentAlertIncident.builder().sourceId(superseded.getId()).build()));
-        when(imagingReportRepository.findById(superseded.getId())).thenReturn(Optional.of(superseded));
+            com.example.hms.model.UrgentAlertIncident.builder().sourceId(v1.getId()).build()));
+        when(imagingReportRepository.findById(v1.getId())).thenReturn(Optional.of(v1));
         when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of());
 
         service.escalateOverdue();
+        verify(ladder, never()).closeIncident(any(), any(), any(), any(), any());
 
+        draft.setSignedAt(LocalDateTime.now().minusMinutes(1));
+        draft.setCriticalResultFlaggedAt(LocalDateTime.now().minusMinutes(1));
+        draft.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(1));
+        service.escalateOverdue();
         verify(ladder).closeIncident(eq(com.example.hms.model.UrgentAlertIncident.SOURCE_IMAGING_REPORT),
-            eq(superseded.getId()), eq(com.example.hms.model.UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT),
+            eq(v1.getId()), eq(com.example.hms.model.UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT),
             org.mockito.ArgumentMatchers.isNull(), any());
     }
 
