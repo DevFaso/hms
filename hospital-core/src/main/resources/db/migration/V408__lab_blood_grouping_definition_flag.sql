@@ -20,4 +20,7 @@ WHERE definition.id = candidates.id
        OR candidates.loinc_key IN ('882-1')
        OR candidates.name_key ~ '\mgroupe sanguin\M'
        OR candidates.name_key ~ '\mgroupage\M'
-       OR candidates.name_key ~ '\mblood (group|type)(ing)?\M');
+       OR candidates.name_key ~ '\mblood (group|type)(ing)?\M')
+  -- A name that also names a screen, an antibody, HLA, a Coombs test or a crossmatch is not a plain grouping,
+  -- whatever its code: a grouping must never close it. The catalogue sets such a test by hand if ever needed.
+  AND candidates.name_key !~ '(\mrai\M|agglutinin|anticorps|antibod|\mhla\M|coombs|compatib)';

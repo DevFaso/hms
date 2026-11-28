@@ -39,7 +39,19 @@ class BloodGroupingDefinitionBackfillPostgresIT {
             new Definition("XM", "Épreuve de compatibilité", null, false, false),
             new Definition("TWP-CREA", "Créatinine", null, false, false),
             new Definition("TWP-ECBU", "ECBU", null, true, false),
-            new Definition("DEV-CBC", "Complete Blood Count", null, false, false));
+            new Definition("DEV-CBC", "Complete Blood Count", null, false, false),
+            // A grouping name that also names a screen, an antibody, HLA, Coombs or a crossmatch is not flagged.
+            new Definition("GS-RAI", "Groupe sanguin + RAI", null, false, false),
+            new Definition("GRP-HLA", "Groupage HLA", null, false, false),
+            new Definition("BG-AS", "Blood group antibody screen", null, false, false),
+            new Definition("GS-AGG", "Groupe sanguin et agglutinines irrégulières", null, false, false),
+            new Definition("GS-AC", "Groupe sanguin, anticorps anti-érythrocytaires", null, false, false),
+            new Definition("BT-COOMBS", "Blood type and Coombs test", null, false, false),
+            new Definition("GS-XM", "Groupage et épreuve de compatibilité", null, false, false),
+            new Definition("GS-CAPS", "GROUPAGE SANGUIN - R.A.I. / ANTICORPS", null, false, false),
+            // ...whatever its code or LOINC.
+            new Definition("GSRH", "Groupe sanguin et RAI", null, false, false),
+            new Definition("ABO-AS", "ABO, Rh and antibody screen", "882-1", false, false));
         try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             try (var schema = connection.createStatement()) {
                 schema.execute("CREATE SCHEMA lab");
