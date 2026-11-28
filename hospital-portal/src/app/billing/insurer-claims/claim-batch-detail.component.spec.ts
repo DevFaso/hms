@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { ClaimBatchDetailComponent, wholeFrancs } from './claim-batch-detail.component';
 import {
@@ -14,7 +14,11 @@ import { BillingService } from '../../services/billing.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
-import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 /** Insurer claims PRs 2 to 4 (QA D3983): one bordereau, as a draft and once sent. */
 describe('ClaimBatchDetailComponent (QA D3983)', () => {
@@ -176,6 +180,36 @@ describe('ClaimBatchDetailComponent (QA D3983)', () => {
     expect(host().querySelector('[data-testid="claim-batch-title"]')!.textContent).toContain(
       'BORD-2026-0001',
     );
+  });
+
+  it('a draft sent without its date is refused on the date and nothing is sent', async () => {
+    render(['ROLE_CLAIMS_REVIEWER'], draft);
+    fixture.componentInstance.submittedOn.set('');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="claim-batch-submit"]',
+      sent: claims.submitBatch,
+    });
+    expect(confirm.ask).not.toHaveBeenCalled();
+  });
+
+  it('QA D1341 class: a refusal naming the sending date marks that field with the server reason', async () => {
+    render(['ROLE_CLAIMS_REVIEWER'], draft);
+    claims.submitBatch.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ submittedOn: 'La date d’envoi ne peut pas être à venir.' }),
+      ),
+    );
+
+    await fixture.componentInstance.submit();
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, {
+      'claim-submitted-on': 'La date d’envoi ne peut pas être à venir.',
+    });
   });
 
   it('a declined confirmation sends nothing', async () => {

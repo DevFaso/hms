@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { InsurerPaymentsComponent, proposeAllocation } from './insurer-payments.component';
 import {
@@ -12,7 +12,11 @@ import {
 import { PayerCatalogueService } from '../../services/payer-catalogue.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 /** Insurer claims PR 3 (QA D3983): « Règlements assureurs ». */
 describe('InsurerPaymentsComponent (QA D3983)', () => {
@@ -143,6 +147,28 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
       }),
     );
     expect(body.clientRequestId).toBeTruthy();
+  });
+
+  it('QA D1341 class: a refusal naming the reference marks that field with the server reason', () => {
+    render(['ROLE_ACCOUNTANT']);
+    claims.recordInsurerPayment.and.returnValue(
+      throwError(() => fieldErrorsResponse({ reference: 'Cette référence est déjà utilisée.' })),
+    );
+    const component = fixture.componentInstance;
+    component.startRecord();
+    component.setPayer('payer-1');
+    component.amount.set('9000');
+    component.receivedDate.set('2026-11-20');
+    component.reference.set('VIR-2026-0042');
+    component.propose();
+    fixture.detectChanges();
+
+    component.save();
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, {
+      'insurer-payment-reference': 'Cette référence est déjà utilisée.',
+    });
   });
 
   it('without an amount, a date or a reference nothing is sent; nor with a card number or an over-allocation', () => {

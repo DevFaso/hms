@@ -26,7 +26,7 @@ import {
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { newPaymentRequestKey } from '../../shared/payment-request-key';
@@ -56,6 +56,16 @@ export function proposeAllocation(lines: ClaimLine[], amount: number): Record<st
  * what is not allocated stays visible as « à affecter ». Recorded by the hospital admin or the accountant only,
  * never through a till; a payment entered in error is reversed, with a reason, by another person.
  */
+/** The controls a server field names, by the field (QA D1341). */
+const FIELD_IDS: Readonly<Record<string, string>> = {
+  payerId: 'insurer-payment-payer',
+  amount: 'insurer-payment-amount',
+  receivedDate: 'insurer-payment-date',
+  method: 'insurer-payment-method',
+  reference: 'insurer-payment-reference',
+  reason: 'insurer-reverse-reason',
+};
+
 @Component({
   selector: 'app-insurer-payments',
   standalone: true,
@@ -320,11 +330,29 @@ export class InsurerPaymentsComponent {
       },
       error: (err: unknown) => {
         this.busy.set(false);
+        this.markRefused(err);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.PAYMENTS.FAILED'),
         );
       },
     });
+  }
+
+  /** QA D1341 class: a 400 that names fields marks each control it names with its own reason. */
+  private markRefused(err: unknown): void {
+    const root = this.host.nativeElement;
+    const idByField: Record<string, string> = {};
+    for (const [field, id] of Object.entries(FIELD_IDS)) {
+      if (root.querySelector(`#${id}`) !== null) idByField[field] = id;
+    }
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length > 0) {
+      refuseFields(
+        root,
+        refused.map(([id, message]) => ({ id, message })),
+        Object.values(idByField),
+      );
+    }
   }
 
   /* ── Reverse ── */

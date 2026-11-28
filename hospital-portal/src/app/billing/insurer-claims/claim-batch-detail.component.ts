@@ -31,7 +31,7 @@ import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
 import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
@@ -43,6 +43,19 @@ import { localDateString } from '../../shared/date-utils';
 import { ClaimsNavComponent } from './claims-nav.component';
 
 /** A whole number of francs typed in a field, or null when it is not one. */
+/** The controls a server field names, by the field (QA D1341). */
+const FIELD_IDS: Readonly<Record<string, readonly string[]>> = {
+  submittedOn: ['claim-submitted-on'],
+  payerReference: ['claim-payer-reference'],
+  receivedOn: ['claim-received-on'],
+  reason: ['claim-cancel-reason', 'claim-action-reason'],
+  amount: ['claim-action-amount'],
+  reasonClass: ['claim-action-class'],
+  resolution: ['claim-action-resolution'],
+  writeOffReason: ['claim-action-code'],
+  supportingDocument: ['claim-action-document'],
+};
+
 export function wholeFrancs(raw: string | number | null | undefined): number | null {
   const text = String(raw ?? '')
     .replace(/[\s\u00a0\u202f]/g, '')
@@ -217,11 +230,33 @@ export class ClaimBatchDetailComponent {
       },
       error: (err: unknown) => {
         this.busy.set(false);
+        this.markRefused(err);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.BATCH.FAILED'),
         );
       },
     });
+  }
+
+  /**
+   * QA D1341 class: a 400 that names fields marks each control it names with its own reason, not a toast alone.
+   * A field can be on two forms (the cancel and the refusal reason): the one on screen is marked.
+   */
+  private markRefused(err: unknown): void {
+    const root = this.host.nativeElement;
+    const idByField: Record<string, string> = {};
+    for (const [field, ids] of Object.entries(FIELD_IDS)) {
+      const shown = ids.find((id) => root.querySelector(`#${id}`) !== null);
+      if (shown) idByField[field] = shown;
+    }
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length > 0) {
+      refuseFields(
+        root,
+        refused.map(([id, message]) => ({ id, message })),
+        Object.values(idByField),
+      );
+    }
   }
 
   private refuse(fieldIds: string[], key: string): void {
@@ -388,6 +423,7 @@ export class ClaimBatchDetailComponent {
         },
         error: (err: unknown) => {
           this.busy.set(false);
+          this.markRefused(err);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.BATCH.FAILED'),
           );
