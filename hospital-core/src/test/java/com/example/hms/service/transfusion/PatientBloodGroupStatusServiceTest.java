@@ -210,6 +210,91 @@ class PatientBloodGroupStatusServiceTest {
         assertThat(PatientBloodGroupStatusService.declaredOnly(" ").getDeclared()).isNull();
     }
 
+    @SuppressWarnings("unchecked")
+    private com.example.hms.repository.TransfusionReactionRepository reactionsWired(
+            com.example.hms.service.recordaccess.CrossHospitalReachRecorder recorder) {
+        com.example.hms.repository.TransfusionReactionRepository reactions =
+            mock(com.example.hms.repository.TransfusionReactionRepository.class);
+        ObjectProvider<com.example.hms.service.recordaccess.CrossHospitalReachRecorder> recorders = mock(ObjectProvider.class);
+        when(recorders.getIfAvailable()).thenReturn(recorder);
+        ObjectProvider<com.example.hms.utility.RoleValidator> roles = mock(ObjectProvider.class);
+        SevereTransfusionReactionLookup lookup = new SevereTransfusionReactionLookup(reactions, recorders, roles);
+        ObjectProvider<SevereTransfusionReactionLookup> lookups = mock(ObjectProvider.class);
+        when(lookups.getIfAvailable()).thenReturn(lookup);
+        service.setReactions(lookups);
+        when(repository.findCurrentWithHospital(any(), any())).thenReturn(Optional.empty());
+        return reactions;
+    }
+
+    private static com.example.hms.model.TransfusionReaction haemolyticAt(com.example.hms.model.Hospital at,
+                                                                         LocalDateTime onset) {
+        com.example.hms.model.TransfusionReaction reaction = new com.example.hms.model.TransfusionReaction();
+        reaction.setReactionType(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        reaction.setSeverity(com.example.hms.enums.TransfusionReactionSeverity.SEVERE);
+        reaction.setOnsetAt(onset);
+        reaction.setHospital(at);
+        return reaction;
+    }
+
+    @Test
+    @DisplayName("QA D4151: a severe transfusion reaction on record is on the chart's safety line, a mild one is not")
+    void severeReactionOnRecord() {
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder recorder =
+            mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        com.example.hms.repository.TransfusionReactionRepository reactions = reactionsWired(recorder);
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(hospitalId);
+        here.setName("Centre Test A");
+        LocalDateTime onset = LocalDateTime.of(2026, 11, 27, 5, 37);
+        // Only the severities that stay on the record are asked for: a mild or moderate reaction is not a safety line.
+        when(reactions.findFirstByPatient_IdAndSeverityInOrderByOnsetAtDesc(patient.getId(),
+            java.util.EnumSet.of(com.example.hms.enums.TransfusionReactionSeverity.SEVERE,
+                com.example.hms.enums.TransfusionReactionSeverity.LIFE_THREATENING)))
+            .thenReturn(Optional.of(haemolyticAt(here, onset)));
+
+        BloodGroupStatusDTO status = service.withAntibodies(patient, hospitalId);
+
+        assertThat(status.getSevereTransfusionReaction()).isTrue();
+        assertThat(status.getSevereTransfusionReactionType())
+            .isEqualTo(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        assertThat(status.getSevereTransfusionReactionAt()).isEqualTo(onset);
+        assertThat(status.getSevereTransfusionReactionHospitalName()).isEqualTo("Centre Test A");
+        // Its own hospital's reaction is no cross-hospital read.
+        org.mockito.Mockito.verifyNoInteractions(recorder);
+
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        assertThat(service.withAntibodies(other, hospitalId).getSevereTransfusionReaction()).isFalse();
+        // A list read does not look: null, never « none ».
+        assertThat(service.of(patient, hospitalId).getSevereTransfusionReaction()).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D4151 review: a severe reaction recorded at A shows at B, with A's name, and the read is accounted")
+    void aSevereReactionFollowsThePatientToAnotherHospital() {
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder recorder =
+            mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        com.example.hms.repository.TransfusionReactionRepository reactions = reactionsWired(recorder);
+        com.example.hms.model.Hospital atA = new com.example.hms.model.Hospital();
+        atA.setId(UUID.randomUUID());
+        atA.setName("Centre Test A");
+        when(reactions.findFirstByPatient_IdAndSeverityInOrderByOnsetAtDesc(org.mockito.ArgumentMatchers.eq(patient.getId()), any()))
+            .thenReturn(Optional.of(haemolyticAt(atA, LocalDateTime.of(2026, 11, 27, 5, 37))));
+
+        BloodGroupStatusDTO atB = service.withAntibodies(patient, hospitalId);
+
+        assertThat(atB.getSevereTransfusionReaction()).isTrue();
+        assertThat(atB.getSevereTransfusionReactionHospitalName()).isEqualTo("Centre Test A");
+        org.mockito.Mockito.verify(recorder).recordReach(org.mockito.ArgumentMatchers.eq(patient.getId()),
+            org.mockito.ArgumentMatchers.eq(hospitalId), any(), any(),
+            org.mockito.ArgumentMatchers.eq(java.util.Map.of(atA.getId().toString(), 1L)),
+            org.mockito.ArgumentMatchers.eq(SevereTransfusionReactionLookup.REACH_DESCRIPTION));
+        // A proxy's copy never carries it.
+        BloodGroupStatusDTO proxy = PatientBloodGroupStatusService.forProxy(atB);
+        assertThat(proxy.getSevereTransfusionReaction()).isNull();
+        assertThat(proxy.getSevereTransfusionReactionHospitalName()).isNull();
+    }
+
     @Test
     @DisplayName("Rex P2: a proxy's copy keeps the value and the disagreement, drops the provenance and the antibody")
     void forProxy() {

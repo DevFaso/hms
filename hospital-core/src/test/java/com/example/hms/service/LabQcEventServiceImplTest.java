@@ -475,6 +475,64 @@ class LabQcEventServiceImplTest {
         assertThat(captor.getValue().isPassed()).isTrue();
     }
 
+    /** A HIGH_CONTROL target of 5.0 +/- 0.2 for the test, as the director set it. */
+    private void highControlTarget() {
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setId(testDefId);
+        com.example.hms.model.LabQcTarget target = com.example.hms.model.LabQcTarget.builder()
+            .hospitalId(hospitalId).testDefinition(testDef).qcLevel(LabQcEventLevel.HIGH_CONTROL)
+            .targetMean(new BigDecimal("5.0")).targetSd(new BigDecimal("0.2")).build();
+        when(labTestDefinitionRepository.findById(testDefId)).thenReturn(Optional.of(testDef));
+        when(qcTargetRepository.findByHospitalIdAndTestDefinition_IdAndQcLevel(hospitalId, testDefId,
+            LabQcEventLevel.HIGH_CONTROL)).thenReturn(Optional.of(target));
+    }
+
+    @Test
+    void d4147_aControlBeyondThreeSdIsNeverStoredAsAccepted() {
+        highControlTarget();
+        LabQcEventRequestDTO nineSdOut = LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("HIGH_CONTROL")
+            .measuredValue(new BigDecimal("6.8")).accepted(true).build();
+
+        assertThatThrownBy(() -> service.recordQcEvent(nineSdOut, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(refused -> {
+                com.example.hms.exception.FieldBusinessException field =
+                    (com.example.hms.exception.FieldBusinessException) refused;
+                assertThat(field.getMessageKey()).isEqualTo("lab.qc.outside3SdNotAccepted");
+                assertThat(field.getField()).isEqualTo("accepted");
+            });
+        verify(qcEventRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void d4147_theSameControlIsRecordedAsRejected_andWithNoDecisionItIsRejectedByRule() {
+        highControlTarget();
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("HIGH_CONTROL")
+            .measuredValue(new BigDecimal("6.8")).accepted(false).build(), Locale.ENGLISH);
+        // No decision (an API caller predating it): 5.4 against a target of 5.0 +/- 0.1 is within the legacy
+        // 10 %, which alone would pass it, and 4 SD out: rejected by rule.
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setId(testDefId);
+        when(qcTargetRepository.findByHospitalIdAndTestDefinition_IdAndQcLevel(hospitalId, testDefId,
+            LabQcEventLevel.HIGH_CONTROL)).thenReturn(Optional.of(com.example.hms.model.LabQcTarget.builder()
+                .hospitalId(hospitalId).testDefinition(testDef).qcLevel(LabQcEventLevel.HIGH_CONTROL)
+                .targetMean(new BigDecimal("5.0")).targetSd(new BigDecimal("0.1")).build()));
+        service.recordQcEvent(LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("HIGH_CONTROL")
+            .measuredValue(new BigDecimal("5.4")).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(run -> {
+            assertThat(run.getSdFlag()).isEqualTo("OUTSIDE_3SD");
+            assertThat(run.isPassed()).isFalse();
+        });
+    }
+
     @Test
     void recordQcEvent_withoutATargetHasNoFlag() {
         when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

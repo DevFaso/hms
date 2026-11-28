@@ -301,6 +301,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
         LabResultRequestDTO request = entryRequest();
         request.setSupersedesResultId(released.getId());
+        request.setCorrectionReason("Recontrôle sur un second automate");
 
         service.createLabResult(request, Locale.ENGLISH);
 
@@ -313,6 +314,50 @@ class LabResultServiceImplLifecycleTest {
         // the released row keeps its value and its release
         assertThat(released.getResultValue()).isEqualTo("4.1");
         assertThat(released.isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("QA D4143 — a correction says why: no reason, nothing saved; the reason is kept on the correction")
+    void aCorrectionStatesItsReason() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        for (String blank : new String[] {null, "", "   "}) {
+            LabResultRequestDTO silent = entryRequest();
+            silent.setSupersedesResultId(released.getId());
+            silent.setCorrectionReason(blank);
+            assertThatThrownBy(() -> service.createLabResult(silent, Locale.ENGLISH))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(refused -> assertThat(((com.example.hms.exception.FieldBusinessException) refused).getField())
+                    .isEqualTo("correctionReason"))
+                .extracting("messageKey").isEqualTo("labresult.correction.reasonRequired");
+        }
+        verify(labResultRepository, never()).save(any(LabResult.class));
+
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+        request.setCorrectionReason("  Erreur de dilution  ");
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues().stream().filter(r -> r != released).findFirst().orElseThrow()
+            .getCorrectionReason()).isEqualTo("Erreur de dilution");
+    }
+
+    @Test
+    @DisplayName("QA D4143 — a result that corrects nothing keeps no reason, whatever the client sent")
+    void aPlainResultCarriesNoCorrectionReason() {
+        stubEntryPath();
+        LabResultRequestDTO request = entryRequest();
+        request.setCorrectionReason("not a correction");
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, atLeastOnce()).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(result -> assertThat(result.getCorrectionReason()).isNull());
     }
 
     @Test
@@ -473,6 +518,7 @@ class LabResultServiceImplLifecycleTest {
 
         LabResultRequestDTO request = entryRequest();
         request.setSupersedesResultId(released.getId());
+        request.setCorrectionReason("Recontrôle sur un second automate");
         service.createLabResult(request, Locale.ENGLISH);
     }
 
@@ -486,6 +532,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
         LabResultRequestDTO request = entryRequest();
         request.setSupersedesResultId(released.getId());
+        request.setCorrectionReason("Recontrôle sur un second automate");
 
         service.createLabResult(request, Locale.ENGLISH);
 

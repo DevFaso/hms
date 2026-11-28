@@ -34,7 +34,21 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
   manufacturer: 'LAB_INSTRUMENTS.MANUFACTURER',
   modelNumber: 'LAB_INSTRUMENTS.MODEL',
   notes: 'LAB_INSTRUMENTS.NOTES',
+  installationDate: 'LAB_INSTRUMENTS.INSTALLATION_DATE',
+  lastCalibrationDate: 'LAB_INSTRUMENTS.LAST_CALIBRATION_DATE',
+  nextCalibrationDate: 'LAB_INSTRUMENTS.NEXT_CALIBRATION_DATE',
+  lastMaintenanceDate: 'LAB_INSTRUMENTS.LAST_MAINTENANCE_DATE',
+  nextMaintenanceDate: 'LAB_INSTRUMENTS.NEXT_MAINTENANCE_DATE',
 };
+
+/** QA D4153: the dates of an instrument the form edits. */
+const INSTRUMENT_DATE_FIELDS = [
+  'installationDate',
+  'lastCalibrationDate',
+  'nextCalibrationDate',
+  'lastMaintenanceDate',
+  'nextMaintenanceDate',
+] as const;
 
 @Component({
   selector: 'app-lab-instruments',
@@ -142,15 +156,28 @@ export class LabInstrumentsComponent implements OnInit {
     this.form = this.emptyForm();
   }
 
+  /**
+   * QA D4153: the installation, calibration and maintenance dates are entered in the form. A date
+   * field left or made empty is sent as no date, never as an empty string.
+   */
+  private datedForm(): LabInstrumentRequest {
+    const body: LabInstrumentRequest = { ...this.form };
+    for (const field of INSTRUMENT_DATE_FIELDS) {
+      if (!body[field]) body[field] = undefined;
+    }
+    return body;
+  }
+
   save(): void {
     const hospitalId = this.auth.getHospitalId();
     if (!hospitalId) return;
     this.saving.set(true);
 
     const id = this.editingId();
+    const body = this.datedForm();
     const op = id
-      ? this.instrumentService.updateInstrument(id, this.form)
-      : this.instrumentService.createInstrument(hospitalId, this.form);
+      ? this.instrumentService.updateInstrument(id, body)
+      : this.instrumentService.createInstrument(hospitalId, body);
 
     op.subscribe({
       next: () => {

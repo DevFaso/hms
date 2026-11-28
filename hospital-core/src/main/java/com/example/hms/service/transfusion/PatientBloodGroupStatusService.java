@@ -54,6 +54,36 @@ public class PatientBloodGroupStatusService {
         this.positiveAuthority = positiveAuthority;
     }
 
+    /**
+     * QA D4151: the severe transfusion reaction on record, for the safety line of one chart. Lazy like the
+     * others; absent in a test that builds this by hand.
+     */
+    private ObjectProvider<SevereTransfusionReactionLookup> reactions;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setReactions(ObjectProvider<SevereTransfusionReactionLookup> reactions) {
+        this.reactions = reactions;
+    }
+
+    /**
+     * QA D4151 (r81) and its review: a severe reaction stopped the transfusion, alerted the doctors and the
+     * laboratory, and then appeared nowhere on the patient's record: the next prescriber of blood saw nothing.
+     * It follows the patient to every hospital, like the antibody flag, with the hospital that holds it.
+     */
+    private void withSevereReaction(BloodGroupStatusDTO status, UUID patientId, UUID hospitalId) {
+        SevereTransfusionReactionLookup lookup = reactions == null ? null : reactions.getIfAvailable();
+        if (lookup == null) {
+            return;
+        }
+        Optional<SevereTransfusionReactionLookup.SevereReaction> newest = lookup.shownAt(patientId, hospitalId);
+        status.setSevereTransfusionReaction(newest.isPresent());
+        newest.ifPresent(reaction -> {
+            status.setSevereTransfusionReactionType(reaction.type());
+            status.setSevereTransfusionReactionAt(reaction.onsetAt());
+            status.setSevereTransfusionReactionHospitalName(reaction.hospitalName());
+        });
+    }
+
     /** Declared and confirmed, for a read at {@code hospitalId}. No hospital (an unscoped read): declared only. */
     public BloodGroupStatusDTO of(Patient patient, UUID hospitalId) {
         if (patient == null) {
@@ -95,6 +125,7 @@ public class PatientBloodGroupStatusService {
             return status;
         }
         withExposure(status, patient.getId(), hospitalId);
+        withSevereReaction(status, patient.getId(), hospitalId);
         PositiveAntibodyScreenService screens = antibodyScreen.getIfAvailable();
         if (screens == null) {
             return status;
