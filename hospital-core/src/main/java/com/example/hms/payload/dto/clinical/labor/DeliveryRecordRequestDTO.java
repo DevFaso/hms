@@ -29,7 +29,7 @@ public class DeliveryRecordRequestDTO {
 
     private LocalDateTime birthDateTime;
 
-    @NotNull
+    @NotNull(message = "{delivery.validation.modeRequired}")
     private DeliveryMode deliveryMode;
 
     /** A single-baby shortcut kept for older clients; {@link #babies} is the per-baby form (QA D1714). */
@@ -41,23 +41,23 @@ public class DeliveryRecordRequestDTO {
      * event. When given, {@link #numberOfInfants} and {@link #liveBirth} (if sent) must agree with it.
      */
     @jakarta.validation.Valid
-    @jakarta.validation.constraints.Size(max = 5)
+    @jakarta.validation.constraints.Size(max = 5, message = "{delivery.validation.babiesTooMany}")
     private java.util.List<DeliveryBabyDTO> babies;
 
-    @Min(1) @Max(5)
+    @Min(value = 1, message = "{delivery.validation.numberOfInfants}") @Max(value = 5, message = "{delivery.validation.numberOfInfants}")
     private Integer numberOfInfants;
 
     private InfantSex infantSex;
 
-    @Min(200) @Max(9000)
+    @Min(value = 200, message = "{delivery.validation.birthWeight}") @Max(value = 9000, message = "{delivery.validation.birthWeight}")
     private Integer birthWeightGrams;
 
-    @Min(20) @Max(45)
+    @Min(value = 20, message = "{delivery.validation.gestationalAge}") @Max(value = 45, message = "{delivery.validation.gestationalAge}")
     private Integer gestationalAgeWeeksAtBirth;
 
-    @Min(0) @Max(10)
+    @Min(value = 0, message = "{delivery.validation.apgar}") @Max(value = 10, message = "{delivery.validation.apgar}")
     private Integer apgarOneMinute;
-    @Min(0) @Max(10)
+    @Min(value = 0, message = "{delivery.validation.apgar}") @Max(value = 10, message = "{delivery.validation.apgar}")
     private Integer apgarFiveMinute;
 
     @com.example.hms.validation.NotInClinicalFuture
@@ -66,7 +66,7 @@ public class DeliveryRecordRequestDTO {
     private Boolean placentaComplete;
     private Boolean uterotonicGiven;
 
-    @Min(0) @Max(5000)
+    @Min(value = 0, message = "{delivery.validation.bloodLoss}") @Max(value = 5000, message = "{delivery.validation.bloodLoss}")
     private Integer estimatedBloodLossMl;
 
     private PerinealTear perinealTear;
@@ -77,7 +77,7 @@ public class DeliveryRecordRequestDTO {
      * QA D214 (#896 review): required only when another birth was recorded
      * for this mother within 20 weeks of this one; kept on the record notes.
      */
-    @jakarta.validation.constraints.Size(max = 500)
+    @jakarta.validation.constraints.Size(max = 500, message = "{validation.reason.size}")
     private String recentDeliveryOverrideReason;
 
     /**
@@ -87,6 +87,6 @@ public class DeliveryRecordRequestDTO {
      */
     private Boolean bornBeforeArrival;
 
-    @jakarta.validation.constraints.Size(max = 500)
+    @jakarta.validation.constraints.Size(max = 500, message = "{validation.reason.size}")
     private String bornBeforeArrivalReason;
 }

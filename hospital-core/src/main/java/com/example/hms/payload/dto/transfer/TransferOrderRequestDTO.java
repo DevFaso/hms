@@ -17,17 +17,17 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TransferOrderRequestDTO {
 
-    @NotNull
+    @NotNull(message = "{transfer.validation.admissionRequired}")
     private UUID admissionId;
 
-    @NotNull
+    @NotNull(message = "{transfer.validation.bedRequired}")
     private UUID toBedId;
 
-    @NotBlank
-    @Size(max = 500)
+    @NotBlank(message = "{transfer.r7.reasonRequired}")
+    @Size(max = 500, message = "{validation.reason.size}")
     private String reason;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{validation.notes.size1000}")
     private String notes;
 
     private UUID requestedByStaffId;
@@ -38,7 +38,7 @@ public class TransferOrderRequestDTO {
      */
     private boolean isolationOverride;
 
-    @Size(max = 500)
+    @Size(max = 500, message = "{validation.reason.size}")
     private String isolationOverrideReason;
 
     /**

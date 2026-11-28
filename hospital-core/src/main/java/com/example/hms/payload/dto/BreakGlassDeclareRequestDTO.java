@@ -18,25 +18,25 @@ import java.util.UUID;
 @Schema(description = "Request to declare a break-the-glass emergency-access session.")
 public class BreakGlassDeclareRequestDTO {
 
-    @NotNull
+    @NotNull(message = "{breakGlass.validation.patientRequired}")
     @Schema(description = "Patient whose chart will be accessed under this session.",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID patientId;
 
-    @NotNull
+    @NotNull(message = "{breakGlass.validation.hospitalRequired}")
     @Schema(description = "Hospital under whose authority the override is invoked.",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
     @com.example.hms.validation.ClinicalOverrideReasonRequired
-    @Size(max = 1024)
+    @Size(max = 1024, message = "{breakGlass.validation.reason}")
     @Schema(description = "Clinical justification (logged + reviewable). Min 10 characters to discourage no-op declarations.",
             example = "Patient unconscious, no proxy reachable; need allergy/med history for emergency intubation.",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String reason;
 
-    @Min(15)
-    @jakarta.validation.constraints.Max(240)
+    @Min(value = 15, message = "{breakGlass.validation.ttl}")
+    @jakarta.validation.constraints.Max(value = 240, message = "{breakGlass.validation.ttl}")
     @Schema(description = "Optional override TTL in minutes (15–240). Defaults to 240 (4h).",
             example = "60")
     private Integer ttlMinutes;

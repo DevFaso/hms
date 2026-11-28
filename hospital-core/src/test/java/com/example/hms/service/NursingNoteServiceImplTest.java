@@ -444,6 +444,7 @@ class NursingNoteServiceImplTest {
         NursingNoteCreateRequestDTO request = NursingNoteCreateRequestDTO.builder()
             .patientId(patientId)
             .hospitalId(hospitalId)
+            .narrative("Patient resting comfortably.")
             .build();
 
         when(roleValidator.getCurrentUserId()).thenReturn(actorUserId);
@@ -463,6 +464,7 @@ class NursingNoteServiceImplTest {
         NursingNoteCreateRequestDTO request = NursingNoteCreateRequestDTO.builder()
             .patientId(patientId)
             .hospitalId(hospitalId)
+            .narrative("Patient resting comfortably.")
             .build();
 
         User author = new User();
@@ -491,6 +493,7 @@ class NursingNoteServiceImplTest {
         NursingNoteCreateRequestDTO request = NursingNoteCreateRequestDTO.builder()
             .patientId(patientId)
             .hospitalId(hospitalId)
+            .narrative("Patient resting comfortably.")
             .build();
 
         User author = new User();

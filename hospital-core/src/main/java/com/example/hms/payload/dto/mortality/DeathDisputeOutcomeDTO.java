@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeathDisputeOutcomeDTO {
 
-    @NotBlank
-    @Size(max = 1000)
+    @NotBlank(message = "{mortality.dispute.outcomeReasonRequired}")
+    @Size(max = 1000, message = "{validation.reason.size1000}")
     private String reason;
 }

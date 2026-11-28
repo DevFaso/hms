@@ -18,19 +18,19 @@ import java.time.LocalDateTime;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EncounterWorkspaceAddendumRequestDTO {
 
-    @NotBlank
-    @Size(min = 10, max = 4000)
+    @NotBlank(message = "{addendum.validation.contentLength}")
+    @Size(min = 10, max = 4000, message = "{addendum.validation.contentLength}")
     private String content;
 
-    @NotNull
+    @NotNull(message = "{addendum.validation.eventTimeRequired}")
     private LocalDateTime eventDateTime;
 
-    @NotNull
+    @NotNull(message = "{addendum.validation.documentationTimeRequired}")
     private LocalDateTime documentationDateTime;
 
     private boolean lateEntry;
 
-    @NotBlank
-    @Size(min = 6, max = 64)
+    @NotBlank(message = "{addendum.validation.pinRequired}")
+    @Size(min = 6, max = 64, message = "{addendum.validation.pinRequired}")
     private String authorizingPin;
 }

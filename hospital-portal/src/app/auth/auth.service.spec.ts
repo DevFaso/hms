@@ -209,6 +209,30 @@ describe('AuthService — resolveLandingPath', () => {
     roleContext.activeRole = 'ROLE_DOCTOR';
     expect(service.resolveLandingPath()).toBe('/dashboard');
   });
+
+  // No role selected yet: the landing path follows the token, as both super-admin guards do.
+  it('lands a super-admin token with no role selected on /super-admin', () => {
+    spyOn(service, 'getRoles').and.returnValue(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.setRoles(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.activeRole = null;
+    expect(service.isActiveSuperAdmin()).toBeTrue();
+    expect(service.resolveLandingPath()).toBe('/super-admin');
+  });
+
+  it('lands a token without super-admin and no role selected on /dashboard', () => {
+    spyOn(service, 'getRoles').and.returnValue(['ROLE_DOCTOR', 'ROLE_NURSE']);
+    roleContext.setRoles(['ROLE_DOCTOR', 'ROLE_NURSE']);
+    roleContext.activeRole = null;
+    expect(service.isActiveSuperAdmin()).toBeFalse();
+    expect(service.resolveLandingPath()).toBe('/dashboard');
+  });
+
+  it('keeps the selected role over the token: a super-admin token acting as doctor is not super-admin', () => {
+    spyOn(service, 'getRoles').and.returnValue(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.setRoles(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.isActiveSuperAdmin()).toBeFalse();
+  });
 });
 
 describe('AuthService — where the session is kept', () => {

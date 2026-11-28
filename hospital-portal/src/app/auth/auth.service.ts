@@ -488,10 +488,21 @@ export class AuthService {
   }
 
   resolveLandingPath(): string {
-    if (this.roleContext.activeRole === 'ROLE_SUPER_ADMIN') {
+    if (this.isActiveSuperAdmin()) {
       return '/super-admin';
     }
     return '/dashboard';
+  }
+
+  /**
+   * Whether this session acts as super-admin: the role selected at login when
+   * there is one, otherwise the token's roles. Shared by the landing path and
+   * both super-admin guards, so a session with no selected role (several roles,
+   * none picked yet) lands where the guards would send it.
+   */
+  isActiveSuperAdmin(): boolean {
+    const selected = this.roleContext.activeRole;
+    return selected ? selected === 'ROLE_SUPER_ADMIN' : this.hasAnyRole(['ROLE_SUPER_ADMIN']);
   }
 
   /**
