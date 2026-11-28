@@ -347,7 +347,17 @@
     "BABY_OUTCOME_STILLBORN": "Mort-né(e) (sans signe de vie)",
     "BABY_OUTCOME_UNKNOWN": "Non renseigné",
     "BABY_OUTCOMES": "Issue de chaque bébé",
-    "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité."
+    "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité.",
+    "WARD_TITLE": "Femmes en travail dans cet hôpital",
+    "WARD_EMPTY": "Aucune femme n'est en travail dans cet hôpital en ce moment.",
+    "WARD_FAILED": "La liste des femmes en travail n'a pas pu être chargée.",
+    "WARD_ADMITTED": "Admise le {{time}}",
+    "WARD_WEEKS": "{{weeks}} SA",
+    "WARD_ENTRIES_ONE": "{{count}} observation au partogramme",
+    "WARD_ENTRIES": "{{count}} observations au partogramme",
+    "WARD_OPEN": "Ouvrir le dossier de travail",
+    "WARD_OPEN_FAILED": "Le dossier de cette patiente n'a pas pu être ouvert.",
+    "WARD_RECORD_HEADING": "Dossier de travail de {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Opérateur",
@@ -7894,7 +7904,7 @@
         "MEDICATION_DEACTIVATED": "Médicament désactivé",
         "MFA_BACKUP_USED": "Code de secours utilisé",
         "MFA_CHALLENGE": "Validation en deux étapes demandée",
-        "MFA_ENROLLED": "Validation en deux étapes configurée",
+        "MFA_ENROLLED": "Configuration de la validation en deux étapes commencée",
         "MFA_FAILURE": "Échec de la validation en deux étapes",
         "MFA_VERIFIED": "Validation en deux étapes réussie",
         "MTM_INTERVENTION_RECORDED": "Intervention pharmaceutique enregistrée",
@@ -14055,7 +14065,7 @@
     "NO_RUNS": "Aucune exécution pour ce rapport",
     "WEEK_LABEL": "Semaine {{week}}, {{year}}",
     "PERIOD_TOKEN": "Période",
-    "ROWS": "Lignes",
+    "ROWS": "Lignes de données",
     "GENERATED_AT": "Généré le",
     "ERROR": "Erreur",
     "TYPE_ENCOUNTER_ACTIVITY": "Activité des consultations",
@@ -14067,7 +14077,15 @@
     "RUN_GENERATING": "En cours",
     "RUN_SUCCEEDED": "Envoyé",
     "RUN_FAILED": "Échec",
-    "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide."
+    "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide.",
+    "RUN_TITLE": "Exécuter « {{name}} »",
+    "RUN_PERIOD": "Période à envoyer",
+    "RUN_PERIOD_HINT": "Seules les périodes terminées sont proposées. Une période déjà envoyée ne peut pas être renvoyée.",
+    "RUN_ALREADY_SENT": "déjà envoyée",
+    "RUN_CONFIRM": "Générer et envoyer",
+    "RUN_NOTICE_ONE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} ligne de données.",
+    "RUN_NOTICE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} lignes de données.",
+    "RUN_ALREADY_SENT_REFUSAL": "Le rapport de cette période a déjà été envoyé : choisissez une autre période."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retirer ce modèle de séance ?",
@@ -15987,7 +16005,8 @@
     "CONFIRM_DUPLICATE": "Cet identifiant est déjà utilisé. Cochez « Enregistrer quand même » et indiquez un motif, ou corrigez l’identifiant.",
     "REASON_REQUIRED": "Indiquez le motif d’enregistrement d’un identifiant en double.",
     "WAIT_CHECK": "L’identifiant est en cours de vérification. Réessayez dans un instant.",
-    "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
+    "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir.",
+    "SEARCH_EXACT_TOGGLE": "Chercher seulement par identifiant national (UI)"
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Notifications aux patients",

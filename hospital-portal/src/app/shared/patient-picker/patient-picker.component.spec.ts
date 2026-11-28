@@ -4,6 +4,8 @@ import { of, Subject, throwError } from 'rxjs';
 
 import { PatientPickerComponent } from './patient-picker.component';
 import { PatientService, PatientResponse } from '../../services/patient.service';
+import fr from '../../../assets/i18n/fr.json';
+import en from '../../../assets/i18n/en.json';
 
 function mockPatient(id: string, firstName: string): PatientResponse {
   return { id, firstName, lastName: 'Doe', active: true } as PatientResponse;
@@ -428,5 +430,23 @@ describe('PatientPickerComponent', () => {
     fixture.componentRef.setInput('selected', mockPatient('p1', 'Anna'));
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('#rx-patient')).toBeNull();
+  });
+
+  it('D2595 / D3868: the exact-identifier option names no digit count until it is chosen', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const toggle = host.querySelector('.picker-exact-toggle span')!.textContent!.trim();
+    // A record number (7 characters) and a name work in the box: the option beside it is not its instruction.
+    expect(toggle).toBe('NATIONAL_IU.SEARCH_EXACT_TOGGLE');
+    for (const bundle of [fr, en]) {
+      expect(bundle.NATIONAL_IU.SEARCH_EXACT_TOGGLE).not.toMatch(/\d/);
+    }
+    // Once chosen, the box itself says what it takes.
+    fixture.componentInstance.setNationalUniqueIdMode(true);
+    fixture.detectChanges();
+    expect(host.querySelector('input.picker-input')!.getAttribute('placeholder')).toBe(
+      'NATIONAL_IU.SEARCH_EXACT',
+    );
   });
 });

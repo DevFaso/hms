@@ -80,6 +80,7 @@ class HospitalAdminOffOrdersTest {
         assertOffChart(BirthPlanController.class);
         assertOffChart(HighRiskPregnancyCarePlanController.class);
         assertOffChart(LaborController.class);
+        assertOffChart(LaborWardController.class);
         assertOffChart(PostpartumCareController.class);
         assertOffChart(NewbornAssessmentController.class);
         // Booking a prenatal visit is front-desk work: RECEPTIONIST leads that list.

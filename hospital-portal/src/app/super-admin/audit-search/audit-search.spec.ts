@@ -19,6 +19,7 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
   let query: Record<string, string>;
   let savedSearch: jasmine.SpyObj<AuditSavedSearchService>;
   let residency: jasmine.SpyObj<DataResidencyService>;
+  let lastFixture: ReturnType<typeof TestBed.createComponent<SuperAdminAuditSearchComponent>>;
 
   function setup(): SuperAdminAuditSearchComponent {
     TestBed.configureTestingModule({
@@ -38,6 +39,7 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     });
     const fixture = TestBed.createComponent(SuperAdminAuditSearchComponent);
     fixture.detectChanges();
+    lastFixture = fixture;
     return fixture.componentInstance;
   }
 
@@ -216,5 +218,28 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     await cmp.deleteSaved(saved);
     expect(cmp.savedSearches().length).toBe(0);
     expect(cmp.savedDeleteFailed()).toBeFalse();
+  });
+
+  it('D4027: « Exclure les lectures… » has its box on the line of its label', () => {
+    setup();
+    const host = lastFixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    host.style.width = '1200px';
+    document.body.appendChild(host);
+    const label = host.querySelector('[data-testid="audit-exclude-routine"]') as HTMLElement;
+    const box = label.querySelector('input[type="checkbox"]')!.getBoundingClientRect();
+    const text = label.querySelector('span')!.getBoundingClientRect();
+    // Side by side: the text starts right of the box, and the box is not on a line of its own above it.
+    expect(text.left).toBeGreaterThan(box.right - 1);
+    expect(box.top).toBeLessThan(text.bottom);
+    expect(box.bottom).toBeGreaterThan(text.top);
+    host.remove();
+  });
+
+  it('D4027: an MFA enrolment only started is not called set up', () => {
+    // MfaController logs MFA_ENROLLED (status PENDING) when the setup STARTS; MFA_VERIFIED is the confirmation.
+    const label = fr.PORTAL.ENUM.AUDIT_EVENT_TYPE.MFA_ENROLLED;
+    expect(label).not.toMatch(/configurée|activée/i);
+    expect(label).toMatch(/commencée/);
   });
 });

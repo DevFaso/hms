@@ -347,7 +347,17 @@
     "BABY_OUTCOME_STILLBORN": "Stillborn (no signs of life)",
     "BABY_OUTCOME_UNKNOWN": "Not recorded",
     "BABY_OUTCOMES": "Outcome of each baby",
-    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
+    "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register.",
+    "WARD_TITLE": "Women in labour at this hospital",
+    "WARD_EMPTY": "No woman is in labour at this hospital right now.",
+    "WARD_FAILED": "The list of women in labour could not be loaded.",
+    "WARD_ADMITTED": "Admitted {{time}}",
+    "WARD_WEEKS": "{{weeks}} weeks",
+    "WARD_ENTRIES_ONE": "{{count}} partograph observation",
+    "WARD_ENTRIES": "{{count}} partograph observations",
+    "WARD_OPEN": "Open the labour record",
+    "WARD_OPEN_FAILED": "This patient's record could not be opened.",
+    "WARD_RECORD_HEADING": "Labour record of {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Operator",
@@ -7928,7 +7938,7 @@
         "MEDICATION_DEACTIVATED": "Medication Deactivated",
         "MFA_BACKUP_USED": "MFA Backup Code Used",
         "MFA_CHALLENGE": "MFA Challenge",
-        "MFA_ENROLLED": "MFA Enrolled",
+        "MFA_ENROLLED": "Two-step verification setup started",
         "MFA_FAILURE": "MFA Failure",
         "MFA_VERIFIED": "MFA Verified",
         "MTM_INTERVENTION_RECORDED": "Medication Intervention Recorded",
@@ -14055,7 +14065,7 @@
     "NO_RUNS": "No runs yet for this report",
     "WEEK_LABEL": "Week {{week}}, {{year}}",
     "PERIOD_TOKEN": "Period",
-    "ROWS": "Rows",
+    "ROWS": "Data rows",
     "GENERATED_AT": "Generated",
     "ERROR": "Error",
     "TYPE_ENCOUNTER_ACTIVITY": "Encounter activity",
@@ -14067,7 +14077,15 @@
     "RUN_GENERATING": "Generating",
     "RUN_SUCCEEDED": "Sent",
     "RUN_FAILED": "Failed",
-    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
+    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address.",
+    "RUN_TITLE": "Run « {{name}} »",
+    "RUN_PERIOD": "Period to send",
+    "RUN_PERIOD_HINT": "Only closed periods are offered. A period already sent cannot be sent again.",
+    "RUN_ALREADY_SENT": "already sent",
+    "RUN_CONFIRM": "Generate and send",
+    "RUN_NOTICE_ONE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data row.",
+    "RUN_NOTICE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data rows.",
+    "RUN_ALREADY_SENT_REFUSAL": "The report for this period was already sent: choose another period."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retire this session template?",
@@ -15987,7 +16005,8 @@
     "CONFIRM_DUPLICATE": "This identifier is already in use. Tick « Save anyway » and give a reason, or correct the identifier.",
     "REASON_REQUIRED": "Give the reason for saving a duplicate identifier.",
     "WAIT_CHECK": "The identifier is still being checked. Try again in a moment.",
-    "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
+    "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it.",
+    "SEARCH_EXACT_TOGGLE": "Search by national unique identifier (UI) only"
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Patient notifications",

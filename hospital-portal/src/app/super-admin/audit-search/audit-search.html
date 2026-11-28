@@ -93,16 +93,17 @@
     </section>
 
     <section class="filter-card">
-      <label class="filter-field">
+      <!-- QA D4027: the box sits on its label's line, not alone above it. -->
+      <label class="filter-check" data-testid="audit-exclude-routine">
         <input
           type="checkbox"
           [ngModel]="excludeRoutineSuccesses()"
           (ngModelChange)="excludeRoutineSuccesses.set($event)"
         />
-        {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.EXCLUDE_ROUTINE' | translate }}
+        <span>{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.EXCLUDE_ROUTINE' | translate }}</span>
       </label>
       <label class="filter-field">
-        {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.HOSPITAL_FILTER' | translate }}
+        <span>{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.HOSPITAL_FILTER' | translate }}</span>
         <select
           data-testid="audit-hospital-filter"
           [ngModel]="hospitalId()"

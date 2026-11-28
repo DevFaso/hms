@@ -98,11 +98,13 @@ describe('LaborTabComponent', () => {
       'entries',
       'recordDelivery',
       'delivery',
+      'activeEpisodes',
     ]);
     laborSpy.episodes.and.returnValue(of([]));
+    laborSpy.activeEpisodes.and.returnValue(of([]));
     laborSpy.entries.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup', 'getById']);
     patientSpy.search.and.returnValue(of([]));
     patientSpy.lookup.and.returnValue(of([]));
 
@@ -132,6 +134,50 @@ describe('LaborTabComponent', () => {
       'LABOR.PARTOGRAPH',
     );
     expect(host.textContent).toContain('LABOR.PARTOGRAPH_SCROLL_HINT');
+  });
+
+  it('D3868: the tab lists the women in labour at this hospital, and one opens her labour record', () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'h1';
+    laborSpy.activeEpisodes.and.returnValue(of([{ ...episode('e1', 'ACTIVE'), entryCount: 4 }]));
+    laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
+    patientSpy.getById.and.returnValue(
+      of({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as PatientResponse),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(laborSpy.activeEpisodes).toHaveBeenCalled();
+    const rows = host.querySelectorAll('[data-testid="labor-ward-row"]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Awa Traore');
+    expect(rows[0].textContent).toContain('LABOR.WARD_ENTRIES');
+
+    (host.querySelector('[data-testid="labor-ward-open"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(patientSpy.getById).toHaveBeenCalledWith('p1');
+    expect(fixture.componentInstance.patient()?.id).toBe('p1');
+    expect(laborSpy.episodes).toHaveBeenCalledWith('p1');
+    expect(host.querySelector('[data-testid="labor-ward"]')).toBeNull();
+  });
+
+  it('D3868: an empty labour ward says so; with no hospital in scope no list is asked for', () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'h1';
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="labor-ward-empty"]'),
+    ).not.toBeNull();
+
+    laborSpy.activeEpisodes.calls.reset();
+    TestBed.inject(RoleContextService).activeHospitalId = null;
+    const unscoped = TestBed.createComponent(LaborTabComponent);
+    unscoped.detectChanges();
+    expect(laborSpy.activeEpisodes).not.toHaveBeenCalled();
+    expect(
+      (unscoped.nativeElement as HTMLElement).querySelector('[data-testid="labor-ward"]'),
+    ).toBeNull();
   });
 
   it('D65: with no patient picked, shows the labour hint, not the referrals one', () => {
@@ -960,7 +1006,9 @@ describe('LaborTabComponent labour transfer (provisional rule, 2026-11-12)', () 
       'delivery',
       'transfer',
       'arrivalWithoutHandover',
+      'activeEpisodes',
     ]);
+    laborSpy.activeEpisodes.and.returnValue(of([]));
     laborSpy.entries.and.returnValue(of([]));
     laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
     hospitalSpy = jasmine.createSpyObj('HospitalService', ['directory']);

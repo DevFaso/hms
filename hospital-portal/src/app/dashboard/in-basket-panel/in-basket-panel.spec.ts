@@ -373,4 +373,40 @@ describe('InBasketPanelComponent', () => {
     (buttons[0] as HTMLButtonElement).click();
     expect(router.navigate).toHaveBeenCalledWith(['/encounters', 'enc-42']);
   });
+
+  it('D3866 (r77/r81): every action of an item is a house button, never a bare browser one', () => {
+    inBasketSpy.getItems.and.returnValue(
+      of(
+        mockPage([
+          mockItem({
+            id: 'note',
+            itemType: 'TASK',
+            priority: 'NORMAL',
+            title: 'Note à signer : Salimata B77',
+            referenceType: 'ENCOUNTER_NOTE_SIGNATURE',
+            encounterId: 'enc-1',
+          }),
+          mockItem({
+            id: 'platform',
+            itemType: 'TASK',
+            priority: 'NORMAL',
+            referenceType: 'INTEGRATION_FAILING',
+          }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const actions = Array.from(host.querySelectorAll<HTMLButtonElement>('.item-actions button'));
+    // The note's « open the visit », the platform link and both acknowledge buttons.
+    expect(actions.length).toBe(4);
+    for (const button of actions) {
+      const house = ['btn-primary', 'btn-secondary', 'btn-danger', 'btn-acknowledge'].some((c) =>
+        button.classList.contains(c),
+      );
+      expect(house)
+        .withContext(button.textContent?.trim() ?? '')
+        .toBeTrue();
+    }
+  });
 });

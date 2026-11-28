@@ -347,7 +347,17 @@
     "BABY_OUTCOME_STILLBORN": "Mortinato (sin signos de vida)",
     "BABY_OUTCOME_UNKNOWN": "No registrado",
     "BABY_OUTCOMES": "Resultado de cada bebé",
-    "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad."
+    "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad.",
+    "WARD_TITLE": "Mujeres en trabajo de parto en este hospital",
+    "WARD_EMPTY": "Ninguna mujer está en trabajo de parto en este hospital en este momento.",
+    "WARD_FAILED": "No se pudo cargar la lista de mujeres en trabajo de parto.",
+    "WARD_ADMITTED": "Ingresada el {{time}}",
+    "WARD_WEEKS": "{{weeks}} semanas",
+    "WARD_ENTRIES_ONE": "{{count}} observación en el partograma",
+    "WARD_ENTRIES": "{{count}} observaciones en el partograma",
+    "WARD_OPEN": "Abrir el registro del parto",
+    "WARD_OPEN_FAILED": "No se pudo abrir el expediente de esta paciente.",
+    "WARD_RECORD_HEADING": "Registro del parto de {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Operador",
@@ -7928,7 +7938,7 @@
         "MEDICATION_DEACTIVATED": "Medicamento desactivado",
         "MFA_BACKUP_USED": "Código de respaldo MFA usado",
         "MFA_CHALLENGE": "Desafío MFA",
-        "MFA_ENROLLED": "MFA registrada",
+        "MFA_ENROLLED": "Configuración de la verificación en dos pasos iniciada",
         "MFA_FAILURE": "Fallo de MFA",
         "MFA_VERIFIED": "MFA verificado",
         "MTM_INTERVENTION_RECORDED": "Intervención farmacéutica registrada",
@@ -14055,7 +14065,7 @@
     "NO_RUNS": "Sin ejecuciones para este informe",
     "WEEK_LABEL": "Semana {{week}}, {{year}}",
     "PERIOD_TOKEN": "Período",
-    "ROWS": "Filas",
+    "ROWS": "Filas de datos",
     "GENERATED_AT": "Generado",
     "ERROR": "Error",
     "TYPE_ENCOUNTER_ACTIVITY": "Actividad de consultas",
@@ -14067,7 +14077,15 @@
     "RUN_GENERATING": "Generando",
     "RUN_SUCCEEDED": "Enviado",
     "RUN_FAILED": "Fallido",
-    "RECIPIENT_INVALID": "«{{address}}» no es una dirección de correo electrónico válida."
+    "RECIPIENT_INVALID": "«{{address}}» no es una dirección de correo electrónico válida.",
+    "RUN_TITLE": "Ejecutar « {{name}} »",
+    "RUN_PERIOD": "Periodo a enviar",
+    "RUN_PERIOD_HINT": "Solo se ofrecen los periodos cerrados. Un periodo ya enviado no se puede volver a enviar.",
+    "RUN_ALREADY_SENT": "ya enviado",
+    "RUN_CONFIRM": "Generar y enviar",
+    "RUN_NOTICE_ONE": "Informe « {{name}} » generado y enviado para el periodo {{period}}: {{rows}} fila de datos.",
+    "RUN_NOTICE": "Informe « {{name}} » generado y enviado para el periodo {{period}}: {{rows}} filas de datos.",
+    "RUN_ALREADY_SENT_REFUSAL": "El informe de este periodo ya se envió: elija otro periodo."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "¿Retirar esta plantilla de sesión?",
@@ -15987,7 +16005,8 @@
     "CONFIRM_DUPLICATE": "Este identificador ya está en uso. Marque « Guardar de todos modos » e indique un motivo, o corrija el identificador.",
     "REASON_REQUIRED": "Indique el motivo para guardar un identificador duplicado.",
     "WAIT_CHECK": "El identificador aún se está verificando. Inténtelo de nuevo en un momento.",
-    "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo."
+    "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo.",
+    "SEARCH_EXACT_TOGGLE": "Buscar solo por identificador nacional único (UI)"
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Notificaciones a pacientes",

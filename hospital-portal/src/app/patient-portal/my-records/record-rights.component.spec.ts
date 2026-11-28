@@ -217,4 +217,32 @@ describe('RecordRightsComponent own-account requests', () => {
     }
     expect(fixture.componentInstance.error()).toBe('Le délai est dépassé.');
   });
+
+  it('D4025: a patient of one hospital finds it chosen; the form is the house form', () => {
+    const fixture = create();
+    fixture.componentRef.setInput('hospitals', [
+      { hospitalId: 'hospital-a', hospitalName: 'Clinique A' },
+    ]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.hospitalId).toBe('hospital-a');
+    const host = fixture.nativeElement as HTMLElement;
+    for (const id of ['rights-hospital', 'rights-kind', 'rights-purpose']) {
+      expect(host.querySelector('#' + id)!.closest('.field'))
+        .withContext(id)
+        .not.toBeNull();
+    }
+    expect(
+      host.querySelector('[data-testid="record-rights-submit"]')!.classList.contains('btn-primary'),
+    ).toBeTrue();
+  });
+
+  it('D4025: a patient of two hospitals still chooses', () => {
+    const fixture = create();
+    fixture.componentRef.setInput('hospitals', [
+      { hospitalId: 'hospital-a', hospitalName: 'Clinique A' },
+      { hospitalId: 'hospital-b', hospitalName: 'Clinique B' },
+    ]);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.hospitalId).toBe('');
+  });
 });

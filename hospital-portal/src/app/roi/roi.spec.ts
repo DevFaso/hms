@@ -409,4 +409,38 @@ describe('RoiComponent', () => {
       }),
     );
   });
+
+  it('D4024: in a 700 px column the table scrolls in its box; nothing is squeezed or cut', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    host.style.width = '700px';
+    document.body.appendChild(host);
+    roiService.worklist.and.returnValue(
+      of(page([request({ purpose: 'Demande de l’assurance pour un remboursement de soins' })])),
+    );
+    fixture.detectChanges();
+
+    const scroll = host.querySelector('.table-scroll') as HTMLElement;
+    const table = scroll.querySelector('table') as HTMLElement;
+    // The table keeps its width and scrolls, instead of shrinking to the card.
+    expect(table.getBoundingClientRect().width).toBeGreaterThanOrEqual(780);
+    expect(scroll.scrollWidth).toBeGreaterThan(scroll.clientWidth);
+    // The actions cell is a table cell (a flex td broke the row), its buttons in a wrapping group.
+    const cell = table.querySelector('td.actions-cell') as HTMLElement;
+    expect(getComputedStyle(cell).display).toBe('table-cell');
+    const group = cell.querySelector('.row-actions') as HTMLElement;
+    expect(getComputedStyle(group).flexWrap).toBe('wrap');
+    for (const button of Array.from(group.querySelectorAll('button'))) {
+      expect(button.getBoundingClientRect().right)
+        .withContext(button.textContent?.trim() ?? '')
+        .toBeLessThanOrEqual(cell.getBoundingClientRect().right + 1);
+    }
+    // Headers keep whole words (no « De-mand-le »).
+    for (const th of Array.from(table.querySelectorAll('th'))) {
+      expect(getComputedStyle(th).whiteSpace).toBe('nowrap');
+    }
+    // The purpose wraps in its column.
+    expect(getComputedStyle(table.querySelector('td.scope-cell')!).whiteSpace).not.toBe('nowrap');
+    host.remove();
+  });
 });

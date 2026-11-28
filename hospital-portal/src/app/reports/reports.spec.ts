@@ -3,10 +3,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import { of, Subject, throwError } from 'rxjs';
 
-import { ReportsComponent } from './reports';
+import { ReportsComponent, closedPeriodTokens } from './reports';
 import { ReportDefinitionResponse, ReportRunResponse, ReportsService } from './reports.service';
 import { ToastService } from '../core/toast.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function definition(overrides: Partial<ReportDefinitionResponse> = {}): ReportDefinitionResponse {
   return {
@@ -393,5 +394,105 @@ describe('ReportsComponent', () => {
     spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     await component.toggleActive(definition({ active: true }));
     expect(mockService.deactivate).not.toHaveBeenCalled();
+  });
+
+  describe('QA D4023: the run asks for a period, says what it did, and fits at 390 px', () => {
+    it('offers the closed periods in the server format, the server default first', () => {
+      const today = new Date(2026, 10, 27); // 27 November 2026, a Friday of ISO week 48
+      expect(closedPeriodTokens('MONTHLY', today, 3)).toEqual(['202610', '202609', '202608']);
+      expect(closedPeriodTokens('DAILY', today, 2)).toEqual(['2026-11-26', '2026-11-25']);
+      expect(closedPeriodTokens('WEEKLY', today, 2)).toEqual(['2026-W47', '2026-W46']);
+      // Across a year: 5 January 2026 is in week 2; the week before is 2026-W01, then 2025-W52.
+      expect(closedPeriodTokens('WEEKLY', new Date(2026, 0, 12), 3)).toEqual([
+        '2026-W02',
+        '2026-W01',
+        '2025-W52',
+      ]);
+      expect(closedPeriodTokens('MONTHLY', new Date(2026, 0, 15), 1)).toEqual(['202512']);
+    });
+
+    it('« Exécuter » opens the period choice, marks the periods already sent and runs the one chosen', () => {
+      const tokens = component.runChoices(definition());
+      mockService.runs.and.returnValue(of([run({ periodToken: tokens[0] })]));
+      (
+        fixture.nativeElement.querySelector('[data-testid="report-run"]') as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      expect(mockService.runNow).not.toHaveBeenCalled();
+      const select = fixture.nativeElement.querySelector('#rep-run-period') as HTMLSelectElement;
+      expect(select).not.toBeNull();
+      const first = Array.from(select.options).find((o) => o.value === tokens[0])!;
+      expect(first.disabled).toBeTrue();
+      // The newest period not sent yet is the one proposed.
+      expect(component.runToken()).toBe(tokens[1]);
+
+      component.runToken.set(tokens[2]);
+      component.confirmRun();
+
+      expect(mockService.runNow).toHaveBeenCalledWith('d1', tokens[2]);
+    });
+
+    it('a period already sent is refused on the period field, nothing sent', () => {
+      document.body.appendChild(fixture.nativeElement);
+      const tokens = component.runChoices(definition());
+      mockService.runs.and.returnValue(of([run({ periodToken: tokens[0] })]));
+      component.openRun(definition());
+      component.runToken.set(tokens[0]);
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="report-run-confirm"]',
+        alsoMarked: ['rep-run-period'],
+      });
+      expect(marked).toContain('rep-run-period');
+      expect(mockService.runNow).not.toHaveBeenCalled();
+      fixture.nativeElement.remove();
+    });
+
+    it('a period already sent is not sent again', () => {
+      const tokens = component.runChoices(definition());
+      mockService.runs.and.returnValue(of([run({ periodToken: tokens[0] })]));
+      component.openRun(definition());
+      component.runToken.set(tokens[0]);
+      component.confirmRun();
+      expect(mockService.runNow).not.toHaveBeenCalled();
+    });
+
+    it('a successful run is said on the page with its period and its rows, and the history shows it', () => {
+      mockService.runNow.and.returnValue(of(run({ periodToken: '202610', rowCount: 1 })));
+      component.runNow(definition(), '202610');
+      fixture.detectChanges();
+
+      const notice = fixture.nativeElement.querySelector(
+        '[data-testid="report-run-notice"]',
+      ) as HTMLElement;
+      expect(notice).not.toBeNull();
+      expect(notice.getAttribute('role')).toBe('status');
+      expect(component.runNotice()).toEqual(
+        jasmine.objectContaining({ name: 'Monthly encounters', rows: 1 }),
+      );
+      expect(notice.textContent).toContain('REPORTS.RUN_NOTICE_ONE');
+      expect(component.expandedId()).toBe('d1');
+    });
+
+    it('the row buttons are house buttons in a wrapping group, the cell stays a table cell', () => {
+      const cell = fixture.nativeElement.querySelector('td.actions-cell') as HTMLElement;
+      expect(getComputedStyle(cell).display).toBe('table-cell');
+      const buttons = Array.from(cell.querySelectorAll('button'));
+      expect(buttons.length).toBe(3);
+      for (const button of buttons) {
+        expect(
+          button.classList.contains('btn-primary') || button.classList.contains('btn-secondary'),
+        )
+          .withContext(button.textContent?.trim() ?? '')
+          .toBeTrue();
+        expect(button.classList.contains('btn-ghost')).toBeFalse();
+      }
+      expect(getComputedStyle(cell.querySelector('.row-actions')!).flexWrap).toBe('wrap');
+    });
+
+    it('the history column says what the count is', () => {
+      expect(fr.REPORTS.ROWS).toBe('Lignes de données');
+    });
   });
 });
