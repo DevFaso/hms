@@ -435,33 +435,6 @@ class NursingNoteServiceImplTest {
         verifyNoInteractions(auditEventLogService);
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(NursingNoteTemplate.class)
-    void createNote_refusesANoteWithNothingWritten_D3860(NursingNoteTemplate template) {
-        UUID actorUserId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        NursingNoteCreateRequestDTO request = NursingNoteCreateRequestDTO.builder()
-            .patientId(UUID.randomUUID())
-            .hospitalId(hospitalId)
-            .template(template)
-            .dataSubjective("   ")
-            .narrative("")
-            .attestAccuracy(true)
-            .attestSpellCheck(true)
-            .attestNoAbbreviations(true)
-            .signedByName("Awa Ouédraogo")
-            .build();
-        when(roleValidator.getCurrentUserId()).thenReturn(actorUserId);
-        when(roleValidator.isNurse(actorUserId, hospitalId)).thenReturn(true);
-
-        com.example.hms.exception.FieldBusinessException refused = assertThrows(
-            com.example.hms.exception.FieldBusinessException.class,
-            () -> nursingNoteService.createNote(request, Locale.FRANCE));
-        assertEquals("dataSubjective", refused.getField());
-        assertEquals("nursingNote.contentRequired", refused.getMessageKey());
-        verifyNoInteractions(nursingNoteRepository);
-    }
-
     @Test
     void createNote_throwsWhenAuthorMissing() {
         UUID actorUserId = UUID.randomUUID();

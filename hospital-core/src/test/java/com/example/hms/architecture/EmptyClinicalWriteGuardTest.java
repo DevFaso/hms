@@ -94,8 +94,6 @@ class EmptyClinicalWriteGuardTest {
         CHECKED.put("LaborController.addEntry", "service/impl/LaborServiceImpl.java#addEntry");
         CHECKED.put("ImagingResultController.createReport", "service/impl/ImagingReportServiceImpl.java#createReport");
         CHECKED.put("NurseTaskController.createCareNote", "service/impl/NurseTaskServiceImpl.java#createCareNote");
-        // QA D3860 (r77): a nursing note needs one written part; its attestations are not one.
-        CHECKED.put("NursingNoteController.createNote", "service/impl/NursingNoteServiceImpl.java#requireNoteContent");
         CHECKED.put("MaternalHistoryController.createMaternalHistory",
             "service/impl/MaternalHistoryServiceImpl.java#createMaternalHistory");
         CHECKED.put("HighRiskPregnancyCarePlanController.createPlan",

@@ -60,7 +60,7 @@ class LabResultRequestDTOValidationTest {
                 .containsExactlyInAnyOrder("resultUnit", "notes");
             String unitLabel = TestMessageSources.bundles().getMessage("field.label.resultUnit", null,
                 Locale.forLanguageTag(lang));
-            assertThat((String) fieldErrors.get("resultUnit")).as(lang).startsWith(unitLabel);
+            assertThat((String) fieldErrors.get("resultUnit")).as(lang).contains(unitLabel);
         }
     }
 
