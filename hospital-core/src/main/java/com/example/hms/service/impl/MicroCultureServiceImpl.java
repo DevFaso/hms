@@ -556,6 +556,14 @@ public class MicroCultureServiceImpl implements MicroCultureService {
      * clinical write (same stance as CriticalValueNotificationService).
      */
     private void notifyOrderingProviderBestEffort(MicroCultureResult culture) {
+        // Read in the caller's transaction, outside the best-effort catch: a failed read there would
+        // mark the shared transaction rollback-only (QA D1212). The report itself reads the same rows.
+        List<MicroIsolate> isolates = isolateRepository
+            .findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(culture.getId());
+        // QA r81 D4156: say susceptibilities are in the chart only when there are some.
+        boolean hasSusceptibilities = !isolates.isEmpty() && !susceptibilityRepository
+            .findByIsolate_IdInOrderByAntibioticNameAsc(isolates.stream().map(MicroIsolate::getId).toList())
+            .isEmpty();
         try {
             LabOrder order = culture.getLabOrder();
             Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
@@ -565,15 +573,9 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                     culture.getId());
                 return;
             }
-            List<MicroIsolate> isolates = isolateRepository
-                .findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(culture.getId());
             String organisms = isolates.stream()
                 .map(MicroIsolate::getOrganismName)
                 .collect(Collectors.joining(", "));
-            // QA r81 D4156: say susceptibilities are in the chart only when there are some.
-            boolean hasSusceptibilities = !isolates.isEmpty() && !susceptibilityRepository
-                .findByIsolate_IdInOrderByAntibioticNameAsc(isolates.stream().map(MicroIsolate::getId).toList())
-                .isEmpty();
             String patientName = culture.getPatient() != null ? culture.getPatient().getFullName() : null;
             // Read by the ordering provider, in their language (QA D665).
             String noticeKey = hasSusceptibilities
