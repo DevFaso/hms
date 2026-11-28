@@ -547,6 +547,25 @@ class LabQcEventServiceImplTest {
         assertThat(captor.getValue().getSdFlag()).isNull();
     }
 
+    /** QA r81 D4173: a QC run carries a measured value, so a culture or a qualitative test is refused. */
+    @Test
+    void recordQcEvent_cultureOrQualitativeTestIsRefused() {
+        LabTestDefinition culture = new LabTestDefinition();
+        culture.setCulture(true);
+        LabTestDefinition qualitative = new LabTestDefinition();
+        qualitative.setExpectedResult("Négatif");
+        for (LabTestDefinition definition : java.util.List.of(culture, qualitative)) {
+            when(labTestDefinitionRepository.findById(testDefId)).thenReturn(Optional.of(definition));
+            LabQcEventRequestDTO run = LabQcEventRequestDTO.builder()
+                .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("LOW_CONTROL")
+                .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).build();
+            assertThatThrownBy(() -> service.recordQcEvent(run, Locale.ENGLISH))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    e -> assertThat(e.getMessageKey()).isEqualTo("lab.qc.quantitativeOnly"));
+        }
+        verify(qcEventRepository, org.mockito.Mockito.never()).save(any());
+    }
+
     @Test
     void recordQcEvent_anotherHospitalsTestDefinitionIsNotFound() {
         LabTestDefinition foreign = new LabTestDefinition();

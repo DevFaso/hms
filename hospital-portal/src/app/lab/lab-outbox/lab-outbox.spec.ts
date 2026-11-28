@@ -112,6 +112,29 @@ describe('LabOutboxComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="outbox-row-m-2"]')).not.toBeNull();
   });
 
+  it('D4168: a row names its order, patient and test when the list carries them', () => {
+    setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      pageOf([
+        message({
+          id: 'm-1',
+          labOrderCode: 'LAB-000046',
+          patientName: 'Awa Traore',
+          testName: 'Hemoglobin',
+        }),
+      ]),
+    );
+    const cell = fixture.nativeElement.querySelector('[data-testid="outbox-order-m-1"]');
+    expect(cell.textContent).toContain('LAB-000046');
+    expect(cell.textContent).toContain('Awa Traore');
+    expect(cell.textContent).toContain('Hemoglobin');
+  });
+
+  it('D4168: no Order column while the list carries no order data', () => {
+    setup(['ROLE_LAB_TECHNICIAN'], pageOf([message({ id: 'm-1' })]));
+    expect(fixture.nativeElement.querySelector('[data-testid="outbox-order-m-1"]')).toBeNull();
+  });
+
   it('opens a global row using its ordering hospital and refuses rows with no hospital', () => {
     const row = message({ orderingHospitalId: 'h2', orderingHospitalName: 'Hospital B' });
     setup(['ROLE_SUPER_ADMIN'], pageOf([row]));

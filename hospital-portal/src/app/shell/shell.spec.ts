@@ -143,6 +143,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  it('allows laboratory scientists to open the scoped inventory and instrument views', () => {
+    const shell = routes.find((route) =>
+      route.children?.some((child) => child.path === 'lab-inventory'),
+    );
+    expect(shell).toBeDefined();
+    for (const path of ['lab-inventory', 'lab-instruments']) {
+      const route = shell!.children!.find((child) => child.path === path);
+      expect(route?.data?.['requiresHospitalScope']).toBeTrue();
+      expect(route?.data?.['roles']).toContain('ROLE_LAB_SCIENTIST');
+    }
+  });
+
+  it('lists Instruments and Inventaire in the nav of a laboratory scientist (r81 D4171)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_LAB_SCIENTIST',
+      roles: ['ROLE_LAB_SCIENTIST'],
+      wildcardPermission: false,
+    });
+    const routes = items.map((item) => item.route);
+    expect(routes).toContain('/lab-instruments');
+    expect(routes).toContain('/lab-inventory');
+  });
+
   it('names every facility-only network workspace, including routes absent from navigation', () => {
     const { items, component } = createComponent({
       activeRole: 'ROLE_SUPER_ADMIN',

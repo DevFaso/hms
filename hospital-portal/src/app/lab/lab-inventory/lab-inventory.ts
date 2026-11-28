@@ -1,6 +1,7 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { PluralPipe } from '../../shared/i18n/plural';
+import { EXPIRING_SOON_DAYS, isExpiringSoon } from './expiring-soon';
+import { CountUnitPipe } from '../../shared/pipes/count-unit.pipe';
 import {
   Component,
   computed,
@@ -12,8 +13,6 @@ import {
 
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { countUnit } from '../../shared/pipes/count-unit.pipe';
-import { LabValuePipe } from '../shared/lab-value.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabInstrumentService,
@@ -26,6 +25,7 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { labelledRefusalReason, refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 
 /**
  * QA D1193 (round 22): a field the server refuses is named with its label, not
@@ -38,46 +38,16 @@ const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
   reorderThreshold: 'LAB_INVENTORY.REORDER_THRESHOLD',
 };
 
-/** QA D4077: the stock situations a line can be in; a line can be in several. */
-export type LabStockState = 'OUT' | 'LOW' | 'EXPIRED' | 'EXPIRING';
-export type LabStockFilter = 'ALL' | LabStockState;
-
-/** A lot is announced this many days before it expires. */
-export const LAB_EXPIRY_WARNING_DAYS = 14;
-
-/**
- * QA D4077: nothing left is « Rupture », not « Stock bas »; a lot that expires within
- * {@link LAB_EXPIRY_WARNING_DAYS} days is announced before it is « Expiré ».
- */
-export function labStockStates(
-  item: Pick<LabInventoryItemResponse, 'quantity' | 'lowStock' | 'expired' | 'expirationDate'>,
-  today: Date = new Date(),
-): LabStockState[] {
-  const states: LabStockState[] = [];
-  if (Number(item.quantity) <= 0) states.push('OUT');
-  else if (item.lowStock) states.push('LOW');
-  if (item.expired) {
-    states.push('EXPIRED');
-  } else if (item.expirationDate) {
-    const expires = new Date(`${String(item.expirationDate).slice(0, 10)}T00:00:00`);
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const days = Math.round((expires.getTime() - start.getTime()) / 86_400_000);
-    if (Number.isFinite(days) && days < 0) states.push('EXPIRED');
-    else if (Number.isFinite(days) && days <= LAB_EXPIRY_WARNING_DAYS) states.push('EXPIRING');
-  }
-  return states;
-}
-
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
   imports: [
+    FormControlStyleDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     DatePipe,
-    LabValuePipe,
     ServerTimePipe,
-    PluralPipe,
+    CountUnitPipe,
     RouterModule,
     FormsModule,
     TranslateModule,
@@ -97,31 +67,18 @@ export class LabInventoryComponent implements OnInit {
   loading = signal(true);
   error = signal<string | null>(null);
   items = signal<LabInventoryItemResponse[]>([]);
-  /** QA D4077: which lines the table shows, and a search on the name, the code or the lot. */
-  stockFilter = signal<LabStockFilter>('ALL');
-  search = signal('');
-  visibleItems = computed(() => {
-    const filter = this.stockFilter();
-    const query = this.search().trim().toLowerCase();
-    return this.items().filter((item) => {
-      if (filter !== 'ALL' && !labStockStates(item).includes(filter)) return false;
-      if (!query) return true;
-      return [item.name, item.itemCode, item.lotNumber]
-        .filter((text): text is string => !!text)
-        .some((text) => text.toLowerCase().includes(query));
-    });
-  });
-  readonly stockStates = labStockStates;
-
-  /** QA D4077: « 500 tubes », « 1 boîte »: the unit in the plural when the quantity asks for it. */
-  stockUnit(item: LabInventoryItemResponse): string | undefined {
-    const unit = (item.unit ?? '').trim();
-    if (!unit) return undefined;
-    const shown = countUnit(item.quantity ?? 0, unit);
-    const space = shown.indexOf(' ');
-    return space < 0 ? unit : shown.slice(space + 1);
-  }
   totalElements = signal(0);
+  totalPages = signal(0);
+  pageIndex = signal(0);
+  activeSearch = signal('');
+  searchText = '';
+
+  /** D4154: a lot expiring within this many days is flagged as expiring soon. */
+  readonly expiringSoonDays = EXPIRING_SOON_DAYS;
+
+  isExpiringSoon(item: LabInventoryItemResponse): boolean {
+    return isExpiringSoon(item.expirationDate, item.expired);
+  }
 
   canManage = computed(() => {
     const roles = this.auth.getRoles();
@@ -154,18 +111,34 @@ export class LabInventoryComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.instrumentService.getInventoryItems(hospitalId).subscribe({
-      next: (page) => {
-        this.items.set(page.content ?? []);
-        this.totalElements.set(page.totalElements ?? 0);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        console.error('Failed to load inventory', err);
-        this.error.set(this.translate.instant('LAB_INVENTORY.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.instrumentService
+      .getInventoryItems(hospitalId, this.pageIndex(), 20, this.activeSearch())
+      .subscribe({
+        next: (page) => {
+          this.items.set(page.content ?? []);
+          this.totalElements.set(page.totalElements ?? 0);
+          this.totalPages.set(page.totalPages ?? 0);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          console.error('Failed to load inventory', err);
+          this.error.set(this.translate.instant('LAB_INVENTORY.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
+  }
+
+  search(): void {
+    if (this.loading()) return;
+    this.activeSearch.set(this.searchText.trim());
+    this.pageIndex.set(0);
+    this.loadItems();
+  }
+
+  goToPage(page: number): void {
+    if (this.loading() || page < 0 || page >= this.totalPages()) return;
+    this.pageIndex.set(page);
+    this.loadItems();
   }
 
   openCreate(): void {

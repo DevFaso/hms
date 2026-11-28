@@ -397,7 +397,7 @@ public class GlobalExceptionHandler {
             } else {
                 String path = joinPath(item.prefix(), RequestFieldPaths.toJson(item.beanType(), property));
                 fieldErrors.putIfAbsent(path,
-                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path));
+                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path, violation));
             }
         }
         return malformedBodyResponse(fieldErrors, globalReasons, request);
@@ -659,10 +659,10 @@ public class GlobalExceptionHandler {
         if (error.isBindingFailure()) {
             return invalidFieldReason(path);
         }
-        String template = error.contains(jakarta.validation.ConstraintViolation.class)
-            ? error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate()
-            : null;
-        return constraintReason(error.getDefaultMessage(), template, path);
+        jakarta.validation.ConstraintViolation<?> violation = error.contains(jakarta.validation.ConstraintViolation.class)
+            ? error.unwrap(jakarta.validation.ConstraintViolation.class) : null;
+        String template = violation == null ? null : violation.getMessageTemplate();
+        return constraintReason(error.getDefaultMessage(), template, path, violation);
     }
 
     /**
@@ -670,15 +670,126 @@ public class GlobalExceptionHandler {
      * default template is prefixed with the field's label, one written for the
      * field passes unchanged.
      */
-    private String constraintReason(String message, String template, String path) {
+    private String constraintReason(String message, String template, String path,
+            jakarta.validation.ConstraintViolation<?> violation) {
         String label = fieldLabel(path);
         if (message == null || message.isBlank()) {
             return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
         }
         if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
+            String house = houseConstraintReason(template, violation, label);
+            if (house != null) return house;
             return localized("error.validation.namedField", "{0}: {1}", label, message);
         }
         return message;
+    }
+
+    /** The constraint name of a default template, e.g. "Size" for {jakarta.validation.constraints.Size.message}. */
+    static String defaultConstraintName(String template) {
+        if (template == null || !template.startsWith("{jakarta.validation.constraints.") || !template.endsWith(".message}")) {
+            return null;
+        }
+        return template.substring("{jakarta.validation.constraints.".length(), template.length() - ".message}".length());
+    }
+
+    /**
+     * The bean-validation constraints answered in the house wording rather
+     * than the validator's own phrase (QA D4158). ValidationWordingGuardTest
+     * fails when the code uses a constraint missing from this set.
+     */
+    static final java.util.Set<String> HOUSE_WORDED_CONSTRAINTS = java.util.Set.of(
+        "NotNull", "NotBlank", "NotEmpty", "Null", "AssertTrue", "AssertFalse",
+        "Min", "Max", "DecimalMin", "DecimalMax", "Positive", "PositiveOrZero", "Negative", "NegativeOrZero",
+        "Size", "Digits", "Pattern", "Email",
+        "Past", "PastOrPresent", "Future", "FutureOrPresent");
+
+    /**
+     * QA D4158: a default constraint message in the house wording, naming the
+     * field and its limit, or null for a constraint this does not know.
+     */
+    private String houseConstraintReason(String template, jakarta.validation.ConstraintViolation<?> violation, String label) {
+        String name = defaultConstraintName(template);
+        if (name == null) return null;
+        java.util.Map<String, Object> attributes = violation == null
+            ? java.util.Map.of() : violation.getConstraintDescriptor().getAttributes();
+        Object value = attributes.get("value");
+        boolean inclusive = !Boolean.FALSE.equals(attributes.get("inclusive"));
+        java.util.Locale locale = LocaleContextHolder.getLocale();
+        switch (name) {
+            case "NotNull", "NotBlank", "NotEmpty":
+                return localized("error.validation.requiredField", "{0}: please enter a value", label);
+            case "Null":
+                return localized("error.validation.mustBeEmpty", "{0}: leave this field empty", label);
+            case "AssertTrue", "AssertFalse", "Pattern":
+                return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
+            case "Email":
+                return localized("error.validation.emailField", "{0}: enter a valid email address", label);
+            case "Min":
+                return value == null ? null : localized("error.validation.minimumField", "{0} must be at least {1}", label, value);
+            case "Max":
+                return value == null ? null : localized("error.validation.maximumField", "{0} must be at most {1}", label, value);
+            case "DecimalMin":
+                if (value == null) return null;
+                return inclusive
+                    ? localized("error.validation.minimumField", "{0} must be at least {1}", label,
+                        com.example.hms.utility.DisplayNumbers.labValue(value.toString(), locale))
+                    : localized("error.validation.greaterField", "{0} must be greater than {1}", label,
+                        com.example.hms.utility.DisplayNumbers.labValue(value.toString(), locale));
+            case "DecimalMax":
+                if (value == null) return null;
+                return inclusive
+                    ? localized("error.validation.maximumField", "{0} must be at most {1}", label,
+                        com.example.hms.utility.DisplayNumbers.labValue(value.toString(), locale))
+                    : localized("error.validation.lessField", "{0} must be less than {1}", label,
+                        com.example.hms.utility.DisplayNumbers.labValue(value.toString(), locale));
+            case "Positive":
+                return localized("error.validation.greaterField", "{0} must be greater than {1}", label, 0);
+            case "PositiveOrZero":
+                return localized("error.validation.minimumField", "{0} must be at least {1}", label, 0);
+            case "Negative":
+                return localized("error.validation.lessField", "{0} must be less than {1}", label, 0);
+            case "NegativeOrZero":
+                return localized("error.validation.maximumField", "{0} must be at most {1}", label, 0);
+            case "Size":
+                return sizeReason(violation, attributes, label);
+            case "Digits":
+                return localized("error.validation.digitsField",
+                    "{0}: at most {1} digits before the decimal point and {2} after it", label,
+                    attributes.getOrDefault("integer", 0), attributes.getOrDefault("fraction", 0));
+            case "Past":
+                return localized("error.validation.pastField", "{0} must be a date in the past", label);
+            case "PastOrPresent":
+                return localized("error.validation.notFutureField", "{0} cannot be in the future", label);
+            case "Future":
+                return localized("error.validation.futureField", "{0} must be a date in the future", label);
+            case "FutureOrPresent":
+                return localized("error.validation.notPastField", "{0} cannot be in the past", label);
+            default:
+                return null;
+        }
+    }
+
+    /** A @Size refusal: too long or too short, in characters for text and in items otherwise. */
+    private String sizeReason(jakarta.validation.ConstraintViolation<?> violation,
+            java.util.Map<String, Object> attributes, String label) {
+        Object invalid = violation == null ? null : violation.getInvalidValue();
+        int min = attributes.get("min") instanceof Integer i ? i : 0;
+        int max = attributes.get("max") instanceof Integer i ? i : Integer.MAX_VALUE;
+        int length = -1;
+        if (invalid instanceof CharSequence chars) length = chars.length();
+        else if (invalid instanceof java.util.Collection<?> items) length = items.size();
+        else if (invalid instanceof java.util.Map<?, ?> entries) length = entries.size();
+        else if (invalid != null && invalid.getClass().isArray()) length = java.lang.reflect.Array.getLength(invalid);
+        boolean text = invalid == null || invalid instanceof CharSequence;
+        boolean tooShort = length >= 0 ? length < min : max == Integer.MAX_VALUE;
+        if (tooShort) {
+            return text
+                ? localized("error.validation.sizeMinText", "{0}: at least {1} characters", label, min)
+                : localized("error.validation.sizeMinItems", "{0}: at least {1} items", label, min);
+        }
+        return text
+            ? localized("error.validation.sizeMaxText", "{0}: at most {1} characters", label, max)
+            : localized("error.validation.sizeMaxItems", "{0}: at most {1} items", label, max);
     }
 
     /**
@@ -714,7 +825,14 @@ public class GlobalExceptionHandler {
                 }
             } else {
                 for (org.springframework.context.MessageSourceResolvable error : result.getResolvableErrors()) {
-                    fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
+                    jakarta.validation.ConstraintViolation<?> violation = null;
+                    try {
+                        violation = result.unwrap(error, jakarta.validation.ConstraintViolation.class);
+                    } catch (IllegalArgumentException unsupported) {
+                        // Some method-validation errors have no bean constraint to unwrap.
+                    }
+                    String template = violation == null ? null : violation.getMessageTemplate();
+                    fieldErrors.putIfAbsent(prefix, constraintReason(error.getDefaultMessage(), template, prefix, violation));
                 }
             }
         }
@@ -766,8 +884,8 @@ public class GlobalExceptionHandler {
         Map<String, String> violations = new LinkedHashMap<>();
         for (jakarta.validation.ConstraintViolation<?> v : ex.getConstraintViolations()) {
             // QA D1338 (round 29): keyed on the request's JSON name ("testName", not "name").
-            violations.putIfAbsent(RequestFieldPaths.toJson(v.getRootBeanClass(), v.getPropertyPath().toString()),
-                v.getMessage());
+            String path = RequestFieldPaths.toJson(v.getRootBeanClass(), v.getPropertyPath().toString());
+            violations.putIfAbsent(path, constraintReason(v.getMessage(), v.getMessageTemplate(), path, v));
         }
         String reasons = joinReasons(violations.values().stream());
 

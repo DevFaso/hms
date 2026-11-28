@@ -26,6 +26,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ToastService } from '../../core/toast.service';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { LocaleNumberPipe } from '../../shared/pipes/lab-value.pipe';
@@ -82,6 +83,7 @@ const TARGET_FIELD_IDS: Readonly<Record<string, string>> = {
     SubmitGuardDirective,
     MeasurePipe,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     TranslateModule,
     LocaleNumberPipe,
@@ -243,12 +245,19 @@ export class LabQcDashboardComponent implements OnInit {
     this.showRecordForm.set(true);
     if (this.tests().length === 0) {
       this.labService.listTestDefinitions().subscribe({
-        next: (list) => this.tests.set(list.filter((t) => t.isActive)),
+        next: (list) => {
+          const quantitative = list.filter(
+            (t) => t.isActive && !t.culture && !t.expectedResult?.trim(),
+          );
+          this.tests.set(quantitative);
+          this.selectTest(
+            quantitative.some((t) => t.id === testDefinitionId) ? testDefinitionId! : '',
+          );
+        },
         error: () => this.toast.error(this.translate.instant('LAB_QC.RECORD.TESTS_LOAD_FAILED')),
       });
-    }
-    if (testDefinitionId) {
-      this.selectTest(testDefinitionId);
+    } else {
+      this.selectTest(this.tests().some((t) => t.id === testDefinitionId) ? testDefinitionId! : '');
     }
   }
 

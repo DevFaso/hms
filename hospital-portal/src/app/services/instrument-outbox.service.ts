@@ -26,6 +26,10 @@ export interface OutboxMessage {
    * parsed server-side so list rows can show it; absent on order messages.
    */
   resultStatus?: string | null;
+  /** D4168: the order the message is about, when the list carries it (code, patient, test). */
+  labOrderCode?: string | null;
+  patientName?: string | null;
+  testName?: string | null;
   createdAt: string;
   sentAt?: string;
   attempts: number;

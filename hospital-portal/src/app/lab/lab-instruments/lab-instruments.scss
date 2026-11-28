@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-header' as lane-header;
 .lab-instruments-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -259,3 +260,4 @@
   gap: 6px;
   font-size: 14px;
 }
+@include lane-header.header;

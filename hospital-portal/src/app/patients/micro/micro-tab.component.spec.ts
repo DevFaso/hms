@@ -126,6 +126,33 @@ describe('MicroTabComponent', () => {
     );
   });
 
+  it('names the other reports of the same order and says when a later one exists (r81 D4175)', () => {
+    const other = {
+      id: 'c2',
+      status: 'FINAL' as const,
+      growthResult: 'NO_GROWTH' as const,
+      specimenAccessionNumber: 'ACC-2',
+      createdAt: '2026-08-21T10:00:00',
+    };
+    microServiceSpy.listForPatient.and.returnValue(
+      of([
+        culture({
+          id: 'c1',
+          status: 'CORRECTED',
+          otherReportsOnOrder: [other],
+          latestOnOrder: false,
+        }),
+        culture({ id: 'c3', labOrderId: 'o9' }),
+      ]),
+    );
+    fixture.detectChanges();
+
+    const notes = fixture.nativeElement.querySelectorAll('[data-testid="other-reports"]');
+    expect(notes.length).toBe(1);
+    expect(notes[0].textContent).toContain('MICRO.OTHER_REPORTS_LATER');
+    expect(notes[0].textContent).toContain('ACC-2');
+  });
+
   it('surfaces the backend refusal verbatim on load failure', () => {
     microServiceSpy.listForPatient.and.returnValue(
       throwError(() => ({ error: { message: 'Patient not found with ID: p1' } })),

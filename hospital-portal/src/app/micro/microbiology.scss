@@ -1,3 +1,4 @@
+@use '../shared/styles/diagnostics-header' as lane-header;
 .micro-page {
   display: flex;
   flex-direction: column;
@@ -445,3 +446,27 @@
     white-space: pre-line;
   }
 }
+
+/* QA r81 D4175: the other reports of the same order. */
+.other-reports {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 0.82rem;
+  margin: 0.5rem 0;
+
+  p {
+    margin: 0 0 0.25rem;
+    font-weight: 600;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 1rem;
+  }
+}
+@include lane-header.header;

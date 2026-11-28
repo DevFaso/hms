@@ -13,10 +13,8 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,13 +32,19 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     private final LabInventoryItemRepository inventoryRepository;
     private final HospitalRepository hospitalRepository;
     private final LabInventoryItemMapper mapper;
-    private final MessageSource messageSource;
 
     @Override
     public Page<LabInventoryItemResponseDTO> getByHospital(UUID hospitalId, Pageable pageable, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, false);
         return inventoryRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable)
             .map(mapper::toDto);
+    }
+
+    @Override
+    public Page<LabInventoryItemResponseDTO> searchByHospital(UUID hospitalId, String search, Pageable pageable, Locale locale) {
+        LabFacilityAccess.require(hospitalId, false);
+        if (search == null || search.isBlank()) return inventoryRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable).map(mapper::toDto);
+        return inventoryRepository.searchActive(hospitalId, search.trim(), pageable).map(mapper::toDto);
     }
 
     @Override
@@ -48,13 +52,14 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), false);
         return mapper.toDto(item);
     }
 
     @Override
     @Transactional
     public LabInventoryItemResponseDTO create(UUID hospitalId, LabInventoryItemRequestDTO dto, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, true);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
@@ -78,6 +83,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), true);
 
         // Check item code uniqueness if changed
         if (dto.getItemCode() != null
@@ -102,13 +108,14 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), true);
         item.setActive(false);
         inventoryRepository.save(item);
     }
 
     @Override
     public List<LabInventoryItemResponseDTO> getLowStockItems(UUID hospitalId, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, true);
         return inventoryRepository.findLowStockItems(hospitalId).stream()
             .map(mapper::toDto)
             .toList();
@@ -130,13 +137,6 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     private void requireOwnItem(LabInventoryItem item, UUID id) {
         if (item.getHospital() == null || !hasHospitalAccess(item.getHospital().getId())) {
             throw new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id);
-        }
-    }
-
-    private void requireHospitalScope(UUID hospitalId, Locale locale) {
-        if (!hasHospitalAccess(hospitalId)) {
-            throw new AccessDeniedException(
-                messageSource.getMessage("access.denied", null, "Access denied", locale));
         }
     }
 

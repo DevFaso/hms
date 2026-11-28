@@ -25,6 +25,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { labSeverityFlag, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe } from '../shared/lab-value.pipe';
@@ -68,6 +69,7 @@ import { refuseFields } from '../../shared/forms/invalid-fields';
     LabCorrectionBadgeComponent,
     ModalDialogDirective,
     ServerTimePipe,
+    DateTimePipe,
     EnumLabelPipe,
     LabValuePipe,
     CommonModule,

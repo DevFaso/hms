@@ -24,7 +24,7 @@ public class EmergencyReleaseRequestDTO {
     private EmergencyReleaseType releaseType;
 
     /** Required, named at once with the other fields; the service also bounds its length. */
-    @jakarta.validation.constraints.NotBlank
+    @jakarta.validation.constraints.NotBlank(message = "{transfusion.emergency.reasonRequired}")
     private String reason;
 
     /**

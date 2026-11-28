@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -96,6 +97,26 @@ describe('LabInstrumentsComponent', () => {
     expect(component.loading()).toBeFalse();
     expect(component.instruments().length).toBe(2);
     expect(component.totalElements()).toBe(2);
+  });
+
+  it('shows the next calibration and maintenance dates even when they are overdue', () => {
+    fixture.detectChanges();
+    flushInstruments({
+      ...PAGED,
+      content: [
+        mockInstrument({
+          nextCalibrationDate: '2025-03-15',
+          nextMaintenanceDate: '2025-04-21',
+          calibrationOverdue: true,
+          maintenanceOverdue: true,
+        }),
+      ],
+    });
+    fixture.detectChanges();
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr')!;
+    expect(row.textContent).toContain(formatDate('2025-03-15', 'mediumDate', 'en-US'));
+    expect(row.textContent).toContain(formatDate('2025-04-21', 'mediumDate', 'en-US'));
+    expect(row.textContent).toContain('LAB_INSTRUMENTS.OVERDUE');
   });
 
   it('should show loading state initially', () => {

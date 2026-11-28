@@ -306,7 +306,7 @@
                     o.priority | enumLabel: 'imagingOrderPriority'
                   }}</span>
                 </td>
-                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
+                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | dateTime) : '—' }}</td>
                 <td>
                   <div class="action-group">
                     <button
@@ -555,7 +555,7 @@
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
-                <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
+                <td>{{ r.createdAt ? (r.createdAt | serverTime | dateTime) : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
                     r.reportStatus | enumLabel: 'imagingReportStatus'
@@ -1041,9 +1041,9 @@
         <button
           class="modal-close"
           (click)="closeStatusUpdate()"
-          [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          &times;
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -1112,9 +1112,9 @@
         <button
           class="modal-close"
           (click)="closeReportModal()"
-          [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          &times;
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -1729,8 +1729,12 @@
               : ('IMAGING.NEW_IMAGING_ORDER' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()" [title]="'COMMON.CLOSE' | translate">
-          &times;
+        <button
+          class="modal-close"
+          (click)="closeModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -2127,9 +2131,9 @@
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"
-          [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          &times;
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

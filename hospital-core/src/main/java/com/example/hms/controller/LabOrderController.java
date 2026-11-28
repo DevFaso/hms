@@ -92,7 +92,7 @@ public class LabOrderController {
     @GetMapping("/duplicates")
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "Preview potential duplicate lab orders before submission",
-               description = "Active orders (not yet resulted, cancelled or voided) of the same test for the same "
+               description = "Active or already resulted orders (not cancelled or voided) of the same test for the same "
                    + "patient at the same hospital within the duplicate window. Ordering anyway is allowed: send "
                    + "the ids returned here as acknowledgedDuplicateOrderIds on the create request; it is recorded "
                    + "as acknowledged only when they cover every duplicate found when the order is placed.")

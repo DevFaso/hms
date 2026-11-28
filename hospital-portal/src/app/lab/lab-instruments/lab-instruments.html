@@ -1,8 +1,11 @@
 <div class="lab-instruments-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">precision_manufacturing</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">precision_manufacturing</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_INSTRUMENTS.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_INSTRUMENTS.SUBTITLE' | translate }}</p>
       </div>
@@ -242,25 +245,23 @@
                 </span>
               </td>
               <td>
+                {{
+                  instr.nextCalibrationDate
+                    ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
                 @if (instr.calibrationOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextCalibrationDate
-                      ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
-                      : '—'
-                  }}
                 }
               </td>
               <td>
+                {{
+                  instr.nextMaintenanceDate
+                    ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
                 @if (instr.maintenanceOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextMaintenanceDate
-                      ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
-                      : '—'
-                  }}
                 }
               </td>
               @if (canManage()) {

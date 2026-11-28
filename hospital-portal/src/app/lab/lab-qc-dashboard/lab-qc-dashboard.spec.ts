@@ -258,6 +258,23 @@ describe('LabQcDashboardComponent', () => {
       lab.saveQcTarget = jasmine.createSpy('saveQcTarget').and.returnValue(of(target));
     });
 
+    it('offers quantitative tests only and never selects a qualitative or culture test', () => {
+      lab.listTestDefinitions.and.returnValue(
+        of([
+          { id: 'numeric', testName: 'Potassium', isActive: true },
+          { id: 'qualitative', testName: 'Rapid test', isActive: true, expectedResult: 'Negative' },
+          { id: 'culture', testName: 'Culture', isActive: true, culture: true },
+          { id: 'retired', testName: 'Old test', isActive: false },
+        ]),
+      );
+      component.openRecordForm('culture');
+      expect(component.tests().map((item) => item.id)).toEqual(['numeric']);
+      expect(component.qcTestId()).toBe('');
+      expect(lab.getQcTargets).not.toHaveBeenCalled();
+      component.openRecordForm('numeric');
+      expect(component.qcTestId()).toBe('numeric');
+    });
+
     it('lets the technician in: no validation-study read, the run form, no target editing', () => {
       activeRoles = ['ROLE_LAB_TECHNICIAN'];
       mockLabService.getValidationSummary.calls.reset();

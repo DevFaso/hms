@@ -869,7 +869,7 @@
                               patient: o.patientFullName || '—',
                               test: o.labTestName || o.labTestCode || '—',
                               date: o.orderDatetime
-                                ? (o.orderDatetime | serverTime | date: 'short')
+                                ? (o.orderDatetime | serverTime | dateTime)
                                 : '—',
                               code: shortOrderCode(o.labOrderCode),
                             }

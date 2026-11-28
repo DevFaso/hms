@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-header' as lane-header;
 .lab-staff-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -118,13 +119,12 @@
   width: 100%;
   border-collapse: collapse;
 
-  /* QA D4304 (r81): the table fits its box at a desktop width. Every cell was
-     on one line, so the table was wider than the page and the role chips sat
-     under the pinned « Actions » column. Text wraps between words; an e-mail
-     address or a licence number breaks only when a word alone is too long. */
+  /* D4163 + QA D4304 (r81): the long columns (email, department) wrap so the table fits its box
+     and the role chips no longer sit under the pinned « Actions » column; the licence number and
+     the role chip stay on one line. */
   th,
   td {
-    padding: 0.75rem 1rem;
+    padding: 0.75rem;
     text-align: left;
     white-space: normal;
     overflow-wrap: break-word;
@@ -135,8 +135,18 @@
     white-space: nowrap;
   }
 
+  td:nth-child(2) {
+    overflow-wrap: anywhere;
+  }
+
   td:nth-child(5) {
     min-width: 9rem;
+  }
+
+  td:nth-child(4),
+  .role-badge {
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   thead {
@@ -282,3 +292,4 @@
     font-size: 1rem;
   }
 }
+@include lane-header.header;

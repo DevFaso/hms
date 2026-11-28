@@ -422,6 +422,59 @@ class MicroCultureServiceImplTest {
             eq("POSITIVE_CULTURE_RESULT"));
     }
 
+    /** QA r81 D4175: a report names the other reports of its order, and says whether a later one exists. */
+    @Test
+    void aReportNamesTheOtherReportsOfItsOrder() {
+        culture.setStatus(MicroCultureStatus.CORRECTED);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroCultureResult later = MicroCultureResult.builder()
+            .labOrder(order).patient(patient).hospital(hospital)
+            .status(MicroCultureStatus.FINAL).growthResult(MicroGrowthResult.NO_GROWTH).build();
+        later.setId(UUID.randomUUID());
+        when(cultureRepository.findByLabOrder_IdAndHospital_IdOrderByCreatedAtDesc(orderId, hospitalId))
+            .thenReturn(List.of(later, culture));
+
+        MicroCultureResponseDTO dto = service.getCulture(cultureId, hospitalId);
+
+        assertThat(dto.getLatestOnOrder()).isFalse();
+        assertThat(dto.getOtherReportsOnOrder()).singleElement()
+            .satisfies(other -> {
+                assertThat(other.getId()).isEqualTo(later.getId());
+                assertThat(other.getGrowthResult()).isEqualTo(MicroGrowthResult.NO_GROWTH);
+            });
+    }
+
+    /** QA r81 D4156: the notice mentions susceptibilities only when the isolates carry some. */
+    @Test
+    void positiveCultureNoticeMentionsSusceptibilitiesOnlyWhenThereAreSome() {
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroIsolate isolate = storedIsolate();
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(isolate));
+        when(susceptibilityRepository.findByIsolate_IdInOrderByAntibioticNameAsc(any()))
+            .thenReturn(List.of(com.example.hms.model.MicroSusceptibility.builder().isolate(isolate).build()));
+
+        service.finalizeCulture(cultureId, hospitalId, null);
+
+        verify(notificationService).createNotification(eq("microculture.positive.notification"), any(),
+            eq("dr.traore"), eq("POSITIVE_CULTURE_RESULT"));
+    }
+
+    @Test
+    void positiveCultureNoticeWithoutSusceptibilitiesDoesNotClaimAny() {
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroIsolate isolate = storedIsolate();
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(isolate));
+
+        service.finalizeCulture(cultureId, hospitalId, null);
+
+        verify(notificationService).createNotification(eq("microculture.positive.notification.noSusceptibility"), any(),
+            eq("dr.traore"), eq("POSITIVE_CULTURE_RESULT"));
+    }
+
     @Test
     void aVoidedOrdersCultureTakesNoChangeAndNotifiesNobody() {
         // QA D820, self-review of #960: the order was voided as entered in error
@@ -992,7 +1045,8 @@ class MicroCultureServiceImplTest {
             .organismName("Escherichia coli").correctionReason("Pousse tardive").build());
 
         assertThat(culture.getGrowthResult()).isEqualTo(MicroGrowthResult.GROWTH);
-        verify(notificationService).createNotification(eq("microculture.positive.notification"), any(),
+        // QA r81 D4156: the isolate has no susceptibility, so the notice does not claim any.
+        verify(notificationService).createNotification(eq("microculture.positive.notification.noSusceptibility"), any(),
             eq("dr.traore"), eq("POSITIVE_CULTURE_RESULT"));
     }
 

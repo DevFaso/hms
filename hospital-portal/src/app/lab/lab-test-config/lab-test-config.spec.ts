@@ -34,6 +34,23 @@ function mockDefinition(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('LabTestConfigComponent', () => {
+  it('marks culture definitions in the catalogue without marking other tests', () => {
+    fixture.detectChanges();
+    flushInit(
+      [
+        mockDefinition({ id: 'culture', culture: true }),
+        mockDefinition({ id: 'numeric', culture: false }),
+      ],
+      2,
+    );
+    fixture.detectChanges();
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr');
+    expect(rows[0].querySelector('[data-testid="def-culture"]')?.textContent).toContain(
+      'LAB_TEST_CONFIG.CULTURE',
+    );
+    expect(rows[1].querySelector('[data-testid="def-culture"]')).toBeNull();
+  });
+
   it('keeps approval-link navigation aligned with the actual destination route', () => {
     const find = (items: Route[]): Route | undefined => {
       for (const route of items) {

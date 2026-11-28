@@ -82,6 +82,7 @@ class ReadOnlyPostGuardTest {
         "ChatController#getMessagesBySenderEmail",
         "ChatController#getMessagesBySenderUsername",
         "EncounterController#byDoctor",
+        "LabInventoryController#search",
         "LookupController#getAppointmentsByPatientEmail",
         "LookupController#getAppointmentsByPatientMri",
         "LookupController#getAppointmentsByPatientPhone",

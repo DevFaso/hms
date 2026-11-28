@@ -155,7 +155,7 @@
       <dl class="opos-grid">
         <div>
           <dt>{{ 'TRANSFUSION.RELEASE_ISSUED_AT' | translate }}</dt>
-          <dd>{{ r.issuedAt | serverTime | date: 'short' }}</dd>
+          <dd>{{ r.issuedAt | serverTime | dateTime }}</dd>
         </div>
         <div>
           <dt>{{ 'TRANSFUSION.OPOS.PATIENT_AT_RELEASE' | translate }}</dt>
@@ -232,7 +232,7 @@
                   | translate
                     : {
                         name: r.countersignedByName || '—',
-                        at: (r.countersignedAt | serverTime | date: 'short'),
+                        at: (r.countersignedAt | serverTime | dateTime),
                       }
               }}
               @if (r.countersignCovering) {
@@ -247,7 +247,7 @@
                 (r.countersignOverdue
                   ? 'TRANSFUSION.OPOS.OVERDUE_SINCE'
                   : 'TRANSFUSION.OPOS.DUE_BY'
-                ) | translate: { at: (r.countersignDueAt | serverTime | date: 'short') }
+                ) | translate: { at: (r.countersignDueAt | serverTime | dateTime) }
               }}
             </span>
             @if (canCountersign) {
@@ -278,7 +278,7 @@
                 | translate
                   : {
                       name: r.reviewedByName || '—',
-                      at: (r.reviewedAt | serverTime | date: 'short'),
+                      at: (r.reviewedAt | serverTime | dateTime),
                     }
             }}
             @if (r.reviewNote) {
@@ -288,8 +288,7 @@
         } @else {
           <span>
             {{
-              'TRANSFUSION.OPOS.DUE_BY'
-                | translate: { at: (r.reviewDueAt | serverTime | date: 'short') }
+              'TRANSFUSION.OPOS.DUE_BY' | translate: { at: (r.reviewDueAt | serverTime | dateTime) }
             }}
           </span>
           @if (canReview) {
@@ -355,7 +354,7 @@
             <li>
               {{ 'TRANSFUSION.OPOS.PATIENT_INFORMED' | translate }}{{ 'COMMON.COLON' | translate }}
               @if (r.patientInformedAt) {
-                {{ r.patientInformedAt | serverTime | date: 'short' }}
+                {{ r.patientInformedAt | serverTime | dateTime }}
                 ({{ r.patientInformedByName || '—' }})
               } @else {
                 {{ 'TRANSFUSION.OPOS.PENDING' | translate }}
@@ -364,14 +363,14 @@
             <li>
               {{ 'TRANSFUSION.OPOS.ANTIBODY_SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
               @if (r.antibodyScreenDoneAt) {
-                {{ r.antibodyScreenDoneAt | serverTime | date: 'shortDate' }}
+                {{ r.antibodyScreenDoneAt | serverTime | date: 'mediumDate' }}
               } @else {
                 {{
                   'TRANSFUSION.OPOS.SCREEN_WINDOW'
                     | translate
                       : {
-                          from: (r.antibodyScreenDueFrom | serverTime | date: 'shortDate'),
-                          to: (r.antibodyScreenDueBy | serverTime | date: 'shortDate'),
+                          from: (r.antibodyScreenDueFrom | serverTime | date: 'mediumDate'),
+                          to: (r.antibodyScreenDueBy | serverTime | date: 'mediumDate'),
                         }
                 }}
               }

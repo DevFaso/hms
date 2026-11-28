@@ -41,6 +41,16 @@ describe('AuditDescriptionService (QA D894)', () => {
     fr: ['ajouté', 'modifié', 'effacé', 'affiché en entier'],
     es: ['añadido', 'modificado', 'borrado', 'mostrado completo'],
   };
+  it('reads the lab duplicate audit in its old and its new wording (r81 D4165)', () => {
+    const recent =
+      'Duplicate warning not acknowledged: lab order o2 placed while recent order o1 of the same test exists';
+    const active =
+      'Duplicate warning not acknowledged: lab order o2 placed while active order o1 of the same test is open';
+    for (const text of [recent, active]) {
+      expect(describeIn('fr', text)).toContain('demande récente o1');
+    }
+  });
+
   it('reads the duplicate decision audit in all three reader languages', () => {
     const expected = {
       en: 'Possible duplicate kept as a separate patient',

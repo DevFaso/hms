@@ -1073,8 +1073,8 @@ textarea {
    every page styles its own cells. Opt out with `data-no-cards`.
    Guarded by shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
-@media screen and (max-width: 599px) {
-  table[data-cards]:not(.fc table, .fc) {
+@mixin card-mode($sel) {
+  #{$sel} {
     display: block !important;
     width: 100% !important;
     min-width: 0 !important;
@@ -1085,13 +1085,13 @@ textarea {
   /* The header row is gone, not clipped: a clipped header keeps its sort
      buttons in the Tab order, invisible. Each cell carries its header as its
      label, which a screen reader reads with the value. */
-  table[data-cards]:not(.fc table, .fc) > thead {
+  #{$sel} > thead {
     display: none !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) {
+  #{$sel} > :is(tbody, tfoot) {
     display: block !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr {
+  #{$sel} > :is(tbody, tfoot) > tr {
     display: table !important;
     table-layout: fixed;
     border-collapse: separate;
@@ -1106,10 +1106,10 @@ textarea {
   /* The card is white unless the page tints the row (an abnormal result, an
      overdue line, a lot about to expire): zero specificity, so a page's
      `tr.flagged { background }` still shows on a phone. */
-  :where(table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr) {
+  :where(#{$sel} > :is(tbody, tfoot) > tr) {
     background-color: var(--surface);
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
     display: table-row !important;
     position: static !important;
     width: auto !important;
@@ -1129,13 +1129,10 @@ textarea {
     overflow-wrap: anywhere;
     vertical-align: baseline;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th):first-child:not([hidden]) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):first-child:not([hidden]) {
     background-image: none !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
     content: attr(data-label);
     display: table-cell;
     width: 38%;
@@ -1156,24 +1153,16 @@ textarea {
      `white-space: nowrap` on a name, a description or a badge (sized for a
      wide table column) is not inherited from the cell's `normal`, and kept
      the organisation's name and description past the card's edge. */
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)
-    :not(.material-symbols-outlined, .material-icons) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th) :not(.material-symbols-outlined, .material-icons) {
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)
-    :is(div, span, a, p) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th) :is(div, span, a, p) {
     max-width: 100% !important;
   }
   /* A cell with no header to answer to (an empty-state row, an expanded
      detail, a spanning group title) is a plain full-width block. */
-  table[data-cards]:not(.fc table, .fc)
+  #{$sel}
     > :is(tbody, tfoot)
     > tr
     > :is(td, th):is(:not([data-label]), [data-label='']):not([hidden]) {
@@ -1181,24 +1170,30 @@ textarea {
     padding: 0.45rem 0 !important;
     text-align: left !important;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)[data-label='']::before {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th)[data-label='']::before {
     content: none;
   }
   /* A cell with nothing in it adds no empty line to the card. */
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):empty {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):empty {
     display: none !important;
   }
   /* What a page hides with the `hidden` attribute stays hidden: a collapsed
      detail row, a table kept for later. (A page that hides rows or cells by a
      class of its own on a phone marks its table `data-no-cards`.) */
-  table[data-cards]:not(.fc table, .fc)[hidden],
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot)[hidden],
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr[hidden] {
+  #{$sel}[hidden],
+  #{$sel} > :is(tbody, tfoot)[hidden],
+  #{$sel} > :is(tbody, tfoot) > tr[hidden] {
     display: none !important;
   }
+}
+
+@media screen and (max-width: 599px) {
+  @include card-mode('table[data-cards]:not(.fc table, .fc)');
+}
+
+/* D4163: a wide list that opts in with data-cards-tablet reads as cards up to 1023 px too, instead of scrolling sideways inside its box. */
+@media screen and (min-width: 600px) and (max-width: 1023px) {
+  @include card-mode('table[data-cards][data-cards-tablet]:not(.fc table, .fc)');
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

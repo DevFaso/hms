@@ -709,6 +709,27 @@ class TransfusionServiceImplTest {
         return admin;
     }
 
+    /** QA r81 D4159: the stored stop and discard reasons name the reaction in French, never the enum constant. */
+    @Test
+    void aReactionsStoredReasonsAreStaffReadableFrench() {
+        Object previous = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            TransfusionAdministration admin = inProgress();
+            service.recordReaction(admin.getId(), TransfusionReactionRequestDTO.builder()
+                .reactionType(TransfusionReactionType.ACUTE_HEMOLYTIC)
+                .severity(TransfusionReactionSeverity.LIFE_THREATENING)
+                .onsetAt(LocalDateTime.now())
+                .signsSymptoms("Fièvre")
+                .build());
+            assertThat(admin.getStopReason()).isEqualTo("Réaction transfusionnelle : Hémolytique aiguë");
+            assertThat(admin.getBloodUnit().getDiscardReason()).isEqualTo("Réaction transfusionnelle (Hémolytique aiguë)");
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource((org.springframework.context.MessageSource) previous);
+        }
+    }
+
     @Test
     void recordingAReactionStopsTheTransfusionAndQuarantinesTheUnit() {
         TransfusionAdministration admin = inProgress();
@@ -723,7 +744,7 @@ class TransfusionServiceImplTest {
         // Stopping the infusion is the first step of every reaction protocol —
         // the record must not show it still running.
         assertThat(admin.getStatus()).isEqualTo(TransfusionAdministrationStatus.STOPPED);
-        assertThat(admin.getStopReason()).contains("ACUTE_HEMOLYTIC");
+        assertThat(admin.getStopReason()).isNotBlank().doesNotContain("Transfusion reaction: ACUTE");
         // The implicated bag is evidence for the workup, not stock.
         assertThat(admin.getBloodUnit().getStatus()).isEqualTo(BloodUnitStatus.DISCARDED);
         verify(reactionRepository).save(any(TransfusionReaction.class));

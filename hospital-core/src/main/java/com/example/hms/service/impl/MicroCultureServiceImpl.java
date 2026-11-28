@@ -556,6 +556,14 @@ public class MicroCultureServiceImpl implements MicroCultureService {
      * clinical write (same stance as CriticalValueNotificationService).
      */
     private void notifyOrderingProviderBestEffort(MicroCultureResult culture) {
+        // Read in the caller's transaction, outside the best-effort catch: a failed read there would
+        // mark the shared transaction rollback-only (QA D1212). The report itself reads the same rows.
+        List<MicroIsolate> isolates = isolateRepository
+            .findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(culture.getId());
+        // QA r81 D4156: say susceptibilities are in the chart only when there are some.
+        boolean hasSusceptibilities = !isolates.isEmpty() && !susceptibilityRepository
+            .findByIsolate_IdInOrderByAntibioticNameAsc(isolates.stream().map(MicroIsolate::getId).toList())
+            .isEmpty();
         try {
             LabOrder order = culture.getLabOrder();
             Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
@@ -565,13 +573,15 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                     culture.getId());
                 return;
             }
-            String organisms = isolateRepository
-                .findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(culture.getId()).stream()
+            String organisms = isolates.stream()
                 .map(MicroIsolate::getOrganismName)
                 .collect(Collectors.joining(", "));
             String patientName = culture.getPatient() != null ? culture.getPatient().getFullName() : null;
             // Read by the ordering provider, in their language (QA D665).
-            notificationService.createNotification("microculture.positive.notification",
+            String noticeKey = hasSusceptibilities
+                ? "microculture.positive.notification"
+                : "microculture.positive.notification.noSusceptibility";
+            notificationService.createNotification(noticeKey,
                 new Object[]{
                     patientName != null && !patientName.isBlank()
                         ? patientName
@@ -698,6 +708,22 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .collect(Collectors.groupingBy(s -> s.getIsolate().getId()));
 
         LabOrder order = culture.getLabOrder();
+        // QA r81 D4175: the reports of the same order, newest first, so two are never read apart.
+        List<MicroCultureResult> onOrder = order == null || order.getId() == null || culture.getHospital() == null
+            ? List.of()
+            : cultureRepository.findByLabOrder_IdAndHospital_IdOrderByCreatedAtDesc(order.getId(),
+                culture.getHospital().getId());
+        if (onOrder == null) onOrder = List.of();
+        List<MicroCultureResponseDTO.OtherReport> others = onOrder.stream()
+            .filter(other -> other.getId() != null && !other.getId().equals(culture.getId()))
+            .map(other -> MicroCultureResponseDTO.OtherReport.builder()
+                .id(other.getId())
+                .status(other.getStatus())
+                .growthResult(other.getGrowthResult())
+                .specimenAccessionNumber(other.getSpecimen() != null ? other.getSpecimen().getAccessionNumber() : null)
+                .createdAt(other.getCreatedAt())
+                .build())
+            .toList();
         List<MicroCultureResponseDTO.Correction> corrections =
             correctionRepository.findByCultureResult_IdOrderByCorrectedAtDesc(culture.getId()).stream()
                 .map(this::toCorrectionDto)
@@ -733,6 +759,9 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .map(isolate -> toIsolateDto(isolate, byIsolate.getOrDefault(isolate.getId(), List.of())))
                 .toList())
             .corrections(corrections)
+            .otherReportsOnOrder(others)
+            .latestOnOrder(onOrder.isEmpty() || culture.getId() == null
+                || culture.getId().equals(onOrder.get(0).getId()))
             .build();
     }
 

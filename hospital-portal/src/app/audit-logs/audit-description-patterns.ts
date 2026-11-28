@@ -1110,6 +1110,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['order', 'earlier'],
   },
   {
+    // QA r81 D4165: the earlier order may be active or already resulted.
+    key: 'AUDIT.DESC.LAB_DUPLICATE_ACKNOWLEDGED',
+    re: /^Duplicate warning acknowledged \(order anyway\): lab order (\S+) placed while recent order (\S+) of the same test exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_UNACKNOWLEDGED',
+    re: /^Duplicate warning not acknowledged: lab order (\S+) placed while recent order (\S+) of the same test exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
     key: 'AUDIT.DESC.IMAGING_DUPLICATE_OVERRIDDEN',
     re: /^Duplicate warning overridden \((\S+)\): imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
     params: ['reason', 'order', 'earlier'],

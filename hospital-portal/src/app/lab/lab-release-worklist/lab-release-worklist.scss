@@ -454,10 +454,29 @@
 .release-table {
   min-width: 60rem;
 
+  @media (max-width: 1023px) {
+    min-width: 0;
+  }
+
+  /* D4162 (e): a word is never broken inside a header or a chip; a long value breaks only when it
+     would overflow its cell (break-word keeps the column's minimum at its longest word). */
   th,
   td {
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+  }
+
+  th {
+    white-space: nowrap;
+  }
+
+  .critical-tag,
+  .priority-badge,
+  .source-tag,
+  .status-tag,
+  .qc-hold-tag {
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   th:last-child,
