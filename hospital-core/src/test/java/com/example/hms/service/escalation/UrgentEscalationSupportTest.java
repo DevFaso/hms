@@ -100,6 +100,20 @@ class UrgentEscalationSupportTest {
     }
 
     @Test
+    void anIncidentOfAPatientAlreadyFlaggedIsRecordedWithoutASecondFlag() {
+        // QA D4102: the register holds every incident; the administrators get one flag per patient.
+        UUID alert = UUID.randomUUID();
+        when(incidents.findBySourceTypeAndSourceIdAndResolvedAtIsNull(UrgentAlertIncident.SOURCE_URGENT_ALERT, alert))
+            .thenReturn(Optional.empty());
+
+        assertThat(ladder.openIncident(UrgentAlertIncident.SOURCE_URGENT_ALERT, alert, HOSPITAL, T0.plusMinutes(61),
+            61, 3, false)).isTrue();
+
+        verify(incidents).save(any());
+        verify(notifications, never()).createNotification(any(), any(), anyString(), anyString());
+    }
+
+    @Test
     void theIncidentOpensOnceAndTheAdministratorsFlagCarriesMinutesOnly() {
         UUID alert = UUID.randomUUID();
         when(incidents.findBySourceTypeAndSourceIdAndResolvedAtIsNull(UrgentAlertIncident.SOURCE_IMAGING_REPORT, alert))

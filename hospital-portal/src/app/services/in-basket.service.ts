@@ -20,6 +20,10 @@ export interface InBasketItem {
   createdAt: string;
   readAt: string | null;
   acknowledgedAt: string | null;
+  /** QA D4104: true when somebody other than the reader acknowledged it (an alert answered for everybody). */
+  acknowledgedByOther?: boolean;
+  /** QA D4104: that person's name. */
+  acknowledgedByName?: string | null;
 }
 
 export interface InBasketSummary {

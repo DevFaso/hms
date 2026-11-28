@@ -485,7 +485,10 @@
     "CLINICAL_RULES.VERSION": "Version",
     "PATIENT_SAFETY.ALLERGIES": "Allergies",
     "PATIENT_SAFETY.NAME": "Patient",
-    "PATIENT_SAFETY.WEIGHT_KG": "{{kg}} kg"
+    "PATIENT_SAFETY.WEIGHT_KG": "{{kg}} kg",
+    "URGENT_ALERTS.AGE_HOURS": "{{hours}} h {{minutes}} min",
+    "URGENT_ALERTS.AGE_MINUTES": "{{minutes}} min",
+    "URGENT_INCIDENTS.SOURCE": "Source"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",

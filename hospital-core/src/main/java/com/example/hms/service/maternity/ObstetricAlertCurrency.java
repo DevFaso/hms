@@ -41,6 +41,9 @@ import java.util.Optional;
  *       (provisional, 2026-11-14).</li>
  *   <li>An adult HIGH NEWS2 (QA D3862): a later complete vital set of the
  *       patient at the hospital scored below HIGH.</li>
+ *   <li>A newborn's finding on a vital set, an adult's urgent hypertension and a maternal early warning
+ *       (QA D4103): a later vital set that re-measured the values and that the raising rule no longer judges
+ *       urgent ({@link com.example.hms.service.vitals.VitalSetAlertCurrency}).</li>
  * </ul>
  * QA D658 (High, patient safety): a later record that did not measure a
  * value says nothing about it. Only the newest later record that re-measured
@@ -78,17 +81,42 @@ public class ObstetricAlertCurrency {
             case ObstetricAlertEscalationService.SOURCE_POSTPARTUM -> postpartumResolved(row);
             case ObstetricAlertEscalationService.SOURCE_DELIVERY -> deliveryResolved(row);
             case ObstetricAlertEscalationService.SOURCE_NEWS2 -> news2Resolved(row);
+            case ObstetricAlertEscalationService.SOURCE_NEWBORN_VITAL_SIGN -> vitalSets != null
+                && vitalSets.newbornFindingResolved(row.getSourceId(), row.getPatientId(), row.getHospitalId(),
+                    row.getAlertType());
+            case ObstetricAlertEscalationService.SOURCE_URGENT_HYPERTENSION -> vitalSets != null
+                && vitalSets.urgentHypertensionResolved(row.getSourceId(), row.getPatientId(), row.getHospitalId());
+            case ObstetricAlertEscalationService.SOURCE_VITAL_SIGN -> vitalSets != null
+                && vitalSets.maternalWarningResolved(row.getSourceId(), row.getPatientId(), row.getHospitalId());
             case ObstetricAlertEscalationService.SOURCE_POSITIVE_CULTURE -> cultureNoLongerPositive(row);
             case ObstetricAlertEscalationService.SOURCE_O_POSITIVE_COUNTERSIGN -> oPositiveCountersigned(row);
             case ObstetricAlertEscalationService.SOURCE_INCOMPATIBLE_COUNTERSIGN -> incompatibleCountersigned(row);
+            // CLOSED_BY_A_PERSON_ONLY, and a source this class has never heard of: the alert stands.
             default -> false;
         };
     }
 
     /**
+     * QA D4103 (r81): the sources with no record that could say the alert is over. A labour transfer's notice and
+     * a severe transfusion reaction rest on an event, not on a value somebody can measure again: only a person
+     * closes them. Every other source of the ladder has its rule in {@link #noLongerUrgent}
+     * ({@code UrgentAlertClosingRuleGuardTest}: a new source must be given a rule, or be listed here with its
+     * reason).
+     */
+    public static final java.util.Set<String> CLOSED_BY_A_PERSON_ONLY = java.util.Set.of(
+        ObstetricAlertEscalationService.SOURCE_TRANSFER, ObstetricAlertEscalationService.SOURCE_TRANSFUSION_REACTION);
+
+    /** QA D4103: the alerts raised from a vital set (setter-injected; absent, such an alert stands). */
+    private com.example.hms.service.vitals.VitalSetAlertCurrency vitalSets;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setVitalSets(com.example.hms.service.vitals.VitalSetAlertCurrency vitalSets) {
+        this.vitalSets = vitalSets;
+    }
+
+    /**
      * Scorecard K4: the records behind the alerts that are not obstetric (setter-injected; absent, the alert
-     * stands). A severe transfusion reaction and an adult's urgent hypertension have nothing here: only a person
-     * closes them.
+     * stands).
      */
     private com.example.hms.repository.MicroCultureResultRepository cultureRepository;
     private com.example.hms.repository.OPositiveReleaseDecisionRepository oPositiveDecisions;

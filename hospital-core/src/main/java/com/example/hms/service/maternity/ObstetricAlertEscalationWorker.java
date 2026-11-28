@@ -104,6 +104,26 @@ public class ObstetricAlertEscalationWorker {
      */
     static final String UNRESOLVED_KEY = "urgent.alert.unresolved";
     /**
+     * QA D4106 (r81): the notices of the first two steps name the step (« transmise au clinicien de couverture »,
+     * « transmise au médecin-chef ») instead of « rappel 1 », « rappel 2 »; the documenter's names no step. Same
+     * arguments as {@link #UNRESOLVED_KEY}. {@link #REMINDER_KEY} and {@link #DOCUMENTER_REMINDER_KEY} stay in the
+     * bundles: the notices already sent are rendered with them.
+     */
+    static final String COVER_STEP_KEY = "urgent.alert.step.cover";
+    static final String LEAD_STEP_KEY = "urgent.alert.step.lead";
+    static final String DOCUMENTER_WAITING_KEY = "urgent.alert.documenter.waiting";
+    /** Every notice key of a step, in every language ({@code UrgentAlertStepWordingGuardTest}). */
+    static final List<String> STEP_NOTICE_KEYS = List.of(COVER_STEP_KEY, LEAD_STEP_KEY, UNRESOLVED_KEY,
+        DOCUMENTER_WAITING_KEY);
+
+    /** The notice of a step of the ladder. */
+    static String stepNoticeKey(CriticalResultEscalationLadder.Step step) {
+        if (UrgentEscalationSupport.unresolved(step)) {
+            return UNRESOLVED_KEY;
+        }
+        return step == CriticalResultEscalationLadder.Step.COVER ? COVER_STEP_KEY : LEAD_STEP_KEY;
+    }
+    /**
      * Scorecard K4: the bell of an urgent alert that is neither obstetric nor an early-warning score (a severe
      * transfusion reaction, a positive culture, an adult's urgent hypertension, an overdue countersignature).
      */
@@ -448,19 +468,18 @@ public class ObstetricAlertEscalationWorker {
         String storedMessage = row.getAlertMessage() == null ? "" : row.getAlertMessage();
         boolean unresolved = UrgentEscalationSupport.unresolved(step);
         long minutes = UrgentEscalationSupport.minutesSince(row.getFirstNoticeFiledAt(), now);
-        Object[] reminderArgs = {String.valueOf(next), typeArg, patientArg, messageArg};
-        // The last step and every reminder after it say « non résolue » and for how long; the steps before say
-        // which reminder this is. Staff-locale text only titles the in-basket item; notices are keyed (QA D665).
-        String noticeKey = unresolved ? UNRESOLVED_KEY : REMINDER_KEY;
-        Object[] noticeArgs = unresolved ? new Object[]{typeArg, patientArg, messageArg, minutes} : reminderArgs;
-        String message = unresolved
-            ? messageSource.getMessage(UNRESOLVED_KEY, new Object[]{storedType, patientName, storedMessage, minutes}, locale)
-            : messageSource.getMessage(REMINDER_KEY, new Object[]{reminderArgs[0], storedType, patientName, storedMessage},
-                locale);
+        // QA D4106 (r81): each step says what it did (passed to the covering clinician, to the médecin-chef), and
+        // the last step and every reminder after it say « non résolue »; all say for how long. Staff-locale text
+        // only titles the in-basket item; notices are keyed (QA D665).
+        String noticeKey = stepNoticeKey(step);
+        Object[] noticeArgs = {typeArg, patientArg, messageArg, minutes};
+        String message = messageSource.getMessage(noticeKey,
+            new Object[]{storedType, patientName, storedMessage, minutes}, locale);
         String documenter = usernameOf(row.getDocumentedByUserId());
         if (documenter != null) {
-            // The documenter learns it is still unanswered; she cannot answer it herself.
-            notifyQuietly(DOCUMENTER_REMINDER_KEY, reminderArgs, documenter, noticeType(row.getSourceType(), true),
+            // The documenter learns it is still unanswered; she cannot answer it herself. One wording at every
+            // step: she is told how long it has waited, never a reminder number the clinicians do not see.
+            notifyQuietly(DOCUMENTER_WAITING_KEY, noticeArgs, documenter, noticeType(row.getSourceType(), true),
                 row.getId());
         }
         Set<String> circle = stepCircle(row, step, documenter);
@@ -479,8 +498,10 @@ public class ObstetricAlertEscalationWorker {
             // From the last step on the alert is on the register of incidents; the administrators are flagged
             // once, when it opens, with no clinical text.
             if (unresolved) {
+                // QA D4102: one flag to the administrators per patient with unanswered alerts, not one per alert.
+                boolean firstOfPatient = !ladder.incidentOpenForPatient(row.getHospitalId(), row.getPatientId());
                 ladder.openIncident(UrgentAlertIncident.SOURCE_URGENT_ALERT, row.getId(), row.getHospitalId(), now,
-                    minutes, delivery.reached());
+                    minutes, delivery.reached(), firstOfPatient);
             }
         }
         if (delivery.reached() == 0) {
@@ -610,7 +631,29 @@ public class ObstetricAlertEscalationWorker {
         row.setAcknowledgedAt(acks.get(0).getAcknowledgedAt());
         row.setAcknowledgedBy(acks.get(0).getAcknowledgedBy());
         escalationRepository.save(row);
+        // QA D4104: the alert is answered for everybody; the other readers' copies say by whom and when.
+        inBasketItemRepository.acknowledgeOpenByReference(row.getId(), REFERENCE_TYPE,
+            acks.get(0).getAcknowledgedBy(), acks.get(0).getAcknowledgedAt());
         return true;
+    }
+
+    /**
+     * QA D4104 (r81): an item of this alert has just been acknowledged, in the caller's transaction. The alert is
+     * closed now and not at the next sweep, and every other recipient's copy is marked acknowledged with the same
+     * person and time. Nothing happens for the documenter's own acknowledgement, for an alert only its record
+     * closes, or for one already closed.
+     *
+     * @return true when the alert was closed now
+     */
+    @Transactional
+    public boolean itemAcknowledged(UUID escalationId) {
+        if (escalationId == null) {
+            return false;
+        }
+        return escalationRepository.findById(escalationId)
+            .filter(row -> row.getAcknowledgedAt() == null)
+            .map(this::closedIfAcknowledged)
+            .orElse(false);
     }
 
     /**

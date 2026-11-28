@@ -134,14 +134,16 @@ class ObstetricAlertReaderLanguageTest {
         when(patientRepository.findByIdUnscoped(PATIENT)).thenReturn(Optional.of(p));
 
         assertThat(worker.escalateOne(row.getId())).isTrue();
-        Object[] args = sentArgs(ObstetricAlertEscalationWorker.REMINDER_KEY);
+        Object[] args = sentArgs(ObstetricAlertEscalationWorker.COVER_STEP_KEY);
 
-        assertThat(read(ObstetricAlertEscalationWorker.REMINDER_KEY, args, Locale.FRENCH))
-            .contains("rappel 1").contains("Pertes sanguines estimées 1200 ml");
-        String es = read(ObstetricAlertEscalationWorker.REMINDER_KEY, args, Locale.of("es"));
-        String en = read(ObstetricAlertEscalationWorker.REMINDER_KEY, args, Locale.ENGLISH);
-        assertThat(es).contains("recordatorio 1").contains("Pérdida de sangre estimada 1200 ml");
-        assertThat(en).contains("reminder 1").contains("Estimated blood loss 1200 ml");
+        // QA D4106 (r81): the first step says the alert was passed to the covering clinician.
+        assertThat(read(ObstetricAlertEscalationWorker.COVER_STEP_KEY, args, Locale.FRENCH))
+            .contains("clinicien de couverture").doesNotContain("rappel")
+            .contains("Pertes sanguines estimées 1200 ml");
+        String es = read(ObstetricAlertEscalationWorker.COVER_STEP_KEY, args, Locale.of("es"));
+        String en = read(ObstetricAlertEscalationWorker.COVER_STEP_KEY, args, Locale.ENGLISH);
+        assertThat(es).contains("clínico de guardia").contains("Pérdida de sangre estimada 1200 ml");
+        assertThat(en).contains("covering clinician").contains("Estimated blood loss 1200 ml");
         assertNoFrench(es);
         assertNoFrench(en);
     }

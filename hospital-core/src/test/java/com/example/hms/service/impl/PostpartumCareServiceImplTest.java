@@ -216,7 +216,9 @@ class PostpartumCareServiceImplTest {
         // QA D605: the URGENT postpartum alert reaches the on-call team too.
         verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
             hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(a.sourceType())
-                && "postpartum.alert.msg.postpartum-hemorrhage".equals(a.alertMessageKey())));
+                // QA D4105: the rule's sentence travels inside the sentence that adds the measured values.
+                && "postpartum.alert.msg.postpartum-hemorrhage".equals(
+                    com.example.hms.service.escalation.UrgentAlertReading.ruleKey(a.alertMessageKey(), a.alertMessageArgs()))));
 
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());
@@ -262,7 +264,10 @@ class PostpartumCareServiceImplTest {
             assertEquals(PostpartumAlertSeverity.URGENT, severe.get(0).getSeverity());
             assertTrue(severe.get(0).getMessage().contains("avis obstétrical urgent"), severe.get(0).getMessage());
             verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
-                com.example.hms.service.vitals.SevereHypertension.MESSAGE_KEY.equals(a.alertMessageKey())));
+                // QA D4105: the rule's sentence travels inside the sentence that adds the measured pressure.
+                com.example.hms.service.escalation.UrgentAlertReading.WITH_READING_KEY.equals(a.alertMessageKey())
+                    && com.example.hms.service.vitals.SevereHypertension.MESSAGE_KEY.equals(
+                        com.example.hms.service.escalation.UrgentAlertReading.ruleKey(a.alertMessageKey(), a.alertMessageArgs()))));
         } else {
             verify(obstetricAlertEscalation, never()).raiseAfterCommit(any());
         }

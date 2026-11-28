@@ -160,6 +160,10 @@ class GuardDriftRatchetTest {
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        // QA D4102 (r81): the register of unresolved urgent alerts is the hospital administrator's and the
+        // médecin-chef's (the service keeps that one doctor); a nurse reads her own alerts on /urgent-alerts/mine.
+        listed.put("UrgentAlertController.incidents",
+            "The incident register: the hospital administrator and the médecin-chef only; nurses read their own alerts");
         // Go-live D2 (V385): the médecin-chef approves dose limits (and formulary entries where the hospital
         // has no pharmacist); the policy narrows the doctors to that one. Nurses neither propose nor decide.
         listed.put("MedicationCatalogController.approve", MEDICATION_CATALOG_DECISION_REASON);

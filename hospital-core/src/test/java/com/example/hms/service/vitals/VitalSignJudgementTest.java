@@ -447,7 +447,11 @@ class VitalSignJudgementTest {
         assertThat(alert.hospitalId()).isEqualTo(hospitalId);
         assertThat(alert.alertType()).isEqualTo(com.example.hms.service.escalation.UrgentAlerts.TYPE_URGENT_HYPERTENSION);
         // The threshold and the sentence are the rule's own: nothing new decides what is urgent.
-        assertThat(alert.alertMessageKey()).isEqualTo(judgement.judge(vital).bloodPressure().messageKey());
+        // QA D4105: the rule's sentence travels inside the sentence that adds the measured pressure.
+        assertThat(alert.alertMessageKey())
+            .isEqualTo(com.example.hms.service.escalation.UrgentAlertReading.WITH_READING_KEY);
+        assertThat(com.example.hms.service.escalation.UrgentAlertReading.ruleKey(alert.alertMessageKey(), alert.alertMessageArgs()))
+            .isEqualTo(judgement.judge(vital).bloodPressure().messageKey());
         // Those the bell reached get their item, never a second bell.
         assertThat(alert.alreadyNotified()).containsExactly("nurse_a", "dr_a");
 

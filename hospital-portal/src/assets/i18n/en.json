@@ -5543,7 +5543,8 @@
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
     "CLINICAL_RULES": "Clinical rules",
-    "PAYER_SHARES": "Insurer shares"
+    "PAYER_SHARES": "Insurer shares",
+    "URGENT_INCIDENTS": "Unresolved urgent alerts"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -10821,6 +10822,8 @@
       "readBackAt": "Read back {{at}}",
       "followUp": "Order follow-up"
     },
+    "acknowledgedBy": "Acknowledged by {{name}} · {{time}}",
+    "acknowledgedBySomebody": "Acknowledged by another member of the team · {{time}}",
     "openPlatformItem": "Open",
     "platformRequest": {
       "open": "Write to the platform",
@@ -17087,5 +17090,55 @@
     "COMPLETE_CORRECTION": "Complete correction review",
     "CORRECTION_HINT": "Review the requested correction in the authorized record workflow and explain the outcome. This decision does not overwrite clinical data.",
     "EXPORT": "Download approved copy (PDF)"
+  },
+  "URGENT_ALERTS": {
+    "REGION": "Urgent alerts to acknowledge",
+    "TO_ACK_ONE": "{{count}} urgent alert to acknowledge",
+    "TO_ACK_MANY": "{{count}} urgent alerts to acknowledge",
+    "DOCUMENTED_ONE": "{{count}} alert you documented is still waiting for an acknowledgement",
+    "DOCUMENTED_MANY": "{{count}} alerts you documented are still waiting for an acknowledgement",
+    "OLDEST": "The oldest has been waiting for {{age}}",
+    "OPEN_IN_BASKET": "Open the in-basket",
+    "ACKNOWLEDGE": "Acknowledge",
+    "AGE_MINUTES": "{{minutes}} min",
+    "AGE_HOURS": "{{hours}} h {{minutes}} min",
+    "MARK_ONE": "{{count}} urgent alert not acknowledged, waiting for {{age}}",
+    "MARK_MANY": "{{count}} urgent alerts not acknowledged, the oldest waiting for {{age}}"
+  },
+  "URGENT_INCIDENTS": {
+    "TITLE": "Unresolved urgent alerts",
+    "SUBTITLE": "Urgent clinical alerts nobody acknowledged by the last step of the escalation: when, for how long, the steps taken, who acknowledged, and when each one closed.",
+    "REFRESH": "Refresh",
+    "RETRY": "Try again",
+    "LOAD_FAILED": "The register could not be loaded.",
+    "OPEN_ONE": "{{count}} incident open",
+    "OPEN_MANY": "{{count}} incidents open",
+    "FILTER": "Incidents shown",
+    "FILTER_OPEN": "Open",
+    "FILTER_ALL": "Open and closed (30 days)",
+    "EMPTY_OPEN": "No incident is open.",
+    "EMPTY_ALL": "No incident in the last 30 days.",
+    "CASE": "Case {{number}}",
+    "STATUS_OPEN": "Open",
+    "STATUS_CLOSED": "Closed",
+    "ALERTS_ONE": "{{count}} alert",
+    "ALERTS_MANY": "{{count}} alerts",
+    "SOURCE": "Source",
+    "OPENED_AT": "Incident opened",
+    "UNACKNOWLEDGED_FOR": "not acknowledged for {{minutes}} min at that time",
+    "STEPS": "Steps taken",
+    "STEPS_UNKNOWN": "Not recorded for this source",
+    "STEP_COVER": "covering clinician told",
+    "STEP_LEAD": "chief medical officer told",
+    "STEP_INCIDENT": "incident opened",
+    "REMINDERS_ONE": "{{count}} reminder since",
+    "REMINDERS_MANY": "{{count}} reminders since",
+    "TOLD_ONE": "{{count}} clinician told",
+    "TOLD_MANY": "{{count}} clinicians told",
+    "CLOSED": "Closed",
+    "NOT_CLOSED": "Still open",
+    "RESOLVED_BY_RECORD": "a later reading no longer supports the alert",
+    "ACKNOWLEDGED_BY": "acknowledged by {{name}}",
+    "ACKNOWLEDGED": "acknowledged"
   }
 }

@@ -91,6 +91,7 @@
             </span>
             <span class="wl-patient-info">
               <span class="wl-name">{{ item.patientName }}</span>
+              <app-urgent-alert-mark [patientId]="item.patientId" />
               {{ ' '
               }}<span class="wl-meta">
                 {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}

@@ -109,6 +109,29 @@ public interface ObstetricAlertEscalationRepository extends JpaRepository<Obstet
     List<ObstetricAlertEscalation> findOpenBySource(@Param("sourceType") String sourceType,
                                                     @Param("sourceId") UUID sourceId);
 
+    /**
+     * QA D4101 (r81): per patient, how many urgent alerts of the hospital are waiting for an acknowledgement and
+     * since when the oldest waits: {@code [patientId, count, oldest createdAt]}. An alert whose first notice is
+     * still owed is not listed yet.
+     */
+    @Query("""
+        SELECT e.patientId, COUNT(e), MIN(e.createdAt) FROM ObstetricAlertEscalation e
+        WHERE e.hospitalId = :hospitalId AND e.acknowledgedAt IS NULL AND e.ladderBacklog = false
+          AND e.firstNoticeFiledAt IS NOT NULL
+        GROUP BY e.patientId
+        """)
+    List<Object[]> findOpenPatientMarks(@Param("hospitalId") UUID hospitalId);
+
+    /** QA D4101: the open alerts this user documented: she cannot acknowledge them, and must know they wait. */
+    @Query("""
+        SELECT e FROM ObstetricAlertEscalation e
+        WHERE e.hospitalId = :hospitalId AND e.documentedByUserId = :userId
+          AND e.acknowledgedAt IS NULL AND e.ladderBacklog = false AND e.firstNoticeFiledAt IS NOT NULL
+        ORDER BY e.createdAt ASC
+        """)
+    List<ObstetricAlertEscalation> findOpenDocumentedBy(@Param("hospitalId") UUID hospitalId,
+                                                        @Param("userId") UUID userId);
+
     /** Whether this alert of this record was ever escalated, open or closed (a correction never replays it). */
     boolean existsBySourceTypeAndSourceIdAndAlertMessageKey(String sourceType, UUID sourceId, String alertMessageKey);
 
