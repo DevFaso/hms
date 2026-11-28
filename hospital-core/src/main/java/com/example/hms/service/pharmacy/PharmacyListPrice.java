@@ -20,12 +20,23 @@ public final class PharmacyListPrice {
     private PharmacyListPrice() {
     }
 
-    /** The selling price of one unit of {@code item}, when the pharmacy priced it. */
+    /**
+     * The selling price of one unit of {@code item}, when the pharmacy priced it. An item documented as free of
+     * charge ({@link #isFree}) has no selling price, whatever figure it still carries.
+     */
     public static Optional<BigDecimal> of(InventoryItem item) {
-        if (item == null || item.getUnitPrice() == null || item.getUnitPrice().signum() <= 0) {
+        if (item == null || isFree(item) || item.getUnitPrice() == null || item.getUnitPrice().signum() <= 0) {
             return Optional.empty();
         }
         return Optional.of(item.getUnitPrice());
+    }
+
+    /**
+     * QA D4181 (r81): whether the pharmacy documented {@code item} as handed over at no charge. The only way an
+     * item leaves the counter with nothing to pay and no price ({@link FillPriceGate}).
+     */
+    public static boolean isFree(InventoryItem item) {
+        return item != null && item.getFreeOfChargeReason() != null && !item.getFreeOfChargeReason().isBlank();
     }
 
     /** The selling price of one unit of a catalog medication at a pharmacy, when priced there. */

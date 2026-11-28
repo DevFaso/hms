@@ -106,7 +106,9 @@ public class PharmacyReconciliationService {
     @Transactional(readOnly = true)
     public List<PharmacyReconciliationDTO> pharmacies() {
         UUID hospitalId = requireReader();
+        // QA D4182 (r81): a partner pharmacy has no till of the hospital to reconcile.
         return pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(hospitalId).stream()
+                .filter(PharmacyStores::isOwnStore)
                 .map(p -> PharmacyReconciliationDTO.builder().pharmacyId(p.getId()).pharmacyName(p.getName()).build())
                 .toList();
     }

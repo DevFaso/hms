@@ -118,7 +118,7 @@ import static org.mockito.Mockito.when;
 @Import({DispenseServiceImpl.class, PreparedFillVoider.class, StockQuarantine.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
         DispenseVerificationService.class,
         ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, FefoLotPolicy.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
-        StockTransactionServiceImpl.class, StockTransferBooking.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
+        StockTransactionServiceImpl.class, StockTransferBooking.class, PharmacyPriceHistory.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
         PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class, EncryptionKeyHolder.class,
         com.example.hms.service.EndedStayOrderGuard.class, com.example.hms.service.StayOrderDiscontinuation.class,
         PreparedFillConcurrencyPostgresIT.Config.class})
@@ -725,6 +725,8 @@ class PreparedFillConcurrencyPostgresIT {
         entityManager.persist(partner);
         InventoryItem item = InventoryItem.builder()
             .pharmacy(dispensary).medicationCatalogItem(amoxicillin)
+            // QA D4181 (r81): a fill leaves only from an item that is priced or documented as free.
+            .freeOfChargeReason("Programme national (fixture)")
             .quantityOnHand(BigDecimal.valueOf(100)).active(true).build();
         entityManager.persist(item);
         lot = StockLot.builder()

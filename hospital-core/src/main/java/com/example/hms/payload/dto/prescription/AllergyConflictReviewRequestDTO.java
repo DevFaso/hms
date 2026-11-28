@@ -23,7 +23,7 @@ import lombok.Setter;
 public class AllergyConflictReviewRequestDTO {
 
     /** CONTINUE (with a plan) or STOP. Mandatory. */
-    @NotNull
+    @NotNull(message = "{allergy.review.decisionRequired}")
     private AllergyReviewDecision decision;
 
     /** The plan a CONTINUE sets (monitoring, premedication). Mandatory for CONTINUE. */
@@ -31,8 +31,8 @@ public class AllergyConflictReviewRequestDTO {
     private String plan;
 
     /** The clinical rationale. Mandatory. */
-    @NotBlank
-    @Size(max = 1000)
+    @NotBlank(message = "{allergy.review.rationaleRequired}")
+    @Size(max = 1000, message = "{allergy.review.rationaleTooLong}")
     private String rationale;
 
     /**

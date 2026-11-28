@@ -29,6 +29,10 @@ public class InventoryItemResponseDTO {
     private BigDecimal reorderThreshold;
     private BigDecimal reorderQuantity;
     private BigDecimal unitPrice;
+    /** QA D4181 (r81): the item is documented as handed over at no charge at this pharmacy. */
+    private boolean freeOfCharge;
+    /** QA D4181: why, as recorded by the store manager or the administrator. */
+    private String freeOfChargeReason;
     private String unit;
     /** QA D2674 (r65): units of {@code unit} in one pack, when the item was converted; null otherwise. */
     private Integer unitsPerPack;
