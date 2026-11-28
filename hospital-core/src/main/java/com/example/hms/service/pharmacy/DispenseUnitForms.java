@@ -2,6 +2,7 @@ package com.example.hms.service.pharmacy;
 
 
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -45,8 +46,7 @@ public final class DispenseUnitForms {
     private static final Pattern MARKS = Pattern.compile("\\p{M}");
     private static final Pattern SPACES = Pattern.compile("\\s+");
     /** QA D3949: what a pack holds, after the pack's own name: « de 10 comprimés », « of 10 », « x 10 », « (10 cp) ». */
-    private static final Pattern PACK_CONTENTS =
-        Pattern.compile("^([^(/]+?)\\s*(?:\\s(?:de|d'|of|con|x)\\s*\\d.*|\\(.*\\)|/\\s*\\d.*)$");
+    private static final List<String> CONTENTS_WORDS = List.of("de", "d'", "of", "con", "x");
 
     private static final Map<String, Form> FORMS = Map.ofEntries(
         Map.entry("comprime", Form.SOLID_DOSE), Map.entry("cp", Form.SOLID_DOSE),
@@ -144,7 +144,48 @@ public final class DispenseUnitForms {
         String plain = Normalizer.normalize(unit == null ? "" : unit, Normalizer.Form.NFD);
         plain = MARKS.matcher(plain).replaceAll("").toLowerCase(Locale.ROOT).replace("µ", "u").replace('-', ' ').trim();
         plain = SPACES.matcher(plain).replaceAll(" ");
-        java.util.regex.Matcher pack = PACK_CONTENTS.matcher(plain);
-        return pack.matches() ? pack.group(1).trim() : plain;
+        String pack = plain.substring(0, packNameEnd(plain)).trim();
+        return pack.isEmpty() ? plain : pack;
+    }
+
+    /**
+     * QA D3949: where a pack's own name ends in a single-spaced unit, before what it holds: « (10 cp) », « /10 »,
+     * or a word « de », « d' », « of », « con », « x » followed by a number. The whole unit when nothing follows the
+     * name. One pass over the words (no backtracking pattern on a typed value).
+     */
+    private static int packNameEnd(String plain) {
+        int end = plain.length();
+        int paren = plain.indexOf('(');
+        if (paren >= 0) {
+            end = paren;
+        }
+        int slash = plain.indexOf('/');
+        if (slash >= 0 && slash < end && startsWithDigit(plain, slash + 1)) {
+            end = slash;
+        }
+        int wordStart = plain.indexOf(' ') + 1;
+        while (wordStart > 0 && wordStart < end) {
+            if (introducesContents(plain, wordStart)) {
+                return wordStart - 1;
+            }
+            wordStart = plain.indexOf(' ', wordStart) + 1;
+        }
+        return end;
+    }
+
+    /** Whether the word at {@code at} is « de », « d' », « of », « con » or « x » followed by a number. */
+    private static boolean introducesContents(String plain, int at) {
+        for (String word : CONTENTS_WORDS) {
+            if (plain.startsWith(word, at) && startsWithDigit(plain, at + word.length())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a digit comes at {@code at}, after at most one space. */
+    private static boolean startsWithDigit(String plain, int at) {
+        int i = at < plain.length() && plain.charAt(at) == ' ' ? at + 1 : at;
+        return i < plain.length() && Character.isDigit(plain.charAt(i));
     }
 }

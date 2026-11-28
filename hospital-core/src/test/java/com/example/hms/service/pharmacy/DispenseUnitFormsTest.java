@@ -47,7 +47,7 @@ class DispenseUnitFormsTest {
     @CsvSource({"plaquette, plaquette de 10 comprimés", "Plaquettes, Plaquette de 10 comprimés",
         "plaquette de 10 comprimés, plaquette", "boîte, boîte de 24 comprimés", "boite, Boîtes de 24 comprimés",
         "flacon, flacon de 100 ml", "sirop, flacon de 100 ml", "blister, blister (10 cp)", "box, box of 20 tablets",
-        "plaquette, plaquette x10", "pot, pot de 30 gélules", "pot de 30 gélules, pot"})
+        "plaquette, plaquette x10", "plaquette, plaquette/10", "pot, pot de 30 gélules", "pot de 30 gélules, pot"})
     void aPackDescribedWithItsContentsIsThatPack(String fill, String lot) {
         assertThatCode(() -> DispenseUnitForms.requireCompatible(fill, lot)).doesNotThrowAnyException();
         assertThat(DispenseUnitForms.fits(fill, lot)).isTrue();
@@ -68,6 +68,17 @@ class DispenseUnitFormsTest {
         "(10 cp), (10 cp)", "boîte  de 24, boite", "flacon de, flacon de"})
     void theKeyOfAUnit(String unit, String key) {
         assertThat(DispenseUnitForms.key(unit)).isEqualTo(key);
+    }
+
+    /** A long typed unit is read in one pass (no backtracking pattern on a typed value). */
+    @Test
+    void aLongTypedUnitIsReadQuickly() {
+        String[] longUnits = {"' ".repeat(5000), "' x0".repeat(5000), "de ".repeat(5000) + "x", "(".repeat(5000)};
+        long start = System.nanoTime();
+        for (String unit : longUnits) {
+            DispenseUnitForms.fits(unit, "plaquette de 10 comprimés");
+        }
+        assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(500);
     }
 
     @Test
