@@ -291,7 +291,14 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("PUT /nurse/tasks/{taskId}/complete",
             "the completion note is optional"),
         Map.entry("PUT /refills/{refillId}/approve",
-            "the provider notes are optional to approve (required to deny or hold, D1315)")
+            "the provider notes are optional to approve (required to deny or hold, D1315)"),
+        // Insurer claims PRs 2-3 (#1394): the body is optional; the service state refuses.
+        Map.entry("POST /billing-invoices/insurer-claims/batches/{batchId}/submit",
+            "body optional by design; refusals come from the service state"),
+        Map.entry("PUT /billing-invoices/insurer-claims/batches/{batchId}/lines/{lineId}/documents",
+            "body optional by design; refusals come from the service state"),
+        Map.entry("PUT /billing-invoices/insurer-claims/batches/{batchId}/shares",
+            "body optional by design; refusals come from the service state")
     );
 
     /**
