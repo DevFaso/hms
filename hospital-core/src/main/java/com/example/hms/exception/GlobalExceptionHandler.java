@@ -396,8 +396,7 @@ public class GlobalExceptionHandler {
                 globalReasons.add(violation.getMessage());
             } else {
                 String path = joinPath(item.prefix(), RequestFieldPaths.toJson(item.beanType(), property));
-                fieldErrors.putIfAbsent(path,
-                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path));
+                fieldErrors.putIfAbsent(path, constraintReason(violation.getMessage(), violation, path));
             }
         }
         return malformedBodyResponse(fieldErrors, globalReasons, request);
@@ -659,10 +658,10 @@ public class GlobalExceptionHandler {
         if (error.isBindingFailure()) {
             return invalidFieldReason(path);
         }
-        String template = error.contains(jakarta.validation.ConstraintViolation.class)
-            ? error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate()
+        jakarta.validation.ConstraintViolation<?> violation = error.contains(jakarta.validation.ConstraintViolation.class)
+            ? error.unwrap(jakarta.validation.ConstraintViolation.class)
             : null;
-        return constraintReason(error.getDefaultMessage(), template, path);
+        return constraintReason(error.getDefaultMessage(), violation, path);
     }
 
     /**
@@ -670,15 +669,106 @@ public class GlobalExceptionHandler {
      * default template is prefixed with the field's label, one written for the
      * field passes unchanged.
      */
-    private String constraintReason(String message, String template, String path) {
+    private String constraintReason(String message, jakarta.validation.ConstraintViolation<?> violation, String path) {
         String label = fieldLabel(path);
         if (message == null || message.isBlank()) {
             return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
         }
-        if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
-            return localized("error.validation.namedField", "{0}: {1}", label, message);
+        String template = violation == null ? null : violation.getMessageTemplate();
+        if (template != null && isDefaultTemplate(template)) {
+            // QA D3861: never the validator's own sentence ("ne doit pas être vide",
+            // "la taille doit être comprise entre 10 et 1024"): the house wording of
+            // the constraint, naming the field and the limit.
+            String house = houseReason(violation, label);
+            return house != null ? house : localized("error.validation.namedField", "{0}: {1}", label, message);
         }
         return message;
+    }
+
+    /** Whether a message template is bean validation's (or Hibernate Validator's) own default. */
+    static boolean isDefaultTemplate(String template) {
+        return DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith);
+    }
+
+    /**
+     * QA D3861: the constraints whose default message {@link #houseReason} rewords. A request
+     * constraint of any other kind needs a message key of its own
+     * (RequestConstraintMessageGuardTest).
+     */
+    public static final java.util.Set<String> HOUSE_WORDED_CONSTRAINTS = java.util.Set.of(
+        "NotNull", "NotBlank", "NotEmpty", "Size", "Min", "Max", "DecimalMin", "DecimalMax",
+        "Positive", "PositiveOrZero", "Negative", "NegativeOrZero", "Past", "PastOrPresent",
+        "Future", "FutureOrPresent", "Pattern", "Digits", "AssertTrue", "AssertFalse");
+
+    /** The house wording of a default-message constraint, or null for one this does not word. */
+    private String houseReason(jakarta.validation.ConstraintViolation<?> violation, String label) {
+        if (violation.getConstraintDescriptor() == null) {
+            return null;
+        }
+        String kind = violation.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName();
+        Map<String, Object> attributes = violation.getConstraintDescriptor().getAttributes();
+        return switch (kind) {
+            case "NotNull", "NotBlank", "NotEmpty" -> localized("validation.house.required", "Fill in “{0}”.", label);
+            case "Size" -> sizeReason(attributes, violation.getInvalidValue(), label);
+            case "Min" -> localized("validation.house.min", "“{0}” must be at least {1}.", label, attributes.get("value"));
+            case "Max" -> localized("validation.house.max", "“{0}” must be at most {1}.", label, attributes.get("value"));
+            case "DecimalMin" -> Boolean.FALSE.equals(attributes.get("inclusive"))
+                ? localized("validation.house.min.exclusive", "“{0}” must be more than {1}.", label, decimal(attributes))
+                : localized("validation.house.min", "“{0}” must be at least {1}.", label, decimal(attributes));
+            case "DecimalMax" -> Boolean.FALSE.equals(attributes.get("inclusive"))
+                ? localized("validation.house.max.exclusive", "“{0}” must be less than {1}.", label, decimal(attributes))
+                : localized("validation.house.max", "“{0}” must be at most {1}.", label, decimal(attributes));
+            case "Positive" -> localized("validation.house.min.exclusive", "“{0}” must be more than {1}.", label, 0);
+            case "PositiveOrZero" -> localized("validation.house.min", "“{0}” must be at least {1}.", label, 0);
+            case "Negative" -> localized("validation.house.max.exclusive", "“{0}” must be less than {1}.", label, 0);
+            case "NegativeOrZero" -> localized("validation.house.max", "“{0}” must be at most {1}.", label, 0);
+            case "Past" -> localized("validation.house.past", "“{0}” must be in the past.", label);
+            case "PastOrPresent" -> localized("validation.house.pastOrPresent", "“{0}” cannot be in the future.", label);
+            case "Future" -> localized("validation.house.future", "“{0}” must be in the future.", label);
+            case "FutureOrPresent" -> localized("validation.house.futureOrPresent", "“{0}” cannot be in the past.", label);
+            case "Pattern" -> localized("validation.house.pattern", "“{0}” is not in a valid format.", label);
+            case "Digits" -> localized("validation.house.digits",
+                "“{0}”: at most {1} digits before the decimal point and {2} after.",
+                label, attributes.get("integer"), attributes.get("fraction"));
+            case "AssertTrue", "AssertFalse" ->
+                localized("validation.house.invalid", "“{0}”: this value is not valid.", label);
+            default -> null;
+        };
+    }
+
+    /** {@code @Size}: characters for text, items for a list, the bound that applies. */
+    private String sizeReason(Map<String, Object> attributes, Object value, String label) {
+        int min = attributes.get("min") instanceof Integer i ? i : 0;
+        int max = attributes.get("max") instanceof Integer i ? i : Integer.MAX_VALUE;
+        boolean text = value == null || value instanceof CharSequence;
+        if (min == max) {
+            return text
+                ? localized("validation.house.size.exact", "“{0}”: exactly {1} characters.", label, min)
+                : localized("validation.house.size.items.exact", "“{0}”: exactly {1} items.", label, min);
+        }
+        if (max == Integer.MAX_VALUE) {
+            return text
+                ? localized("validation.house.size.min", "“{0}”: at least {1} characters.", label, min)
+                : localized("validation.house.size.items.min", "“{0}”: at least {1} items.", label, min);
+        }
+        if (min <= 0) {
+            return text
+                ? localized("validation.house.size.max", "“{0}”: {1} characters at most.", label, max)
+                : localized("validation.house.size.items.max", "“{0}”: {1} items at most.", label, max);
+        }
+        return text
+            ? localized("validation.house.size.range", "“{0}”: between {1} and {2} characters.", label, min, max)
+            : localized("validation.house.size.items.range", "“{0}”: between {1} and {2} items.", label, min, max);
+    }
+
+    /** A {@code @DecimalMin}/{@code @DecimalMax} bound as a number, so it is written the reader's way. */
+    private static Object decimal(Map<String, Object> attributes) {
+        Object value = attributes.get("value");
+        try {
+            return new java.math.BigDecimal(String.valueOf(value)).stripTrailingZeros();
+        } catch (NumberFormatException e) {
+            return value;
+        }
     }
 
     /**

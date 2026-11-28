@@ -16,11 +16,11 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Compliance sign-off on a break-the-glass session (E8 #54).")
 public class BreakGlassReviewRequestDTO {
 
-    @NotNull
+    @NotNull(message = "{breakGlass.validation.outcomeRequired}")
     @Schema(description = "The reviewer's decision.", example = "JUSTIFIED")
     private BreakGlassReviewOutcome outcome;
 
-    @Size(max = 1024)
+    @Size(max = 1024, message = "{breakGlass.validation.noteTooLong}")
     @Schema(description = "Optional note for the record (e.g. 'Confirmed with the on-call consultant').")
     private String note;
 }

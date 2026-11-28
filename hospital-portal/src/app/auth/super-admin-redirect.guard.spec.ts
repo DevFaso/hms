@@ -11,7 +11,7 @@ describe('SuperAdminRedirectGuard — MVP-5 surface consolidation', () => {
   let roleContext: RoleContextService;
 
   beforeEach(() => {
-    auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasAnyRole']);
+    auth = jasmine.createSpyObj<AuthService>('AuthService', ['isActiveSuperAdmin']);
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
     });
@@ -24,6 +24,7 @@ describe('SuperAdminRedirectGuard — MVP-5 surface consolidation', () => {
   it('redirects a super-admin active role to /super-admin', () => {
     roleContext.setRoles(['ROLE_SUPER_ADMIN']);
     roleContext.activeRole = 'ROLE_SUPER_ADMIN';
+    auth.isActiveSuperAdmin.and.returnValue(true);
 
     const result = TestBed.runInInjectionContext(() =>
       SuperAdminRedirectGuard({} as never, {} as never),
@@ -33,14 +34,14 @@ describe('SuperAdminRedirectGuard — MVP-5 surface consolidation', () => {
     expect(router.serializeUrl(result as UrlTree)).toBe('/super-admin');
   });
 
-  it('falls back to AuthService.hasAnyRole when no active role is set', () => {
-    auth.hasAnyRole.and.returnValue(true);
+  it('uses the shared session predicate when no active role is set', () => {
+    auth.isActiveSuperAdmin.and.returnValue(true);
 
     const result = TestBed.runInInjectionContext(() =>
       SuperAdminRedirectGuard({} as never, {} as never),
     );
 
-    expect(auth.hasAnyRole).toHaveBeenCalledWith(['ROLE_SUPER_ADMIN']);
+    expect(auth.isActiveSuperAdmin).toHaveBeenCalled();
     expect(result).toEqual(jasmine.any(UrlTree));
     expect(router.serializeUrl(result as UrlTree)).toBe('/super-admin');
   });

@@ -72,7 +72,10 @@ class EmptyClinicalWriteGuardTest {
     /** Properties that do not carry clinical content: references, dates of record, flags of the record itself. */
     private static final Pattern NOT_CONTENT = Pattern.compile(
         "(?i).*(id|ids|identifier|date|time|at|status|source|version|active|lateEntry|hospital|patient|encounter"
-            + "|staff|assignment|author|recordedBy|type|category|template|method)$");
+            + "|staff|assignment|author|recordedBy|type|category|template|method)$"
+            // QA D3860 (r77): an attestation or a signature is not content. A DAR note with
+            // nothing written passed this guard on its @NotNull attestAccuracy alone.
+            + "|(?i)(attest|signed|confirm|acknowledg).*");
 
     /** "Controller.method" -> "service/File.java#method": the service method that calls ClinicalContent. */
     private static final Map<String, String> CHECKED = new LinkedHashMap<>();
@@ -91,6 +94,8 @@ class EmptyClinicalWriteGuardTest {
         CHECKED.put("LaborController.addEntry", "service/impl/LaborServiceImpl.java#addEntry");
         CHECKED.put("ImagingResultController.createReport", "service/impl/ImagingReportServiceImpl.java#createReport");
         CHECKED.put("NurseTaskController.createCareNote", "service/impl/NurseTaskServiceImpl.java#createCareNote");
+        // QA D3860 (r77): a nursing note needs one written part; its attestations are not one.
+        CHECKED.put("NursingNoteController.createNote", "service/impl/NursingNoteServiceImpl.java#requireNoteContent");
         CHECKED.put("MaternalHistoryController.createMaternalHistory",
             "service/impl/MaternalHistoryServiceImpl.java#createMaternalHistory");
         CHECKED.put("HighRiskPregnancyCarePlanController.createPlan",

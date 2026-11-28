@@ -28,23 +28,23 @@ import java.time.LocalDateTime;
 public class DeathRecordAmendmentDTO {
 
     /** Mandatory. An amended certificate with no account of why is worse than none. */
-    @NotBlank
-    @Size(max = 500)
+    @NotBlank(message = "{mortality.amendmentReasonRequired}")
+    @Size(max = 500, message = "{validation.reason.size}")
     private String amendmentReason;
 
-    @Size(max = 500)
+    @Size(max = 500, message = "{mortality.validation.causeTooLong}")
     private String immediateCause;
 
-    @Size(max = 20)
+    @Size(max = 20, message = "{mortality.validation.causeCodeTooLong}")
     private String immediateCauseCode;
 
-    @Size(max = 500)
+    @Size(max = 500, message = "{mortality.validation.causeTooLong}")
     private String underlyingCause;
 
-    @Size(max = 20)
+    @Size(max = 20, message = "{mortality.validation.causeCodeTooLong}")
     private String underlyingCauseCode;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{mortality.validation.contributingTooLong}")
     private String contributingCauses;
 
     private MannerOfDeath mannerOfDeath;
@@ -66,6 +66,6 @@ public class DeathRecordAmendmentDTO {
     /** Completed weeks. Left off keeps what the record holds. */
     private Integer gestationalAgeWeeks;
 
-    @Size(max = 1000)
+    @Size(max = 1000, message = "{validation.notes.size1000}")
     private String notes;
 }

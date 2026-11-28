@@ -183,7 +183,7 @@ class FieldLabelMeaningTest {
                 assertThat(fieldErrors).as(lang + " " + target.to()).hasSize(1);
                 String reason = String.valueOf(fieldErrors.values().iterator().next());
                 assertThat(reason).as(lang + " " + target.to())
-                    .startsWith(recipient.get(lang))
+                    .contains(recipient.get(lang))
                     .doesNotContainIgnoringCase("period")
                     .doesNotContainIgnoringCase("période")
                     .doesNotContainIgnoringCase("período");

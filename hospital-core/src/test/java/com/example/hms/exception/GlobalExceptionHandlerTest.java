@@ -1044,8 +1044,10 @@ class GlobalExceptionHandlerTest {
         @DisplayName("QA D1249: a constraint left on its default text names its field")
         void aDefaultConstraintMessageNamesItsField_D1249() throws Exception {
             Map<String, Object> body = validated(new DefaultMessageBody());
-            assertThat((String) ((Map<?, ?>) body.get("fieldErrors")).get("reason")).startsWith("reason: ");
-            assertThat((String) body.get("message")).startsWith("reason: ");
+            // QA D3861: the house wording names the field, never the validator's sentence.
+            assertThat((String) ((Map<?, ?>) body.get("fieldErrors")).get("reason"))
+                .isEqualTo("Fill in “reason”.");
+            assertThat((String) body.get("message")).contains("“reason”").doesNotContain("must not");
         }
 
         @Test

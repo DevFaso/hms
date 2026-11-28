@@ -11,7 +11,7 @@ describe('superAdminPathRewriteGuard — MVP-5b', () => {
   let roleContext: RoleContextService;
 
   beforeEach(() => {
-    auth = jasmine.createSpyObj<AuthService>('AuthService', ['hasAnyRole']);
+    auth = jasmine.createSpyObj<AuthService>('AuthService', ['isActiveSuperAdmin']);
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
     });
@@ -24,6 +24,7 @@ describe('superAdminPathRewriteGuard — MVP-5b', () => {
   it('rewrites a super-admin click on /feature-flags to /super-admin/feature-flags', () => {
     roleContext.setRoles(['ROLE_SUPER_ADMIN']);
     roleContext.activeRole = 'ROLE_SUPER_ADMIN';
+    auth.isActiveSuperAdmin.and.returnValue(true);
     const guard = superAdminPathRewriteGuard('/super-admin/feature-flags');
 
     const result = TestBed.runInInjectionContext(() => guard({} as never, {} as never));
@@ -32,13 +33,13 @@ describe('superAdminPathRewriteGuard — MVP-5b', () => {
     expect(router.serializeUrl(result as UrlTree)).toBe('/super-admin/feature-flags');
   });
 
-  it('falls back to AuthService.hasAnyRole when no active role is set', () => {
-    auth.hasAnyRole.and.returnValue(true);
+  it('uses the shared session predicate when no active role is set', () => {
+    auth.isActiveSuperAdmin.and.returnValue(true);
     const guard = superAdminPathRewriteGuard('/super-admin/audit-logs');
 
     const result = TestBed.runInInjectionContext(() => guard({} as never, {} as never));
 
-    expect(auth.hasAnyRole).toHaveBeenCalledWith(['ROLE_SUPER_ADMIN']);
+    expect(auth.isActiveSuperAdmin).toHaveBeenCalled();
     expect(result).toEqual(jasmine.any(UrlTree));
     expect(router.serializeUrl(result as UrlTree)).toBe('/super-admin/audit-logs');
   });

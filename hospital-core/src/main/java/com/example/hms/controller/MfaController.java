@@ -502,8 +502,9 @@ public class MfaController {
 
     // DTO for MFA login verification (unauthenticated)
     public record MfaLoginVerifyRequest(
-            @jakarta.validation.constraints.NotBlank String mfaToken,
-            @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 6, max = 8) String code
+            @jakarta.validation.constraints.NotBlank(message = "{mfa.token.invalid}") String mfaToken,
+            @jakarta.validation.constraints.NotBlank(message = "{mfa.login.codeRequired}")
+            @jakarta.validation.constraints.Size(min = 6, max = 8, message = "{mfa.login.codeLength}") String code
     ) {}
 
     /** A bundle message in the reader's language (the request's Accept-Language). */

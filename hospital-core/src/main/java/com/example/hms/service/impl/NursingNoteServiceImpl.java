@@ -33,6 +33,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.NursingNoteService;
+import com.example.hms.service.support.ClinicalContent;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +84,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         UUID actorUserId = requireCurrentUser();
         UUID hospitalId = resolveHospitalId(request.getHospitalId());
         ensureCanDocument(actorUserId, hospitalId);
+        requireNoteContent(request);
 
         User author = userRepository.findById(actorUserId)
             .orElseThrow(() -> new ResourceNotFoundException("nursingNote.author.notFound", actorUserId));
@@ -120,6 +122,19 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         NursingNote saved = nursingNoteRepository.save(note);
         logAuditEvent(saved, patient, hospital, staff, actorUserId, "Nursing note documented");
         return nursingNoteMapper.toResponse(saved);
+    }
+
+    /**
+     * QA D3860: a note with nothing written in it (no data, action, response,
+     * SOAPIE part, narrative or entry) was saved and listed on the chart as an
+     * empty note. The attestations and signature are not content.
+     */
+    private static void requireNoteContent(NursingNoteCreateRequestDTO request) {
+        ClinicalContent.requireAny("dataSubjective", "nursingNote.contentRequired",
+            request.getDataSubjective(), request.getDataObjective(), request.getDataAssessment(),
+            request.getDataPlan(), request.getDataImplementation(), request.getDataEvaluation(),
+            request.getActionSummary(), request.getResponseSummary(), request.getEducationSummary(),
+            request.getNarrative(), request.getEducationEntries(), request.getInterventionEntries());
     }
 
     @Override
