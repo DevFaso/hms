@@ -8,8 +8,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,8 +32,6 @@ public final class HospitalContextRequestOverrides {
     /** The patient portal: the caller acts on their own record, as a patient. */
     public static final String PATIENT_PORTAL_PATH = "/me/patient";
 
-    private static final Set<String> READ_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
-
     private static final Logger log = LoggerFactory.getLogger(HospitalContextRequestOverrides.class);
 
     private HospitalContextRequestOverrides() {
@@ -50,10 +46,10 @@ public final class HospitalContextRequestOverrides {
      *       chip-scoped view).</li>
      *   <li>A hospital in the principal's live permitted set → acting at it.
      *       This also settles a caller holding several hospitals, who
-     *       otherwise has none ({@code AMBIGUOUS}). On a write outside the
-     *       patient portal, a hospital where a staff caller is only a patient
-     *       is ignored: the request runs on the live scope
-     *       ({@link #refusesStaffWriteAt}).</li>
+     *       otherwise has none ({@code AMBIGUOUS}). Outside the patient
+     *       portal, a hospital where a staff caller is only a patient is
+     *       ignored: the request runs on the live scope
+     *       ({@link #actsOnlyAsPatientAt}).</li>
      *   <li>Anything else, including a malformed value and a principal whose
      *       permitted set is EMPTY (a patient, a Keycloak principal with no
      *       local account, a user whose assignments were revoked) → refused
@@ -96,13 +92,13 @@ public final class HospitalContextRequestOverrides {
             return refused(effective, requestedHospital);
         }
 
-        if (refusesStaffWriteAt(effective, requestedHospital, request)) {
-            // A write by a staff caller naming a hospital where they are only a
-            // patient (a stale chip, a patient hospital made primary): the
-            // header is ignored, not refused. The request runs on the live
-            // scope, so a write about their own account still passes and a
-            // hospital-scoped write finds no acting hospital there.
-            log.info("[AUTH] Ignoring {} {} on a staff write: the caller is only a patient there",
+        if (actsOnlyAsPatientAt(effective, requestedHospital, request)) {
+            // A staff caller naming a hospital where they are only a patient (a
+            // stale chip, a patient hospital made primary), outside the patient
+            // portal: the header is ignored, not refused. The request runs on
+            // the live scope, so a request about their own account still passes
+            // and nothing of that hospital is read or written as staff.
+            log.info("[AUTH] Ignoring {} {}: the caller is only a patient there",
                 HEADER_HOSPITAL_ID, requestedHospital);
             return effective;
         }
@@ -113,32 +109,23 @@ public final class HospitalContextRequestOverrides {
     }
 
     /**
-     * True when {@code request} is a staff write at a hospital where the caller
-     * is only a patient ({@link HospitalContext#isTreatedOnlyAt}): a write
-     * outside the patient portal acts at a hospital where the caller works.
-     * The patient portal's own paths, every read and a request outside HTTP
-     * keep the caller's whole permitted set. A caller who works at a provider
-     * facility (a pharmacy, a laboratory) is left to the provider confinement,
-     * whose answer for a hospital endpoint must stay that of an unmapped path.
+     * True when {@code request} acts as staff at a hospital where the caller is
+     * only a patient ({@link HospitalContext#isTreatedOnlyAt}): outside the
+     * patient portal, a staff caller reads and writes where they work. The
+     * patient portal's own paths and a request outside HTTP keep the caller's
+     * whole permitted set. A caller who works at a provider facility (a
+     * pharmacy, a laboratory) is left to the provider confinement, whose answer
+     * for a hospital endpoint must stay that of an unmapped path.
      */
-    public static boolean refusesStaffWriteAt(HospitalContext context, UUID hospitalId, HttpServletRequest request) {
+    public static boolean actsOnlyAsPatientAt(HospitalContext context, UUID hospitalId, HttpServletRequest request) {
         return context != null && context.isTreatedOnlyAt(hospitalId)
             && (context.getProviderFacilityTypes() == null || context.getProviderFacilityTypes().isEmpty())
-            && isStaffWrite(request);
+            && request != null && !isPatientPortalPath(request);
     }
 
-    /** {@link #refusesStaffWriteAt} for the request being served. */
-    public static boolean refusesStaffWriteAt(HospitalContext context, UUID hospitalId) {
-        return refusesStaffWriteAt(context, hospitalId, currentRequest());
-    }
-
-    /** A write (any method but GET, HEAD, OPTIONS, TRACE) outside the patient portal. */
-    public static boolean isStaffWrite(HttpServletRequest request) {
-        if (request == null || request.getMethod() == null
-            || READ_METHODS.contains(request.getMethod().toUpperCase(Locale.ROOT))) {
-            return false;
-        }
-        return !isPatientPortalPath(request);
+    /** {@link #actsOnlyAsPatientAt} for the request being served. */
+    public static boolean actsOnlyAsPatientAt(HospitalContext context, UUID hospitalId) {
+        return actsOnlyAsPatientAt(context, hospitalId, currentRequest());
     }
 
     /** True for {@link #PATIENT_PORTAL_PATH} and below, relative to the servlet context. */

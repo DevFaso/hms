@@ -1162,6 +1162,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         // QA D1912 (round 53): the voided results leave the portal; their
         // "new result available" notifications leave with them.
         resultReleaseNotifier.patientResultsWithdrawn(saved, voidedResultIds);
+        // QA D4149: the prescriber may have acted on a result that no longer exists: they are told, with why.
+        resultReleaseNotifier.prescriberOrderWithdrawn(saved, true, !voidedResultIds.isEmpty(),
+            roleValidator.getCurrentUserId());
         log.info("Lab order {} voided as entered in error", saved.getId());
         return labOrderMapper.toLabOrderResponseDTO(saved);
     }
@@ -1170,12 +1173,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason,
                                                         Locale locale) {
-        LabOrder labOrder = labOrderRepository.findById(id)
+        // QA D4148 review: a cancellation decides on the order as it is committed, under the lock the
+        // collection and the void take, so a tube collected meanwhile is never cancelled over.
+        boolean cancelling = toStatus == LabOrderStatus.CANCELLED;
+        LabOrder labOrder = (cancelling ? labOrderRepository.findWithLockById(id) : labOrderRepository.findById(id))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (!labOrder.isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        if (cancelling) {
+            LabOrderStatus committed = labOrderRepository.findStatusById(id);
+            if (committed != null) {
+                labOrder.setStatus(committed);
+            }
         }
 
         LabOrderStatus current = labOrder.getStatus();
@@ -1186,7 +1198,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
         // QA D1098: the shared order rule, so the refusal names the reason.
         com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(current, toStatus, RESULTED_STATES);
-        validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
+        validateStatusTransition(labOrder, toStatus, authorityHospitalId, orderingHospitalId);
         if (toStatus == LabOrderStatus.CANCELLED) {
             // QA D673: a cancel states why, and the reason is kept on the order.
             String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired", "reason");
@@ -1196,11 +1208,31 @@ public class LabOrderServiceImpl implements LabOrderService {
             labOrder.setCancellationReason(cancelReason);
         }
         labOrder.setStatus(toStatus);
-        return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(labOrder));
+        LabOrder saved = labOrderRepository.save(labOrder);
+        if (toStatus == LabOrderStatus.CANCELLED) {
+            // QA D4149: the prescriber is told their order was called off, and why.
+            resultReleaseNotifier.prescriberOrderWithdrawn(saved, false, roleValidator.getCurrentUserId());
+        }
+        return labOrderMapper.toLabOrderResponseDTO(saved);
     }
 
-    private void validateStatusTransition(LabOrderStatus from, LabOrderStatus to,
+    /** QA D4148: the states of an order nothing was collected for yet. */
+    private static final Set<LabOrderStatus> BEFORE_COLLECTION = EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+
+    /**
+     * QA D4148: the prescriber calls off their own order while nothing was collected for it, as the prescriber
+     * of an imaging order does. Once a specimen exists the order is the laboratory's to cancel.
+     */
+    private static boolean prescriberCancelsBeforeCollection(LabOrder labOrder, UUID currentUserId) {
+        com.example.hms.model.Staff prescriber = labOrder.getOrderingStaff();
+        return currentUserId != null && BEFORE_COLLECTION.contains(labOrder.getStatus())
+            && prescriber != null && prescriber.getUser() != null
+            && currentUserId.equals(prescriber.getUser().getId());
+    }
+
+    private void validateStatusTransition(LabOrder labOrder, LabOrderStatus to,
                                           UUID hospitalId, UUID orderingHospitalId) {
+        LabOrderStatus from = labOrder.getStatus();
         Set<LabOrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(from, Set.of());
         if (!allowed.contains(to)) {
             throw new BusinessException("lab.order.invalidTransition", from.name(), to.name());
@@ -1209,7 +1241,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         if (to == LabOrderStatus.CANCELLED) {
-            requireOrderDecisionAuthority(currentUserId, orderingHospitalId, "lab.order.cancelForbidden");
+            if (!prescriberCancelsBeforeCollection(labOrder, currentUserId)) {
+                requireOrderDecisionAuthority(currentUserId, orderingHospitalId, "lab.order.cancelForbidden");
+            }
             return;
         }
 

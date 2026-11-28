@@ -477,9 +477,20 @@
               }}
             </option>
             @for (order of orders(); track order.id) {
-              <option [value]="order.id">{{ orderLabel(order) }}</option>
+              <option [value]="order.id">
+                {{ shortOrderCode(order.labOrderCode) }} ·
+                {{ order.orderDatetime | serverTime | dateTime }} ·
+                {{ orderLabel(order) }}
+              </option>
             }
           </select>
+          <!-- QA D4176: says why a potassium or a completed order is not in the list. -->
+          <small class="field-hint" data-testid="create-order-hint">{{
+            (!ordersLoading() && orders().length === 0
+              ? 'MICRO.ORDERS_NONE_OPEN'
+              : 'MICRO.ORDERS_CULTURE_ONLY'
+            ) | translate
+          }}</small>
         </div>
 
         <div class="form-field">

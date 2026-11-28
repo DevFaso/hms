@@ -2463,7 +2463,7 @@ class PatientServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
         doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
-            .when(accountLinkGuard).requireLinkable(staffUser, null);
+            .when(accountLinkGuard).requireLinkable(staffUser, null, hospitalId);
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.FRENCH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
@@ -2484,7 +2484,7 @@ class PatientServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.alreadyLinked"))
-            .when(accountLinkGuard).requireLinkable(user, null);
+            .when(accountLinkGuard).requireLinkable(user, null, hospitalId);
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -2502,7 +2502,7 @@ class PatientServiceImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
-            .when(accountLinkGuard).requireLinkable(staffUser, null);
+            .when(accountLinkGuard).requireLinkable(staffUser, null, hospitalId);
 
         assertThatThrownBy(() -> patientService.createPatient(request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -2522,7 +2522,7 @@ class PatientServiceImplTest {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(userRepository.findById(newUserId)).thenReturn(Optional.of(staffUser));
         doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
-            .when(accountLinkGuard).requireLinkable(staffUser, patientId);
+            .when(accountLinkGuard).requireLinkable(staffUser, patientId, null);
 
         assertThatThrownBy(() -> patientService.updatePatient(patientId, request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -2550,7 +2550,7 @@ class PatientServiceImplTest {
 
         patientService.updatePatient(patientId, request, Locale.ENGLISH);
 
-        verify(accountLinkGuard, never()).requireLinkable(any(), any());
+        verify(accountLinkGuard, never()).requireLinkable(any(), any(), any());
         verify(patientRepository).save(patient);
     }
 

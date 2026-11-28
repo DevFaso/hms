@@ -554,6 +554,11 @@ export class LabResultsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /** QA D4143: a correction is not saved without its reason. */
+  correctionReasonMissing(): boolean {
+    return !!this.correcting() && !(this.form.correctionReason ?? '').trim();
+  }
+
   /** A released result that no correction has replaced yet. */
   canCorrect(r: LabResultResponse): boolean {
     return this.canEnterResults() && !!r.released && !r.supersededByResultId;
@@ -683,6 +688,10 @@ export class LabResultsComponent implements OnInit {
     const payload: LabResultRequest = {
       ...this.form,
       resultDate: toServerDateTime(this.form.resultDate),
+      // QA D4143: the reason travels with a correction only.
+      correctionReason: this.correcting()
+        ? this.form.correctionReason?.trim() || undefined
+        : undefined,
     };
     if (panel) {
       // r63 (NFS panels): one value per component; the server composes the summary value.

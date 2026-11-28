@@ -237,6 +237,41 @@ describe('LabInstrumentsComponent', () => {
     flushInstruments();
   });
 
+  it('QA D4153: the form offers the five dates and sends the ones entered, an emptied one as no date', () => {
+    fixture.detectChanges();
+    flushInstruments();
+
+    component.openCreate();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    for (const field of [
+      'installationDate',
+      'lastCalibrationDate',
+      'nextCalibrationDate',
+      'lastMaintenanceDate',
+      'nextMaintenanceDate',
+    ]) {
+      const input = el.querySelector<HTMLInputElement>(`[data-testid="instrument-${field}"]`);
+      expect(input?.type).withContext(field).toBe('date');
+    }
+
+    component.form.name = 'Ionogramme';
+    component.form.serialNumber = 'SN-DATES';
+    component.form.installationDate = '2026-01-15';
+    component.form.nextCalibrationDate = '2026-12-01';
+    component.form.lastMaintenanceDate = '';
+    component.save();
+
+    const req = httpMock.expectOne(
+      (r) => r.url.includes('/lab/instruments/hospital/h-1') && r.method === 'POST',
+    );
+    expect(req.request.body.installationDate).toBe('2026-01-15');
+    expect(req.request.body.nextCalibrationDate).toBe('2026-12-01');
+    expect(req.request.body.lastMaintenanceDate).toBeUndefined();
+    req.flush(mockInstrument({ id: 'inst-dates' }));
+    flushInstruments();
+  });
+
   it('should save updated instrument', () => {
     fixture.detectChanges();
     flushInstruments();
