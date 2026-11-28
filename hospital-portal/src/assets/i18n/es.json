@@ -221,7 +221,7 @@
     "FHR": "FCF (lpm)",
     "INFANT_SEX": "Sexo",
     "LATENT_PHASE": "Fase latente",
-    "MINOR_SAFEGUARDING": "Minor patient (under {{years}} at admission): a safeguarding review is open. Provisional rule.",
+    "MINOR_SAFEGUARDING": "Minor patient (under {{years}} at admission): safeguarding to be reviewed. Provisional rule.",
     "LATE_ENTRY": "Registro tardío",
     "LIQUOR": "Líquido amniótico",
     "LIQUOR_ABSENT": "Ausente",

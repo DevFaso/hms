@@ -28,7 +28,11 @@ test('an emergency and an urgent choice never read « Urgence » beside « Urgen
   walk(fr, [], (path) => {
     if (path.at(-1) !== 'EMERGENCY') return;
     const parent = path.slice(0, -1).reduce((node, key) => node[key], fr);
-    if (typeof parent.URGENT === 'string' && /^urgence$/i.test(parent.EMERGENCY.trim())) {
+    if (
+      typeof parent.URGENT === 'string' &&
+      /^urgence$/i.test(parent.EMERGENCY.trim()) &&
+      /^urgente?$/i.test(parent.URGENT.trim())
+    ) {
       offenders.push(path.slice(0, -1).join('.'));
     }
   });
@@ -52,4 +56,30 @@ test('the visit, nursing-note and labour panels show one date-time format', () =
   ]) {
     assert.doesNotMatch(readFileSync(file, 'utf8'), /\|\s*date:\s*'short'/, file);
   }
+});
+
+test('the maternity pickers filter the mother, but never the ultrasound order picker', () => {
+  // QA r81 D4116; review of #1378 F5: an URGENT/STAT or OTHER ultrasound is never refused by the server,
+  // so its picker offers every patient.
+  const pickerTag = (file, id) => {
+    const html = readFileSync(file, 'utf8');
+    const at = html.indexOf(`inputId="${id}"`);
+    assert.ok(at > 0, `${file}: missing picker ${id}`);
+    const start = html.lastIndexOf('<app-patient-picker', at);
+    return html.slice(start, html.indexOf('/>', at));
+  };
+  for (const [file, id] of [
+    ['src/app/maternity/labor-tab.html', 'labor-patient'],
+    ['src/app/maternity/postpartum-tab.html', 'pp-patient'],
+    ['src/app/maternity/prenatal-tab.html', 'pn-patient'],
+    ['src/app/maternity/birth-plan-tab.html', 'bp-filter-patient'],
+    ['src/app/maternity/birth-plan-tab.html', 'bp-patient'],
+    ['src/app/maternity/maternity.html', 'history-patient'],
+  ]) {
+    assert.match(pickerTag(file, id), /\bmaternalOnly\b/, `${file} ${id}`);
+  }
+  assert.doesNotMatch(
+    pickerTag('src/app/maternity/ultrasound-tab.html', 'us-patient'),
+    /\bmaternalOnly\b/,
+  );
 });

@@ -1323,26 +1323,31 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
-    /** QA r81 D4115: the visit statuses that are still open (the patient is still being seen). */
-    private static final java.util.Set<EncounterStatus> OPEN_VISIT_STATUSES = java.util.EnumSet.of(
-        EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
-        EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+    /**
+     * QA r81 D4115: the statuses of a visit still in the queue, before any physician has seen the patient. A visit
+     * a physician has started (IN_PROGRESS, AWAITING_RESULTS, READY_FOR_DISCHARGE) never blocks a new one.
+     */
+    private static final java.util.Set<EncounterStatus> QUEUED_VISIT_STATUSES = java.util.EnumSet.of(
+        EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN);
 
     /**
      * QA r81 D4115: a second walk-in of the same type, for the same patient, in the same department and on the
      * same day, while the first is still open, was created with no word and the triage queue listed the patient
-     * twice. It is refused and the open visit is named; once the first visit is closed (seen, left without being
-     * seen, cancelled) a new one is accepted. A booked appointment keeps its own check above.
+     * twice. It is refused while the first is still in the queue (not yet seen by a physician), and the department
+     * is named; once a physician has started it, or it is closed, a new one is accepted. An EMERGENCY walk-in is
+     * never refused (QA D1476). A booked appointment keeps its own check above.
      */
     private void assertNoOpenSameDayVisit(EncounterResolution ctx, com.example.hms.enums.EncounterType type,
                                           LocalDateTime encounterDate) {
-        if (ctx.appointment() != null || ctx.department() == null || type == null) {
+        // QA D1476: emergency care is never refused at the desk; an EMERGENCY walk-in is always accepted.
+        if (ctx.appointment() != null || ctx.department() == null || type == null
+                || type == com.example.hms.enums.EncounterType.EMERGENCY) {
             return;
         }
         LocalDateTime dayStart = encounterDate.toLocalDate().atStartOfDay();
         boolean open = encounterRepository
             .existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
-                ctx.hospitalId(), ctx.patient().getId(), ctx.department().getId(), type, OPEN_VISIT_STATUSES,
+                ctx.hospitalId(), ctx.patient().getId(), ctx.department().getId(), type, QUEUED_VISIT_STATUSES,
                 dayStart, dayStart.plusDays(1).minusNanos(1));
         if (open) {
             throw new com.example.hms.exception.FieldBusinessException("encounterType", "encounter.duplicateOpenVisit",

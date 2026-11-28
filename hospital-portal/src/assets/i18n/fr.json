@@ -221,7 +221,7 @@
     "FHR": "BCF (bpm)",
     "INFANT_SEX": "Sexe",
     "LATENT_PHASE": "Phase de latence",
-    "MINOR_SAFEGUARDING": "Patiente mineure (moins de {{years}} ans à l’admission) : une revue de protection est ouverte. Règle provisoire.",
+    "MINOR_SAFEGUARDING": "Patiente mineure (moins de {{years}} ans à l’admission) : situation de protection à revoir. Règle provisoire.",
     "LATE_ENTRY": "Saisie tardive",
     "LIQUOR": "Liquide amniotique",
     "LIQUOR_ABSENT": "Absent",
@@ -8330,9 +8330,9 @@
         "GENERIC_REPORT": "Autre compte rendu"
       },
       "ADMISSION_TYPE": {
-        "EMERGENCY": "Urgence vitale",
+        "EMERGENCY": "Urgence",
         "ELECTIVE": "Programmée",
-        "URGENT": "Urgente",
+        "URGENT": "Semi-urgente",
         "NEWBORN": "Nouveau-né",
         "TRANSFER": "Transfert",
         "OBSERVATION": "Observation",

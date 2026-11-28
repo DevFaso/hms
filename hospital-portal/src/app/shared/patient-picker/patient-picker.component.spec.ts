@@ -173,6 +173,21 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('review of #1378 F5: without maternalOnly a patient recorded male is still offered', (done) => {
+    const recordedMale = {
+      ...mockPatient('m', 'Awa TestEcho'),
+      gender: 'M',
+      dateOfBirth: '1996-04-02',
+    };
+    patientSpy.search.and.returnValue(of([recordedMale]));
+    component.ngOnInit();
+    component.onQueryChange('TestEcho');
+    setTimeout(() => {
+      expect(component.suggestions().map((p) => p.id)).toEqual(['m']);
+      done();
+    }, 400);
+  });
+
   // QA D1274 (D1253 sibling, round 27): a birth date found nobody, in any format.
   it('QA D1274: a typed birth date is searched by birth date, never as a name or a phone', (done) => {
     component.hospitalId = 'h1';

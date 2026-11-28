@@ -221,7 +221,7 @@
     "FHR": "FHR (bpm)",
     "INFANT_SEX": "Sex",
     "LATENT_PHASE": "Latent phase",
-    "MINOR_SAFEGUARDING": "Minor patient (under {{years}} at admission): a safeguarding review is open. Provisional rule.",
+    "MINOR_SAFEGUARDING": "Minor patient (under {{years}} at admission): safeguarding to be reviewed. Provisional rule.",
     "LATE_ENTRY": "Late entry",
     "LIQUOR": "Liquor",
     "LIQUOR_ABSENT": "Absent",
