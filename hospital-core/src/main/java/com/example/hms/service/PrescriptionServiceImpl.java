@@ -1321,10 +1321,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (rationale.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.rationaleRequired");
         }
-        // QA r81 D4108 class: continuing despite the allergy is an override, so its rationale is at least
-        // 10 non-whitespace characters (provisional rule). Stopping the order is not an override.
-        if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE
-                && !com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(rationale)) {
+        // QA r81 D4108 class: the rationale is at least 10 non-whitespace characters (provisional rule), as the
+        // request's own validation says at the edge.
+        if (!com.example.hms.service.clinicalrules.ClinicalOverrideReason.isSufficient(rationale)) {
             throw new com.example.hms.exception.FieldBusinessException("rationale", "clinical.override.reasonMin");
         }
         if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE && plan.isEmpty()) {

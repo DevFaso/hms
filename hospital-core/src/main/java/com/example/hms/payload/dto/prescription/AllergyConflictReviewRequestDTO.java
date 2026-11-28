@@ -30,7 +30,11 @@ public class AllergyConflictReviewRequestDTO {
     @Size(max = 1000)
     private String plan;
 
-    /** The clinical rationale. Mandatory. */
+    /**
+     * The clinical rationale. Mandatory, at least 10 non-whitespace characters (QA r81 D4108 class, provisional
+     * rule CLINICAL_OVERRIDE_REASON_MINIMUM), refused at the edge with the other fields.
+     */
+    @com.example.hms.validation.ClinicalOverrideReasonRequired
     @NotBlank(message = "{allergy.review.rationaleRequired}")
     @Size(max = 1000, message = "{allergy.review.rationaleTooLong}")
     private String rationale;
