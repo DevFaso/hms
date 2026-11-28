@@ -65,7 +65,8 @@ class DispenseControllerTest {
     void cashierReachesTheCheckoutPicker() throws Exception {
         assertThat(gateOf("listByPharmacy", UUID.class, Pageable.class)).contains("'BILLING_SPECIALIST'");
         Method list = com.example.hms.controller.PharmacyRegistryController.class.getDeclaredMethod(
-                "list", UUID.class, Pageable.class, org.springframework.security.core.Authentication.class);
+                "list", UUID.class, boolean.class, Pageable.class,
+                org.springframework.security.core.Authentication.class);
         assertThat(list.getAnnotation(PreAuthorize.class).value()).contains("'ROLE_BILLING_SPECIALIST'");
     }
 

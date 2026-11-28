@@ -105,6 +105,17 @@ public class PharmacyPayment extends BaseEntity {
     @Column(name = "receipt_number", length = 40)
     private String receiptNumber;
 
+    /**
+     * QA D4186 (r81, V421): the selling price of one unit and the line total when this payment was taken, so the
+     * receipt can be opened again and reprinted with the prices first charged, never with today's list price.
+     * Null on payments recorded before V421: their reprint shows no price line.
+     */
+    @Column(name = "charged_unit_price", precision = 12, scale = 2)
+    private BigDecimal chargedUnitPrice;
+
+    @Column(name = "charged_line_total", precision = 12, scale = 2)
+    private BigDecimal chargedLineTotal;
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "received_by", nullable = false,

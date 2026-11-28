@@ -110,13 +110,13 @@ describe('CounterSaleComponent', () => {
 
   beforeEach(async () => {
     pharmacy = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'listLotsByInventoryItem',
     ]);
     sales = jasmine.createSpyObj('PharmacySaleService', ['createSale', 'listByPharmacy']);
     toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']);
-    pharmacy.listPharmacies.and.returnValue(
+    pharmacy.listStores.and.returnValue(
       of({ content: [{ id: 'ph-1', hospitalId: 'h-1', name: 'Pharmacie centrale' }] } as any),
     );
     pharmacy.listInventoryByPharmacy.and.returnValue(of({ data: { content: items } } as any));

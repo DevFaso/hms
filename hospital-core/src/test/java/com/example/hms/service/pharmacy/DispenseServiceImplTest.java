@@ -226,6 +226,14 @@ class DispenseServiceImplTest {
                 .barcodeValue(LotBarcode.mint())
                 .build();
         stockLot.setId(stockLotId);
+        // QA D4181 (r81): a fill leaves only from an item that is priced or documented as free. The fixture's
+        // item is documented free (no charge, as these tests assumed of an unpriced item); a test about money
+        // prices it and withdraws the reason.
+        inventoryItem.setFreeOfChargeReason("Programme national (fixture)");
+        org.mockito.Mockito.lenient().when(inventoryItemRepository
+                .findByPharmacyIdAndMedicationCatalogItemId(any(), any())).thenReturn(Optional.of(inventoryItem));
+        org.mockito.Mockito.lenient().when(medicationCatalogItemRepository.findById(catalogItem.getId()))
+                .thenReturn(Optional.of(inventoryItem.getMedicationCatalogItem()));
         stockMovesLikeTheDatabase();
     }
 
@@ -270,6 +278,8 @@ class DispenseServiceImplTest {
                 .patientId(patientId)
                 .pharmacyId(pharmacyId)
                 .dispensedBy(userId)
+                // QA D4181 (r81): the product the fill is priced on (the lot's, when a lot is named).
+                .medicationCatalogItemId(catalogItem.getId())
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
@@ -578,6 +588,7 @@ class DispenseServiceImplTest {
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
             entity.setMedicationCatalogItem(catalogItem);
             inventoryItem.setUnitPrice(new BigDecimal("100"));
+            inventoryItem.setFreeOfChargeReason(null);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
@@ -659,6 +670,126 @@ class DispenseServiceImplTest {
             assertThat(entity.getBillingDeferredAt()).isNotNull().isEqualTo(entity.getDispensedAt());
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), any(),
                     eq(dispenseId.toString()), any(), any());
+        }
+
+        @Test
+        @DisplayName("review of #1380 (F2): a dispensary that only priced the item (no lot of it) fills it without a lot, "
+                + "although it holds an active item")
+        void aPriceOnlyItemFillsWithoutALot() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setBillingUrgencyReason("Crise, caisse fermée");
+            Dispense entity = stubThePricedOneStepFill(dto);
+            wireTheDeferralGate();
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+            // The old rule: any active item at the pharmacy switched the lot rule on for every fill there.
+            lenient().when(inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacyId)).thenReturn(true);
+            when(stockLotRepository.existsByInventoryItemId(inventoryItem.getId())).thenReturn(false);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+
+            service.createDispense(dto);
+
+            verify(dispenseRepository).save(any(Dispense.class));
+        }
+
+        /** Review of #1380 (F3): the order's item at this pharmacy has no price and no free-of-charge reason. */
+        private Dispense stubTheUnpricedOneStepFill(DispenseRequestDTO dto) {
+            Dispense entity = stubThePricedOneStepFill(dto);
+            inventoryItem.setUnitPrice(null);
+            inventoryItem.setFreeOfChargeReason(null);
+            return entity;
+        }
+
+        @Test
+        @DisplayName("review of #1380 (F3): an unpriced one-step fill on a logged urgency override leaves NOT_PRICED, "
+                + "is audited and raises a pricing task")
+        void anUnpricedOneStepFillLeavesOnAnUrgencyOverride() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setBillingUrgencyReason("Crise d'asthme, nuit");
+            Dispense entity = stubTheUnpricedOneStepFill(dto);
+            com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferrals = wireTheDeferralGate();
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+
+            service.createDispense(dto);
+
+            org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.DispenseBillingDeferral> row =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.DispenseBillingDeferral.class);
+            verify(deferrals).save(row.capture());
+            assertThat(row.getValue().getKind()).isEqualTo(com.example.hms.enums.DispenseBillingDeferralKind.URGENCY_OVERRIDE);
+            assertThat(row.getValue().getAmountDue()).isEqualByComparingTo("0");
+            assertThat(entity.getBillingDeferredReason()).isEqualTo("Crise d'asthme, nuit");
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_RELEASED_UNPRICED), org.mockito.ArgumentMatchers.anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+            verify(pricingTask).priceNeeded(eq(pharmacy), eq(catalogItem), any(), eq(userId));
+        }
+
+        @Test
+        @DisplayName("review of #1380 (F3): an ordinary outpatient unpriced one-step fill stays refused; nothing is logged")
+        void anOrdinaryUnpricedOneStepFillStaysRefused() {
+            DispenseRequestDTO dto = buildRequest();
+            inventoryItem.setUnitPrice(null);
+            inventoryItem.setFreeOfChargeReason(null);
+            // Lenient: the refusal comes before the fill is mapped or the actors are read.
+            lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferrals = wireTheDeferralGate();
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo(FillPriceGate.NO_PRICE_KEY);
+            verify(dispenseRepository, never()).save(any());
+            verify(deferrals, never()).save(any());
+            org.mockito.Mockito.verifyNoInteractions(pricingTask);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+        @DisplayName("review of #1380 (F5): an unlinked order filled with no lot and no product, on an urgency reason "
+                + "or an open stay, is refused: the pharmacist names the product; nothing moves or is logged")
+        void anUnlinkedOrderIsNeverReleasedUnpriced(boolean onOpenStay) {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setMedicationCatalogItemId(null);
+            prescription.setMedicationCatalogItemId(null);
+            if (!onOpenStay) {
+                dto.setBillingUrgencyReason("Crise d'asthme, nuit");
+            }
+            lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            lenient().when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+            // The dispensary keeps lots of the drug (D138); the order names no catalogue item to find them by.
+            lenient().when(inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacyId)).thenReturn(true);
+            lenient().when(stockLotRepository.existsByInventoryItemId(any())).thenReturn(true);
+            DispenseBillingDeferralService gate = mock(DispenseBillingDeferralService.class);
+            lenient().when(gate.chargedToOpenStay(any(), any())).thenReturn(onOpenStay);
+            service.setBillingDeferrals(gate);
+            UnpricedFillRelease pricingTask = mock(UnpricedFillRelease.class);
+            service.setUnpricedFillRelease(pricingTask);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("medicationCatalogItemId", "dispense.productRequired");
+            verify(dispenseRepository, never()).save(any());
+            verify(gate, never()).admit(any(), any(), any(), any(), any(), any(), any());
+            org.mockito.Mockito.verifyNoInteractions(pricingTask);
         }
 
         /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */
@@ -803,7 +934,7 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D138: a pharmacy that keeps lots refuses a fill that names none, and nothing moves")
+        @DisplayName("QA D138: a medication the pharmacy keeps in lots refuses a fill that names none, and nothing moves")
         void aFillWithNoLotIsRefusedWhereThePharmacyKeepsLots() {
             DispenseRequestDTO dto = buildRequest();
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
@@ -812,11 +943,12 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacyId)).thenReturn(true);
+            // Review of #1380 (F2): the rule is the item's: this item has lots at this pharmacy.
+            when(stockLotRepository.existsByInventoryItemId(inventoryItem.getId())).thenReturn(true);
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("dispense.lot.required") || e.getMessage().contains("keeps stock in lots"));
+                    .matches(e -> e.getMessage().contains("dispense.lot.required") || e.getMessage().contains("in lots"));
             verify(dispenseRepository, never()).save(any(Dispense.class));
             verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
         }
@@ -3706,6 +3838,8 @@ class DispenseServiceImplTest {
         @DisplayName("QA D3940: a substitution names the product dispensed (a lot, or the item when stock is not in lots)")
         void aSubstitutionWithNoProductIsRefused() {
             DispenseRequestDTO dto = buildRequest();
+            // The fixture's request names its product (QA D4181); this one is about a fill that names none.
+            dto.setMedicationCatalogItemId(null);
             dto.setSubstitution(true);
             dto.setSubstitutionReason("Rupture");
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

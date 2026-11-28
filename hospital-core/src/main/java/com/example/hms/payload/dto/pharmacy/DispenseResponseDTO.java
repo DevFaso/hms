@@ -25,6 +25,9 @@ public class DispenseResponseDTO {
     private UUID patientId;
     /** The patient as a person reads them (QA D102: the receipt showed the raw id). */
     private String patientName;
+    /** QA D4185 (r81): the record number at the dispensing hospital, and the date of birth, beside the name. */
+    private String patientMrn;
+    private java.time.LocalDate patientDateOfBirth;
     private UUID pharmacyId;
     /** The pharmacy's name (QA D102). */
     private String pharmacyName;

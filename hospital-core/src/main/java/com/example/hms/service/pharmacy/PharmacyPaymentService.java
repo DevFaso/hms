@@ -24,6 +24,9 @@ public interface PharmacyPaymentService {
 
     Page<PharmacyPaymentResponseDTO> listByDispense(UUID dispenseId, Pageable pageable);
 
+    /** QA D4186 (r81): the payment history of one pharmacy of the acting hospital, newest first, with receipts. */
+    Page<PharmacyPaymentResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
+
     Page<PharmacyPaymentResponseDTO> listByPatient(UUID patientId, Pageable pageable);
 
     /**

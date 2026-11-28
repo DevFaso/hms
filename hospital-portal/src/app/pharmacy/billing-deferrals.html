@@ -96,9 +96,7 @@
             </div>
             <div>
               <dt>{{ 'PHARMACY_MONEY.DEFERRAL.ASKED' | translate }}</dt>
-              <dd>
-                {{ r.requestedByName | dash }} · {{ r.requestedAt | serverTime | date: 'short' }}
-              </dd>
+              <dd>{{ r.requestedByName | dash }} · {{ r.requestedAt | serverTime | dateTime }}</dd>
             </div>
             <div class="deferral-meta-wide">
               <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REASON' | translate }}</dt>
@@ -164,9 +162,7 @@
             @if (r.reviewedAt) {
               <div data-testid="deferral-reviewed-by">
                 <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REVIEWED_BY' | translate }}</dt>
-                <dd>
-                  {{ r.reviewedByName | dash }} · {{ r.reviewedAt | serverTime | date: 'short' }}
-                </dd>
+                <dd>{{ r.reviewedByName | dash }} · {{ r.reviewedAt | serverTime | dateTime }}</dd>
               </div>
               <div class="deferral-meta-wide" data-testid="deferral-review-note">
                 <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REVIEW_NOTE' | translate }}</dt>

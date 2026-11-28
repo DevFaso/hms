@@ -64,7 +64,9 @@ public enum ClinicalRuleSetKey {
     /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
     URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS),
     /** QA D4269 (r81), owner decision 2026-11-27: what a minor may do alone on their own portal account, by age. */
-    MINOR_PORTAL_RIGHTS(ClinicalRuleArea.RECORDS);
+    MINOR_PORTAL_RIGHTS(ClinicalRuleArea.RECORDS),
+    /** Review of #1380 (QA r81 D4181): an unpriced fill leaves only on an urgency override or an open stay. */
+    UNPRICED_FILL_RELEASE(ClinicalRuleArea.BILLING);
 
     private final ClinicalRuleArea area;
 

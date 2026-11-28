@@ -2,8 +2,33 @@
   @if (onOpenStay()) {
     <p class="deferral-note" data-testid="deferral-open-stay">
       <span class="material-symbols-outlined" aria-hidden="true">hotel</span>
-      <span>{{ 'PHARMACY_MONEY.DEFERRAL.OPEN_STAY' | translate }}</span>
+      <span>{{
+        (urgencyOnly()
+          ? 'PHARMACY_MONEY.DEFERRAL.UNPRICED_OPEN_STAY'
+          : 'PHARMACY_MONEY.DEFERRAL.OPEN_STAY'
+        ) | translate
+      }}</span>
     </p>
+  } @else if (urgencyOnly()) {
+    <!-- Review of #1380 (F3): no selling price here; it leaves only on a logged urgency override. -->
+    <p class="deferral-intro" data-testid="deferral-unpriced">
+      {{ 'PHARMACY_MONEY.DEFERRAL.UNPRICED_INTRO' | translate }}
+    </p>
+    <div class="field">
+      <label [for]="fieldId('urgency-reason')"
+        >{{ 'PHARMACY_MONEY.DEFERRAL.URGENCY_REASON' | translate }} *</label
+      >
+      <textarea
+        rows="2"
+        maxlength="500"
+        required
+        [id]="fieldId('urgency-reason')"
+        [name]="fieldId('urgency-reason')"
+        data-testid="deferral-urgency-reason"
+        [(ngModel)]="urgencyReason"
+        [ngModelOptions]="{ standalone: true }"
+      ></textarea>
+    </div>
   } @else {
     <p class="deferral-intro">{{ 'PHARMACY_MONEY.DEFERRAL.INTRO' | translate }}</p>
 
@@ -184,7 +209,7 @@
     </fieldset>
   }
   <small class="deferral-hint deferral-provisional" data-testid="deferral-provisional"
-    ><app-rule-status ruleKey="DEFERRED_BILLING">{{
+    ><app-rule-status [ruleKey]="urgencyOnly() ? 'UNPRICED_FILL_RELEASE' : 'DEFERRED_BILLING'">{{
       'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate
     }}</app-rule-status></small
   >

@@ -42,6 +42,8 @@ public class DispenseMapper {
             // GET /dispenses/{id} used to add it, so the pharmacy checkout picker
             // (the pharmacy's list) read "Non renseigné" on every row.
             .patientName(patientNameOf(entity.getPatient()))
+            .patientMrn(PatientIdentityLine.mrnOf(entity.getPatient(), hospitalIdOf(entity.getPharmacy())))
+            .patientDateOfBirth(PatientIdentityLine.dateOfBirthOf(entity.getPatient()))
             .pharmacyId(entity.getPharmacy() != null ? entity.getPharmacy().getId() : null)
             .pharmacyName(pharmacyNameOf(entity.getPharmacy()))
             .stockLotId(entity.getStockLot() != null ? entity.getStockLot().getId() : null)
@@ -109,6 +111,15 @@ public class DispenseMapper {
         }
         try {
             return patient.getFullName();
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
+    }
+
+    /** The hospital of a fill's pharmacy, or null; a detached proxy answers null. */
+    static java.util.UUID hospitalIdOf(Pharmacy pharmacy) {
+        try {
+            return pharmacy != null && pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
         } catch (org.hibernate.LazyInitializationException detached) {
             return null;
         }

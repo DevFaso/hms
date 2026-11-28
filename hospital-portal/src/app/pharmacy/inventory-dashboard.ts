@@ -33,6 +33,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 
@@ -55,6 +56,7 @@ const CI_FIELD_IDS = ['ciMed'];
     CfaPipe,
     ModalDialogDirective,
     CountUnitPipe,
+    ReasonDialogComponent,
   ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -121,6 +123,9 @@ export class InventoryDashboardComponent implements OnInit {
   inventoryItems = signal<InventoryItemResponse[]>([]);
   /** QA D835: the row whose price box is open; every other row shows its price as text. */
   editingPriceId = signal<string | null>(null);
+  /** QA D4181 (r81): the item whose free-of-charge standing is being declared or withdrawn. */
+  readonly freeOfChargeFor = signal<InventoryItemResponse | null>(null);
+  readonly freeOfChargeBusy = signal(false);
   /** QA D2674 (r65): the item whose pack size is being set, and the form's fields. */
   readonly packItem = signal<InventoryItemResponse | null>(null);
   readonly packSaving = signal(false);
@@ -160,7 +165,7 @@ export class InventoryDashboardComponent implements OnInit {
   loadPharmacies(): void {
     this.pharmacyFailed.set(false);
     // Keep the upstream complete pharmacy selector (QA D1347).
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
@@ -416,7 +421,8 @@ export class InventoryDashboardComponent implements OnInit {
   savePrice(item: InventoryItemResponse, raw: string, reason = ''): void {
     const price = Number(raw);
     const priceId = `price-input-${item.id}`;
-    if (raw === '' || !Number.isInteger(price) || price < 0) {
+    // Review of #1380 (F1): 0 is never a selling price; free is documented with a reason.
+    if (raw === '' || !Number.isInteger(price) || price < 1) {
       // QA D1306 (round 28): the price box is marked, not only a toast.
       const message = this.translate.instant('PHARMACY.PRICE_INVALID');
       refuseFields(this.host.nativeElement, [priceId], [priceId], message);
@@ -461,6 +467,56 @@ export class InventoryDashboardComponent implements OnInit {
         error: (err) => {
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
+  /**
+   * QA D4181 (r81): documents the item as handed over at no charge (with its reason), or withdraws that.
+   * A fill from an item with neither a price nor this reason is refused by the server, so "free" is said
+   * here, by the people who set prices, and kept in the price history.
+   */
+  saveFreeOfCharge(item: InventoryItemResponse, reason: string): void {
+    const free = !item.freeOfCharge;
+    this.freeOfChargeBusy.set(true);
+    this.svc
+      .updateInventoryItem(item.id, {
+        pharmacyId: item.pharmacyId,
+        medicationCatalogItemId: item.medicationCatalogItemId,
+        reorderThreshold: item.reorderThreshold,
+        reorderQuantity: item.reorderQuantity,
+        unit: item.unit,
+        freeOfCharge: free,
+        ...(free ? { freeOfChargeReason: reason } : { priceChangeReason: reason }),
+        active: item.active,
+      })
+      .subscribe({
+        next: (res) => {
+          const saved = res?.data;
+          this.inventoryItems.update((rows) =>
+            rows.map((r) =>
+              r.id === item.id
+                ? {
+                    ...r,
+                    freeOfCharge: saved?.freeOfCharge ?? free,
+                    freeOfChargeReason: saved?.freeOfChargeReason ?? (free ? reason : null),
+                  }
+                : r,
+            ),
+          );
+          this.freeOfChargeBusy.set(false);
+          this.freeOfChargeFor.set(null);
+          this.toast.success(
+            this.translate.instant(
+              free ? 'R81_DISPENSING.FREE.DECLARED' : 'R81_DISPENSING.FREE.WITHDRAWN',
+            ),
+          );
+        },
+        error: (err) => {
+          this.freeOfChargeBusy.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('R81_DISPENSING.FREE.FAILED'),
           );
         },
       });
