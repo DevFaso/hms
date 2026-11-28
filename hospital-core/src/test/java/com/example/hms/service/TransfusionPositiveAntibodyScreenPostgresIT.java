@@ -119,6 +119,8 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    /** QA D4141: the second checker's own confirmation; its rules are BedsideVerifierConfirmationTest's. */
+    @MockitoBean private com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier;
     /** The account of cross-hospital reads: in the slice as a double, so the reads it is handed can be checked. */
     @MockitoBean private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 

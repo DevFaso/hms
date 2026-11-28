@@ -156,6 +156,7 @@ class DeceasedPatientCareGuardTest {
         ImagingStudyImage#upload,delete,withdraw | V316: key images of a study already done document it, as its report does; r64 D2464: withdrawing a wrong image corrects that record
         ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
         ImagingOrder#checkIn,recordExam | policy rule 3: the arrival and the exam record document a study ordered before the death, as its status write does
+        ImagingOrder#withdrawPendingRequest | QA D4140: calls off a request that never became an order; it gives no care
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
         LabSpecimen#receiveSpecimen,rejectSpecimen | a sample collected before the death
@@ -211,7 +212,7 @@ class DeceasedPatientCareGuardTest {
         Transfusion#recordCrossmatch,recordBloodGroup | a laboratory result on a sample collected before the death
         Transfusion#recordAntibodyWorkup | the biologist's finding on a sample collected before the death (QA D3351); it gives no care
         HospitalCriticalResultEscalation#set | a hospital's escalation settings, no patient
-        Transfusion#receiveUnit,discardUnit | blood bank stock, no patient
+        Transfusion#receiveUnit,discardUnit,recordUnitReturn | blood bank stock, no patient (recordUnitReturn: QA D4178, an issued bag coming back to the laboratory)
         Transfusion#countersignPositiveRelease,reviewPositiveRelease,recordPositiveFollowUp | V380: the signature, the review and the follow-up record of an O positive bag that already went out; none gives care, and a death does not end the duty to sign or review
         Transfusion#setPositiveProtocol | V380: a hospital's emergency O positive protocol, no patient
         Transfusion#countersignIncompatibleRelease,recordIncompatibleMonitoring | V381: the countersignature and the monitoring record of an incompatible release already made; neither gives care, and a death does not end the duty to sign or to report what was seen

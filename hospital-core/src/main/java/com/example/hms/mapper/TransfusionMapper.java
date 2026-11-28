@@ -91,6 +91,12 @@ public class TransfusionMapper {
             .status(unit.getStatus())
             .discardReason(unit.getDiscardReason())
             .notes(unit.getNotes())
+            .awaitingReturn(unit.getStatus() == com.example.hms.enums.BloodUnitStatus.ISSUED
+                && unit.getRequest() != null && unit.getRequest().isTerminal())
+            .returnOutcome(unit.getReturnOutcome())
+            .returnRecordedAt(unit.getReturnRecordedAt())
+            .returnRecordedByName(unit.getReturnRecordedByName())
+            .returnNote(unit.getReturnNote())
             .createdAt(unit.getCreatedAt())
             .build();
     }
@@ -266,6 +272,8 @@ public class TransfusionMapper {
             .administeredByName(staffName(administration.getAdministeredBy()))
             .verifiedByName(staffName(administration.getVerifiedBy()))
             .verificationMethod(administration.getVerificationMethod())
+            .verifierConfirmedAt(administration.getVerifierConfirmedAt())
+            .verifierConfirmationMethod(administration.getVerifierConfirmationMethod())
             .stopReason(administration.getStopReason())
             .notes(administration.getNotes())
             .reactions(reactions == null ? List.of() : reactions.stream().map(this::toDto).toList())

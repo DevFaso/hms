@@ -61,6 +61,13 @@ export interface ImagingOrderResponse {
   orderingProviderUserId?: string | null;
   /** QA D611: set once the order is signed; a signed order is immutable. */
   providerSignedAt?: string | null;
+  /** QA D4140: who placed the request (a nurse or a midwife asks, a physician authorises). */
+  requestedByUserId?: string | null;
+  requestedByName?: string | null;
+  /** QA D4140: the request was placed by somebody who is not a physician of the hospital. */
+  physicianAuthorisationRequired?: boolean | null;
+  /** QA D4140: no physician has authorised the request yet; nothing of the exam can be done. */
+  awaitingPhysicianAuthorisation?: boolean;
   orderedAt: string;
   scheduledDate: string;
   scheduledTime: string;
@@ -442,6 +449,16 @@ export class ImagingService {
     return this.http.get<ImagingOrderResponse[]>(`${this.baseUrl}/orders`, {
       params: httpParams,
       ...(opts?.allHospitals ? allHospitalsRequestOptions() : {}),
+    });
+  }
+
+  /** QA D4140: whoever placed a request that still waits for a physician withdraws it, with a reason. */
+  withdrawPendingRequest(
+    orderId: string,
+    cancellationReason: string,
+  ): Observable<ImagingOrderResponse> {
+    return this.http.post<ImagingOrderResponse>(`${this.baseUrl}/orders/${orderId}/withdrawal`, {
+      cancellationReason,
     });
   }
 

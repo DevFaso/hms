@@ -118,6 +118,8 @@ class PatientBloodGroupOnRecordPostgresIT {
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    /** QA D4141: the second checker's own confirmation; its rules are BedsideVerifierConfirmationTest's. */
+    @MockitoBean private com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier;
     @MockitoBean private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private final UUID hospital = UUID.randomUUID();
