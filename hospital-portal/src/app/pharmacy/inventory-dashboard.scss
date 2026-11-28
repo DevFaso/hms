@@ -357,3 +357,12 @@ tr.expiring-soon td {
   color: var(--text-secondary, #5b6472);
   overflow-wrap: anywhere;
 }
+
+// QA D4181 (r81): the reason an item is free of charge, under its badge, never wider than the price column.
+.free-reason {
+  display: block;
+  max-width: 16rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, inherit);
+  overflow-wrap: anywhere;
+}

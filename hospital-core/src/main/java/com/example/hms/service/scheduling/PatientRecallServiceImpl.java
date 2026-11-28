@@ -88,8 +88,11 @@ public class PatientRecallServiceImpl implements PatientRecallService {
                 .filter(d -> d.getHospital() != null && hospitalId.equals(d.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         }
+        // r81: the preferred clinician is one of this hospital's staff; any other answers as unknown.
         Staff provider = request.getPreferredProviderId() != null
-            ? staffRepository.findById(request.getPreferredProviderId()).orElse(null)
+            ? staffRepository.findById(request.getPreferredProviderId())
+                .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getPreferredProviderId()))
             : null;
 
         PatientRecall recall = recallRepository.save(PatientRecall.builder()

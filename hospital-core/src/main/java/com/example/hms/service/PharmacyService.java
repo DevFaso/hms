@@ -15,6 +15,9 @@ public interface PharmacyService {
 
     Page<PharmacyResponseDTO> listByHospital(UUID hospitalId, Pageable pageable);
 
+    /** QA D4182 (r81): the hospital's own stores only (no partner, no community pharmacy): every store picker. */
+    Page<PharmacyResponseDTO> listStores(UUID hospitalId, Pageable pageable);
+
     Page<PharmacyResponseDTO> search(UUID hospitalId, String query, Pageable pageable);
 
     PharmacyResponseDTO update(UUID id, PharmacyRequestDTO dto);

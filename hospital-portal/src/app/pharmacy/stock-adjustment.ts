@@ -235,7 +235,7 @@ export class StockAdjustmentComponent implements OnInit {
 
   private loadPharmacies(): void {
     // QA D1347: every pharmacy (all pages), not the first 100.
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+    allRows((page, size) => this.svc.listStores(page, size)).subscribe({
       next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);

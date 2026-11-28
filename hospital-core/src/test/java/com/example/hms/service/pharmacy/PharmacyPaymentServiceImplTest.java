@@ -245,6 +245,55 @@ class PharmacyPaymentServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D4186: the price charged is kept on the payment, and the history reprints it as a duplicate whatever the price is today")
+    void d4186_thePriceChargedIsKeptAndReprinted() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        PharmacyPayment taken = new PharmacyPayment();
+        taken.setDispense(dispense);
+        taken.setPatient(patient);
+        taken.setHospital(hospital);
+        taken.setAmount(new BigDecimal("2500"));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(taken);
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenAnswer(inv -> PharmacyPaymentResponseDTO.builder().build());
+
+        PharmacyPaymentResponseDTO first = service.createPayment(dto);
+
+        assertThat(taken.getChargedUnitPrice()).isEqualByComparingTo("250");
+        assertThat(taken.getChargedLineTotal()).isEqualByComparingTo("2500");
+        assertThat(first.getReceipt().isDuplicate()).as("the first answer is the original").isFalse();
+        assertThat(first.getReceipt().getUnitPrice()).isEqualByComparingTo("250");
+
+        // The store manager changes the price afterwards; the reprint must not move.
+        inventoryItem.setUnitPrice(new BigDecimal("400.00"));
+        when(paymentRepository.findById(taken.getId())).thenReturn(Optional.of(taken));
+        PharmacyPaymentResponseDTO reopened = service.getPayment(taken.getId());
+        assertThat(reopened.getReceipt().isDuplicate()).isTrue();
+        assertThat(reopened.getReceipt().getUnitPrice()).isEqualByComparingTo("250");
+        assertThat(reopened.getReceipt().getLineTotal()).isEqualByComparingTo("2500");
+        assertThat(reopened.getReceipt().getPatientName()).contains("Awa");
+
+        when(paymentRepository.findHistoryForPharmacy(eq(hospitalId), eq(pharmacy.getId()), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(taken)));
+        var history = service.listByPharmacy(pharmacy.getId(), org.springframework.data.domain.PageRequest.of(0, 20));
+        assertThat(history.getContent()).singleElement().satisfies(row -> {
+            assertThat(row.getReceipt().isDuplicate()).isTrue();
+            assertThat(row.getReceipt().getUnitPrice()).isEqualByComparingTo("250");
+            assertThat(row.getReceipt().getMedicationName()).isEqualTo("Amoxicilline 500mg");
+        });
+    }
+
+    @Test
     @DisplayName("cash payment: persists record and does not call mobile-money gateway")
     void cashPaymentSucceeds() {
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);

@@ -28,6 +28,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { PrintLabelService } from '../services/print-label.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -46,6 +47,7 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
     AllergyHoldDialogComponent,
     SubmitGuardDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

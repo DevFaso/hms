@@ -93,7 +93,11 @@
           @for (c of filtered(); track c) {
             <tr>
               <td>{{ c.createdAt | serverTime | date: 'shortDate' }}</td>
-              <td>{{ c.patientName || ('PHARMACY_CLAIMS.PATIENT_UNNAMED' | translate) }}</td>
+              <td>
+                {{ c.patientName || ('PHARMACY_CLAIMS.PATIENT_UNNAMED' | translate) }}
+                <!-- QA D4185 (r81): the record number and date of birth beside the name. -->
+                <app-patient-id-line [mrn]="c.patientMrn" [dateOfBirth]="c.patientDateOfBirth" />
+              </td>
               <td>{{ c.coverageReference || '—' }}</td>
               <td>{{ c.amount | cfa: c.currency }}</td>
               <td>
