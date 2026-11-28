@@ -96,6 +96,7 @@ describe('LabComponent — performing laboratory', () => {
       'updateOrder',
       'deleteOrder',
       'voidOrder',
+      'cancelOrder',
       'listSpecimens',
       'createSpecimen',
       'receiveSpecimen',
@@ -1056,6 +1057,87 @@ describe('LabComponent — performing laboratory', () => {
       expect(toast.success).not.toHaveBeenCalled();
       expect(component.rejecting()).toBeFalse();
       expect(labService.listOrders).toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D4148: an order is cancelled by its prescriber before collection, then by the lab', () => {
+    const cancelButton = (id: string) =>
+      fixture.nativeElement.querySelector(
+        `[data-testid="lab-cancel-${id}"]`,
+      ) as HTMLButtonElement | null;
+    const signedInAs = (id: string) =>
+      auth.getUserProfile.and.returnValue({
+        id,
+        staffId: 'staff-1',
+      } as unknown as ReturnType<AuthService['getUserProfile']>);
+
+    it('the prescriber is offered « annuler » on their own order while nothing was collected', async () => {
+      await setup(['ROLE_DOCTOR'], [order({ id: 'mine', orderingStaffUserId: 'dr-me' })]);
+      signedInAs('dr-me');
+
+      for (const status of ['ORDERED', 'PENDING']) {
+        expect(component.canCancelOrder(order({ status, orderingStaffUserId: 'dr-me' })))
+          .withContext(status)
+          .toBeTrue();
+      }
+      for (const status of ['COLLECTED', 'RECEIVED', 'IN_PROGRESS', 'RESULTED', 'COMPLETED']) {
+        expect(component.canCancelOrder(order({ status, orderingStaffUserId: 'dr-me' })))
+          .withContext(status)
+          .toBeFalse();
+      }
+      expect(component.canCancelOrder(order({ orderingStaffUserId: 'a-colleague' })))
+        .withContext('a colleague’s order')
+        .toBeFalse();
+      expect(component.canCancelOrder(order({ orderingStaffUserId: null })))
+        .withContext('no prescriber account on the order')
+        .toBeFalse();
+    });
+
+    it('the laboratory manager cancels until a result exists, with a reason', async () => {
+      await setup(
+        ['ROLE_LAB_MANAGER'],
+        [order({ id: 'received', status: 'RECEIVED' }), order({ id: 'done', status: 'COMPLETED' })],
+      );
+      labService.cancelOrder.and.returnValue(of(order({ id: 'received', status: 'CANCELLED' })));
+
+      expect(cancelButton('done'))
+        .withContext('a completed order is voided, not cancelled')
+        .toBeNull();
+      cancelButton('received')!.click();
+      fixture.detectChanges();
+      expect(component.cancellingOrder()?.id).toBe('received');
+      expect(fixture.nativeElement.querySelector('app-reason-dialog')).not.toBeNull();
+
+      labService.listOrders.calls.reset();
+      component.confirmCancelOrder(component.cancellingOrder()!, 'Tube hémolysé');
+
+      expect(labService.cancelOrder).toHaveBeenCalledOnceWith('received', 'Tube hémolysé');
+      expect(toast.success).toHaveBeenCalled();
+      expect(component.cancellingOrder()).toBeNull();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+
+    it('a refusal keeps the dialog open and shows the server’s reason', async () => {
+      await setup(['ROLE_LAB_MANAGER'], [order({ id: 'received', status: 'RECEIVED' })]);
+      labService.cancelOrder.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Seul le prescripteur…' } })),
+      );
+      component.cancellingOrder.set(order({ id: 'received', status: 'RECEIVED' }));
+
+      component.confirmCancelOrder(component.cancellingOrder()!, 'x');
+
+      expect(toast.error).toHaveBeenCalledWith('Seul le prescripteur…');
+      expect(component.cancellingOrder()).not.toBeNull();
+      expect(component.cancelBusy()).toBeFalse();
+    });
+
+    it('a performing laboratory is never offered the cancellation of another hospital’s order', async () => {
+      await setup(
+        ['ROLE_LAB_MANAGER'],
+        [order({ id: 'incoming', performingHospitalId: HOSPITAL_A, hospitalId: 'elsewhere' })],
+      );
+
+      expect(cancelButton('incoming')).toBeNull();
     });
   });
 

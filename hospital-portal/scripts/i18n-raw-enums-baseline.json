@@ -16,6 +16,7 @@
     "src/app/audit-logs/audit-logs.html::detail.reason",
     "src/app/billing/billing.html::g.relationship",
     "src/app/lab/lab-results/lab-results.html::r.qcOverrideReason",
+    "src/app/lab/lab-results/lab-results.html::r.correctionReason",
     "src/app/nurse-station/nurse-station.html::<option>name",
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
     "src/app/encounters/encounters.html::<option>department",
@@ -293,6 +294,7 @@
     "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason"
   ],
   "reasons": {
+    "src/app/lab/lab-results/lab-results.html::r.correctionReason": "LabResultRequestDTO.correctionReason is a size-bounded String (500 characters) typed in lab-results.html textarea#lr-correctionReason when a released result is corrected; LabResultServiceImpl.requireCorrectionReason trims and stores it on lab.lab_results.correction_reason (V467) and LabResultMapper returns it. It is the scientist's free text, not an enum token, and must remain as typed.",
     "src/app/pharmacy/dispensing.html::pay.freeOfChargeReason": "QA D4181: DispensePaymentStatusDTO.freeOfChargeReason is InventoryItem.freeOfChargeReason, the free text (max 500) the store manager or administrator typed in the inventory reason dialog (InventoryItemRequestDTO.freeOfChargeReason, InventoryServiceImpl.freeOfChargeChangeOf); not an enum.",
     "src/app/pharmacy/inventory-dashboard.html::item.freeOfChargeReason": "QA D4181: InventoryItemResponseDTO.freeOfChargeReason is the free text (max 500) typed in the inventory reason dialog and stored on InventoryItem.freeOfChargeReason by InventoryServiceImpl.applyFreeOfCharge; not an enum.",
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",

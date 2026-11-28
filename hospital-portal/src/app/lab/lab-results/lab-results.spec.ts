@@ -598,6 +598,58 @@ describe('LabResultsComponent', () => {
       );
     });
 
+    it('QA D4143: a correction asks for its reason and sends it', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+
+      component.openCorrection(component.results()[0]);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="lr-correction-reason"]')).not.toBeNull();
+      expect(component.correctionReasonMissing()).toBeTrue();
+
+      component.form.correctionReason = '  Erreur de dilution ';
+      expect(component.correctionReasonMissing()).toBeFalse();
+    });
+
+    it('QA D4143: a plain entry shows no reason field and is never held for one', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+
+      component.openCreate();
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="lr-correction-reason"]')).toBeNull();
+      expect(component.correctionReasonMissing()).toBeFalse();
+    });
+
+    it('QA D4143: the detail of a correction shows the value it replaced and why', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersedesResultId: 'result-0' })]);
+      component.selectedResult.set(
+        mockResult({
+          released: true,
+          supersedesResultId: 'result-0',
+          resultValue: '105',
+          supersededResultValue: '150',
+          supersededResultUnit: 'µmol/L',
+          supersededReleasedAt: '2026-11-27T05:40:00',
+          correctionReason: 'Erreur de dilution',
+        }) as never,
+      );
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="detail-replaced-value"]')?.textContent).toContain(
+        '150',
+      );
+      expect(host.querySelector('[data-testid="detail-correction-reason"]')?.textContent).toContain(
+        'Erreur de dilution',
+      );
+    });
+
     it('marks a superseded result and offers no second correction of it', () => {
       allowEntry();
       fixture.detectChanges();

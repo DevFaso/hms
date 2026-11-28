@@ -216,7 +216,9 @@ class LabResultServiceImplPerformingHospitalTest {
     }
 
     @Test
-    void orderingHospitalActorIsStillJudgedByTheOrderingHospitalRoles() {
+    void orderingHospitalActorDoesNotEnterTheResultOfAnOrderSentOut() {
+        // QA D4150 (r81): the ordering hospital's actor used to be judged by its own roles here; the result of
+        // an order sent to another laboratory is now entered by that laboratory only, whatever the role.
         UUID doctorId = UUID.randomUUID();
         // #721: the order is read unlocked for the permission checks and the
         // write lock is taken only for the status decision, which is written
@@ -233,20 +235,45 @@ class LabResultServiceImplPerformingHospitalTest {
                 return 1;
             });
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
-        when(authService.getCurrentUserId()).thenReturn(doctorId);
-        when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(false);
-        when(roleValidator.isMidwife(doctorId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isDoctor(doctorId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isNurse(doctorId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isLabTechnician(doctorId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isLabManager(doctorId, ordering.getId())).thenReturn(false);
-        when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_DIRECTOR")).thenReturn(false);
-        when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_QUALITY_MANAGER")).thenReturn(false);
+        org.mockito.Mockito.lenient().when(authService.getCurrentUserId()).thenReturn(doctorId);
+        org.mockito.Mockito.lenient().when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isMidwife(doctorId, ordering.getId())).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctorId, ordering.getId())).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isNurse(doctorId, ordering.getId())).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isLabTechnician(doctorId, ordering.getId())).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isLabManager(doctorId, ordering.getId())).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_DIRECTOR")).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_QUALITY_MANAGER")).thenReturn(false);
 
         LabResultRequestDTO request = request();
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("lab or clinical role");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasMessageContaining("only the laboratory that performs it");
+        verify(labResultRepository, never()).save(any());
+    }
+
+    /** QA D4150 (class): the ordering hospital does not delete the performing laboratory's draft of an order sent out. */
+    @Test
+    void theOrderingHospitalDoesNotDeleteTheResultOfAnOrderItSentOut() {
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        UUID id = result.getId();
+
+        assertThatThrownBy(() -> service.deleteLabResult(id, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("lab.result.entryOtherLab");
+        verify(labResultRepository, never()).deleteById(any());
+    }
+
+    /** ...while the performing laboratory still deletes its own draft. */
+    @Test
+    void thePerformingLaboratoryDeletesItsOwnDraft() {
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+
+        service.deleteLabResult(result.getId(), Locale.ENGLISH);
+
+        verify(labResultRepository).deleteById(result.getId());
     }
 
     @Test

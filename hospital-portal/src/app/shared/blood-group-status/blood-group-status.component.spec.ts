@@ -97,6 +97,25 @@ describe('BloodGroupStatusComponent', () => {
     expect(byId(el, 'blood-group-rhd-exposed')).toBeNull();
   });
 
+  it('D4151: shows a severe transfusion reaction on record, with or without a group on file', () => {
+    let el = show({
+      severeTransfusionReaction: true,
+      severeTransfusionReactionType: 'ACUTE_HEMOLYTIC',
+      severeTransfusionReactionAt: '2026-11-27T05:37:00',
+    });
+    expect(text(el, 'blood-group-severe-reaction')).toMatch(/BLOOD_GROUP\.SEVERE_REACTION$/);
+    el = show({ confirmed: 'A+', severeTransfusionReaction: true });
+    expect(text(el, 'blood-group-severe-reaction')).toMatch(
+      /BLOOD_GROUP\.SEVERE_REACTION_UNTYPED$/,
+    );
+    el = show({ confirmed: 'A+', severeTransfusionReaction: false });
+    expect(byId(el, 'blood-group-severe-reaction')).toBeNull();
+    el = show({ confirmed: 'A+', severeTransfusionReaction: true }, null, {
+      showAntibodies: false,
+    });
+    expect(byId(el, 'blood-group-severe-reaction')).toBeNull();
+  });
+
   it('leaves the antibody alert out where the host asks it to', () => {
     const el = show({ confirmed: 'B+', alloImmunised: true }, null, { showAntibodies: false });
     expect(byId(el, 'blood-group-antibody')).toBeNull();

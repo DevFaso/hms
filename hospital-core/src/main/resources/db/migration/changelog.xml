@@ -4170,6 +4170,13 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V467 (QA D4143, r81): why a released lab result was corrected, on lab.lab_results. Additive.
+         Range V465-V469 is reserved for the r81 lab lane (V465 and V466 are in the lane's first PR). -->
+    <changeSet id="V467-lab-result-correction-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V467__lab_result_correction_reason.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- V384: the record of every stored upload (type by content, size, sender, hospital) and the state of its
          malware check; the daily upload allowance is counted from it. -->
     <changeSet id="V384-upload-records" author="hms-team" runOnChange="false">

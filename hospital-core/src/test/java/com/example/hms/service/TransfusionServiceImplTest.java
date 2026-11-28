@@ -2756,6 +2756,44 @@ class TransfusionServiceImplTest {
         verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
     }
 
+    /** QA D4151 review: a severe reaction recorded at another hospital warns this hospital's blood request. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void d4151_aSevereReactionRecordedElsewhereWarnsTheBloodRequestHere() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService screens =
+            org.mockito.Mockito.mock(com.example.hms.service.transfusion.PositiveAntibodyScreenService.class);
+        when(screens.status(any(), any(), any()))
+            .thenReturn(com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO.builder().build());
+        service.setAntibodyScreen(screens);
+        com.example.hms.repository.TransfusionReactionRepository reactions =
+            org.mockito.Mockito.mock(com.example.hms.repository.TransfusionReactionRepository.class);
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder recorder =
+            org.mockito.Mockito.mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        org.springframework.beans.factory.ObjectProvider<com.example.hms.service.recordaccess.CrossHospitalReachRecorder> recorders =
+            org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(recorders.getIfAvailable()).thenReturn(recorder);
+        service.setSevereReactions(new com.example.hms.service.transfusion.SevereTransfusionReactionLookup(reactions,
+            recorders, org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class)));
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        elsewhere.setName("Centre Test A");
+        com.example.hms.model.TransfusionReaction reaction = new com.example.hms.model.TransfusionReaction();
+        reaction.setHospital(elsewhere);
+        reaction.setReactionType(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        reaction.setSeverity(com.example.hms.enums.TransfusionReactionSeverity.LIFE_THREATENING);
+        reaction.setOnsetAt(java.time.LocalDateTime.of(2026, 11, 27, 5, 37));
+        when(reactions.findFirstByPatient_IdAndSeverityInOrderByOnsetAtDesc(eq(patient.getId()), any()))
+            .thenReturn(Optional.of(reaction));
+
+        var status = service.getAntibodyStatus(patient.getId());
+
+        assertThat(status.isSevereTransfusionReaction()).isTrue();
+        assertThat(status.getSevereTransfusionReactionType())
+            .isEqualTo(com.example.hms.enums.TransfusionReactionType.ACUTE_HEMOLYTIC);
+        assertThat(status.getSevereTransfusionReactionHospitalName()).isEqualTo("Centre Test A");
+        verify(recorder).recordReach(eq(patient.getId()), eq(hospitalId), any(), any(), any(), any());
+    }
+
     // ═══ QA D4141 (r81): the second bedside check is a clinician's, and they confirm it themselves ═══
 
     private TransfusionAdministrationRequestDTO hangOfAnIssuedBag(Staff verifier, String secret) {

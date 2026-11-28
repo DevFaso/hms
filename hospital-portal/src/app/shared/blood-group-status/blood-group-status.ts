@@ -20,6 +20,13 @@ export interface BloodGroupStatus {
   rhdPositiveExposedAt?: string | null;
   /** The bag was given (true), or is out with no administration on record (false). */
   rhdPositiveExposureConfirmed?: boolean | null;
+  /** QA D4151: a severe or life-threatening transfusion reaction is on record at this hospital. Permanent. */
+  severeTransfusionReaction?: boolean | null;
+  /** The newest such reaction: its type (ACUTE_HEMOLYTIC, ...) and when it began. */
+  severeTransfusionReactionType?: string | null;
+  severeTransfusionReactionAt?: string | null;
+  /** QA D4151 review: the hospital that holds the reaction's record (it follows the patient). */
+  severeTransfusionReactionHospitalName?: string | null;
 }
 
 /** What a screen shows: the confirmed group when there is one, else the declared one (labelled so). */

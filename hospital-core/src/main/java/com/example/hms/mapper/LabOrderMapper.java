@@ -68,6 +68,7 @@ public class LabOrderMapper {
         .patientMrn(patientMrnAt(patient, hospital, labOrderId))
         .patientDateOfBirth(patient != null ? patient.getDateOfBirth() : null)
         .orderingStaffName(staffNameOf(orderingStaff, labOrderId))
+        .orderingStaffUserId(staffUserIdOf(orderingStaff, labOrderId))
         .hospitalId(hospital != null && hospital.getId() != null ? hospital.getId().toString() : null)
         .hospitalName(hospitalName)
         .performingHospitalId(performingHospital != null && performingHospital.getId() != null
@@ -76,6 +77,7 @@ public class LabOrderMapper {
         .labTestName(labTestName)
         .labTestDefinitionMissing(definitionMissing)
             .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
+            .labTestCulture(labTestDefinition != null && labTestDefinition.isCulture())
             // QA D1095: the unit a result of this test is entered in (prefilled on entry).
             .labTestUnit(labTestDefinition != null ? labTestDefinition.getUnit() : null)
             // r63 D2312 / NFS panels: what result entry needs to warn on a critical
@@ -168,6 +170,20 @@ public class LabOrderMapper {
             return patient.getMrnForHospital(hospital.getId());
         } catch (EntityNotFoundException | JpaObjectRetrievalFailureException ex) {
             log.warn("LabOrder({}) patient has a dangling hospital registration; MRN unavailable.", labOrderId);
+            return null;
+        }
+    }
+
+    /** QA D4148: the ordering clinician's account id, or null when it cannot be read. */
+    private static String staffUserIdOf(Staff staff, java.util.UUID labOrderId) {
+        if (staff == null) {
+            return null;
+        }
+        try {
+            java.util.UUID userId = JpaProxyUtils.idOf(staff.getUser());
+            return userId != null ? userId.toString() : null;
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException ex) {
+            log.warn("LabOrder({}) ordering staff has a dangling user; account unavailable.", labOrderId);
             return null;
         }
     }

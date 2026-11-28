@@ -18,6 +18,8 @@ export interface LabOrderResponse {
   patientDateOfBirth?: string | null;
   /** Lab requests list and drawer: the clinician who placed the order. */
   orderingStaffName?: string | null;
+  /** QA D4148: that clinician's account, so the prescriber is offered « annuler » on their own order. */
+  orderingStaffUserId?: string | null;
   hospitalId?: string;
   hospitalName: string;
   /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
@@ -25,6 +27,8 @@ export interface LabOrderResponse {
   performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
+  /** QA D4176: the test is resulted through the culture and antibiogram workflow. */
+  labTestCulture?: boolean;
   /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
   labTestDefinitionMissing?: boolean;
   /** QA D1095: the test definition's unit, prefilled when a result is entered. */
@@ -124,6 +128,12 @@ export interface LabResultResponse {
   supersedesResultId?: string | null;
   /** D81: set on a released result once a correction replaced it. */
   supersededByResultId?: string | null;
+  /** QA D4143: why this result corrects the one it supersedes. */
+  correctionReason?: string | null;
+  /** QA D4143: the value this correction replaced (on the single-result read of a correction). */
+  supersededResultValue?: string | null;
+  supersededResultUnit?: string | null;
+  supersededReleasedAt?: string | null;
   /** The user who entered the result, so a self-release can be confirmed up front. */
   enteredByUserId?: string | null;
   signedAt: string | null;
@@ -485,6 +495,8 @@ export interface LabResultRequest {
   notes?: string;
   /** D81: the released result on the same order that this new result corrects. */
   supersedesResultId?: string;
+  /** QA D4143: required with supersedesResultId: why the released result is corrected. */
+  correctionReason?: string;
   /** r63 (NFS panels): one value per component; the server composes resultValue from them. */
   components?: { code: string; value: string }[];
 }
@@ -820,6 +832,19 @@ export class LabService {
    * a delete: the order reads ENTERED_IN_ERROR with the reason, and its
    * results stop appearing anywhere.
    */
+  /**
+   * QA D4148: cancel an order, with a reason. The prescriber cancels their own order while nothing was
+   * collected for it; after that it is the laboratory manager's or director's.
+   */
+  cancelOrder(id: string, reason: string): Observable<LabOrderResponse> {
+    return this.http
+      .post<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}/transition`, {
+        status: 'CANCELLED',
+        reason,
+      })
+      .pipe(map((res) => res.data));
+  }
+
   voidOrder(id: string, reason: string): Observable<LabOrderResponse> {
     return this.http
       .post<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}/void`, { reason })
