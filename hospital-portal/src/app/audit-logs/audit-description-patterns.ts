@@ -1311,6 +1311,19 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['reason'],
     localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },
+  // QA D4141: the second bedside checker of a transfusion confirmed with their own factor, or was refused.
+  {
+    key: 'AUDIT.DESC.BEDSIDE_CHECK_CONFIRMED',
+    re: /^Transfusion bedside second check confirmed by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.BEDSIDE_CHECK_CONFIRMATION_REFUSED',
+    re: /^Transfusion bedside second check confirmation refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
   {
     // QA D1563 / D1555: a nurse or a pharmacist acknowledged a documented allergy, with a reason
     // (rows written before Policy 4, which replaced that release by the prescriber's review).

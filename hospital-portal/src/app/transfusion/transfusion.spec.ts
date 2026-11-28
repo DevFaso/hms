@@ -842,6 +842,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     expect(el('hang-verifier')!.textContent).toContain('Aminata Sawadogo');
 
     component.hangForm.verifiedByUserId = 'user-2';
+    // QA D4141: the colleague named confirms with their own factor (transfusion-r81.spec.ts).
+    component.hangForm.verifierSecret = 'Her-Own-Password-1';
     component.submitHang();
     expect(txSpy.startAdministration).toHaveBeenCalledWith(
       jasmine.objectContaining({ verifiedByUserId: 'user-2', bloodUnitId: 'u1' }),

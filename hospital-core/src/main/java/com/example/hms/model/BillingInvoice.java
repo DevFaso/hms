@@ -33,7 +33,6 @@ import org.springframework.data.annotation.LastModifiedBy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.HashSet;
 import java.util.Set;
 
 @Entity
@@ -133,7 +132,10 @@ public class BillingInvoice extends BaseEntity {
         orphanRemoval = true)
     @Builder.Default
 
-    private Set<InvoiceItem> invoiceItems = new HashSet<>();
+    // QA D2709: kept in the order the lines are added, so they are inserted (and dated) in that order: the
+    // consultation first, then the visit's orders, as the charge sources post them.
+    @jakarta.persistence.OrderBy("createdAt ASC, id ASC")
+    private Set<InvoiceItem> invoiceItems = new java.util.LinkedHashSet<>();
 
     // Spring Data Auditing — ensure @EnableJpaAuditing + AuditorAware<UUID> bean exists
     @CreatedBy

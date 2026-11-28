@@ -188,6 +188,24 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
     @Column(name = "provider_signed_at")
     private LocalDateTime providerSignedAt;
 
+    /**
+     * QA D4140 (V465): who placed the request, from the session. A physician's signature makes the signer the
+     * ordering provider; these two keep the nurse or midwife who asked, and are never rewritten.
+     */
+    @Column(name = "requested_by_user_id")
+    private UUID requestedByUserId;
+
+    @Column(name = "requested_by_name", length = 200)
+    private String requestedByName;
+
+    /**
+     * QA D4140 (V465): the request was placed by somebody who is not a signing physician of the order's
+     * hospital, so it waits for one ({@code ImagingOrderAuthorisation}). Kept true once signed: the order's
+     * history. Null on an order written before V465.
+     */
+    @Column(name = "physician_authorisation_required")
+    private Boolean physicianAuthorisationRequired;
+
     @Column(name = "provider_signature_statement", length = 1000)
     private String providerSignatureStatement;
 

@@ -30,6 +30,11 @@ public interface AppointmentWaitlistRepository extends JpaRepository<Appointment
 
     Optional<AppointmentWaitlist> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
+    /** QA D4229: whether the patient already has a request in one of these statuses for this department here. */
+    boolean existsByHospital_IdAndPatient_IdAndDepartment_IdAndStatusIn(UUID hospitalId, UUID patientId,
+                                                                       UUID departmentId,
+                                                                       java.util.Collection<String> statuses);
+
     /** Lapsed offers, for the reconciliation sweep (P3 #22). Unscoped — system actor. */
     List<AppointmentWaitlist> findByStatusAndOfferExpiresAtBefore(
         String status, java.time.LocalDateTime cutoff);

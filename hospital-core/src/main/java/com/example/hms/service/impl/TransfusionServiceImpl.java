@@ -177,6 +177,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         this.positiveAuthority = positiveAuthority;
     }
 
+    /**
+     * QA D4141: the second bedside checker's own confirmation. Setter injection, required: no bag is hung
+     * without it.
+     */
+    private com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setBedsideVerifier(com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier) {
+        this.bedsideVerifier = bedsideVerifier;
+    }
+
     @Override
     public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO recordAntibodyWorkup(
             com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request) {
@@ -454,6 +465,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (unit.getStatus() == BloodUnitStatus.DISCARDED) {
             throw new BusinessException("transfusion.unit.alreadyDiscarded", unit.getUnitNumber());
         }
+        // QA D4178 (same class): a bag out of the laboratory and never hung is not written off from the
+        // stock screen, which closed the follow-up of its release on the word that it was never given.
+        // The laboratory records its return, and what it found (recordUnitReturn).
+        if (unit.getStatus() == BloodUnitStatus.ISSUED
+                && administrationRepository.findByBloodUnit_Id(unit.getId()).isEmpty()) {
+            throw new BusinessException("transfusion.unit.discardIssued", unit.getUnitNumber());
+        }
         // QA CX-008 sibling: a bag running into a patient is stopped at the
         // bedside, which is what discards it; the stock screen cannot.
         if (administrationRepository.findByBloodUnit_Id(unit.getId())
@@ -620,20 +638,144 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (administrationRepository.existsByRequest_IdAndStatus(requestId, TransfusionAdministrationStatus.IN_PROGRESS)) {
             throw new BusinessException("transfusion.request.inProgress");
         }
-        // Release anything held for this patient rather than stranding it. A bag
+        // Release anything reserved for this patient rather than stranding it. A bag
         // that has been hung never goes back to stock, whatever its status reads.
+        List<BloodUnit> outOfTheLab = new ArrayList<>();
         for (BloodUnit unit : unitRepository.findByRequest_IdOrderByUnitNumberAsc(requestId)) {
-            boolean held = unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED;
-            if (held && administrationRepository.findByBloodUnit_Id(unit.getId()).isEmpty()) {
+            if (administrationRepository.findByBloodUnit_Id(unit.getId()).isPresent()) {
+                continue;
+            }
+            if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED) {
+                // Reserved and still in the laboratory's fridge: it is simply free again.
                 unit.setStatus(BloodUnitStatus.RETURNED);
                 unitRepository.save(unit);
-                // V380: an O positive bag that comes back unused exposed nobody; its follow-up is closed.
                 positiveAuthority.noteBagBack(unit.getId());
+            } else if (unit.getStatus() == BloodUnitStatus.ISSUED) {
+                // QA D4178: an issued bag has left the laboratory. The prescriber's word does not bring it
+                // back: it stays out of stock, with whatever follow-up its release opened, until the
+                // laboratory records what became of it (recordUnitReturn).
+                outOfTheLab.add(unit);
             }
         }
         request.setStatus(TransfusionRequestStatus.CANCELLED);
         request.setCancelReason(reason);
-        return requestRepository.save(request);
+        TransfusionRequest saved = requestRepository.save(request);
+        if (!outOfTheLab.isEmpty()) {
+            notifySafely(() -> fileBagsToRecoverAfterCommit(saved, outOfTheLab), requestId);
+        }
+        return saved;
+    }
+
+    public static final String RECOVER_TITLE_KEY = "transfusion.unit.toRecover.inBasketTitle";
+    public static final String RECOVER_BODY_KEY = "transfusion.unit.toRecover.inBasketBody";
+    public static final String RECOVER_INCOMPATIBLE_BODY_KEY = "transfusion.unit.toRecover.incompatibleBody";
+    /** The reference of the « bag to recover » task, closed when the laboratory records the return. */
+    public static final String UNIT_REFERENCE_TYPE = "BLOOD_UNIT_TO_RECOVER";
+    private static final Set<String> LAB_MANAGER_ROLE_CODES = Set.of(SecurityConstants.ROLE_LAB_MANAGER);
+
+    /**
+     * QA D4178: a request was cancelled with a bag out of the laboratory. Each lab director is asked, after
+     * the commit, to get the bag back and record what became of it. A task, not an alarm: nobody is in danger.
+     */
+    private void fileBagsToRecoverAfterCommit(TransfusionRequest request, List<BloodUnit> units) {
+        fileBagsToRecoverAfterCommit(request, units, false);
+    }
+
+    /**
+     * QA D4178 review: the same task when a bag issued and never hung is found incompatible. It stays out of
+     * stock with its release follow-up open; the laboratory gets it back and records its return.
+     */
+    private void fileBagsToRecoverAfterCommit(TransfusionRequest request, List<BloodUnit> units, boolean incompatible) {
+        List<UUID> readers = labDirectors(request);
+        if (readers.isEmpty()) {
+            // A hospital with no lab director: its lab managers recover the bag.
+            readers = assignmentRepository
+                .findLiveUsersAtHospitalWithRoleCodes(request.getHospital().getId(), LAB_MANAGER_ROLE_CODES)
+                .stream().map(com.example.hms.model.User::getId).distinct().toList();
+        }
+        if (readers.isEmpty()) {
+            log.warn("Transfusion request {} was cancelled with {} bag(s) out of the laboratory and no lab director or manager to tell",
+                request.getId(), units.size());
+            return;
+        }
+        Patient patient = request.getPatient();
+        List<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> items = new ArrayList<>();
+        for (BloodUnit unit : units) {
+            Object[] titleArgs = {unit.getUnitNumber()};
+            Object[] bodyArgs = {unit.getUnitNumber(), patient != null ? patient.getFullName() : null};
+            for (UUID reader : readers) {
+                com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item = urgentItem(reader, request,
+                    com.example.hms.enums.InBasketItemType.TASK, unit.getId(), UNIT_REFERENCE_TYPE);
+                item.setPriority(com.example.hms.enums.InBasketPriority.NORMAL);
+                item.setTitleKey(RECOVER_TITLE_KEY);
+                if (incompatible) {
+                    item.setBodyKey(RECOVER_INCOMPATIBLE_BODY_KEY);
+                } else {
+                    item.setBodyKey(RECOVER_BODY_KEY);
+                }
+                items.add(staffCopy(item, titleArgs, bodyArgs));
+            }
+        }
+        fileAfterCommit(items, request.getId());
+    }
+
+    /**
+     * QA D4178: the laboratory records what became of a bag it issued and that was never hung. The one way
+     * such a bag re-enters stock, and it takes the laboratory's own statements (cold chain kept, bag
+     * intact); otherwise the bag is out of stock for good. A bag that never came back keeps the follow-up
+     * its release opened: nobody can say it was not given.
+     */
+    @Override
+    public BloodUnitResponseDTO recordUnitReturn(UUID unitId,
+            com.example.hms.payload.dto.transfusion.BloodUnitReturnRequestDTO request) {
+        unitRepository.lockById(unitId);
+        BloodUnit unit = loadUnitScoped(unitId);
+        if (unit.getStatus() != BloodUnitStatus.ISSUED) {
+            throw new BusinessException("transfusion.unit.return.notIssued", unit.getUnitNumber());
+        }
+        // A bag that was hung is opened: it is stopped or completed at the bedside, never returned.
+        if (administrationRepository.findByBloodUnit_Id(unit.getId()).isPresent()) {
+            throw new BusinessException("transfusion.unit.alreadyHung", unit.getUnitNumber());
+        }
+        com.example.hms.enums.BloodUnitReturnOutcome outcome = request.getOutcome();
+        String note = hasText(request.getNote()) ? request.getNote().trim() : null;
+        if (outcome == com.example.hms.enums.BloodUnitReturnOutcome.FIT_FOR_STOCK) {
+            if (!Boolean.TRUE.equals(request.getColdChainKept())) {
+                throw new FieldBusinessException("coldChainKept", "transfusion.unit.return.coldChainRequired");
+            }
+            if (!Boolean.TRUE.equals(request.getBagIntact())) {
+                throw new FieldBusinessException("bagIntact", "transfusion.unit.return.intactRequired");
+            }
+            if (unit.isExpiredOn(LocalDate.now(clock))) {
+                throw new FieldBusinessException("outcome", "transfusion.unit.expired", unit.getUnitNumber(),
+                    DisplayDates.date(unit.getExpiresOn()));
+            }
+            unit.setStatus(BloodUnitStatus.RETURNED);
+            // V380: an O positive bag that came back unused exposed nobody; its follow-up is closed.
+            positiveAuthority.noteBagBack(unit.getId());
+        } else {
+            if (note == null) {
+                throw new FieldBusinessException("note", "transfusion.unit.return.noteRequired");
+            }
+            unit.setStatus(BloodUnitStatus.DISCARDED);
+            unit.setDiscardReason(note);
+            if (outcome == com.example.hms.enums.BloodUnitReturnOutcome.UNFIT_DESTROYED) {
+                // The laboratory holds the bag: nobody received it.
+                positiveAuthority.noteBagBack(unit.getId());
+            }
+            // NOT_RECOVERED: the follow-up of its release stays open.
+        }
+        UUID actorId = roleValidator.getCurrentUserId();
+        unit.setReturnOutcome(outcome);
+        unit.setReturnRecordedAt(LocalDateTime.now(clock));
+        unit.setReturnRecordedByUserId(actorId);
+        unit.setReturnRecordedByName(actorId == null ? null : userRepository.findById(actorId)
+            .map(com.example.hms.mapper.TransfusionMapper::userName).orElse(null));
+        unit.setReturnNote(note);
+        BloodUnit saved = unitRepository.save(unit);
+        // The « bag to recover » task is done: the laboratory has recorded what became of the bag.
+        inBasketService.removeOpenItemsForReference(saved.getId(), UNIT_REFERENCE_TYPE);
+        return mapper.toDto(saved);
     }
 
     // ── Crossmatch and issue ────────────────────────────────────────────
@@ -799,14 +941,21 @@ public class TransfusionServiceImpl implements TransfusionService {
             if ((unit.getStatus() == BloodUnitStatus.ISSUED || hung != null) && !alreadyIncompatible) {
                 notifySafely(() -> fileIncompatibleResultAfterCommit(transfusionRequest, unit, hung, saved), saved.getId());
             }
+            // QA D4178 review: an issued bag never hung stays out of stock; the laboratory is asked to get it back.
+            if (hung == null && unit.getStatus() == BloodUnitStatus.ISSUED && !alreadyIncompatible) {
+                notifySafely(() -> fileBagsToRecoverAfterCommit(transfusionRequest, List.of(unit), true),
+                    saved.getId());
+            }
             // A running bag stays what it is: it is not back at the lab, and only the
             // clinician stops it. Stopping or finishing it closes it as any other. A bag whose
             // transfusion ended keeps its final status, and so does its request.
-            if (hung == null
-                    && (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED)) {
-                // A bag reserved here, or out and not hung, and now found incompatible goes
-                // back to the lab. Left as it was, nothing could ever release it: issue and
-                // hang refuse it, and it is hidden from the units that can be crossmatched.
+            // QA D4178 (class): a bag that was issued is out of the laboratory. An incompatible result does not
+            // bring it back: it stays ISSUED (hang refuses it), its release follow-up stays open, and it re-enters
+            // stock only through the laboratory's recorded return (recordUnitReturn).
+            if (hung == null && unit.getStatus() == BloodUnitStatus.CROSSMATCHED) {
+                // A bag reserved here, still in the laboratory's fridge, and now found incompatible is
+                // free again. Left as it was, nothing could ever release it: issue and hang refuse it,
+                // and it is hidden from the units that can be crossmatched.
                 unit.setStatus(BloodUnitStatus.RETURNED);
                 unitRepository.save(unit);
                 positiveAuthority.noteBagBack(unit.getId());
@@ -1580,6 +1729,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (samePerson) {
             throw new BusinessException("transfusion.administration.twoPersonCheck");
         }
+        // QA D4141: the second check is a clinician's. The named person is of the bedside team of this
+        // hospital (the people the picker lists), whatever the client sent.
+        if (verifier.getUser() == null
+                || !com.example.hms.service.transfusion.BedsideVerifierConfirmation.holdsBedsideRole(verifier)) {
+            throw new FieldBusinessException(verifierField(request), "transfusion.administration.verifierNotBedside");
+        }
+        // ...and they confirm it themselves, with their own factor. Last, so that nothing else can still
+        // refuse the hang once their code or password has been used.
+        String confirmedBy = bedsideVerifier.confirm(verifier.getUser(),
+            administering.getUser() != null ? administering.getUser().getId() : null, hospitalId,
+            request.getVerifierSecret());
 
         TransfusionAdministration administration = TransfusionAdministration.builder()
             .request(transfusionRequest)
@@ -1590,6 +1750,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             .startedAt(LocalDateTime.now(clock))
             .administeredBy(administering)
             .verifiedBy(verifier)
+            .verifierConfirmedAt(LocalDateTime.now(clock))
+            .verifierConfirmationMethod(confirmedBy)
             .verificationMethod(request.getVerificationMethod())
             .notes(request.getNotes())
             .build();
@@ -1598,6 +1760,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         // V380: the O positive release this bag went out on is the one that was given.
         positiveAuthority.noteAdministered(unit.getId(), transfusionRequest.getId(), saved.getStartedAt());
         return toDetail(saved, List.of());
+    }
+
+    /** The request property that named the second checker, for a refusal about them. */
+    private static String verifierField(TransfusionAdministrationRequestDTO request) {
+        return request.getVerifiedByUserId() != null ? "verifiedByUserId" : "verifiedByStaffId";
     }
 
     /**
@@ -1615,12 +1782,12 @@ public class TransfusionServiceImpl implements TransfusionService {
             .filter(Staff::isActive)
             .filter(staff -> staff.getUser() != null && staff.getUser().isActive() && !staff.getUser().isDeleted()
                 && !Objects.equals(staff.getUser().getId(), self))
-            .filter(staff -> staff.getAssignment() != null && staff.getAssignment().getRole() != null
-                && staff.getAssignment().getRole().getCode() != null
-                && com.example.hms.service.emar.ControlledAdministrationWitness.WITNESS_ROLE_CODES
-                    .contains(staff.getAssignment().getRole().getCode().toUpperCase(java.util.Locale.ROOT)))
+            // QA D4141: the one question the hang asks of the person it is sent.
+            .filter(com.example.hms.service.transfusion.BedsideVerifierConfirmation::holdsBedsideRole)
             .map(staff -> new com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO(
-                staff.getUser().getId(), verifierName(staff)))
+                staff.getUser().getId(), verifierName(staff),
+                // What this colleague will type to confirm: their code, their password, or nothing they can give.
+                bedsideVerifier.methodFor(staff.getUser()), false))
             .sorted(java.util.Comparator.comparing(
                 com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO::displayName,
                 java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))

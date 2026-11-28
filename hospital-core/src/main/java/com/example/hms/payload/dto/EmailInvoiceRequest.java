@@ -2,13 +2,16 @@ package com.example.hms.payload.dto;
 
 public record EmailInvoiceRequest(
     @jakarta.validation.constraints.NotEmpty
-    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS)
+    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS,
+        message = EmailInvoiceRequest.TOO_MANY)
     java.util.List<
         @jakarta.validation.constraints.NotBlank
         @jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> to,
-    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS)
+    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS,
+        message = EmailInvoiceRequest.TOO_MANY)
     java.util.List<@jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> cc,
-    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS)
+    @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_RECIPIENTS,
+        message = EmailInvoiceRequest.TOO_MANY)
     java.util.List<@jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> bcc,
     @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_MESSAGE_LENGTH)
     String message,
@@ -32,6 +35,11 @@ public record EmailInvoiceRequest(
      * note.
      */
     public static final int MAX_RECIPIENTS = 3;
+    /**
+     * QA D4230 (round 81): one list over the cap is refused in the same words as the three lists together
+     * ({@code invoiceMail.recipient.tooMany}); it used to answer « la taille doit être comprise entre 0 et 3 ».
+     */
+    public static final String TOO_MANY = "{validation.invoiceMail.tooMany}";
     public static final int MAX_MESSAGE_LENGTH = 2000;
     public static final int MAX_REASON_LENGTH = 500;
 

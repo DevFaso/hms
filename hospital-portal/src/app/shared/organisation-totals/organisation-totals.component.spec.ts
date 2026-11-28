@@ -89,13 +89,13 @@ describe('OrganisationTotalsComponent — totals only, small counts withheld (pl
 
     const rows = all(fixture, '[data-testid="organisation-totals-row"]');
     expect(rows.length).toBe(2);
-    // Raw text: the amounts carry narrow no-break spaces, which a whitespace squeeze would flatten.
+    // Raw text: the amounts carry no-break spaces, which a whitespace squeeze would flatten.
     const first = rows[0].textContent ?? '';
     expect(first).toContain('Clinique Test A');
     expect(first).toContain('XOF');
     // Whole francs, grouped the French way, never a decimal.
-    expect(first).toContain('250 000 F CFA');
-    expect(first).toContain('12 500 F CFA');
+    expect(first).toContain('250 000 F CFA');
+    expect(first).toContain('12 500 F CFA');
     expect(first).not.toMatch(/\d[.,]\d{2}\s*F/);
     expect((rows[1].textContent ?? '').replace(/\s+/g, ' ')).toContain('XAF');
     expect(text(fixture)).toContain('Chiffres de l’organisation');

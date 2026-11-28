@@ -13,6 +13,8 @@
     "Visit summary sections (2026-11-12): allergy reaction, prescription frequency and the family-history relationship are free text a clinician typed, as on the chart pages pinned above."
   ],
   "pinned": [
+    "src/app/audit-logs/audit-logs.html::detail.reason",
+    "src/app/billing/billing.html::g.relationship",
     "src/app/lab/lab-results/lab-results.html::r.qcOverrideReason",
     "src/app/lab/lab-results/lab-results.html::r.correctionReason",
     "src/app/nurse-station/nurse-station.html::<option>name",

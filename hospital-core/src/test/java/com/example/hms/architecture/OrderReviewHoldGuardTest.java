@@ -80,7 +80,7 @@ class OrderReviewHoldGuardTest {
         NurseTask#createHandoff,completeHandoff,captureVitals,createNursingTask,completeNursingTask,markInboxRead,createCareNote | no order
         Transfusion#createRequest | a new order written after the dispute follows the normal workflow
         Transfusion#recordBloodGroup,recordCrossmatch | a laboratory result, which must always be written; issue and start are refused
-        Transfusion#receiveUnit,discardUnit | blood bank stock
+        Transfusion#receiveUnit,discardUnit,recordUnitReturn | blood bank stock (recordUnitReturn: QA D4178, an issued bag coming back to the laboratory; nothing leaves on it)
         Transfusion#cancelRequest | stops the request
         Transfusion#completeAdministration,stopAdministration,recordReaction | treatment already running: never held, stop and complete stay available
         StockOutRouting#confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the hold: a hand-over that happened is recorded and raised, the hold stands

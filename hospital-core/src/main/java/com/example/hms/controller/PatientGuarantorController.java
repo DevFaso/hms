@@ -48,6 +48,15 @@ public class PatientGuarantorController {
         "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_DOCTOR',"
             + "'ROLE_MIDWIFE')";
 
+    /**
+     * QA D4223 (round 81): who pays is what the cashier and the accountant work with (who to bill, who an invoice
+     * may be mailed to), so they read the list, in their own hospital like everyone else. They change nothing:
+     * adding, editing and deactivating a guarantor stay with {@link #ROLES}.
+     */
+    private static final String READ_ROLES =
+        "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_DOCTOR',"
+            + "'ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')";
+
     private final PatientGuarantorService guarantorService;
     private final ControllerAuthUtils authUtils;
 
@@ -69,7 +78,7 @@ public class PatientGuarantorController {
     }
 
     @GetMapping
-    @PreAuthorize(ROLES)
+    @PreAuthorize(READ_ROLES)
     @Operation(summary = "Guarantors for a patient (primary first)",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<List<GuarantorResponseDTO>> list(
