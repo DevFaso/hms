@@ -166,10 +166,6 @@ public class ImagingCriticalNotificationService {
         List<ImagingReport> overdue = imagingReportRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (ImagingReport report : overdue) {
-            if (Boolean.FALSE.equals(report.getLatestVersion())) {
-                // QA r81 D4157: a version replaced by a correction leaves the ladder; the new one has its own alert.
-                continue;
-            }
             try {
                 if (escalateOne(report, now)) {
                     escalated++;
@@ -185,15 +181,7 @@ public class ImagingCriticalNotificationService {
     /** The incident of a finding a clinician has since acknowledged is closed, with that clinician's name on it. */
     private void closeAnsweredIncidents() {
         for (UrgentAlertIncident incident : ladder.openIncidents(UrgentAlertIncident.SOURCE_IMAGING_REPORT)) {
-            Optional<ImagingReport> source = imagingReportRepository.findById(incident.getSourceId());
-            if (source.isPresent() && Boolean.FALSE.equals(source.get().getLatestVersion())
-                    && source.get().getCriticalResultAcknowledgedAt() == null) {
-                // QA r81 D4157: the replaced version's incident closes; the correction carries its own.
-                ladder.closeIncident(UrgentAlertIncident.SOURCE_IMAGING_REPORT, source.get().getId(),
-                    UrgentAlertIncident.RESOLVED_NO_LONGER_URGENT, null, LocalDateTime.now(clock));
-                continue;
-            }
-            source
+            imagingReportRepository.findById(incident.getSourceId())
                 .filter(report -> report.getCriticalResultAcknowledgedAt() != null)
                 .ifPresent(report -> {
                     User by = report.getCriticalResultAcknowledgedBy() == null

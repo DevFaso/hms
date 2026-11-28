@@ -298,20 +298,6 @@ class ImagingCriticalNotificationServiceTest {
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
     }
 
-    /** QA r81 D4157: the version a correction replaced leaves the ladder; only the latest escalates. */
-    @Test
-    void aReplacedVersionIsNotEscalated() {
-        ImagingReport replaced = flagged();
-        replaced.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
-        replaced.setLatestVersion(false);
-        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(replaced));
-
-        assertThat(service.escalateOverdue()).isZero();
-
-        verify(notificationService, never()).created(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        assertThat(replaced.getCriticalEscalationLevel()).isNotEqualTo((short) 1);
-    }
-
     @Test
     void aFindingWithNoStepDueIsLeftAlone() {
         ImagingReport report = flagged();
