@@ -297,6 +297,28 @@ class AuthBootstrapServiceImplTest {
     }
 
     @Nested
+    @DisplayName("resolveCurrentSession — staff who is also a patient elsewhere")
+    class StaffWhoIsAlsoAPatient {
+
+        @Test
+        @DisplayName("r81: the primary hospital is where they work, even when the patient row comes first")
+        void thePrimaryHospitalIsWhereTheyWork() {
+            UUID treatedAt = UUID.randomUUID();
+            when(userRepository.findByUsername("john.doe")).thenReturn(Optional.of(staffUser));
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+                activeAssignment(treatedAt, "ROLE_PATIENT"), activeAssignment(HOSPITAL_ID, "ROLE_NURSE")));
+            when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(USER_ID)).thenReturn(Optional.of(staff));
+            when(patientRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+
+            SessionBootstrapResponseDTO result = service.resolveCurrentSession("john.doe");
+
+            assertThat(result.getPrimaryHospitalId()).isEqualTo(HOSPITAL_ID);
+            assertThat(result.getPermittedHospitalIds()).containsExactly(treatedAt, HOSPITAL_ID);
+        }
+    }
+
+    @Nested
     @DisplayName("resolveCurrentSession — no hospital assignments")
     class NoHospitalAssignments {
 

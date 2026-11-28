@@ -48,6 +48,7 @@ class AllergyReviewStateReadingTest {
 
     private final UUID hospitalId = UUID.randomUUID();
     private Prescription rx;
+    private PatientAllergy allergy;
     private CurrentAllergyRecheck check;
 
     /** The three gate responses that carry the cards. */
@@ -68,7 +69,7 @@ class AllergyReviewStateReadingTest {
         rx.setPatient(patient);
         rx.setHospital(hospital);
         rx.setMedicationName("Amoxicillin");
-        PatientAllergy allergy = new PatientAllergy();
+        allergy = new PatientAllergy();
         allergy.setId(UUID.randomUUID());
         allergy.setActive(true);
         allergy.setAllergenDisplay("Penicillin");
@@ -163,6 +164,63 @@ class AllergyReviewStateReadingTest {
         check.readFor(rx, "Amoxicillin", true).applyTo(dto);
         assertThat(dto.getAllergyReview().getState()).isEqualTo(State.AWAITING_REVIEW);
         assertThat(dto.getAllergyReview().getPlan()).isNull();
+    }
+
+    /** QA D3945 (r77, not fixed in r81): the voided review is said, with whose it was, when, and why it no longer counts. */
+    @Test
+    void aReviewVoidedByAChangedAllergySaysSoOnEveryResponseAndOnTheCard() {
+        review(AllergyReviewDecision.CONTINUE);
+        // The allergy is made more severe after the review: the gates hold again.
+        allergy.setSeverity(AllergySeverity.LIFE_THREATENING);
+        allergy.setUpdatedAt(LocalDateTime.of(2026, 11, 12, 8, 0));
+        for (var response : RESPONSES.entrySet()) {
+            AllergyReviewCarrier dto = response.getValue().get();
+            check.readFor(rx, "Amoxicillin", true).applyTo(dto);
+            AllergyReviewStateDTO state = stateOf(dto);
+            assertThat(state.getState()).as(response.getKey()).isEqualTo(State.AWAITING_REVIEW);
+            assertThat(state.getVoidedDecision()).as(response.getKey()).isEqualTo(State.CONTINUE);
+            assertThat(state.getVoidedReviewedByName()).isEqualTo("Aminata Ouedraogo");
+            assertThat(state.getVoidedReviewedAt()).isEqualTo(LocalDateTime.of(2026, 11, 10, 9, 30));
+            assertThat(state.getVoidedBecause()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_CHANGED);
+            assertThat(state.getVoidedBecauseText()).contains("allergy record was changed after that review");
+            // The old plan never comes back with a review that no longer counts.
+            assertThat(state.getPlan()).isNull();
+            assertThat(state.getRationale()).isNull();
+            CdsCard card = cardsOf(dto).getFirst();
+            assertThat(card.detail()).as(response.getKey())
+                .contains("An earlier review by Dr Aminata Ouedraogo")
+                .contains("allergy record was changed after that review")
+                .contains("A new review by an authorized prescriber is needed");
+            assertThat(card.detail()).doesNotContain(PLAN).doesNotContain(RATIONALE);
+        }
+    }
+
+    @Test
+    void aReviewVoidedByAChangedOrderNamesTheOrderToo() {
+        review(AllergyReviewDecision.STOP);
+        rx.setDosage("1000");
+        WorkQueuePrescriptionDTO dto = new WorkQueuePrescriptionDTO();
+        check.readFor(rx, "Amoxicillin", true).applyTo(dto);
+        AllergyReviewStateDTO state = dto.getAllergyReview();
+        assertThat(state.getState()).isEqualTo(State.AWAITING_REVIEW);
+        assertThat(state.getVoidedDecision()).isEqualTo(State.STOP);
+        assertThat(state.getVoidedBecause()).isEqualTo(CurrentAllergyRecheck.VOID_ALLERGY_OR_ORDER_CHANGED);
+        assertThat(state.getVoidedBecauseText()).contains("drug, dose, route or frequency");
+    }
+
+    @Test
+    void aConflictNeverReviewedAndACurrentReviewCarryNoVoidedBecause() {
+        WorkQueuePrescriptionDTO never = new WorkQueuePrescriptionDTO();
+        check.readFor(rx, "Amoxicillin", true).applyTo(never);
+        assertThat(never.getAllergyReview().getVoidedBecause()).isNull();
+        assertThat(never.getAllergyReview().getVoidedDecision()).isNull();
+
+        review(AllergyReviewDecision.CONTINUE);
+        WorkQueuePrescriptionDTO current = new WorkQueuePrescriptionDTO();
+        check.readFor(rx, "Amoxicillin", true).applyTo(current);
+        assertThat(current.getAllergyReview().getState()).isEqualTo(State.CONTINUE);
+        assertThat(current.getAllergyReview().getVoidedBecause()).isNull();
+        assertThat(current.getAllergyReview().getVoidedBecauseText()).isNull();
     }
 
     @Test

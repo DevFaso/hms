@@ -58,6 +58,22 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
     /** Roles that read nothing clinical of other people, so holding them does not lift the shaping. */
     private static final Set<String> NOT_CLINICAL_READERS = Set.of(RECEPTIONIST, "ROLE_PATIENT", "ROLE_STAFF");
     private static final String ROLE_PREFIX = "ROLE_";
+
+    /**
+     * The roles that read a visit itself ({@code EncounterController}'s list), and so its reason
+     * wherever it shows. Everyone else on a front-desk view (the hospital admin, billing, accounts)
+     * reads the reason as the desk does: what was booked or typed at the desk, never triage's
+     * complaint. {@code DeskViewVisitReasonGuardTest} holds this set equal to the visit readers.
+     */
+    public static final Set<String> VISIT_READERS = Set.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+        "ROLE_RADIOLOGIST", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST", "ROLE_SUPER_ADMIN");
+
+    /**
+     * The front-desk view types whose visit reason is shaped for every caller outside
+     * {@link #VISIT_READERS}, with the field: the class of QA D4265.
+     */
+    public static final Map<Class<?>, String> DESK_VIEW_VISIT_REASON =
+        Map.of(ReceptionQueueItemDTO.class, "appointmentReason");
     private static final List<String> OWN_RECORD_PREFIXES = List.of("/me/", "/api/me/");
 
     /**
@@ -98,8 +114,13 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
                                   @NonNull MediaType selectedContentType,
                                   @NonNull Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   @NonNull ServerHttpRequest request, @NonNull ServerHttpResponse response) {
-        if (body != null && !(body instanceof byte[]) && isReceptionistOnly() && !isOwnRecord(request)) {
+        if (body == null || body instanceof byte[] || isOwnRecord(request)) {
+            return body;
+        }
+        if (isReceptionistOnly()) {
             shape(body);
+        } else if (!readsVisits()) {
+            shapeDeskView(body);
         }
         return body;
     }
@@ -120,6 +141,37 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
             .filter(authority -> authority != null && authority.startsWith(ROLE_PREFIX))
             .toList();
         return roles.contains(RECEPTIONIST) && NOT_CLINICAL_READERS.containsAll(roles);
+    }
+
+    /** Holds a role that reads a visit itself; a request with no authentication is not shaped here. */
+    public static boolean readsVisits() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null || authentication.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .anyMatch(VISIT_READERS::contains);
+    }
+
+    /**
+     * A front-desk view for a caller who reads no visit: the visit reason becomes the desk's,
+     * exactly as for a receptionist, through the wrappers a desk view comes in.
+     */
+    public static void shapeDeskView(Object body) {
+        switch (body) {
+            case Page<?> page -> page.getContent().forEach(ReceptionistResponseShaping::shapeDeskViewIfPresent);
+            case Collection<?> many -> many.forEach(ReceptionistResponseShaping::shapeDeskViewIfPresent);
+            case ApiResponseWrapper<?> wrapper -> shapeDeskViewIfPresent(wrapper.getData());
+            case ReceptionQueueItemDTO row -> row.setAppointmentReason(row.getDeskAppointmentReason());
+            case FlowBoardDTO flow -> java.util.stream.Stream.of(flow.getScheduled(), flow.getConfirmed(),
+                    flow.getArrived(), flow.getInProgress(), flow.getNoShow(), flow.getCompleted(), flow.getWalkIn())
+                .forEach(ReceptionistResponseShaping::shapeDeskViewIfPresent);
+            default -> { /* Not a front-desk view: DeskViewVisitReasonGuardTest keeps this true. */ }
+        }
+    }
+
+    private static void shapeDeskViewIfPresent(Object body) {
+        if (body != null) {
+            shapeDeskView(body);
+        }
     }
 
     /** Removes the clinical fields from one response body, through its wrappers. */

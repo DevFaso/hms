@@ -46,7 +46,7 @@ import static org.mockito.ArgumentMatchers.*;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({StockCountService.class, StockBalanceReconciliationService.class, StockTransactionServiceImpl.class, StockTransferBooking.class, StockTransactionMapper.class,
+@Import({StockCountService.class, StockBalanceReconciliationService.class, StockTransactionServiceImpl.class, StockTransferBooking.class, PharmacyPriceHistory.class, StockTransactionMapper.class,
     LowStockAlertDelivery.class, StockCountRevisionPostgresIT.TestClock.class,
     com.example.hms.security.EncryptionKeyHolder.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)

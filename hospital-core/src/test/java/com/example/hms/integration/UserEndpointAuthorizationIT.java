@@ -515,10 +515,12 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(status(post("/users/admin-register"), admin, signup("recB", "RECEPTIONIST", hospitalB)))
             .isEqualTo(403);
 
-        // A PATIENT registration lands at the caller's own active hospital
-        // whatever hospitalId the body names (resolveHospitalForPatient reads
-        // the context first), so this one is allowed, and is created at A.
-        MvcResult patient = perform(post("/users/admin-register"), admin, signup("patB", "PATIENT", hospitalB));
+        // QA r81 D4260: a body naming a hospital the caller holds no role at is refused whatever
+        // the role granted; a PATIENT registration used to be accepted and created at the caller's
+        // own hospital instead. At the caller's hospital it is created there.
+        assertThat(status(post("/users/admin-register"), admin, signup("patB", "PATIENT", hospitalB)))
+            .isEqualTo(403);
+        MvcResult patient = perform(post("/users/admin-register"), admin, signup("patA", "PATIENT", hospitalA));
         assertThat(patient.getResponse().getStatus()).isEqualTo(201);
         UUID patientId = idOf(patient);
         createdUsers.add(patientId);

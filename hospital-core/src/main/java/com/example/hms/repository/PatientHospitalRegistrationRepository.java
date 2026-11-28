@@ -99,6 +99,9 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     );
     boolean existsByPatientIdAndHospitalId(UUID patientId, UUID hospitalId);
 
+    /** The patient holds a registration (any state) at one of these hospitals. */
+    boolean existsByPatientIdAndHospitalIdIn(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     /** QA D1476: the patient holds a registration here and the desk deactivated it. */
     boolean existsByPatientIdAndHospitalIdAndActiveFalse(UUID patientId, UUID hospitalId);
 

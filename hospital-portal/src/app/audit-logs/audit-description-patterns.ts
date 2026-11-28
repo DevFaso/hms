@@ -2213,6 +2213,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.DISPENSE_RELEASED_UNPRICED',
+    re: /^Fill handed over with no selling price; price roles notified$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.DISPENSE_BILLING_OVERRIDE_REVIEWED',
     re: /^Urgency override of a fill's billing reviewed$/,
     params: [],

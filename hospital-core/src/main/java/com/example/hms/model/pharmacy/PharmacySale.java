@@ -103,6 +103,14 @@ public class PharmacySale extends BaseEntity {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    /**
+     * QA D4186 (r81, V421): the readable receipt number of the sale, from the hospital's pharmacy receipt counter
+     * ({@code CODE-PH-YYYY-000001}, shared with the checkout's payments), allocated once when the sale is recorded.
+     * Null on sales recorded before V421.
+     */
+    @Column(name = "receipt_number", length = 40)
+    private String receiptNumber;
+
     @Size(max = 10)
     @Column(name = "currency", nullable = false, length = 10)
     @Builder.Default

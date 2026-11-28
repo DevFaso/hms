@@ -241,6 +241,8 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         UUID rxId = createAndSignPrescription();
         transactionTemplate.executeWithoutResult(tx ->
                 prescriptionRepository.findById(rxId).orElseThrow().setMedicationCatalogItemId(capsules.getId()));
+        holdFreeOfCharge(dispensaryA, capsules);
+        holdFreeOfCharge(dispensaryA, tablets);
 
         mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
                 .andExpect(status().isOk())
@@ -289,6 +291,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     @Test
     @DisplayName("QA D752: a legacy prescription with no stored quantity stays dispensable until its derived cap (9) is reached")
     void d752_legacyPartialDispenseKeepsTheRestOfTheDerivedCap() throws Exception {
+        com.example.hms.model.medication.MedicationCatalogItem product = heldProduct(dispensaryA);
         UUID rxId = createAndSignPrescription();
         // A legacy row: no stored quantity, regimen 1 tablet three times a day for 3 days = 9.
         transactionTemplate.executeWithoutResult(tx -> {
@@ -298,6 +301,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
             rx.setFrequency("TID");
             rx.setDuration("3 days");
         });
+        orderProduct(rxId, product);
 
         for (int[] step : new int[][] {{4, 0}, {4, 0}, {1, 1}}) {
             mockMvc.perform(apiPost(DISPENSE)
@@ -320,7 +324,9 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     @Test
     @DisplayName("QA D512: POST /pharmacy/dispense with no pharmacist verification is refused, and it can still be done after")
     void d512_aFillWithoutVerificationIsRefused() throws Exception {
+        com.example.hms.model.medication.MedicationCatalogItem product = heldProduct(dispensaryA);
         UUID rxId = createAndSignPrescription();
+        orderProduct(rxId, product);
         tools.jackson.databind.node.ObjectNode unverified = (tools.jackson.databind.node.ObjectNode)
                 tools.jackson.databind.json.JsonMapper.builder().build()
                         .readTree(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null));
@@ -796,6 +802,37 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private String dispenseBody(UUID rxId, Pharmacy pharmacy, User dispensedBy, int quantity,
                                 String substitutionReason) {
         return dispenseBody(rxId, pharmacy, dispensedBy, quantity, substitutionReason, null);
+    }
+
+    @Autowired private com.example.hms.repository.pharmacy.InventoryItemRepository inventoryItemRepository;
+
+    /**
+     * QA D4181 (r81): a fill leaves only from an item its pharmacy priced or documented as free. This
+     * dispensary keeps no lots, so the item is held inactive (an active one makes every fill name a lot)
+     * and documented as free: the fills of these tests carry no charge, as before.
+     */
+    private void holdFreeOfCharge(Pharmacy pharmacy, com.example.hms.model.medication.MedicationCatalogItem product) {
+        com.example.hms.model.pharmacy.InventoryItem item = inventoryItemRepository.save(
+                com.example.hms.model.pharmacy.InventoryItem.builder().pharmacy(pharmacy)
+                        .medicationCatalogItem(product).unit("tablet").active(false)
+                        .freeOfChargeReason("Programme national (fixture)").build());
+        cleanup.push(() -> inventoryItemRepository.deleteById(item.getId()));
+    }
+
+    /**
+     * A product held free of charge at {@code pharmacy}, for a fill that names no product: it is priced on the
+     * order's own item. Seeded before the prescription, so the fills are removed before their product.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem heldProduct(Pharmacy pharmacy) {
+        com.example.hms.model.medication.MedicationCatalogItem product =
+                seedProduct("Amoxicillin 500 mg capsule", "CAPSULE", "500");
+        holdFreeOfCharge(pharmacy, product);
+        return product;
+    }
+
+    private void orderProduct(UUID rxId, com.example.hms.model.medication.MedicationCatalogItem product) {
+        transactionTemplate.executeWithoutResult(tx ->
+                prescriptionRepository.findById(rxId).orElseThrow().setMedicationCatalogItemId(product.getId()));
     }
 
     /** QA D3940: a fill that names the catalogue item dispensed (a dispensary that keeps no lots). */
