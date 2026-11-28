@@ -105,7 +105,7 @@ describe('GoodsReceiptComponent', () => {
 
   beforeEach(async () => {
     svc = jasmine.createSpyObj('PharmacyService', [
-      'listPharmacies',
+      'listStores',
       'listInventoryByPharmacy',
       'listLotsByInventoryItem',
       'listLotsByPharmacy',
@@ -113,7 +113,7 @@ describe('GoodsReceiptComponent', () => {
       'receiveStock',
     ]);
     toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    svc.listPharmacies.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Main' }] } as any));
+    svc.listStores.and.returnValue(of({ content: [{ id: 'ph-1', name: 'Main' }] } as any));
     svc.listInventoryByPharmacy.and.returnValue(of({ data: { content: items } } as any));
     svc.listLotsByInventoryItem.and.returnValue(of({ data: { content: [] } } as any));
     svc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } } as any));

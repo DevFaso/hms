@@ -38,6 +38,30 @@
           </select>
         </div>
       }
+      <!-- QA D4186 (r81): the list is narrowed by what the cashier types (name, record number, medicine). -->
+      @if (dispenses().length > 0) {
+        <div class="form-row">
+          <label for="dispenseSearch">{{ 'R81_DISPENSING.CHECKOUT.SEARCH' | translate }}</label>
+          <input
+            id="dispenseSearch"
+            class="keneya-form-control"
+            type="text"
+            maxlength="200"
+            autocomplete="off"
+            data-testid="checkout-dispense-search"
+            [ngModel]="dispenseSearch()"
+            (ngModelChange)="dispenseSearch.set($event)"
+            [placeholder]="'R81_DISPENSING.CHECKOUT.SEARCH_PLACEHOLDER' | translate"
+          />
+          <p class="field-hint" role="status" data-testid="checkout-dispense-count">
+            {{
+              shownDispenses().length
+                | pluralKey: 'R81_DISPENSING.CHECKOUT.FILLS_SHOWN'
+                | translate: { count: shownDispenses().length }
+            }}
+          </p>
+        </div>
+      }
       <!-- QA D416: the fill is picked from the pharmacy's list, not typed as an id -->
       <div class="form-row">
         <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK' | translate }} *</label>
@@ -49,13 +73,22 @@
           [disabled]="loading() || dispensesLoading()"
         >
           <option value="">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK_PLACEHOLDER' | translate }}</option>
-          @for (d of dispenses(); track d.id) {
-            <!-- QA D1058: the patient first, so four Paracétamol rows are told apart -->
+          @for (d of shownDispenses(); track d.id) {
+            <!-- QA D1058: the patient first, so four Paracétamol rows are told apart.
+                 QA D4185 / D4186: with the record number, and what the fill costs. -->
             <option [value]="d.id">
-              {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }} ·
-              {{ d.medicationName }} · {{ d.quantityDispensed | countUnit: d.unit }}
+              {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
+              @if (d.patientMrn) {
+                ({{ d.patientMrn }})
+              }
+              · {{ d.medicationName }} · {{ d.quantityDispensed | countUnit: d.unit }} ·
+              @if (d.chargeAmount !== null && d.chargeAmount !== undefined) {
+                {{ d.chargeAmount | cfa: 'XOF' }}
+              } @else {
+                {{ 'R81_DISPENSING.CHECKOUT.NOT_PRICED' | translate }}
+              }
               @if (d.dispensedAt) {
-                · {{ d.dispensedAt | serverTime | date: 'short' }}
+                · {{ d.dispensedAt | serverTime | dateTime }}
               }
             </option>
           }
@@ -72,7 +105,10 @@
             <dt>{{ 'PHARMACY_CHECKOUT.QTY_DISPENSED' | translate }}</dt>
             <dd>{{ d.quantityDispensed | countUnit: d.unit }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
-            <dd>{{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}</dd>
+            <dd>
+              {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
+              <app-patient-id-line [mrn]="d.patientMrn" [dateOfBirth]="d.patientDateOfBirth" />
+            </dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PHARMACY' | translate }}</dt>
             <dd>{{ d.pharmacyName || '—' }}</dd>
           </dl>
@@ -204,12 +240,23 @@
           </p>
         }
         <h1>{{ 'PHARMACY_CHECKOUT.RECEIPT.TITLE' | translate }}</h1>
+        <!-- QA D4186 (r81): a receipt opened again from the history is a duplicate, and says so in print. -->
+        @if (isDuplicate(r)) {
+          <p class="receipt-duplicate" data-testid="receipt-duplicate">
+            {{ 'R81_DISPENSING.RECEIPT.DUPLICATE' | translate }}
+          </p>
+        }
+        @if (r.status === 'VOIDED') {
+          <p class="receipt-duplicate receipt-voided" role="alert" data-testid="receipt-voided">
+            {{ 'R81_DISPENSING.RECEIPT.VOIDED' | translate }}
+          </p>
+        }
         <p class="receipt-meta">
           <!-- QA D1032: the server's receipt number (CODE-PH-YYYY-000001), never a slice of the id -->
           {{ 'PHARMACY_CHECKOUT.RECEIPT.NUMBER' | translate }} {{ r.receiptNumber || '—' }}<br />
           {{
             'PHARMACY_CHECKOUT.RECEIPT.ISSUED_AT'
-              | translate: { date: (r.createdAt | serverTime | date: 'short') }
+              | translate: { date: (r.createdAt | serverTime | dateTime) }
           }}
         </p>
       </header>
@@ -228,6 +275,15 @@
             <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.UNIT_PRICE' | translate }}</dt>
             <dd data-testid="receipt-unit-price">{{ r.receipt?.unitPrice | cfa: r.currency }}</dd>
           }
+          @if (
+            isDuplicate(r) && (r.receipt?.unitPrice === null || r.receipt?.unitPrice === undefined)
+          ) {
+            <!-- A payment older than the kept prices: the total paid is exact, the unit price is not known. -->
+            <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.UNIT_PRICE' | translate }}</dt>
+            <dd data-testid="receipt-unit-price-unknown">
+              {{ 'R81_DISPENSING.RECEIPT.PRICE_NOT_KEPT' | translate }}
+            </dd>
+          }
           @if (r.receipt?.insurerShare) {
             <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.LINE_TOTAL' | translate }}</dt>
             <dd data-testid="receipt-line-total">{{ r.receipt?.lineTotal | cfa: r.currency }}</dd>
@@ -238,7 +294,11 @@
           }
           <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
           <dd>
-            {{ dispense()?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
+            {{
+              r.receipt?.patientName ||
+                dispense()?.patientName ||
+                ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate)
+            }}
           </dd>
           @if (r.receipt?.patientMrn) {
             <dt>{{ 'PHARMACY_CHECKOUT.RECEIPT.MRN' | translate }}</dt>
@@ -284,9 +344,145 @@
           {{ 'PHARMACY_CHECKOUT.PRINT' | translate }}
         </button>
         <button type="button" class="btn-secondary" (click)="reset()">
-          {{ 'PHARMACY_CHECKOUT.NEW_PAYMENT' | translate }}
+          {{
+            (isDuplicate(r) ? 'R81_DISPENSING.RECEIPT.CLOSE' : 'PHARMACY_CHECKOUT.NEW_PAYMENT')
+              | translate
+          }}
         </button>
       </div>
+    </section>
+  }
+
+  <!-- ========= QA D4186 (r81): the pharmacy's payments, to reopen and reprint a receipt ========= -->
+  @if (!receipt() && selectedPharmacyId()) {
+    <section
+      class="card no-print receipt-history"
+      [attr.aria-busy]="historyLoading()"
+      data-testid="receipt-history"
+    >
+      <div class="history-head">
+        <h3 id="receipt-history-title">{{ 'R81_DISPENSING.HISTORY.TITLE' | translate }}</h3>
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="historyLoading()"
+          (click)="loadHistory()"
+        >
+          {{ 'R81_DISPENSING.HISTORY.REFRESH' | translate }}
+        </button>
+      </div>
+      <p class="field-hint">{{ 'R81_DISPENSING.HISTORY.HINT' | translate }}</p>
+      @if (historyFailed()) {
+        <p class="field-hint" role="alert" data-testid="receipt-history-failed">
+          {{ 'R81_DISPENSING.HISTORY.LOAD_FAILED' | translate }}
+        </p>
+      } @else if (history().length === 0 && !historyLoading()) {
+        <p class="field-hint" data-testid="receipt-history-empty">
+          {{ 'R81_DISPENSING.HISTORY.EMPTY' | translate }}
+        </p>
+      } @else if (history().length > 0) {
+        <div class="form-row">
+          <label for="historySearch">{{ 'R81_DISPENSING.HISTORY.SEARCH' | translate }}</label>
+          <input
+            id="historySearch"
+            class="keneya-form-control"
+            type="text"
+            maxlength="200"
+            autocomplete="off"
+            data-testid="receipt-history-search"
+            [ngModel]="historySearch()"
+            (ngModelChange)="historySearch.set($event)"
+            [placeholder]="'R81_DISPENSING.HISTORY.SEARCH_PLACEHOLDER' | translate"
+          />
+          <p class="field-hint" role="status">
+            {{
+              shownHistory().length
+                | pluralKey: 'R81_DISPENSING.HISTORY.SHOWN'
+                | translate: { count: shownHistory().length }
+            }}
+          </p>
+        </div>
+        <div
+          class="table-responsive"
+          tabindex="0"
+          role="region"
+          aria-labelledby="receipt-history-title"
+        >
+          <table class="data-table history-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+                <th scope="col">{{ 'R81_DISPENSING.HISTORY.COL_RECEIPT' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY_CHECKOUT.MEDICATION' | translate }}</th>
+                <th scope="col" class="num">
+                  {{ 'R81_DISPENSING.HISTORY.COL_AMOUNT' | translate }}
+                </th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of shownHistory(); track p.id) {
+                <tr [class.history-voided]="p.status === 'VOIDED'">
+                  <td>{{ p.createdAt | serverTime | dateTime }}</td>
+                  <td data-testid="receipt-history-number">
+                    {{ p.receiptNumber || '—' }}
+                    @if (p.status === 'VOIDED') {
+                      <span class="badge badge-warning">{{
+                        'R81_DISPENSING.HISTORY.VOIDED' | translate
+                      }}</span>
+                    }
+                  </td>
+                  <td class="patient-cell">
+                    {{
+                      p.receipt?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate)
+                    }}
+                    <app-patient-id-line
+                      [mrn]="p.receipt?.patientMrn"
+                      [dateOfBirth]="p.receipt?.patientDateOfBirth"
+                    />
+                  </td>
+                  <td>
+                    {{ p.receipt?.medicationName || '—' }}
+                    @if (p.receipt?.quantity; as quantity) {
+                      · {{ quantity | countUnit: p.receipt?.unit }}
+                    }
+                  </td>
+                  <td class="num">{{ p.amount | cfa: p.currency }}</td>
+                  <td class="col-actions">
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      data-testid="receipt-history-open"
+                      [disabled]="loading()"
+                      [attr.aria-label]="
+                        'R81_DISPENSING.HISTORY.OPEN_NAMED'
+                          | translate: { number: p.receiptNumber || '—' }
+                      "
+                      (click)="reopenReceipt(p)"
+                    >
+                      {{ 'R81_DISPENSING.HISTORY.OPEN' | translate }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (historyMore()) {
+          <div class="actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="receipt-history-more"
+              [disabled]="historyLoading()"
+              (click)="loadHistory(true)"
+            >
+              {{ 'R81_DISPENSING.HISTORY.MORE' | translate }}
+            </button>
+          </div>
+        }
+      }
     </section>
   }
 </div>

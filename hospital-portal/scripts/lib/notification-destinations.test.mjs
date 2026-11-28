@@ -70,6 +70,9 @@ const NO_DESTINATION = {
   REORDER_ALERT: 'staff only (pharmacy stock); the staff bell expands the message',
   PHARMACY_BILLING_DEFERRAL:
     'staff only (accountants and hospital admins asked to approve an outpatient credit); the staff bell expands the message',
+  // Review of #1380 (F3): a medicine handed over with no selling price.
+  PHARMACY_PRICE_NEEDED:
+    'staff only (store managers and hospital admins asked to set a selling price); the staff bell expands the message',
   MEWS_ESCALATION:
     'staff only (maternal early warning, policy 2026-11-20: midwife in charge and doctors); the staff bell expands the message',
   // Scorecard K4 (V386): the one escalation ladder of every urgent clinical message.

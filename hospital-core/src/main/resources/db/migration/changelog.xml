@@ -4197,4 +4197,28 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V420 — QA r81 D4181: an inventory item is sold at a price or documented as free of charge.
+         Adds clinical.inventory_items.free_of_charge_reason (IF NOT EXISTS) and gives each item a stock
+         transfer created without a selling price the price of its source item, with a price-history row.
+         Range V420-V424 is reserved for the r81 pharmacy dispensing fixes.
+         ================================================================= -->
+    <changeSet id="V420-inventory-item-free-of-charge-and-transfer-prices" author="hms-team" runOnChange="false">
+        <sqlFile path="V420__inventory_item_free_of_charge_and_transfer_prices.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V421 — QA r81 D4186: the price charged is kept on a pharmacy payment (charged_unit_price,
+         charged_line_total) and a counter sale gets a receipt number, so a receipt reprints as first printed.
+         ================================================================= -->
+    <changeSet id="V421-pharmacy-receipt-reprint" author="hms-team" runOnChange="false">
+        <sqlFile path="V421__pharmacy_receipt_reprint.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -468,3 +468,18 @@
 }
 
 @include operations.workspace;
+
+// QA D4199 (r81): the queue search has one border (the box's) and one clear control (« Effacer »). At rest
+// the input draws no border of its own, and the browser's own « × » of a search field is not drawn. Its
+// focus indicator is left exactly as it is.
+.search-box.queue-search {
+  input:not(:focus) {
+    border-color: transparent;
+  }
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
+}

@@ -76,6 +76,9 @@ class PrescriptionNotificationPrivacyGuardTest {
             "the pharmacy's flag to the prescriber (a cover reads « the prescription »), the decision to the patient")),
         Map.entry("service/pharmacy/DispenseBillingDeferralFollowUp.java", new Reader(Audience.NOBODY,
             "QA D3301: billing and finance are told of a hand-over to a patient, never of the medicine")),
+        Map.entry("service/pharmacy/UnpricedFillRelease.java", new Reader(Audience.DISPENSING_PHARMACY,
+            "review of #1380: the price roles of the dispensing pharmacy's hospital (store manager, hospital admin) "
+                + "are asked to price the medicine; the patient is never named")),
         Map.entry("service/pharmacy/PrescriberPharmacyNotificationWriter.java", new Reader(Audience.PRESCRIBER,
             "what the pharmacy tells the prescriber about their own prescription")),
         Map.entry("service/pharmacy/partner/PartnerSmsTemplates.java", new Reader(Audience.DISPENSING_PHARMACY,

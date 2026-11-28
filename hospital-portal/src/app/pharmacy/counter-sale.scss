@@ -326,3 +326,35 @@
     justify-content: center;
   }
 }
+
+// QA D4186 (r81): a reopened sale is marked as a duplicate, and the receipt alone is printed.
+.receipt-duplicate {
+  margin: 0 0 0.75rem;
+  padding: 0.25rem 0.75rem;
+  display: inline-block;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.receipt-pharmacy {
+  margin: 0 0 0.75rem;
+}
+
+@media print {
+  .no-print,
+  .page-header,
+  .today-sales,
+  .state-banner {
+    display: none !important;
+  }
+
+  .sale-receipt {
+    border: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0.5rem !important;
+  }
+}
