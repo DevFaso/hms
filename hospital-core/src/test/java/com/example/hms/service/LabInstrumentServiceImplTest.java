@@ -74,6 +74,7 @@ class LabInstrumentServiceImplTest {
         // Set hospital context so scope checks pass
         HospitalContext context = HospitalContext.builder()
             .permittedHospitalIds(Set.of(HOSPITAL_ID))
+            .hospitalRoles(java.util.Map.of(HOSPITAL_ID, Set.of("ROLE_LAB_MANAGER")))
             .activeHospitalId(HOSPITAL_ID)
             .superAdmin(false)
             .build();
@@ -106,6 +107,183 @@ class LabInstrumentServiceImplTest {
     @AfterEach
     void tearDown() {
         HospitalContextHolder.clear();
+    }
+
+    @Test
+    @DisplayName("QA D4314: the list includes deactivated instruments only when asked")
+    void listIncludesInactiveOnlyWhenAsked() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        org.springframework.data.domain.Page<LabInstrument> page = new org.springframework.data.domain.PageImpl<>(List.of(instrument));
+        when(instrumentRepository.findByHospitalId(HOSPITAL_ID, pageable)).thenReturn(page);
+        when(instrumentRepository.findByHospitalIdAndActiveTrue(HOSPITAL_ID, pageable)).thenReturn(page);
+        when(mapper.toDto(instrument)).thenReturn(responseDto);
+
+        service.getByHospital(HOSPITAL_ID, true, pageable, LOCALE);
+        verify(instrumentRepository).findByHospitalId(HOSPITAL_ID, pageable);
+        verify(instrumentRepository, never()).findByHospitalIdAndActiveTrue(HOSPITAL_ID, pageable);
+
+        service.getByHospital(HOSPITAL_ID, false, pageable, LOCALE);
+        verify(instrumentRepository).findByHospitalIdAndActiveTrue(HOSPITAL_ID, pageable);
+    }
+
+    @Test
+    @DisplayName("QA D4076: a date in the future, or a next date before the last one (typed or stored), is refused on its field")
+    void incoherentDatesAreRefusedOnTheirField() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+
+        requestDto.setInstallationDate(today.plusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("installationDate");
+
+        requestDto.setInstallationDate(null);
+        instrument.setLastCalibrationDate(today.minusDays(5));
+        requestDto.setNextCalibrationDate(today.minusDays(10));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("nextCalibrationDate");
+
+        requestDto.setNextCalibrationDate(null);
+        requestDto.setLastMaintenanceDate(today.minusDays(1));
+        requestDto.setNextMaintenanceDate(today.minusDays(3));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("nextMaintenanceDate");
+        verify(instrumentRepository, never()).save(any());
+    }
+
+    // ── another hospital's instrument answers as an unknown one (review F3) ──
+
+    @Test
+    @DisplayName("another hospital's instrument is 'not found' on read, update, deactivate and reactivate, exactly like an unknown id")
+    void anotherHospitalsInstrumentAnswersAsUnknown() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        instrument.setHospital(elsewhere);
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+
+        assertThatThrownBy(() -> service.getById(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivate(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.reactivate(INSTRUMENT_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(instrumentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D4314: a deactivated instrument of the caller's hospital is reactivated")
+    void reactivatesOwnInstrument() {
+        instrument.setActive(false);
+        when(instrumentRepository.findById(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
+        when(instrumentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.reactivate(INSTRUMENT_ID, LOCALE);
+
+        assertThat(instrument.isActive()).isTrue();
+    }
+
+    @Test
+    void partialUpdateChecksExistingDatesInBothDirections() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        instrument.setLastCalibrationDate(today.minusDays(2));
+        instrument.setNextCalibrationDate(today.plusDays(2));
+        instrument.setLastMaintenanceDate(today.minusDays(2));
+        instrument.setNextMaintenanceDate(today.plusDays(2));
+        requestDto.setNextCalibrationDate(today.minusDays(3));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextCalibrationDate(null);
+        instrument.setNextCalibrationDate(today.minusDays(2));
+        requestDto.setLastCalibrationDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setLastCalibrationDate(null);
+        requestDto.setNextMaintenanceDate(today.minusDays(3));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextMaintenanceDate(null);
+        instrument.setNextMaintenanceDate(today.minusDays(2));
+        requestDto.setLastMaintenanceDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(instrumentRepository, never()).save(any());
+    }
+
+    @Test
+    void plannedServiceDatesAfterLastServiceAreAccepted() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        requestDto.setInstallationDate(today.minusDays(10));
+        requestDto.setLastCalibrationDate(today);
+        requestDto.setNextCalibrationDate(today.plusDays(30));
+        requestDto.setLastMaintenanceDate(today.minusDays(1));
+        requestDto.setNextMaintenanceDate(today.plusDays(10));
+        when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(mapper.toEntity(eq(requestDto), eq(hospital), any())).thenReturn(instrument);
+        when(instrumentRepository.save(instrument)).thenReturn(instrument);
+        when(mapper.toDto(instrument)).thenReturn(responseDto);
+        assertThat(service.create(HOSPITAL_ID, requestDto, LOCALE)).isEqualTo(responseDto);
+    }
+
+    /**
+     * #1379 F1: a row stored before the date checks (future installation,
+     * next dates before the last) takes a status-only edit: the portal sends
+     * every stored date back unchanged, and only changed dates are checked.
+     */
+    @Test
+    void statusOnlyEditOfARowWithStoredInvalidDatesIsSaved() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        instrument.setInstallationDate(today.plusYears(4));
+        instrument.setLastCalibrationDate(today.minusDays(2));
+        instrument.setNextCalibrationDate(today.minusDays(20));
+        instrument.setLastMaintenanceDate(today.plusDays(5));
+        instrument.setNextMaintenanceDate(today.minusDays(9));
+        requestDto.setStatus(InstrumentStatus.OUT_OF_SERVICE.name());
+        requestDto.setInstallationDate(instrument.getInstallationDate());
+        requestDto.setLastCalibrationDate(instrument.getLastCalibrationDate());
+        requestDto.setNextCalibrationDate(instrument.getNextCalibrationDate());
+        requestDto.setLastMaintenanceDate(instrument.getLastMaintenanceDate());
+        requestDto.setNextMaintenanceDate(instrument.getNextMaintenanceDate());
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        when(instrumentRepository.save(instrument)).thenReturn(instrument);
+        when(mapper.toDto(instrument)).thenReturn(responseDto);
+
+        assertThat(service.update(INSTRUMENT_ID, requestDto, LOCALE)).isEqualTo(responseDto);
+
+        // Changing one date of an inverted pair is still checked against the other.
+        requestDto.setNextCalibrationDate(today.minusDays(10));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("lab.instrument.nextBeforeLast"));
+    }
+
+    @Test
+    void createAndUpdateRejectInvalidInstrumentDatesBeforeSaving() {
+        when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(Optional.of(instrument));
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
+        requestDto.setInstallationDate(today.plusDays(1));
+        assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setInstallationDate(today);
+        requestDto.setLastCalibrationDate(today);
+        requestDto.setNextCalibrationDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.create(HOSPITAL_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        requestDto.setNextCalibrationDate(today);
+        requestDto.setLastMaintenanceDate(today);
+        requestDto.setNextMaintenanceDate(today.minusDays(1));
+        assertThatThrownBy(() -> service.update(INSTRUMENT_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(instrumentRepository, never()).save(any());
     }
 
     // ── getByHospital ────────────────────────────────────────────

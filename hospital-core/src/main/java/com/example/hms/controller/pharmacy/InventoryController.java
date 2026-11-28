@@ -119,8 +119,10 @@ public class InventoryController {
     @Operation(summary = "Deactivate inventory item", description = "Soft-delete an inventory item")
     @ApiResponse(responseCode = "200", description = "Inventory item deactivated")
     @ApiResponse(responseCode = "404", description = "Inventory item not found")
-    public ResponseEntity<ApiResponseWrapper<String>> deactivateItem(@PathVariable UUID id) {
-        inventoryService.deactivateInventoryItem(id);
+    public ResponseEntity<ApiResponseWrapper<String>> deactivateItem(@PathVariable UUID id,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String reason) {
+        // QA D4197 (r81): an item that still holds stock is deactivated only with its reason (field « reason »).
+        inventoryService.deactivateInventoryItem(id, reason);
         return ResponseEntity.ok(ApiResponseWrapper.success("Inventory item deactivated"));
     }
 

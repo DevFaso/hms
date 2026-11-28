@@ -22,6 +22,7 @@ import { HttpClient } from '@angular/common/http';
 import { Subscription, filter, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { PluralPipe } from '../shared/i18n/plural';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -97,6 +98,7 @@ function isMobileViewport(): boolean {
     HospitalScopeHintComponent,
     HospitalNetworkWorkspaceComponent,
     TranslateModule,
+    PluralPipe,
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,
@@ -949,6 +951,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'outbox',
+        label: 'Claim sheets',
+        translationKey: 'NAV.CLAIM_BATCHES',
+        route: '/billing/bordereaux',
+        permission: 'View Billing',
+        // Insurer claims PR 2 (QA D3983): mirrors the /billing/bordereaux RoleGuard; its tabs lead to the
+        // insurer payments and the receivables.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_CLAIMS_REVIEWER',
+        ],
+      },
+      {
         icon: 'science',
         label: 'Laboratory',
         translationKey: 'NAV.LABORATORY',
@@ -1349,6 +1367,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // QA D4183 (r81): the physical inventory and the consumption report had no entry for anyone. Their
+    // gate is their own, the same list as their route guards: the accountant reads both and is not
+    // admitted by the stock block above.
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_INVENTORY_CLERK',
+        'ROLE_STORE_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ACCOUNTANT',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push(
+        {
+          icon: 'fact_check',
+          label: 'Stock count',
+          translationKey: 'NAV.STOCK_COUNT',
+          route: '/pharmacy/stock-count',
+        },
+        {
+          icon: 'query_stats',
+          label: 'Consumption report',
+          translationKey: 'NAV.STOCK_CONSUMPTION',
+          route: '/pharmacy/consumption',
+        },
+      );
+    }
     // QA D2927 (r66): the pharmacy's two money pages are finance's too. They sat inside the block
     // above, whose gate admits neither the accountant nor the billing specialist, so the roles their
     // entries named never saw them: a credit waited for an approver who could only type the URL.
@@ -1595,6 +1641,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_LAB_DIRECTOR',
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])

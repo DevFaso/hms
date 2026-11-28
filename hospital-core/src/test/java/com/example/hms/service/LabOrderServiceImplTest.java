@@ -49,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -177,6 +178,29 @@ class LabOrderServiceImplTest {
         assertThat(saved.isDocumentationSharedWithLab()).isTrue();
         assertThat(saved.getDocumentationReference()).isNull();
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void createResponseUsesDatabaseGeneratedOrderCode() {
+        mockCommonLookups();
+        java.util.concurrent.atomic.AtomicReference<LabOrder> saved = new java.util.concurrent.atomic.AtomicReference<>();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> {
+            LabOrder order = invocation.getArgument(0);
+            saved.set(order);
+            return order;
+        });
+        doAnswer(invocation -> {
+            saved.get().setOrderNumber("LAB-000046");
+            return null;
+        }).when(labOrderRepository).flush();
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenAnswer(invocation -> {
+            LabOrder order = invocation.getArgument(0);
+            return LabOrderResponseDTO.builder().labOrderCode(order.getOrderNumber()).build();
+        });
+
+        LabOrderResponseDTO result = labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH);
+
+        assertThat(result.getLabOrderCode()).isEqualTo("LAB-000046");
     }
 
     @Test

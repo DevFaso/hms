@@ -1,0 +1,835 @@
+<div class="page-container pharmacy-workspace">
+  <div class="page-header">
+    <div>
+      <p class="workspace-eyebrow">{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</p>
+      <h1 class="page-title">{{ 'STOCK_COUNT.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'STOCK_COUNT.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      @if (storesLoaded() && !storesFailed() && stores().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-store-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else if (stores().length > 0) {
+        <select
+          appFormControl
+          class="pharmacy-select"
+          data-testid="count-store"
+          [attr.aria-label]="'STOCK_COUNT.STORE' | translate"
+          [ngModel]="selectedStoreId"
+          (ngModelChange)="onStoreChange($event)"
+        >
+          @for (store of stores(); track store.pharmacyId) {
+            <option [value]="store.pharmacyId">{{ store.pharmacyName }}</option>
+          }
+        </select>
+      }
+    </div>
+  </div>
+
+  @if (storesFailed()) {
+    <div class="workspace-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadStores()">
+        {{ 'PHARMACY_DASH.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <div class="tab-bar">
+    <button
+      type="button"
+      class="tab-btn"
+      data-testid="tab-counts"
+      [class.active]="tab() === 'counts'"
+      [attr.aria-pressed]="tab() === 'counts'"
+      (click)="setTab('counts')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+      {{ 'STOCK_COUNT.TAB.COUNTS' | translate }}
+      @if (countOf('PENDING') + countOf('OUTDATED') > 0) {
+        <span class="alert-count">{{ countOf('PENDING') + countOf('OUTDATED') }}</span>
+      }
+    </button>
+    @if (canCount()) {
+      <button
+        type="button"
+        class="tab-btn"
+        data-testid="tab-sheet"
+        [class.active]="tab() === 'sheet'"
+        [attr.aria-pressed]="tab() === 'sheet'"
+        (click)="setTab('sheet')"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
+        {{ 'STOCK_COUNT.TAB.SHEET' | translate }}
+      </button>
+    }
+    <button
+      type="button"
+      class="tab-btn"
+      data-testid="tab-balance"
+      [class.active]="tab() === 'balance'"
+      [attr.aria-pressed]="tab() === 'balance'"
+      (click)="setTab('balance')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">balance</span>
+      {{ 'STOCK_COUNT.TAB.BALANCE' | translate }}
+      @if (drift().length > 0) {
+        <span class="alert-count">{{ drift().length }}</span>
+      }
+    </button>
+  </div>
+
+  <!-- ───────────── The count sheet ───────────── -->
+  @if (tab() === 'sheet' && canCount() && selectedStoreId) {
+    @if (sheetLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (sheetFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="btn-secondary" (click)="refreshSheet()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (sheet(); as lines) {
+      <section class="count-sheet" data-testid="count-sheet">
+        <div class="sheet-head">
+          <p class="sheet-reason">
+            <strong>{{ 'STOCK_COUNT.SHEET.REASON' | translate }}</strong>{{
+              'COMMON.COLON' | translate
+            }}
+            {{ sheetReason() }}
+          </p>
+          <p class="workspace-note">{{ 'STOCK_COUNT.SHEET.EXPLAIN' | translate }}</p>
+        </div>
+        <div class="workspace-toolbar">
+          <label class="workspace-search"
+            ><span class="material-symbols-outlined" aria-hidden="true">search</span
+            ><input
+              appFormControl
+              type="search"
+              name="sheetSearch"
+              [(ngModel)]="sheetSearch"
+              [attr.aria-label]="'STOCK_COUNT.SEARCH' | translate"
+              [placeholder]="'STOCK_COUNT.SEARCH' | translate"
+          /></label>
+          <label class="check-option">
+            <input type="checkbox" name="showEmptyLots" [(ngModel)]="showEmptyLots" />
+            {{ 'STOCK_COUNT.SHEET.SHOW_EMPTY' | translate: { count: hiddenEmptyLots() } }}
+          </label>
+          <button type="button" class="btn-secondary" (click)="refreshSheet()">
+            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+            {{ 'STOCK_COUNT.SHEET.REFRESH' | translate }}
+          </button>
+        </div>
+
+        @if (lines.length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon" aria-hidden="true">inventory_2</span>
+            <h3>{{ 'STOCK_COUNT.SHEET.EMPTY' | translate }}</h3>
+            <p>{{ 'STOCK_COUNT.SHEET.EMPTY_HINT' | translate }}</p>
+          </div>
+        } @else {
+          <form (ngSubmit)="saveSheet()" novalidate>
+            <div
+              class="table-wrapper"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="'STOCK_COUNT.TAB.SHEET' | translate"
+            >
+              <table class="data-table count-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'STOCK_COUNT.COL.MEDICINE' | translate }}</th>
+                    <th scope="col">{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+                    <th scope="col">{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
+                    <th scope="col" class="num">{{ 'STOCK_COUNT.COL.BOOK' | translate }}</th>
+                    <th scope="col">{{ 'STOCK_COUNT.COL.COUNTED' | translate }}</th>
+                    <th scope="col" class="num">{{ 'STOCK_COUNT.COL.VARIANCE' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (line of visibleSheet(); track line.key) {
+                    <tr [attr.data-state]="line.state" data-testid="sheet-line">
+                      <th scope="row" class="medicine-cell">
+                        <span class="med-name">{{ line.medication }}</span>
+                        @if (line.form) {
+                          {{ ' ' }}<small class="cell-sub">{{ line.form | catalogForm }}</small>
+                        }
+                      </th>
+                      <td>
+                        @if (line.lotNumber) {
+                          <span class="code-chip">{{ line.lotNumber }}</span>
+                        } @else {
+                          {{ ' '
+                          }}<small class="cell-sub">{{ 'STOCK_COUNT.NO_LOT' | translate }}</small>
+                        }
+                      </td>
+                      <td>
+                        {{
+                          line.expiryDate
+                            ? (line.expiryDate | serverTime | date: 'mediumDate')
+                            : '—'
+                        }}
+                      </td>
+                      <td class="num">{{ line.book | countUnit: line.unit }}</td>
+                      <td class="counted-cell">
+                        <input
+                          appFormControl
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputmode="decimal"
+                          class="counted-input"
+                          [id]="fieldId(line)"
+                          [name]="fieldId(line)"
+                          [attr.aria-label]="
+                            'STOCK_COUNT.SHEET.COUNTED_FOR'
+                              | translate: { medicine: line.medication, lot: line.lotNumber ?? '' }
+                          "
+                          [disabled]="line.state === 'saved' || line.state === 'saving'"
+                          [(ngModel)]="line.counted"
+                          (ngModelChange)="onCounted(line)"
+                        />
+                        @if (line.state === 'saved') {
+                          <small class="line-saved" role="status">
+                            <span class="material-symbols-outlined" aria-hidden="true"
+                              >check_circle</span
+                            >
+                            {{ 'STOCK_COUNT.SHEET.LINE_SAVED' | translate }}
+                          </small>
+                        }
+                        @if (line.state === 'refused' && line.message) {
+                          <small class="line-refused" role="alert">{{ line.message }}</small>
+                        }
+                      </td>
+                      <td class="num">
+                        @if (variance(line); as v) {
+                          <span
+                            class="variance"
+                            [class.negative]="v < 0"
+                            [class.positive]="v > 0"
+                            >{{ signed(v) }}</span
+                          >
+                        } @else if (typed(line)) {
+                          <span class="variance none">{{
+                            'STOCK_COUNT.NO_VARIANCE' | translate
+                          }}</span>
+                        } @else {
+                          —
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="form-actions sheet-actions">
+              <p class="sheet-progress" role="status" data-testid="sheet-progress">
+                {{
+                  'STOCK_COUNT.SHEET.PROGRESS'
+                    | translate: { count: unsavedLines().length, saved: savedLines() }
+                }}
+              </p>
+              <button type="button" class="btn-secondary" (click)="closeSheet()">
+                {{ 'STOCK_COUNT.SHEET.FINISH' | translate }}
+              </button>
+              <button
+                type="submit"
+                class="btn-primary"
+                data-testid="sheet-save"
+                [disabled]="sheetSaving()"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">save</span>
+                {{
+                  sheetSaving()
+                    ? ('COMMON.SAVING' | translate)
+                    : ('STOCK_COUNT.SHEET.SAVE' | translate)
+                }}
+              </button>
+            </div>
+          </form>
+        }
+      </section>
+    } @else {
+      <form
+        class="form-card form-card-accent start-form"
+        data-testid="count-start"
+        (ngSubmit)="startCount()"
+        novalidate
+      >
+        <h2>{{ 'STOCK_COUNT.SHEET.START_TITLE' | translate }}</h2>
+        <p class="workspace-note">{{ 'STOCK_COUNT.SHEET.START_EXPLAIN' | translate }}</p>
+        <div class="field">
+          <label for="countReason">{{ 'STOCK_COUNT.SHEET.REASON' | translate }} *</label>
+          <input
+            id="countReason"
+            name="countReason"
+            type="text"
+            maxlength="300"
+            required
+            appFocusOnRender
+            data-server-field="reason"
+            [placeholder]="'STOCK_COUNT.SHEET.REASON_PLACEHOLDER' | translate"
+            [(ngModel)]="countReason"
+          />
+        </div>
+        <div class="form-actions">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            data-testid="count-start-submit"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+            {{ 'STOCK_COUNT.SHEET.START' | translate }}
+          </button>
+        </div>
+      </form>
+    }
+  }
+
+  <!-- ───────────── The recorded counts ───────────── -->
+  @if (tab() === 'counts') {
+    <div class="workspace-toolbar">
+      <label class="workspace-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          appFormControl
+          type="search"
+          name="countSearch"
+          [(ngModel)]="countSearch"
+          [attr.aria-label]="'STOCK_COUNT.SEARCH' | translate"
+          [placeholder]="'STOCK_COUNT.SEARCH' | translate"
+      /></label>
+      <label class="filter-field" for="countFilter">
+        {{ 'STOCK_COUNT.FILTER' | translate }}
+        <select appFormControl id="countFilter" name="countFilter" [(ngModel)]="countFilter">
+          @for (filter of countFilters; track filter) {
+            <option [value]="filter">{{ filter | keyLabel: 'STOCK_COUNT.FILTERS.' }}</option>
+          }
+        </select>
+      </label>
+      @if (canCount()) {
+        <button type="button" class="btn-primary" data-testid="count-new" (click)="setTab('sheet')">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'STOCK_COUNT.NEW' | translate }}
+        </button>
+      }
+    </div>
+
+    @if (confirming(); as count) {
+      <form
+        class="form-card form-card-accent confirm-form"
+        data-testid="count-confirm-form"
+        appInlineSubForm
+        #confirmForm="inlineSubForm"
+        (dismissed)="confirming.set(null)"
+        (ngSubmit)="confirmAdjustment()"
+        novalidate
+      >
+        <h2>{{ 'STOCK_COUNT.CONFIRM.TITLE' | translate }}</h2>
+        <dl class="count-summary">
+          <div>
+            <dt>{{ 'STOCK_COUNT.COL.MEDICINE' | translate }}</dt>
+            <dd>
+              {{ count.medicationName | dash }}
+              @if (count.lotNumber) {
+                · <span class="code-chip">{{ count.lotNumber }}</span>
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ 'STOCK_COUNT.COL.BOOK' | translate }}</dt>
+            <dd>{{ count.bookQuantity | countUnit: count.unit }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'STOCK_COUNT.COL.COUNTED' | translate }}</dt>
+            <dd>{{ count.countedQuantity | countUnit: count.unit }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'STOCK_COUNT.COL.VARIANCE' | translate }}</dt>
+            <dd>
+              <strong>{{ signed(count.variance) }}</strong>
+            </dd>
+          </div>
+        </dl>
+        @if (count.ownCount) {
+          <p class="workspace-note own-note" data-testid="count-own-note">
+            {{ 'STOCK_COUNT.CONFIRM.OWN_NOTE' | translate }}
+          </p>
+        }
+        <label class="check-option">
+          <input
+            id="countConfirmed"
+            type="checkbox"
+            name="countConfirmed"
+            required
+            data-server-field="confirmed"
+            [(ngModel)]="confirmChecked"
+          />
+          {{
+            (count.variance === 0
+              ? 'STOCK_COUNT.CONFIRM.CHECK_NO_VARIANCE'
+              : 'STOCK_COUNT.CONFIRM.CHECK'
+            )
+              | translate
+                : {
+                    variance: signed(count.variance),
+                    quantity: (count.countedQuantity | countUnit: count.unit),
+                  }
+          }}
+          *
+        </label>
+        @if (needsWitness(count)) {
+          <div class="field">
+            <label for="countWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+            <select
+              id="countWitness"
+              name="countWitness"
+              required
+              data-server-field="witnessedBy"
+              [(ngModel)]="confirmWitness"
+            >
+              <option [ngValue]="undefined">
+                {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+              </option>
+              @for (w of witnessCandidates(); track w.userId) {
+                <option [ngValue]="w.userId">{{ w.displayName }}</option>
+              }
+            </select>
+            <app-witness-confirm
+              fieldId="countWitnessSecret"
+              [witnessId]="confirmWitness"
+              [candidates]="witnessCandidates()"
+            />
+          </div>
+        }
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="confirming.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            data-testid="count-confirm-submit"
+            [disabled]="confirmSaving()"
+          >
+            {{ 'STOCK_COUNT.CONFIRM.SUBMIT' | translate }}
+          </button>
+        </div>
+      </form>
+    }
+
+    @if (countsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (countsFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="btn-secondary" (click)="loadCounts()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (visibleCounts().length === 0) {
+      <div class="empty-state" data-testid="counts-empty">
+        <span class="material-symbols-outlined empty-icon" aria-hidden="true">fact_check</span>
+        <h3>
+          {{
+            (counts().length === 0 ? 'STOCK_COUNT.EMPTY' : 'STOCK_COUNT.EMPTY_FILTER') | translate
+          }}
+        </h3>
+        <p>{{ 'STOCK_COUNT.EMPTY_HINT' | translate }}</p>
+      </div>
+    } @else {
+      <ul class="count-list" data-testid="count-list">
+        @for (count of visibleCounts(); track count.id) {
+          <li class="count-card" [attr.data-status]="count.status" data-testid="count-row">
+            <header class="count-head">
+              <div>
+                <h3 class="count-title">
+                  {{ count.medicationName | dash }}
+                  @if (count.lotNumber) {
+                    <span class="code-chip">{{ count.lotNumber }}</span>
+                  }
+                </h3>
+                <p class="count-meta">
+                  {{
+                    'STOCK_COUNT.RECORDED_BY'
+                      | translate
+                        : {
+                            name: (count.recordedByName | dash),
+                            date: (count.recordedAt | serverTime | dateTime),
+                          }
+                  }}
+                </p>
+              </div>
+              <span
+                class="count-status"
+                [attr.data-status]="count.status"
+                data-testid="count-status"
+                >{{ count.status | keyLabel: 'STOCK_COUNT.STATUS.' }}</span
+              >
+            </header>
+            <dl class="count-figures">
+              <div>
+                <dt>{{ 'STOCK_COUNT.COL.BOOK' | translate }}</dt>
+                <dd>{{ count.bookQuantity | countUnit: count.unit }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'STOCK_COUNT.COL.COUNTED' | translate }}</dt>
+                <dd>{{ count.countedQuantity | countUnit: count.unit }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'STOCK_COUNT.COL.VARIANCE' | translate }}</dt>
+                <dd>
+                  <span
+                    class="variance"
+                    [class.negative]="count.variance < 0"
+                    [class.positive]="count.variance > 0"
+                    >{{
+                      count.variance === 0
+                        ? ('STOCK_COUNT.NO_VARIANCE' | translate)
+                        : signed(count.variance)
+                    }}</span
+                  >
+                </dd>
+              </div>
+              <div class="wide">
+                <dt>{{ 'STOCK_COUNT.SHEET.REASON' | translate }}</dt>
+                <dd class="free-text">{{ count.reason }}</dd>
+              </div>
+              @if (count.status === 'APPLIED') {
+                <div class="wide">
+                  <dt>{{ 'STOCK_COUNT.APPLIED' | translate }}</dt>
+                  <dd>
+                    {{
+                      'STOCK_COUNT.BY_ON'
+                        | translate
+                          : {
+                              name: (count.appliedByName | dash),
+                              date: (count.appliedAt | serverTime | dateTime),
+                            }
+                    }}
+                    @if (count.samePersonConfirmation) {
+                      {{ ' '
+                      }}<small class="cell-sub">{{ 'STOCK_COUNT.SAME_PERSON' | translate }}</small>
+                    }
+                  </dd>
+                </div>
+              }
+              @if (count.status === 'CLOSED') {
+                <div class="wide">
+                  <dt>{{ 'STOCK_COUNT.CLOSED' | translate }}</dt>
+                  <dd>
+                    {{
+                      'STOCK_COUNT.BY_ON'
+                        | translate
+                          : {
+                              name: (count.closedByName | dash),
+                              date: (count.closedAt | serverTime | dateTime),
+                            }
+                    }}
+                    <span class="free-text" data-testid="count-close-reason"
+                      >{{ 'COMMON.COLON' | translate }} {{ count.closeReason }}</span
+                    >
+                  </dd>
+                </div>
+              }
+            </dl>
+            @if (count.status === 'OUTDATED') {
+              <p class="workspace-note outdated-note" data-testid="count-outdated-note">
+                {{ 'STOCK_COUNT.OUTDATED_NOTE' | translate }}
+              </p>
+            }
+            @if (canCount() && (count.status === 'PENDING' || count.status === 'OUTDATED')) {
+              <div class="count-actions">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="count-close"
+                  (click)="startClose(count)"
+                >
+                  {{ 'STOCK_COUNT.CLOSE.ACTION' | translate }}
+                </button>
+                <!-- One button whose label switches (QA D2100): a count the stock overtook is counted
+                     again, a waiting one is confirmed. -->
+                <button
+                  type="button"
+                  class="btn-primary"
+                  [attr.data-testid]="
+                    count.status === 'OUTDATED' ? 'count-recount' : 'count-confirm'
+                  "
+                  (click)="count.status === 'OUTDATED' ? recount(count) : openConfirm(count)"
+                >
+                  {{ primaryActionKey(count) | translate }}
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  <!-- ───────────── The balance reconciliation ───────────── -->
+  @if (tab() === 'balance') {
+    <p class="workspace-note">{{ 'STOCK_COUNT.BALANCE.EXPLAIN' | translate }}</p>
+
+    @if (reconciling(); as item) {
+      <form
+        class="form-card form-card-accent balance-form"
+        data-testid="balance-form"
+        appInlineSubForm
+        #balanceForm="inlineSubForm"
+        (dismissed)="reconciling.set(null)"
+        (ngSubmit)="reconcile()"
+        novalidate
+      >
+        <h2>
+          {{ 'STOCK_COUNT.BALANCE.FORM_TITLE' | translate: { name: item.medicationName ?? '' } }}
+        </h2>
+        <p class="workspace-note">{{ 'STOCK_COUNT.BALANCE.FORM_EXPLAIN' | translate }}</p>
+        <div
+          class="table-wrapper"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'STOCK_COUNT.BALANCE.LOTS' | translate"
+        >
+          <table class="data-table count-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
+                <th scope="col" class="num">{{ 'STOCK_COUNT.BALANCE.LOT_BALANCE' | translate }}</th>
+                <th scope="col">{{ 'STOCK_COUNT.COL.COUNTED' | translate }} *</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (lot of item.lots; track lot.lotId) {
+                <tr>
+                  <th scope="row">
+                    <span class="code-chip">{{ lot.lotNumber }}</span>
+                    {{ ' ' }}<small class="cell-sub">{{ item.medicationName }}</small>
+                  </th>
+                  <td>
+                    {{ lot.expiryDate ? (lot.expiryDate | serverTime | date: 'mediumDate') : '—' }}
+                  </td>
+                  <td class="num">{{ lot.remainingQuantity | countUnit: item.unit }}</td>
+                  <td>
+                    <label class="lot-count">
+                      <span class="lot-count-label"
+                        >{{ 'STOCK_COUNT.COL.COUNTED' | translate }}, {{ lot.lotNumber }} *</span
+                      >
+                      <input
+                        appFormControl
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="counted-input"
+                        required
+                        data-server-field="lotCounts"
+                        [id]="lotFieldId(lot.lotId)"
+                        [name]="lotFieldId(lot.lotId)"
+                        [(ngModel)]="lotCounts[lot.lotId]"
+                      />
+                    </label>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="balance-result" role="status" data-testid="balance-result">
+          {{
+            'STOCK_COUNT.BALANCE.RESULT'
+              | translate
+                : {
+                    onHand: (item.quantityOnHand | countUnit: item.unit),
+                    lots: (item.lotQuantity | countUnit: item.unit),
+                    difference: signed(item.difference),
+                  }
+          }}
+        </p>
+        <div class="field">
+          <label for="balanceReason">{{ 'STOCK_COUNT.BALANCE.REASON' | translate }} *</label>
+          <input
+            id="balanceReason"
+            name="balanceReason"
+            type="text"
+            maxlength="300"
+            required
+            data-server-field="reason"
+            [(ngModel)]="balanceReason"
+          />
+        </div>
+        @if (item.controlled) {
+          <div class="field">
+            <label for="balanceWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+            <select
+              id="balanceWitness"
+              name="balanceWitness"
+              required
+              data-server-field="witnessedBy"
+              [(ngModel)]="balanceWitness"
+            >
+              <option [ngValue]="undefined">
+                {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+              </option>
+              @for (w of witnessCandidates(); track w.userId) {
+                <option [ngValue]="w.userId">{{ w.displayName }}</option>
+              }
+            </select>
+            <app-witness-confirm
+              fieldId="balanceWitnessSecret"
+              [witnessId]="balanceWitness"
+              [candidates]="witnessCandidates()"
+            />
+          </div>
+        }
+        <label class="check-option">
+          <input
+            id="balanceConfirmed"
+            type="checkbox"
+            name="balanceConfirmed"
+            required
+            data-server-field="confirmed"
+            [(ngModel)]="balanceConfirmed"
+          />
+          {{
+            'STOCK_COUNT.BALANCE.CHECK'
+              | translate: { total: (item.lotQuantity | countUnit: item.unit) }
+          }}
+          *
+        </label>
+        <app-inline-discard-ask [form]="balanceForm" />
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="reconciling.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            data-testid="balance-submit"
+            [disabled]="reconcileSaving()"
+          >
+            {{ 'STOCK_COUNT.BALANCE.SUBMIT' | translate }}
+          </button>
+        </div>
+      </form>
+    }
+
+    @if (driftLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (driftFailed()) {
+      <div class="workspace-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PHARMACY_DASH.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="btn-secondary" (click)="loadDrift()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (drift().length === 0) {
+      <div class="empty-state" data-testid="balance-empty">
+        <span class="material-symbols-outlined empty-icon" aria-hidden="true">check_circle</span>
+        <h3>{{ 'STOCK_COUNT.BALANCE.EMPTY' | translate }}</h3>
+        <p>{{ 'STOCK_COUNT.BALANCE.EMPTY_HINT' | translate }}</p>
+      </div>
+    } @else {
+      <div
+        class="table-wrapper"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'STOCK_COUNT.TAB.BALANCE' | translate"
+      >
+        <table class="data-table count-table" data-testid="balance-table">
+          <thead>
+            <tr>
+              <th scope="col">{{ 'STOCK_COUNT.COL.MEDICINE' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_COUNT.BALANCE.ON_HAND' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_COUNT.BALANCE.LOT_TOTAL' | translate }}</th>
+              <th scope="col" class="num">{{ 'STOCK_COUNT.COL.VARIANCE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of drift(); track item.inventoryItemId) {
+              <tr data-testid="balance-row">
+                <th scope="row" class="medicine-cell">
+                  <span class="med-name">{{ item.medicationName | dash }}</span>
+                  @if (item.form) {
+                    {{ ' ' }}<small class="cell-sub">{{ item.form | catalogForm }}</small>
+                  }
+                </th>
+                <td class="num">{{ item.quantityOnHand | countUnit: item.unit }}</td>
+                <td class="num">{{ item.lotQuantity | countUnit: item.unit }}</td>
+                <td class="num">
+                  <span
+                    class="variance"
+                    [class.negative]="item.difference < 0"
+                    [class.positive]="item.difference > 0"
+                    >{{ signed(item.difference) }}</span
+                  >
+                </td>
+                <td>
+                  @if (canReconcile()) {
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      data-testid="balance-open"
+                      (click)="openReconcile(item)"
+                    >
+                      {{ 'STOCK_COUNT.BALANCE.OPEN' | translate }}
+                    </button>
+                  } @else {
+                    {{ ' '
+                    }}<small class="cell-sub">{{
+                      'STOCK_COUNT.BALANCE.READ_ONLY' | translate
+                    }}</small>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- QA D4191: a count is closed with its reason (the shared reason dialog: required, focus in and back). -->
+  @if (closing(); as count) {
+    <app-reason-dialog
+      titleKey="STOCK_COUNT.CLOSE.TITLE"
+      labelKey="STOCK_COUNT.CLOSE.REASON"
+      confirmKey="STOCK_COUNT.CLOSE.CONFIRM"
+      dismissKey="COMMON.BACK"
+      [busy]="closeSaving()"
+      (confirmed)="closeCount(count, $event)"
+      (cancelled)="closing.set(null)"
+    >
+      <p>
+        {{ count.medicationName }}
+        @if (count.lotNumber) {
+          · {{ count.lotNumber }}
+        }
+      </p>
+      <p>{{ 'STOCK_COUNT.CLOSE.EXPLAIN' | translate }}</p>
+    </app-reason-dialog>
+  }
+</div>

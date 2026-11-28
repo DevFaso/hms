@@ -75,6 +75,9 @@ public class PatientProfileDTO {
      */
     private java.util.List<HospitalRecord> hospitalRecords;
 
+    /** QA D4269: what the account may do alone, by the patient's age; on the patient's own profile only. */
+    private com.example.hms.service.recordaccess.MinorPortalRights.Rights portalRights;
+
     /** One active registration: the hospital and the MRN it gave the patient. */
     @Getter
     @Setter

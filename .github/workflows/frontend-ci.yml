@@ -81,6 +81,11 @@ jobs:
       - name: i18n placeholder check
         run: npm run i18n:placeholders
 
+      # QA D4315 (r81): a counted text has a singular and a plural (KEY_ONE /
+      # KEY_OTHER through the plural pipe); no new « {{count}} ligne(s) ».
+      - name: i18n plural check
+        run: npm run i18n:plurals
+
       # QA D527: the clinical pages gate their write buttons from the action
       # map the backend mirror test checks; an inline 'ROLE_' list drifts unseen.
       - name: RBAC inline-role gate

@@ -1337,6 +1337,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND));
         // QA r70 review: no portal account is opened, and no code sent, for a patient recorded as deceased.
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D4269: the desk hands over or re-sends no code for a child under 13 (a parent or the guardian acts).
+        if (minorPortalRights != null) {
+            minorPortalRights.requireActivatable(patient);
+        }
         UUID userId = patient.getUser().getId();
         UserRoleHospitalAssignment assignment = assignmentRepository.findByUserId(userId).stream()
             .filter(this::isPatientRole)
@@ -1718,7 +1722,28 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
+    /** QA D4269: no portal account of their own for a child under 13; null only in a hand-built test. */
+    private com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMinorPortalRights(com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights) {
+        this.minorPortalRights = minorPortalRights;
+    }
+
+    /** QA D4269: a PATIENT invitation is not switched on, shown or re-sent when the patient is under 13. */
+    private void requireOwnAccountAge(UserRoleHospitalAssignment assignment) {
+        User holder = assignment.getUser();
+        if (minorPortalRights == null || holder == null || holder.getId() == null || !isPatientRole(assignment)) {
+            return;
+        }
+        // QA D4269 review: every linked row is read; a tenant carrying duplicate rows (V113) is not skipped.
+        for (java.util.UUID patientId : patientRepository.findIdsByUserId(holder.getId())) {
+            patientRepository.findByIdUnscoped(patientId).ifPresent(minorPortalRights::requireActivatable);
+        }
+    }
+
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
+        requireOwnAccountAge(assignment);
         // An account an administrator switched off (V184) is not turned on
         // from below, and neither is its assignment: the code is refused
         // outright, with nothing confirmed and no credentials handed out.

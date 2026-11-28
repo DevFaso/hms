@@ -145,7 +145,32 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         StockTransaction tx = stockTransactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("stockTransaction.notFound", id));
         enforceHospitalScope(tx.getInventoryItem().getPharmacy());
-        return stockTransactionMapper.toResponseDTO(tx);
+        return withTransferStores(new org.springframework.data.domain.PageImpl<>(List.of(tx))).getContent().get(0);
+    }
+
+    /**
+     * QA D4184 (r81): the movements as the ledger lists them: each names its product ({@code StockTransactionMapper})
+     * and, for a transfer, the other store. Two statements for the page, whatever its size.
+     */
+    private Page<StockTransactionResponseDTO> withTransferStores(Page<StockTransaction> page) {
+        List<UUID> ids = page.getContent().stream().map(StockTransaction::getId)
+            .filter(java.util.Objects::nonNull).toList();
+        java.util.Map<UUID, String> stores = new java.util.HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Object[] row : stockTransactionRepository.transferDestinationNames(ids)) {
+                stores.put((UUID) row[0], (String) row[1]);
+            }
+            for (Object[] row : stockTransactionRepository.transferSourceNames(ids)) {
+                stores.put((UUID) row[0], (String) row[1]);
+            }
+        }
+        return page.map(tx -> {
+            StockTransactionResponseDTO dto = stockTransactionMapper.toResponseDTO(tx);
+            if (dto != null) {
+                dto.setCounterpartPharmacyName(stores.get(tx.getId()));
+            }
+            return dto;
+        });
     }
 
     @Override
@@ -153,16 +178,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     public Page<StockTransactionResponseDTO> listByInventoryItem(UUID inventoryItemId, Pageable pageable) {
         InventoryItem item = resolveInventoryItem(inventoryItemId);
         enforceHospitalScope(item.getPharmacy());
-        return stockTransactionRepository.findByInventoryItemId(inventoryItemId, pageable)
-                .map(stockTransactionMapper::toResponseDTO);
+        return withTransferStores(stockTransactionRepository.findByInventoryItemId(inventoryItemId, pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<StockTransactionResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable) {
         enforcePharmacyScope(pharmacyId);
-        return stockTransactionRepository.findByInventoryItemPharmacyId(pharmacyId, pageable)
-                .map(stockTransactionMapper::toResponseDTO);
+        return withTransferStores(stockTransactionRepository.findByInventoryItemPharmacyId(pharmacyId, pageable));
     }
 
     @Override
@@ -170,8 +193,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     public Page<StockTransactionResponseDTO> listByPharmacyAndDateRange(
             UUID pharmacyId, LocalDateTime from, LocalDateTime to, Pageable pageable) {
         enforcePharmacyScope(pharmacyId);
-        return stockTransactionRepository.findByPharmacyAndDateRange(pharmacyId, from, to, pageable)
-                .map(stockTransactionMapper::toResponseDTO);
+        return withTransferStores(stockTransactionRepository.findByPharmacyAndDateRange(pharmacyId, from, to, pageable));
     }
 
     @Override
@@ -179,9 +201,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     public Page<StockTransactionResponseDTO> listByPharmacyAndType(
             UUID pharmacyId, StockTransactionType type, Pageable pageable) {
         enforcePharmacyScope(pharmacyId);
-        return stockTransactionRepository.findByInventoryItemPharmacyIdAndTransactionType(
-                        pharmacyId, type, pageable)
-                .map(stockTransactionMapper::toResponseDTO);
+        return withTransferStores(stockTransactionRepository.findByInventoryItemPharmacyIdAndTransactionType(
+                        pharmacyId, type, pageable));
     }
 
     @Override

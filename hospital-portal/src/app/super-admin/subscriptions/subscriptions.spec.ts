@@ -36,8 +36,11 @@ describe('SubscriptionsComponent', () => {
       'createPlan',
       'updatePlan',
       'deactivatePlan',
+      'reactivatePlan',
+      'listFeatureKeys',
     ]);
     service.listPlans.and.returnValue(of([] as SubscriptionPlan[]));
+    service.listFeatureKeys.and.returnValue(of(['ff.platform.billing', 'ff.platform.ehr']));
   });
 
   it('opens the form when New plan is clicked even though every field is empty', () => {

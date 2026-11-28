@@ -85,6 +85,25 @@ public class MedicationCatalogController {
         return ResponseEntity.ok(catalogService.requestFormularyApproval(id, dto.getReason()));
     }
 
+    /**
+     * QA D4180 (r81): the entries of the catalogue, and the proposals still waiting, that look like the one the
+     * caller is about to propose. The form asks before sending; an exact one is refused by the proposal itself.
+     */
+    @GetMapping("/similar")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Entries that look like a proposed one (same name, form or strength)")
+    public ResponseEntity<List<com.example.hms.payload.dto.medication.MedicationCatalogSimilarEntryDTO>> similar(
+            @RequestParam String nameFr,
+            @RequestParam(required = false) String form,
+            @RequestParam(required = false) String strength,
+            @RequestParam(required = false) String strengthUnit,
+            @RequestParam(required = false) UUID excludeId) {
+        com.example.hms.model.medication.FormularySnapshot proposed =
+            new com.example.hms.model.medication.FormularySnapshot(nameFr, null, null, null, form, strength,
+                strengthUnit, null, null, null, false, true, null, false, null, null);
+        return ResponseEntity.ok(versionService.similarEntries(proposed, excludeId));
+    }
+
     @GetMapping("/versions")
     @PreAuthorize(VERSION_READERS)
     @Operation(summary = "The approval queue, or the decided versions, of the acting hospital")
@@ -242,10 +261,12 @@ public class MedicationCatalogController {
     @Operation(summary = "Deactivate a medication catalog item")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,
-            @RequestParam(required = false) UUID hospitalId) {
+            @RequestParam(required = false) UUID hospitalId,
+            @RequestParam(required = false) String reason) {
         // r66 D2901: the portal sends no hospitalId (every deactivation answered 400); the service acts at
         // the caller's hospital. One that is sent is narrowed by HospitalIdNarrowingInterceptor first.
-        catalogService.deactivate(id, hospitalId);
+        // QA D4190 (r81): the reason is required by the service (field « reason ») and kept on the entry's history.
+        catalogService.deactivate(id, hospitalId, reason);
         return ResponseEntity.noContent().build();
     }
 }

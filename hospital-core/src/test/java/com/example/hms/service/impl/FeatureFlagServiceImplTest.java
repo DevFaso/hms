@@ -76,6 +76,20 @@ class FeatureFlagServiceImplTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("QA D4070: the plan picker's catalogue is every flag the platform knows, once, trimmed and sorted")
+    void catalogueKeysCollectEveryKnownFlag() {
+        properties.getEnvironments().put("prod", null);
+        properties.getDefaults().put("  ", Boolean.TRUE);
+        properties.getOverrides().put("FEATURE.ALPHA", Boolean.FALSE);
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(
+            FeatureFlagOverride.builder().flagKey(" feature.delta ").enabled(true).build(),
+            FeatureFlagOverride.builder().flagKey(null).enabled(true).build()));
+
+        assertThat(service.catalogueKeys())
+            .containsExactly("feature.alpha", "feature.beta", "feature.delta", "feature.gamma");
+    }
+
+    @Test
     void listFlagsMergesPropertiesAndOverrides() {
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(
             FeatureFlagOverride.builder().flagKey("feature.delta").enabled(false).build()

@@ -379,7 +379,7 @@
     },
     "ACTION": {
       "SUSPEND": "Suspendre",
-      "RESTORE": "Restaurer",
+      "RESTORE": "Rétablir",
       "ARCHIVE": "Archiver",
       "SCHEDULE_PURGE": "Planifier la purge",
       "CANCEL_PURGE": "Annuler la purge"
@@ -403,7 +403,7 @@
     "MODAL": {
       "SUSPEND_TITLE": "Suspendre cette organisation",
       "SUSPEND_DESC": "Tous les utilisateurs de cette organisation seront bloqués jusqu'à la restauration. Les super admins gardent accès. L'action est tracée de façon permanente.",
-      "RESTORE_TITLE": "Restaurer cette organisation",
+      "RESTORE_TITLE": "Rétablir cette organisation",
       "RESTORE_DESC": "Remet l'organisation en ACTIF. Les utilisateurs pourront se reconnecter à leur prochaine tentative.",
       "ARCHIVE_TITLE": "Archiver cette organisation",
       "ARCHIVE_DESC": "L'organisation est masquée par défaut mais les données sont conservées. Vous pouvez restaurer plus tard ou planifier une purge.",
@@ -473,13 +473,17 @@
       "LAB_RESULTS": "Résultats de labo",
       "LAB_TEST_DEFINITIONS": "Catalogue de tests",
       "TREATMENT_PLANS": "Plans de traitement",
-      "REFERRALS": "Orientations"
+      "REFERRALS": "Orientations",
+      "ACTIVE_M_ONE": "actif",
+      "ACTIVE_M_OTHER": "actifs",
+      "ACTIVE_F_ONE": "active",
+      "ACTIVE_F_OTHER": "actives"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Intégrations totales",
       "PENDING": "Intégrations en attente",
       "DISABLED": "Liens désactivés",
-      "RELEASES": "Fenêtres de mise en production actives"
+      "RELEASES": "Fenêtres de mise en production en cours"
     },
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organisations",
@@ -606,7 +610,7 @@
       "HOSPITAL": "Hôpital",
       "RESOURCE": "Ressource",
       "STATUS": "Statut",
-      "IMPERSONATOR": "Emprunteur d'identité"
+      "IMPERSONATOR": "Agit au nom de (support)"
     },
     "TAB": {
       "SUPPORT": "Journal d'audit support",
@@ -703,11 +707,11 @@
     "DISMISS": "Ignorer la diffusion"
   },
   "SUBSCRIPTIONS": {
-    "DEACTIVATE_CONFIRM_BODY": "Elle ne pourra plus être attribuée à une organisation.",
-    "DEACTIVATE_CONFIRM": "Désactiver la formule {{name}} ?",
-    "DEACTIVATED": "Formule {{name}} désactivée.",
-    "UPDATED": "Formule {{name}} enregistrée.",
-    "CREATED": "Formule {{name}} créée.",
+    "DEACTIVATE_CONFIRM_BODY": "Il ne pourra plus être attribué à une organisation. Vous pourrez le réactiver.",
+    "DEACTIVATE_CONFIRM": "Désactiver le plan {{name}} ?",
+    "DEACTIVATED": "Plan {{name}} désactivé.",
+    "UPDATED": "Plan {{name}} enregistré.",
+    "CREATED": "Plan {{name}} créé.",
     "TITLE": "Plans d'abonnement",
     "SUBTITLE": "Catalogue de plans et affectations par organisation.",
     "ACTIVE_ONLY": "Plans actifs uniquement",
@@ -720,7 +724,7 @@
     "PER_MONTH": "/ mois",
     "SEATS": "licences utilisateurs incluses",
     "NO_FEATURES": "Aucune clé de fonctionnalité",
-    "NO_PLANS": "Aucun plan pour le moment — créez le premier.",
+    "NO_PLANS": "Aucun plan à afficher pour ce filtre.",
     "LOAD_ERROR": "Impossible de charger les plans. Réessayez.",
     "FORM": {
       "NAME": "Nom",
@@ -729,16 +733,35 @@
       "PRICE_CENTS": "Prix mensuel (centimes)",
       "CURRENCY": "Devise",
       "INCLUDED_SEATS": "Licences utilisateurs incluses",
-      "FEATURE_KEYS": "Clés de fonctionnalité",
+      "FEATURE_KEYS": "Fonctionnalités incluses",
       "FEATURE_KEYS_PLACEHOLDER": "clés séparées par des virgules",
-      "PRICE": "Prix mensuel ({{currency}})"
+      "PRICE": "Prix mensuel ({{currency}})",
+      "FEATURE_KEYS_HINT": "Une organisation abonnée n'a accès qu'aux fonctionnalités cochées. Sans aucune case cochée, le plan ne restreint rien.",
+      "FEATURE_KEYS_NONE": "La plateforme ne déclare aucune fonctionnalité pour le moment.",
+      "FEATURE_KEY_UNKNOWN": "clé inconnue de la plateforme : décochez-la pour enregistrer"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Le nom et le code de palier sont requis.",
       "SAVE_FAILED": "L'enregistrement a échoué.",
       "DEACTIVATE_FAILED": "La désactivation a échoué.",
-      "WHOLE_UNITS": "Cette devise n'a pas de centimes : saisissez un montant entier."
-    }
+      "WHOLE_UNITS": "Cette devise n'a pas de centimes : saisissez un montant entier.",
+      "REACTIVATE_FAILED": "La réactivation a échoué."
+    },
+    "REACTIVATE": "Réactiver",
+    "REACTIVATE_CONFIRM": "Réactiver le plan {{name}} ?",
+    "REACTIVATE_CONFIRM_BODY": "Il pourra de nouveau être attribué à une organisation.",
+    "REACTIVATED": "Plan {{name}} réactivé.",
+    "STATUS_FILTER": "Statut",
+    "FILTER_ACTIVE": "Plans actifs",
+    "FILTER_INACTIVE": "Plans inactifs",
+    "FILTER_ALL": "Tous les plans",
+    "STATUS_ACTIVE": "Actif",
+    "STATUS_INACTIVE": "Inactif",
+    "TIER_CODE_LABEL": "Code de palier :",
+    "SEATS_COUNT_ONE": "{{count}} licence utilisateur incluse",
+    "SEATS_COUNT_OTHER": "{{count}} licences utilisateurs incluses",
+    "USED_BY_ONE": "Utilisé par {{count}} organisation",
+    "USED_BY_OTHER": "Utilisé par {{count}} organisations"
   },
   "ORG_REGION": {
     "TITLE": "Résidence des données",
@@ -802,14 +825,14 @@
     },
     "ACTION": {
       "SUSPEND": "Suspendre",
-      "RESTORE": "Restaurer",
+      "RESTORE": "Rétablir",
       "ARCHIVE": "Archiver",
       "SCHEDULE_PURGE": "Planifier une purge",
       "CANCEL_PURGE": "Annuler la purge"
     },
     "DIALOG": {
       "SUSPEND": "Suspendre l'établissement",
-      "RESTORE": "Restaurer l'établissement",
+      "RESTORE": "Rétablir l'établissement",
       "ARCHIVE": "Archiver l'établissement",
       "SCHEDULE-PURGE": "Planifier la purge",
       "CANCEL-PURGE": "Annuler la purge planifiée",
@@ -2077,8 +2100,8 @@
       "PRO_RESPONSE": "Réponses au questionnaire patient enregistrées ({{instrument}}, {{source}})",
       "PRO_ALERT_ACK": "Alerte de sécurité du questionnaire prise en compte",
       "LAB_CORRECTION": "Correction : le résultat {{correction}} remplace le résultat publié {{original}}",
-      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
-      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande {{earlier}} du même examen est en cours",
+      "LAB_DUPLICATE_ACKNOWLEDGED": "Alerte de doublon acceptée (« Commander quand même ») : demande {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
+      "LAB_DUPLICATE_UNACKNOWLEDGED": "Alerte de doublon non acceptée : demande {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "LAB_AUTOVERIFICATION": "Validation automatique (indicateur N de l’automate) via {{source}}",
       "HL7_ORU_INGESTED": "Message de résultat (ORU^R01) reçu via {{source}}",
       "HL7_ADT": "Message d’admission (ADT^{{type}}) : {{what}} — {{details}}",
@@ -2268,6 +2291,7 @@
       "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
+      "MINOR_PORTAL_ACTION_REFUSED": "Action refusée sur le compte portail d’un mineur (règle des droits des mineurs selon l’âge)",
       "AUDIT_RETENTION_PURGED": "Entrées d’audit au-delà de la durée de conservation supprimées",
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
@@ -2276,7 +2300,13 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
       "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct"
+      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct",
+      "RELEASE_WINDOW_UPDATED": "Fenêtre de mise en production modifiée ({{details}})",
+      "RELEASE_WINDOW_CANCELLED": "Fenêtre de mise en production annulée ({{details}})",
+      "CATALOG_ENTRY_WITHDRAWN": "Médicament retiré du livret ({{kind}}, version n° {{n}}) : {{item}}",
+      "INVENTORY_ITEM_DEACTIVATED_REASON": "Article de stock désactivé avec {{quantity}} en stock. Motif : {{reason}}",
+      "INVENTORY_ITEM_DEACTIVATED": "Article de stock désactivé avec {{quantity}} en stock",
+      "INSURER_CLAIM_EVENT": "{{what}} : {{id}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2590,6 +2620,24 @@
       "CASH_SESSION_CLOSED": "Caisse clôturée",
       "CASH_SESSION_REOPENED": "Caisse rouverte",
       "CASH_SESSION_REVIEWED": "Caisse vérifiée"
+    },
+    "INSURER_CLAIM_EVENT": {
+      "INSURER_CLAIM_DRAFT_CREATED": "Brouillon de bordereau créé",
+      "INSURER_CLAIM_DRAFT_CHANGED": "Brouillon de bordereau modifié",
+      "INSURER_CLAIM_DRAFT_DELETED": "Brouillon de bordereau supprimé",
+      "INSURER_CLAIM_SUBMITTED": "Bordereau envoyé à l’organisme",
+      "INSURER_CLAIM_RECEIPT_BY_THE_PAYER_RECORDED": "Réception du bordereau par l’organisme enregistrée",
+      "INSURER_CLAIM_CANCELLED": "Bordereau annulé",
+      "INSURER_CLAIM_EXPORTED": "Bordereau exporté",
+      "INSURER_PAYMENT_RECORDED": "Règlement assureur enregistré",
+      "INSURER_PAYMENT_ALLOCATED": "Règlement assureur affecté",
+      "INSURER_PAYMENT_REVERSED": "Règlement assureur annulé",
+      "INSURER_CLAIM_LINE_REFUSED_BY_THE_PAYER": "Ligne de bordereau refusée par l’organisme",
+      "REFUSED_AMOUNT_RE_BILLED_TO_THE_PATIENT": "Montant refusé refacturé au patient",
+      "INSURER_CLAIM_WRITE_OFF_REQUESTED": "Passage en perte demandé",
+      "INSURER_CLAIM_WRITE_OFF_APPROVED": "Passage en perte approuvé",
+      "INSURER_CLAIM_WRITE_OFF_REFUSED": "Passage en perte refusé",
+      "INSURER_CLAIM_WRITE_OFF_CANCELLED": "Demande de passage en perte retirée"
     }
   },
   "BILLING": {
@@ -3048,7 +3096,9 @@
         "CLAIMED": "Réclamée",
         "PAID": "Payée par l’assureur",
         "REJECTED": "Refusée par l’assureur",
-        "CANCELLED": "Annulée"
+        "CANCELLED": "Annulée",
+        "PARTIALLY_PAID": "Payée en partie",
+        "WRITTEN_OFF": "Passée en perte"
       },
       "REJECTED_LINE": "Refusé par l’assureur : {{reason}}",
       "CLAIM": "Marquer réclamée",
@@ -3700,7 +3750,9 @@
       "CLAIMS_REVIEWER": "Contrôleur(se) des remboursements",
       "ANESTHESIOLOGIST": "Anesthésiste",
       "PHYSIOTHERAPIST": "Kinésithérapeute",
-      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur"
+      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur",
+      "STORE_MANAGER": "Gestionnaire de stock",
+      "INVENTORY_CLERK": "Magasinier"
     },
     "ROLES": "Rôles",
     "ROOMED": "En salle d'examen",
@@ -3829,7 +3881,17 @@
     "AGING_90_PLUS": "Plus de 90 jours",
     "CRITICAL_ALERTS_ONE": "{{count}} alerte critique",
     "CRITICAL_ALERTS_MANY": "{{count}} alertes critiques",
-    "DAYS_LEFT_SHORT": "{{days}} j"
+    "DAYS_LEFT_SHORT": "{{days}} j",
+    "STOCK": {
+      "TITLE": "Stock à surveiller",
+      "LOW": "articles au seuil de réapprovisionnement ou en dessous",
+      "LOW_ONE": "article au seuil de réapprovisionnement ou en dessous",
+      "OUT": "articles en rupture de stock",
+      "OUT_ONE": "article en rupture de stock",
+      "ITEM": "En stock : {{held}} · seuil : {{threshold}}",
+      "NONE": "Aucun article n’est sous son seuil.",
+      "PAGES": "Gestion du stock"
+    }
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "L'e-mail d'activation (avec le code de chaque rôle) est en file d'envoi.",
@@ -4258,7 +4320,7 @@
     "KEY_PLACEHOLDER": "ex. activer-nouveau-tableau-de-bord",
     "KEY_REQUIRED": "La clé du drapeau est obligatoire",
     "LOADING": "Chargement des drapeaux…",
-    "LOAD_FAILED": "Échec du chargement des drapeaux de fonctionnalité",
+    "LOAD_FAILED": "Échec du chargement des indicateurs de fonctionnalités",
     "NEW_FLAG": "Configurer un drapeau",
     "NO_FLAGS": "Aucun drapeau trouvé",
     "NO_FLAGS_MATCHING": "Aucun drapeau ne correspond à « {{query}} »",
@@ -4270,7 +4332,7 @@
     "REMOVE_OVERRIDE": "Supprimer le remplacement",
     "SEARCH_PLACEHOLDER": "Rechercher des drapeaux…",
     "SUBTITLE": "Gérer les bascules de fonctionnalité",
-    "TITLE": "Drapeaux de fonctionnalité",
+    "TITLE": "Indicateurs de fonctionnalités",
     "TOGGLE": "Basculer",
     "TOGGLE_FAILED": "Échec du basculement de {{key}}",
     "DISABLE_FLAG": "Désactiver {{key}}",
@@ -4620,10 +4682,10 @@
     "EXISTING_SPECIMENS": "Cette demande possède déjà {{count}} prélèvement(s). Vérifiez la liste avant d’en recueillir un autre.",
     "DUPLICATE": {
       "TITLE": "Demande possiblement en double",
-      "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
+      "BODY": "Ce patient a déjà, ici, une demande du même examen passée dans les dernières 24 heures, en cours ou déjà rendue. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
       "BACK": "Revenir à la demande",
       "ORDER_ANYWAY": "Commander quand même",
-      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà une demande en cours pour le même examen ici : {{codes}}. Vérifiez que chacune est nécessaire."
+      "PLACED_ANYWAY": "La demande a été passée, mais ce patient avait déjà, ici, une demande récente du même examen : {{codes}}. Vérifiez que chacune est nécessaire."
     },
     "ABNORMAL": "Anormal",
     "ACCESSION": "N° d'enregistrement",
@@ -4832,7 +4894,9 @@
     "LAB_SCIENTIST": "Scientifique de laboratoire",
     "LAB_MANAGER": "Responsable de laboratoire",
     "LAB_DIRECTOR": "Directeur de laboratoire",
-    "STAFF_COUNT": "{{count}} membres du personnel"
+    "STAFF_COUNT": "{{count}} membres du personnel",
+    "STAFF_COUNT_ONE": "{{count}} membre du personnel",
+    "STAFF_COUNT_OTHER": "{{count}} membres du personnel"
   },
   "LAB_TEST_CONFIG": {
     "APPROVAL_NEXT_STEP": "Continuer dans la file d’approbation labo",
@@ -5188,10 +5252,10 @@
     "STATUS": "Statut",
     "STATUS_ACTIVE": "Actif",
     "STATUS_MAINTENANCE": "Maintenance",
-    "STATUS_CALIBRATION_DUE": "Calibration requise",
+    "STATUS_CALIBRATION_DUE": "Étalonnage requis",
     "STATUS_OUT_OF_SERVICE": "Hors service",
     "STATUS_RETIRED": "Retiré",
-    "CALIBRATION": "Prochaine calibration",
+    "CALIBRATION": "Prochain étalonnage",
     "MAINTENANCE": "Prochaine maintenance",
     "INSTALLATION_DATE": "Date d’installation",
     "LAST_CALIBRATION_DATE": "Dernier étalonnage",
@@ -5206,7 +5270,17 @@
     "SAVE_ERROR": "Impossible d'enregistrer l'instrument. Veuillez réessayer.",
     "DEACTIVATED": "Instrument désactivé.",
     "DEACTIVATE_ERROR": "Impossible de désactiver l'instrument.",
-    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?"
+    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?",
+    "DATES": "Calibration et maintenance",
+    "LAST_CALIBRATION": "Dernière calibration",
+    "NEXT_CALIBRATION": "Prochaine calibration",
+    "LAST_MAINTENANCE": "Dernière maintenance",
+    "NEXT_MAINTENANCE": "Prochaine maintenance",
+    "INACTIVE": "Désactivé",
+    "SHOW_INACTIVE": "Afficher les instruments désactivés",
+    "REACTIVATE": "Réactiver",
+    "REACTIVATED": "Instrument réactivé.",
+    "REACTIVATE_ERROR": "La réactivation a échoué."
   },
   "LAB_OUTBOX": {
     "ORDERING_HOSPITAL": "Hôpital prescripteur",
@@ -5225,6 +5299,7 @@
     "STATUS_ACK": "Acquitté",
     "STATUS_SENT": "Envoyé",
     "COL_TYPE": "Message",
+    "COL_ORDER": "Demande",
     "COL_STATUS": "Statut",
     "COL_ATTEMPTS": "Tentatives",
     "COL_LAST_ATTEMPT": "Dernière tentative",
@@ -5297,12 +5372,26 @@
     "IN_STOCK": "En stock",
     "LOW_STOCK": "Stock bas",
     "EXPIRED": "Expiré",
+    "EXPIRING_SOON": "Expire bientôt",
+    "EXPIRING_SOON_HINT": "Expire dans moins de {{days}} jours",
     "CREATED": "Article d'inventaire créé avec succès.",
     "UPDATED": "Article d'inventaire mis à jour avec succès.",
     "SAVE_ERROR": "Impossible d'enregistrer l'article. Veuillez réessayer.",
     "DEACTIVATED": "Article d'inventaire désactivé.",
     "DEACTIVATE_ERROR": "Impossible de désactiver l'article.",
-    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet article ?"
+    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet article ?",
+    "LOT": "Lot",
+    "STATE_OUT": "Rupture",
+    "STATE_LOW": "Stock bas",
+    "STATE_EXPIRED": "Expiré",
+    "STATE_EXPIRING": "Expire bientôt",
+    "FILTER": "Afficher",
+    "FILTER_ALL": "Tous les articles",
+    "SEARCH": "Rechercher",
+    "SEARCH_PLACEHOLDER": "Nom, code ou lot",
+    "NO_MATCH": "Aucun article ne correspond à ce filtre.",
+    "SHOWN_ONE": "{{count}} article affiché",
+    "SHOWN_OTHER": "{{count}} articles affichés"
   },
   "LANG": {
     "EN": "English",
@@ -5544,7 +5633,14 @@
     "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
     "CLINICAL_RULES": "Règles cliniques",
     "PAYER_SHARES": "Parts assureurs",
-    "URGENT_INCIDENTS": "Alertes urgentes non résolues"
+    "URGENT_INCIDENTS": "Alertes urgentes non résolues",
+    "MESSAGES_ARIA_ONE": "Messages ({{count}} non lu)",
+    "MESSAGES_ARIA_OTHER": "Messages ({{count}} non lus)",
+    "NOTIFICATIONS_ARIA_ONE": "Notifications ({{count}} non lue)",
+    "NOTIFICATIONS_ARIA_OTHER": "Notifications ({{count}} non lues)",
+    "STOCK_COUNT": "Inventaire physique",
+    "STOCK_CONSUMPTION": "Rapport de consommation",
+    "CLAIM_BATCHES": "Bordereaux"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6528,8 +6624,8 @@
     "ACCESS_LOGS": "Journaux d'accès",
     "ACTIVATE": "Activer",
     "ACTIVE_CONNECTIONS": "Connexions actives",
-    "ACTIVE_RELEASES": "Versions actives",
-    "ACTIVE_WINDOWS": "Fenêtres actives",
+    "ACTIVE_RELEASES": "Mises en production en cours",
+    "ACTIVE_WINDOWS": "Fenêtres en cours",
     "API_KEYS": "Clés API",
     "API_KEY_KEEP": "Laisser vide pour conserver la valeur actuelle",
     "API_KEY_REF": "Référence de clé API",
@@ -6591,7 +6687,7 @@
     "FEATURE_FLAG": "Indicateur de fonctionnalité",
     "FEATURE_TOGGLES": "Indicateurs de fonctionnalité",
     "FREE": "Libre",
-    "FREEZE_CHANGES_DURING": "Geler les changements pendant",
+    "FREEZE_CHANGES_DURING": "Geler les changements pendant la fenêtre",
     "GB": "GB",
     "HEALTHY": "Sain",
     "HOSPITALS": "Hôpitaux",
@@ -6641,8 +6737,8 @@
     "NO_CATALOG_HINT": "Enregistrez un service pour commencer",
     "NO_HOSPITAL_LINKS": "Aucun lien d'hôpital",
     "NO_ORG_HOSPITALS": "Cette organisation n’a pas encore d’hôpital.",
-    "NO_RELEASES": "Aucune version planifiée",
-    "NO_RELEASES_HINT": "Planifiez une version pour commencer",
+    "NO_RELEASES": "Aucune mise en production planifiée",
+    "NO_RELEASES_HINT": "Planifiez une fenêtre de mise en production pour commencer",
     "NO_SERVICES": "Aucun service trouvé",
     "NO_SERVICES_HINT": "Enregistrez un service pour commencer",
     "ONBOARDING_GUIDE": "Guide d'intégration",
@@ -6675,9 +6771,9 @@
     "REGISTERING": "Enregistrement...",
     "REGISTER_NEW_SERVICE": "Enregistrer un nouveau service",
     "REGISTER_SERVICE": "Enregistrer le service",
-    "RELEASES": "Versions",
+    "RELEASES": "Mises en production",
     "RELEASE_NOTES": "Notes de version",
-    "RELEASE_WINDOWS": "Fenêtres de version",
+    "RELEASE_WINDOWS": "Fenêtres de mise en production",
     "REQUIRE_NUMBER": "Exiger un chiffre",
     "REQUIRE_SPECIAL": "Exiger un caractère spécial",
     "REQUIRE_UPPERCASE": "Exiger une majuscule",
@@ -6689,8 +6785,8 @@
     "SAVE_CONFIG": "Enregistrer la configuration",
     "SCHEDULE": "Planifier",
     "SCHEDULED_MAINTENANCE": "Maintenance planifiée",
-    "SCHEDULE_RELEASE": "Planifier la version",
-    "SCHEDULE_RELEASE_WINDOW": "Planifier la fenêtre de version",
+    "SCHEDULE_RELEASE": "Planifier une mise en production",
+    "SCHEDULE_RELEASE_WINDOW": "Planifier une fenêtre de mise en production",
     "SCHEDULING": "Planification",
     "SEARCH_CATALOG": "Rechercher dans le catalogue...",
     "SECONDS": "secondes",
@@ -6760,7 +6856,10 @@
       "STATUS_CHANGED": "Statut du service modifié en {{status}}",
       "STATUS_CHANGE_FAILED": "Échec du changement de statut",
       "TASK_DETAILS": "{{title}} : {{nextAction}} | {{metricLabel}} : {{metricValue}}",
-      "VALIDATION_FAILED": "Veuillez corriger ces champs : {{errors}}"
+      "VALIDATION_FAILED": "Veuillez corriger ces champs : {{errors}}",
+      "RELEASE_UPDATED": "Fenêtre de mise en production « {{name}} » modifiée",
+      "RELEASE_CANCELLED": "Fenêtre de mise en production « {{name}} » annulée",
+      "RELEASE_CANCEL_FAILED": "L'annulation de la fenêtre a échoué."
     },
     "TOTAL_INTEGRATIONS": "Total des intégrations",
     "UAT": "UAT",
@@ -6773,7 +6872,18 @@
     "VERSION": "Version",
     "VIEW_DETAILS": "Voir les détails",
     "VIEW_DOCS": "Voir la documentation",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "PLANNED_WINDOWS_LABEL": "Fenêtres planifiées",
+    "EDIT_RELEASE_WINDOW": "Modifier la fenêtre de mise en production",
+    "CANCEL_RELEASE": "Annuler la fenêtre",
+    "CANCEL_RELEASE_CONFIRM_BODY": "Elle restera dans la liste avec le statut « Annulée », et son gel des changements ne s'appliquera pas.",
+    "RELEASE_SHOW_DETAIL": "Détail",
+    "RELEASE_HIDE_DETAIL": "Masquer le détail",
+    "RELEASE_CREATED_AT": "Créée le",
+    "RELEASE_UPDATED_AT": "Modifiée le",
+    "CANCEL_RELEASE_REASON": "Motif de l'annulation",
+    "CANCEL_RELEASE_KEEP": "Garder la fenêtre",
+    "CANCEL_RELEASE_TITLE": "Annuler cette fenêtre de mise en production ?"
   },
   "PORTAL": {
     "VITALS": {
@@ -7607,14 +7717,14 @@
         "PENDING": "Prête à retirer"
       },
       "IMAGING_ORDER_STATUS": {
-        "CANCELLED": "Annulé",
-        "COMPLETED": "Terminé",
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
         "DRAFT": "Brouillon",
         "IN_PROGRESS": "En cours",
-        "ORDERED": "Prescrit",
+        "ORDERED": "Prescrite",
         "PENDING_AUTHORIZATION": "En attente d’autorisation",
         "RESULTS_AVAILABLE": "Résultats disponibles",
-        "SCHEDULED": "Planifié"
+        "SCHEDULED": "Planifiée"
       },
       "IMAGING_REPORT_STATUS": {
         "ADDENDUM": "Addendum",
@@ -7954,7 +8064,20 @@
         "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
         "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques validé",
         "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de règle clinique révoquée",
-        "AUDIT_RETENTION_PURGED": "Entrées d’audit supprimées après la durée de conservation"
+        "MINOR_PORTAL_ACTION_REFUSED": "Action du portail refusée à un mineur",
+        "AUDIT_RETENTION_PURGED": "Entrées d’audit supprimées après la durée de conservation",
+        "INSURER_CLAIM_BATCH_DRAFTED": "Brouillon de bordereau préparé ou modifié",
+        "INSURER_CLAIM_BATCH_SUBMITTED": "Bordereau envoyé à l’organisme",
+        "INSURER_CLAIM_BATCH_CANCELLED": "Bordereau annulé",
+        "INSURER_CLAIM_BATCH_EXPORTED": "Bordereau exporté",
+        "INSURER_PAYMENT_RECORDED": "Règlement assureur enregistré ou affecté",
+        "INSURER_PAYMENT_REVERSED": "Règlement assureur annulé",
+        "INSURER_CLAIM_LINE_REFUSED": "Ligne de bordereau refusée par l’organisme",
+        "INSURER_CLAIM_LINE_REBILLED": "Montant refusé refacturé au patient",
+        "INSURER_CLAIM_WRITE_OFF_REQUESTED": "Passage en perte demandé",
+        "INSURER_CLAIM_WRITE_OFF_APPROVED": "Passage en perte approuvé",
+        "INSURER_CLAIM_WRITE_OFF_REFUSED": "Passage en perte refusé",
+        "INSURER_CLAIM_WRITE_OFF_CANCELLED": "Demande de passage en perte retirée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -8510,6 +8633,7 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
         "PAYER_PLAN": "Formule d’organisme payeur",
+        "INSURER_CLAIM_BATCH": "Bordereau de réclamation assureur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
         "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
@@ -10348,7 +10472,15 @@
     "NO_DEPARTMENT_OPTION": "— Aucun département —",
     "DEPARTMENTS_LOAD_FAILED": "Les départements n’ont pas pu être chargés.",
     "REACTIVATE": "Réactiver",
-    "REQUIRES_ASSIGNMENT": "Gérer les affectations pour rétablir les accès du personnel"
+    "REQUIRES_ASSIGNMENT": "Gérer les affectations pour rétablir les accès du personnel",
+    "MEMBERS_COUNT_ONE": "{{count}} membre du personnel",
+    "MEMBERS_COUNT_OTHER": "{{count}} membres du personnel",
+    "FILTER_HOSPITAL": "Hôpital",
+    "ALL_HOSPITALS": "Tous les hôpitaux",
+    "FILTER_STATUS": "Statut",
+    "ALL_STATUSES": "Actifs et désactivés",
+    "STATUS_ACTIVE": "Actifs",
+    "STATUS_INACTIVE": "Désactivés"
   },
   "TREATMENT": {
     "ACTIVE": "Actif",
@@ -11233,7 +11365,7 @@
     "FORMULARY": "Livret thérapeutique",
     "FULFILLMENT_MODE": "Mode de dispensation",
     "GENERIC_NAME": "Nom générique",
-    "GENERIC_NAME_PLACEHOLDER": "ex. Amoxicillin",
+    "GENERIC_NAME_PLACEHOLDER": "ex. amoxicilline (DCI)",
     "GOODS_RECEIPT_SUBTITLE": "Recevoir et enregistrer les livraisons de stock",
     "GOODS_RECEIPT_TITLE": "Réception de marchandises",
     "INSUFFICIENT_STOCK": "Stock insuffisant",
@@ -11255,8 +11387,8 @@
     "MEDICATION": "Médicament",
     "MED_CREATED": "Médicament créé",
     "MED_CREATE_FAILED": "Échec de la création du médicament",
-    "MED_DELETED": "Médicament supprimé",
-    "MED_DELETE_FAILED": "Échec de la suppression du médicament",
+    "MED_DELETED": "Médicament retiré du livret",
+    "MED_DELETE_FAILED": "Le médicament n’a pas pu être retiré du livret",
     "MED_REQUIRED_FIELDS": "Le nom (FR) et le nom générique sont obligatoires",
     "MED_UPDATED": "Médicament mis à jour",
     "MED_UPDATE_FAILED": "Échec de la mise à jour du médicament",
@@ -11298,9 +11430,9 @@
     "NO_TRANSACTIONS": "Aucune transaction",
     "OFFLINE_PENDING_MANY": "dispensations en attente de synchronisation",
     "OFFLINE_PENDING_ONE": "dispensation en attente de synchronisation",
-    "OFFLINE_SYNCED": "Dispensations synchronisées : {{count}}",
-    "OFFLINE_SYNCED_WITH_PENDING": "Dispensations synchronisées : {{count}} — en attente : {{failed}}",
-    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — dispensations encore en file d'attente : {{count}}",
+    "OFFLINE_SYNCED": "{{count}} dispensations synchronisées",
+    "OFFLINE_SYNCED_WITH_PENDING": "{{count}} dispensations synchronisées — encore en attente : {{failed}}",
+    "OFFLINE_SYNC_FAILED": "Échec de la synchronisation — {{count}} dispensations restent en file d’attente",
     "OFFLINE_SYNC_NOW": "Synchroniser maintenant",
     "ON_FORMULARY": "Au formulaire",
     "OUT_OF_STOCK": "En rupture de stock",
@@ -11388,7 +11520,6 @@
     "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait",
     "REFILL_NONE": "Première délivrance",
     "REFILL_REMAINING": "{{count}} renouvellements restants",
-    "REFILL_REMAINING_ONE": "{{count}} renouvellement restant",
     "REGION": "Région",
     "REGISTRY_SUBTITLE": "Gérer les pharmacies enregistrées",
     "REGISTRY_TITLE": "Registre des pharmacies",
@@ -11546,7 +11677,7 @@
     "CANCEL_READY_SUCCESS": "Préparation annulée.",
     "CANCEL_READY_FAILED": "Impossible d'annuler la préparation.",
     "PREPARED_BY": "Préparée par {{name}}",
-    "STOCK_REMAINING": "{{qty}} restant(s) (seuil : {{threshold}})",
+    "STOCK_REMAINING": "En stock : {{qty}} (seuil : {{threshold}})",
     "UNITS": "unités",
     "BADGE_ESSENTIAL": "Essentiel",
     "BADGE_CONTROLLED": "Contrôlé",
@@ -11611,9 +11742,9 @@
     "REGISTER_RETURN_FILL": "Retour, réf. lot {{lot}} délivré le {{date}}",
     "REGISTER_RETURN_FILL_DATE": "Retour de la délivrance du {{date}}",
     "CATALOG_APPROVAL": {
-      "PANEL_TITLE": "Validation du formulaire et des limites de dose",
+      "PANEL_TITLE": "Validation du livret thérapeutique et des limites de dose",
       "PENDING_COUNT": "{{count}} en attente de validation",
-      "INTRO": "Un nouveau médicament, une modification de ce qui est prescrit et délivré (nom, code ATC, forme, dosage, voie, stupéfiant) et toute limite de dose ne prennent effet qu’après validation par une autre personne que celle qui les a proposés : un pharmacien de l’établissement pour le formulaire ; un pharmacien ou le médecin-chef pour les limites de dose. D’ici là, la prescription et la délivrance utilisent la version en vigueur.",
+      "INTRO": "Un nouveau médicament, une modification de ce qui est prescrit et délivré (nom, code ATC, forme, dosage, voie, stupéfiant) et toute limite de dose ne prennent effet qu’après validation par une autre personne que celle qui les a proposés : pour le livret thérapeutique, un pharmacien de l’établissement, ou son médecin-chef quand l’établissement n’a aucun pharmacien actif ; pour les limites de dose, un pharmacien ou le médecin-chef. D’ici là, la prescription et la délivrance utilisent la version en vigueur.",
       "VIEW_PENDING": "En attente de validation",
       "VIEW_HISTORY": "Historique des versions",
       "EMPTY_PENDING": "Aucune version en attente de validation.",
@@ -11621,20 +11752,22 @@
       "EMPTY_ENTRY": "Aucune version enregistrée pour cet article : il date d’avant le circuit de validation.",
       "LOAD_FAILED": "Les versions n’ont pas pu être chargées.",
       "KIND": {
-        "FORMULARY": "Formulaire",
+        "FORMULARY": "Livret thérapeutique",
         "DOSE_LIMIT": "Limites de dose"
       },
       "CHANGE": {
         "CREATE": "Nouveau médicament",
         "UPDATE": "Modification",
-        "RATIFY": "Valeurs en vigueur soumises telles quelles"
+        "RATIFY": "Valeurs en vigueur soumises telles quelles",
+        "WITHDRAWAL": "Retrait du livret"
       },
       "STATUS": {
         "PENDING_APPROVAL": "En attente de validation",
         "APPROVED": "Validée, en vigueur",
         "REJECTED": "Refusée",
         "SUPERSEDED": "Remplacée par une version plus récente",
-        "WITHDRAWN": "Retirée par son auteur"
+        "WITHDRAWN": "Retirée par son auteur",
+        "RECORDED": "Retiré du livret"
       },
       "VERSION": "Version n° {{n}}",
       "PROPOSED_BY": "Proposée par",
@@ -11644,7 +11777,8 @@
         "SUPERSEDED": "Validée par",
         "REJECTED": "Refusée par",
         "WITHDRAWN": "Retirée par",
-        "PENDING_APPROVAL": "Décision"
+        "PENDING_APPROVAL": "Décision",
+        "RECORDED": "Retiré par"
       },
       "DECISION_REASON": "Motif de la décision",
       "DECISION_BASIS_LABEL": "En qualité de",
@@ -11662,7 +11796,7 @@
       "BAND": "{{min}} à {{max}} kg : {{dose}}, {{perDay}} prises/jour",
       "OWN_PROPOSAL_NOTE": "Vous avez proposé cette version : une autre personne doit la valider.",
       "ROLE_NOTE": {
-        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du formulaire (le médecin-chef seulement si l’établissement n’a aucun pharmacien actif).",
+        "FORMULARY": "Seul un pharmacien de l’établissement, autre que l’auteur, valide ou refuse un article du livret thérapeutique (le médecin-chef seulement si l’établissement n’a aucun pharmacien actif).",
         "DOSE_LIMIT": "Seul un pharmacien de l’établissement ou son médecin-chef, autre que l’auteur, valide ou refuse des limites de dose."
       },
       "APPROVE": "Valider",
@@ -11690,12 +11824,12 @@
       "SUBMIT_FOR_APPROVAL": "Envoyer en validation",
       "CHANGE_REASON": "Motif (lu par la personne qui valide)",
       "CHANGE_REASON_REQUIRED": "Indiquez le motif : il est lu par la personne qui valide et conservé dans l’historique.",
-      "CREATE_HINT": "Le médicament sera prescriptible et délivrable après validation par un pharmacien de l’établissement, autre que vous.",
+      "CREATE_HINT": "Le médicament sera prescriptible et délivrable après validation par un pharmacien de l’établissement, autre que vous (son médecin-chef si l’établissement n’a aucun pharmacien actif).",
       "EDIT_HINT_PROPOSES": "Vous modifiez ce qui est prescrit et délivré : la modification part en validation et l’article garde ses valeurs actuelles d’ici là. La catégorie, la liste essentielle, la description et la catégorie sensible sont enregistrées tout de suite.",
       "EDIT_HINT_DIRECT": "Rien de ce qui est prescrit ou délivré ne change : l’enregistrement est immédiat, sans validation.",
       "DOSING_HINT": "Les limites partent en validation : un autre pharmacien ou le médecin-chef les valide. D’ici là, le contrôle de dose utilise les limites en vigueur.",
       "DOSING_PENDING_NOTE": "Des limites sont déjà en attente de validation pour cet article : elles doivent être validées, refusées ou retirées avant d’en proposer d’autres.",
-      "PROPOSED_TOAST_CREATE": "Médicament proposé : en attente de validation par un pharmacien",
+      "PROPOSED_TOAST_CREATE": "Médicament proposé : en attente de validation",
       "PROPOSED_TOAST_UPDATE": "Modification envoyée en validation : l’article garde ses valeurs actuelles d’ici là",
       "PROPOSED_TOAST_DOSING": "Limites de dose envoyées en validation",
       "FIELD": {
@@ -11721,7 +11855,20 @@
         "manualReviewUnderMonths": "Vérification manuelle avant (mois)",
         "weightBands": "Tranches de poids",
         "source": "Source des valeurs"
-      }
+      },
+      "WITHDRAWAL_NOTE": "Le médicament a été retiré du livret : il n’est plus prescriptible ni délivrable. Le retrait a pris effet tout de suite, sans validation.",
+      "COL_BEFORE_DECIDED": "Avant cette version",
+      "COL_AFTER": {
+        "PENDING_APPROVAL": "Proposé",
+        "APPROVED": "Validé, en vigueur",
+        "SUPERSEDED": "Validé, remplacé depuis",
+        "REJECTED": "Proposé, refusé",
+        "WITHDRAWN": "Proposé, retiré par son auteur",
+        "RECORDED": "Après le retrait"
+      },
+      "APPROVE_CONFIRM_TITLE": "Valider cette version ?",
+      "APPROVE_CONFIRM_MESSAGE": "{{label}} : la version prend effet tout de suite pour la prescription et la délivrance. Une version validée ne peut pas être annulée ; la corriger demande une nouvelle proposition.",
+      "APPROVE_CONFIRM_SIMILAR": "{{label}} : la version prend effet tout de suite et ne peut pas être annulée. Attention, le livret contient déjà : {{similar}}. Vérifiez qu’il ne s’agit pas du même médicament."
     },
     "DOSING": {
       "ACTION": "Limites de dose pédiatriques",
@@ -11758,7 +11905,7 @@
       "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
     },
     "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
-    "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
+    "LOTS_OTHER_FORM": "{{count}} lots de ce médicament sous une autre forme ne sont pas proposés : l’ordonnance est rédigée en « {{unit}} ».",
     "SAVE_PRICE": "Enregistrer le prix",
     "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
     "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2).",
@@ -11811,7 +11958,50 @@
     "STOCK_CONDITION_MISSING_LOSS": "Rien ne revient en stock : les unités sont enregistrées comme perte.",
     "CANCEL_READY_NOT_INTACT": "« Stock manquant ou endommagé » ne peut pas revenir en vente comme intact : choisissez endommagé, périmé, contaminé ou manquant.",
     "LEDGER_REASON_MISSING": "Manquant sur une préparation annulée (perte)",
-    "TRANSFER_NO_DESTINATIONS": "Aucun autre dépôt actif n’est configuré dans cet hôpital. Ajoutez un dépôt de destination au registre des pharmacies avant de transférer du stock."
+    "TRANSFER_NO_DESTINATIONS": "Aucun autre dépôt actif n’est configuré dans cet hôpital. Ajoutez un dépôt de destination au registre des pharmacies avant de transférer du stock.",
+    "LEDGER": {
+      "FILTER_MEDICINE": "Médicament ou lot",
+      "FILTER_MEDICINE_PLACEHOLDER": "Nom du médicament ou numéro de lot",
+      "FILTER_FROM": "Du",
+      "FILTER_TO": "Au",
+      "CLEAR_FILTERS": "Effacer les filtres",
+      "TRANSFER_TO": "vers {{store}}",
+      "TRANSFER_FROM": "depuis {{store}}",
+      "NO_MATCH": "Aucun mouvement ne correspond à ces filtres.",
+      "NO_MATCH_HINT": "Élargissez la période ou effacez les filtres."
+    },
+    "TRIGGER_ALERTS_HINT": "Envoie maintenant une alerte aux pharmaciens et au gestionnaire de stock pour chaque article sous son seuil qui n’a pas encore été signalé.",
+    "STOCK_PER_STORE_HINT": "Le total additionne les magasins de l’établissement ; une délivrance se fait depuis un seul magasin.",
+    "REFILL_REMAINING_ONE": "{{count}} renouvellement restant",
+    "LOTS_OTHER_FORM_ONE": "{{count}} lot de ce médicament sous une autre forme n’est pas proposé : l’ordonnance est rédigée en « {{unit}} ».",
+    "OFFLINE_SYNCED_ONE": "{{count}} dispensation synchronisée",
+    "OFFLINE_SYNCED_WITH_PENDING_ONE": "{{count}} dispensation synchronisée — encore en attente : {{failed}}",
+    "OFFLINE_SYNC_FAILED_ONE": "Échec de la synchronisation — {{count}} dispensation reste en file d’attente",
+    "CATALOG_DUPLICATE": {
+      "TITLE": "Le livret contient déjà un médicament qui ressemble à celui-ci :",
+      "APPROVER_TITLE": "Le livret contient déjà un médicament qui ressemble à cette proposition :",
+      "APPROVER_HINT": "Vérifiez qu’il ne s’agit pas du même médicament avant de valider. Un doublon exact est refusé.",
+      "STATE": {
+        "IN_CATALOGUE": "au livret",
+        "WITHDRAWN": "retiré du livret",
+        "PENDING": "proposition en attente de validation"
+      },
+      "PLATFORM": "liste nationale",
+      "EXACT": "identique",
+      "EXACT_HINT": "Même nom, même forme et même dosage : cette proposition serait refusée. Modifiez l’entrée existante.",
+      "SIMILAR_HINT": "S’il s’agit du même médicament, modifiez l’entrée existante. S’il s’agit d’un autre dosage ou d’une autre forme, vous pouvez envoyer la proposition.",
+      "SIMILAR_TOAST": "Un médicament ressemblant est déjà au livret : vérifiez la liste avant d’envoyer.",
+      "SEND_ANYWAY": "Envoyer quand même en validation",
+      "EXACT_IN_CATALOGUE": "Ce médicament est déjà au livret : {{label}}.",
+      "EXACT_PENDING": "Le même médicament est déjà proposé et en attente de validation : {{label}}."
+    },
+    "CATALOG_WITHDRAW": {
+      "ACTION": "Retirer du livret",
+      "TITLE": "Retirer ce médicament du livret ?",
+      "REASON": "Motif du retrait",
+      "CONFIRM": "Retirer du livret",
+      "EXPLAIN": "Il ne pourra plus être prescrit ni délivré. Le retrait prend effet tout de suite ; votre nom, la date et le motif sont conservés dans l’historique de l’article. Le remettre au livret demandera une validation."
+    }
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -13357,7 +13547,23 @@
     "IMPACTED_CONTROLLERS": "Contrôleurs impactés",
     "RECOMMENDED_ACTIONS": "Actions recommandées",
     "SCENARIO_REQUIRED": "Un scénario est requis",
-    "SIM_RULES_REQUIRED": "Le modèle n'a aucune règle à simuler"
+    "SIM_RULES_REQUIRED": "Le modèle n'a aucune règle à simuler",
+    "AGE_DAYS_ONE": "{{count}} jour",
+    "AGE_DAYS_OTHER": "{{count}} jours",
+    "DEFAULT_NAME": {
+      "DEFAULT_ORG": "Organisation de santé par défaut",
+      "ACCESS_CONTROL": "Politique de contrôle d'accès par défaut",
+      "PATIENT_DATA_ACCESS": "Règle d'accès aux données des patients",
+      "ADMIN_ENDPOINT_ACCESS": "Règle d'accès aux fonctions d'administration",
+      "DATA_PROTECTION": "Politique de protection des données par défaut",
+      "AUDIT_LOGGING": "Politique de journalisation d'audit par défaut",
+      "AUDIT_SENSITIVE": "Audit des opérations sensibles",
+      "PASSWORD_POLICY": "Politique de mots de passe par défaut",
+      "PASSWORD_MIN_LENGTH": "Longueur minimale du mot de passe",
+      "SESSION_MANAGEMENT": "Politique de gestion des sessions par défaut",
+      "SESSION_TIMEOUT": "Expiration de session",
+      "ROLE_MANAGEMENT": "Politique de gestion des rôles par défaut"
+    }
   },
   "EDUCATION": {
     "TITLE": "Éducation des patients",
@@ -13602,6 +13808,9 @@
     "LATE_ENTRY": "saisie tardive"
   },
   "MICRO": {
+    "OTHER_REPORTS_EARLIER_MANY": "Cette demande a aussi des comptes rendus plus anciens :",
+    "OTHER_REPORTS_EARLIER": "Cette demande a aussi un compte rendu plus ancien :",
+    "OTHER_REPORTS_LATER": "Un compte rendu plus récent existe pour cette demande : lisez-le avant de vous fier à celui-ci.",
     "SUSCEPTIBILITY_REMOVE_CONFIRM": "Retirer ce résultat d'antibiogramme ?",
     "ISOLATE_REMOVE_CONFIRM": "Retirer cet isolat et ses antibiogrammes ?",
     "CORRECTION_HISTORY": "Historique des corrections",
@@ -14104,10 +14313,12 @@
       "GROUPS": "Patient / poche",
       "GROUP_UNKNOWN": "non groupé",
       "UNIT_CHOSEN": "Poche choisie",
-      "CHOSEN_LEAST": "La mieux appariée de {{count}} poche(s) considérée(s)",
+      "CHOSEN_LEAST": "La mieux appariée des {{count}} poches considérées",
+      "CHOSEN_LEAST_ONE": "La mieux appariée de la seule poche considérée",
+      "TAB": "Libérations incompatibles",
       "CHOSEN_NOT_LEAST": "Pas la mieux appariée des {{count}} poches considérées : choix du médecin",
       "AUTHORITY": "Autorité",
-      "DECLARED_BY": "déclaré par {{name}} ({{role}})",
+      "DECLARED_BY": "délivrance déclarée par {{name}} ({{role}})",
       "COUNTERSIGN": "Contresignature",
       "COUNTERSIGN_ACTION": "Je prends cette décision : contresigner",
       "DONE_BY": "{{name}}, {{at}}",
@@ -14280,6 +14491,7 @@
     "VERIFIER": "Second contrôleur",
     "VERIFIER_HINT": "Un infirmier, une sage-femme ou un médecin de l’établissement, au lit du patient avec vous. Ne peut pas être vous.",
     "VERIFICATION_METHOD": "Méthode de vérification",
+    "VERIFICATION_METHOD_DEFAULT": "Scan du bracelet",
     "REPORT_REACTION": "Déclarer une réaction",
     "REACTION_HINT": "Déclarer une réaction arrête la transfusion et met l'unité en quarantaine.",
     "REACTION_TYPE": "Réaction",
@@ -14828,7 +15040,7 @@
     "BACK_TO_SIGN_IN": "Retour à la connexion"
   },
   "LAB_OPS": {
-    "AGING": "Ancienneté (>24h)",
+    "AGING": "Demandes ouvertes depuis plus de 24 h",
     "AVG_TAT_TODAY": "Délai moyen (jour)",
     "AVG_TAT_WEEK": "Délai moyen (semaine)",
     "CANCELLED_TODAY": "Annulées aujourd'hui",
@@ -14866,7 +15078,8 @@
       "NOT_FOUND_TITLE": "Établissement prestataire introuvable",
       "NOT_FOUND_TEXT": "Il a peut-être été supprimé, ou le lien est incorrect.",
       "NOT_AVAILABLE_TITLE": "Non disponible",
-      "NOT_AVAILABLE_TEXT": "Cette page n'est pas disponible pour votre compte dans cet établissement. Si vous pensez qu'elle devrait l'être, contactez l'administrateur de votre établissement."
+      "NOT_AVAILABLE_TEXT": "Cette page n'est pas disponible pour votre compte dans cet établissement. Si vous pensez qu'elle devrait l'être, contactez l'administrateur de votre établissement.",
+      "NOT_CHECKED": "Non vérifié"
     },
     "LIST": {
       "TITLE": "Établissements prestataires",
@@ -14883,7 +15096,9 @@
       "COL_LIFECYCLE": "Cycle de vie",
       "COL_SUBMITTED": "Soumis le",
       "EMPTY_TITLE": "Aucun établissement prestataire",
-      "EMPTY_TEXT": "Aucune pharmacie ni aucun laboratoire ne correspond à ces filtres."
+      "EMPTY_TEXT": "Aucune pharmacie ni aucun laboratoire ne correspond à ces filtres.",
+      "SEARCH": "Rechercher",
+      "SEARCH_PLACEHOLDER": "Nom, code ou ville"
     },
     "FORM": {
       "CREATE_TITLE": "Nouvel établissement prestataire",
@@ -14966,7 +15181,10 @@
       "REVOKED": "Vérification révoquée ; l'établissement est suspendu.",
       "SUSPENDED": "Établissement suspendu.",
       "RESTORED": "Établissement rétabli.",
-      "ARCHIVED": "Établissement archivé."
+      "ARCHIVED": "Établissement archivé.",
+      "DECIDED_BY": "Décidé par",
+      "EVENTS_TITLE": "Journal de l'établissement",
+      "EVENTS_EMPTY": "Aucun événement enregistré."
     },
     "VERIFY": {
       "TITLE": "Vérifier l'établissement",
@@ -15076,6 +15294,20 @@
       "RECORD_OTHER": "Autre",
       "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rôle attribué : {{role}}"
+    },
+    "LIFECYCLE_STATE": {
+      "PENDING_VERIFICATION": "En attente de vérification",
+      "REJECTED_NOT_ACTIVATED": "Non activé (dossier rejeté)",
+      "VERIFICATION_REVOKED": "Suspendu (vérification révoquée)"
+    },
+    "EVENT": {
+      "PROVIDER_CREATED": "Établissement enregistré, dossier soumis",
+      "PROVIDER_VERIFIED": "Dossier vérifié",
+      "PROVIDER_REJECTED": "Dossier rejeté",
+      "PROVIDER_EVIDENCE_RESUBMITTED": "Nouveau dossier soumis",
+      "PROVIDER_VERIFICATION_REVOKED": "Vérification révoquée",
+      "HOSPITAL_SUSPENDED": "Établissement suspendu",
+      "HOSPITAL_RESTORED": "Établissement rétabli"
     }
   },
   "PHARMACY_CLAIMS": {
@@ -15618,13 +15850,14 @@
     "LOADED_CLAIMS": "demandes chargées",
     "CLAIMS_NONE_HINT": "Aucune demande pour le moment. Actualisez la liste pour vérifier les nouvelles demandes.",
     "CLAIMS_EMPTY_HINT": "Aucune demande pour ce filtre. Changez de statut ou actualisez la liste.",
-    "LOADED_MOVEMENTS": "mouvements chargés pour ce filtre",
-    "STOCK_HINT": "Consultez le lot, le motif et l’auteur de chaque mouvement.",
+    "LOADED_MOVEMENTS": "mouvements affichés",
+    "STOCK_HINT": "Chaque mouvement indique son médicament, son lot, son motif et son auteur.",
     "LOADED_QUEUE": "ordonnances sur cette page de la file",
     "LOADED_QUEUE_ONE": "ordonnance sur cette page de la file",
     "DISPENSE_HINT": "Vérifiez le patient, le médicament et la quantité avant la délivrance.",
     "ROUTING_DECISION": "Choisir une orientation",
-    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres"
+    "VISIBLE_INTERACTIONS": "interactions correspondant aux filtres",
+    "LOADED_MOVEMENTS_ONE": "mouvement affiché"
   },
   "LAB_EVOLUTION": {
     "TITLE": "Évolution du résultat",
@@ -16149,10 +16382,10 @@
       "DATE": "Jour",
       "LOAD_FAILED": "Le rapprochement n’a pas pu être chargé.",
       "RECONCILED": "Journée rapprochée : aucun écart.",
-      "DIFFERENCES": "{{count}} écart(s) à examiner.",
+      "DIFFERENCES": "{{count}} écarts à examiner.",
       "MONEY": "Argent du jour",
       "SALES": "Ventes au comptoir",
-      "COUNT": "{{count}} opération(s)",
+      "COUNT": "{{count}} opérations",
       "DISPENSE_PAYMENTS": "Paiements des délivrances",
       "REFUNDS": "Remboursements remis",
       "NET": "Net encaissé",
@@ -16190,7 +16423,9 @@
       "DEFERRED_STAY": "dont comptes de séjour : {{amount}}",
       "HANDED_OVER_BY": "remis par {{name}}",
       "OVERRIDE_REVIEWED": "Revue par la comptabilité",
-      "OVERRIDE_TO_REVIEW": "À revoir par la comptabilité"
+      "OVERRIDE_TO_REVIEW": "À revoir par la comptabilité",
+      "DIFFERENCES_ONE": "{{count}} écart à examiner.",
+      "COUNT_ONE": "{{count}} opération"
     },
     "ONESTEP": {
       "DEFER_LABEL": "Remettre « à facturer » : motif",
@@ -16884,7 +17119,13 @@
       "PAGES": "Pages des parts assureurs",
       "PAGE": "Page {{page}} sur {{pages}}",
       "PREVIOUS": "Précédente",
-      "NEXT": "Suivante"
+      "NEXT": "Suivante",
+      "BATCH": "Bordereau",
+      "NO_BATCH": "Sur aucun bordereau",
+      "DECIDED_ON": "Dernier changement",
+      "REFUSAL_REASON": "Refusé par l’organisme : {{reason}}",
+      "PAID_SO_FAR": "Déjà payé par l’organisme : {{amount}}",
+      "PARTLY_REJECTED": "Refusé par l’organisme ({{amount}}) : {{reason}}"
     },
     "LINE": {
       "VALUE": "N° de préautorisation {{number}}",
@@ -16896,6 +17137,219 @@
       "SAVED": "Numéro de préautorisation enregistré.",
       "SAVED_WITH_ORDER": "Numéro de préautorisation enregistré sur l’acte et sur sa demande d’imagerie.",
       "FAILED": "Le numéro de préautorisation n’a pas pu être enregistré."
+    },
+    "NAV": {
+      "LABEL": "Écrans des réclamations assureurs",
+      "SHARES": "Parts assureurs",
+      "BATCHES": "Bordereaux",
+      "PAYMENTS": "Règlements assureurs",
+      "RECEIVABLES": "Créances assureurs"
+    },
+    "BATCHES": {
+      "TITLE": "Bordereaux",
+      "SUBTITLE": "Les bordereaux envoyés à chaque organisme payeur, par période, et où en est leur règlement.",
+      "NEW_TITLE": "Nouveau bordereau",
+      "NEW_HINT": "Le brouillon reprend toutes les parts à réclamer de cet organisme dont la date des soins est dans la période (la date de sortie pour une hospitalisation). Vous pouvez ajouter ou retirer des parts avant l’envoi.",
+      "NEW_REQUIRED": "Choisissez l’organisme payeur et saisissez la période.",
+      "CHOOSE_PAYER": "Choisir un organisme",
+      "CREATE": "Préparer le brouillon",
+      "CREATED": "Brouillon de bordereau créé.",
+      "CREATE_FAILED": "Le bordereau n’a pas pu être créé.",
+      "VIEW_OPEN": "En cours",
+      "VIEW_CLOSED": "Soldés ou annulés",
+      "LOAD_FAILED": "Les bordereaux n’ont pas pu être chargés.",
+      "EMPTY": "Aucun bordereau ici.",
+      "DRAFT_NAME": "Brouillon",
+      "PERIOD": "Période",
+      "SUBMITTED_ON": "Envoyé le",
+      "CLAIMED": "Réclamé",
+      "PAID": "Payé par l’organisme",
+      "OUTSTANDING": "Reste dû",
+      "OPEN": "Ouvrir"
+    },
+    "BATCH": {
+      "LOAD_FAILED": "Ce bordereau n’a pas pu être chargé.",
+      "BACK": "Retour aux bordereaux",
+      "PERIOD_LINE": "Soins du {{from}} au {{to}}",
+      "SUMMARY": "Récapitulatif",
+      "LINES": "Lignes",
+      "GROSS": "Montant facturé",
+      "PATIENT_SHARE": "Part patient",
+      "REBILLED": "Refacturé au patient",
+      "WRITTEN_OFF": "Passé en perte",
+      "WRITE_OFF_PENDING": "Perte demandée",
+      "PAYER_REFERENCE": "Référence de l’organisme",
+      "CANCELLED_LINE": "Annulé : {{reason}}",
+      "EXPORT_PDF": "Télécharger le PDF",
+      "EXPORT_CSV": "Télécharger le CSV",
+      "EXPORT_FAILED": "Le fichier n’a pas pu être téléchargé.",
+      "SEND_TITLE": "Envoyer à l’organisme",
+      "WARNINGS": "Points à vérifier avant l’envoi : {{count}}. Ils n’empêchent pas l’envoi.",
+      "SUBMIT": "Marquer comme envoyé",
+      "SUBMIT_CONFIRM": "Envoyer ce bordereau de {{amount}} à {{payer}} ?",
+      "SUBMIT_WARNINGS": "Points encore à vérifier : {{count}}. Une fois envoyé, les lignes ne peuvent plus être modifiées.",
+      "SUBMITTED": "Bordereau envoyé et numéroté.",
+      "DELETE": "Supprimer le brouillon",
+      "DELETE_CONFIRM": "Supprimer ce brouillon de bordereau ?",
+      "DELETED": "Brouillon supprimé.",
+      "RECEIPT_TITLE": "Réception par l’organisme",
+      "RECEIVED_ON": "Reçu par l’organisme le",
+      "RECEIPT_SAVED": "Date de réception enregistrée.",
+      "CANCEL": "Annuler le bordereau",
+      "CANCEL_REASON": "Motif de l’annulation",
+      "CANCELLED": "Bordereau annulé : ses parts sont de nouveau à réclamer.",
+      "LINES_TITLE": "Actes réclamés",
+      "NO_LINES": "Aucun acte sur ce bordereau.",
+      "DISCHARGED": "Sortie le",
+      "DOCUMENTS": "Pièces jointes (ordonnance, compte rendu, lettre de prise en charge…)",
+      "DOCUMENTS_LINE": "Pièces jointes : {{list}}",
+      "DOCUMENTS_SAVED": "Pièces jointes enregistrées.",
+      "REMOVE_SHARE": "Retirer cette facture",
+      "SHARE_REMOVED": "Facture retirée du bordereau.",
+      "ADD_SHARE": "Ajouter",
+      "SHARE_ADDED": "Facture ajoutée au bordereau.",
+      "REFUSAL_LINE": "Refusé par l’organisme ({{amount}}) : {{reason}}",
+      "REFUSE": "Saisir un refus",
+      "ASK_WRITE_OFF": "Demander un passage en perte",
+      "REFUSAL_CLASS": "Nature du motif",
+      "RESOLUTION": "Suite à donner",
+      "WRITE_OFF_CODE": "Code motif de la perte",
+      "SUPPORTING_DOCUMENT": "Pièce justificative (référence)",
+      "PAYER_REASON": "Motif donné par l’organisme",
+      "WRITE_OFF_REASON_TEXT": "Motif du passage en perte",
+      "REBILL_FINANCE_ONLY": "Seuls l’administrateur de l’établissement ou le comptable peuvent refacturer un montant refusé au patient.",
+      "REBILL_CONFIRM": "Refacturer {{amount}} à {{patient}} ? Le patient devra ce montant.",
+      "REFUSAL_SAVED": "Refus enregistré.",
+      "WRITE_OFF_ASKED": "Passage en perte demandé : une autre personne doit l’approuver.",
+      "AVAILABLE_TITLE": "Autres parts de cet organisme à réclamer",
+      "NO_AVAILABLE": "Aucune autre part à réclamer pour cet organisme.",
+      "FAILED": "La modification n’a pas pu être enregistrée.",
+      "DATE_REQUIRED": "Saisissez la date.",
+      "REASON_REQUIRED": "Saisissez le motif.",
+      "AMOUNT_INVALID": "Saisissez un montant entier, au plus ce qui reste attendu sur la ligne.",
+      "DOCUMENT_REQUIRED": "Saisissez la référence de la pièce justificative.",
+      "REMOVE_CONFIRM": "Retirer la facture {{invoice}} de ce bordereau ?",
+      "CANCEL_CONFIRM": "Annuler le bordereau {{number}} ? Ses parts seront de nouveau à réclamer.",
+      "ACTION_REQUIRED": "Renseignez les champs signalés."
+    },
+    "BATCH_STATUS": {
+      "DRAFT": "Brouillon",
+      "SUBMITTED": "Envoyé",
+      "PARTIALLY_SETTLED": "Réglé en partie",
+      "SETTLED": "Soldé",
+      "CANCELLED": "Annulé"
+    },
+    "WARNING": {
+      "MISSING_POLICY_NUMBER": "Numéro de police absent de la couverture.",
+      "COVERAGE_NOT_VERIFIED": "Couverture jamais vérifiée à l’accueil.",
+      "COVERAGE_EXPIRED": "La couverture était expirée le jour des soins.",
+      "MISSING_PRE_AUTHORISATION": "Aucun numéro de prise en charge pour cet acte.",
+      "OUT_OF_PERIOD": "La date des soins est hors de la période du bordereau."
+    },
+    "REFUSAL_CLASS": {
+      "PATIENT_SIDE": "Côté patient (non couvert, plafond atteint, droits non valides)",
+      "PROVIDER_FAULT": "Notre dossier (prise en charge ou pièce manquante, codage, envoi tardif)",
+      "TARIFF_REDUCTION": "Réduction tarifaire (facturé au-dessus du tarif convenu)",
+      "DISPUTED": "Contesté par l’établissement"
+    },
+    "RESOLUTION": {
+      "REBILL_PATIENT": "Refacturer au patient",
+      "WRITE_OFF_REQUEST": "Demander un passage en perte",
+      "RESUBMIT": "Représenter à l’organisme",
+      "CONTEST": "Contester le refus"
+    },
+    "WRITE_OFF_REASON": {
+      "IRRECOVERABLE_AFTER_RECOVERY": "Irrécouvrable après poursuites",
+      "COMMERCIAL_WAIVER": "Abandon commercial ou règlement amiable",
+      "CONTRACTUAL_ADJUSTMENT": "Ajustement contractuel (tarif)"
+    },
+    "WRITE_OFF_STATUS": {
+      "REQUESTED": "En attente d’approbation",
+      "APPROVED": "Approuvé",
+      "REFUSED": "Refusé",
+      "CANCELLED": "Retiré"
+    },
+    "PAYMENT_METHOD": {
+      "BANK_TRANSFER": "Virement bancaire",
+      "CHEQUE": "Chèque",
+      "MOBILE_MONEY": "Mobile money",
+      "CASH": "Espèces"
+    },
+    "PAYMENT_STATUS": {
+      "RECORDED": "Enregistré",
+      "REVERSED": "Annulé"
+    },
+    "PAYMENTS": {
+      "TITLE": "Règlements assureurs",
+      "SUBTITLE": "Ce que chaque organisme a versé, avec sa date et sa référence, et les lignes de bordereau réglées. Jamais un mouvement de caisse.",
+      "RECORD": "Enregistrer un règlement",
+      "FINANCE_ONLY": "Seuls l’administrateur de l’établissement ou le comptable enregistrent, affectent ou annulent un règlement assureur.",
+      "ALLOCATE_TITLE": "Affecter le règlement",
+      "AMOUNT": "Montant reçu (F CFA)",
+      "RECEIVED_ON": "Reçu le",
+      "METHOD": "Mode de règlement",
+      "REFERENCE": "Référence (n° de virement, de chèque ou de reçu)",
+      "NOTE": "Remarque",
+      "ALLOCATE_LINE": "{{payer}}, référence {{reference}} : {{amount}} restent à affecter.",
+      "CHOOSE_PAYER_FIRST": "Choisissez l’organisme pour voir ses lignes de bordereau.",
+      "NO_OPEN_LINES": "Cet organisme n’a aucune ligne de bordereau en attente de règlement. Le montant restera à affecter.",
+      "PROPOSE": "Proposer (les plus anciens d’abord)",
+      "GRID": "Affectation du règlement aux lignes de bordereau",
+      "EXPECTED": "Reste attendu",
+      "ALLOCATED": "Affecté",
+      "ALLOCATED_FOR": "Montant affecté à la facture {{invoice}}",
+      "UNALLOCATED_LINE": "Affecté : {{allocated}} · À affecter : {{left}}",
+      "LOAD_FAILED": "Les règlements assureurs n’ont pas pu être chargés.",
+      "EMPTY": "Aucun règlement assureur enregistré.",
+      "TO_ALLOCATE": "À affecter",
+      "RECORDED_BY": "Enregistré par",
+      "REVERSED_LINE": "Annulé : {{reason}}",
+      "ALLOCATE": "Affecter",
+      "REVERSE": "Annuler ce règlement",
+      "REVERSE_BY_OTHER": "Vous avez enregistré ce règlement : un autre administrateur ou comptable peut l’annuler.",
+      "REVERSE_REASON": "Motif de l’annulation",
+      "ALLOCATION_INVALID": "Saisissez un montant entier, au plus ce qui reste attendu sur la ligne.",
+      "OVER_ALLOCATED": "Les affectations dépassent le montant du règlement.",
+      "NOTHING_ALLOCATED": "Saisissez au moins une affectation.",
+      "ALLOCATED_TOAST": "Règlement affecté.",
+      "REQUIRED": "Saisissez l’organisme, un montant entier, la date et la référence.",
+      "RECORDED_TOAST": "Règlement assureur enregistré.",
+      "FAILED": "Le règlement n’a pas pu être enregistré.",
+      "REVERSED_TOAST": "Règlement assureur annulé."
+    },
+    "RECEIVABLES": {
+      "TITLE": "Créances assureurs",
+      "SUBTITLE": "Ce que chaque organisme doit, depuis quand, et les passages en perte en attente d’une seconde personne.",
+      "LOAD_FAILED": "Ce rapport n’a pas pu être chargé.",
+      "AGEING_TITLE": "Ancienneté des créances",
+      "AGEING_NOTE": "Soldes au {{date}}, par nombre de jours depuis l’envoi de chaque bordereau. Outil de relance : l’ancienneté seule ne justifie jamais une provision.",
+      "NOTHING_OWED": "Aucun organisme ne doit rien.",
+      "NOT_CLAIMED": "À réclamer",
+      "D0_30": "0–30 jours",
+      "D31_60": "31–60 jours",
+      "D61_90": "61–90 jours",
+      "D90": "Plus de 90 jours",
+      "TOTAL": "Tous les organismes",
+      "RECONCILIATION_TITLE": "Rapprochement des bordereaux envoyés",
+      "SENT_FROM": "Envoyés du",
+      "SENT_TO": "Envoyés au",
+      "NO_BATCH": "Aucun bordereau envoyé ni règlement reçu sur cette période.",
+      "RECEIVED": "Reçu"
+    },
+    "WRITE_OFFS": {
+      "TITLE": "Passages en perte à approuver",
+      "EMPTY": "Aucun passage en perte en attente.",
+      "ASKED_BY": "Demandé par",
+      "APPROVE": "Approuver",
+      "APPROVE_CONFIRM": "Passer en perte {{amount}} dus par {{payer}} ? Le patient ne les devra pas.",
+      "APPROVED": "Passage en perte approuvé.",
+      "REFUSE": "Refuser",
+      "REFUSED": "Passage en perte refusé : le montant reste dû.",
+      "REFUSE_REASON": "Motif du refus",
+      "OWN_REQUEST": "Vous l’avez demandé : une autre personne doit décider.",
+      "WITHDRAW": "Retirer",
+      "WITHDRAW_CONFIRM": "Retirer cette demande de passage en perte ?",
+      "WITHDRAWN": "Demande de passage en perte retirée."
     }
   },
   "R70_MONEY": {
@@ -16966,7 +17420,9 @@
         "CLAIMED": "Réclamée",
         "PAID": "Payée",
         "REJECTED": "Refusée",
-        "CANCELLED": "Annulée"
+        "CANCELLED": "Annulée",
+        "PARTIALLY_PAID": "Payée en partie",
+        "WRITTEN_OFF": "Passée en perte"
       }
     },
     "PRICE_LIST": {
@@ -17070,6 +17526,12 @@
     "CODE_SENT_GENERIC": "Un code a été envoyé.",
     "EXPIRES": "Valable jusqu’à {{time}}."
   },
+  "MINOR_RIGHTS": {
+    "UNDER_13": "Ce compte est celui d’un enfant de moins de 13 ans : il est en lecture seule. Un parent ou le tuteur légal effectue cette démarche à l’accueil de l’établissement.",
+    "AGE_13_14": "À 13 et 14 ans, votre compte est en lecture seule. Pour cette démarche, adressez-vous à l’accueil de l’établissement avec un parent ou votre tuteur légal.",
+    "FAMILY_15_17": "Avant 18 ans, donner à un autre adulte l’accès à votre dossier se fait auprès de l’administration de l’établissement, avec un parent ou votre tuteur légal. Vous pouvez retirer vous-même un accès déjà donné, sauf celui d’un parent ou d’un tuteur vérifié.",
+    "SHARING_15_17": "Avant 18 ans, vous pouvez fermer vous-même le partage avec les autres hôpitaux. Pour le rouvrir, adressez-vous à l’administration de l’établissement avec un parent ou votre tuteur légal."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",
     "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",
@@ -17089,6 +17551,11 @@
     "FAILED": "Impossible de terminer cette action. Réessayez.",
     "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
     "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
+    "DOWNLOAD": "Télécharger ma copie (PDF)",
+    "DOWNLOAD_UNTIL": "Copie disponible jusqu’au",
+    "COPY_EXPIRED": "Le délai pour télécharger cette copie est dépassé. Faites une nouvelle demande.",
+    "DOWNLOAD_FAILED": "La copie n’a pas pu être téléchargée. Réessayez.",
+    "DESK_COPY_EXPIRED": "Délai de retrait de la copie dépassé",
     "EXPORT": "Télécharger la copie approuvée (PDF)"
   },
   "URGENT_ALERTS": {
@@ -17140,5 +17607,153 @@
     "RESOLVED_BY_RECORD": "un relevé ultérieur ne justifie plus l’alerte",
     "ACKNOWLEDGED_BY": "acquittée par {{name}}",
     "ACKNOWLEDGED": "acquittée"
+  },
+  "STOCK_COUNT": {
+    "TITLE": "Inventaire physique",
+    "SUBTITLE": "Comptez le stock d’un magasin, faites confirmer chaque écart par une seconde personne et rapprochez les soldes.",
+    "STORE": "Magasin",
+    "TAB": {
+      "COUNTS": "Comptages enregistrés",
+      "SHEET": "Compter le stock",
+      "BALANCE": "Rapprochement des soldes"
+    },
+    "SEARCH": "Rechercher un médicament ou un lot",
+    "FILTER": "Afficher",
+    "FILTERS": {
+      "OPEN": "À traiter",
+      "PENDING": "En attente de confirmation",
+      "OUTDATED": "À recompter",
+      "APPLIED": "Appliqués au stock",
+      "CLOSED": "Clôturés sans ajustement",
+      "ALL": "Tous les comptages"
+    },
+    "STATUS": {
+      "PENDING": "En attente de confirmation",
+      "OUTDATED": "À recompter : le stock a changé",
+      "APPLIED": "Appliqué au stock",
+      "CLOSED": "Clôturé sans ajustement"
+    },
+    "NEW": "Nouveau comptage",
+    "NO_LOT": "Sans lot",
+    "NO_VARIANCE": "Aucun écart",
+    "COL": {
+      "MEDICINE": "Médicament",
+      "BOOK": "Quantité théorique",
+      "COUNTED": "Quantité comptée",
+      "VARIANCE": "Écart"
+    },
+    "EMPTY": "Aucun comptage enregistré pour ce magasin.",
+    "EMPTY_FILTER": "Aucun comptage ne correspond à ce filtre.",
+    "EMPTY_HINT": "Démarrez un comptage pour saisir les quantités comptées lot par lot.",
+    "RECORDED_BY": "Compté par {{name}}, {{date}}",
+    "BY_ON": "{{name}}, {{date}}",
+    "APPLIED": "Ajustement confirmé par",
+    "CLOSED": "Clôturé par",
+    "SAME_PERSON": "Confirmé par la personne qui a compté : aucun autre collègue habilité dans l’établissement.",
+    "OUTDATED_NOTE": "Le stock de ce lot a changé depuis ce comptage : il ne peut plus être appliqué. Recomptez-le, ou clôturez ce comptage.",
+    "RECOUNT": "Recompter",
+    "SHEET": {
+      "START_TITLE": "Démarrer un comptage",
+      "START_EXPLAIN": "Le comptage enregistre ce que vous voyez sur l’étagère. Rien ne change dans le stock tant qu’une seconde personne n’a pas confirmé l’ajustement.",
+      "REASON": "Objet du comptage",
+      "REASON_PLACEHOLDER": "ex. Inventaire mensuel de novembre",
+      "REASON_REQUIRED": "Indiquez l’objet du comptage (300 caractères au maximum).",
+      "START": "Charger les lots à compter",
+      "EXPLAIN": "Saisissez la quantité comptée des lots que vous avez comptés ; une ligne laissée vide n’est pas enregistrée.",
+      "SHOW_EMPTY": "Afficher aussi les lots à zéro ({{count}})",
+      "REFRESH": "Recharger les quantités théoriques",
+      "EMPTY": "Ce magasin n’a aucun article actif.",
+      "EMPTY_HINT": "Ajoutez un article à l’inventaire ou réceptionnez un lot.",
+      "COUNTED_FOR": "Quantité comptée, {{medicine}} {{lot}}",
+      "LINE_SAVED": "Enregistré",
+      "LINE_FAILED": "Ce comptage n’a pas pu être enregistré.",
+      "NOTHING_TYPED": "Saisissez au moins une quantité comptée.",
+      "INVALID_QUANTITY": "Saisissez une quantité comptée positive ou nulle, avec deux décimales au plus.",
+      "PROGRESS": "À enregistrer : {{count}} · Déjà enregistré : {{saved}}",
+      "SAVE": "Enregistrer le comptage",
+      "FINISH": "Terminer",
+      "SAVED": "{{count}} comptages enregistrés. Une seconde personne confirme les écarts dans « Comptages enregistrés ».",
+      "SAVED_ONE": "{{count}} comptage enregistré. Une seconde personne confirme l’écart dans « Comptages enregistrés ».",
+      "REFUSED": "{{count}} lignes refusées : le motif est indiqué sur chaque ligne.",
+      "REFUSED_ONE": "{{count}} ligne refusée : le motif est indiqué sur la ligne.",
+      "DISCARD_TITLE": "Quitter ce comptage ?",
+      "DISCARD_MESSAGE": "{{count}} quantités saisies ne sont pas enregistrées et seront perdues.",
+      "DISCARD_MESSAGE_ONE": "{{count}} quantité saisie n’est pas enregistrée et sera perdue.",
+      "DISCARD_CONFIRM": "Quitter sans enregistrer"
+    },
+    "CONFIRM": {
+      "TITLE": "Confirmer l’ajustement du stock",
+      "OWN_NOTE": "Vous avez enregistré ce comptage : un collègue habilité doit le confirmer. Vous ne pouvez le confirmer vous-même que si l’établissement n’a personne d’autre.",
+      "CHECK": "Je confirme l’ajustement de {{variance}} : le stock de ce lot devient {{quantity}}.",
+      "CHECK_NO_VARIANCE": "Je confirme ce comptage : aucun écart, le stock reste à {{quantity}}.",
+      "CHECK_REQUIRED": "Cochez la confirmation de l’ajustement.",
+      "SUBMIT": "Confirmer",
+      "ACTION": "Confirmer l’ajustement",
+      "ACTION_NO_VARIANCE": "Confirmer (aucun écart)",
+      "DONE": "Ajustement enregistré : le stock est à jour.",
+      "DONE_NO_VARIANCE": "Comptage confirmé : aucun écart, aucun mouvement.",
+      "FAILED": "La confirmation n’a pas pu être enregistrée."
+    },
+    "CLOSE": {
+      "ACTION": "Clôturer",
+      "TITLE": "Clôturer ce comptage ?",
+      "REASON": "Motif de la clôture",
+      "CONFIRM": "Clôturer le comptage",
+      "EXPLAIN": "Le comptage ne sera pas appliqué : rien ne change dans le stock. Il reste dans l’historique avec votre nom et le motif.",
+      "DONE": "Comptage clôturé.",
+      "FAILED": "Le comptage n’a pas pu être clôturé."
+    },
+    "BALANCE": {
+      "EXPLAIN": "Un article est listé ici quand son stock total ne correspond plus à la somme de ses lots. Le rapprochement ramène le total à la somme des lots, après vérification de chaque lot.",
+      "EMPTY": "Le stock total et les lots correspondent pour tous les articles.",
+      "EMPTY_HINT": "Rien à rapprocher dans ce magasin.",
+      "ON_HAND": "Stock total",
+      "LOT_TOTAL": "Somme des lots",
+      "OPEN": "Rapprocher",
+      "READ_ONLY": "Lecture seule",
+      "FORM_TITLE": "Rapprocher le stock de {{name}}",
+      "FORM_EXPLAIN": "Comptez chaque lot et saisissez sa quantité. Chaque quantité doit être le solde de son lot : si un lot diffère, comptez-le d’abord dans « Compter le stock ».",
+      "LOTS": "Lots de l’article",
+      "LOT_BALANCE": "Solde du lot",
+      "RESULT": "Stock total {{onHand}}, somme des lots {{lots}} : ajustement de {{difference}}.",
+      "REASON": "Motif du rapprochement",
+      "CHECK": "Je confirme avoir compté chaque lot : le stock total devient {{total}}.",
+      "SUBMIT": "Rapprocher le stock",
+      "INCOMPLETE": "Saisissez la quantité de chaque lot, le motif et la confirmation.",
+      "LOT_DIFFERS": "Une quantité saisie diffère du solde de son lot. Comptez d’abord ce lot dans « Compter le stock », puis revenez rapprocher.",
+      "DONE": "Stock rapproché : le total correspond aux lots.",
+      "FAILED": "Le rapprochement n’a pas pu être enregistré."
+    }
+  },
+  "STOCK_CONSUMPTION": {
+    "TITLE": "Rapport de consommation",
+    "SUBTITLE": "Ce qu’un magasin a sorti (délivrances et ventes) et repris (retours) sur une période, par médicament.",
+    "STORE": "Magasin",
+    "FROM": "Du",
+    "TO": "Au",
+    "MEDICINE": "Médicament",
+    "MEDICINE_PLACEHOLDER": "Filtrer par nom",
+    "EXPLAIN": "Un an au plus. Les transferts entre magasins ne sont pas comptés : ce ne sont pas des consommations.",
+    "EXPORT": "Exporter (CSV)",
+    "NOTHING_TO_EXPORT": "Rien à exporter pour cette période.",
+    "LOAD_FAILED": "Le rapport n’a pas pu être chargé.",
+    "EMPTY": "Aucune sortie sur cette période.",
+    "EMPTY_SEARCH": "Aucun médicament ne correspond à ce filtre.",
+    "EMPTY_HINT": "Changez la période, le magasin ou le filtre.",
+    "COUNT": "{{count}} lignes, du {{from}} au {{to}}",
+    "COUNT_ONE": "{{count}} ligne, du {{from}} au {{to}}",
+    "COL": {
+      "MEDICINE": "Médicament",
+      "FORM": "Forme",
+      "UNIT": "Unité",
+      "ISSUED": "Sorties",
+      "RETURNED": "Retours",
+      "NET": "Consommation nette",
+      "MOVEMENTS": "Mouvements"
+    },
+    "UNIT_NOT_RECORDED": "unité non enregistrée",
+    "UNIT_NOT_RECORDED_NOTE": "Unité non enregistrée : mouvements antérieurs à l’enregistrement de l’unité. Les quantités sont telles qu’elles ont été saisies.",
+    "PERIOD": "Période",
+    "FILE_NAME": "consommation-stock"
   }
 }

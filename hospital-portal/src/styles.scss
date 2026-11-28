@@ -692,7 +692,7 @@ textarea {
   border: none;
   border-radius: 8px;
   background: #f1f5f9;
-  color: #475569;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 :where(.btn-close):hover {
@@ -956,6 +956,107 @@ textarea {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   QA D4304 (r81): a pinned column sits ABOVE the cells it is pinned over. The
+   pinned cells are the two above: a row's actions cell at any width (r63), and
+   the last column of any table below the desktop width (r65). A role chip or
+   a badge with its own stacking (position, z-index, transform) was drawn
+   across the pinned « Actions » column; the pin now wins, and its background
+   stops at its own padding box so nothing shows through at a row's edge.
+   Nothing here changes a column's width: every table still fits its box at a
+   desktop width (r64) and keeps its last column on screen below it (r65).
+   Guarded by shared/styles/design-layer.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(
+  td:has(> :where(.action-group, .row-actions, .table-actions)),
+  td:last-child:has(> :where(button, a, .btn-sm))
+) {
+  z-index: 2;
+  background-clip: padding-box;
+}
+:where(
+  table:has(
+      > tbody
+        > tr
+        > td:last-child
+        > :where(.action-group, .row-actions, .table-actions, button, a, .btn-sm)
+    )
+    > thead
+    > tr
+    > th:last-child
+) {
+  z-index: 2;
+}
+@media screen and (max-width: 1023px) {
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > :is(thead, tbody, tfoot)
+      > tr
+      > :is(td, th):last-child:not([colspan], :first-child)
+  ) {
+    z-index: 2;
+    background-clip: padding-box;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D4085 (r81): a tab bar that does not fit shows there is more. « Versions »
+   on /platform and « Messages », « Tâches » in the inbox ended past the right
+   edge of a phone with nothing to say so. Every tab bar (a tablist, or a box
+   of tab buttons) scrolls sideways in place, keeps each tab whole, shows a
+   thin scrollbar, and fades its right edge while tabs remain past it (the
+   table scroll cue: no fade on a bar that fits or is scrolled to its end).
+   A bar that wraps its tabs onto a second line has nothing to scroll and is
+   left as it is. Guarded by shared/styles/design-layer.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(
+  [role='tablist'],
+  .tabs,
+  .tab-bar,
+  .tab-nav,
+  .tab-strip,
+  .section-tabs,
+  .rec-tabs,
+  :has(> .tab-btn),
+  :has(> [role='tab'])
+) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+:where(
+    [role='tablist'],
+    .tabs,
+    .tab-bar,
+    .tab-nav,
+    .tab-strip,
+    .section-tabs,
+    .rec-tabs,
+    :has(> .tab-btn),
+    :has(> [role='tab'])
+  )
+  > :where(.tab-btn, .tab, [role='tab'], .rec-tab, .filter-tab, .chart-tab) {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+@supports (animation-timeline: scroll()) {
+  :where(
+    [role='tablist'],
+    .tabs,
+    .tab-bar,
+    .tab-nav,
+    .tab-strip,
+    .section-tabs,
+    .rec-tabs,
+    :has(> .tab-btn),
+    :has(> [role='tab'])
+  ) {
+    animation: table-scroll-cue-edge linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    QA D2798 / E1 (r65): card mode. Under 600 px a list table is a list of
    cards: one card per row, one line per cell, « Label   value ». On /billing
    the invoice number broke over four lines and Total / Solde needed a sideways
@@ -972,8 +1073,8 @@ textarea {
    every page styles its own cells. Opt out with `data-no-cards`.
    Guarded by shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
-@media screen and (max-width: 599px) {
-  table[data-cards]:not(.fc table, .fc) {
+@mixin card-mode($sel) {
+  #{$sel} {
     display: block !important;
     width: 100% !important;
     min-width: 0 !important;
@@ -984,13 +1085,13 @@ textarea {
   /* The header row is gone, not clipped: a clipped header keeps its sort
      buttons in the Tab order, invisible. Each cell carries its header as its
      label, which a screen reader reads with the value. */
-  table[data-cards]:not(.fc table, .fc) > thead {
+  #{$sel} > thead {
     display: none !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) {
+  #{$sel} > :is(tbody, tfoot) {
     display: block !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr {
+  #{$sel} > :is(tbody, tfoot) > tr {
     display: table !important;
     table-layout: fixed;
     border-collapse: separate;
@@ -1005,10 +1106,10 @@ textarea {
   /* The card is white unless the page tints the row (an abnormal result, an
      overdue line, a lot about to expire): zero specificity, so a page's
      `tr.flagged { background }` still shows on a phone. */
-  :where(table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr) {
+  :where(#{$sel} > :is(tbody, tfoot) > tr) {
     background-color: var(--surface);
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
     display: table-row !important;
     position: static !important;
     width: auto !important;
@@ -1028,13 +1129,10 @@ textarea {
     overflow-wrap: anywhere;
     vertical-align: baseline;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th):first-child:not([hidden]) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):first-child:not([hidden]) {
     background-image: none !important;
   }
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
     content: attr(data-label);
     display: table-cell;
     width: 38%;
@@ -1055,24 +1153,16 @@ textarea {
      `white-space: nowrap` on a name, a description or a badge (sized for a
      wide table column) is not inherited from the cell's `normal`, and kept
      the organisation's name and description past the card's edge. */
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)
-    :not(.material-symbols-outlined, .material-icons) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th) :not(.material-symbols-outlined, .material-icons) {
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)
-    :is(div, span, a, p) {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th) :is(div, span, a, p) {
     max-width: 100% !important;
   }
   /* A cell with no header to answer to (an empty-state row, an expanded
      detail, a spanning group title) is a plain full-width block. */
-  table[data-cards]:not(.fc table, .fc)
+  #{$sel}
     > :is(tbody, tfoot)
     > tr
     > :is(td, th):is(:not([data-label]), [data-label='']):not([hidden]) {
@@ -1080,24 +1170,30 @@ textarea {
     padding: 0.45rem 0 !important;
     text-align: left !important;
   }
-  table[data-cards]:not(.fc table, .fc)
-    > :is(tbody, tfoot)
-    > tr
-    > :is(td, th)[data-label='']::before {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th)[data-label='']::before {
     content: none;
   }
   /* A cell with nothing in it adds no empty line to the card. */
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):empty {
+  #{$sel} > :is(tbody, tfoot) > tr > :is(td, th):empty {
     display: none !important;
   }
   /* What a page hides with the `hidden` attribute stays hidden: a collapsed
      detail row, a table kept for later. (A page that hides rows or cells by a
      class of its own on a phone marks its table `data-no-cards`.) */
-  table[data-cards]:not(.fc table, .fc)[hidden],
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot)[hidden],
-  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr[hidden] {
+  #{$sel}[hidden],
+  #{$sel} > :is(tbody, tfoot)[hidden],
+  #{$sel} > :is(tbody, tfoot) > tr[hidden] {
     display: none !important;
   }
+}
+
+@media screen and (max-width: 599px) {
+  @include card-mode('table[data-cards]:not(.fc table, .fc)');
+}
+
+/* D4163: a wide list that opts in with data-cards-tablet reads as cards up to 1023 px too, instead of scrolling sideways inside its box. */
+@media screen and (min-width: 600px) and (max-width: 1023px) {
+  @include card-mode('table[data-cards][data-cards-tablet]:not(.fc table, .fc)');
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

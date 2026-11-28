@@ -14,6 +14,10 @@ public class InstrumentOutboxResponseDTO {
 
     private UUID id;
     private UUID labOrderId;
+    /** QA r81 D4168: which order, patient and test the row carries, without opening it. */
+    private String labOrderCode;
+    private String patientName;
+    private String testName;
     /** Ordering hospital: the tenant context for an unscoped administrator opening a row. */
     private UUID orderingHospitalId;
     private String orderingHospitalName;

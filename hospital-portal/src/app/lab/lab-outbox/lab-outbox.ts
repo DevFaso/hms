@@ -25,6 +25,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import {
@@ -50,6 +51,7 @@ import {
   imports: [
     ModalDialogDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -83,6 +85,11 @@ export class LabOutboxComponent implements OnInit {
   detail = signal<{ message: OutboxMessage; siblings: OutboxMessage[] } | null>(null);
   detailLoading = signal(false);
   private detailRequest = 0;
+
+  /** D4168: the Order column shows only when the list carries an order code, patient or test. */
+  hasOrderColumn = computed(() =>
+    (this.page()?.content ?? []).some((r) => !!(r.labOrderCode || r.patientName || r.testName)),
+  );
 
   /** Display-only reading of the open message; null = show the raw text only. */
   detailSummary = computed(() => {

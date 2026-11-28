@@ -32,7 +32,12 @@ export function localeOffenders(html, file = 'template') {
   const at = (index) => `${file}:${html.slice(0, index).split('\n').length}`;
   for (const m of html.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
     const expr = m[1];
-    if (LAB_VALUE.test(expr) && !/\|\s*labValue\b/.test(expr)) {
+    // Inventory quantities are counted stock units, not clinical result values.
+    // Restrict this exception to the inventory template and its counted-unit pipe.
+    const countedInventoryQuantity =
+      file === 'lab/lab-inventory/lab-inventory.html' &&
+      /^\s*item\.quantity\s*\|\s*countUnit\s*:/.test(expr);
+    if (LAB_VALUE.test(expr) && !/\|\s*labValue\b/.test(expr) && !countedInventoryQuantity) {
       offenders.push(`${at(m.index)} lab value without | labValue: ${expr.trim()}`);
     }
     if (DATE_FIELD.test(expr) && !/\|\s*date(?:Time)?\b/.test(expr)) {
@@ -81,6 +86,27 @@ test('QA D1002 (siblings): lab values and label colons outside lab/ are formatte
 
 test('QA D1002 guard: the scan sees the shapes the defect had', () => {
   assert.equal(localeOffenders('<strong>{{ r.resultValue }}</strong>').length, 1);
+  assert.equal(
+    localeOffenders(
+      '{{ r.resultValue | countUnit: r.unit }}',
+      'lab/lab-inventory/lab-inventory.html',
+    ).length,
+    1,
+  );
+  assert.equal(
+    localeOffenders(
+      '{{ item.quantity | countUnit: item.unit }}',
+      'lab/lab-results/lab-results.html',
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    localeOffenders(
+      '{{ item.quantity | countUnit: item.unit }}',
+      'lab/lab-inventory/lab-inventory.html',
+    ),
+    [],
+  );
   assert.equal(localeOffenders('<td>{{ r.followUpDate || "—" }}</td>').length, 1);
   assert.equal(localeOffenders("{{ 'PORTAL.RESULT' | translate }}: <b>x</b>").length, 1);
   assert.deepEqual(

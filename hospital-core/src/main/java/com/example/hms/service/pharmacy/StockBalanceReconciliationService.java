@@ -31,6 +31,34 @@ public class StockBalanceReconciliationService {
     private final ControlledStockWitness witness;
     private final EntityManager entityManager;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final StockCountService access;
+    private final com.example.hms.repository.pharmacy.PharmacyRepository pharmacies;
+
+    /**
+     * QA D4183: what there is to reconcile at one of the hospital's pharmacies: each active item whose total differs
+     * from the sum of its lots. Read by those who count the stock or read the pharmacy's reconciliation.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.pharmacy.StockBalanceDriftDTO> drifted(UUID pharmacyId) {
+        UUID hospitalId = access.readerHospital();
+        pharmacies.findByIdAndHospital_Id(pharmacyId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("stockCount.notFound"));
+        var drifted = new java.util.ArrayList<com.example.hms.payload.dto.pharmacy.StockBalanceDriftDTO>();
+        for (var item : items.findWithLotBalanceDrift(pharmacyId)) {
+            var lotBalances = lots.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId()).stream()
+                .map(lot -> new com.example.hms.payload.dto.pharmacy.StockBalanceDriftDTO.LotBalance(lot.getId(),
+                    lot.getLotNumber(), lot.getExpiryDate(), lot.getRemainingQuantity())).toList();
+            java.math.BigDecimal lotTotal = lotBalances.stream()
+                .map(com.example.hms.payload.dto.pharmacy.StockBalanceDriftDTO.LotBalance::remainingQuantity)
+                .filter(java.util.Objects::nonNull).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            var medicine = item.getMedicationCatalogItem();
+            drifted.add(new com.example.hms.payload.dto.pharmacy.StockBalanceDriftDTO(item.getId(),
+                StockProductLabel.nameOf(medicine), StockProductLabel.strengthOf(medicine), StockProductLabel.formOf(medicine),
+                item.getUnit(), medicine != null && medicine.isControlled(), item.getQuantityOnHand(), lotTotal,
+                lotTotal.subtract(item.getQuantityOnHand()), item.getStockRevision(), lotBalances));
+        }
+        return drifted;
+    }
 
     @Transactional
     public UUID reconcile(UUID itemId, StockBalanceReconciliationRequest request) {

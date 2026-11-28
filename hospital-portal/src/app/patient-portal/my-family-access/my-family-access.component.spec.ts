@@ -4,8 +4,13 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyFamilyAccessComponent } from './my-family-access.component';
-import { PatientPortalService, ProxyResponse } from '../../services/patient-portal.service';
+import {
+  PatientPortalService,
+  PatientProfileDTO,
+  ProxyResponse,
+} from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { PortalRights } from '../minor-rights';
 import { expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 
 describe('MyFamilyAccessComponent', () => {
@@ -14,6 +19,7 @@ describe('MyFamilyAccessComponent', () => {
 
   const mockPortalService = {
     getMyProxies: () => of([]),
+    getMyProfile: () => of({ id: 'p-1' }),
     getMyProxyAccess: () => of([]),
     grantProxy: () => of({}),
     revokeProxy: () => of({}),
@@ -100,10 +106,12 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
   beforeEach(async () => {
     portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
       'getMyProxies',
+      'getMyProfile',
       'getMyProxyAccess',
       'grantProxy',
       'revokeProxy',
     ]);
+    portal.getMyProfile.and.returnValue(of({ id: 'p-1' } as PatientProfileDTO));
     portal.getMyProxies.and.returnValue(of([]));
     portal.getMyProxyAccess.and.returnValue(of([received]));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
@@ -308,5 +316,83 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     } finally {
       host.remove();
     }
+  });
+
+  // ── QA D4269: a minor's own account ──
+
+  function rightsOf(band: PortalRights['band'], revoke: boolean): PortalRights {
+    return {
+      band,
+      grantFamilyAccess: band === 'ADULT',
+      revokeFamilyAccess: revoke,
+      closeSharing: band === 'ADULT' || band === 'AGE_15_17',
+      reopenSharing: band === 'ADULT',
+      withdrawContactConsent: band === 'ADULT' || band === 'AGE_15_17',
+      giveContactConsent: band === 'ADULT',
+    };
+  }
+
+  function testId(id: string): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+  }
+
+  it('QA D4269: a child under 13 is offered no grant and no withdrawal, and is told who acts', () => {
+    portal.getMyProxies.and.returnValue(of([{ ...received, id: 'g-1' }]));
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: rightsOf('UNDER_13', false) } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+
+    expect(testId('grant-access-toggle')).toBeNull();
+    expect(testId('revoke-proxy-g-1')).toBeNull();
+    expect(testId('minor-rights-notice')?.textContent).toContain('MINOR_RIGHTS.UNDER_13');
+    // The form cannot be opened from code either.
+    component.showGrantForm.set(true);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.grant-form')).toBeNull();
+  });
+
+  it('QA D4269: at 15 to 17 a grant is not offered, a withdrawal is, with the explanation', () => {
+    portal.getMyProxies.and.returnValue(of([{ ...received, id: 'g-1' }]));
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: rightsOf('AGE_15_17', true) } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+
+    expect(testId('grant-access-toggle')).toBeNull();
+    expect(testId('revoke-proxy-g-1')).not.toBeNull();
+    expect(testId('minor-rights-notice')?.textContent).toContain('MINOR_RIGHTS.FAMILY_15_17');
+  });
+
+  it("QA D4269: at 15 to 17 a verified parent's access offers no withdrawal; an adult's does", () => {
+    portal.getMyProxies.and.returnValue(
+      of([
+        { ...received, id: 'g-1' },
+        { ...received, id: 'g-2', verifiedParentOrGuardian: true },
+      ]),
+    );
+    portal.getMyProfile.and.returnValue(
+      of({ id: 'p-1', portalRights: rightsOf('AGE_15_17', true) } as PatientProfileDTO),
+    );
+    fixture.detectChanges();
+    expect(testId('revoke-proxy-g-1')).not.toBeNull();
+    expect(testId('revoke-proxy-g-2')).toBeNull();
+
+    component.rights.set(rightsOf('ADULT', true));
+    fixture.detectChanges();
+    expect(testId('revoke-proxy-g-2')).not.toBeNull();
+  });
+
+  it('QA D4269: an adult, and an account whose rights are not known, keep every action and see no notice', () => {
+    portal.getMyProxies.and.returnValue(of([{ ...received, id: 'g-1' }]));
+    fixture.detectChanges();
+    expect(testId('grant-access-toggle')).not.toBeNull();
+    expect(testId('revoke-proxy-g-1')).not.toBeNull();
+    expect(testId('minor-rights-notice')).toBeNull();
+
+    component.rights.set(rightsOf('ADULT', true));
+    fixture.detectChanges();
+    expect(testId('grant-access-toggle')).not.toBeNull();
+    expect(testId('minor-rights-notice')).toBeNull();
   });
 });

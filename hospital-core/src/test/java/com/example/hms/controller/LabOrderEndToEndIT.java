@@ -7,6 +7,7 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabResult;
+import com.example.hms.model.LabInventoryItem;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.Notification;
@@ -23,6 +24,7 @@ import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabSpecimenRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.LabInventoryItemRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.NotificationRepository;
@@ -139,6 +141,7 @@ class LabOrderEndToEndIT extends BaseIT {
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
+    @Autowired private LabInventoryItemRepository labInventoryItemRepository;
     @Autowired private LabResultRepository labResultRepository;
     @Autowired private NotificationRepository notificationRepository;
 
@@ -162,6 +165,67 @@ class LabOrderEndToEndIT extends BaseIT {
         UUID assignmentId() {
             return assignment.getId();
         }
+    }
+
+    @Test
+    void inventorySearchScopesActiveItemsAndPaginatesByNameOrCode() throws Exception {
+        var items = List.of(
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Alpha").itemCode("MATCH-A").build(),
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Beta").itemCode("MATCH-B").build(),
+            LabInventoryItem.builder().hospital(otherHospital).name("Reagent Foreign").itemCode("MATCH-F").build(),
+            LabInventoryItem.builder().hospital(hospital).name("Reagent Inactive").itemCode("MATCH-I").active(false).build());
+        labInventoryItemRepository.saveAllAndFlush(items);
+        try {
+            var first = labInventoryItemRepository.searchActive(hospital.getId(), "REAGENT", org.springframework.data.domain.PageRequest.of(0, 1));
+            assertThat(first.getTotalElements()).isEqualTo(2);
+            assertThat(first.getContent()).hasSize(1);
+            var second = labInventoryItemRepository.searchActive(hospital.getId(), "match-b", org.springframework.data.domain.PageRequest.of(0, 10));
+            assertThat(second.getContent()).extracting(LabInventoryItem::getItemCode).containsExactly("MATCH-B");
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "foreign", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            // A typed % or _ is a literal character, not a wildcard.
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "%", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            assertThat(labInventoryItemRepository.searchActive(hospital.getId(), "match_a", org.springframework.data.domain.PageRequest.of(0, 10))).isEmpty();
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+                .andExpect(status().isOk());
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", otherHospital.getId())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+                .andExpect(status().isForbidden());
+            mockMvc.perform(get(API + "/lab/inventory/{id}", items.get(2).getId())
+                    .contextPath(API).with(scopedAs(labManager)))
+                .andExpect(status().isForbidden());
+            mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}", otherHospital.getId())
+                    .contextPath(API).with(scopedAs(labManager)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"Test\",\"itemCode\":\"X\",\"quantity\":1,\"reorderThreshold\":0}"))
+                .andExpect(status().isForbidden());
+        } finally {
+            labInventoryItemRepository.deleteAll(items);
+            labInventoryItemRepository.flush();
+        }
+    }
+
+    @Test
+    void labScientistMayReadScopedInventoryAndInstrumentsButNotWrite() throws Exception {
+        for (String area : List.of("inventory", "instruments")) {
+            String path = API + "/lab/" + area + "/hospital/{hospitalId}";
+            mockMvc.perform(get(path, hospital.getId()).contextPath(API).with(scopedAs(scientist)))
+                .andExpect(status().isOk());
+            mockMvc.perform(get(path, otherHospital.getId()).contextPath(API).with(scopedAs(scientist)))
+                .andExpect(status().isForbidden());
+            String body = area.equals("inventory")
+                ? "{\"name\":\"Test\",\"itemCode\":\"X\",\"quantity\":1,\"reorderThreshold\":0}"
+                : "{\"name\":\"Test\",\"serialNumber\":\"X\"}";
+            mockMvc.perform(post(path, hospital.getId()).contextPath(API).with(scopedAs(scientist)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(post(API + "/lab/inventory/hospital/{hospitalId}/search", hospital.getId())
+                .contextPath(API).with(scopedAs(scientist)).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"query\":\"reagent\"}"))
+            .andExpect(status().isOk());
     }
 
     @BeforeEach
@@ -1071,6 +1135,29 @@ class LabOrderEndToEndIT extends BaseIT {
             .build();
     }
 
+    @Test
+    void creationReturnsTheDatabaseGeneratedOrderCode() throws Exception {
+        var jdbc = applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        String url = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<String>) connection -> connection.getMetaData().getURL());
+        assertThat(url).startsWith("jdbc:h2:mem:");
+        String code = "LAB-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(java.util.Locale.ROOT);
+        jdbc.execute("ALTER TABLE lab.lab_orders ALTER COLUMN order_number SET DEFAULT '" + code + "'");
+        try {
+            MvcResult created = mockMvc.perform(post(LAB_ORDERS).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(orderRequest(LocalDateTime.now())))
+                    .with(signedInAs(doctor)).with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.labOrderCode").value(code))
+                .andReturn();
+            UUID id = UUID.fromString(jsonData(created, "id"));
+            mockMvc.perform(get(LAB_ORDERS + "/{id}", id).contextPath(API).with(signedInAs(doctor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.labOrderCode").value(code));
+        } finally {
+            jdbc.execute("ALTER TABLE lab.lab_orders ALTER COLUMN order_number SET DEFAULT NULL");
+        }
+    }
+
     private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
         LabOrderRequestDTO request = orderRequest(orderedAt);
         MvcResult created = mockMvc.perform(post(LAB_ORDERS).contextPath(API)
@@ -1139,6 +1226,19 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     /** A signed-in user as the JWT filter builds one; the hospital scope resolves from their single assignment. */
+    private RequestPostProcessor scopedAs(Actor actor) {
+        return request -> {
+            HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actor.user().getId())
+                .activeHospitalId(hospital.getId())
+                .permittedHospitalIds(java.util.Set.of(hospital.getId(), otherHospital.getId()))
+                .hospitalRoles(java.util.Map.of(hospital.getId(), java.util.Set.of(actor.role()),
+                    otherHospital.getId(), java.util.Set.of("ROLE_RECEPTIONIST")))
+                .build());
+            return signedInAs(actor).postProcessRequest(request);
+        };
+    }
+
     private static RequestPostProcessor signedInAs(Actor actor) {
         CustomUserDetails details = new CustomUserDetails(actor.user().getId(), actor.user().getUsername(), "n/a", true,
             List.of(new SimpleGrantedAuthority(actor.role())));

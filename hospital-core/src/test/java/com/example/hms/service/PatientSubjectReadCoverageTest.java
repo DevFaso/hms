@@ -85,6 +85,9 @@ class PatientSubjectReadCoverageTest {
         entry("PatientPortalController#getMyInvoiceDetail", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
         entry("PatientPortalController#downloadMyInvoicePdf", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
         entry("PatientPortalController#downloadMyReceiptPdf", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
+        // QA D4270: the patient's own approved record copy; another patient's request answers as a missing one.
+        entry("RoiRecordExportController#downloadOwn",
+            "RoiRequestService.copyForSelf(caller's patient): 404 unless the caller filed the request (QA D4270)"),
         entry("PatientPortalController#termSearchMyNotifications",
             "NotificationService.getNotificationsForUser(caller's own username): the body is a typed term, not an id"));
 

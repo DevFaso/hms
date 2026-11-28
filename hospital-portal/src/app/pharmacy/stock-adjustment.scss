@@ -55,9 +55,26 @@
 
 .filter-bar {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 0.75rem;
   margin-bottom: 1rem;
+
+  .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  input {
+    max-width: 100%;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+  }
 
   label {
     font-size: 0.875rem;
@@ -198,11 +215,34 @@
   border-radius: 4px;
 }
 
+// QA D4184 (r81): the reason is read whole. It was cut at 200 px (« Dispensation d'une ordon… ») even at 1440.
 .reason-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 12rem;
+  max-width: 28rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.tx-product {
+  min-width: 11rem;
+  white-space: normal;
+
+  .med-name {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+}
+
+.tx-form,
+.tx-store {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .pharmacy-empty-hint {

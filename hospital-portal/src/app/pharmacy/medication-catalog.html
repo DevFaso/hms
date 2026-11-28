@@ -286,12 +286,12 @@
                     </button>
                     <button
                       class="action-link danger"
-                      [title]="'COMMON.DELETE' | translate"
-                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                      [title]="'PHARMACY.CATALOG_WITHDRAW.ACTION' | translate"
+                      [attr.aria-label]="'PHARMACY.CATALOG_WITHDRAW.ACTION' | translate"
                       data-test="catalog-delete"
                       (click)="confirmDelete(item)"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined">playlist_remove</span>
                     </button>
                   }
                 </div>
@@ -571,6 +571,47 @@
               ></textarea>
             </div>
 
+            <!-- QA D4180 (r81): the entries that look like this one, before the proposal is sent. -->
+            @if (similarEntries().length > 0) {
+              <div class="similar-warning" role="alert" data-test="catalog-similar-warning">
+                <p>
+                  <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                  <strong>{{ 'PHARMACY.CATALOG_DUPLICATE.TITLE' | translate }}</strong>
+                </p>
+                <ul>
+                  @for (entry of similarEntries(); track $index) {
+                    <li>
+                      {{ catalogLabel(entry.label) }}
+                      {{ ' '
+                      }}<span class="chip">{{
+                        entry.state | keyLabel: 'PHARMACY.CATALOG_DUPLICATE.STATE.'
+                      }}</span>
+                      @if (entry.platform) {
+                        {{ ' '
+                        }}<span class="chip">{{
+                          'PHARMACY.CATALOG_DUPLICATE.PLATFORM' | translate
+                        }}</span>
+                      }
+                      @if (entry.exact) {
+                        {{ ' '
+                        }}<span class="chip chip-exact">{{
+                          'PHARMACY.CATALOG_DUPLICATE.EXACT' | translate
+                        }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+                <p>
+                  {{
+                    (hasExactDuplicate()
+                      ? 'PHARMACY.CATALOG_DUPLICATE.EXACT_HINT'
+                      : 'PHARMACY.CATALOG_DUPLICATE.SIMILAR_HINT'
+                    ) | translate
+                  }}
+                </p>
+              </div>
+            }
+
             <!-- Go-live D2 (V385): what is prescribed and dispensed changes through an approval. -->
             <div class="field">
               <label for="changeReason"
@@ -607,17 +648,20 @@
               submitGuardRequired
               type="submit"
               class="btn-primary"
-              [disabled]="saving()"
+              data-test="catalog-submit"
+              [disabled]="saving() || checkingSimilar()"
             >
-              {{
-                saving()
-                  ? editing()
-                    ? ('COMMON.SAVING' | translate)
-                    : ('COMMON.CREATING' | translate)
-                  : editing()
-                    ? ('COMMON.SAVE_CHANGES' | translate)
-                    : ('COMMON.CREATE' | translate)
-              }}
+              <!-- QA D4189 (r81): the button says what it does. A proposal is sent for approval («
+                   Créer » created nothing); with look-alikes shown, sending again is said to be so. -->
+              @if (saving() || checkingSimilar()) {
+                {{ 'COMMON.SAVING' | translate }}
+              } @else if (!needsApproval()) {
+                {{ 'COMMON.SAVE_CHANGES' | translate }}
+              } @else if (similarEntries().length > 0 && !hasExactDuplicate()) {
+                {{ 'PHARMACY.CATALOG_DUPLICATE.SEND_ANYWAY' | translate }}
+              } @else {
+                {{ 'PHARMACY.CATALOG_APPROVAL.SUBMIT_FOR_APPROVAL' | translate }}
+              }
             </button>
           </div>
         </form>
@@ -890,55 +934,24 @@
     </app-reason-dialog>
   }
 
-  <!-- Delete Confirmation -->
-  @if (showDeleteConfirm()) {
-    <div
-      class="modal-backdrop"
-      (click)="cancelDelete()"
-      (keydown.escape)="cancelDelete()"
-      role="presentation"
-      tabindex="-1"
+  <!-- QA D4190 (r81): a withdrawal from the catalogue says why (the shared reason dialog: required, focus
+       in and back); who, when and why are then a line of the entry's history. It asked nothing and said
+       « Supprimer ce médicament du catalogue ? ». -->
+  @if (showDeleteConfirm() && deletingItem(); as withdrawn) {
+    <app-reason-dialog
+      data-test="catalog-withdraw-dialog"
+      titleKey="PHARMACY.CATALOG_WITHDRAW.TITLE"
+      labelKey="PHARMACY.CATALOG_WITHDRAW.REASON"
+      confirmKey="PHARMACY.CATALOG_WITHDRAW.CONFIRM"
+      dismissKey="COMMON.BACK"
+      [busy]="deleting()"
+      (confirmed)="executeDelete($event)"
+      (cancelled)="cancelDelete()"
     >
-      <dialog
-        class="modal"
-        [open]="showDeleteConfirm()"
-        (click)="$event.stopPropagation()"
-        (keydown)="$event.stopPropagation()"
-        tabindex="-1"
-        appModalDialog
-        aria-labelledby="medication-catalog-dialog-title-2"
-        (escaped)="cancelDelete()"
-      >
-        <div class="modal-header">
-          <h2 id="medication-catalog-dialog-title-2">{{ 'COMMON.DELETE' | translate }}</h2>
-          <button
-            [attr.aria-label]="'COMMON.CLOSE' | translate"
-            class="modal-close"
-            (click)="cancelDelete()"
-          >
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p class="delete-warning">
-            {{ 'PHARMACY.DELETE_MED_CONFIRM' | translate }}
-            <strong>{{ deletingItem()?.nameFr }}</strong>
-          </p>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">
-            {{ 'COMMON.CANCEL' | translate }}
-          </button>
-          <button
-            type="button"
-            class="btn-danger"
-            [disabled]="deleting()"
-            (click)="executeDelete()"
-          >
-            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
-          </button>
-        </div>
-      </dialog>
-    </div>
+      <p>
+        <strong>{{ withdrawn.nameFr }}</strong>
+      </p>
+      <p>{{ 'PHARMACY.CATALOG_WITHDRAW.EXPLAIN' | translate }}</p>
+    </app-reason-dialog>
   }
 </div>

@@ -11,6 +11,8 @@ export interface SubscriptionPlan {
   includedSeats: number;
   featureKeys: string;
   active: boolean;
+  /** QA D4071: how many organizations hold this plan as their active subscription. */
+  activeOrganizationCount?: number;
   createdAt: string | null;
   updatedAt: string | null;
 }

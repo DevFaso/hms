@@ -459,6 +459,51 @@ class StaffSchedulingServiceImplTest {
         verify(leaveRepository, never()).save(any());
     }
 
+    /**
+     * QA r81 D4179: an approved leave can be withdrawn. One under way ends
+     * yesterday (the person is present again today), one not started is
+     * cancelled, one already over is refused.
+     */
+    @Test
+    void d4179_approvedLeave_canBeEndedEarlyOrCancelled() {
+        UUID hospitalA = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        com.example.hms.model.User requester = new com.example.hms.model.User();
+        requester.setId(requesterId);
+        actAt(hospitalA);
+        when(roleValidator.getCurrentUserId()).thenReturn(requesterId);
+        lenient().when(userRepository.findById(requesterId)).thenReturn(Optional.of(requester));
+        when(leaveRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        com.example.hms.model.StaffLeaveRequest underWay = approvedLeave(hospitalA, requester, TODAY.minusDays(3), TODAY.plusDays(4));
+        service.cancelLeave(underWay.getId(), Locale.ENGLISH);
+        assertThat(underWay.getStatus()).isEqualTo(com.example.hms.enums.StaffLeaveStatus.APPROVED);
+        assertThat(underWay.getEndDate()).isEqualTo(TODAY.minusDays(1));
+
+        com.example.hms.model.StaffLeaveRequest upcoming = approvedLeave(hospitalA, requester, TODAY.plusDays(2), TODAY.plusDays(5));
+        service.cancelLeave(upcoming.getId(), Locale.ENGLISH);
+        assertThat(upcoming.getStatus()).isEqualTo(com.example.hms.enums.StaffLeaveStatus.CANCELLED);
+        assertThat(upcoming.getEndDate()).isEqualTo(TODAY.plusDays(5));
+
+        com.example.hms.model.StaffLeaveRequest over = approvedLeave(hospitalA, requester, TODAY.minusDays(9), TODAY.minusDays(2));
+        assertThatThrownBy(() -> service.cancelLeave(over.getId(), Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class);
+        assertThat(over.getEndDate()).isEqualTo(TODAY.minusDays(2));
+    }
+
+    private com.example.hms.model.StaffLeaveRequest approvedLeave(UUID hospitalId, com.example.hms.model.User requester,
+            LocalDate start, LocalDate end) {
+        com.example.hms.model.StaffLeaveRequest leave = com.example.hms.model.StaffLeaveRequest.builder()
+            .hospital(buildStaff(UUID.randomUUID(), hospitalId).getHospital())
+            .requestedBy(requester)
+            .status(com.example.hms.enums.StaffLeaveStatus.APPROVED)
+            .startDate(start).endDate(end)
+            .build();
+        leave.setId(UUID.randomUUID());
+        when(leaveRepository.findDetailedById(leave.getId())).thenReturn(Optional.of(leave));
+        return leave;
+    }
+
     /** QA D602: hospital A's own admin cannot move A's shift to hospital B through the body either. */
     @Test
     void d602_ownAdmin_cannotMoveTheShiftToAnotherHospital() {

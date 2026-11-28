@@ -593,6 +593,78 @@ export const routes: Routes = [
           import('./billing/payers/payers.component').then((m) => m.PayersComponent),
       },
 
+      // Insurer claims PRs 2-4 (QA D3983): bordereaux, insurer payments and receivables; mirrors
+      // InsurerClaimController (the hospital admin and the accountant alone record payments and decide write-offs;
+      // each screen shows the other claims roles what they may read).
+      {
+        path: 'billing/bordereaux',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/claim-batches.component').then(
+            (m) => m.ClaimBatchesComponent,
+          ),
+      },
+      {
+        path: 'billing/bordereaux/:id',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/claim-batch-detail.component').then(
+            (m) => m.ClaimBatchDetailComponent,
+          ),
+      },
+      {
+        path: 'billing/reglements-assureurs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/insurer-payments.component').then(
+            (m) => m.InsurerPaymentsComponent,
+          ),
+      },
+      {
+        path: 'billing/creances-assureurs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/insurer-receivables.component').then(
+            (m) => m.InsurerReceivablesComponent,
+          ),
+      },
+
       // QA D2706 (r70): the hospital's insurer shares in one list, the claims reviewer's own screen; mirrors
       // GET /billing-invoices/payer-shares (InvoicePayerShareController).
       {
@@ -907,6 +979,7 @@ export const routes: Routes = [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -942,6 +1015,7 @@ export const routes: Routes = [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -1591,6 +1665,41 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
+      },
+      {
+        // QA D4183 (r81): the physical stock counts, their confirmation and the balance
+        // reconciliation; roles mirror the reads of pharmacy.StockCountController (the accountant
+        // reads; each write is offered from action-permissions.ts).
+        path: 'pharmacy/stock-count',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./pharmacy/stock-count').then((m) => m.StockCountComponent),
+      },
+      {
+        // QA D4183 (r81): the consumption report; roles mirror StockCountController#consumption.
+        path: 'pharmacy/consumption',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-consumption').then((m) => m.StockConsumptionComponent),
       },
       {
         // QA D967: the controlled-drug register; roles mirror ControlledRegisterController.

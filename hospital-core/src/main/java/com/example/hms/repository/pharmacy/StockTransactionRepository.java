@@ -78,6 +78,17 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     java.util.List<ReturnableTransferRow> findReturnablePairedTransfers(@Param("itemId") UUID itemId,
         @Param("withLot") boolean withLot, @Param("lotId") UUID lotId);
 
+    /** QA D4184: {@code [transferId, destination store name]} for the transfers among these movements. */
+    @Query("SELECT t.id, p.name FROM StockTransaction t, com.example.hms.model.pharmacy.Pharmacy p "
+         + "WHERE t.id IN :ids AND t.transactionType = com.example.hms.enums.StockTransactionType.TRANSFER "
+         + "AND p.id = t.referenceId AND p.hospital.id = t.inventoryItem.pharmacy.hospital.id")
+    java.util.List<Object[]> transferDestinationNames(@Param("ids") Collection<UUID> ids);
+
+    /** QA D4184: {@code [receiptId, source store name]} for the receipts among these movements that a transfer made. */
+    @Query("SELECT r.id, o.inventoryItem.pharmacy.name FROM StockTransaction r, StockTransaction o "
+         + "WHERE r.id IN :ids AND o.id = r.transferOriginId")
+    java.util.List<Object[]> transferSourceNames(@Param("ids") Collection<UUID> ids);
+
     /** The counterpart receipt of one atomic inter-store transfer. */
     java.util.Optional<StockTransaction> findByTransferOriginId(UUID transferOriginId);
 

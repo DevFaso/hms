@@ -36,18 +36,30 @@ public class LabInstrumentController {
 
     @Operation(summary = "List instruments for a hospital")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Page<LabInstrumentResponseDTO>> list(
             @PathVariable UUID hospitalId,
             @ParameterObject Pageable pageable,
+            @org.springframework.web.bind.annotation.RequestParam(name = "includeInactive", defaultValue = "false")
+            boolean includeInactive,
             @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(instrumentService.getByHospital(hospitalId, pageable, locale));
+        return ResponseEntity.ok(instrumentService.getByHospital(hospitalId, includeInactive, pageable, locale));
+    }
+
+    @Operation(summary = "Reactivate a deactivated instrument")
+    @PostMapping("/{id}/reactivate")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<LabInstrumentResponseDTO> reactivate(
+            @PathVariable UUID id,
+            @RequestHeader(name = "Accept-Language", required = false) String lang) {
+        Locale locale = parseLocale(lang);
+        return ResponseEntity.ok(instrumentService.reactivate(id, locale));
     }
 
     @Operation(summary = "Get instrument by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<LabInstrumentResponseDTO> getById(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) String lang) {

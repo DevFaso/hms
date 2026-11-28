@@ -70,6 +70,36 @@
             </div>
           }
 
+          @if (culture.otherReportsOnOrder?.length) {
+            <!-- QA r81 D4175: the other reports of the same order, so neither is read alone. -->
+            <div class="other-reports" role="note" data-testid="other-reports">
+              <span class="material-symbols-outlined" aria-hidden="true">library_books</span>
+              <div>
+                <p>
+                  {{
+                    (!culture.latestOnOrder
+                      ? 'MICRO.OTHER_REPORTS_LATER'
+                      : culture.otherReportsOnOrder!.length === 1
+                        ? 'MICRO.OTHER_REPORTS_EARLIER'
+                        : 'MICRO.OTHER_REPORTS_EARLIER_MANY'
+                    ) | translate
+                  }}
+                </p>
+                <ul>
+                  @for (other of culture.otherReportsOnOrder; track other.id) {
+                    <li>
+                      {{ statusLabel(other.status) }} · {{ growthLabel(other.growthResult) }}
+                      @if (other.specimenAccessionNumber) {
+                        · {{ other.specimenAccessionNumber }}
+                      }
+                      · {{ other.createdAt | serverTime | dateTime }}
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          }
+
           <div class="culture-meta">
             @if (culture.collectedAt) {
               <span>

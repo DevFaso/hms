@@ -37,7 +37,7 @@ public class LabInventoryController {
 
     @Operation(summary = "List inventory items for a hospital")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Page<LabInventoryItemResponseDTO>> list(
             @PathVariable UUID hospitalId,
             @ParameterObject Pageable pageable,
@@ -46,9 +46,25 @@ public class LabInventoryController {
         return ResponseEntity.ok(inventoryService.getByHospital(hospitalId, pageable, locale));
     }
 
+    @com.example.hms.validation.RejectsUnknownFields(com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH)
+    public record InventorySearchRequest(
+        @jakarta.validation.constraints.NotBlank
+        @jakarta.validation.constraints.Size(max = 255) String query) {}
+
+    @Operation(summary = "Search inventory items for a hospital")
+    @PostMapping("/hospital/{hospitalId}/search")
+    @com.example.hms.security.ReadsOnly("a search: the term travels in the body so it stays out of URLs and logs")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<Page<LabInventoryItemResponseDTO>> search(
+            @PathVariable UUID hospitalId, @ParameterObject Pageable pageable,
+            @Valid @RequestBody InventorySearchRequest request,
+            @RequestHeader(name = "Accept-Language", required = false) String lang) {
+        return ResponseEntity.ok(inventoryService.searchByHospital(hospitalId, request.query(), pageable, parseLocale(lang)));
+    }
+
     @Operation(summary = "Get inventory item by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<LabInventoryItemResponseDTO> getById(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) String lang) {

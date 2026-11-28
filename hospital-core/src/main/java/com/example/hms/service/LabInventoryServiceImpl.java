@@ -9,14 +9,13 @@ import com.example.hms.payload.dto.LabInventoryItemRequestDTO;
 import com.example.hms.payload.dto.LabInventoryItemResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabInventoryItemRepository;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,27 +33,34 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     private final LabInventoryItemRepository inventoryRepository;
     private final HospitalRepository hospitalRepository;
     private final LabInventoryItemMapper mapper;
-    private final MessageSource messageSource;
 
     @Override
     public Page<LabInventoryItemResponseDTO> getByHospital(UUID hospitalId, Pageable pageable, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, false);
         return inventoryRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable)
             .map(mapper::toDto);
+    }
+
+    @Override
+    public Page<LabInventoryItemResponseDTO> searchByHospital(UUID hospitalId, String search, Pageable pageable, Locale locale) {
+        LabFacilityAccess.require(hospitalId, false);
+        if (search == null || search.isBlank()) return inventoryRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable).map(mapper::toDto);
+        return inventoryRepository.searchActive(hospitalId, search.trim(), pageable).map(mapper::toDto);
     }
 
     @Override
     public LabInventoryItemResponseDTO getById(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), false);
         return mapper.toDto(item);
     }
 
     @Override
     @Transactional
     public LabInventoryItemResponseDTO create(UUID hospitalId, LabInventoryItemRequestDTO dto, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, true);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
@@ -77,7 +83,8 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     public LabInventoryItemResponseDTO update(UUID id, LabInventoryItemRequestDTO dto, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), true);
 
         // Check item code uniqueness if changed
         if (dto.getItemCode() != null
@@ -101,14 +108,15 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     public void deactivate(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
-        requireHospitalScope(item.getHospital().getId(), locale);
+        requireOwnItem(item, id);
+        LabFacilityAccess.require(item.getHospital().getId(), true);
         item.setActive(false);
         inventoryRepository.save(item);
     }
 
     @Override
     public List<LabInventoryItemResponseDTO> getLowStockItems(UUID hospitalId, Locale locale) {
-        requireHospitalScope(hospitalId, locale);
+        LabFacilityAccess.require(hospitalId, true);
         return inventoryRepository.findLowStockItems(hospitalId).stream()
             .map(mapper::toDto)
             .toList();
@@ -116,17 +124,23 @@ public class LabInventoryServiceImpl implements LabInventoryService {
 
     // ── helpers ───────────────────────────────────────────────────
 
+    /** The acting scope decides, as in {@link LabFacilityAccess}: global view sees every hospital, a
+     *  super-admin pinned to a hospital sees that one, anyone else their own hospitals. */
     private boolean hasHospitalAccess(UUID hospitalId) {
         if (hospitalId == null) return false;
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) return true;
-        return HospitalScopeUtils.resolveScope(context).contains(hospitalId);
+        if (ActingScopeResolver.currentScope() instanceof ActingScope.Global) return true;
+        UUID superAdminPin = ActingScopeResolver.superAdminPinnedHospitalIdOrNull();
+        if (superAdminPin != null) return superAdminPin.equals(hospitalId);
+        return HospitalScopeUtils.resolveScope(HospitalContextHolder.getContextOrEmpty()).contains(hospitalId);
     }
 
-    private void requireHospitalScope(UUID hospitalId, Locale locale) {
-        if (!hasHospitalAccess(hospitalId)) {
-            throw new AccessDeniedException(
-                messageSource.getMessage("access.denied", null, "Access denied", locale));
+    /**
+     * Another hospital's item answers exactly as an unknown id (404): a 403
+     * here told the caller that the id exists somewhere else.
+     */
+    private void requireOwnItem(LabInventoryItem item, UUID id) {
+        if (item.getHospital() == null || !hasHospitalAccess(item.getHospital().getId())) {
+            throw new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id);
         }
     }
 

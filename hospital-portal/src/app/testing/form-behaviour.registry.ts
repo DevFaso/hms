@@ -10,6 +10,10 @@ import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
 import { CashSessionComponent } from '../billing/cash-session/cash-session.component';
 import { CashSupervisorComponent } from '../billing/cash-session/cash-supervisor.component';
+import { ClaimBatchDetailComponent } from '../billing/insurer-claims/claim-batch-detail.component';
+import { ClaimBatchesComponent } from '../billing/insurer-claims/claim-batches.component';
+import { InsurerPaymentsComponent } from '../billing/insurer-claims/insurer-payments.component';
+import { InsurerReceivablesComponent } from '../billing/insurer-claims/insurer-receivables.component';
 import { ImagingPreAuthEntryComponent } from '../billing/line-pre-authorisation/imaging-pre-auth-entry.component';
 import { LinePreAuthorisationComponent } from '../billing/line-pre-authorisation/line-pre-authorisation.component';
 import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
@@ -63,6 +67,8 @@ import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
 import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconciliation';
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
+import { StockConsumptionComponent } from '../pharmacy/stock-consumption';
+import { StockCountComponent } from '../pharmacy/stock-count';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
 import { WitnessConfirmComponent } from '../pharmacy/witness-confirm/witness-confirm.component';
 import { CheckinDialogComponent } from '../reception/checkin-dialog/checkin-dialog.component';
@@ -128,6 +134,26 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashSupervisorComponent',
     file: 'billing/cash-session/cash-supervisor.component',
     type: CashSupervisorComponent,
+  },
+  {
+    name: 'ClaimBatchDetailComponent',
+    file: 'billing/insurer-claims/claim-batch-detail.component',
+    type: ClaimBatchDetailComponent,
+  },
+  {
+    name: 'ClaimBatchesComponent',
+    file: 'billing/insurer-claims/claim-batches.component',
+    type: ClaimBatchesComponent,
+  },
+  {
+    name: 'InsurerPaymentsComponent',
+    file: 'billing/insurer-claims/insurer-payments.component',
+    type: InsurerPaymentsComponent,
+  },
+  {
+    name: 'InsurerReceivablesComponent',
+    file: 'billing/insurer-claims/insurer-receivables.component',
+    type: InsurerReceivablesComponent,
   },
   {
     name: 'ImagingPreAuthEntryComponent',
@@ -362,6 +388,12 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     file: 'pharmacy/stock-adjustment',
     type: StockAdjustmentComponent,
   },
+  {
+    name: 'StockConsumptionComponent',
+    file: 'pharmacy/stock-consumption',
+    type: StockConsumptionComponent,
+  },
+  { name: 'StockCountComponent', file: 'pharmacy/stock-count', type: StockCountComponent },
   { name: 'StockRoutingComponent', file: 'pharmacy/stock-routing', type: StockRoutingComponent },
   {
     name: 'WitnessConfirmComponent',

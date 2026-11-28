@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -95,6 +96,73 @@ class OrganizationLifecycleServiceImplTest {
 
     private TenantLifecycleActionRequestDTO withReason(String reason) {
         return TenantLifecycleActionRequestDTO.builder().reason(reason).build();
+    }
+
+    // ── deactivate / reactivate (QA D4317) ─────────────────────────────
+
+    @Test
+    @DisplayName("QA D4317: an organization with an active facility is not deactivated, and nothing changes")
+    void deactivateRefusedWithActiveFacility() {
+        org.setActive(true);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.countActiveFacilities(orgId)).thenReturn(2L);
+
+        assertThatThrownBy(() -> service.deactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
+        verify(organizationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D4317: deactivating never suspends on its own, even with no active facility: users may still be assigned")
+    void deactivateNeverSuspends() {
+        org.setActive(true);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.countActiveFacilities(orgId)).thenReturn(0L);
+
+        assertThatThrownBy(() -> service.deactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
+        assertThat(org.getSuspendedAt()).isNull();
+        verify(organizationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D4317: deactivating an organization already out of ACTIVE only aligns its flag, and never touches its state")
+    void deactivateOnlyAlignsTheFlagOutsideActive() {
+        org.setActive(true);
+        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+
+        service.deactivate(orgId);
+        assertThat(org.isActive()).isFalse();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
+        verify(organizationRepository).save(org);
+
+        service.deactivate(orgId);
+        verify(organizationRepository, times(1)).save(org);
+    }
+
+    @Test
+    @DisplayName("QA D4317: a suspended or archived organization is not reactivated from an edit; a legacy flag is aligned")
+    void reactivateOnlyAlignsAnActiveLifecycle() {
+        org.setActive(false);
+        org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+
+        assertThatThrownBy(() -> service.reactivate(orgId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(org.isActive()).isFalse();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
+
+        org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
+        service.reactivate(orgId);
+        assertThat(org.isActive()).isTrue();
+        assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
     }
 
     // ── suspend ────────────────────────────────────────────────────────

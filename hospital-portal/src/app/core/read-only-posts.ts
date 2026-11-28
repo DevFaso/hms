@@ -27,6 +27,7 @@ export const READ_ONLY_POST_ROUTES: readonly string[] = [
   '/departments/search',
   '/empi/candidates',
   '/encounters/by-doctor',
+  '/lab/inventory/hospital/{hospitalId}/search',
   '/lookup/appointment/patient/email',
   '/lookup/appointment/patient/mrn',
   '/lookup/appointment/patient/phone',
@@ -52,6 +53,7 @@ export const READ_ONLY_POST_ROUTES: readonly string[] = [
   '/super-admin/audit-search',
   '/super-admin/audit-search/csv',
   '/super-admin/organizations/hierarchy/term-search',
+  '/super-admin/providers/search',
   '/super-admin/security/rules/simulations',
   '/users/search',
 ];

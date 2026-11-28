@@ -283,6 +283,34 @@ describe('Dashboard navigation & RBAC', () => {
     expect(refillTile?.route).toBe('/refills');
   });
 
+  // ── QA D4200 (r81): the store manager's and the inventory clerk's dashboard ──
+
+  it('QA D4200: names the stock roles and gives them their stock pages, never the generic staff dashboard', () => {
+    const manager = createComponent(['ROLE_STORE_MANAGER'], []);
+    expect(manager.roleLabel()).toBe('DASHBOARD.ROLE.STORE_MANAGER');
+    const routes = manager.stockWorkflowTiles().map((t) => t.route);
+    expect(routes).toContain('/pharmacy/inventory');
+    expect(routes).toContain('/pharmacy/stock-count');
+    TestBed.resetTestingModule();
+
+    const clerk = createComponent(['ROLE_INVENTORY_CLERK'], []);
+    expect(clerk.roleLabel()).toBe('DASHBOARD.ROLE.INVENTORY_CLERK');
+    expect(clerk.stockWorkflowTiles().length).toBeGreaterThan(0);
+  });
+
+  it('QA D4200: the stock card counts the low and the empty items, the emptiest first', () => {
+    const manager = createComponent(['ROLE_STORE_MANAGER'], []);
+    expect(manager.stockAlertsShown()).toEqual([]);
+    manager.stockAlerts.set([
+      { id: 'a', medicationName: 'Amoxicilline', quantityOnHand: 4, reorderThreshold: 10 },
+      { id: 'b', medicationName: 'Paracétamol', quantityOnHand: 0, reorderThreshold: 20 },
+      { id: 'c', medicationName: 'Métronidazole', quantityOnHand: 1, reorderThreshold: 5 },
+    ] as unknown as import('../services/pharmacy.service').InventoryItemResponse[]);
+
+    expect(manager.stockOutCount()).toBe(1);
+    expect(manager.stockAlertsShown().map((i) => i.id)).toEqual(['b', 'c', 'a']);
+  });
+
   // ── Nurse workflow tiles SHOULD include /nurse-station ──────
 
   it('nurse workflow tiles should include a nurse-station route', () => {

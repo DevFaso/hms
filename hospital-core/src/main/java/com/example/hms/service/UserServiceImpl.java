@@ -123,6 +123,41 @@ public class UserServiceImpl implements UserService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
+    /** QA D4269: no own portal account switched on for a child under 13; null only in a hand-built test. */
+    private com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMinorPortalRights(com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights) {
+        this.minorPortalRights = minorPortalRights;
+    }
+
+    /**
+     * QA D4269 review: every path that switches an account on asks first. Each patient row linked to the account is
+     * read (a tenant carrying duplicate rows, V113, is checked row by row rather than skipped), and a child under 13
+     * is refused: a parent or the legal guardian acts for them at the desk. Nothing is switched on when it refuses.
+     */
+    /** QA D4269 review: every patient row linked to the account may have an own account (no refusal audited). */
+    private boolean mayHaveOwnAccount(UUID userId) {
+        if (minorPortalRights == null || userId == null) {
+            return true;
+        }
+        for (UUID patientId : patientRepository.findIdsByUserId(userId)) {
+            if (!patientRepository.findByIdUnscoped(patientId).map(minorPortalRights::mayHaveOwnAccount).orElse(true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void requireOwnAccountAge(UUID userId) {
+        if (minorPortalRights == null || userId == null) {
+            return;
+        }
+        for (UUID patientId : patientRepository.findIdsByUserId(userId)) {
+            patientRepository.findByIdUnscoped(patientId).ifPresent(minorPortalRights::requireActivatable);
+        }
+    }
+
     /**
      * Sends a set-password link to the holder of an account activated by its
      * e-mail link (no activation page, so no first password shown). Setter-
@@ -1858,6 +1893,11 @@ public class UserServiceImpl implements UserService {
         // account without the marker is simply not activated yet).
         Boolean recorded = user.getActivatedBeforeDelete();
         boolean previouslyActivated = recorded != null ? recorded : wasEverActivated(user);
+        // QA D4269 review: a restore puts the record back; a child under 13's own account stays off. Asked without a
+        // refusal: the restore itself is allowed, so no refused action is audited.
+        if (previouslyActivated && !mayHaveOwnAccount(user.getId())) {
+            previouslyActivated = false;
+        }
         user.setActivatedBeforeDelete(null);
         user.setDeleted(false);
         user.setActive(previouslyActivated);
@@ -2000,6 +2040,10 @@ public class UserServiceImpl implements UserService {
             // super-admin assignment would leave the platform with none.
             if (Boolean.FALSE.equals(dto.getActive()) && user.isActive()) {
                 assignmentService.requireSuperAdminRemainsWithoutUser(user.getId());
+            }
+            // QA D4269 review: an administrator's re-enable is an activation too.
+            if (Boolean.TRUE.equals(dto.getActive()) && !user.isActive()) {
+                requireOwnAccountAge(user.getId());
             }
             reactivated = applyActive(user, dto.getActive());
         }
@@ -2342,6 +2386,10 @@ public class UserServiceImpl implements UserService {
         // account gets a set-password link at that address. Read before the
         // activation switches it on.
         final boolean firstPasswordOwed = com.example.hms.utility.TemporaryPasswords.owedAtActivation(user);
+
+        // QA D4269 review: the link activates no own account for a child under 13. Refused before anything is
+        // switched on, so the account and its patient assignments stay off.
+        requireOwnAccountAge(user.getId());
 
         user.setActive(true);
         user.setActivationToken(null);

@@ -565,4 +565,132 @@ class PatientPortalServiceImplProxyTest {
             verify(patientProxyRepository, times(8)).save(any());
         }
     }
+
+    @Nested
+    @DisplayName("QA D4269: a minor's own family access, by age")
+    class MinorsOwnFamilyAccess {
+
+        private final com.example.hms.service.AuditEventLogService audit =
+            org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+
+        private void signedInBorn(java.time.LocalDate dateOfBirth) {
+            service.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+                audit, java.time.Clock.systemDefaultZone()));
+            User grantorUser = new User();
+            grantorUser.setId(UUID.randomUUID());
+            grantor.setUser(grantorUser);
+            grantor.setDateOfBirth(dateOfBirth);
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
+            when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
+        }
+
+        private ProxyGrantRequestDTO fullAccess() {
+            return ProxyGrantRequestDTO.builder().proxyUsername("caregiver.sam")
+                .relationship(ProxyRelationship.CAREGIVER).permissions("ALL").build();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(ints = {9, 13, 14, 15, 17})
+        @DisplayName("no minor gives another account access alone: refused before the other account is looked up, audited")
+        void aMinorsGrantIsRefused(int age) {
+            signedInBorn(java.time.LocalDate.now().minusYears(age).minusDays(1));
+            ProxyGrantRequestDTO dto = fullAccess();
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+
+            verify(patientProxyRepository, never()).save(any());
+            org.mockito.Mockito.verifyNoInteractions(userRepository);
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(audit).logEvent(row.capture());
+            assertThat(row.getValue().getEventType())
+                .isEqualTo(com.example.hms.enums.AuditEventType.MINOR_PORTAL_ACTION_REFUSED);
+        }
+
+        @Test
+        @DisplayName("an adult's grant is unchanged")
+        void anAdultGrantsAsBefore() {
+            signedInBorn(java.time.LocalDate.now().minusYears(18));
+            when(userRepository.findByUsername("caregiver.sam")).thenReturn(Optional.of(proxyUser));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.empty());
+            when(patientProxyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.grantProxy(auth, fullAccess());
+
+            verify(patientProxyRepository).save(any());
+            org.mockito.Mockito.verifyNoInteractions(audit);
+        }
+
+        @Test
+        @DisplayName("review: a grant that lapsed at 18 does not block giving the same person access again")
+        void aLapsedGrantDoesNotBlockGivingItAgain() {
+            signedInBorn(java.time.LocalDate.now().minusYears(18).minusDays(5));
+            PatientProxy lapsed = buildGrant("ALL", null);
+            lapsed.setCreatedAt(LocalDateTime.now().minusYears(1));
+            when(userRepository.findByUsername("caregiver.sam")).thenReturn(Optional.of(proxyUser));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.of(lapsed));
+            when(patientProxyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.grantProxy(auth, fullAccess());
+
+            assertThat(lapsed.getStatus()).isEqualTo(ProxyStatus.EXPIRED);
+            verify(patientProxyRepository, times(2)).save(any());
+
+            // A live grant to the same person is still a duplicate.
+            PatientProxy live = buildGrant("ALL", null);
+            live.setCreatedAt(LocalDateTime.now().minusDays(1));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                grantorPatientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.of(live));
+            ProxyGrantRequestDTO again = fullAccess();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.grantProxy(auth, again))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(live.getStatus()).isEqualTo(ProxyStatus.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("at 13-14 a grant is not withdrawn alone; at 15-17 it is, except a verified parent's")
+        void withdrawingByAge() {
+            signedInBorn(java.time.LocalDate.now().minusYears(14));
+            PatientProxy grant = buildGrant("ALL", null);
+            when(patientProxyRepository.findById(grant.getId())).thenReturn(Optional.of(grant));
+            UUID grantId = grant.getId();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeProxy(auth, grantId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(grant.getStatus()).isEqualTo(ProxyStatus.ACTIVE);
+
+            grantor.setDateOfBirth(java.time.LocalDate.now().minusYears(16));
+            grant.setRelationship(ProxyRelationship.PARENT);
+            grant.setRelationshipVerifiedAt(LocalDateTime.now().minusDays(10));
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeProxy(auth, grantId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(grant.getStatus()).isEqualTo(ProxyStatus.ACTIVE);
+
+            grant.setRelationshipVerifiedAt(null);
+            service.revokeProxy(auth, grantId);
+            assertThat(grant.getStatus()).isEqualTo(ProxyStatus.REVOKED);
+        }
+
+        @Test
+        @DisplayName("an access given while the patient was a minor no longer opens the record once they are 18")
+        void aGrantFromMinorityIsEndedAtMajority() {
+            grantor.setDateOfBirth(java.time.LocalDate.now().minusYears(18).minusDays(5));
+            PatientProxy grant = buildGrant("ALL", null);
+            grant.setCreatedAt(LocalDateTime.now().minusYears(1));
+            stubActiveGrant(grant);
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.mockito.Mockito.verifyNoInteractions(appointmentService);
+
+            // Given again after the birthday: the adult's own decision.
+            grant.setCreatedAt(LocalDateTime.now().minusDays(2));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId)).thenReturn(List.of());
+            assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH)).isEmpty();
+        }
+    }
 }

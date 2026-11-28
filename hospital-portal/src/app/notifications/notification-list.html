@@ -60,8 +60,10 @@
             <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
           }
           <div class="notif-content">
-            <h4 class="notif-title">{{ notif.title || notif.message }}</h4>
-            <p class="notif-message">{{ notif.message }}</p>
+            <h4 class="notif-title">{{ notif.title?.trim() || notif.message }}</h4>
+            @if (notif.title?.trim() && notif.title?.trim() !== notif.message.trim()) {
+              <p class="notif-message">{{ notif.message }}</p>
+            }
             <span class="notif-time">{{ notif.createdAt | serverTime | dateTime }}</span>
           </div>
           @if (!notif.read) {

@@ -41,7 +41,7 @@ describe('ProviderListComponent', () => {
 
   it('lists every provider facility, unfiltered, on open', () => {
     const { host } = setup();
-    expect(service.list).toHaveBeenCalledWith({ type: '', status: '' }, 0, 20);
+    expect(service.list).toHaveBeenCalledWith({ type: '', status: '', search: '' }, 0, 20);
     expect(host.querySelectorAll('[data-test="provider-row"]').length).toBe(2);
   });
 
@@ -49,9 +49,17 @@ describe('ProviderListComponent', () => {
     const { cmp } = setup();
     cmp.pageIndex.set(3);
     cmp.setType('LABORATORY');
-    expect(service.list).toHaveBeenCalledWith({ type: 'LABORATORY', status: '' }, 0, 20);
+    expect(service.list).toHaveBeenCalledWith(
+      { type: 'LABORATORY', status: '', search: '' },
+      0,
+      20,
+    );
     cmp.setStatus('VERIFIED');
-    expect(service.list).toHaveBeenCalledWith({ type: 'LABORATORY', status: 'VERIFIED' }, 0, 20);
+    expect(service.list).toHaveBeenCalledWith(
+      { type: 'LABORATORY', status: 'VERIFIED', search: '' },
+      0,
+      20,
+    );
   });
 
   it('a filter change cancels the slower request; an old answer never lands under the new filter', () => {

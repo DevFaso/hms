@@ -4,18 +4,32 @@
       <span class="material-symbols-outlined">family_restroom</span>
       {{ 'PORTAL.FAMILY.TITLE' | translate }}
     </h1>
-    <button class="btn-primary" (click)="showGrantForm.set(!showGrantForm())">
-      <span class="material-symbols-outlined">person_add</span>
-      {{
-        showGrantForm()
-          ? ('PORTAL.FAMILY.CANCEL' | translate)
-          : ('PORTAL.FAMILY.GRANT_ACCESS' | translate)
-      }}
-    </button>
+    @if (canGrant()) {
+      <button
+        class="btn-primary"
+        data-testid="grant-access-toggle"
+        (click)="showGrantForm.set(!showGrantForm())"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        {{
+          showGrantForm()
+            ? ('PORTAL.FAMILY.CANCEL' | translate)
+            : ('PORTAL.FAMILY.GRANT_ACCESS' | translate)
+        }}
+      </button>
+    }
   </div>
 
+  <!-- QA D4269: why a minor's account does not offer the action, and who does it. -->
+  @if (minorNotice(); as noticeKey) {
+    <p class="minor-notice" role="note" data-testid="minor-rights-notice">
+      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      <span>{{ noticeKey | translate }}</span>
+    </p>
+  }
+
   <!-- Grant Form -->
-  @if (showGrantForm()) {
+  @if (showGrantForm() && canGrant()) {
     <!-- QA D1281: the two required fields show the star and declare it; the
          guard on "Accorder" names and marks only the blank ones. -->
     <div class="portal-card grant-form" data-submit-scope>
@@ -190,14 +204,16 @@
                   }}
                 </td>
                 <td>
-                  <button
-                    class="btn-danger-sm"
-                    [attr.data-testid]="'revoke-proxy-' + p.id"
-                    (click)="askRevoke(p)"
-                  >
-                    <span class="material-symbols-outlined">block</span>
-                    {{ 'PORTAL.FAMILY.REVOKE' | translate }}
-                  </button>
+                  @if (canRevokeRow(p)) {
+                    <button
+                      class="btn-danger-sm"
+                      [attr.data-testid]="'revoke-proxy-' + p.id"
+                      (click)="askRevoke(p)"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                      {{ 'PORTAL.FAMILY.REVOKE' | translate }}
+                    </button>
+                  }
                 </td>
               </tr>
             }

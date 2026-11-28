@@ -1,8 +1,11 @@
 <div class="lab-outbox-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">outbox</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">outbox</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_OUTBOX.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_OUTBOX.SUBTITLE' | translate }}</p>
       </div>
@@ -90,10 +93,13 @@
     </div>
   } @else {
     <div class="table-wrap">
-      <table class="outbox-table">
+      <table class="outbox-table" data-cards-tablet>
         <thead>
           <tr>
             <th>{{ 'LAB_OUTBOX.ORDERING_HOSPITAL' | translate }}</th>
+            @if (hasOrderColumn()) {
+              <th>{{ 'LAB_OUTBOX.COL_ORDER' | translate }}</th>
+            }
             <th>{{ 'LAB_OUTBOX.COL_TYPE' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_STATUS' | translate }}</th>
             <th>{{ 'LAB_OUTBOX.COL_ATTEMPTS' | translate }}</th>
@@ -107,6 +113,19 @@
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'outbox-row-' + row.id">
               <td>{{ row.orderingHospitalName || '?' }}</td>
+              @if (hasOrderColumn()) {
+                <td class="order-cell" [attr.data-testid]="'outbox-order-' + row.id">
+                  @if (row.labOrderCode) {
+                    <span class="mono">{{ row.labOrderCode }}</span>
+                  }
+                  @if (row.patientName) {
+                    <div>{{ row.patientName }}</div>
+                  }
+                  @if (row.testName) {
+                    <div class="cell-secondary">{{ row.testName }}</div>
+                  }
+                </td>
+              }
               <td class="type-cell">
                 <span class="mono">{{ row.messageType }}</span>
                 @if (resultStatusKey(row.resultStatus); as rsKey) {
@@ -126,12 +145,12 @@
               </td>
               <td class="numeric">{{ row.attempts }}</td>
               <td class="date-cell">
-                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
+                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | dateTime) : '—' }}
               </td>
               <td class="error-cell" [title]="row.lastError ?? ''">
                 {{ row.lastError ?? '—' }}
               </td>
-              <td class="date-cell">{{ row.createdAt | serverTime | date: 'short' }}</td>
+              <td class="date-cell">{{ row.createdAt | serverTime | dateTime }}</td>
               <td class="actions-cell">
                 <button
                   class="btn-icon"
@@ -270,7 +289,7 @@
               }
               <dt>{{ 'LAB_OUTBOX.SUMMARY_QUEUED' | translate }}</dt>
               <dd data-testid="outbox-summary-queued">
-                {{ d.message.createdAt | serverTime | date: 'short' }}
+                {{ d.message.createdAt | serverTime | dateTime }}
               </dd>
               @if (waitingReason(); as w) {
                 <dt>{{ 'LAB_OUTBOX.SUMMARY_WAITING' | translate }}</dt>
@@ -322,7 +341,7 @@
                   }}<span class="status-badge" [attr.data-status]="sibling.status">
                     {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}
                   </span>
-                  <span>{{ sibling.createdAt | serverTime | date: 'short' }}</span>
+                  <span>{{ sibling.createdAt | serverTime | dateTime }}</span>
                 </li>
               }
             </ul>

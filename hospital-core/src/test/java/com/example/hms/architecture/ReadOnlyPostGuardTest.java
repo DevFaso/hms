@@ -82,6 +82,7 @@ class ReadOnlyPostGuardTest {
         "ChatController#getMessagesBySenderEmail",
         "ChatController#getMessagesBySenderUsername",
         "EncounterController#byDoctor",
+        "LabInventoryController#search",
         "LookupController#getAppointmentsByPatientEmail",
         "LookupController#getAppointmentsByPatientMri",
         "LookupController#getAppointmentsByPatientPhone",
@@ -119,6 +120,8 @@ class ReadOnlyPostGuardTest {
         "PatientPortalController#termSearchMyNotifications",
         "PrescriptionController#search",
         "SuperAdminOrganizationController#termSearchOrganizationHierarchy",
+        // QA D4075 (r81): the provider list's search box (a facility name, code or city).
+        "SuperAdminProviderController#search",
         "UserRoleHospitalAssignmentController#termSearchAssignments");
 
     private record Post(RequestMappingInfo info, HandlerMethod handler) {

@@ -247,7 +247,7 @@
                   | translate
                     : {
                         name: currentTarget()?.approvedByDisplay,
-                        date: (currentTarget()?.approvedAt | serverTime | date: 'short'),
+                        date: (currentTarget()?.approvedAt | serverTime | dateTime),
                       }
               }}
             </p>
@@ -636,7 +636,7 @@
                           <tbody>
                             @for (run of recentRuns(); track run.id) {
                               <tr>
-                                <td>{{ run.recordedAt | serverTime | date: 'short' }}</td>
+                                <td>{{ run.recordedAt | serverTime | dateTime }}</td>
                                 <td>
                                   {{
                                     (run.qcLevel === 'LOW_CONTROL'

@@ -21,9 +21,18 @@ class RoiReleaseScopeGuardTest {
                     assertThat(endpoint).as(file.toString())
                         .contains("pdf.renderForRoi(requests.copyForExport(requestId))")
                         .doesNotContain("pdf.render(");
+                    // QA D4270: every release in the file is one of the two resolved copies (the staff's, by
+                    // hospital, role and approver; the patient's own), never a patient id from the request.
+                    int releases = endpoint.split("pdf\\.renderForRoi\\(", -1).length - 1;
+                    int resolved = endpoint.split("pdf\\.renderForRoi\\(requests\\.copyForExport\\(requestId\\)\\)", -1).length - 1
+                        + endpoint.split("pdf\\.renderForRoi\\(portal\\.myApprovedRoiCopy\\(auth, requestId\\)\\)", -1).length - 1;
+                    assertThat(resolved).as(file + ": every renderForRoi takes a resolved approved copy").isEqualTo(releases);
                 }
             }
         }
+        // QA D4270: the patient's own copy is resolved from the request the patient filed, and only that.
+        assertThat(source("service/impl/PatientPortalServiceImpl.java"))
+            .contains("return roiRequestService.copyForSelf(findPatient(auth), requestId);");
         String pdf = source("service/PatientRecordPdfService.java");
         assertThat(pdf).contains("code.getStatus() == null && !hasDirectives", "if (code.getStatus() != null)");
         assertThat(pdf).contains("requestId == null", "getHospitalReleaseChart(patientId, hospitalId)",

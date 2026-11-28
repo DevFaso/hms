@@ -23,6 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.utility.MessageUtil;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -213,6 +216,43 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             ? ": " + request.getReason() : "");
         recordAudit(org, AuditEventType.TENANT_PURGE_CANCELLED, description);
         return toResponse(org);
+    }
+
+    @Override
+    public void deactivate(UUID organizationId) {
+        Organization org = loadOrThrow(organizationId);
+        if (org.getLifecycleState() != OrganizationLifecycleState.ACTIVE) {
+            // Already suspended, archived or on its way out: only the flag is aligned.
+            if (org.isActive()) {
+                org.setActive(false);
+                organizationRepository.save(org);
+                invalidateStatusCache();
+            }
+            return;
+        }
+        long activeFacilities = organizationRepository.countActiveFacilities(organizationId);
+        if (activeFacilities > 0) {
+            throw new ConflictException(
+                MessageUtil.resolveOrRaw("organization.deactivate.activeHospitals", activeFacilities));
+        }
+        // No active facility is not "nobody affected": a user may still hold an
+        // assignment at an inactive one, and a suspended organization blocks
+        // every request of its users. Suspending stays on the lifecycle page.
+        throw new ConflictException(MessageUtil.resolveOrRaw("organization.deactivate.useLifecycle"));
+    }
+
+    @Override
+    public void reactivate(UUID organizationId) {
+        Organization org = loadOrThrow(organizationId);
+        if (org.getLifecycleState() != OrganizationLifecycleState.ACTIVE) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("organization.reactivate.useLifecycle"));
+        }
+        // A row whose flag was cleared before the two switches moved together.
+        if (!org.isActive()) {
+            org.setActive(true);
+            organizationRepository.save(org);
+            invalidateStatusCache();
+        }
     }
 
     // ── helpers ────────────────────────────────────────────────────────

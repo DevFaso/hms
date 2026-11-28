@@ -1,8 +1,11 @@
 <div class="lab-inventory-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">inventory_2</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_INVENTORY.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_INVENTORY.SUBTITLE' | translate }}</p>
       </div>
@@ -118,6 +121,21 @@
     </div>
   }
 
+  <div class="filter-bar" role="search">
+    <label for="lab-inventory-search">{{ 'COMMON.SEARCH' | translate }}</label>
+    <input
+      appFormControl
+      id="lab-inventory-search"
+      name="search"
+      type="search"
+      [(ngModel)]="searchText"
+      (keydown.enter)="search()"
+    />
+    <button type="button" class="btn-secondary" [disabled]="loading()" (click)="search()">
+      {{ 'COMMON.SEARCH' | translate }}
+    </button>
+  </div>
+
   <!-- Loading -->
   @if (loading()) {
     <div class="loading-state">
@@ -141,7 +159,7 @@
   @if (!loading() && !error() && items().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined">inventory</span>
-      <p>{{ 'LAB_INVENTORY.EMPTY' | translate }}</p>
+      <p>{{ (activeSearch() ? 'LAB.NO_RESULTS' : 'LAB_INVENTORY.EMPTY') | translate }}</p>
     </div>
   }
 
@@ -155,6 +173,8 @@
             <th>{{ 'LAB_INVENTORY.ITEM_CODE' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.CATEGORY' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.QUANTITY' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.REORDER_THRESHOLD' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.LOT' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.EXPIRATION' | translate }}</th>
             <th>{{ 'LAB_INVENTORY.STOCK_STATUS' | translate }}</th>
             @if (canManage()) {
@@ -164,11 +184,17 @@
         </thead>
         <tbody>
           @for (item of items(); track item.id) {
-            <tr [class.low-stock-row]="item.lowStock" [class.expired-row]="item.expired">
+            <tr
+              [class.low-stock-row]="item.lowStock"
+              [class.expired-row]="item.expired"
+              [class.expiring-row]="isExpiringSoon(item)"
+            >
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
-              <td>{{ item.quantity | labValue: item.unit }}</td>
+              <td>{{ item.quantity | countUnit: item.unit }}</td>
+              <td>{{ item.reorderThreshold | countUnit: item.unit }}</td>
+              <td data-test="inventory-lot">{{ item.lotNumber || '—' }}</td>
               <td>
                 {{
                   item.expirationDate
@@ -181,13 +207,29 @@
                   <span class="status-badge expired">{{
                     'LAB_INVENTORY.EXPIRED' | translate
                   }}</span>
+                } @else if (item.quantity <= 0) {
+                  {{ ' '
+                  }}<span class="status-badge low-stock">{{
+                    'PHARMACY.OUT_OF_STOCK' | translate
+                  }}</span>
                 } @else if (item.lowStock) {
-                  <span class="status-badge low-stock">{{
+                  {{ ' '
+                  }}<span class="status-badge low-stock">{{
                     'LAB_INVENTORY.LOW_STOCK' | translate
                   }}</span>
                 } @else {
                   {{ ' '
                   }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                }
+                @if (isExpiringSoon(item)) {
+                  {{ ' '
+                  }}<span
+                    class="status-badge expiring-soon"
+                    [attr.title]="
+                      'LAB_INVENTORY.EXPIRING_SOON_HINT' | translate: { days: expiringSoonDays }
+                    "
+                    >{{ 'LAB_INVENTORY.EXPIRING_SOON' | translate }}</span
+                  >
                 }
               </td>
               @if (canManage()) {
@@ -215,5 +257,26 @@
         </tbody>
       </table>
     </div>
+  }
+  @if (!loading() && !error() && totalPages() > 1) {
+    <nav class="pagination" [attr.aria-label]="'COMMON.PAGE' | translate">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="pageIndex() === 0"
+        (click)="goToPage(pageIndex() - 1)"
+      >
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span>{{ 'COMMON.PAGE' | translate }} {{ pageIndex() + 1 }} / {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="pageIndex() + 1 >= totalPages()"
+        (click)="goToPage(pageIndex() + 1)"
+      >
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </nav>
   }
 </div>

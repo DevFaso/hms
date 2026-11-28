@@ -16,6 +16,8 @@ public interface LabInventoryService {
 
     Page<LabInventoryItemResponseDTO> getByHospital(UUID hospitalId, Pageable pageable, Locale locale);
 
+    Page<LabInventoryItemResponseDTO> searchByHospital(UUID hospitalId, String search, Pageable pageable, Locale locale);
+
     LabInventoryItemResponseDTO getById(UUID id, Locale locale);
 
     LabInventoryItemResponseDTO create(UUID hospitalId, LabInventoryItemRequestDTO dto, Locale locale);

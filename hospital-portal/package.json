@@ -36,6 +36,7 @@
     "i18n:enums": "node scripts/check-i18n-enum-coverage.mjs",
     "i18n:raw-enums": "node scripts/check-i18n-raw-enums.mjs",
     "i18n:placeholders": "node scripts/check-i18n-placeholders.mjs",
+    "i18n:plurals": "node scripts/check-i18n-plurals.mjs",
     "rbac:inline-roles": "node scripts/check-rbac-inline-roles.mjs",
     "guard:a11y-dialogs": "node scripts/check-a11y-dialogs.mjs",
     "guard:a11y-names": "node scripts/check-a11y-names.mjs",

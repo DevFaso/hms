@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { LabResultResponse, LabService } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { CriticalEscalationSettingsComponent } from './critical-escalation-settings.component';
@@ -27,6 +28,7 @@ import { CriticalEscalationSettingsComponent } from './critical-escalation-setti
     CommonModule,
     TranslateModule,
     ServerTimePipe,
+    DateTimePipe,
     LabValuePipe,
     LabCorrectionBadgeComponent,
     CriticalEscalationSettingsComponent,

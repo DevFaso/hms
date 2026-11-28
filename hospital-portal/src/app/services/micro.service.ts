@@ -90,9 +90,22 @@ export interface MicroCultureResponse {
   reportedByName: string | null;
   notes: string | null;
   corrections?: MicroCultureCorrection[];
+  /** QA r81 D4175: the other reports of the same order, newest first. */
+  otherReportsOnOrder?: MicroCultureOtherReport[];
+  /** QA r81 D4175: false when a later report exists for the same order. */
+  latestOnOrder?: boolean;
   createdAt: string;
   updatedAt: string | null;
   isolates: MicroIsolate[];
+}
+
+/** QA r81 D4175: another report of the same order. */
+export interface MicroCultureOtherReport {
+  id: string;
+  status: MicroCultureStatus;
+  growthResult: MicroGrowthResult | null;
+  specimenAccessionNumber: string | null;
+  createdAt: string;
 }
 
 /** Spring Page envelope, returned bare (no ApiWrapper) by GET /micro-cultures. */

@@ -151,4 +151,70 @@ describe('RecordRightsComponent own-account requests', () => {
     });
     expect(component.description).toBe('cdx description');
   });
+
+  it('QA D4270: an approved copy is downloaded from the request, and an expired or declined one is not offered', () => {
+    const fixture = TestBed.createComponent(RecordRightsComponent);
+    fixture.detectChanges();
+    const row = (id: string, more: object) => ({
+      id,
+      patientId: 'p-1',
+      requesterType: 'PATIENT',
+      requestKind: 'COPY',
+      status: 'FULFILLED',
+      requestedOn: '2026-11-27',
+      scopeDescription: 'FULL_RECORD',
+      ...more,
+    });
+    http
+      .expectOne('/me/patient/roi-requests')
+      .flush([
+        row('ready', { copyDownloadable: true, copyAvailableUntil: '2026-12-27' }),
+        row('expired', { copyDownloadable: false, copyAvailableUntil: '2026-10-01' }),
+        row('declined', { status: 'DENIED' }),
+      ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="record-copy-download-expired"]')).toBeNull();
+    expect(host.querySelector('[data-testid="record-copy-download-declined"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="record-copy-expired"]').length).toBe(1);
+    const button = host.querySelector<HTMLButtonElement>(
+      '[data-testid="record-copy-download-ready"]',
+    );
+    expect(button).not.toBeNull();
+
+    const saved = spyOn(URL, 'createObjectURL').and.returnValue('blob:copy');
+    button?.click();
+    const download = http.expectOne('/me/patient/roi-requests/ready/record.pdf');
+    expect(download.request.method).toBe('GET');
+    expect(download.request.responseType).toBe('blob');
+    download.flush(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    expect(saved).toHaveBeenCalled();
+    expect(fixture.componentInstance.downloadingId()).toBeNull();
+  });
+
+  it('QA D4270: a refused download says the reason the server gave', async () => {
+    const fixture = TestBed.createComponent(RecordRightsComponent);
+    fixture.detectChanges();
+    http.expectOne('/me/patient/roi-requests').flush([]);
+    fixture.componentInstance.download({
+      id: 'late',
+      patientId: 'p-1',
+      requesterType: 'PATIENT',
+      status: 'FULFILLED',
+      requestedOn: '2026-11-27',
+      copyDownloadable: true,
+    });
+    http
+      .expectOne('/me/patient/roi-requests/late/record.pdf')
+      .flush(new Blob([JSON.stringify({ message: 'Le délai est dépassé.' })]), {
+        status: 400,
+        statusText: 'Bad Request',
+      });
+    // The refusal arrives as a Blob: reading it is asynchronous.
+    for (let i = 0; i < 50 && !fixture.componentInstance.error(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(fixture.componentInstance.error()).toBe('Le délai est dépassé.');
+  });
 });

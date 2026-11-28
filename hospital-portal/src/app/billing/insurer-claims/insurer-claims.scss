@@ -1,0 +1,241 @@
+/*
+ * Insurer claims (bordereaux, insurer payments, receivables): one sheet for the four screens. Everything wraps or
+ * scrolls inside its own box, so no screen scrolls sideways at 390, 768 or 1440 px.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.claims-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.claims-tab {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border-color, #d0d5dd);
+  border-radius: 999px;
+  background: var(--surface-color, #fff);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+}
+
+.claims-tab-on {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+  font-weight: 600;
+}
+
+.claims-panel {
+  min-width: 0;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color, #e4e7ec);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+
+  h2 {
+    margin: 0 0 0.6rem;
+    font-size: 1.05rem;
+  }
+}
+
+.claims-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  align-items: end;
+
+  label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+.claims-wide {
+  grid-column: 1 / -1;
+}
+
+.claims-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.claims-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+}
+
+.claims-card {
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color, #e4e7ec);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+  overflow-wrap: anywhere;
+}
+
+.claims-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.claims-status {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-muted, #f2f4f7);
+  font-size: 0.78rem;
+  white-space: nowrap;
+
+  &[data-status='SUBMITTED'],
+  &[data-status='PARTIALLY_SETTLED'],
+  &[data-status='REQUESTED'] {
+    background: var(--warning-tint, #fef3c7);
+    color: var(--warning-text, #92400e);
+  }
+
+  &[data-status='SETTLED'],
+  &[data-status='RECORDED'],
+  &[data-status='APPROVED'] {
+    background: var(--success-tint, #dcfce7);
+    color: var(--success-text, #166534);
+  }
+
+  &[data-status='CANCELLED'],
+  &[data-status='REVERSED'],
+  &[data-status='REFUSED'] {
+    background: var(--danger-tint, #fee2e2);
+    color: var(--danger-text, #991b1b);
+  }
+}
+
+.claims-meta {
+  display: grid;
+  gap: 0.35rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  margin: 0 0 0.5rem;
+
+  dt {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #667085);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.claims-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.claims-warning {
+  margin: 0.35rem 0;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: var(--warning-tint, #fef3c7);
+  color: var(--warning-text, #92400e);
+  font-size: 0.82rem;
+}
+
+.claims-note {
+  margin: 0.35rem 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #667085);
+}
+
+.claims-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.claims-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th,
+  td {
+    padding: 0.45rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-color, #e4e7ec);
+  }
+
+  .amount {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  tfoot td,
+  tfoot th {
+    font-weight: 700;
+  }
+
+  input {
+    width: 7.5rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: right;
+  }
+}
+
+.claims-sub {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--border-color, #d0d5dd);
+  border-radius: 6px;
+}
+
+.claims-history {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.claims-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.muted {
+  color: var(--text-secondary, #667085);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

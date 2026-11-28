@@ -230,7 +230,8 @@ public class PdfInvoiceService {
             w.right(BODY, 11, t.get(PATIENT_SHARE, money(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice), t.locale())));
         }
         for (var share : shares == null ? List.<com.example.hms.payload.dto.billing.InvoicePayerShareDTO>of() : shares) {
-            if (!com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.getStatus())) {
+            BigDecimal refused = refusedOf(share);
+            if (refused.signum() <= 0) {
                 continue;
             }
             w.ensureRoom(32);
@@ -239,8 +240,24 @@ public class PdfInvoiceService {
             if (mailed && com.example.hms.service.notification.SensitiveWording.reveals(reason)) {
                 reason = ""; // K4: the payer's words can name the condition; the desk explains it
             }
-            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount(), t.locale()), reason));
+            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(refused, t.locale()), reason));
         }
+    }
+
+    /**
+     * Insurer claims plan PR 3 (QA D3983): what the payer refused of a share and the patient now owes: the whole
+     * amount of a REJECTED share, or the part of a share still standing that was re-billed after the payer refused
+     * one of its acts. Zero for a cancelled share and for one nothing was refused of.
+     */
+    static BigDecimal refusedOf(com.example.hms.payload.dto.billing.InvoicePayerShareDTO share) {
+        if (share == null || com.example.hms.enums.PayerShareStatus.CANCELLED.name().equals(share.getStatus())) {
+            return BigDecimal.ZERO;
+        }
+        if (share.getRejectedAmount() != null && share.getRejectedAmount().signum() > 0) {
+            return share.getRejectedAmount();
+        }
+        return com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.getStatus())
+            ? nz(share.getAmount()) : BigDecimal.ZERO;
     }
 
     /**

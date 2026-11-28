@@ -52,6 +52,27 @@ public class MicroCultureResponseDTO {
     /** What the report said before each correction, newest first (QA CX-009). */
     private List<Correction> corrections;
 
+    /**
+     * QA r81 D4175: the other reports of the same order at this hospital, newest
+     * first, so a second report is never read without the first.
+     */
+    private List<OtherReport> otherReportsOnOrder;
+
+    /** QA r81 D4175: true when no later report exists for the same order. */
+    private Boolean latestOnOrder;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OtherReport {
+        private UUID id;
+        private MicroCultureStatus status;
+        private MicroGrowthResult growthResult;
+        private String specimenAccessionNumber;
+        private LocalDateTime createdAt;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

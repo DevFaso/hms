@@ -46,6 +46,8 @@ const NOT_AUTHOR_OWNED = {
     'the patient cancels her own appointment (the server scopes it to her)',
   'pharmacy/dispensing.html :: openCancelReady(rx)':
     'a ready-for-pickup fill is the pharmacy’s to release, not a clinician’s order (pharmacist workflow)',
+  'billing/insurer-claims/insurer-receivables.component.html :: withdraw(row)':
+    'a write-off request on an insurer claim, not a clinical record: withdrawn by its requester or by finance (canWithdraw reads requestedByMe from the server)',
 };
 
 /** The `@if` conditions that enclose `index` in a prettier-formatted template. */
@@ -179,6 +181,8 @@ const NOT_AN_ORDER = {
     'the void as entered in error IS the correction path of a resulted lab order (isVoidable decides)',
   'discharge/discharge.html :: openCancel(a)':
     'a pending discharge approval request, not an order (canCancelApproval admits only PENDING)',
+  'billing/insurer-claims/insurer-receivables.component.html :: withdraw(row)':
+    'a write-off request on an insurer claim line, not an order (offered only while REQUESTED)',
 };
 
 /** True when the condition (or a predicate it calls, one level down) asks `isOrderCancellable`. */

@@ -2027,6 +2027,61 @@ class UserServiceImplTest {
             verify(loginAttemptService).resetAttempts(userId);
         }
 
+        /** QA D4269 review: the account's linked patient is a child of 9, and the age rule is wired. */
+        private void linkedToAChild() {
+            UUID patientId = UUID.randomUUID();
+            com.example.hms.model.Patient child = new com.example.hms.model.Patient();
+            child.setId(patientId);
+            child.setDateOfBirth(java.time.LocalDate.now().minusYears(9));
+            when(patientRepository.findIdsByUserId(userId)).thenReturn(List.of(patientId));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(child));
+            userService.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+                auditEventLogService, java.time.Clock.systemDefaultZone()));
+        }
+
+        @Test
+        @DisplayName("QA D4269 review: an administrator's re-enable of a child under 13's account is refused")
+        void updateRefusesReEnablingAChildUnder13() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("child");
+            target.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            linkedToAChild();
+
+            assertThatThrownBy(() -> userService.updateUser(userId, activeFlag(true)))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+            assertThat(target.isActive()).isFalse();
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("QA D4269 review: a restore puts a child under 13's account back switched off, refusing nothing")
+        void restoreKeepsAChildUnder13sAccountOff() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("child");
+            target.setActive(false);
+            target.setDeleted(true);
+            target.setActivatedBeforeDelete(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            lenient().when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
+            linkedToAChild();
+
+            userService.restoreUser(userId);
+
+            assertThat(target.isDeleted()).isFalse();
+            assertThat(target.isActive()).isFalse();
+            // Nothing was refused, so no refusal row: only the restore's own audit.
+            ArgumentCaptor<AuditEventRequestDTO> rows = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeast(0)).logEvent(rows.capture());
+            assertThat(rows.getAllValues()).noneMatch(r -> r.getEventType()
+                == com.example.hms.enums.AuditEventType.MINOR_PORTAL_ACTION_REFUSED);
+        }
+
         private User reactivationTarget(boolean alreadyActive) {
             User target = new User();
             target.setId(userId);
@@ -3284,6 +3339,37 @@ class UserServiceImplTest {
         /** What the account keeps of a token: its hash, never the token. */
         private static String k4bStored(String token) {
             return com.example.hms.utility.ActivationTokens.storedForms(token).get(0);
+        }
+
+        /** QA D4269 review: the mailed link is an activation like the code; under 13 it switches nothing on. */
+        @org.junit.jupiter.api.Test
+        void aChildUnder13sLinkActivatesNothing_D4269() {
+            User u = pending();
+            UUID patientId = UUID.randomUUID();
+            com.example.hms.model.Patient child = new com.example.hms.model.Patient();
+            child.setId(patientId);
+            child.setDateOfBirth(java.time.LocalDate.now().minusYears(9));
+            when(patientRepository.findIdsByUserId(u.getId())).thenReturn(List.of(patientId));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(child));
+            userService.setMinorPortalRights(new com.example.hms.service.recordaccess.MinorPortalRightsGuard(
+                auditEventLogService, java.time.Clock.systemDefaultZone()));
+            when(userRepository.findByActivationToken(k4bStored("tok-1"))).thenReturn(Optional.of(u));
+
+            assertThatThrownBy(() -> userService.verifyEmailByToken("tok-1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting("messageKey").isEqualTo("portal.minor.noAccountUnder13");
+            assertThatThrownBy(() -> userService.verifyEmail("apatient@example.com", "tok-1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(u.isActive()).isFalse();
+            assertThat(u.getActivationToken()).isNotNull();
+            verify(userRepository, never()).save(any(User.class));
+            verify(assignmentRepository, never()).save(any());
+
+            // From 13 the same link activates.
+            child.setDateOfBirth(java.time.LocalDate.now().minusYears(13));
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of());
+            assertThat(userService.verifyEmailByToken("tok-1")).isTrue();
+            assertThat(u.isActive()).isTrue();
         }
 
         @org.junit.jupiter.api.Test

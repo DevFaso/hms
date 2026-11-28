@@ -63,8 +63,10 @@ class LabOrderDuplicateCheckTest {
         ArgumentCaptor<LocalDateTime> since = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(labOrderRepository).findActiveSameTestSince(eq(patientId), eq(hospitalId), eq(definitionId),
             eq("GLU-F"), statuses.capture(), since.capture(), any());
+        // QA r81 D4165: an order resulted within the window is named too; cancelled or voided ones are not.
         assertThat(statuses.getValue()).containsExactlyInAnyOrder(LabOrderStatus.ORDERED, LabOrderStatus.PENDING,
-            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
+            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS,
+            LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
         // The cutoff is 24 h before the call, on the server's clock.
         assertThat(since.getValue()).isBetween(before.minusHours(24), after.minusHours(24));
     }

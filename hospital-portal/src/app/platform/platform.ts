@@ -32,7 +32,8 @@ import {
   AutomationTask,
 } from '../services/platform.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toServerDateTime, localDateString } from '../shared/date-utils';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { toServerDateTime, localDateString, toLocalInputValue } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
@@ -184,6 +185,7 @@ const RELEASE_FIELD_IDS = ['relName', 'relEnvironment', 'relStartsAt', 'relEndsA
     InlineDiscardAskComponent,
     InlineSubFormDirective,
     ServerTimePipe,
+    ReasonDialogComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -277,6 +279,10 @@ export class PlatformComponent implements OnInit {
   releasesError = signal(false);
   releaseFormOpen = signal(false);
   releaseForm = signal<ReleaseForm>({ ...EMPTY_RELEASE_FORM });
+  /** QA D4082: the window being corrected; null while a new one is scheduled. */
+  editingReleaseId = signal<string | null>(null);
+  /** QA D4082: the card whose detail is open. */
+  expandedReleaseId = signal<string | null>(null);
 
   /* Computed */
   filteredServices = computed(() => {
@@ -891,8 +897,73 @@ export class PlatformComponent implements OnInit {
   }
 
   openReleaseForm(): void {
+    this.editingReleaseId.set(null);
     this.releaseForm.set({ ...EMPTY_RELEASE_FORM });
     this.releaseFormOpen.set(true);
+  }
+
+  /** QA D4082: a window still ahead is corrected in the same form, with its stored values. */
+  openReleaseEdit(rel: ReleaseWindowResponse): void {
+    this.editingReleaseId.set(rel.id);
+    this.releaseForm.set({
+      name: rel.name,
+      description: rel.description ?? '',
+      environment: rel.environment,
+      startsAt: toLocalInputValue(rel.startsAt),
+      endsAt: toLocalInputValue(rel.endsAt),
+      freezeChanges: !!rel.freezeChanges,
+      ownerTeam: rel.ownerTeam ?? '',
+      notes: rel.notes ?? '',
+    });
+    this.releaseFormOpen.set(true);
+  }
+
+  toggleReleaseDetail(rel: ReleaseWindowResponse): void {
+    this.expandedReleaseId.update((id) => (id === rel.id ? null : rel.id));
+  }
+
+  /** Only a window that has not started can be corrected. */
+  canEditRelease(rel: ReleaseWindowResponse): boolean {
+    return rel.status === 'SCHEDULED';
+  }
+
+  /** A window that has not finished can be withdrawn. */
+  canCancelRelease(rel: ReleaseWindowResponse): boolean {
+    return rel.status === 'SCHEDULED' || rel.status === 'IN_PROGRESS';
+  }
+
+  /** QA D4082: the window whose cancellation is being confirmed in the reason dialog. */
+  cancellingRelease = signal<ReleaseWindowResponse | null>(null);
+
+  startCancelRelease(rel: ReleaseWindowResponse): void {
+    this.cancellingRelease.set(rel);
+  }
+
+  stopCancelRelease(): void {
+    this.cancellingRelease.set(null);
+  }
+
+  /**
+   * QA D4082: a window scheduled by mistake is withdrawn with its reason (the reason dialog
+   * refuses a blank one, and so does the server); it stays in the list as cancelled.
+   */
+  cancelRelease(rel: ReleaseWindowResponse, reason: string): void {
+    this.saving.set(true);
+    this.platformSvc.cancelReleaseWindow(rel.id, reason.trim()).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.stopCancelRelease();
+        this.toast.success(
+          this.translate.instant('PLATFORM.TOAST.RELEASE_CANCELLED', { name: rel.name }),
+        );
+        this.loadReleases();
+        this.loadDashboard();
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.RELEASE_CANCEL_FAILED'));
+      },
+    });
   }
 
   closeReleaseForm(): void {
@@ -940,12 +1011,19 @@ export class PlatformComponent implements OnInit {
     };
 
     this.saving.set(true);
-    this.platformSvc.scheduleReleaseWindow(request).subscribe({
+    const editingId = this.editingReleaseId();
+    const save$ = editingId
+      ? this.platformSvc.updateReleaseWindow(editingId, request)
+      : this.platformSvc.scheduleReleaseWindow(request);
+    save$.subscribe({
       next: (created) => {
         this.releaseFormOpen.set(false);
         this.saving.set(false);
         this.toast.success(
-          this.translate.instant('PLATFORM.TOAST.RELEASE_SCHEDULED', { name: created.name }),
+          this.translate.instant(
+            editingId ? 'PLATFORM.TOAST.RELEASE_UPDATED' : 'PLATFORM.TOAST.RELEASE_SCHEDULED',
+            { name: created.name },
+          ),
         );
         this.loadReleases();
         this.loadDashboard();

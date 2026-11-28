@@ -116,6 +116,16 @@ class CancelVoidReasonGuardTest {
         // Billing-money plan PR 7: a payer's rejection of its share names the payer's reason.
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
             "PayerShareRejectRequestDTO.reason -> service/billing/InvoiceCoverageServiceTest#rejectingNeedsTheReasonAndNeverACardNumber");
+        // Insurer claims plan PRs 2-4: a sent bordereau cancelled, an insurer payment reversed and a write-off
+        // refused each name their reason; a draft is deleted and a waiting request withdrawn, which undo nothing.
+        HANDLERS.put("POST /billing-invoices/insurer-claims/batches/{batchId}/cancel",
+            "InsurerClaimReasonRequestDTO.reason (@NotBlank) -> service/billing/claim/InsurerClaimsPostgresIT#theBordereauFromDraftToSent");
+        HANDLERS.put("POST /billing-invoices/insurer-claims/payments/{paymentId}/reverse",
+            "InsurerClaimReasonRequestDTO.reason (@NotBlank) -> controller/InsurerClaimAccessTest#incompleteMoneyRequestsAreRefusedAtTheEdge");
+        HANDLERS.put("POST /billing-invoices/insurer-claims/write-offs/{writeOffId}/cancel",
+            "NOT A VOID: withdraws a write-off request not yet decided; nothing was written off and the amount is owed by the payer as before");
+        HANDLERS.put("DELETE /billing-invoices/insurer-claims/batches/{batchId}",
+            "NOT A VOID: only a DRAFT bordereau is deleted (billing.claim.notDraft); a sent one is cancelled with a reason");
         HANDLERS.put("DELETE /billing-invoices/{id}",
             "NOT A VOID: only a DRAFT is deleted (billing.invoice.deleteOnlyDraft, QA D613); an issued invoice is cancelled with a reason");
         HANDLERS.put("DELETE /invoice-items/{id}",
@@ -446,6 +456,8 @@ class CancelVoidReasonGuardTest {
             "NOT A WITHDRAWAL: a temporary reservation of a free slot");
         CLINICAL_HANDLERS.put("PATCH /staff/scheduling/leaves/{leaveId}/cancel",
             "NOT A CLINICAL RECORD: a staff member's own leave request");
+        CLINICAL_HANDLERS.put("POST /super-admin/platform/release-windows/{id}/cancel",
+            "PlatformReleaseWindowCancelRequestDTO.reason -> service/impl/SuperAdminPlatformRegistryServiceImplTest#cancelReleaseWindowNeedsAReason");
         // QA D4140: whoever placed an imaging request that waits for a physician withdraws it, with a reason.
         CLINICAL_HANDLERS.put("POST /imaging/orders/{orderId}/withdrawal",
             "ImagingOrderWithdrawalRequestDTO.cancellationReason -> service/ImagingOrderServiceImplTest#d4140_whoeverAskedWithdrawsHerOwnPendingRequest_andNothingElse");
@@ -547,6 +559,8 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: a staff role assignment");
         DELETE_PROOFS.put("DELETE /beds/{bedId}",
             "NOT A CLINICAL RECORD: ward configuration");
+        DELETE_PROOFS.put("DELETE /billing-invoices/insurer-claims/batches/{batchId}",
+            "NOT A CLINICAL RECORD: a draft bordereau that was never sent; a sent one is cancelled with a reason");
         DELETE_PROOFS.put("DELETE /billing-invoices/{id}",
             "KNOWN GAP (D1241 class, standing debt): an administrator hard-deletes an invoice; billing files belong to fix/r25-mar-cds-pharmacy-billing (the reasoned cancel is the supported path)");
         DELETE_PROOFS.put("DELETE /birth-plans/{id}",

@@ -139,7 +139,10 @@ class R23BackendClassGuardsTest {
         // Billing-money plan PR 6: a plan's last day is never before its start (the day before it = withdrawn).
         "payload/dto/billing/PayerPlanRequestDTO.java", "service/billing/PayerCatalogueService.java#to.isBefore(from",
         "payload/dto/billing/PayerPlanUpdateRequestDTO.java",
-            "service/billing/PayerCatalogueService.java#to.isBefore(from.minusDays(1))");
+            "service/billing/PayerCatalogueService.java#to.isBefore(from.minusDays(1))",
+        // Insurer claims plan PR 2: the period of a bordereau never ends before it starts.
+        "payload/dto/billing/InsurerClaimBatchRequestDTO.java",
+            "service/billing/claim/InsurerClaimBatchService.java#getPeriodTo().isBefore(body.getPeriodFrom())");
 
     /** A date-typed field; its name decides whether it opens or closes a range. */
     private static final Pattern DATE_FIELD = Pattern.compile(

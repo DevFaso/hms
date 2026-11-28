@@ -61,6 +61,8 @@ public class SuperAdminPlatformRegistrySummaryDTO {
         private long pendingIntegrations;
         private long disabledLinks;
         private long activeReleaseWindows;
+        /** QA D4081: windows not started yet; {@code activeReleaseWindows} counts only those running now. */
+        private long plannedReleaseWindows;
         /**
          * When a release window was last created or changed. It used to be
          * served as {@code lastSnapshotGeneratedAt} under a "Last snapshot"

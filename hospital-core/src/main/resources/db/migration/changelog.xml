@@ -4184,6 +4184,47 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V415 (QA r81 D4074, D4312): provider facilities keep the licence authority as typed, and one
+         VERIFIED facility per CNSS number (index created only when no duplicate exists). DO block. -->
+    <changeSet id="V415-provider-licence-authority-label" author="hms-team" runOnChange="false">
+        <sqlFile path="V415__provider_licence_authority_label.sql" relativeToChangelogFile="true"
+                 splitStatements="false" stripComments="false"/>
+    </changeSet>
+
+    <!-- V416 (QA r81 D4317): an inactive organization that still holds an active facility gets its
+         active flag back; nothing is suspended. -->
+    <changeSet id="V416-organization-active-follows-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V416__organization_active_follows_lifecycle.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V417 (QA r81 D4082): a cancelled release window keeps its reason. -->
+    <changeSet id="V417-release-window-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V417__release_window_cancel_reason.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V455-V458 (insurer claims plan PRs 2-4, QA D3983; V455-V459 reserved, V459 unused): the bordereau sent to
+         a payer and its lines (V455), the payer's remittances and their allocation to lines (V456), a payer share
+         settled by amounts with PARTIALLY_PAID and WRITTEN_OFF (V457), the payer's refusals and the four-eyes
+         write-offs (V458). Plain DDL, no DO block. -->
+    <changeSet id="V455-insurer-claim-batches" author="hms-team" runOnChange="false">
+        <sqlFile path="V455__insurer_claim_batches.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V456-insurer-payments" author="hms-team" runOnChange="false">
+        <sqlFile path="V456__insurer_payments.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V457-payer-share-settlement" author="hms-team" runOnChange="false">
+        <sqlFile path="V457__payer_share_settlement.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V458-insurer-claim-refusals-write-offs" author="hms-team" runOnChange="false">
+        <sqlFile path="V458__insurer_claim_refusals_write_offs.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- V465 (QA D4140, r81): an imaging request placed by a nurse or a midwife waits for a physician. Who
          placed the request and whether it needs a physician, on clinical.imaging_orders. Additive.
          Range V465-V469 is reserved for the r81 lab lane. -->
@@ -4222,6 +4263,30 @@
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V425: a physical stock count can be closed (QA r81 D4191).
+         Range V425-V429 is the r81 pharmacy-stock lane's. Four nullable columns on
+         clinical.pharmacy_stock_counts (closed_at, closed_by_user_id, closed_by_name,
+         close_reason), one CHECK (a closed count names who and why, and was never
+         applied) and a partial index on the counts still waiting. Additive,
+         IF NOT EXISTS; no rollback declared (forward-only).
+         ================================================================= -->
+    <changeSet id="V425-stock-count-closure" author="hms-team" runOnChange="false">
+        <sqlFile path="V425__stock_count_closure.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V426: the withdrawal of a medicine is a line of its history (QA r81 D4190).
+         Widens two CHECKs of clinical.medication_catalog_versions (change type
+         WITHDRAWAL, status RECORDED) and ties the two together. No column, no data
+         change; no rollback declared (forward-only).
+         ================================================================= -->
+    <changeSet id="V426-medication-catalog-withdrawal-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V426__medication_catalog_withdrawal_history.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
     </changeSet>
 
     <!-- V450 (QA D4221): the starter price list's consultation and observation items take their system links; no price and no invoice changes. -->

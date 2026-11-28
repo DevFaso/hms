@@ -30,4 +30,9 @@ public class ProxyResponseDTO {
     private LocalDateTime revokedAt;
     private String notes;
     private LocalDateTime createdAt;
+    /**
+     * QA D4269: a verified parent's or legal guardian's access. A patient aged 15 to 17 does not withdraw it alone,
+     * so the screen offers no « Retirer » on such a row.
+     */
+    private boolean verifiedParentOrGuardian;
 }

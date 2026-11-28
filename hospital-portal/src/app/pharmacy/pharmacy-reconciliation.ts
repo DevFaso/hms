@@ -21,6 +21,7 @@ import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PluralKeyPipe } from '../shared/i18n/plural-key';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import {
   PharmacyMoneyService,
@@ -55,6 +56,7 @@ function localIsoDate(d: Date): string {
     DateTimePipe,
     KeyLabelPipe,
     SubmitGuardDirective,
+    PluralKeyPipe,
   ],
   templateUrl: './pharmacy-reconciliation.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -51,8 +51,11 @@ class SuperAdminSubscriptionPlanQaTest {
             }
             return plan;
         });
+        com.example.hms.service.FeatureFlagService featureFlags = mock(com.example.hms.service.FeatureFlagService.class);
+        when(featureFlags.catalogueKeys()).thenReturn(java.util.List.of("lab", "pharmacy"));
         SubscriptionServiceImpl service = new SubscriptionServiceImpl(
-            planRepository, subscriptionRepository, mock(OrganizationRepository.class), new SubscriptionMapper());
+            planRepository, subscriptionRepository, mock(OrganizationRepository.class), new SubscriptionMapper(),
+            featureFlags);
         mvc = MockMvcBuilders.standaloneSetup(new SuperAdminSubscriptionController(service))
             .setControllerAdvice(new GlobalExceptionHandler())
             .setMessageConverters(new org.springframework.http.converter.json.JacksonJsonHttpMessageConverter(

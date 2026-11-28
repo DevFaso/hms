@@ -17,6 +17,22 @@ public interface LabInventoryItemRepository extends JpaRepository<LabInventoryIt
 
     Page<LabInventoryItem> findByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
+    /**
+     * Active items whose name or code contains the term, case-insensitively.
+     * A {@code %} or {@code _} typed by the user is matched literally.
+     */
+    default Page<LabInventoryItem> searchActive(UUID hospitalId, String term, Pageable pageable) {
+        String escaped = term.toLowerCase(java.util.Locale.ROOT)
+            .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        return searchActiveByPattern(hospitalId, "%" + escaped + "%", pageable);
+    }
+
+    @Query("SELECT i FROM LabInventoryItem i WHERE i.hospital.id = :hospitalId AND i.active = true "
+         + "AND (LOWER(i.name) LIKE :pattern ESCAPE '\\' "
+         + "OR LOWER(i.itemCode) LIKE :pattern ESCAPE '\\')")
+    Page<LabInventoryItem> searchActiveByPattern(@Param("hospitalId") UUID hospitalId, @Param("pattern") String pattern,
+            Pageable pageable);
+
     Optional<LabInventoryItem> findByIdAndActiveTrue(UUID id);
 
     boolean existsByHospitalIdAndItemCode(UUID hospitalId, String itemCode);

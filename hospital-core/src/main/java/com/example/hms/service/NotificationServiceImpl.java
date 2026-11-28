@@ -285,6 +285,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public List<NotificationPreferenceDTO> updatePreferences(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
+        requireMinorMayChangeContactConsent(userId, updates);
         User user = userRepository.lockForNotificationPreferences(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         // A settings page is a partial matrix. Omitted choices (including a desk-recorded refusal)
@@ -316,6 +317,49 @@ public class NotificationServiceImpl implements NotificationService {
         notificationPreferenceRepository.saveAll(new java.util.ArrayList<>(changed.values()));
         auditOwnChannelChoices(userId, audited);
         return ownView(existing.values(), userId);
+    }
+
+    /** QA D4269: what a minor may do alone on their own account; null only in a hand-built test. */
+    private com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMinorPortalRights(com.example.hms.service.recordaccess.MinorPortalRightsGuard minorPortalRights) {
+        this.minorPortalRights = minorPortalRights;
+    }
+
+    /**
+     * QA D4269: the SMS and e-mail choices are the patient's consent to be written to. A minor's own account
+     * changes them only as the age rule allows (a withdrawal from 15; giving one back is done at the desk).
+     * Read before the account lock is taken, so the refusal's audit row never waits on it. A choice that changes
+     * nothing is not a change; a staff account's own settings are no patient's consent and pass.
+     */
+    private void requireMinorMayChangeContactConsent(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
+        if (minorPortalRights == null || updates == null || updates.isEmpty()) {
+            return;
+        }
+        var patient = com.example.hms.service.support.LinkedPatientLookup.linkedPatient(patientRepository, userId)
+            .orElse(null);
+        if (patient == null) {
+            return;
+        }
+        var stored = notificationPreferenceRepository.findByUser_Id(userId);
+        for (var update : updates) {
+            if (update == null || update.getNotificationType() == null || update.getEnabled() == null
+                || (update.getChannel() != com.example.hms.enums.NotificationChannel.SMS
+                    && update.getChannel() != com.example.hms.enums.NotificationChannel.EMAIL)) {
+                continue;
+            }
+            boolean before = stored.stream()
+                .filter(row -> row.getNotificationType() == update.getNotificationType()
+                    && row.getChannel() == update.getChannel())
+                .findFirst().map(NotificationPreference::isEnabled).orElse(true);
+            boolean after = update.getEnabled();
+            if (before != after) {
+                minorPortalRights.require(patient, after
+                    ? com.example.hms.service.recordaccess.MinorPortalRights.Action.GIVE_CONTACT_CONSENT
+                    : com.example.hms.service.recordaccess.MinorPortalRights.Action.WITHDRAW_CONTACT_CONSENT);
+            }
+        }
     }
 
     /**

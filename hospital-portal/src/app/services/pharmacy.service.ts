@@ -107,9 +107,25 @@ export interface MedicationCatalogItemResponse {
 /* ──────────────── Medication catalogue approvals (go-live D2, V385) ──────────────── */
 
 export type MedicationCatalogVersionKind = 'FORMULARY' | 'DOSE_LIMIT';
-export type MedicationCatalogChangeType = 'CREATE' | 'UPDATE' | 'RATIFY';
+/** WITHDRAWAL (QA D4190): the entry taken out of the catalogue; a line of its history, never decided. */
+export type MedicationCatalogChangeType = 'CREATE' | 'UPDATE' | 'RATIFY' | 'WITHDRAWAL';
+
+/**
+ * QA D4180 (r81): an entry of the catalogue, or a proposal still waiting, that looks like the one
+ * being proposed. `exact` (same name, form and strength) is refused by the server.
+ */
+export interface MedicationCatalogSimilarEntry {
+  catalogItemId?: string | null;
+  versionId?: string | null;
+  label: string;
+  form?: string | null;
+  exact: boolean;
+  state: 'IN_CATALOGUE' | 'WITHDRAWN' | 'PENDING';
+  platform: boolean;
+}
+/** RECORDED (QA D4190): an act that took effect when it was recorded (a withdrawal from the catalogue). */
 export type MedicationCatalogVersionStatus =
-  'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED' | 'WITHDRAWN';
+  'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED' | 'WITHDRAWN' | 'RECORDED';
 
 /** A formulary entry as one version carries it. */
 export interface FormularySnapshot {
@@ -174,6 +190,8 @@ export interface MedicationCatalogVersion {
   callerMayApprove: boolean;
   callerMayReject: boolean;
   ownProposal: boolean;
+  /** QA D4180: for a formulary version still waiting, the entries and proposals that look like it. */
+  similarEntries?: MedicationCatalogSimilarEntry[] | null;
 }
 
 /* ───────────────────────────── Pharmacy Registry ───────────────────────────── */
@@ -337,9 +355,10 @@ export interface StockLotResponse {
   unit?: string | null;
   /**
    * QA D3940: the lot's product (reader's language, with its strength), its
-   * strength and form, and how it relates to the order — filled by the
-   * dispensable-lots read only. A SUBSTITUTE leaves only as a recorded
-   * substitution; the server never lists another strength or molecule.
+   * strength and form — on every read of a lot since QA D4184 (r81): a lot is
+   * never listed without its medicine. `productMatch` (how it relates to the
+   * order) is the dispensable-lots read's only. A SUBSTITUTE leaves only as a
+   * recorded substitution; the server never lists another strength or molecule.
    */
   productName?: string | null;
   strength?: string | null;
@@ -468,6 +487,16 @@ export interface StockTransactionResponse {
   /** QA D158: the lot's number, never its id. */
   stockLotNumber?: string;
   createdAt: string;
+  /**
+   * QA D4184 (r81): what moved (the product in the reader's language with its strength, its
+   * dosage form's code), in which unit (absent on movements older than the unit snapshot), and
+   * for a transfer the other store.
+   */
+  medicationName?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  unit?: string | null;
+  counterpartPharmacyName?: string | null;
   // FU-2: first-class RECEIPT fields
   lotNumber?: string;
   supplier?: string;
@@ -854,6 +883,19 @@ export interface StockCheckResult {
   prescriptionStatus?: string;
   /** QA D966: whether a routing action can still be taken; the buttons follow it. */
   routable?: boolean;
+  /**
+   * QA D4193 (r81): what each of the hospital's own stores holds; `quantityOnHand` is their
+   * total. Absent from a server that predates it.
+   */
+  stores?: StoreStock[] | null;
+}
+
+/** One of the hospital's own stores and what it holds of the prescribed medicine. */
+export interface StoreStock {
+  pharmacyId: string;
+  pharmacyName: string;
+  quantityOnHand: number;
+  unit?: string | null;
 }
 
 export interface PartnerOption {
@@ -1106,8 +1148,25 @@ export class PharmacyService {
     return this.http.put<MedicationCatalogItemResponse>(`/medication-catalog/${id}`, req);
   }
 
-  deleteMedication(id: string): Observable<void> {
-    return this.http.delete<void>(`/medication-catalog/${id}`);
+  /** QA D4190 (r81): a withdrawal says why; the reason is kept on the entry's history. */
+  deleteMedication(id: string, reason: string): Observable<void> {
+    const params = new HttpParams().set('reason', reason);
+    return this.http.delete<void>(`/medication-catalog/${id}`, { params });
+  }
+
+  /** QA D4180 (r81): what already looks like the entry about to be proposed. */
+  similarMedications(
+    entry: { nameFr: string; form?: string; strength?: string; strengthUnit?: string },
+    excludeId?: string | null,
+  ): Observable<MedicationCatalogSimilarEntry[]> {
+    let params = new HttpParams().set('nameFr', entry.nameFr);
+    if (entry.form) params = params.set('form', entry.form);
+    if (entry.strength) params = params.set('strength', entry.strength);
+    if (entry.strengthUnit) params = params.set('strengthUnit', entry.strengthUnit);
+    if (excludeId) params = params.set('excludeId', excludeId);
+    return this.http.get<MedicationCatalogSimilarEntry[]>('/medication-catalog/similar', {
+      params,
+    });
   }
 
   /**

@@ -96,7 +96,15 @@ export class LabOpsDashboardComponent implements OnInit, OnDestroy {
       {
         key: 'in_progress',
         label: this.translate.instant('LAB_OPS.IN_PROGRESS'),
-        value: s.statusInProgress,
+        // Every open stage, including results awaiting validation, as on the lab list.
+        value:
+          s.statusOrdered +
+          s.statusPending +
+          s.statusCollected +
+          s.statusReceived +
+          s.statusInProgress +
+          s.statusResulted +
+          s.statusVerified,
         icon: 'pending_actions',
         color: '#7c3aed',
         bgColor: '#ede9fe',

@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-header' as lane-header;
 .lab-outbox-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -100,6 +101,12 @@
   overflow-x: auto;
   border: 1px solid var(--color-border, #e5e7eb);
   border-radius: 8px;
+}
+
+.outbox-table .date-cell,
+.outbox-table td:first-child,
+.outbox-table .order-cell {
+  white-space: normal;
 }
 
 .outbox-table {
@@ -392,3 +399,4 @@
     animation: none;
   }
 }
+@include lane-header.header;

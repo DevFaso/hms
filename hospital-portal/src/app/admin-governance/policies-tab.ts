@@ -2,6 +2,7 @@ import { allRows } from '../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { GovernanceNamePipe } from './default-names';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -28,7 +29,14 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
+  imports: [
+    GovernanceNamePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    OrgTextPipe,
+  ],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

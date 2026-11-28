@@ -329,3 +329,15 @@ textarea.form-control {
 }
 
 @include operations.workspace;
+
+// QA D4193 (r81): the stock of each store, under the hospital's total.
+.store-stock {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+
+  li {
+    overflow-wrap: anywhere;
+  }
+}

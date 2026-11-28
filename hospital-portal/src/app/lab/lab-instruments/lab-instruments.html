@@ -1,8 +1,11 @@
 <div class="lab-instruments-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">precision_manufacturing</span>
       <div>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">precision_manufacturing</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
         <h1 class="page-title">{{ 'LAB_INSTRUMENTS.TITLE' | translate }}</h1>
         <p class="page-subtitle">{{ 'LAB_INSTRUMENTS.SUBTITLE' | translate }}</p>
       </div>
@@ -12,6 +15,15 @@
         'LAB_INSTRUMENTS.COUNT' | translate: { count: totalElements() }
       }}</span>
       @if (canManage()) {
+        <label class="inactive-toggle">
+          <input
+            type="checkbox"
+            data-test="instruments-show-inactive"
+            [checked]="showInactive()"
+            (change)="toggleInactive($any($event.target).checked)"
+          />
+          {{ 'LAB_INSTRUMENTS.SHOW_INACTIVE' | translate }}
+        </label>
         <button class="btn-primary" (click)="openCreate()" [disabled]="loading()">
           <span class="material-symbols-outlined">add</span>
           {{ 'LAB_INSTRUMENTS.ADD' | translate }}
@@ -80,8 +92,14 @@
               <option value="RETIRED">{{ 'LAB_INSTRUMENTS.STATUS_RETIRED' | translate }}</option>
             </select>
           </label>
-          <!-- QA D4153: the dates the list and its « en retard » flag are fed from. -->
-          <div class="form-dates" data-testid="instrument-dates">
+          <!-- QA D4076, D4153: a calibration or a maintenance done is recorded here, and the next one
+               planned; the list and its « en retard » flag are fed from these dates. -->
+          <fieldset
+            class="date-grid form-dates"
+            data-test="instrument-dates"
+            data-testid="instrument-dates"
+          >
+            <legend>{{ 'LAB_INSTRUMENTS.DATES' | translate }}</legend>
             <label
               >{{ 'LAB_INSTRUMENTS.INSTALLATION_DATE' | translate }}
               <input
@@ -137,7 +155,7 @@
                 data-server-field="nextMaintenanceDate"
               />
             </label>
-          </div>
+          </fieldset>
           <label
             >{{ 'LAB_INSTRUMENTS.NOTES' | translate }}
             <textarea [(ngModel)]="form.notes" name="notes" rows="3"></textarea>
@@ -210,8 +228,15 @@
         </thead>
         <tbody>
           @for (instr of instruments(); track instr.id) {
-            <tr>
-              <td>{{ instr.name }}</td>
+            <tr [class.inactive-row]="instr.active === false">
+              <td>
+                {{ instr.name }}
+                @if (instr.active === false) {
+                  <span class="inactive-badge" data-test="instrument-inactive">{{
+                    'LAB_INSTRUMENTS.INACTIVE' | translate
+                  }}</span>
+                }
+              </td>
               <td>{{ instr.serialNumber }}</td>
               <td>{{ instr.manufacturer ?? '—' }}</td>
               <td>
@@ -220,45 +245,54 @@
                 </span>
               </td>
               <td>
+                {{
+                  instr.nextCalibrationDate
+                    ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
                 @if (instr.calibrationOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextCalibrationDate
-                      ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
-                      : '—'
-                  }}
                 }
               </td>
               <td>
+                {{
+                  instr.nextMaintenanceDate
+                    ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
                 @if (instr.maintenanceOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
-                } @else {
-                  {{
-                    instr.nextMaintenanceDate
-                      ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
-                      : '—'
-                  }}
                 }
               </td>
               @if (canManage()) {
                 <td class="actions-col">
-                  <button
-                    class="btn-icon"
-                    (click)="openEdit(instr)"
-                    title="{{ 'COMMON.EDIT' | translate }}"
-                    [attr.aria-label]="'COMMON.EDIT' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="btn-icon danger"
-                    (click)="deactivate(instr)"
-                    title="{{ 'COMMON.DELETE' | translate }}"
-                    [attr.aria-label]="'COMMON.DELETE' | translate"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (instr.active === false) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-small"
+                      data-test="instrument-reactivate"
+                      (click)="reactivate(instr)"
+                    >
+                      {{ 'LAB_INSTRUMENTS.REACTIVATE' | translate }}
+                    </button>
+                  } @else {
+                    <button
+                      class="btn-icon"
+                      (click)="openEdit(instr)"
+                      title="{{ 'COMMON.EDIT' | translate }}"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="btn-icon danger"
+                      (click)="deactivate(instr)"
+                      title="{{ 'COMMON.DELETE' | translate }}"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </td>
               }
             </tr>

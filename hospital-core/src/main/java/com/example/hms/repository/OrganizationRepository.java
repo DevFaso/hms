@@ -66,6 +66,10 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
     @Query("SELECT o FROM Organization o JOIN FETCH o.securityPolicies sp WHERE o.id = :organizationId AND sp.active = true")
     Optional<Organization> findByIdWithActiveSecurityPolicies(@Param("organizationId") UUID organizationId);
 
+    /** QA D4317: how many active facilities (of any type) the organization holds. */
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.organization.id = :organizationId AND h.active = true")
+    long countActiveFacilities(@Param("organizationId") UUID organizationId);
+
     @EntityGraph(attributePaths = "hospitals")
     @Query("SELECT o FROM Organization o WHERE o.id = :organizationId")
     Optional<Organization> findByIdWithHospitals(@Param("organizationId") UUID organizationId);

@@ -71,6 +71,30 @@
             <span class="payer-shares-status" [attr.data-status]="share.status">{{
               share.status | keyLabel: 'BILLING.PAYER_SHARES.STATUSES.'
             }}</span>
+            @if ((share.paidAmount ?? 0) > 0 && share.status !== 'PAID') {
+              <span
+                class="payer-shares-reason"
+                [attr.data-testid]="'payer-share-paid-' + share.id"
+                >{{
+                  'INSURER_CLAIMS.SHARES.PAID_SO_FAR'
+                    | translate: { amount: (share.paidAmount | cfa) }
+                }}</span
+              >
+            }
+            @if (share.status !== 'REJECTED' && (share.rejectedAmount ?? 0) > 0) {
+              <span
+                class="payer-shares-reason"
+                [attr.data-testid]="'payer-share-partly-rejected-' + share.id"
+                >{{
+                  'INSURER_CLAIMS.SHARES.PARTLY_REJECTED'
+                    | translate
+                      : {
+                          amount: (share.rejectedAmount | cfa),
+                          reason: share.rejectionReason ?? '',
+                        }
+                }}</span
+              >
+            }
             @if (share.status === 'REJECTED' && share.rejectionReason) {
               <span
                 class="payer-shares-reason"
@@ -82,25 +106,7 @@
               >
             }
             <span class="payer-shares-actions">
-              @if (canClaim(share)) {
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  [disabled]="busy()"
-                  (click)="decide(share, 'claim')"
-                >
-                  {{ 'BILLING.PAYER_SHARES.CLAIM' | translate }}
-                </button>
-              }
               @if (canSettle(share)) {
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  [disabled]="busy()"
-                  (click)="decide(share, 'paid')"
-                >
-                  {{ 'BILLING.PAYER_SHARES.MARK_PAID' | translate }}
-                </button>
                 <button
                   type="button"
                   class="btn-secondary btn-sm"

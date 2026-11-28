@@ -315,6 +315,15 @@ public class RoleValidator {
         return com.example.hms.security.CallerIdentity.isSuperAdminFor(hospitalId);
     }
 
+    /**
+     * QA D4270 review: the staff who collect any approved release-of-information copy of {@code hospitalId}: a
+     * doctor, a nurse or a midwife assigned THERE. Reception is not one (it reads no clinical content), and a role
+     * held at another hospital does not count.
+     */
+    public boolean collectsReleaseCopies(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
     /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
     public boolean ordersImaging(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
@@ -544,6 +553,16 @@ public class RoleValidator {
     public boolean canDecidePayerShare(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
             CLAIMS_REVIEWER_ROLE);
+    }
+
+    /**
+     * Insurer claims plan PR 3 (owner decision of 2026-11-26, Q2): who records, allocates or reverses a payer's
+     * remittance at {@code hospitalId}, cancels a submitted bordereau, re-bills a refused amount to the patient and
+     * approves or refuses a write-off: a hospital admin or an accountant assignment there. Never the billing
+     * specialist (the till) and never the platform super-admin on their own.
+     */
+    public boolean canSettleInsurerClaims(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
     /**

@@ -22,6 +22,15 @@
           }
         </select>
       }
+      <!-- QA D4183 (r81): the physical count and the consumption report, one click from the stock. -->
+      <a class="btn-secondary" routerLink="/pharmacy/stock-count" data-testid="link-stock-count">
+        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+        {{ 'NAV.STOCK_COUNT' | translate }}
+      </a>
+      <a class="btn-secondary" routerLink="/pharmacy/consumption" data-testid="link-consumption">
+        <span class="material-symbols-outlined" aria-hidden="true">query_stats</span>
+        {{ 'NAV.STOCK_CONSUMPTION' | translate }}
+      </a>
       <button class="btn-primary" (click)="openCreateItem()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.ADD_ITEM' | translate }}
@@ -499,11 +508,14 @@
         <button
           class="btn-secondary"
           data-testid="trigger-reorder-alerts"
+          [disabled]="triggeringAlerts()"
           (click)="triggerReorderAlerts()"
         >
           <span class="material-symbols-outlined">notifications_active</span>
           {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
         </button>
+        <!-- QA D4183 (r81): what the button does, and to whom. -->
+        <p class="workspace-note">{{ 'PHARMACY.TRIGGER_ALERTS_HINT' | translate }}</p>
       </div>
     }
     @if (alertsFailed()) {
@@ -595,6 +607,7 @@
         <table class="data-table">
           <thead>
             <tr>
+              <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
               <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
               <th>{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
               <th>{{ 'PHARMACY.DAYS_REMAINING' | translate }}</th>
@@ -610,6 +623,15 @@
                   getDaysUntilExpiry(lot.expiryDate) > 0 && getDaysUntilExpiry(lot.expiryDate) <= 30
                 "
               >
+                <!-- QA D4184 (r81): lot numbers repeat across medicines; the row names its product. -->
+                <td class="lot-product" data-testid="expiry-product">
+                  <span class="med-name">{{
+                    lot.productName ?? ('PHARMACY.UNKNOWN_ITEM' | translate)
+                  }}</span>
+                  @if (lot.form) {
+                    <small class="lot-form">{{ lot.form | catalogForm }}</small>
+                  }
+                </td>
                 <td>
                   <span class="code-chip">{{ lot.lotNumber }}</span>
                 </td>
@@ -631,7 +653,7 @@
                     </span>
                   }
                 </td>
-                <td>{{ lot.remainingQuantity }}</td>
+                <td>{{ lot.remainingQuantity | countUnit: lot.unit }}</td>
                 <td>{{ lot.supplier | dash }}</td>
               </tr>
             }

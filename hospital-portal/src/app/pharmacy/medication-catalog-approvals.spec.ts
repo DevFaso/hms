@@ -94,7 +94,8 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     render([strengthChange]);
 
     expect(svc.listCatalogVersions).toHaveBeenCalledOnceWith('PENDING_APPROVAL', 0, 200);
-    expect(text('.version-title')).toBe('Paracétamol 1000 mg (TABLET)');
+    // QA D4187 (r81): the dosage form through its translation key, never the raw code.
+    expect(text('.version-title')).toBe('Paracétamol 1000 mg (PHARMACY.FORM_OPTION.TABLET)');
     expect(text('[data-test="approval-status"]')).toBe('PENDING_APPROVAL');
     expect(text('.version-who')).toContain('Awa Traoré');
     expect(text('.version-who')).toContain('Nouveau dosage référencé');
@@ -107,13 +108,24 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(el.querySelectorAll('tr.changed').length).toBe(1);
   });
 
-  it('approves a version, reads the queue again and tells its host', () => {
+  it('approves a version only after the confirmation (QA D4189), reads the queue again and tells its host', async () => {
     render([strengthChange]);
     svc.approveCatalogVersion.and.returnValue(of({ ...strengthChange, status: 'APPROVED' }));
     const decided = jasmine.createSpy('decided');
     fixture.componentInstance.decided.subscribe(decided);
 
+    // One click no longer approves: the approver is asked, and « Retour » changes nothing.
+    confirm.ask.and.resolveTo(false);
     el.querySelector<HTMLButtonElement>('[data-test="approval-approve"]')!.click();
+    await fixture.whenStable();
+    expect(svc.approveCatalogVersion).not.toHaveBeenCalled();
+    expect(confirm.ask.calls.mostRecent().args[0].titleKey).toBe(
+      'PHARMACY.CATALOG_APPROVAL.APPROVE_CONFIRM_TITLE',
+    );
+
+    confirm.ask.and.resolveTo(true);
+    el.querySelector<HTMLButtonElement>('[data-test="approval-approve"]')!.click();
+    await fixture.whenStable();
 
     expect(svc.approveCatalogVersion).toHaveBeenCalledOnceWith('v-1');
     expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.CATALOG_APPROVAL.APPROVED_TOAST');
@@ -145,7 +157,7 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     svc.rejectCatalogVersion.and.returnValue(of({ ...strengthChange, status: 'REJECTED' }));
     el.querySelector<HTMLButtonElement>('[data-test="approval-refuse"]')!.click();
     const dialog = reasonDialog(fixture)!;
-    expect(dialog.textContent).toContain('Paracétamol 1000 mg (TABLET)');
+    expect(dialog.textContent).toContain('Paracétamol 1000 mg (PHARMACY.FORM_OPTION.TABLET)');
 
     // A blank reason sends nothing.
     dialog.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
@@ -172,13 +184,15 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(toast.success).toHaveBeenCalledOnceWith('PHARMACY.CATALOG_APPROVAL.WITHDRAWN_TOAST');
   });
 
-  it("says the server's reason when an approval is refused, and keeps the version in the queue", () => {
+  it("says the server's reason when an approval is refused, and keeps the version in the queue", async () => {
     render([strengthChange]);
     svc.approveCatalogVersion.and.returnValue(
       throwError(() => ({ error: { message: 'Une version est validée par une autre personne' } })),
     );
+    confirm.ask.and.resolveTo(true);
 
     el.querySelector<HTMLButtonElement>('[data-test="approval-approve"]')!.click();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     expect(toast.error).toHaveBeenCalledTimes(1);
@@ -187,6 +201,74 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(
       el.querySelector<HTMLButtonElement>('[data-test="approval-approve"]')!.disabled,
     ).toBeFalse();
+  });
+
+  it("QA D4187: writes the form and the route of a version in the reader's words, never their codes", () => {
+    render([
+      {
+        ...strengthChange,
+        formulary: { ...strengthChange.formulary, form: 'CAPSULE', route: 'ORAL' },
+        previousFormulary: { ...strengthChange.previousFormulary, form: 'TABLET', route: 'ORAL' },
+        changedFields: ['form'],
+      },
+    ]);
+    const rows = Array.from(el.querySelectorAll('[data-test="approval-line"]')).map(
+      (row) => row.textContent ?? '',
+    );
+    const form = rows.find((row) => row.includes('form'))!;
+    expect(form).toContain('PHARMACY.FORM_OPTION.TABLET');
+    expect(form).toContain('PHARMACY.FORM_OPTION.CAPSULE');
+    expect(rows.find((row) => row.includes('route'))).toContain('PHARMACY.ROUTE_OPTION.ORAL');
+  });
+
+  it('QA D4180: shows the approver the entry that looks like the proposal, and says it again when asked', async () => {
+    render([
+      {
+        ...strengthChange,
+        similarEntries: [
+          {
+            catalogItemId: 'm-2',
+            label: 'Paracétamol 1000 mg (TABLET)',
+            form: 'TABLET',
+            exact: false,
+            state: 'IN_CATALOGUE',
+            platform: true,
+          },
+        ],
+      },
+    ]);
+    const similar = el.querySelector('[data-test="approval-similar"]')!;
+    expect(similar.textContent).toContain('Paracétamol 1000 mg (PHARMACY.FORM_OPTION.TABLET)');
+    expect(similar.textContent).toContain('PHARMACY.CATALOG_DUPLICATE.PLATFORM');
+
+    confirm.ask.and.resolveTo(false);
+    el.querySelector<HTMLButtonElement>('[data-test="approval-approve"]')!.click();
+    await fixture.whenStable();
+    const asked = confirm.ask.calls.mostRecent().args[0];
+    expect(asked.messageKey).toBe('PHARMACY.CATALOG_APPROVAL.APPROVE_CONFIRM_SIMILAR');
+    expect(asked.params?.['similar']).toContain('Paracétamol 1000 mg');
+  });
+
+  it('QA D4190: a withdrawal is a line of the history, with its note and no action', () => {
+    render([
+      {
+        ...strengthChange,
+        changeType: 'WITHDRAWAL',
+        status: 'RECORDED',
+        changedFields: ['active'],
+        decidedByName: 'Awa Traoré',
+        decidedAt: '2026-11-26T09:00:00',
+        callerMayApprove: false,
+        callerMayReject: false,
+      },
+    ]);
+    expect(text('[data-test="approval-status"]')).toBe('RECORDED');
+    expect(el.querySelector('[data-test="approval-withdrawal-note"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="approval-approve"]')).toBeNull();
+    // QA D4189: a decided version's first column is what it replaced, not « in force ».
+    expect(el.querySelector('thead')!.textContent).toContain(
+      'PHARMACY.CATALOG_APPROVAL.COL_BEFORE_DECIDED',
+    );
   });
 
   it('shows the history of every version with who decided and why, and no action on a decided one', () => {
@@ -214,6 +296,23 @@ describe('MedicationCatalogApprovalsComponent (go-live D2)', () => {
     expect(text('[data-test="approval-decision-reason"]')).toBe('Dosage non référencé');
     expect(el.querySelector('[data-test="approval-approve"]')).toBeNull();
     expect(el.querySelector('[data-test="approval-refuse"]')).toBeNull();
+  });
+
+  it('QA D4188: the two views are the tabs of one tab bar, the one shown marked as such', () => {
+    render([strengthChange]);
+    const tabs = Array.from(el.querySelectorAll<HTMLButtonElement>('.tab-bar > button.tab-btn'));
+    expect(tabs.map((b) => b.dataset['test'])).toEqual([
+      'approvals-view-pending',
+      'approvals-view-history',
+    ]);
+    expect(tabs.map((b) => b.classList.contains('active'))).toEqual([true, false]);
+    expect(tabs[0].getAttribute('aria-pressed')).toBe('true');
+
+    tabs[1].click();
+    fixture.detectChanges();
+
+    expect(tabs.map((b) => b.classList.contains('active'))).toEqual([false, true]);
+    expect(tabs[1].getAttribute('aria-pressed')).toBe('true');
   });
 
   it('reads one entry’s versions when given an entry, with no queue tabs', () => {

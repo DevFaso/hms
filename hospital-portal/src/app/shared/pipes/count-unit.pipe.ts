@@ -30,6 +30,8 @@ const INVARIABLE = new Set([
  * in the plural (ending in s, x or z, or « (s) ») is shown as stored. Each word of a compound
  * unit takes the plural (« comprimés pelliculés »); of a pack named with its content only the
  * pack's name does (« 2 boîtes de 12 gélules », QA D4194).
+ * Whether a count is plural is the language's own rule (`Intl.PluralRules`), not a threshold
+ * written here.
  */
 export function countUnit(
   quantity: number | string | null | undefined,
@@ -41,8 +43,7 @@ export function countUnit(
   const word = (unit ?? '').trim();
   if (!word || word === 'UNIT') return shown;
   const n = Number(quantity);
-  const plural =
-    Number.isFinite(n) && (locale.startsWith('fr') ? Math.abs(n) >= 2 : Math.abs(n) !== 1);
+  const plural = Number.isFinite(n) && new Intl.PluralRules(locale).select(Math.abs(n)) !== 'one';
   return `${shown} ${plural ? pluralUnit(word) : word}`.trim();
 }
 
@@ -58,6 +59,10 @@ function pluralUnit(unit: string): string {
     return `${head}${pack[2]}`;
   }
   if (/[\d/%()]/.test(unit)) return unit;
+  return pluralWords(unit);
+}
+
+function pluralWords(unit: string): string {
   const words = unit.split(/\s+/);
   if (words.some((w) => INVARIABLE.has(w.toLowerCase()) || w.length < 3 || w === w.toUpperCase())) {
     return unit;

@@ -53,6 +53,7 @@ public class OrganizationController {
 
 
     private final OrganizationRepository organizationRepository;
+    private final com.example.hms.service.OrganizationLifecycleService organizationLifecycleService;
     private final OrganizationSecurityService organizationSecurityService;
     private final OrganizationMapper organizationMapper;
     private final OrganizationSecurityPolicyMapper policyMapper;
@@ -140,6 +141,11 @@ public class OrganizationController {
         // QA D435: two organisations with the same name cannot be told apart in any picker.
         requireNameFree(requestDTO.getName(), null);
 
+        // QA D4317: an organization is created active; it is suspended from its
+        // lifecycle page (reason and step-up), never born inactive.
+        if (Boolean.FALSE.equals(requestDTO.getActive())) {
+            throw new com.example.hms.exception.FieldBusinessException("active", "organization.create.inactive");
+        }
         Organization organization = organizationMapper.toEntity(requestDTO);
         organization = organizationRepository.save(organization);
 
@@ -180,6 +186,21 @@ public class OrganizationController {
             requireNameFree(requestDTO.getName(), organization.getId());
         }
 
+        // QA D4317: an edit changes the state only when the body says so. A body
+        // without `active` (the portal's) leaves a suspended organization
+        // suspended; an explicit value is answered by the lifecycle service,
+        // which refuses and points to the lifecycle page.
+        Boolean wanted = requestDTO.getActive();
+        if (wanted != null && wanted != organization.isActive()) {
+            if (wanted) {
+                organizationLifecycleService.reactivate(id);
+            } else {
+                organizationLifecycleService.deactivate(id);
+            }
+            organization = organizationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
+        }
+
         organizationMapper.updateEntity(organization, requestDTO);
         organization = organizationRepository.save(organization);
 
@@ -205,8 +226,10 @@ public class OrganizationController {
         Organization organization = organizationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
-        organization.setActive(false);
-        organizationRepository.save(organization);
+        // QA D4317: an organization in use is not switched off from the list. The
+        // refusal gives the count of active facilities, or points to the
+        // lifecycle page, where a suspension takes its reason and its step-up.
+        organizationLifecycleService.deactivate(id);
         
         log.info("Soft deleted organization: {}", organization.getCode());
         return ResponseEntity.noContent().build();

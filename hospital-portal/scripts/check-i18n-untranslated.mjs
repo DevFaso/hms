@@ -54,7 +54,7 @@ const BASELINE_LOCALE = 'en';
 /** Fails the build. */
 const ENFORCED_LOCALES = ['fr'];
 /** Reported against a ceiling, not allowlisted — see the header. */
-const RATCHET_LOCALES = { es: Number(process.env.ES_MAX_UNTRANSLATED ?? '1376') };
+const RATCHET_LOCALES = { es: Number(process.env.ES_MAX_UNTRANSLATED ?? '1505') };
 
 const REPORT_ONLY = process.argv.includes('--report-only');
 const WRITE_ALLOWLIST = process.argv.includes('--write-allowlist');

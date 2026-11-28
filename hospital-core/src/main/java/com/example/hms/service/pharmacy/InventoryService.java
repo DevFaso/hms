@@ -23,7 +23,7 @@ public interface InventoryService {
 
     InventoryItemResponseDTO updateInventoryItem(UUID id, InventoryItemRequestDTO dto);
 
-    void deactivateInventoryItem(UUID id);
+    void deactivateInventoryItem(UUID id, String reason);
 
     /** Review of #1239: an item's price history (old and new price, reason, who and when), oldest first. */
     java.util.List<com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO> listPriceHistory(UUID id);

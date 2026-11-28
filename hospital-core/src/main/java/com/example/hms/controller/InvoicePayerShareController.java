@@ -43,8 +43,12 @@ public class InvoicePayerShareController {
 
     static final String READERS = "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
         + "'ROLE_BILLING_SPECIALIST','ROLE_CLAIMS_REVIEWER')";
-    static final String DECIDERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
-        + "'ROLE_BILLING_SPECIALIST','ROLE_CLAIMS_REVIEWER')";
+    /**
+     * Review of #1394 (F2): a whole refusal moves the share's full amount to the patient, a money decision taken by
+     * the hospital admin or the accountant only (RoleValidator#canSettleInsurerClaims), as a refused bordereau line
+     * re-billed to the patient is.
+     */
+    static final String REFUSERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT')";
 
     /** Insurer claims plan PR 1: who records a pre-authorisation number (RoleValidator#canRecordPreAuthorisation). */
     static final String PRE_AUTHORISATION_RECORDERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
@@ -116,23 +120,9 @@ public class InvoicePayerShareController {
         return ResponseEntity.ok(coverageService.list(invoiceId));
     }
 
-    @PostMapping("/{invoiceId}/payer-shares/{shareId}/claim")
-    @PreAuthorize(DECIDERS)
-    @Operation(summary = "Mark a payer share as sent to the payer")
-    public ResponseEntity<List<InvoicePayerShareDTO>> claim(@PathVariable UUID invoiceId, @PathVariable UUID shareId) {
-        return ResponseEntity.ok(coverageService.claim(invoiceId, shareId));
-    }
-
-    @PostMapping("/{invoiceId}/payer-shares/{shareId}/paid")
-    @PreAuthorize(DECIDERS)
-    @Operation(summary = "Mark a payer share as settled by the payer")
-    public ResponseEntity<List<InvoicePayerShareDTO>> paid(@PathVariable UUID invoiceId, @PathVariable UUID shareId) {
-        return ResponseEntity.ok(coverageService.markPaid(invoiceId, shareId));
-    }
-
     @PostMapping("/{invoiceId}/payer-shares/{shareId}/reject")
-    @PreAuthorize(DECIDERS)
-    @Operation(summary = "Record that the payer refused its share, with its reason; the patient owes it again")
+    @PreAuthorize(REFUSERS)
+    @Operation(summary = "Record that the payer refused a share not yet claimed, with its reason; the patient owes it")
     public ResponseEntity<List<InvoicePayerShareDTO>> reject(
         @PathVariable UUID invoiceId,
         @PathVariable UUID shareId,

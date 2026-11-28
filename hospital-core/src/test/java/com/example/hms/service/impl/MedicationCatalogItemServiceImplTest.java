@@ -395,10 +395,13 @@ class MedicationCatalogItemServiceImplTest {
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
         requestDTO.setActive(false);
+        requestDTO.setChangeReason("Rappel de lot");
 
         service.update(itemId, requestDTO);
 
         assertThat(item.isActive()).isFalse();
+        // QA D4190: the withdrawal is a line of the entry's history, with its reason.
+        verify(versionService).recordWithdrawal(item, "Rappel de lot", "changeReason");
         verify(versionService, never()).proposeFormulary(any(), any(), any());
         ArgumentCaptor<AuditEventRequestDTO> row = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(row.capture());
@@ -585,7 +588,7 @@ class MedicationCatalogItemServiceImplTest {
 
         assertThatThrownBy(() -> service.update(itemId, requestDTO))
             .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.deactivate(itemId, null))
+        assertThatThrownBy(() -> service.deactivate(itemId, null, "Rappel de lot"))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(catalogRepository, never()).save(any());
         assertThat(item.isActive()).isTrue();
@@ -618,7 +621,7 @@ class MedicationCatalogItemServiceImplTest {
         actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
-        service.deactivate(itemId, null);
+        service.deactivate(itemId, null, "Rappel de lot");
 
         assertThat(item.isActive()).isFalse();
         // Review F1 (#1360): the row is read under its lock, so an approval being applied lands first or waits.
@@ -632,7 +635,7 @@ class MedicationCatalogItemServiceImplTest {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.deactivate(itemId, null))
+        assertThatThrownBy(() -> service.deactivate(itemId, null, "Rappel de lot"))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(item.isActive()).isTrue();
     }
@@ -644,7 +647,7 @@ class MedicationCatalogItemServiceImplTest {
         actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
-        service.deactivate(itemId, hospitalId);
+        service.deactivate(itemId, hospitalId, "Rappel de lot");
 
         assertThat(item.isActive()).isFalse();
         verify(catalogRepository).save(item);
@@ -657,7 +660,7 @@ class MedicationCatalogItemServiceImplTest {
         actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
-        service.deactivate(itemId, hospitalId);
+        service.deactivate(itemId, hospitalId, "Rappel de lot");
 
         ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(captor.capture());
@@ -668,10 +671,51 @@ class MedicationCatalogItemServiceImplTest {
     }
 
     @Test
+    void deactivate_writesTheWithdrawalOnTheEntrysHistory_withItsReason_beforeTheRowIsDeactivated() {
+        // QA D4190 (r81): who withdrew it, when and why. It asked no reason and left no line.
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(versionService.recordWithdrawal(any(), any(), any())).thenAnswer(call -> {
+            assertThat(((MedicationCatalogItem) call.getArgument(0)).isActive())
+                .as("the history line is written from the entry still in force").isTrue();
+            return null;
+        });
+
+        service.deactivate(itemId, hospitalId, "Rappel de lot");
+
+        verify(versionService).recordWithdrawal(item, "Rappel de lot", "reason");
+        assertThat(item.isActive()).isFalse();
+    }
+
+    @Test
+    void deactivate_withoutAReason_isRefused_andTheEntryStaysInTheCatalogue() {
+        actingAtTheItemsHospital();
+        when(versionService.recordWithdrawal(any(), any(), any())).thenThrow(
+            new com.example.hms.exception.FieldBusinessException("reason", "medication.catalog.withdrawal.reasonRequired"));
+
+        assertThatThrownBy(() -> service.deactivate(itemId, hospitalId, " "))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "reason");
+        assertThat(item.isActive()).isTrue();
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivate_ofAnEntryAlreadyWithdrawn_writesNoSecondLine() {
+        item.deactivate();
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+
+        service.deactivate(itemId, hospitalId, null);
+
+        verify(versionService, never()).recordWithdrawal(any(), any(), any());
+    }
+
+    @Test
     void deactivate_notFound_throws() {
         when(catalogRepository.findLockedById(itemId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.deactivate(itemId, hospitalId))
+        assertThatThrownBy(() -> service.deactivate(itemId, hospitalId, "Rappel de lot"))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

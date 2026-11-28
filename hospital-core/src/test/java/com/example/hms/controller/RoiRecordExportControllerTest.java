@@ -13,6 +13,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -28,21 +30,67 @@ class RoiRecordExportControllerTest {
     static class MethodSecurity { }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_PATIENT", "ROLE_HOSPITAL_ADMIN", "ROLE_RECEPTIONIST", "ROLE_ACCOUNTANT"})
-    void aWorklistOrPatientRoleCannotDownloadAClinicalRecord(String role) throws Exception {
+    // QA D4270 review: reception reads no clinical content (owner rule 2026-11-06); the full record copy is one.
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_PATIENT", "ROLE_ACCOUNTANT", "ROLE_PHARMACIST",
+        "ROLE_BILLING_SPECIALIST", "ROLE_RECEPTIONIST"})
+    void aRoleWithNoPartInAReleaseCannotAskForTheStaffCopy(String role) throws Exception {
         var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
             "limited", "ignored", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role)));
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
         mvc.perform(get("/roi-requests/{id}/record.pdf", UUID.randomUUID())).andExpect(status().isForbidden());
-        verifyNoInteractions(requests, pdf);
+        verifyNoInteractions(requests, pdf, portal);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_DOCTOR", "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"})
+    void aStaffRoleCannotAskForAPatientsOwnCopy_D4270(String role) throws Exception {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("staff", "ignored",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+        mvc.perform(get("/me/patient/roi-requests/{id}/record.pdf", UUID.randomUUID())).andExpect(status().isForbidden());
+        verifyNoInteractions(requests, pdf, portal);
+    }
+
+    @Test
+    void thePatientDownloadsTheirOwnApprovedCopy_D4270() throws Exception {
+        var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("patient", "ignored",
+            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PATIENT")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
+        UUID requestId = UUID.randomUUID();
+        byte[] bytes = "%PDF-1.4 own-copy".getBytes(StandardCharsets.US_ASCII);
+        var approved = new RoiRequestService.ApprovedCopy(UUID.randomUUID(), requestId, UUID.randomUUID(), true);
+        when(portal.myApprovedRoiCopy(any(), eq(requestId))).thenReturn(approved);
+        when(pdf.renderForRoi(approved)).thenReturn(bytes);
+        mvc.perform(get("/me/patient/roi-requests/{id}/record.pdf", requestId)).andExpect(status().isOk())
+            .andExpect(content().contentType("application/pdf")).andExpect(content().bytes(bytes))
+            .andExpect(header().string("Cache-Control", "no-store"));
+        var order = inOrder(portal, pdf);
+        order.verify(portal).myApprovedRoiCopy(any(), eq(requestId)); order.verify(pdf).renderForRoi(approved);
+        verifyNoInteractions(requests);
+    }
+
+    @Test
+    void anotherPatientsOrAnExpiredRequestNeverRendersForThePatient_D4270() throws Exception {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("patient", "ignored",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PATIENT"))));
+        UUID foreign = UUID.randomUUID(), expired = UUID.randomUUID();
+        when(portal.myApprovedRoiCopy(any(), eq(foreign)))
+            .thenThrow(new com.example.hms.exception.ResourceNotFoundException("roi.request.notFound", foreign));
+        when(portal.myApprovedRoiCopy(any(), eq(expired))).thenThrow(new BusinessException("roi.request.copyExpired"));
+        mvc.perform(get("/me/patient/roi-requests/{id}/record.pdf", foreign)).andExpect(status().isNotFound());
+        mvc.perform(get("/me/patient/roi-requests/{id}/record.pdf", expired)).andExpect(status().isBadRequest());
+        verifyNoInteractions(pdf);
+    }
+
+    @MockitoBean com.example.hms.service.PatientPortalService portal;
     @Autowired MockMvc mvc;
     @MockitoBean RoiRequestService requests;
     @MockitoBean PatientRecordPdfService pdf;
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_SUPER_ADMIN"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_SUPER_ADMIN",
+        "ROLE_HOSPITAL_ADMIN"})
     void approvedCopyUsesExistingRedactedPdfAndAuditsBeforeReturningUncacheableBytes(String role) throws Exception {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("clinical", "ignored",

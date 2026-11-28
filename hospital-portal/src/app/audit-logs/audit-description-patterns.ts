@@ -495,6 +495,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['details'],
   },
   {
+    key: 'AUDIT.DESC.RELEASE_WINDOW_UPDATED',
+    re: /^Release window updated (.*)$/,
+    params: ['details'],
+  },
+  {
+    key: 'AUDIT.DESC.RELEASE_WINDOW_CANCELLED',
+    re: /^Release window cancelled (.*)$/,
+    params: ['details'],
+  },
+  {
     key: 'AUDIT.DESC.REGION_POLICY_UPDATED',
     re: /^Region (\S+) policy updated: (.*)$/,
     params: ['region', 'details'],
@@ -1100,6 +1110,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['order', 'earlier'],
   },
   {
+    // QA r81 D4165: the earlier order may be active or already resulted.
+    key: 'AUDIT.DESC.LAB_DUPLICATE_ACKNOWLEDGED',
+    re: /^Duplicate warning acknowledged \(order anyway\): lab order (\S+) placed while recent order (\S+) of the same test exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DUPLICATE_UNACKNOWLEDGED',
+    re: /^Duplicate warning not acknowledged: lab order (\S+) placed while recent order (\S+) of the same test exists$/,
+    params: ['order', 'earlier'],
+  },
+  {
     key: 'AUDIT.DESC.IMAGING_DUPLICATE_OVERRIDDEN',
     re: /^Duplicate warning overridden \((\S+)\): imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
     params: ['reason', 'order', 'earlier'],
@@ -1285,6 +1306,24 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Medication catalogue (\S+) version (\S+) WITHDRAWN \(\S+\) for '(.*)'$/,
     params: ['kind', 'n', 'item'],
     localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  // QA D4190 (r81): an entry taken out of the catalogue, a line of its history.
+  {
+    key: 'AUDIT.DESC.CATALOG_ENTRY_WITHDRAWN',
+    re: /^Medication catalogue (\S+) version (\S+) WITHDRAWN_FROM_CATALOGUE \(\S+\) for '(.*)'$/,
+    params: ['kind', 'n', 'item'],
+    localise: { kind: 'phrase:CATALOG_VERSION_KIND' },
+  },
+  // QA D4197 (r81): a stock item deactivated, with what it still held and the reason given.
+  {
+    key: 'AUDIT.DESC.INVENTORY_ITEM_DEACTIVATED_REASON',
+    re: /^Inventory item deactivated with (\S+) on hand; reason: ([\s\S]*)$/,
+    params: ['quantity', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.INVENTORY_ITEM_DEACTIVATED',
+    re: /^Inventory item deactivated with (\S+) on hand$/,
+    params: ['quantity'],
   },
   {
     key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
@@ -1730,6 +1769,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^(Payer share applied|Payer share applied after a credit note|Payer share replaced after a credit note|Payer share cancelled with its invoice|Payer share claimed|Payer share paid|Payer share rejected): share (\S+) on invoice (\S+)$/,
     params: ['what', 'share', 'invoice'],
     localise: { what: 'phrase:PAYER_SHARE_EVENT' },
+  },
+  {
+    // Insurer claims PRs 2-4 (QA D3983): a bordereau, an insurer payment, a refusal or a write-off (ids only).
+    key: 'AUDIT.DESC.INSURER_CLAIM_EVENT',
+    re: /^(Insurer claim draft created|Insurer claim draft changed|Insurer claim draft deleted|Insurer claim submitted|Insurer claim receipt by the payer recorded|Insurer claim cancelled|Insurer claim exported|Insurer payment recorded|Insurer payment allocated|Insurer payment reversed|Insurer claim line refused by the payer|Refused amount re-billed to the patient|Insurer claim write-off requested|Insurer claim write-off approved|Insurer claim write-off refused|Insurer claim write-off cancelled): (?:batch|payment|line|write-off) (\S+)$/,
+    params: ['what', 'id'],
+    localise: { what: 'phrase:INSURER_CLAIM_EVENT' },
   },
   {
     // Insurer claims PR 1 (QA D3984): a pre-authorisation number recorded on a line, or copied from its order.
@@ -2280,6 +2326,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.CLINICAL_RULE_SIGNOFF_REVOKED',
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
+  },
+  // QA D4269: an action on a minor's own portal account refused by the age rule (action and band in details).
+  {
+    key: 'AUDIT.DESC.MINOR_PORTAL_ACTION_REFUSED',
+    re: /^Portal action refused by the minors' rights rule$/,
+    params: [],
   },
   // V382: the retention purge of the audit tables records itself (counts and cutoff in details).
   {

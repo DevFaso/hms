@@ -65,4 +65,14 @@ public class StockCount extends BaseEntity {
     private Boolean samePersonConfirmation;
     @Column(name = "adjustment_id", unique = true)
     private UUID adjustmentId;
+    /** QA D4191 (V425): a count that will never be applied is closed, by a named person, with the reason. */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "closed_by_user_id")
+    private User closedBy;
+    @Column(name = "closed_by_name", length = 201)
+    private String closedByName;
+    @Column(name = "close_reason", length = 300)
+    private String closeReason;
 }

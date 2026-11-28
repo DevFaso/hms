@@ -32,7 +32,9 @@ export const ACTION_PERMISSIONS = {
   },
   roiRecordPdfExport: {
     endpoint: 'RoiRecordExportController#download',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+    // QA D4270: the hospital administrator too, for the requests they approved (roi.ts). Not reception: the copy
+    // is the whole chart, and the desk reads no clinical content (owner rule 2026-11-06).
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
   // QA D3220: « Demander du sang » on the labour card, the post-partum watch and the prescription dialog.
   transfusionRequestCreate: {
@@ -359,6 +361,41 @@ export const ACTION_PERMISSIONS = {
   inventoryReorderTrigger: {
     endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
     roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  // QA D4183 (r81): the physical stock count; the accountant reads the page and is offered none of these.
+  stockCountRecord: {
+    endpoint: 'pharmacy.StockCountController#record',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockCountConfirm: {
+    endpoint: 'pharmacy.StockCountController#confirm',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockCountClose: {
+    endpoint: 'pharmacy.StockCountController#close',
+    roles: [
+      'ROLE_PHARMACIST',
+      'ROLE_INVENTORY_CLERK',
+      'ROLE_STORE_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  stockBalanceReconcile: {
+    endpoint: 'pharmacy.StockCountController#reconcileBalance',
+    roles: ['ROLE_PHARMACIST', 'ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
   /** Labour transfer (provisional rule, 2026-11-12): the service also requires the role AT the hospital. */
   laborTransfer: {

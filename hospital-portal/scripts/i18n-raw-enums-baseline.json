@@ -127,6 +127,8 @@
     "src/app/micro/microbiology.html::culture.growthResult",
     "src/app/micro/microbiology.html::culture.specimenSource",
     "src/app/micro/microbiology.html::culture.status",
+    "src/app/micro/microbiology.html::other.growthResult",
+    "src/app/micro/microbiology.html::other.status",
     "src/app/micro/microbiology.html::susc.method",
     "src/app/mortality/mortality.html::e.enteredInErrorReason",
     "src/app/mortality/mortality.html::rec.amendmentReason",
@@ -192,6 +194,8 @@
     "src/app/patients/micro/micro-tab.component.html::culture.growthResult",
     "src/app/patients/micro/micro-tab.component.html::culture.specimenSource",
     "src/app/patients/micro/micro-tab.component.html::culture.status",
+    "src/app/patients/micro/micro-tab.component.html::other.growthResult",
+    "src/app/patients/micro/micro-tab.component.html::other.status",
     "src/app/patients/micro/micro-tab.component.html::susc.method",
     "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason",
     "src/app/patients/patient-chart/patient-chart.component.html::<option>t",
@@ -220,6 +224,7 @@
     "src/app/platform/platform.html::item.featureFlag",
     "src/app/platform/platform.html::item.serviceType",
     "src/app/platform/platform.html::own.serviceLevel",
+    "src/app/platform/platform.html::rel.cancelReason",
     "src/app/platform/platform.html::selectedService()!.serviceType",
     "src/app/platform/platform.html::svc.serviceType",
     "src/app/platform/platform.html::task.nextAction",
@@ -254,6 +259,7 @@
     "src/app/staff/staff-detail.html::leave.reason",
     "src/app/staff/staff-detail.html::shift.shiftType",
     "src/app/staff/staff-list.html::<option>dept",
+    "src/app/staff/staff-list.html::<option>name",
     "src/app/super-admin/integration-health/integration-health.html::chip.status",
     "src/app/super-admin/integration-messages/integration-messages.html::d.messageType",
     "src/app/super-admin/integration-messages/integration-messages.html::row.messageType",
@@ -289,7 +295,14 @@
     "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason"
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason",
+    "src/app/pharmacy/stock-count.html::count.reason",
+    "src/app/pharmacy/stock-count.html::count.closeReason",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::b.cancelReason",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::refusal.reason",
+    "src/app/billing/insurer-claims/insurer-payments.component.html::row.reversalReason",
+    "src/app/billing/insurer-claims/insurer-receivables.component.html::row.reason",
+    "src/app/billing/payer-shares/payer-shares-list.component.html::row.rejectionReason"
   ],
   "reasons": {
     "src/app/lab/lab-results/lab-results.html::r.correctionReason": "LabResultRequestDTO.correctionReason is a size-bounded String (500 characters) typed in lab-results.html textarea#lr-correctionReason when a released result is corrected; LabResultServiceImpl.requireCorrectionReason trims and stores it on lab.lab_results.correction_reason (V467) and LabResultMapper returns it. It is the scientist's free text, not an enum token, and must remain as typed.",
@@ -329,6 +342,13 @@
     "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
     "src/app/staff/staff-list.html::<option>d": "QA r70 D3202: DepartmentOption.name from GET /departments/active-minimal/{hospitalId} (Department.name, a hospital admin's free text); the staff write resolves the department by that name. Not an enum.",
-    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum."
+    "src/app/pharmacy/dispensing.html::action.rx.readyForCollection?.substitutionReason": "QA D3942: Dispense.substitutionReason is the free text the pharmacist typed (DispenseRequestDTO.substitutionReason, max 500), traced through DispenseServiceImpl.toReadyForCollection; not an enum.",
+    "src/app/pharmacy/stock-count.html::count.reason": "QA D4183: the purpose of a stock count, typed by the person who counted (free text)",
+    "src/app/pharmacy/stock-count.html::count.closeReason": "QA D4191: the reason a stock count was closed, typed by the person who closed it (free text)",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::b.cancelReason": "Insurer claims PR 2: InsurerClaimBatchDTO.cancelReason is the free text (500 characters) the hospital admin or accountant typed when cancelling a sent bordereau (InsurerClaimReasonRequestDTO.reason); not a wire token.",
+    "src/app/billing/insurer-claims/claim-batch-detail.component.html::refusal.reason": "Insurer claims PR 3: InsurerClaimRefusalDTO.reason is the payer’s reason as the clerk typed it (InsurerClaimRefusalRequestDTO.reason, free text); its class and resolution beside it go through keyLabel.",
+    "src/app/billing/insurer-claims/insurer-payments.component.html::row.reversalReason": "Insurer claims PR 3: InsurerPaymentDTO.reversalReason is the free text the hospital admin or accountant typed when reversing an insurer payment; not a wire token.",
+    "src/app/billing/insurer-claims/insurer-receivables.component.html::row.reason": "Insurer claims PR 4: InsurerClaimWriteOffDTO.reason is the free text typed with a write-off request (its reason code beside it goes through keyLabel); not a wire token.",
+    "src/app/billing/payer-shares/payer-shares-list.component.html::row.rejectionReason": "Insurer claims PR 3 (QA D3983): OpenPayerShareDTO.rejectionReason is InvoicePayerShare.rejectionReason, the payer’s reason as typed, already shown as typed on the invoice drawer (share.rejectionReason); not a wire token."
   }
 }

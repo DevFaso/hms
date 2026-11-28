@@ -67,6 +67,7 @@ class LabInventoryServiceImplTest {
     void setUp() {
         HospitalContext context = HospitalContext.builder()
             .permittedHospitalIds(Set.of(HOSPITAL_ID))
+            .hospitalRoles(java.util.Map.of(HOSPITAL_ID, Set.of("ROLE_LAB_MANAGER")))
             .activeHospitalId(HOSPITAL_ID)
             .superAdmin(false)
             .build();
@@ -129,7 +130,35 @@ class LabInventoryServiceImplTest {
             .isInstanceOf(AccessDeniedException.class);
     }
 
+    @Test
+    @DisplayName("another hospital's item is 'not found' on read, update and deactivate, exactly like an unknown id")
+    void anotherHospitalsItemAnswersAsUnknown() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        item.setHospital(elsewhere);
+        when(inventoryRepository.findByIdAndActiveTrue(ITEM_ID)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.getById(ITEM_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.update(ITEM_ID, requestDto, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivate(ITEM_ID, LOCALE))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(inventoryRepository, never()).save(any());
+    }
+
     // ── getById ──────────────────────────────────────────────────
+
+    @Test
+    void inventorySearchKeepsTheHospitalScopeAndPaging() {
+        Pageable page = PageRequest.of(1, 20);
+        when(inventoryRepository.searchActive(HOSPITAL_ID, "reagent", page)).thenReturn(new PageImpl<>(List.of(item)));
+        when(mapper.toDto(item)).thenReturn(responseDto);
+        assertThat(service.searchByHospital(HOSPITAL_ID, "  reagent  ", page, LOCALE).getContent()).containsExactly(responseDto);
+        UUID otherHospital = UUID.randomUUID();
+        assertThatThrownBy(() -> service.searchByHospital(otherHospital, "reagent", page, LOCALE)).isInstanceOf(AccessDeniedException.class);
+        verify(inventoryRepository, never()).searchActive(org.mockito.ArgumentMatchers.eq(otherHospital), anyString(), any());
+    }
 
     @Test
     @DisplayName("getById returns item when found")

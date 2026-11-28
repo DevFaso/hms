@@ -1,0 +1,348 @@
+<div class="page-container" data-testid="insurer-receivables-page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INSURER_CLAIMS.RECEIVABLES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INSURER_CLAIMS.RECEIVABLES.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  <app-claims-nav current="receivables" />
+
+  <section class="claims-panel" aria-labelledby="write-offs-title">
+    <h2 id="write-offs-title">{{ 'INSURER_CLAIMS.WRITE_OFFS.TITLE' | translate }}</h2>
+    @if (writeOffsFailed()) {
+      <p class="muted" role="alert">{{ 'INSURER_CLAIMS.RECEIVABLES.LOAD_FAILED' | translate }}</p>
+    } @else if (writeOffs().length === 0) {
+      <p class="muted" data-testid="write-offs-empty">
+        {{ 'INSURER_CLAIMS.WRITE_OFFS.EMPTY' | translate }}
+      </p>
+    } @else {
+      <ul class="claims-list" data-testid="write-offs-list">
+        @for (row of writeOffs(); track row.id) {
+          <li class="claims-card" [attr.data-testid]="'write-off-' + row.id">
+            <div class="claims-card-head">
+              <strong>{{ row.payerName || '—' }} · {{ row.amount | cfa: 'XOF' }}</strong>
+              <span class="claims-status" [attr.data-status]="row.status">{{
+                row.status | keyLabel: 'INSURER_CLAIMS.WRITE_OFF_STATUS.'
+              }}</span>
+            </div>
+            <dl class="claims-meta">
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.NAV.BATCHES' | translate }}</dt>
+                <dd>
+                  @if (row.batchId) {
+                    <a [routerLink]="['/billing/bordereaux', row.batchId]">{{
+                      row.batchNumber || '—'
+                    }}</a>
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>{{ 'R70_MONEY.SHARES.INVOICE' | translate }}</dt>
+                <dd>
+                  {{ row.invoiceNumber || '—' }}
+                  <span class="muted">· {{ row.patientName || '—' }}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCH.WRITE_OFF_CODE' | translate }}</dt>
+                <dd>{{ row.reasonCode | keyLabel: 'INSURER_CLAIMS.WRITE_OFF_REASON.' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCH.SUPPORTING_DOCUMENT' | translate }}</dt>
+                <dd>{{ row.supportingDocument }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.WRITE_OFFS.ASKED_BY' | translate }}</dt>
+                <dd>{{ row.requestedByName || '—' }}</dd>
+              </div>
+            </dl>
+            <p class="claims-note">{{ row.reason }}</p>
+            <div class="claims-actions">
+              @if (canDecide(row)) {
+                <button
+                  type="button"
+                  class="btn-primary btn-sm"
+                  [disabled]="busy()"
+                  [attr.data-testid]="'write-off-approve-' + row.id"
+                  (click)="approve(row)"
+                >
+                  {{ 'INSURER_CLAIMS.WRITE_OFFS.APPROVE' | translate }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy()"
+                  [attr.data-testid]="'write-off-refuse-' + row.id"
+                  (click)="startRefuse(row)"
+                >
+                  {{ 'INSURER_CLAIMS.WRITE_OFFS.REFUSE' | translate }}
+                </button>
+              } @else if (row.requestedByMe) {
+                <span class="muted" [attr.data-testid]="'write-off-own-' + row.id">{{
+                  'INSURER_CLAIMS.WRITE_OFFS.OWN_REQUEST' | translate
+                }}</span>
+              }
+              @if (canWithdraw(row)) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy()"
+                  [attr.data-testid]="'write-off-withdraw-' + row.id"
+                  (click)="withdraw(row)"
+                >
+                  {{ 'INSURER_CLAIMS.WRITE_OFFS.WITHDRAW' | translate }}
+                </button>
+              }
+            </div>
+            @if (refusing() === row.id) {
+              <form class="claims-sub claims-form" (ngSubmit)="confirmRefuse(row)">
+                <div class="claims-wide">
+                  <label for="write-off-refuse-reason"
+                    >{{ 'INSURER_CLAIMS.WRITE_OFFS.REFUSE_REASON' | translate }} *</label
+                  >
+                  <input
+                    appFormControl
+                    type="text"
+                    id="write-off-refuse-reason"
+                    name="refuseReason"
+                    maxlength="500"
+                    required
+                    [ngModel]="refuseReason()"
+                    (ngModelChange)="refuseReason.set($event ?? '')"
+                  />
+                </div>
+                <div class="claims-actions">
+                  <button
+                    type="submit"
+                    class="btn-primary btn-sm"
+                    data-testid="write-off-refuse-confirm"
+                    [disabled]="busy()"
+                  >
+                    {{ 'INSURER_CLAIMS.WRITE_OFFS.REFUSE' | translate }}
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm" (click)="refusing.set(null)">
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                </div>
+              </form>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="claims-panel" aria-labelledby="ageing-title">
+    <h2 id="ageing-title">{{ 'INSURER_CLAIMS.RECEIVABLES.AGEING_TITLE' | translate }}</h2>
+    @if (ageingFailed()) {
+      <p class="muted" role="alert">{{ 'INSURER_CLAIMS.RECEIVABLES.LOAD_FAILED' | translate }}</p>
+    } @else if (ageing(); as report) {
+      <p class="claims-note">
+        {{
+          'INSURER_CLAIMS.RECEIVABLES.AGEING_NOTE'
+            | translate: { date: (report.asOf | dayMonth: undefined : true) }
+        }}
+      </p>
+      @if (report.rows.length === 0) {
+        <p class="muted" data-testid="ageing-empty">
+          {{ 'INSURER_CLAIMS.RECEIVABLES.NOTHING_OWED' | translate }}
+        </p>
+      } @else {
+        <div class="claims-table-wrap">
+          <table class="claims-table" data-testid="ageing-table">
+            <caption class="sr-only">
+              {{
+                'INSURER_CLAIMS.RECEIVABLES.AGEING_TITLE' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'INSURER_CLAIMS.SHARES.PAYER' | translate }}</th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.NOT_CLAIMED' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.D0_30' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.D31_60' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.D61_90' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.D90' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.PAYMENTS.TO_ALLOCATE' | translate }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of report.rows; track row.payerId) {
+                <tr>
+                  <th scope="row">{{ row.payerName }}</th>
+                  <td class="amount">{{ row.notClaimed | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.days0To30 | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.days31To60 | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.days61To90 | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.over90Days | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.outstanding | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.unallocated | cfa: 'XOF' }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr data-testid="ageing-total">
+                <th scope="row">{{ 'INSURER_CLAIMS.RECEIVABLES.TOTAL' | translate }}</th>
+                <td class="amount">{{ report.total.notClaimed | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.days0To30 | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.days31To60 | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.days61To90 | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.over90Days | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.outstanding | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.unallocated | cfa: 'XOF' }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="claims-actions">
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            data-testid="ageing-csv"
+            (click)="exportAgeing()"
+          >
+            {{ 'INSURER_CLAIMS.BATCH.EXPORT_CSV' | translate }}
+          </button>
+        </div>
+      }
+    } @else {
+      <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    }
+  </section>
+
+  <section class="claims-panel" aria-labelledby="reconciliation-title">
+    <h2 id="reconciliation-title">
+      {{ 'INSURER_CLAIMS.RECEIVABLES.RECONCILIATION_TITLE' | translate }}
+    </h2>
+    <form class="claims-form">
+      <div>
+        <label for="receivables-from">{{
+          'INSURER_CLAIMS.RECEIVABLES.SENT_FROM' | translate
+        }}</label>
+        <input
+          appFormControl
+          type="date"
+          id="receivables-from"
+          name="fromDate"
+          [ngModel]="fromDate()"
+          (ngModelChange)="fromDate.set($event ?? '')"
+        />
+      </div>
+      <div>
+        <label for="receivables-to">{{ 'INSURER_CLAIMS.RECEIVABLES.SENT_TO' | translate }}</label>
+        <input
+          appFormControl
+          type="date"
+          id="receivables-to"
+          name="toDate"
+          [attr.min]="fromDate() || null"
+          [ngModel]="toDate()"
+          (ngModelChange)="toDate.set($event ?? '')"
+        />
+      </div>
+      <div class="claims-actions">
+        <button
+          type="button"
+          class="btn-primary btn-sm"
+          data-testid="reconciliation-apply"
+          (click)="loadReconciliation()"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.APPLY' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          data-testid="reconciliation-csv"
+          (click)="exportReconciliation()"
+        >
+          {{ 'INSURER_CLAIMS.BATCH.EXPORT_CSV' | translate }}
+        </button>
+      </div>
+    </form>
+    @if (reconciliationFailed()) {
+      <p class="muted" role="alert">{{ 'INSURER_CLAIMS.RECEIVABLES.LOAD_FAILED' | translate }}</p>
+    } @else if (reconciliation(); as report) {
+      @if (report.rows.length === 0) {
+        <p class="muted" data-testid="reconciliation-empty">
+          {{ 'INSURER_CLAIMS.RECEIVABLES.NO_BATCH' | translate }}
+        </p>
+      } @else {
+        <div class="claims-table-wrap">
+          <table class="claims-table" data-testid="reconciliation-table">
+            <caption class="sr-only">
+              {{
+                'INSURER_CLAIMS.RECEIVABLES.RECONCILIATION_TITLE' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'INSURER_CLAIMS.SHARES.PAYER' | translate }}</th>
+                <th scope="col" class="amount">{{ 'INSURER_CLAIMS.NAV.BATCHES' | translate }}</th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.BATCHES.CLAIMED' | translate }}
+                </th>
+                <th scope="col" class="amount">{{ 'INSURER_CLAIMS.BATCHES.PAID' | translate }}</th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.BATCH.REBILLED' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.BATCH.WRITTEN_OFF' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}
+                </th>
+                <th scope="col" class="amount">
+                  {{ 'INSURER_CLAIMS.RECEIVABLES.RECEIVED' | translate }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of report.rows; track row.payerId) {
+                <tr>
+                  <th scope="row">{{ row.payerName }}</th>
+                  <td class="amount">{{ row.batchCount }}</td>
+                  <td class="amount">{{ row.claimed | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.paid | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.rebilled | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.writtenOff | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.outstanding | cfa: 'XOF' }}</td>
+                  <td class="amount">{{ row.received | cfa: 'XOF' }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr data-testid="reconciliation-total">
+                <th scope="row">{{ 'INSURER_CLAIMS.RECEIVABLES.TOTAL' | translate }}</th>
+                <td class="amount">{{ report.total.batchCount }}</td>
+                <td class="amount">{{ report.total.claimed | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.paid | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.rebilled | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.writtenOff | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.outstanding | cfa: 'XOF' }}</td>
+                <td class="amount">{{ report.total.received | cfa: 'XOF' }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      }
+    } @else {
+      <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    }
+  </section>
+</div>

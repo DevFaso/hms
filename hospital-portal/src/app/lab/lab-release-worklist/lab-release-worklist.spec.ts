@@ -170,7 +170,8 @@ describe('LabReleaseWorklistComponent', () => {
       host().querySelectorAll('[data-testid="release-row-result-1"] td'),
     ).map((c) => c.textContent ?? '');
     // QA D731: both are zone-less UTC server times, shown in the reader's zone.
-    const shown = (iso: string) => formatDate(`${iso}Z`, 'short', 'en-US');
+    const shown = (iso: string) =>
+      `${formatDate(`${iso}Z`, 'mediumDate', 'en-US')}, ${formatDate(`${iso}Z`, 'shortTime', 'en-US')}`;
     expect(cells.some((t) => t.includes(shown('2026-09-20T08:00:00')))).toBeTrue();
     expect(cells.some((t) => t.includes(shown('2026-09-20T14:30:00')))).toBeTrue();
   });

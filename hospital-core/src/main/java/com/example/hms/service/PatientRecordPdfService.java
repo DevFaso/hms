@@ -73,18 +73,21 @@ public class PatientRecordPdfService {
     private final MessageSource messageSource;
 
     public byte[] render(UUID patientId) {
-        return render(patientId, null, null);
+        return render(patientId, null, null, false);
     }
 
     /** Retrieval is audited durably; fulfilment remains the single accounted disclosure. */
     public byte[] renderForRoi(com.example.hms.service.roi.RoiRequestService.ApprovedCopy copy) {
         java.util.Objects.requireNonNull(copy, "copy");
-        return render(copy.patientId(), copy.requestId(), copy.hospitalId());
+        return render(copy.patientId(), copy.requestId(), copy.hospitalId(), copy.selfService());
     }
 
-    private byte[] render(UUID patientId, UUID requestId, UUID approvedHospitalId) {
+    private byte[] render(UUID patientId, UUID requestId, UUID approvedHospitalId, boolean selfService) {
         PdfLabels labels = PdfLabels.ofRequest(messageSource);
-        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
+        // QA D4270: the patient collecting their own approved copy acts at no hospital; the copy is the one of the
+        // hospital that approved it, resolved from the request (RoiRequestService.copyForSelf), never from the caller.
+        UUID hospitalId = requestId != null && selfService
+            ? approvedHospitalId : ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null || (requestId != null && !hospitalId.equals(approvedHospitalId))) {
             throw new AccessDeniedException(
                 "A patient record download requires an active hospital scope; supply X-Hospital-Id or scope the session.");
@@ -100,8 +103,11 @@ public class PatientRecordPdfService {
             : storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId);
         // QA D1380: the printed record carries every row of every section. It
         // asked for 200 per section and the chart review silently cut it at 100.
+        // QA D4270 review: the patient's own copy prints only what the portal releases to the patient (signed notes,
+        // released results and imaging reads); the staff release view would print the care team's unsigned work.
         ChartReviewDTO chart = requestId == null
             ? chartReviewService.getCompleteChartReview(patientId, hospitalId)
+            : selfService ? chartReviewService.getPatientReleaseChart(patientId, hospitalId)
             : chartReviewService.getHospitalReleaseChart(patientId, hospitalId);
 
         byte[] pdf = write(storyboard, chart, requestId == null ? patient.getAllergies() : null, labels, requestId != null);

@@ -332,6 +332,12 @@ final class ComputedKeys {
             "LaborServiceImpl.java|labor.alert.msg.");
         site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name()",
             "LaborServiceImpl.java|labor.alert.type.");
+        // QA D4269: the refusal of a minor's own portal action; the key is one of the literals of
+        // MinorPortalRights.refusalKey, and MinorPortalRightsTest resolves each in every bundle.
+        r.put("com/example/hms/service/recordaccess/MinorPortalRightsGuard.java|key",
+            new Open("one of the portal.minor.* literals returned by MinorPortalRights.refusalKey (messages-patient)"));
+        r.put("com/example/hms/service/recordaccess/MinorPortalRightsGuard.java|key #2",
+            new Open("portal.minor.noAccountUnder13, the one refusal of MinorPortalRights for ACTIVATE_ACCOUNT"));
         r.put("com/example/hms/security/context/ImpersonationLimits.java|refusalKey",
             new Open("one of the two constants ACCOUNT_CHANGE_REFUSED (messages-auth) and MONEY_WRITE_REFUSED"
                 + " (messages-billing), chosen by the constructor; ImpersonationLimitsTest resolves both"));
@@ -470,6 +476,8 @@ final class ComputedKeys {
             new Open("a stored in-basket title/body key; written by the order-review and transfusion writers with literal keys"));
         site(r, d, "com/example/hms/service/impl/TransfusionServiceImpl.java|\"transfusion.productType.\" + type.name()",
             "TransfusionServiceImpl.java|transfusion.productType.");
+        site(r, d, "com/example/hms/service/impl/TransfusionServiceImpl.java|\"transfusion.reactionType.\" + type.name()",
+            "TransfusionServiceImpl.java|transfusion.reactionType.");
         site(r, d, "com/example/hms/service/maternity/LaborAlertArgs.java|\"labor.liquor.\" + entry.getLiquorColour().name()",
             "LaborAlertArgs.java|labor.liquor.");
         r.put("com/example/hms/service/maternity/ObstetricAlertEscalationWorker.java|alert.alertMessageKey()",
@@ -662,6 +670,8 @@ final class ComputedKeys {
             enumValues("transfusion.productType.", BloodProductType.class));
         r.put("TransfusionServiceImpl.java|transfusion.productType.",
             enumValues("transfusion.productType.", BloodProductType.class));
+        r.put("TransfusionServiceImpl.java|transfusion.reactionType.",
+            enumValues("transfusion.reactionType.", com.example.hms.enums.TransfusionReactionType.class));
         r.put("ControlledDrugRegisterService.java|pharmacy.register.movement.",
             enumValues("pharmacy.register.movement.", StockTransactionType.class));
         r.put("ControlledDrugRegisterService.java|pharmacy.stockCondition.",

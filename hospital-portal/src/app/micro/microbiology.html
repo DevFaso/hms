@@ -1,6 +1,12 @@
 <div class="micro-page">
   <div class="page-header">
-    <h1>{{ 'MICRO.PAGE_TITLE' | translate }}</h1>
+    <div>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">biotech</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title">{{ 'MICRO.PAGE_TITLE' | translate }}</h1>
+    </div>
     <div class="header-actions">
       <div class="filter-switch" role="group" [attr.aria-label]="'MICRO.FILTER_LABEL' | translate">
         <button
@@ -97,7 +103,7 @@
                 (keydown.enter)="select(culture)"
                 tabindex="0"
               >
-                <td>{{ culture.createdAt | serverTime | date: 'short' }}</td>
+                <td>{{ culture.createdAt | serverTime | dateTime }}</td>
                 <td>{{ culture.patientName || '—' }}</td>
                 <td>{{ culture.labTestName || '—' }}</td>
                 <td>{{ culture.specimenSource || '—' }}</td>
@@ -183,13 +189,42 @@
             {{ ' '
             }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
-              {{ culture.correctedAt | serverTime | date: 'short' }}
+              {{ culture.correctedAt | serverTime | dateTime }}
               @if (culture.correctedByName) {
                 ({{ culture.correctedByName }})
               }
               —
               {{ 'COMMON.REASON_VALUE' | translate: { reason: culture.correctionReason } }}
             </span>
+          </div>
+        }
+        @if (culture.otherReportsOnOrder?.length) {
+          <!-- QA r81 D4175: the other reports of the same order, so neither is read alone. -->
+          <div class="other-reports" role="note" data-testid="other-reports">
+            <span class="material-symbols-outlined" aria-hidden="true">library_books</span>
+            <div>
+              <p>
+                {{
+                  (!culture.latestOnOrder
+                    ? 'MICRO.OTHER_REPORTS_LATER'
+                    : culture.otherReportsOnOrder!.length === 1
+                      ? 'MICRO.OTHER_REPORTS_EARLIER'
+                      : 'MICRO.OTHER_REPORTS_EARLIER_MANY'
+                  ) | translate
+                }}
+              </p>
+              <ul>
+                @for (other of culture.otherReportsOnOrder; track other.id) {
+                  <li>
+                    {{ statusLabel(other.status) }} · {{ growthLabel(other.growthResult) }}
+                    @if (other.specimenAccessionNumber) {
+                      · {{ other.specimenAccessionNumber }}
+                    }
+                    · {{ other.createdAt | serverTime | dateTime }}
+                  </li>
+                }
+              </ul>
+            </div>
           </div>
         }
         @if (culture.corrections?.length) {
@@ -201,7 +236,7 @@
             @for (c of culture.corrections; track c.id) {
               <div class="correction-entry" data-testid="correction-entry">
                 <p>
-                  {{ c.correctedAt | serverTime | date: 'short' }}
+                  {{ c.correctedAt | serverTime | dateTime }}
                   @if (c.correctedByName) {
                     ({{ c.correctedByName }})
                   }
@@ -221,7 +256,7 @@
         @if (culture.finalizedAt) {
           <p class="finalized-line">
             {{ 'MICRO.FINALIZED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
-            {{ culture.finalizedAt | serverTime | date: 'short' }}
+            {{ culture.finalizedAt | serverTime | dateTime }}
             @if (culture.finalizedByName) {
               ({{ culture.finalizedByName }})
             }

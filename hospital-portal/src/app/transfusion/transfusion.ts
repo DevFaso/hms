@@ -47,6 +47,7 @@ import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
@@ -60,7 +61,7 @@ import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { OPositiveReleasesComponent } from './o-positive-releases/o-positive-releases.component';
 import { IncompatibleReleasesComponent } from './incompatible-releases/incompatible-releases.component';
-type Tab = 'requests' | 'units' | 'opositive';
+type Tab = 'requests' | 'units' | 'opositive' | 'incompatible';
 
 /**
  * Blood bank workbench (Tier 2 item 28) — the first and only caller of every
@@ -82,6 +83,7 @@ type Tab = 'requests' | 'units' | 'opositive';
     ModalDialogDirective,
     BackdropCloseDirective,
     ServerTimePipe,
+    DateTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -360,7 +362,7 @@ export class TransfusionComponent implements OnInit {
     bloodUnitId: '',
     verifiedByUserId: '',
     verifierSecret: '',
-    verificationMethod: 'Wristband scan',
+    verificationMethod: '',
   };
   /** QA CX-008: colleagues the server accepts as the second check; a staff id was typed by hand. */
   verifierCandidates = signal<VerifierCandidate[]>([]);
@@ -1367,7 +1369,7 @@ export class TransfusionComponent implements OnInit {
       bloodUnitId: unit.id,
       verifiedByUserId: '',
       verifierSecret: '',
-      verificationMethod: 'Wristband scan',
+      verificationMethod: this.translate.instant('TRANSFUSION.VERIFICATION_METHOD_DEFAULT'),
     };
     this.verifierCandidatesFailed.set(false);
     this.transfusion

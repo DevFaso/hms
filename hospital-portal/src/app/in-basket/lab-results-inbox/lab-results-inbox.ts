@@ -437,17 +437,14 @@ export class LabResultsInboxComponent {
     const parsed = new Date(SERVER_TIME.transform(iso));
     // A blank cell reads as a rendering fault; missing data reads as missing.
     if (Number.isNaN(parsed.getTime())) return LabResultsInboxComponent.NO_VALUE;
-    // The queue has no date window and no reviewed state, so it carries every
-    // result this physician ever ordered at this hospital. Without the year, a critical result
-    // from two years ago sits at the top of the worklist — severity sorts
-    // first — reading exactly like one released this morning.
-    const showYear = parsed.getFullYear() !== new Date().getFullYear();
-    // No hour12 override: the locale decides, as the in-basket panel does.
+    // D4161: the year and a two-digit hour are always shown, as every other
+    // lane screen does (the dateTime pipe); a critical result from two years
+    // ago must not read like one released this morning.
     return parsed.toLocaleString(currentLocale(), {
-      ...(showYear ? { year: 'numeric' } : {}),
+      year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: 'numeric',
+      hour: '2-digit',
       minute: '2-digit',
     });
   }

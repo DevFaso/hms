@@ -134,6 +134,10 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE " + CLINICAL_ONLY)
     List<Hospital> findAllHospitals();
 
+    /** QA D4317 class: the active staff assignments of one hospital. */
+    @Query("SELECT COUNT(a) FROM UserRoleHospitalAssignment a WHERE a.hospital.id = :hospitalId AND a.active = true")
+    long countActiveStaffAssignments(@Param("hospitalId") UUID hospitalId);
+
     /** Dashboard count: clinical hospitals. */
     @Query("SELECT COUNT(h) FROM Hospital h WHERE " + CLINICAL_ONLY)
     long countHospitals();

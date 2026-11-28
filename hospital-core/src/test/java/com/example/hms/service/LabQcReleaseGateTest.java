@@ -67,6 +67,24 @@ class LabQcReleaseGateTest {
         assertThat(gate.blockingRun(order)).containsSame(rejected);
     }
 
+    /**
+     * Review of #1379 (F5): a culture or qualitative test can no longer get a passing QC run, so an old
+     * rejected run on it must not hold its results.
+     */
+    @Test
+    void anOldRejectedRunOnACultureOrQualitativeTestNoLongerHoldsResults() {
+        latest(LabQcEventLevel.LOW_CONTROL, run(false));
+        order.getLabTestDefinition().setExpectedResult("Négatif");
+        assertThat(gate.isBlocked(order)).isFalse();
+
+        order.getLabTestDefinition().setExpectedResult(null);
+        order.getLabTestDefinition().setCulture(true);
+        assertThat(gate.isBlocked(order)).isFalse();
+
+        order.getLabTestDefinition().setCulture(false);
+        assertThat(gate.isBlocked(order)).isTrue();
+    }
+
     @Test
     void passingLatestRunsDoNotBlock() {
         latest(LabQcEventLevel.LOW_CONTROL, run(true));

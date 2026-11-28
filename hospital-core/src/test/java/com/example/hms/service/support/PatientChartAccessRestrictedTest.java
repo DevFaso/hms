@@ -114,4 +114,59 @@ class PatientChartAccessRestrictedTest {
         assertThatThrownBy(() -> access.require(patientId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ---- QA D4270: the patient of an approved record copy
+
+    private void signedInAs(UUID userId) {
+        var details = org.mockito.Mockito.mock(com.example.hms.security.HospitalUserDetails.class);
+        when(details.getUserId()).thenReturn(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                details, "ignored", java.util.List.of()));
+    }
+
+    @Test
+    @DisplayName("QA D4270: the patient collecting their own approved copy is bound by ownership and registration, not by the staff gate")
+    void theOwnerOfARestrictedChartCollectsTheirOwnCopy() {
+        try {
+            com.example.hms.model.User account = new com.example.hms.model.User();
+            account.setId(UUID.randomUUID());
+            patient.setUser(account);
+            patient.setChartRestricted(true);
+            signedInAs(account.getId());
+
+            assertThat(access.requireForRelease(patientId, hospitalId)).isSameAs(patient);
+            verify(policy, never()).decide(any(), any(), any());
+
+            // A hospital the patient is not registered at falls back to the staff gate, which refuses.
+            UUID elsewhere = UUID.randomUUID();
+            when(policy.decide(any(), any(), any())).thenReturn(RecordAccessDecision.refused(
+                patientId, elsewhere, actor, RecordAccessDenialReason.CHART_RESTRICTED,
+                RecordAccessPosture.TREATMENT_PRESUMED));
+            assertThatThrownBy(() -> access.requireForRelease(patientId, elsewhere))
+                .isInstanceOf(ChartRestrictedException.class);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("QA D4270: anyone else collecting a copy goes through the staff gate, unchanged")
+    void staffCollectingACopyStillPassTheStaffGate() {
+        try {
+            com.example.hms.model.User account = new com.example.hms.model.User();
+            account.setId(UUID.randomUUID());
+            patient.setUser(account);
+            patient.setChartRestricted(true);
+            signedInAs(UUID.randomUUID());
+            when(policy.decide(actor, patientId, hospitalId)).thenReturn(RecordAccessDecision.refused(
+                patientId, hospitalId, actor, RecordAccessDenialReason.CHART_RESTRICTED,
+                RecordAccessPosture.TREATMENT_PRESUMED));
+
+            assertThatThrownBy(() -> access.requireForRelease(patientId, hospitalId))
+                .isInstanceOf(ChartRestrictedException.class);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
 }

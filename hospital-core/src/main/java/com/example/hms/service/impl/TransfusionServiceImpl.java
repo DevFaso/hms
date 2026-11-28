@@ -1907,13 +1907,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         // a reaction was documented would describe something that must not
         // happen, so recording one stops it.
         if (administration.isInProgress()) {
-            stopInternal(administration, "Transfusion reaction: " + request.getReactionType());
+            // QA r81 D4159: the stored reason is staff-readable French, not the enum constant.
+            stopInternal(administration, MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+                "transfusion.reaction.stopReason", reactionLabel(request.getReactionType())));
             administrationRepository.save(administration);
         }
 
         // The implicated bag is evidence for the workup, not stock. A delayed
         // reaction to a bag that ran to the end leaves it what it is: transfused.
-        discardHungUnit(administration.getBloodUnit(), "Transfusion reaction (" + request.getReactionType() + ")");
+        discardHungUnit(administration.getBloodUnit(),
+            MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+                "transfusion.reaction.discardReason", reactionLabel(request.getReactionType())));
         completeRequestIfDone(administration.getRequest());
 
         if (saved.isSevere()) {
@@ -2208,6 +2212,12 @@ public class TransfusionServiceImpl implements TransfusionService {
     /** The product's name in the caller's language (QA D885). */
     private static String productLabel(BloodProductType type) {
         return type == null ? "" : MessageUtil.resolveOrRaw("transfusion.productType." + type.name());
+    }
+
+    /** The reaction's name in the staff locale, for a stored reason (QA r81 D4159). */
+    private static String reactionLabel(com.example.hms.enums.TransfusionReactionType type) {
+        return type == null ? "" : MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+            "transfusion.reactionType." + type.name());
     }
 
     private void stopInternal(TransfusionAdministration administration, String reason) {

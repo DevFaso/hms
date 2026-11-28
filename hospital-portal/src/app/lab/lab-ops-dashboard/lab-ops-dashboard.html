@@ -1,17 +1,20 @@
 <div class="lab-ops-dashboard">
   <header class="page-header">
-    <h1>
-      <span class="material-symbols-outlined header-icon">monitoring</span>
-      {{ 'LAB_OPS.TITLE' | translate }}
-    </h1>
-    @if (summary()) {
-      <p class="subtitle">
-        {{
-          'LAB_OPS.SNAPSHOT_AS_OF'
-            | translate: { date: summary()!.asOfDate | serverTime | date: 'mediumDate' }
-        }}
+    <div>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">monitoring</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
       </p>
-    }
+      <h1 class="page-title">{{ 'LAB_OPS.TITLE' | translate }}</h1>
+      @if (summary()) {
+        <p class="page-subtitle">
+          {{
+            'LAB_OPS.SNAPSHOT_AS_OF'
+              | translate: { date: summary()!.asOfDate | serverTime | date: 'mediumDate' }
+          }}
+        </p>
+      }
+    </div>
   </header>
 
   <!-- Loading -->

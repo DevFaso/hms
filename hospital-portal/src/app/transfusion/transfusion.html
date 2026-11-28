@@ -1,6 +1,10 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">bloodtype</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'TRANSFUSION.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'TRANSFUSION.SUBTITLE' | translate }}</p>
     </div>
@@ -45,6 +49,14 @@
       >
         {{ 'TRANSFUSION.OPOS.TAB' | translate }}
       </button>
+      <button
+        class="tab-btn"
+        data-testid="tab-incompatible"
+        [class.active]="tab() === 'incompatible'"
+        (click)="setTab('incompatible')"
+      >
+        {{ 'TRANSFUSION.INCOMPAT.TAB' | translate }}
+      </button>
     </div>
     <div class="results-filters">
       @if (tab() === 'requests') {
@@ -59,7 +71,7 @@
             <option [value]="s">{{ 'TRANSFUSION.REQUEST_STATUS_' + s | translate }}</option>
           }
         </select>
-      } @else {
+      } @else if (tab() === 'units') {
         <select
           appFormControl
           [ngModel]="unitStatusFilter()"
@@ -160,7 +172,7 @@
                     }}</span>
                   }
                 </td>
-                <td>{{ r.requestedAt | serverTime | date: 'short' }}</td>
+                <td>{{ r.requestedAt | serverTime | dateTime }}</td>
                 <td>
                   <div class="action-group">
                     <button
@@ -194,6 +206,8 @@
   <!-- ══ Emergency O positive releases (V380) ══ -->
   @if (tab() === 'opositive') {
     <app-o-positive-releases />
+  }
+  @if (tab() === 'incompatible') {
     <!-- Releases despite an incompatible crossmatch, and the hospital's fallback (V381) -->
     <app-incompatible-releases />
   }
@@ -525,7 +539,7 @@
                       <td>{{ r.reason || '—' }}</td>
                       <td>{{ r.authoriserName || '—' }}</td>
                       <td>{{ r.issuedByName || '—' }}</td>
-                      <td>{{ r.issuedAt | serverTime | date: 'short' }}</td>
+                      <td>{{ r.issuedAt | serverTime | dateTime }}</td>
                     </tr>
                   }
                 </tbody>
@@ -574,7 +588,7 @@
                 <div class="administration-facts">
                   <span
                     >{{ 'TRANSFUSION.ADMIN_STARTED' | translate }}{{ 'COMMON.COLON' | translate }}
-                    {{ a.startedAt | serverTime | date: 'short' }}</span
+                    {{ a.startedAt | serverTime | dateTime }}</span
                   >
                   @if (a.administeredByName) {
                     <span
@@ -591,7 +605,7 @@
                   @if (a.completedAt) {
                     <span
                       >{{ 'TRANSFUSION.ADMIN_ENDED' | translate }}{{ 'COMMON.COLON' | translate }}
-                      {{ a.completedAt | serverTime | date: 'short' }}</span
+                      {{ a.completedAt | serverTime | dateTime }}</span
                     >
                   }
                   @if (a.volumeTransfusedMl !== null) {
@@ -648,7 +662,7 @@
                     <span>
                       {{ 'TRANSFUSION.REACTION_' + rx.reactionType | translate }} —
                       {{ 'TRANSFUSION.SEVERITY_' + rx.severity | translate }} —
-                      {{ rx.onsetAt | serverTime | date: 'short' }}
+                      {{ rx.onsetAt | serverTime | dateTime }}
                     </span>
                   </div>
                 }
@@ -828,7 +842,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-1-title">{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
-          <button class="modal-close" (click)="closeNewRequest()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeNewRequest()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <!-- QA D1304 (D1272 class): the required picker shows a visible, starred label. -->
@@ -907,7 +927,7 @@
                               date:
                                 (known.severeTransfusionReactionAt
                                   | serverTime
-                                  | date: 'shortDate') ?? '',
+                                  | date: 'mediumDate') ?? '',
                               hospital: known.severeTransfusionReactionHospitalName ?? '',
                             }
                     }}
@@ -1105,7 +1125,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-2-title">{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
-          <button class="modal-close" (click)="closeGroupModal()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeGroupModal()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           @if (groupNeedsPatient()) {
@@ -1210,7 +1236,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-3-title">{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
-          <button class="modal-close" (click)="closeUnitModal()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeUnitModal()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <div class="field">
@@ -1308,7 +1340,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-4-title">{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
-          <button class="modal-close" (click)="closeCrossmatch()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeCrossmatch()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           @if (lateResultUnit(); as unitNumber) {
@@ -1440,7 +1478,13 @@
           <h2 id="transfusion-dialog-antibody-title">
             {{ 'TRANSFUSION.ANTIBODY_RECORD' | translate }}
           </h2>
-          <button class="modal-close" (click)="showAntibodyModal.set(false)">&times;</button>
+          <button
+            class="modal-close"
+            (click)="showAntibodyModal.set(false)"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint">{{ 'TRANSFUSION.ANTIBODY_RECORD_HINT' | translate }}</p>
@@ -1548,7 +1592,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-7-title">{{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}</h2>
-          <button class="modal-close" (click)="closeEmergencyRelease()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeEmergencyRelease()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.EMERGENCY_RELEASE_HINT' | translate }}</p>
@@ -1725,7 +1775,13 @@
           <h2 id="transfusion-dialog-8-title">
             {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
           </h2>
-          <button class="modal-close" (click)="closeIncompatibleRelease()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeIncompatibleRelease()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.INCOMPATIBLE_RELEASE_HINT' | translate }}</p>
@@ -1981,7 +2037,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-5-title">{{ 'TRANSFUSION.HANG' | translate }}</h2>
-          <button class="modal-close" (click)="closeHang()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeHang()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
@@ -2085,7 +2147,13 @@
       >
         <div class="modal-header">
           <h2 id="transfusion-dialog-6-title">{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
-          <button class="modal-close" (click)="closeReaction()">&times;</button>
+          <button
+            class="modal-close"
+            (click)="closeReaction()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.REACTION_HINT' | translate }}</p>
@@ -2185,12 +2253,12 @@
           {{ 'TRANSFUSION.RETURN.TITLE' | translate: { unit: u.unitNumber } }}
         </h2>
         <button
-          class="modal-close"
+          class="btn-close"
           (click)="closeReturn()"
           [title]="'COMMON.CLOSE' | translate"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          &times;
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">

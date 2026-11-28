@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { GovernanceNamePipe } from './default-names';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -21,6 +22,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
   selector: 'app-gov-security-tab',
   standalone: true,
   imports: [
+    GovernanceNamePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

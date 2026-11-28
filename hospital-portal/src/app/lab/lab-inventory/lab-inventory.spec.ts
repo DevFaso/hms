@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -105,6 +106,105 @@ describe('LabInventoryComponent', () => {
     expect(component.loading()).toBeFalse();
     expect(component.items().length).toBe(3);
     expect(component.totalElements()).toBe(3);
+  });
+
+  it('distinguishes empty stock from low stock and displays the reorder threshold', () => {
+    fixture.detectChanges();
+    flushItems({
+      ...PAGED,
+      content: [mockItem({ name: 'Reagent', quantity: 0, reorderThreshold: 10, lowStock: true })],
+    });
+    fixture.detectChanges();
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tbody tr') as HTMLElement;
+    expect(row.textContent).toContain('PHARMACY.OUT_OF_STOCK');
+    expect(row.textContent).not.toContain('LAB_INVENTORY.LOW_STOCK');
+    expect(row.querySelectorAll('td')[4].textContent).toContain('10');
+  });
+
+  it('D4154: a lot expiring within the window shows an expires-soon state', () => {
+    fixture.detectChanges();
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 13);
+    const iso = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+    flushItems({
+      ...PAGED,
+      content: [
+        mockItem({ name: 'Soon', expirationDate: iso }),
+        mockItem({ id: 'x', name: 'Far' }),
+      ],
+    });
+    fixture.detectChanges();
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toContain('LAB_INVENTORY.EXPIRING_SOON');
+    expect(rows[1].textContent).not.toContain('LAB_INVENTORY.EXPIRING_SOON');
+  });
+
+  it('pluralizes counted units while leaving measured units unchanged', () => {
+    fixture.detectChanges();
+    flushItems({
+      ...PAGED,
+      content: [
+        mockItem({ id: 'vial', name: 'Reagent', quantity: 4, unit: 'flacon' }),
+        mockItem({ id: 'weight', name: 'Powder', quantity: 4, unit: 'mg' }),
+      ],
+    });
+    fixture.detectChanges();
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toContain('4 flacons');
+    expect(rows[1].textContent).toContain('4 mg');
+    expect(rows[1].textContent).not.toContain('4 mgs');
+  });
+
+  it('searches across inventory pages and retains the search on navigation', () => {
+    fixture.detectChanges();
+    flushItems();
+    component.searchText = ' reagent ';
+    component.search();
+    let req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ query: 'reagent' });
+    expect(req.request.urlWithParams).not.toContain('reagent');
+    expect(req.request.params.get('page')).toBe('0');
+    req.flush({ ...PAGED, totalPages: 2 });
+    component.goToPage(1);
+    req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ query: 'reagent' });
+    expect(req.request.urlWithParams).not.toContain('reagent');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush({ ...PAGED, number: 1, totalPages: 2 });
+  });
+
+  it('searches with Enter and clears the filter with an empty search', () => {
+    fixture.detectChanges();
+    flushItems();
+    const host = fixture.nativeElement as HTMLElement;
+    const input = host.querySelector<HTMLInputElement>('#lab-inventory-search')!;
+    input.value = 'reagent';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    let req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ query: 'reagent' });
+    expect(req.request.urlWithParams).not.toContain('reagent');
+    req.flush(PAGED);
+    fixture.detectChanges();
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    host.querySelector<HTMLButtonElement>('[role="search"] button')!.click();
+    req = httpMock.expectOne((r) => r.url.includes('/lab/inventory/hospital/h-1'));
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.has('search')).toBeFalse();
+    req.flush(PAGED);
+  });
+
+  it("shows expiration dates in the reader's order, with the year", () => {
+    fixture.detectChanges();
+    flushItems({ ...PAGED, content: [mockItem({ expirationDate: '2025-03-15' })] });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('tbody tr')!.textContent).toContain(
+      formatDate('2025-03-15', 'mediumDate', 'en-US'),
+    );
   });
 
   it('should show loading state initially', () => {

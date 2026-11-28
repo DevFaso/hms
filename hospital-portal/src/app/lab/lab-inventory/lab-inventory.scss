@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-header' as lane-header;
 .lab-inventory-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -47,7 +48,7 @@
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.8125rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .btn-refresh {
@@ -112,12 +113,26 @@
   th {
     font-weight: 600;
     font-size: 0.8125rem;
-    color: #475569;
+    color: var(--text-secondary);
     background: #f8fafc;
   }
 }
 
+@media screen and (min-width: 600px) and (max-width: 900px) {
+  .inventory-table th,
+  .inventory-table td {
+    padding: 0.5rem 0.45rem;
+  }
+
+  .inventory-table th:nth-child(3) {
+    white-space: nowrap !important;
+  }
+}
+
 .low-stock-row {
+  background: #fffbeb;
+}
+.expiring-row {
   background: #fffbeb;
 }
 .expired-row {
@@ -135,6 +150,10 @@
     color: #166534;
   }
   &.low-stock {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.expiring-soon {
     background: #fef3c7;
     color: #92400e;
   }
@@ -207,3 +226,26 @@
   gap: 0.75rem;
   margin-top: 1.5rem;
 }
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  input {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+@include lane-header.header;

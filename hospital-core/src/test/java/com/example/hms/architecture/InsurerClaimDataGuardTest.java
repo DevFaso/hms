@@ -57,6 +57,23 @@ class InsurerClaimDataGuardTest {
                 offenders.add("InvoicePayerShareLineRepository#" + method.getName());
             }
         }
+        // Insurer claims plan PRs 2 to 4 (V455 to V458, plan 4.5): the bordereaux, their lines, the insurer payments
+        // and allocations, the refusals and the write-offs. A method added to any of them without the hospital fails.
+        List<Class<?>> claimRepositories = List.of(
+            com.example.hms.repository.InsurerClaimBatchRepository.class,
+            com.example.hms.repository.InsurerClaimLineRepository.class,
+            com.example.hms.repository.InsurerPaymentRepository.class,
+            com.example.hms.repository.InsurerPaymentAllocationRepository.class,
+            com.example.hms.repository.InsurerClaimRefusalRepository.class,
+            com.example.hms.repository.InsurerClaimWriteOffRepository.class);
+        for (Class<?> repository : claimRepositories) {
+            assertThat(repository.getDeclaredMethods()).as(repository.getSimpleName()).isNotEmpty();
+            for (Method method : repository.getDeclaredMethods()) {
+                if (!method.isSynthetic() && !Modifier.isStatic(method.getModifiers()) && !namesHospital(method)) {
+                    offenders.add(repository.getSimpleName() + "#" + method.getName());
+                }
+            }
+        }
         Set<String> prOne = Set.of("findByIdAndBillingInvoice_IdAndBillingInvoice_Hospital_Id",
             "findByBillingInvoice_IdInAndBillingInvoice_Hospital_Id", "findLiveLineIdsOfOrder",
             "recordPreAuthorisation");

@@ -190,6 +190,10 @@ public final class ClinicalRuleRegistry {
         // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
         rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
             "service.formulary.MedicationCatalogApprovalPolicy"),
+        // QA D4269 (r81), owner decision 2026-11-27, research report « Minors and the patient portal in Burkina
+        // Faso »: no own account under 13, read-only at 13-14, narrowing only at 15-17; a jurist is to confirm.
+        rule(ClinicalRuleSetKey.MINOR_PORTAL_RIGHTS, "2026-11-27.1",
+            "service.recordaccess.MinorPortalRights"),
         // QA D4140 (r81, V465): a nurse's or midwife's imaging request waits for a physician of the hospital.
         rule(ClinicalRuleSetKey.IMAGING_ORDER_PHYSICIAN_AUTHORISATION, "2026-11-27.1",
             "service.imaging.ImagingOrderAuthorisation",

@@ -25,6 +25,11 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { ToastService } from '../../core/toast.service';
 import { PlanAssignmentsComponent } from './plan-assignments.component';
+import { featureKeyTitleKey, splitFeatureKeys } from '../../shared/feature-key-labels';
+import { PluralPipe } from '../../shared/i18n/plural';
+
+/** QA D4310: which plans the list shows. */
+export type PlanStatusFilter = 'ACTIVE' | 'INACTIVE' | 'ALL';
 
 /**
  * QA D865: the currencies a plan can be priced in, as ISO 4217 codes. The
@@ -58,6 +63,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
     InlineDiscardAskComponent,
     SubmitGuardDirective,
     PlanAssignmentsComponent,
+    PluralPipe,
   ],
   templateUrl: './subscriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -74,7 +80,20 @@ export class SubscriptionsComponent implements OnInit {
   readonly errored = signal(false);
   readonly plans = signal<SubscriptionPlan[]>([]);
 
-  readonly showActiveOnly = signal(true);
+  /** QA D4310: active plans by default; inactive ones can be listed and reactivated. */
+  readonly statusFilter = signal<PlanStatusFilter>('ACTIVE');
+  readonly visiblePlans = computed(() => {
+    const filter = this.statusFilter();
+    return this.plans().filter((plan) => filter === 'ALL' || plan.active === (filter === 'ACTIVE'));
+  });
+  /** QA D4070: the feature keys the server accepts, for the picker. */
+  readonly featureCatalogue = signal<string[]>([]);
+  /** The keys ticked in the form, plus any stored key the catalogue no longer has. */
+  readonly selectedFeatureKeys = computed(() => splitFeatureKeys(this.form().featureKeys));
+  readonly unknownFeatureKeys = computed(() => {
+    const known = new Set(this.featureCatalogue().map((key) => key.toLowerCase()));
+    return this.selectedFeatureKeys().filter((key) => !known.has(key.toLowerCase()));
+  });
   readonly editing = signal<SubscriptionPlan | null>(null);
   readonly form = signal<SubscriptionPlanRequest>({ ...FRESH_REQUEST });
   readonly formError = signal<string | null>(null);
@@ -94,7 +113,7 @@ export class SubscriptionsComponent implements OnInit {
   /** A refused deactivation, shown above the plans (the edit form may be closed). */
   readonly deactivateError = signal<string | null>(null);
 
-  readonly hasPlans = computed(() => this.plans().length > 0);
+  readonly hasPlans = computed(() => this.visiblePlans().length > 0);
 
   /**
    * QA D865: the price is typed in the currency's own unit (francs, euros),
@@ -115,13 +134,17 @@ export class SubscriptionsComponent implements OnInit {
 
   ngOnInit(): void {
     this.refresh();
+    this.service
+      .listFeatureKeys()
+      .pipe(catchError(() => of([] as string[])))
+      .subscribe((keys) => this.featureCatalogue.set(keys ?? []));
   }
 
   refresh(): void {
     this.loading.set(true);
     this.errored.set(false);
     this.service
-      .listPlans(this.showActiveOnly())
+      .listPlans(this.statusFilter() === 'ACTIVE')
       .pipe(
         catchError(() => {
           this.errored.set(true);
@@ -134,9 +157,52 @@ export class SubscriptionsComponent implements OnInit {
       });
   }
 
-  toggleActiveFilter(): void {
-    this.showActiveOnly.update((v) => !v);
+  setStatusFilter(value: PlanStatusFilter): void {
+    this.statusFilter.set(value);
     this.refresh();
+  }
+
+  /** QA D4071: a feature key's name when the platform has one, else the key itself. */
+  featureLabel(key: string): string {
+    const titleKey = featureKeyTitleKey(key);
+    return titleKey ? this.translate.instant(titleKey) : key;
+  }
+
+  planFeatureKeys(plan: SubscriptionPlan): string[] {
+    return splitFeatureKeys(plan.featureKeys);
+  }
+
+  isFeatureSelected(key: string): boolean {
+    return this.selectedFeatureKeys().some((k) => k.toLowerCase() === key.toLowerCase());
+  }
+
+  /** QA D4070: the picker ticks or unticks one key; the form keeps the comma-separated list. */
+  toggleFeatureKey(key: string, checked: boolean): void {
+    const others = this.selectedFeatureKeys().filter((k) => k.toLowerCase() !== key.toLowerCase());
+    this.updateForm('featureKeys', (checked ? [...others, key] : others).join(','));
+  }
+
+  /** QA D4310: a deactivated plan goes back in the catalogue. */
+  async reactivate(plan: SubscriptionPlan): Promise<void> {
+    if (plan.active) return;
+    this.deactivateError.set(null);
+    const confirmed = await this.confirm.ask({
+      titleKey: 'SUBSCRIPTIONS.REACTIVATE_CONFIRM',
+      messageKey: 'SUBSCRIPTIONS.REACTIVATE_CONFIRM_BODY',
+      params: { name: plan.name },
+      confirmKey: 'SUBSCRIPTIONS.REACTIVATE',
+    });
+    if (!confirmed) return;
+    this.service.reactivatePlan(plan.id).subscribe({
+      next: () => {
+        this.toast.success(
+          this.translate.instant('SUBSCRIPTIONS.REACTIVATED', { name: plan.name }),
+        );
+        this.refresh();
+      },
+      error: (err: HttpErrorResponse) =>
+        this.deactivateError.set(refusalReason(err) ?? 'SUBSCRIPTIONS.ERROR.REACTIVATE_FAILED'),
+    });
   }
 
   startCreate(): void {

@@ -1,0 +1,200 @@
+<div class="page-container" data-testid="claim-batches-page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INSURER_CLAIMS.BATCHES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INSURER_CLAIMS.BATCHES.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  <app-claims-nav current="batches" />
+
+  @if (canBuild) {
+    <section class="claims-panel" aria-labelledby="claim-batch-new-title">
+      <h2 id="claim-batch-new-title">{{ 'INSURER_CLAIMS.BATCHES.NEW_TITLE' | translate }}</h2>
+      <form class="claims-form" data-testid="claim-batch-new" (ngSubmit)="create()">
+        <div>
+          <label for="claim-batch-payer">{{ 'INSURER_CLAIMS.SHARES.PAYER' | translate }} *</label>
+          <select
+            appFormControl
+            id="claim-batch-payer"
+            name="payerId"
+            required
+            data-testid="claim-batch-payer"
+            [ngModel]="payerId()"
+            (ngModelChange)="payerId.set($event ?? '')"
+          >
+            <option value="">{{ 'INSURER_CLAIMS.BATCHES.CHOOSE_PAYER' | translate }}</option>
+            @for (payer of payers(); track payer.id) {
+              <option [value]="payer.id">{{ payer.name }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="claim-batch-from">{{ 'INSURER_CLAIMS.SHARES.FROM' | translate }} *</label>
+          <input
+            appFormControl
+            type="date"
+            id="claim-batch-from"
+            name="periodFrom"
+            required
+            data-testid="claim-batch-from"
+            [ngModel]="periodFrom()"
+            (ngModelChange)="periodFrom.set($event ?? '')"
+          />
+        </div>
+        <div>
+          <label for="claim-batch-to">{{ 'INSURER_CLAIMS.SHARES.TO' | translate }} *</label>
+          <input
+            appFormControl
+            type="date"
+            id="claim-batch-to"
+            name="periodTo"
+            required
+            data-testid="claim-batch-to"
+            [attr.min]="periodFrom() || null"
+            [attr.aria-invalid]="periodReversed() || null"
+            [ngModel]="periodTo()"
+            (ngModelChange)="periodTo.set($event ?? '')"
+          />
+        </div>
+        <div class="claims-actions">
+          <button
+            type="submit"
+            class="btn-primary btn-sm"
+            data-testid="claim-batch-create"
+            [disabled]="creating()"
+          >
+            {{ 'INSURER_CLAIMS.BATCHES.CREATE' | translate }}
+          </button>
+        </div>
+        <p class="claims-note claims-wide">{{ 'INSURER_CLAIMS.BATCHES.NEW_HINT' | translate }}</p>
+      </form>
+    </section>
+  }
+
+  <div class="claims-nav" role="group" [attr.aria-label]="'R70_MONEY.SHARES.VIEWS' | translate">
+    <button
+      type="button"
+      class="claims-tab"
+      [class.claims-tab-on]="view() === 'open'"
+      [attr.aria-pressed]="view() === 'open'"
+      data-testid="claim-batches-view-open"
+      (click)="setView('open')"
+    >
+      {{ 'INSURER_CLAIMS.BATCHES.VIEW_OPEN' | translate }}
+    </button>
+    <button
+      type="button"
+      class="claims-tab"
+      [class.claims-tab-on]="view() === 'closed'"
+      [attr.aria-pressed]="view() === 'closed'"
+      data-testid="claim-batches-view-closed"
+      (click)="setView('closed')"
+    >
+      {{ 'INSURER_CLAIMS.BATCHES.VIEW_CLOSED' | translate }}
+    </button>
+    <label class="sr-only" for="claim-batches-filter-payer">{{
+      'INSURER_CLAIMS.SHARES.PAYER' | translate
+    }}</label>
+    <select
+      appFormControl
+      id="claim-batches-filter-payer"
+      name="filterPayerId"
+      data-testid="claim-batches-filter-payer"
+      [ngModel]="filterPayerId()"
+      (ngModelChange)="setFilterPayer($event)"
+    >
+      <option value="">{{ 'INSURER_CLAIMS.SHARES.ALL_PAYERS' | translate }}</option>
+      @for (payer of payers(); track payer.id) {
+        <option [value]="payer.id">{{ payer.name }}</option>
+      }
+    </select>
+  </div>
+
+  @if (loading()) {
+    <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="muted" role="alert" data-testid="claim-batches-failed">
+      {{ 'INSURER_CLAIMS.BATCHES.LOAD_FAILED' | translate }}
+    </p>
+  } @else if (rows().length === 0) {
+    <p class="muted" data-testid="claim-batches-empty">
+      {{ 'INSURER_CLAIMS.BATCHES.EMPTY' | translate }}
+    </p>
+  } @else {
+    <ul class="claims-list" data-testid="claim-batches-list">
+      @for (row of rows(); track row.id) {
+        <li class="claims-card" [attr.data-testid]="'claim-batch-' + row.id">
+          <div class="claims-card-head">
+            <strong>
+              {{ row.number || ('INSURER_CLAIMS.BATCHES.DRAFT_NAME' | translate) }}
+              · {{ row.payerName || '—' }}
+            </strong>
+            <span class="claims-status" [attr.data-status]="row.status">{{
+              row.status | keyLabel: 'INSURER_CLAIMS.BATCH_STATUS.'
+            }}</span>
+          </div>
+          <dl class="claims-meta">
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.BATCHES.PERIOD' | translate }}</dt>
+              <dd>
+                {{ row.periodFrom | dayMonth: undefined : true }} –
+                {{ row.periodTo | dayMonth: undefined : true }}
+              </dd>
+            </div>
+            @if (row.submittedOn) {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCHES.SUBMITTED_ON' | translate }}</dt>
+                <dd>{{ row.submittedOn | dayMonth: undefined : true }}</dd>
+              </div>
+            }
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.BATCHES.CLAIMED' | translate }}</dt>
+              <dd class="claims-amount">{{ row.claimedTotal | cfa: 'XOF' }}</dd>
+            </div>
+            @if (row.status !== 'DRAFT') {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCHES.PAID' | translate }}</dt>
+                <dd class="claims-amount">{{ row.paidTotal | cfa: 'XOF' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}</dt>
+                <dd class="claims-amount">{{ row.outstandingTotal | cfa: 'XOF' }}</dd>
+              </div>
+            }
+          </dl>
+          <a
+            class="btn-secondary btn-sm"
+            [routerLink]="['/billing/bordereaux', row.id]"
+            [attr.data-testid]="'claim-batch-open-' + row.id"
+          >
+            {{ 'INSURER_CLAIMS.BATCHES.OPEN' | translate }}
+          </a>
+        </li>
+      }
+    </ul>
+    @if (totalPages() > 1) {
+      <nav class="claims-pager" [attr.aria-label]="'INSURER_CLAIMS.SHARES.PAGES' | translate">
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          [disabled]="page() === 0"
+          (click)="goTo(page() - 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.PREVIOUS' | translate }}
+        </button>
+        <span>{{
+          'INSURER_CLAIMS.SHARES.PAGE' | translate: { page: page() + 1, pages: totalPages() }
+        }}</span>
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          [disabled]="page() + 1 >= totalPages()"
+          (click)="goTo(page() + 1)"
+        >
+          {{ 'INSURER_CLAIMS.SHARES.NEXT' | translate }}
+        </button>
+      </nav>
+    }
+  }
+</div>
