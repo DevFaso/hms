@@ -30,6 +30,8 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { newPaymentRequestKey } from '../../shared/payment-request-key';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { localDateString } from '../../shared/date-utils';
 import { ClaimsNavComponent } from './claims-nav.component';
 import { wholeFrancs } from './claim-batch-detail.component';
 
@@ -66,6 +68,7 @@ export function proposeAllocation(lines: ClaimLine[], amount: number): Record<st
     DayMonthPipe,
     KeyLabelPipe,
     ClaimsNavComponent,
+    SubmitGuardDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './insurer-payments.component.html',
@@ -102,7 +105,7 @@ export class InsurerPaymentsComponent {
   readonly target = signal<InsurerPayment | null>(null);
   readonly payerId = signal('');
   readonly amount = signal('');
-  readonly receivedDate = signal(new Date().toISOString().slice(0, 10));
+  readonly receivedDate = signal(localDateString());
   readonly method = signal<InsurerPaymentMethod>('BANK_TRANSFER');
   readonly reference = signal('');
   readonly note = signal('');
@@ -177,7 +180,7 @@ export class InsurerPaymentsComponent {
     this.reference.set('');
     this.note.set('');
     this.method.set('BANK_TRANSFER');
-    this.receivedDate.set(new Date().toISOString().slice(0, 10));
+    this.receivedDate.set(localDateString());
     this.openLines.set([]);
     this.allocation.set({});
     this.requestKey = newPaymentRequestKey();
@@ -288,7 +291,7 @@ export class InsurerPaymentsComponent {
     const allocations = this.allocations();
     if (!allocations) return;
     this.send(
-      this.claims.recordPayment({
+      this.claims.recordInsurerPayment({
         payerId: this.payerId(),
         amount: wholeFrancs(this.amount()) ?? 0,
         receivedDate: this.receivedDate(),
@@ -302,7 +305,10 @@ export class InsurerPaymentsComponent {
     );
   }
 
-  private send(call: ReturnType<InsurerClaimsService['recordPayment']>, doneKey: string): void {
+  private send(
+    call: ReturnType<InsurerClaimsService['recordInsurerPayment']>,
+    doneKey: string,
+  ): void {
     this.busy.set(true);
     call.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {

@@ -8503,6 +8503,7 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
+        "INSURER_CLAIM_BATCH": "Insurer claim bordereau",
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
         "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
         "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos",
@@ -16892,10 +16893,10 @@
       "CANCELLED": "Withdrawn"
     },
     "PAYMENT_METHOD": {
-      "BANK_TRANSFER": "Bank transfer",
+      "BANK_TRANSFER": "Transferencia bancaria",
       "CHEQUE": "Cheque",
-      "MOBILE_MONEY": "Mobile money",
-      "CASH": "Cash (outside the till)"
+      "MOBILE_MONEY": "Dinero móvil",
+      "CASH": "Efectivo"
     },
     "PAYMENT_STATUS": {
       "RECORDED": "Recorded",

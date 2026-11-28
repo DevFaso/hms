@@ -147,7 +147,10 @@ export class InsurerReceivablesComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => saveResponse(response, 'creances-assureurs.csv'),
-        error: () => this.toast.error(this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED'),
+          ),
       });
   }
 
@@ -157,7 +160,10 @@ export class InsurerReceivablesComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => saveResponse(response, 'rapprochement-assureurs.csv'),
-        error: () => this.toast.error(this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED'),
+          ),
       });
   }
 

@@ -28,13 +28,14 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { newPaymentRequestKey } from '../../shared/payment-request-key';
+import { localDateString } from '../../shared/date-utils';
 import { ClaimsNavComponent } from './claims-nav.component';
 
 /** The first and last day of the month before {@code today}, as ISO dates: the usual claim period. */
 export function previousMonth(today: Date): { from: string; to: string } {
-  const first = new Date(Date.UTC(today.getFullYear(), today.getMonth() - 1, 1));
-  const last = new Date(Date.UTC(today.getFullYear(), today.getMonth(), 0));
-  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+  const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const last = new Date(today.getFullYear(), today.getMonth(), 0);
+  return { from: localDateString(first), to: localDateString(last) };
 }
 
 /**

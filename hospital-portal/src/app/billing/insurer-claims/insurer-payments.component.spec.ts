@@ -58,7 +58,7 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
     claims = jasmine.createSpyObj<InsurerClaimsService>('InsurerClaimsService', [
       'listPayments',
       'openLines',
-      'recordPayment',
+      'recordInsurerPayment',
       'allocate',
       'reversePayment',
     ]);
@@ -66,7 +66,7 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
       of({ content: rows, page: 0, size: 25, totalElements: rows.length, totalPages: 1 }),
     );
     claims.openLines.and.returnValue(of([openLine('1', 4000), openLine('2', 7800)]));
-    claims.recordPayment.and.returnValue(of(recorded));
+    claims.recordInsurerPayment.and.returnValue(of(recorded));
     claims.allocate.and.returnValue(of(recorded));
     claims.reversePayment.and.returnValue(of({ ...recorded, status: 'REVERSED' }));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
@@ -128,7 +128,7 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
 
     component.save();
 
-    const body = claims.recordPayment.calls.mostRecent().args[0];
+    const body = claims.recordInsurerPayment.calls.mostRecent().args[0];
     expect(body).toEqual(
       jasmine.objectContaining({
         payerId: 'payer-1',
@@ -163,7 +163,7 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
     component.setAllocation(openLine('2', 7800), '7800');
     component.save();
 
-    expect(claims.recordPayment).not.toHaveBeenCalled();
+    expect(claims.recordInsurerPayment).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledTimes(4);
   });
 
@@ -191,7 +191,7 @@ describe('InsurerPaymentsComponent (QA D3983)', () => {
     expectEmptySubmitRefusal(fixture, {
       button: '[data-testid="insurer-payment-save"]',
       notMarked: ['insurer-payment-date', 'insurer-payment-method'],
-      sent: claims.recordPayment,
+      sent: claims.recordInsurerPayment,
     });
   });
 

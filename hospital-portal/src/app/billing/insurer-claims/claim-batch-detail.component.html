@@ -124,7 +124,7 @@
             {{ 'INSURER_CLAIMS.BATCH.WARNINGS' | translate: { count: b.warningCount } }}
           </p>
         }
-        <form class="claims-form">
+        <form class="claims-form" (ngSubmit)="submit()">
           <div>
             <label for="claim-submitted-on"
               >{{ 'INSURER_CLAIMS.BATCHES.SUBMITTED_ON' | translate }} *</label
@@ -155,11 +155,14 @@
           </div>
           <div class="claims-actions">
             <button
-              type="button"
+              type="submit"
               class="btn-primary btn-sm"
               data-testid="claim-batch-submit"
-              (click)="submit()"
-              [disabled]="busy() || b.lineCount === 0"
+              [disabled]="busy()"
+              [appSubmitGuard]="
+                b.lineCount === 0 ? ('INSURER_CLAIMS.BATCH.NO_LINES' | translate) : false
+              "
+              submitGuardRequired
             >
               {{ 'INSURER_CLAIMS.BATCH.SUBMIT' | translate }}
             </button>
@@ -203,6 +206,8 @@
               class="btn-secondary btn-sm"
               data-testid="claim-receipt-save"
               [disabled]="busy()"
+              appSubmitGuard
+              submitGuardRequired
             >
               {{ 'COMMON.SAVE' | translate }}
             </button>
@@ -241,6 +246,8 @@
                 class="btn-primary btn-sm"
                 data-testid="claim-batch-cancel-confirm"
                 [disabled]="busy()"
+                appSubmitGuard
+                submitGuardRequired
               >
                 {{ 'INSURER_CLAIMS.BATCH.CANCEL' | translate }}
               </button>
@@ -580,6 +587,8 @@
                       class="btn-primary btn-sm"
                       data-testid="claim-action-confirm"
                       [disabled]="busy()"
+                      appSubmitGuard
+                      submitGuardRequired
                     >
                       {{ 'COMMON.CONFIRM' | translate }}
                     </button>

@@ -8469,6 +8469,7 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
         "PAYER_PLAN": "Formule d’organisme payeur",
+        "INSURER_CLAIM_BATCH": "Bordereau de réclamation assureur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
         "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
@@ -16894,8 +16895,8 @@
     "PAYMENT_METHOD": {
       "BANK_TRANSFER": "Virement bancaire",
       "CHEQUE": "Chèque",
-      "MOBILE_MONEY": "Paiement mobile",
-      "CASH": "Espèces (hors caisse)"
+      "MOBILE_MONEY": "Mobile money",
+      "CASH": "Espèces"
     },
     "PAYMENT_STATUS": {
       "RECORDED": "Enregistré",

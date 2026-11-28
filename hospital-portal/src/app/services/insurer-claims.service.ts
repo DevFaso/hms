@@ -344,7 +344,7 @@ export class InsurerClaimsService {
     return this.http.get<InsurerPayment>(`${BASE}/payments/${id}`);
   }
 
-  recordPayment(body: InsurerPaymentRequest): Observable<InsurerPayment> {
+  recordInsurerPayment(body: InsurerPaymentRequest): Observable<InsurerPayment> {
     return this.http.post<InsurerPayment>(`${BASE}/payments`, body);
   }
 

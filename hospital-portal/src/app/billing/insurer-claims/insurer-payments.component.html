@@ -242,6 +242,8 @@
             class="btn-primary btn-sm"
             data-testid="insurer-payment-save"
             [disabled]="busy()"
+            appSubmitGuard
+            submitGuardRequired
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
@@ -366,6 +368,8 @@
                   class="btn-primary btn-sm"
                   data-testid="insurer-payment-reverse-confirm"
                   [disabled]="busy()"
+                  appSubmitGuard
+                  submitGuardRequired
                 >
                   {{ 'INSURER_CLAIMS.PAYMENTS.REVERSE' | translate }}
                 </button>

@@ -38,6 +38,8 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { saveResponse } from '../../shared/download-file';
 import { allPages } from '../../shared/all-pages';
 import { newPaymentRequestKey } from '../../shared/payment-request-key';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { localDateString } from '../../shared/date-utils';
 import { ClaimsNavComponent } from './claims-nav.component';
 
 /** A whole number of francs typed in a field, or null when it is not one. */
@@ -70,6 +72,7 @@ export function wholeFrancs(raw: string | number | null | undefined): number | n
     DayMonthPipe,
     KeyLabelPipe,
     ClaimsNavComponent,
+    SubmitGuardDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './claim-batch-detail.component.html',
@@ -128,7 +131,7 @@ export class ClaimBatchDetailComponent {
   readonly documents = signal<Record<string, string>>({});
 
   /* Sending. */
-  readonly submittedOn = signal(new Date().toISOString().slice(0, 10));
+  readonly submittedOn = signal(localDateString());
   readonly payerReference = signal('');
   readonly receivedOn = signal('');
   readonly cancelling = signal(false);
@@ -322,7 +325,10 @@ export class ClaimBatchDetailComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => saveResponse(response, name),
-        error: () => this.toast.error(this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('INSURER_CLAIMS.BATCH.EXPORT_FAILED'),
+          ),
       });
   }
 
