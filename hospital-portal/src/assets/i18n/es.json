@@ -354,7 +354,8 @@
     "WARD_ENTRIES_ONE": "{{count}} observación en el partograma",
     "WARD_ENTRIES": "{{count}} observaciones en el partograma",
     "WARD_OPEN": "Abrir el registro del parto",
-    "WARD_OPEN_FAILED": "No se pudo abrir el expediente de esta paciente."
+    "WARD_OPEN_FAILED": "No se pudo abrir el expediente de esta paciente.",
+    "WARD_RECORD_HEADING": "Registro del parto de {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Operador",
@@ -13859,7 +13860,8 @@
     "RUN_ALREADY_SENT": "ya enviado",
     "RUN_CONFIRM": "Generar y enviar",
     "RUN_NOTICE_ONE": "Informe « {{name}} » generado y enviado para el periodo {{period}}: {{rows}} fila de datos.",
-    "RUN_NOTICE": "Informe « {{name}} » generado y enviado para el periodo {{period}}: {{rows}} filas de datos."
+    "RUN_NOTICE": "Informe « {{name}} » generado y enviado para el periodo {{period}}: {{rows}} filas de datos.",
+    "RUN_ALREADY_SENT_REFUSAL": "El informe de este periodo ya se envió: elija otro periodo."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "¿Retirar esta plantilla de sesión?",

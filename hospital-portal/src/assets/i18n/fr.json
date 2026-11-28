@@ -354,7 +354,8 @@
     "WARD_ENTRIES_ONE": "{{count}} observation au partogramme",
     "WARD_ENTRIES": "{{count}} observations au partogramme",
     "WARD_OPEN": "Ouvrir le dossier de travail",
-    "WARD_OPEN_FAILED": "Le dossier de cette patiente n'a pas pu être ouvert."
+    "WARD_OPEN_FAILED": "Le dossier de cette patiente n'a pas pu être ouvert.",
+    "WARD_RECORD_HEADING": "Dossier de travail de {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Opérateur",
@@ -13859,7 +13860,8 @@
     "RUN_ALREADY_SENT": "déjà envoyée",
     "RUN_CONFIRM": "Générer et envoyer",
     "RUN_NOTICE_ONE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} ligne de données.",
-    "RUN_NOTICE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} lignes de données."
+    "RUN_NOTICE": "Rapport « {{name}} » généré et envoyé pour la période {{period}} : {{rows}} lignes de données.",
+    "RUN_ALREADY_SENT_REFUSAL": "Le rapport de cette période a déjà été envoyé : choisissez une autre période."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retirer ce modèle de séance ?",

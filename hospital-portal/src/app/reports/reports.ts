@@ -57,34 +57,32 @@ function pad(value: number): string {
  * The first one is the period the server runs when none is named.
  */
 export function closedPeriodTokens(period: ReportPeriod, today: Date, count: number): string[] {
+  // Calendar arithmetic on the reader's own dates (built from parts, never parsed).
   const year = today.getFullYear();
   const month = today.getMonth();
   const day = today.getDate();
   const tokens: string[] = [];
   for (let i = 1; i <= count; i++) {
     if (period === 'MONTHLY') {
-      const first = new Date(Date.UTC(year, month - i, 1));
-      tokens.push(`${first.getUTCFullYear()}${pad(first.getUTCMonth() + 1)}`);
+      const first = new Date(year, month - i, 1);
+      tokens.push(`${first.getFullYear()}${pad(first.getMonth() + 1)}`);
     } else if (period === 'DAILY') {
-      const date = new Date(Date.UTC(year, month, day - i));
-      tokens.push(
-        `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`,
-      );
+      const date = new Date(year, month, day - i);
+      tokens.push(`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`);
     } else {
       // ISO 8601: the week of the Thursday of that week, in the Thursday's year.
-      const date = new Date(Date.UTC(year, month, day - 7 * i));
-      const weekday = (date.getUTCDay() + 6) % 7;
-      date.setUTCDate(date.getUTCDate() - weekday + 3);
-      const weekYear = date.getUTCFullYear();
-      const firstThursday = new Date(Date.UTC(weekYear, 0, 4));
-      const week =
-        1 +
-        Math.round(
-          ((date.getTime() - firstThursday.getTime()) / 86400000 -
-            3 +
-            ((firstThursday.getUTCDay() + 6) % 7)) /
-            7,
-        );
+      const weekStart = new Date(year, month, day - 7 * i);
+      const weekday = (weekStart.getDay() + 6) % 7;
+      const thursday = new Date(
+        weekStart.getFullYear(),
+        weekStart.getMonth(),
+        weekStart.getDate() - weekday + 3,
+      );
+      const weekYear = thursday.getFullYear();
+      const firstThursdayWeekday = (new Date(weekYear, 0, 4).getDay() + 6) % 7;
+      // Days since 4 January, by calendar date (a daylight-saving hour never shifts it).
+      const days = Math.round((thursday.getTime() - new Date(weekYear, 0, 4).getTime()) / 86400000);
+      const week = 1 + Math.round((days - 3 + firstThursdayWeekday) / 7);
       tokens.push(`${weekYear}-W${pad(week)}`);
     }
   }
@@ -378,7 +376,20 @@ export class ReportsComponent implements OnInit {
   confirmRun(): void {
     const definition = this.runFor();
     const token = this.runToken();
-    if (!definition || !token || this.runSentTokens().has(token)) return;
+    if (!definition) return;
+    const root = this.host.nativeElement;
+    if (!token || this.runSentTokens().has(token)) {
+      // Said on the period field, never a silently disabled button.
+      const reason = token ? 'REPORTS.RUN_ALREADY_SENT_REFUSAL' : 'COMMON.FIELD_REQUIRED';
+      refuseFields(
+        root,
+        [{ id: 'rep-run-period', message: this.translate.instant(reason) }],
+        ['rep-run-period'],
+      );
+      focusFirstInvalid(root, ['rep-run-period']);
+      return;
+    }
+    refuseFields(root, [], ['rep-run-period'], '');
     this.runFor.set(null);
     this.runNow(definition, token);
   }

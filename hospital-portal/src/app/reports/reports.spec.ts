@@ -7,6 +7,7 @@ import { ReportsComponent, closedPeriodTokens } from './reports';
 import { ReportDefinitionResponse, ReportRunResponse, ReportsService } from './reports.service';
 import { ToastService } from '../core/toast.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function definition(overrides: Partial<ReportDefinitionResponse> = {}): ReportDefinitionResponse {
   return {
@@ -430,6 +431,22 @@ describe('ReportsComponent', () => {
       component.confirmRun();
 
       expect(mockService.runNow).toHaveBeenCalledWith('d1', tokens[2]);
+    });
+
+    it('a period already sent is refused on the period field, nothing sent', () => {
+      document.body.appendChild(fixture.nativeElement);
+      const tokens = component.runChoices(definition());
+      mockService.runs.and.returnValue(of([run({ periodToken: tokens[0] })]));
+      component.openRun(definition());
+      component.runToken.set(tokens[0]);
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="report-run-confirm"]',
+        alsoMarked: ['rep-run-period'],
+      });
+      expect(marked).toContain('rep-run-period');
+      expect(mockService.runNow).not.toHaveBeenCalled();
+      fixture.nativeElement.remove();
     });
 
     it('a period already sent is not sent again', () => {

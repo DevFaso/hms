@@ -190,9 +190,10 @@
     </div>
     <div class="modal-body">
       <div class="field">
-        <label for="rep-run-period">{{ 'REPORTS.RUN_PERIOD' | translate }}</label>
+        <label for="rep-run-period">{{ 'REPORTS.RUN_PERIOD' | translate }} *</label>
         <select
           id="rep-run-period"
+          required
           aria-describedby="rep-run-period-hint"
           [ngModel]="runToken()"
           (ngModelChange)="runToken.set($event)"
@@ -217,7 +218,6 @@
         class="btn-primary"
         type="button"
         data-testid="report-run-confirm"
-        [disabled]="!runToken() || runSentTokens().has(runToken())"
         (click)="confirmRun()"
       >
         {{ 'REPORTS.RUN_CONFIRM' | translate }}

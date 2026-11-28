@@ -354,7 +354,8 @@
     "WARD_ENTRIES_ONE": "{{count}} partograph observation",
     "WARD_ENTRIES": "{{count}} partograph observations",
     "WARD_OPEN": "Open the labour record",
-    "WARD_OPEN_FAILED": "This patient's record could not be opened."
+    "WARD_OPEN_FAILED": "This patient's record could not be opened.",
+    "WARD_RECORD_HEADING": "Labour record of {{name}}"
   },
   "MOBILE_MONEY": {
     "OPERATOR_LABEL": "Operator",
@@ -13859,7 +13860,8 @@
     "RUN_ALREADY_SENT": "already sent",
     "RUN_CONFIRM": "Generate and send",
     "RUN_NOTICE_ONE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data row.",
-    "RUN_NOTICE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data rows."
+    "RUN_NOTICE": "Report « {{name}} » for {{period}} generated and sent: {{rows}} data rows.",
+    "RUN_ALREADY_SENT_REFUSAL": "The report for this period was already sent: choose another period."
   },
   "SLOT_ADMIN": {
     "TPL_RETIRE_CONFIRM": "Retire this session template?",

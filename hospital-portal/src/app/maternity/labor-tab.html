@@ -43,8 +43,8 @@
               @for (row of ward(); track row.id) {
                 <li class="labor-ward-row" data-testid="labor-ward-row">
                   <div class="labor-ward-info">
-                    <strong>{{ row.patientName || ('COMMON.UNKNOWN' | translate) }}</strong>
-                    <span class="muted">
+                    <strong>{{ row.patientName || ('COMMON.UNKNOWN' | translate) }}</strong>{{ ' '
+                    }}<span class="muted">
                       {{
                         'LABOR.WARD_ADMITTED'
                           | translate: { time: (row.admittedAt | serverTime | dateTime) }
@@ -84,6 +84,10 @@
 }
 
 @if (patient()) {
+  <!-- QA D3868: a record opened from the list takes the keyboard (the list's button is gone). -->
+  <h2 class="sr-only" tabindex="-1" appFocusOnRender data-testid="labor-record-heading">
+    {{ 'LABOR.WARD_RECORD_HEADING' | translate: { name: patientDisplayName() } }}
+  </h2>
   @if (episodesLoading()) {
     <div class="loading-state">
       <div class="spinner"></div>
@@ -99,7 +103,13 @@
 
   <!-- ══ Start episode form ══ -->
   @if (startFormOpen()) {
-    <div class="view-section action-form" data-submit-scope>
+    <div
+      class="view-section action-form"
+      data-submit-scope
+      appInlineSubForm
+      #startSub="inlineSubForm"
+      (dismissed)="cancelStart()"
+    >
       <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
       <div class="form-row">
         <div class="field">
@@ -166,6 +176,7 @@
         </p>
       </div>
       <p class="muted">{{ 'LABOR.SNAPSHOT_HINT' | translate }}</p>
+      <app-inline-discard-ask [form]="startSub" />
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}

@@ -64,6 +64,13 @@ public interface PatientPortalService {
     PatientProfileDTO updateMyProfile(Authentication auth, PatientProfileUpdateDTO dto);
 
     /** File a release-of-information request as the patient (Tier 2 item 39b). */
+    /**
+     * QA D4025: the message key a patient's own request is refused with on its hospital ({@code null} when the
+     * hospital resolves): not registered at the one named, none at all, or several and none named.
+     */
+    String selfRequestHospitalRefusal(org.springframework.security.core.Authentication auth,
+                                      java.util.UUID requestedHospitalId);
+
     com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
             Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto);
 

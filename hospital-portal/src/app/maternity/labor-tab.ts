@@ -41,6 +41,9 @@ import {
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PluralKeyPipe } from '../shared/pipes/plural-key.pipe';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { bloodPressureReversed } from '../shared/vital-sign-limits';
 import { PartographChartComponent } from './partograph-chart.component';
 
@@ -221,6 +224,9 @@ const DELIVERY_IDS = [
     PatientSafetyHeaderComponent,
     BloodRequestLinkComponent,
     PluralKeyPipe,
+    FocusOnRenderDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './labor-tab.html',
   styleUrl: './maternity.scss',
