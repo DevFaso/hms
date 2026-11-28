@@ -481,9 +481,9 @@ class ActingScopeResolverTest {
     }
 
     /**
-     * r81 review of D4260: a doctor of B who is registered as a patient at A holds a PATIENT
-     * role at A. A writes nowhere for them as staff: not by X-Hospital-Id, not by a
-     * {@code hospitalId} parameter or body (narrowTo). Reads and the patient portal keep A.
+     * r81: a doctor of B who is registered as a patient at A holds a PATIENT role at A. Outside
+     * the patient portal A is nowhere they act as staff: not by X-Hospital-Id, not by a
+     * {@code hospitalId} parameter or body (narrowTo), for a read or a write. The portal keeps A.
      */
     @Nested
     @DisplayName("a staff caller who is only a patient at a hospital")
@@ -504,7 +504,7 @@ class ActingScopeResolverTest {
         }
 
         @Test
-        @DisplayName("X-Hospital-Id naming it is ignored on a write (the live scope), applied on a read and on the portal")
+        @DisplayName("X-Hospital-Id naming it is ignored outside the portal (they act where they work), applied on the portal")
         void theHeader() {
             HospitalContext live = live();
             assertThat(live.isTreatedOnlyAt(A)).isTrue();
@@ -512,9 +512,9 @@ class ActingScopeResolverTest {
 
             HospitalContext write = resolver.withHeader(live, request("POST", "/encounters", A.toString()));
             assertThat(ActingScopeResolver.isRefusedHeader(write)).isFalse();
-            assertThat(ActingScopeResolver.scopeOf(write)).isEqualTo(new ActingScope.Refused(ActingScope.Reason.AMBIGUOUS));
+            assertThat(ActingScopeResolver.scopeOf(write)).isEqualTo(new ActingScope.Pinned(B, ActingScope.Source.DEFAULT));
             assertThat(ActingScopeResolver.scopeOf(resolver.withHeader(live, request("GET", "/encounters", A.toString()))))
-                .isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.HEADER));
+                .isEqualTo(new ActingScope.Pinned(B, ActingScope.Source.DEFAULT));
             assertThat(ActingScopeResolver.scopeOf(
                     resolver.withHeader(live, request("POST", "/me/patient/appointments", A.toString()))))
                 .isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.HEADER));
@@ -532,14 +532,15 @@ class ActingScopeResolverTest {
                 assertThat(resolver.narrowTo(A)).isEqualTo(new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED));
                 verify(audit).recordRefusal(USER, "someone", A, ActingScope.Reason.NOT_PERMITTED,
                     ActingScope.Source.REQUESTED);
-                assertThat(resolver.narrowTo(B)).isEqualTo(new ActingScope.Pinned(B, ActingScope.Source.REQUESTED));
+                assertThat(resolver.narrowTo(B)).isInstanceOfSatisfying(ActingScope.Pinned.class,
+                    pinned -> assertThat(pinned.hospitalId()).isEqualTo(B));
             } finally {
                 org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
             }
         }
 
         @Test
-        @DisplayName("narrowTo it on the patient portal or a read is accepted")
+        @DisplayName("narrowTo it on the patient portal is accepted; on a staff read it is refused")
         void theNarrowOnThePortalAndOnAReads() {
             for (MockHttpServletRequest request : List.of(request("POST", "/me/patient/appointments", null),
                 request("GET", "/encounters", null))) {
@@ -548,7 +549,10 @@ class ActingScopeResolverTest {
                 try {
                     HospitalContextHolder.clear();
                     HospitalContextHolder.setContext(live());
-                    assertThat(resolver.narrowTo(A)).isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.REQUESTED));
+                    ActingScope expected = request.getRequestURI().contains("/me/patient")
+                        ? new ActingScope.Pinned(A, ActingScope.Source.REQUESTED)
+                        : new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED);
+                    assertThat(resolver.narrowTo(A)).isEqualTo(expected);
                 } finally {
                     org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
                 }
@@ -561,6 +565,69 @@ class ActingScopeResolverTest {
             when(accessor.findAssignmentsForUser(USER)).thenReturn(List.of(at(A, "ROLE_PATIENT")));
             HospitalContext patient = resolver.liveContext(USER, "someone");
             assertThat(patient.isTreatedOnlyAt(A)).isFalse();
+        }
+    }
+
+    /** r81: a hospital where a staff caller is only a patient is never the one acted at by default. */
+    @Nested
+    @DisplayName("the default scope of a staff caller who is a patient somewhere")
+    class PatientSomewhere {
+
+        private TenantRoleAssignment global(String role) {
+            return new TenantRoleAssignment(null, ORG, role, role, true, null);
+        }
+
+        @Test
+        @DisplayName("a role at no hospital plus a PATIENT row at A: no hospital, never A")
+        void aHospitalLessRolePlusAPatientRowIsNotPinned() {
+            assertThat(produce(null, global("ROLE_HOSPITAL_ADMIN"), at(A, "ROLE_PATIENT")))
+                .isEqualTo(new ActingScope.Refused(ActingScope.Reason.NO_HOSPITAL));
+        }
+
+        @Test
+        @DisplayName("a doctor of B who is a patient at A acts at B by default")
+        void aDoctorOfBActsAtB() {
+            assertThat(produce(null, at(B, "ROLE_DOCTOR"), at(A, "ROLE_PATIENT")))
+                .isEqualTo(new ActingScope.Pinned(B, ActingScope.Source.DEFAULT));
+        }
+
+        @Test
+        @DisplayName("staff at A and B who is a patient at C: AMBIGUOUS until one is named")
+        void twoWorkplacesStayAmbiguous() {
+            assertThat(produce(null, at(A, "ROLE_DOCTOR"), at(B, "ROLE_NURSE"), at(C, "ROLE_PATIENT")))
+                .isEqualTo(new ActingScope.Refused(ActingScope.Reason.AMBIGUOUS));
+        }
+
+        @Test
+        @DisplayName("outside the patient portal the readable hospitals leave out A, the header naming A is ignored and"
+            + " narrowTo A is refused; on the portal A is kept")
+        void readsAtThePatientHospital() {
+            when(accessor.findAssignmentsForUser(USER)).thenReturn(List.of(at(B, "ROLE_DOCTOR"), at(A, "ROLE_PATIENT")));
+            HospitalContext live = resolver.liveContext(USER, "someone");
+            MockHttpServletRequest staffRead = new MockHttpServletRequest("GET", "/api/patients");
+            staffRead.setContextPath("/api");
+            staffRead.addHeader("X-Hospital-Id", A.toString());
+            MockHttpServletRequest portalRead = new MockHttpServletRequest("GET", "/api/me/patient/profile");
+            portalRead.setContextPath("/api");
+            portalRead.addHeader("X-Hospital-Id", A.toString());
+
+            assertThat(ActingScopeResolver.scopeOf(resolver.withHeader(live, staffRead)))
+                .isEqualTo(new ActingScope.Pinned(B, ActingScope.Source.DEFAULT));
+            assertThat(ActingScopeResolver.scopeOf(resolver.withHeader(live, portalRead)))
+                .isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.HEADER));
+
+            org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(staffRead));
+            try {
+                assertThat(ActingScopeResolver.readableHospitalIds(live)).containsExactly(B);
+                HospitalContextHolder.setContext(live);
+                assertThat(resolver.narrowTo(A)).isEqualTo(new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED));
+                org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                    new org.springframework.web.context.request.ServletRequestAttributes(portalRead));
+                assertThat(ActingScopeResolver.readableHospitalIds(live)).containsExactlyInAnyOrder(A, B);
+            } finally {
+                org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+            }
         }
     }
 }

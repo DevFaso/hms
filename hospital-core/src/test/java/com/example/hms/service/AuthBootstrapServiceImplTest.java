@@ -314,7 +314,26 @@ class AuthBootstrapServiceImplTest {
             SessionBootstrapResponseDTO result = service.resolveCurrentSession("john.doe");
 
             assertThat(result.getPrimaryHospitalId()).isEqualTo(HOSPITAL_ID);
-            assertThat(result.getPermittedHospitalIds()).containsExactly(treatedAt, HOSPITAL_ID);
+            assertThat(result.getPermittedHospitalIds())
+                .as("the hospital where they are only a patient is the patient portal's, not a staff choice")
+                .containsExactly(HOSPITAL_ID);
+        }
+
+        @Test
+        @DisplayName("r81: a patient-only user keeps every hospital that registered them")
+        void aPatientOnlyUserKeepsTheirHospitals() {
+            UUID other = UUID.randomUUID();
+            when(userRepository.findByUsername("john.doe")).thenReturn(Optional.of(staffUser));
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+                activeAssignment(HOSPITAL_ID, "ROLE_PATIENT"), activeAssignment(other, "ROLE_PATIENT")));
+            when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(USER_ID)).thenReturn(Optional.empty());
+            when(patientRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+
+            SessionBootstrapResponseDTO result = service.resolveCurrentSession("john.doe");
+
+            assertThat(result.getPermittedHospitalIds()).containsExactly(HOSPITAL_ID, other);
+            assertThat(result.getPrimaryHospitalId()).isEqualTo(HOSPITAL_ID);
         }
     }
 

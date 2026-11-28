@@ -21,7 +21,8 @@ public final class HospitalScopeUtils {
      * (a super-admin in global view has none), preserving insertion order and uniqueness.
      */
     public static Set<UUID> resolveScope(HospitalContext context) {
-        LinkedHashSet<UUID> scope = new LinkedHashSet<>(context.getPermittedHospitalIds());
+        // r81: never a hospital where a staff caller is only a patient (outside the patient portal).
+        LinkedHashSet<UUID> scope = new LinkedHashSet<>(ActingScopeResolver.workingHospitalIds(context));
         UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOf(context);
         if (activeHospitalId != null) {
             scope.add(activeHospitalId);
