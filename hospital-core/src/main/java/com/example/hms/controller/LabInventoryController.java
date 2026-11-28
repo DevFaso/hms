@@ -46,6 +46,7 @@ public class LabInventoryController {
         return ResponseEntity.ok(inventoryService.getByHospital(hospitalId, pageable, locale));
     }
 
+    @com.example.hms.validation.RejectsUnknownFields(com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH)
     public record InventorySearchRequest(
         @jakarta.validation.constraints.NotBlank
         @jakarta.validation.constraints.Size(max = 255) String query) {}
