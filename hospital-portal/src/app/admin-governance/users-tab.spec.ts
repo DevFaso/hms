@@ -11,7 +11,7 @@ import es from '../../assets/i18n/es.json';
 describe('password rotation age labels', () => {
   for (const [language, bundle, labels] of [
     ['en', en, ['0 days', '1 day', '2 days']],
-    ['fr', fr, ['0 jours', '1 jour', '2 jours']],
+    ['fr', fr, ['0 jour', '1 jour', '2 jours']],
     ['es', es, ['0 d\u00edas', '1 d\u00eda', '2 d\u00edas']],
   ] as const) {
     it(`renders singular and plural ages in ${language}`, () => {

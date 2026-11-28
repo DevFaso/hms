@@ -8,9 +8,7 @@
       </div>
     </div>
     <div class="header-right">
-      <span class="count-badge">{{
-        'LAB_STAFF.STAFF_COUNT' | translate: { count: totalElements() }
-      }}</span>
+      <span class="count-badge">{{ 'LAB_STAFF.STAFF_COUNT' | plural: totalElements() }}</span>
       <button
         [attr.aria-label]="'COMMON.REFRESH' | translate"
         class="btn-refresh"

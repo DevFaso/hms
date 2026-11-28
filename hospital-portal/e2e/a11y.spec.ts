@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 import { test, expect } from './fixtures/test-fixtures';
 // Register the inventory-driven cases in the existing CI entry point.
@@ -162,30 +162,31 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     // RoleGuard admits. One submitted pharmacy so axe scans the table, the
     // filters and the badges rather than the empty state. Registered after
     // the shared auto-mocks, so this handler answers first.
-    await page.route('**/api/super-admin/providers?**', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          content: [
-            {
-              id: '00000000-0000-0000-0000-0000000000d5',
-              facilityType: 'PHARMACY',
-              code: 'PH-A11Y',
-              name: 'Pharmacie A11y',
-              email: null,
-              active: false,
-              lifecycleState: 'SUSPENDED',
-              verificationStatus: 'SUBMITTED',
-              submittedAt: '2026-10-08T09:00:00',
-            },
-          ],
-          totalElements: 1,
-          totalPages: 1,
-          size: 20,
-          number: 0,
-        }),
-      }),
+    const page1 = JSON.stringify({
+      content: [
+        {
+          id: '00000000-0000-0000-0000-0000000000d5',
+          facilityType: 'PHARMACY',
+          code: 'PH-A11Y',
+          name: 'Pharmacie A11y',
+          email: null,
+          active: false,
+          lifecycleState: 'SUSPENDED',
+          verificationStatus: 'SUBMITTED',
+          submittedAt: '2026-10-08T09:00:00',
+        },
+      ],
+      totalElements: 1,
+      totalPages: 1,
+      size: 20,
+      number: 0,
+    });
+    const fulfil = (route: Route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: page1 });
+    // The plain list is a GET; a typed term is a POST to /search (QA D4075: never in the URL).
+    await page.route('**/api/super-admin/providers?**', fulfil);
+    await page.route('**/api/super-admin/providers/search**', (route) =>
+      route.request().method() === 'POST' ? fulfil(route) : route.fallback(),
     );
     await runAxe(page, '/super-admin/providers');
   });

@@ -78,6 +78,8 @@ class ProviderOnboardingServiceImplTest {
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
 
     private ProviderOnboardingServiceImpl service;
     private final UUID actorId = UUID.randomUUID();
@@ -85,7 +87,8 @@ class ProviderOnboardingServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ProviderOnboardingServiceImpl(hospitalRepository, verificationRepository,
-            lifecycleStatusService, auditEventLogService, roleValidator, Clock.fixed(NOW, ZoneOffset.UTC));
+            lifecycleStatusService, auditEventLogService, roleValidator, Clock.fixed(NOW, ZoneOffset.UTC),
+            userRepository, auditEventLogRepository);
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(hospitalRepository.save(any())).thenAnswer(inv -> {
             Hospital h = inv.getArgument(0);
@@ -630,6 +633,60 @@ class ProviderOnboardingServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D4313: a decision names its decider, by full name or else by username; an undecided one names nobody")
+        void namesTheDecider() {
+            Hospital facility = provider();
+            UUID named = UUID.randomUUID();
+            UUID usernameOnly = UUID.randomUUID();
+            ProviderVerification byName = submitted(facility);
+            byName.setDecidedByUserId(named);
+            ProviderVerification byUsername = submitted(facility);
+            byUsername.setDecidedByUserId(usernameOnly);
+            ProviderVerification undecided = submitted(facility);
+            com.example.hms.model.User full = new com.example.hms.model.User();
+            full.setFirstName("Awa");
+            full.setLastName("Traoré");
+            full.setUsername("awa.t");
+            com.example.hms.model.User bare = new com.example.hms.model.User();
+            bare.setFirstName(" ");
+            bare.setUsername("verifier2");
+            when(userRepository.findById(named)).thenReturn(Optional.of(full));
+            when(userRepository.findById(usernameOnly)).thenReturn(Optional.of(bare));
+            when(verificationRepository.findByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()))
+                .thenReturn(List.of(byName, byUsername, undecided));
+
+            assertThat(service.history(facility.getId()))
+                .extracting(ProviderVerificationHistoryEntryDTO::getDecidedByName)
+                .containsExactly("Awa Traoré", "verifier2", null);
+        }
+
+        @Test
+        @DisplayName("QA D4313: the facility log lists its onboarding and lifecycle events, newest first, and nothing else")
+        void lifecycleEventsNewestFirst() {
+            Hospital facility = provider();
+            java.time.LocalDateTime t0 = java.time.LocalDateTime.of(2026, 11, 1, 9, 0);
+            com.example.hms.model.AuditEventLog created = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PROVIDER_CREATED).eventTimestamp(t0).userName("Awa").build();
+            com.example.hms.model.AuditEventLog suspended = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.HOSPITAL_SUSPENDED).eventTimestamp(t0.plusDays(2))
+                .userName("Issa").build();
+            com.example.hms.model.AuditEventLog unrelated = com.example.hms.model.AuditEventLog.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PROVIDER_CREATED).eventTimestamp(null).build();
+            com.example.hms.model.AuditEventLog untyped = com.example.hms.model.AuditEventLog.builder()
+                .eventTimestamp(t0.plusDays(5)).build();
+            when(auditEventLogRepository.findByEntityTypeIgnoreCaseAndResourceId(
+                    org.mockito.ArgumentMatchers.eq("PROVIDER_FACILITY"), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(created, unrelated)));
+            when(auditEventLogRepository.findByEntityTypeIgnoreCaseAndResourceId(
+                    org.mockito.ArgumentMatchers.eq("HOSPITAL"), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(suspended, untyped)));
+
+            assertThat(service.lifecycleEvents(facility.getId()))
+                .extracting(e -> e.getEvent() + "@" + e.getActorName())
+                .containsExactly("HOSPITAL_SUSPENDED@Issa", "PROVIDER_CREATED@Awa");
+        }
+
+        @Test
         @DisplayName("a hospital id answers exactly as an unknown id, and nothing is read")
         void hospitalIdIsNotAProvider() {
             Hospital hospital = new Hospital();
@@ -657,6 +714,107 @@ class ProviderOnboardingServiceImplTest {
             assertThatThrownBy(() -> service.history(id)).isInstanceOf(AccessDeniedException.class);
             verify(verificationRepository, never()).findByHospital_IdOrderByCreatedAtDescIdDesc(any());
         }
+    }
+
+    @Test
+    @DisplayName("QA D4075: a search term is capped at 100 characters and LIKE-escaped")
+    void searchPatternIsCapped() {
+        String pattern = ProviderOnboardingServiceImpl.searchPattern("  " + "a".repeat(150) + "  ");
+        assertThat(pattern).isEqualTo("%" + "a".repeat(100) + "%");
+        assertThat(ProviderOnboardingServiceImpl.searchPattern("50%_x\\")).isEqualTo("%50\\%\\_x\\\\%");
+        assertThat(ProviderOnboardingServiceImpl.searchPattern("  ")).isNull();
+    }
+
+    // ---------------------------------------------------------------- QA r81
+
+    /** The four registration numbers, each with the repository check that guards it and the field it names. */
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> registrationNumbers() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of("RCCM", "business.rccmNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("IFU", "business.ifuNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("CNSS", "business.cnssNumber"),
+            org.junit.jupiter.params.provider.Arguments.of("LICENCE", "professional.licenceNumber"));
+    }
+
+    private void stubTaken(String number) {
+        switch (number) {
+            case "RCCM" -> when(verificationRepository.existsCurrentRccmElsewhere(any(), any())).thenReturn(true);
+            case "IFU" -> when(verificationRepository.existsCurrentIfuElsewhere(any(), any())).thenReturn(true);
+            case "CNSS" -> when(verificationRepository.existsCurrentCnssElsewhere(any(), any())).thenReturn(true);
+            default -> when(verificationRepository.existsCurrentLicenceElsewhere(any(), any(), any())).thenReturn(true);
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} already registered elsewhere -> refused on {1}")
+    @org.junit.jupiter.params.provider.MethodSource("registrationNumbers")
+    @DisplayName("QA D4312: a registration number another facility holds is refused at registration, resubmission and verification")
+    void registrationNumberHeldElsewhereIsRefused(String number, String field) {
+        stubTaken(number);
+
+        assertThatThrownBy(() -> service.create(createRequest(FacilityType.LABORATORY)))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+        verify(hospitalRepository, never()).saveAndFlush(any());
+
+        Hospital facility = provider();
+        ProviderVerification v = submitted(facility);
+        assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+        assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+
+        v.setStatus(ProviderVerificationStatus.REJECTED);
+        ProviderResubmitRequestDTO again = new ProviderResubmitRequestDTO();
+        again.setBusiness(business());
+        again.setProfessional(professional());
+        assertThatThrownBy(() -> service.resubmit(facility.getId(), again))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith(field + ":");
+    }
+
+    @Test
+    @DisplayName("QA D4072 / D4073: an undecided submission has no IFU/CNSS answer and waits for verification; a verified one says yes")
+    void consistencyChecksAreUnansweredUntilRecorded() {
+        Hospital facility = provider();
+        submitted(facility);
+
+        ProviderResponseDTO pending = service.get(facility.getId());
+
+        assertThat(pending.getIfuMatchesRccm()).isNull();
+        assertThat(pending.getCnssMatchesRccm()).isNull();
+        assertThat(pending.getSuspensionCause()).isEqualTo("PENDING_VERIFICATION");
+
+        ProviderResponseDTO verified = service.verify(facility.getId(), verifyRequest(true, true));
+
+        assertThat(verified.getIfuMatchesRccm()).isTrue();
+        assertThat(verified.getCnssMatchesRccm()).isTrue();
+        assertThat(verified.getSuspensionCause()).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D4074: the licence authority is shown as typed while the uniqueness key stays upper-case")
+    void authorityIsShownAsTyped() {
+        ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+        request.getProfessional().setLicenceAuthority("  Autorisation  Labo (fictive) ");
+        when(verificationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ProviderResponseDTO created = service.create(request);
+
+        assertThat(created.getProfessional().getLicenceAuthority()).isEqualTo("Autorisation Labo (fictive)");
+        ArgumentCaptor<ProviderVerification> saved = ArgumentCaptor.forClass(ProviderVerification.class);
+        verify(verificationRepository).save(saved.capture());
+        assertThat(saved.getValue().getLicenceAuthority()).isEqualTo("AUTORISATION LABO (FICTIVE)");
+    }
+
+    @Test
+    @DisplayName("QA D4075: a search reaches the search query with an escaped, lower-case pattern")
+    void searchUsesAnEscapedPattern() {
+        when(verificationRepository.searchLatestByFacilityTypes(any(), any(), any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.list(null, null, " Bobo_100% ", org.springframework.data.domain.PageRequest.of(0, 20));
+
+        verify(verificationRepository).searchLatestByFacilityTypes(any(), any(), eq("%bobo\\_100\\%%"), any());
     }
 
     // ---------------------------------------------------------------- helpers

@@ -81,6 +81,12 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly enumLabels = inject(EnumLabelService);
   /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
+  /** QA r81: the audit writer's placeholder for a missing id is not an id (« Unknown Resource »). */
+  shownResourceId(raw: string | null | undefined): string | null {
+    const id = (raw ?? '').trim();
+    return !id || id === 'Unknown Resource' ? null : id;
+  }
+
   entityLabel(raw: string | null | undefined): string | null {
     return this.enumLabels.auditEntityLabel(raw);
   }

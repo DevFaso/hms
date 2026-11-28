@@ -73,6 +73,29 @@ public class SuperAdminProviderController {
         return ResponseEntity.ok(onboardingService.list(type, status, pageable));
     }
 
+    /** QA D4075: the same list narrowed to a typed term, which stays out of the URL. */
+    @PostMapping("/search")
+    @PreAuthorize(SUPER_ADMIN_ONLY)
+    @com.example.hms.security.ReadsOnly("the provider list's search box, under POST so the typed term stays out of the URL")
+    @Operation(summary = "Search provider facilities by name, code or city",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<Page<ProviderResponseDTO>> search(
+        @Valid @RequestBody com.example.hms.payload.dto.provider.ProviderSearchRequestDTO request,
+        @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return ResponseEntity.ok(onboardingService.list(request.getType(), request.getStatus(), request.getTerm(), pageable));
+    }
+
+    @GetMapping("/{providerId}/lifecycle-events")
+    @PreAuthorize(SUPER_ADMIN_ONLY)
+    @Operation(summary = "The onboarding and lifecycle events of a provider facility, newest first",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<List<com.example.hms.payload.dto.provider.ProviderLifecycleEventDTO>> lifecycleEvents(
+        @PathVariable UUID providerId
+    ) {
+        return ResponseEntity.ok(onboardingService.lifecycleEvents(providerId));
+    }
+
     @GetMapping("/{providerId}")
     @PreAuthorize(SUPER_ADMIN_ONLY)
     @Operation(summary = "Get one provider facility", security = @SecurityRequirement(name = "bearerAuth"))

@@ -76,7 +76,7 @@
         <tbody>
           @for (a of approvals(); track a.id) {
             <tr>
-              <td class="cell-main">{{ a.policyName || '—' }}</td>
+              <td class="cell-main">{{ (a.policyName | govName) || '—' }}</td>
               <td>{{ a.changeType || '—' }}</td>
               <td>{{ a.requestedBy || '—' }}</td>
               <td>{{ a.severity || '—' }}</td>
@@ -113,7 +113,7 @@
           <p class="template-summary">{{ template.summary }}</p>
           <div class="chip-row">
             @for (rule of template.defaultRules; track rule.code) {
-              <span class="flag-badge">{{ rule.name }}</span>
+              <span class="flag-badge">{{ rule.name | govName }}</span>
             }
           </div>
           <div class="template-actions">
@@ -161,7 +161,7 @@
               <td>
                 <code>{{ rs.code }}</code>
               </td>
-              <td class="cell-main">{{ rs.name }}</td>
+              <td class="cell-main">{{ rs.name | govName }}</td>
               <td>{{ rs.enforcementScope }}</td>
               <td>{{ rs.ruleCount ?? rs.rules.length }}</td>
             </tr>

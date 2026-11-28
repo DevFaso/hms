@@ -38,6 +38,12 @@ public interface ProviderOnboardingService {
     /** The provider facilities with their current verification; {@code type} and {@code status} narrow it. */
     Page<ProviderResponseDTO> list(FacilityType type, ProviderVerificationStatus status, Pageable pageable);
 
+    /** QA D4075: as {@link #list(FacilityType, ProviderVerificationStatus, Pageable)}, narrowed to a name, code or city. */
+    Page<ProviderResponseDTO> list(FacilityType type, ProviderVerificationStatus status, String search, Pageable pageable);
+
+    /** QA D4313: the facility's onboarding and lifecycle events, newest first (suspensions and restorations included). */
+    List<com.example.hms.payload.dto.provider.ProviderLifecycleEventDTO> lifecycleEvents(UUID providerId);
+
     /** One provider facility; an id that is not a provider answers as an unknown one. */
     ProviderResponseDTO get(UUID providerId);
 

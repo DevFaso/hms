@@ -714,6 +714,22 @@ describe('PlatformComponent', () => {
       expect(c.releases()).toEqual([window1]);
     });
 
+    it('QA D4082: a window is cancelled only through the reason dialog, with the reason sent', () => {
+      const cancel = jasmine
+        .createSpy('cancelReleaseWindow')
+        .and.returnValue(of({ ...window1, status: 'CANCELLED', cancelReason: 'Doublon' }));
+      (platform as unknown as { cancelReleaseWindow: jasmine.Spy }).cancelReleaseWindow = cancel;
+
+      c.startCancelRelease(window1);
+      expect(c.cancellingRelease()).toBe(window1);
+      expect(cancel).not.toHaveBeenCalled();
+
+      c.cancelRelease(window1, '  Doublon ');
+
+      expect(cancel).toHaveBeenCalledOnceWith('r1', 'Doublon');
+      expect(c.cancellingRelease()).toBeNull();
+    });
+
     it('shows an error state, not an empty list, when the read fails', () => {
       platform.listReleaseWindows.and.returnValue(httpError(500, {}));
 

@@ -121,6 +121,120 @@ class SuperAdminPlatformRegistryServiceImplTest {
             .thenReturn(2L);
         when(platformReleaseWindowRepository.countByStatusNotAndStartsAtAfter(eq(PlatformReleaseStatus.CANCELLED), any()))
             .thenReturn(1L);
+        org.mockito.Mockito.lenient()
+            .when(platformReleaseWindowRepository.countByStatusNotAndStartsAtLessThanEqualAndEndsAtAfter(
+                eq(PlatformReleaseStatus.CANCELLED), any(), any())).thenReturn(1L);
+    }
+
+    @Test
+    @DisplayName("QA D4081: a planned window is counted as planned, not as active")
+    void plannedWindowIsNotActive() {
+        when(organizationPlatformServiceRepository.findAll()).thenReturn(List.of());
+        stubSummaryCounts();
+        when(platformReleaseWindowRepository.countByStatusNotAndStartsAtLessThanEqualAndEndsAtAfter(
+            eq(PlatformReleaseStatus.CANCELLED), any(), any())).thenReturn(0L);
+        when(platformReleaseWindowRepository.findFirstByOrderByUpdatedAtDesc()).thenReturn(Optional.empty());
+
+        SuperAdminPlatformRegistrySummaryDTO summary = service.getRegistrySummary();
+
+        assertThat(summary.getActions().getActiveReleaseWindows()).isZero();
+        assertThat(summary.getActions().getPlannedReleaseWindows()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("QA D4082: a window still ahead is corrected; one that started is refused")
+    void updatesOnlyAWindowStillAhead() {
+        PlatformReleaseWindow ahead = persisted(request("Ahead",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        when(platformReleaseWindowRepository.findById(ahead.getId())).thenReturn(Optional.of(ahead));
+        when(platformReleaseWindowRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        PlatformReleaseWindowRequestDTO change = request("Ahead renamed",
+            LocalDateTime.now().plusDays(4), LocalDateTime.now().plusDays(5));
+        change.setFreezeChanges(false);
+
+        PlatformReleaseWindowResponseDTO updated = service.updateReleaseWindow(ahead.getId(), change);
+
+        assertThat(updated.getName()).isEqualTo("Ahead renamed");
+        assertThat(ahead.isFreezeChanges()).isFalse();
+        assertThat(ahead.getStartsAt()).isEqualTo(change.getStartsAt());
+
+        PlatformReleaseWindow running = persisted(request("Running",
+            LocalDateTime.now().minusHours(1), LocalDateTime.now().plusHours(1)));
+        when(platformReleaseWindowRepository.findById(running.getId())).thenReturn(Optional.of(running));
+        UUID runningId = running.getId();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateReleaseWindow(runningId, change))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(running.getName()).isEqualTo("Running");
+    }
+
+    @Test
+    @DisplayName("QA D4082: a window is cancelled and stays listed as cancelled; a finished one is refused")
+    void cancelsAWindowNotFinished() {
+        PlatformReleaseWindow ahead = persisted(request("Mistake",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        when(platformReleaseWindowRepository.findById(ahead.getId())).thenReturn(Optional.of(ahead));
+        when(platformReleaseWindowRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        PlatformReleaseWindowResponseDTO cancelled = service.cancelReleaseWindow(ahead.getId(), " Planifiée par erreur ");
+
+        assertThat(cancelled.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
+        assertThat(cancelled.getCancelReason()).isEqualTo("Planifiée par erreur");
+        assertThat(ahead.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
+
+        PlatformReleaseWindow done = persisted(request("Done",
+            LocalDateTime.now().minusDays(3), LocalDateTime.now().minusDays(2)));
+        when(platformReleaseWindowRepository.findById(done.getId())).thenReturn(Optional.of(done));
+        UUID doneId = done.getId();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReleaseWindow(doneId, "Trop tard"))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("QA D4082: a window is read by id; an edit ending before it starts or named like another is refused; a second cancel changes nothing")
+    void aWindowIsReadAndItsEditAndCancelSayWhyNot() {
+        PlatformReleaseWindow ahead = persisted(request("Ahead",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        UUID id = ahead.getId();
+        when(platformReleaseWindowRepository.findById(id)).thenReturn(Optional.of(ahead));
+
+        assertThat(service.getReleaseWindow(id).getName()).isEqualTo("Ahead");
+
+        PlatformReleaseWindowRequestDTO backwards = request("Ahead",
+            LocalDateTime.now().plusDays(3), LocalDateTime.now().plusDays(2));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateReleaseWindow(id, backwards))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("endsAt");
+
+        PlatformReleaseWindowRequestDTO twin = request("Taken",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3));
+        when(platformReleaseWindowRepository.existsByNameAndEnvironmentAndIdNot("Taken", twin.getEnvironment(), id))
+            .thenReturn(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateReleaseWindow(id, twin))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        ahead.setStatus(PlatformReleaseStatus.CANCELLED);
+        ahead.setCancelReason("Doublon");
+        PlatformReleaseWindowResponseDTO again = service.cancelReleaseWindow(id, "Autre motif");
+        assertThat(again.getStatus()).isEqualTo(PlatformReleaseStatus.CANCELLED);
+        assertThat(again.getCancelReason()).isEqualTo("Doublon");
+        org.mockito.Mockito.verify(platformReleaseWindowRepository, org.mockito.Mockito.never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("QA D4082: a release window is not cancelled without a reason, and nothing is written")
+    void cancelReleaseWindowNeedsAReason() {
+        PlatformReleaseWindow ahead = persisted(request("Kept",
+            LocalDateTime.now().plusDays(2), LocalDateTime.now().plusDays(3)));
+        UUID id = ahead.getId();
+
+        for (String blank : new String[] {null, "", "   "}) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReleaseWindow(id, blank))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(ex -> assertThat(((com.example.hms.exception.FieldBusinessException) ex).getField())
+                    .isEqualTo("reason"));
+        }
+        assertThat(ahead.getStatus()).isEqualTo(PlatformReleaseStatus.SCHEDULED);
+        org.mockito.Mockito.verify(platformReleaseWindowRepository, org.mockito.Mockito.never()).saveAndFlush(any());
     }
 
     private PlatformReleaseWindowRequestDTO request(String name, LocalDateTime startsAt, LocalDateTime endsAt) {
@@ -174,12 +288,12 @@ class SuperAdminPlatformRegistryServiceImplTest {
         assertThat(disabled.getTitle()).isEqualTo("Disabled service links");
         assertThat(disabled.getMetricValue()).isEqualTo("5 disabled");
         AutomationTaskDTO releases = summary.getAutomationTasks().get(2);
-        assertThat(releases.getMetricValue()).isEqualTo("2 open (1 not started yet)");
+        assertThat(releases.getMetricValue()).isEqualTo("1 in progress, 1 planned");
 
         assertThat(summary.getActions().getTotalIntegrations()).isEqualTo(3);
         assertThat(summary.getActions().getPendingIntegrations()).isEqualTo(1);
         assertThat(summary.getActions().getDisabledLinks()).isEqualTo(5);
-        assertThat(summary.getActions().getActiveReleaseWindows()).isEqualTo(2);
+        assertThat(summary.getActions().getActiveReleaseWindows()).isEqualTo(1);
         assertThat(summary.getActions().getLastReleaseWindowChangeAt()).isEqualTo(LocalDateTime.of(2026, 10, 1, 9, 30));
         verify(platformReleaseWindowRepository, never()).findByStatusIn(any());
     }
@@ -379,6 +493,6 @@ class SuperAdminPlatformRegistryServiceImplTest {
         var snapshot = service.getRegistrySnapshot();
 
         assertThat(snapshot.getGeneratedAt()).isNotNull();
-        assertThat(snapshot.getSummary().getActions().getActiveReleaseWindows()).isEqualTo(2);
+        assertThat(snapshot.getSummary().getActions().getActiveReleaseWindows()).isEqualTo(1);
     }
 }

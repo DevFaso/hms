@@ -13,6 +13,15 @@ public interface SuperAdminPlatformRegistryService {
 
     PlatformReleaseWindowResponseDTO scheduleReleaseWindow(PlatformReleaseWindowRequestDTO request);
 
+    /** QA D4082: one release window. */
+    PlatformReleaseWindowResponseDTO getReleaseWindow(java.util.UUID id);
+
+    /** QA D4082: corrects a window that has not started; a started, finished or cancelled one is refused (409). */
+    PlatformReleaseWindowResponseDTO updateReleaseWindow(java.util.UUID id, PlatformReleaseWindowRequestDTO request);
+
+    /** QA D4082: withdraws a window that has not finished, with the reason; it stays in the list as cancelled. */
+    PlatformReleaseWindowResponseDTO cancelReleaseWindow(java.util.UUID id, String reason);
+
     PlatformRegistrySnapshotDTO getRegistrySnapshot();
 
     /** Release windows, newest start first, at most {@code limit} (default and ceiling in the implementation). */

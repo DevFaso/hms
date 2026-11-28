@@ -61,12 +61,13 @@
                 <div class="cell-sub">{{ row.email || row.username }}</div>
               </td>
               <td>
+                {{ 'ADMIN_GOV.AGE_DAYS' | plural: row.passwordAgeDays }}
+              </td>
+              <td>
                 {{
-                  (row.passwordAgeDays === 1 ? 'ADMIN_GOV.DAYS_ONE' : 'ADMIN_GOV.DAYS_N')
-                    | translate: { days: row.passwordAgeDays }
+                  row.rotationDueOn ? (row.rotationDueOn | serverTime | date: 'mediumDate') : '—'
                 }}
               </td>
-              <td>{{ row.rotationDueOn || '—' }}</td>
               <td [class.overdue]="row.daysUntilDue < 0">{{ row.daysUntilDue }}</td>
               <td>
                 <span

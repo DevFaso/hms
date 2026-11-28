@@ -30,4 +30,11 @@ public interface PlatformReleaseWindowRepository extends JpaRepository<PlatformR
     long countByStatusNotAndStartsAtAfter(PlatformReleaseStatus status, LocalDateTime instant);
 
     boolean existsByNameAndEnvironment(String name, String environment);
+
+    /** QA D4082: the same check for an edit, the edited window left out. */
+    boolean existsByNameAndEnvironmentAndIdNot(String name, String environment, UUID id);
+
+    /** QA D4081: windows running at {@code instant} (started, not ended, not cancelled). */
+    long countByStatusNotAndStartsAtLessThanEqualAndEndsAtAfter(
+        PlatformReleaseStatus status, LocalDateTime startedBy, LocalDateTime instant);
 }

@@ -45,6 +45,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("CX-011 sibling: re-assigning a plan replaces the active subscription, on PostgreSQL")
 class SubscriptionAssignPlanPostgresIT {
 
+    /** QA D4070: the service checks plan feature keys against the flag catalogue; assigning reads none. */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.example.hms.service.FeatureFlagService featureFlagService;
+
     @Container
     @SuppressWarnings("resource")
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")

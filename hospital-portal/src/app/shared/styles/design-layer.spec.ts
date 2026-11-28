@@ -200,6 +200,62 @@ describe('global design layer (QA r65)', () => {
       expect(last.getBoundingClientRect().right).toBeLessThanOrEqual(801);
     });
 
+    // QA D4304 (r81): the pinned « Actions » column covered the cells beside it.
+    const ACTIONS_TABLE = `<div style="overflow-x:auto;width:100%"><table style="min-width:1100px;width:100%">
+        <thead><tr><th>Nom</th><th>Contact</th><th>Hôpitaux</th><th>Statut</th><th>Actions</th></tr></thead>
+        <tbody><tr><td>Organisation fictive</td><td>contact@exemple.test</td><td>2</td>
+          <td><span style="position:relative;z-index:1">Actif</span></td>
+          <td><div class="row-actions" style="display:flex;gap:4px">
+            <button class="btn-sm">Modifier le rattachement</button><button class="btn-sm">Cycle de vie</button>
+            <button class="btn-sm">Journal</button><button class="btn-sm">Désactiver</button></div></td></tr>
+        </tbody></table></div>`;
+
+    for (const width of [768, 1440]) {
+      it(`keeps a pinned actions column above its neighbours and leaves the table's width alone at ${width}`, async () => {
+        const doc = await screen(width);
+        doc.body.innerHTML = ACTIONS_TABLE;
+        const view = doc.defaultView!;
+        const cell = doc.querySelector<HTMLElement>('tbody td:last-child')!;
+        const head = doc.querySelector<HTMLElement>('thead th:last-child')!;
+        const table = doc.querySelector<HTMLElement>('table')!;
+        expect(view.getComputedStyle(cell).position).toBe('sticky');
+        // Above a cell's own positioned content (a chip at z-index 1).
+        expect(Number(view.getComputedStyle(cell).zIndex)).toBeGreaterThan(1);
+        expect(Number(view.getComputedStyle(head).zIndex)).toBeGreaterThan(1);
+        // Opaque: nothing shows through it.
+        expect(view.getComputedStyle(cell).backgroundColor).toBe(WHITE);
+        // The pin adds no width: the table is as wide as its own minimum or its box.
+        expect(table.getBoundingClientRect().width).toBeLessThanOrEqual(Math.max(1100, width) + 1);
+      });
+    }
+
+    // QA D4085 (r81): a tab bar that does not fit scrolls in place and keeps each tab whole.
+    it('scrolls a tab bar that does not fit a phone, without squeezing or wrapping its tabs', async () => {
+      const doc = await screen(390);
+      doc.body.innerHTML = `<nav class="view-nav" style="display:flex;gap:8px">${[
+        'Tableau de bord',
+        'Services',
+        'Catalogue partagé',
+        'Mises en production',
+      ]
+        .map((label) => `<button class="tab-btn" style="padding:8px 16px">${label}</button>`)
+        .join('')}</nav>`;
+      const view = doc.defaultView!;
+      const bar = doc.querySelector<HTMLElement>('nav')!;
+      const tabs = Array.from(doc.querySelectorAll<HTMLElement>('.tab-btn'));
+      expect(view.getComputedStyle(bar).overflowX).toBe('auto');
+      expect(bar.scrollWidth).toBeGreaterThan(bar.clientWidth);
+      // The page itself does not scroll sideways: the bar does.
+      expect(doc.documentElement.scrollWidth).toBeLessThanOrEqual(391);
+      for (const tab of tabs) {
+        expect(view.getComputedStyle(tab).whiteSpace).toBe('nowrap');
+        expect(view.getComputedStyle(tab).flexShrink).toBe('0');
+      }
+      // The last tab is reachable by scrolling the bar.
+      bar.scrollLeft = bar.scrollWidth;
+      expect(tabs[tabs.length - 1].getBoundingClientRect().right).toBeLessThanOrEqual(391);
+    });
+
     it('leaves a desktop table alone', async () => {
       const doc = await screen(1200);
       doc.body.innerHTML = TABLE;

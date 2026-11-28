@@ -495,6 +495,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['details'],
   },
   {
+    key: 'AUDIT.DESC.RELEASE_WINDOW_UPDATED',
+    re: /^Release window updated (.*)$/,
+    params: ['details'],
+  },
+  {
+    key: 'AUDIT.DESC.RELEASE_WINDOW_CANCELLED',
+    re: /^Release window cancelled (.*)$/,
+    params: ['details'],
+  },
+  {
     key: 'AUDIT.DESC.REGION_POLICY_UPDATED',
     re: /^Region (\S+) policy updated: (.*)$/,
     params: ['region', 'details'],

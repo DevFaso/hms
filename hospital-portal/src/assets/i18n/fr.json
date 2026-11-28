@@ -379,7 +379,7 @@
     },
     "ACTION": {
       "SUSPEND": "Suspendre",
-      "RESTORE": "Restaurer",
+      "RESTORE": "Rétablir",
       "ARCHIVE": "Archiver",
       "SCHEDULE_PURGE": "Planifier la purge",
       "CANCEL_PURGE": "Annuler la purge"
@@ -403,7 +403,7 @@
     "MODAL": {
       "SUSPEND_TITLE": "Suspendre cette organisation",
       "SUSPEND_DESC": "Tous les utilisateurs de cette organisation seront bloqués jusqu'à la restauration. Les super admins gardent accès. L'action est tracée de façon permanente.",
-      "RESTORE_TITLE": "Restaurer cette organisation",
+      "RESTORE_TITLE": "Rétablir cette organisation",
       "RESTORE_DESC": "Remet l'organisation en ACTIF. Les utilisateurs pourront se reconnecter à leur prochaine tentative.",
       "ARCHIVE_TITLE": "Archiver cette organisation",
       "ARCHIVE_DESC": "L'organisation est masquée par défaut mais les données sont conservées. Vous pouvez restaurer plus tard ou planifier une purge.",
@@ -473,13 +473,17 @@
       "LAB_RESULTS": "Résultats de labo",
       "LAB_TEST_DEFINITIONS": "Catalogue de tests",
       "TREATMENT_PLANS": "Plans de traitement",
-      "REFERRALS": "Orientations"
+      "REFERRALS": "Orientations",
+      "ACTIVE_M_ONE": "actif",
+      "ACTIVE_M_OTHER": "actifs",
+      "ACTIVE_F_ONE": "active",
+      "ACTIVE_F_OTHER": "actives"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Intégrations totales",
       "PENDING": "Intégrations en attente",
       "DISABLED": "Liens désactivés",
-      "RELEASES": "Fenêtres de mise en production actives"
+      "RELEASES": "Fenêtres de mise en production en cours"
     },
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organisations",
@@ -606,7 +610,7 @@
       "HOSPITAL": "Hôpital",
       "RESOURCE": "Ressource",
       "STATUS": "Statut",
-      "IMPERSONATOR": "Emprunteur d'identité"
+      "IMPERSONATOR": "Agit au nom de (support)"
     },
     "TAB": {
       "SUPPORT": "Journal d'audit support",
@@ -703,11 +707,11 @@
     "DISMISS": "Ignorer la diffusion"
   },
   "SUBSCRIPTIONS": {
-    "DEACTIVATE_CONFIRM_BODY": "Elle ne pourra plus être attribuée à une organisation.",
-    "DEACTIVATE_CONFIRM": "Désactiver la formule {{name}} ?",
-    "DEACTIVATED": "Formule {{name}} désactivée.",
-    "UPDATED": "Formule {{name}} enregistrée.",
-    "CREATED": "Formule {{name}} créée.",
+    "DEACTIVATE_CONFIRM_BODY": "Il ne pourra plus être attribué à une organisation. Vous pourrez le réactiver.",
+    "DEACTIVATE_CONFIRM": "Désactiver le plan {{name}} ?",
+    "DEACTIVATED": "Plan {{name}} désactivé.",
+    "UPDATED": "Plan {{name}} enregistré.",
+    "CREATED": "Plan {{name}} créé.",
     "TITLE": "Plans d'abonnement",
     "SUBTITLE": "Catalogue de plans et affectations par organisation.",
     "ACTIVE_ONLY": "Plans actifs uniquement",
@@ -720,7 +724,7 @@
     "PER_MONTH": "/ mois",
     "SEATS": "licences utilisateurs incluses",
     "NO_FEATURES": "Aucune clé de fonctionnalité",
-    "NO_PLANS": "Aucun plan pour le moment — créez le premier.",
+    "NO_PLANS": "Aucun plan à afficher pour ce filtre.",
     "LOAD_ERROR": "Impossible de charger les plans. Réessayez.",
     "FORM": {
       "NAME": "Nom",
@@ -729,16 +733,35 @@
       "PRICE_CENTS": "Prix mensuel (centimes)",
       "CURRENCY": "Devise",
       "INCLUDED_SEATS": "Licences utilisateurs incluses",
-      "FEATURE_KEYS": "Clés de fonctionnalité",
+      "FEATURE_KEYS": "Fonctionnalités incluses",
       "FEATURE_KEYS_PLACEHOLDER": "clés séparées par des virgules",
-      "PRICE": "Prix mensuel ({{currency}})"
+      "PRICE": "Prix mensuel ({{currency}})",
+      "FEATURE_KEYS_HINT": "Une organisation abonnée n'a accès qu'aux fonctionnalités cochées. Sans aucune case cochée, le plan ne restreint rien.",
+      "FEATURE_KEYS_NONE": "La plateforme ne déclare aucune fonctionnalité pour le moment.",
+      "FEATURE_KEY_UNKNOWN": "clé inconnue de la plateforme : décochez-la pour enregistrer"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Le nom et le code de palier sont requis.",
       "SAVE_FAILED": "L'enregistrement a échoué.",
       "DEACTIVATE_FAILED": "La désactivation a échoué.",
-      "WHOLE_UNITS": "Cette devise n'a pas de centimes : saisissez un montant entier."
-    }
+      "WHOLE_UNITS": "Cette devise n'a pas de centimes : saisissez un montant entier.",
+      "REACTIVATE_FAILED": "La réactivation a échoué."
+    },
+    "REACTIVATE": "Réactiver",
+    "REACTIVATE_CONFIRM": "Réactiver le plan {{name}} ?",
+    "REACTIVATE_CONFIRM_BODY": "Il pourra de nouveau être attribué à une organisation.",
+    "REACTIVATED": "Plan {{name}} réactivé.",
+    "STATUS_FILTER": "Statut",
+    "FILTER_ACTIVE": "Plans actifs",
+    "FILTER_INACTIVE": "Plans inactifs",
+    "FILTER_ALL": "Tous les plans",
+    "STATUS_ACTIVE": "Actif",
+    "STATUS_INACTIVE": "Inactif",
+    "TIER_CODE_LABEL": "Code de palier :",
+    "SEATS_COUNT_ONE": "{{count}} licence utilisateur incluse",
+    "SEATS_COUNT_OTHER": "{{count}} licences utilisateurs incluses",
+    "USED_BY_ONE": "Utilisé par {{count}} organisation",
+    "USED_BY_OTHER": "Utilisé par {{count}} organisations"
   },
   "ORG_REGION": {
     "TITLE": "Résidence des données",
@@ -802,14 +825,14 @@
     },
     "ACTION": {
       "SUSPEND": "Suspendre",
-      "RESTORE": "Restaurer",
+      "RESTORE": "Rétablir",
       "ARCHIVE": "Archiver",
       "SCHEDULE_PURGE": "Planifier une purge",
       "CANCEL_PURGE": "Annuler la purge"
     },
     "DIALOG": {
       "SUSPEND": "Suspendre l'établissement",
-      "RESTORE": "Restaurer l'établissement",
+      "RESTORE": "Rétablir l'établissement",
       "ARCHIVE": "Archiver l'établissement",
       "SCHEDULE-PURGE": "Planifier la purge",
       "CANCEL-PURGE": "Annuler la purge planifiée",
@@ -2277,7 +2300,9 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
       "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct"
+      "DUPLICATE_KEPT_SEPARATE": "Doublon possible conservé comme patient distinct",
+      "RELEASE_WINDOW_UPDATED": "Fenêtre de mise en production modifiée ({{details}})",
+      "RELEASE_WINDOW_CANCELLED": "Fenêtre de mise en production annulée ({{details}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -4259,7 +4284,7 @@
     "KEY_PLACEHOLDER": "ex. activer-nouveau-tableau-de-bord",
     "KEY_REQUIRED": "La clé du drapeau est obligatoire",
     "LOADING": "Chargement des drapeaux…",
-    "LOAD_FAILED": "Échec du chargement des drapeaux de fonctionnalité",
+    "LOAD_FAILED": "Échec du chargement des indicateurs de fonctionnalités",
     "NEW_FLAG": "Configurer un drapeau",
     "NO_FLAGS": "Aucun drapeau trouvé",
     "NO_FLAGS_MATCHING": "Aucun drapeau ne correspond à « {{query}} »",
@@ -4271,7 +4296,7 @@
     "REMOVE_OVERRIDE": "Supprimer le remplacement",
     "SEARCH_PLACEHOLDER": "Rechercher des drapeaux…",
     "SUBTITLE": "Gérer les bascules de fonctionnalité",
-    "TITLE": "Drapeaux de fonctionnalité",
+    "TITLE": "Indicateurs de fonctionnalités",
     "TOGGLE": "Basculer",
     "TOGGLE_FAILED": "Échec du basculement de {{key}}",
     "DISABLE_FLAG": "Désactiver {{key}}",
@@ -4833,7 +4858,9 @@
     "LAB_SCIENTIST": "Scientifique de laboratoire",
     "LAB_MANAGER": "Responsable de laboratoire",
     "LAB_DIRECTOR": "Directeur de laboratoire",
-    "STAFF_COUNT": "{{count}} membres du personnel"
+    "STAFF_COUNT": "{{count}} membres du personnel",
+    "STAFF_COUNT_ONE": "{{count}} membre du personnel",
+    "STAFF_COUNT_OTHER": "{{count}} membres du personnel"
   },
   "LAB_TEST_CONFIG": {
     "APPROVAL_NEXT_STEP": "Continuer dans la file d’approbation labo",
@@ -5207,7 +5234,17 @@
     "SAVE_ERROR": "Impossible d'enregistrer l'instrument. Veuillez réessayer.",
     "DEACTIVATED": "Instrument désactivé.",
     "DEACTIVATE_ERROR": "Impossible de désactiver l'instrument.",
-    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?"
+    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet instrument ?",
+    "DATES": "Calibration et maintenance",
+    "LAST_CALIBRATION": "Dernière calibration",
+    "NEXT_CALIBRATION": "Prochaine calibration",
+    "LAST_MAINTENANCE": "Dernière maintenance",
+    "NEXT_MAINTENANCE": "Prochaine maintenance",
+    "INACTIVE": "Désactivé",
+    "SHOW_INACTIVE": "Afficher les instruments désactivés",
+    "REACTIVATE": "Réactiver",
+    "REACTIVATED": "Instrument réactivé.",
+    "REACTIVATE_ERROR": "La réactivation a échoué."
   },
   "LAB_OUTBOX": {
     "ORDERING_HOSPITAL": "Hôpital prescripteur",
@@ -5303,7 +5340,19 @@
     "SAVE_ERROR": "Impossible d'enregistrer l'article. Veuillez réessayer.",
     "DEACTIVATED": "Article d'inventaire désactivé.",
     "DEACTIVATE_ERROR": "Impossible de désactiver l'article.",
-    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet article ?"
+    "CONFIRM_DEACTIVATE": "Êtes-vous sûr de vouloir désactiver cet article ?",
+    "LOT": "Lot",
+    "STATE_OUT": "Rupture",
+    "STATE_LOW": "Stock bas",
+    "STATE_EXPIRED": "Expiré",
+    "STATE_EXPIRING": "Expire bientôt",
+    "FILTER": "Afficher",
+    "FILTER_ALL": "Tous les articles",
+    "SEARCH": "Rechercher",
+    "SEARCH_PLACEHOLDER": "Nom, code ou lot",
+    "NO_MATCH": "Aucun article ne correspond à ce filtre.",
+    "SHOWN_ONE": "{{count}} article affiché",
+    "SHOWN_OTHER": "{{count}} articles affichés"
   },
   "LANG": {
     "EN": "English",
@@ -5545,7 +5594,11 @@
     "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
     "CLINICAL_RULES": "Règles cliniques",
     "PAYER_SHARES": "Parts assureurs",
-    "URGENT_INCIDENTS": "Alertes urgentes non résolues"
+    "URGENT_INCIDENTS": "Alertes urgentes non résolues",
+    "MESSAGES_ARIA_ONE": "Messages ({{count}} non lu)",
+    "MESSAGES_ARIA_OTHER": "Messages ({{count}} non lus)",
+    "NOTIFICATIONS_ARIA_ONE": "Notifications ({{count}} non lue)",
+    "NOTIFICATIONS_ARIA_OTHER": "Notifications ({{count}} non lues)"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6529,8 +6582,8 @@
     "ACCESS_LOGS": "Journaux d'accès",
     "ACTIVATE": "Activer",
     "ACTIVE_CONNECTIONS": "Connexions actives",
-    "ACTIVE_RELEASES": "Versions actives",
-    "ACTIVE_WINDOWS": "Fenêtres actives",
+    "ACTIVE_RELEASES": "Mises en production en cours",
+    "ACTIVE_WINDOWS": "Fenêtres en cours",
     "API_KEYS": "Clés API",
     "API_KEY_KEEP": "Laisser vide pour conserver la valeur actuelle",
     "API_KEY_REF": "Référence de clé API",
@@ -6592,7 +6645,7 @@
     "FEATURE_FLAG": "Indicateur de fonctionnalité",
     "FEATURE_TOGGLES": "Indicateurs de fonctionnalité",
     "FREE": "Libre",
-    "FREEZE_CHANGES_DURING": "Geler les changements pendant",
+    "FREEZE_CHANGES_DURING": "Geler les changements pendant la fenêtre",
     "GB": "GB",
     "HEALTHY": "Sain",
     "HOSPITALS": "Hôpitaux",
@@ -6642,8 +6695,8 @@
     "NO_CATALOG_HINT": "Enregistrez un service pour commencer",
     "NO_HOSPITAL_LINKS": "Aucun lien d'hôpital",
     "NO_ORG_HOSPITALS": "Cette organisation n’a pas encore d’hôpital.",
-    "NO_RELEASES": "Aucune version planifiée",
-    "NO_RELEASES_HINT": "Planifiez une version pour commencer",
+    "NO_RELEASES": "Aucune mise en production planifiée",
+    "NO_RELEASES_HINT": "Planifiez une fenêtre de mise en production pour commencer",
     "NO_SERVICES": "Aucun service trouvé",
     "NO_SERVICES_HINT": "Enregistrez un service pour commencer",
     "ONBOARDING_GUIDE": "Guide d'intégration",
@@ -6676,9 +6729,9 @@
     "REGISTERING": "Enregistrement...",
     "REGISTER_NEW_SERVICE": "Enregistrer un nouveau service",
     "REGISTER_SERVICE": "Enregistrer le service",
-    "RELEASES": "Versions",
+    "RELEASES": "Mises en production",
     "RELEASE_NOTES": "Notes de version",
-    "RELEASE_WINDOWS": "Fenêtres de version",
+    "RELEASE_WINDOWS": "Fenêtres de mise en production",
     "REQUIRE_NUMBER": "Exiger un chiffre",
     "REQUIRE_SPECIAL": "Exiger un caractère spécial",
     "REQUIRE_UPPERCASE": "Exiger une majuscule",
@@ -6690,8 +6743,8 @@
     "SAVE_CONFIG": "Enregistrer la configuration",
     "SCHEDULE": "Planifier",
     "SCHEDULED_MAINTENANCE": "Maintenance planifiée",
-    "SCHEDULE_RELEASE": "Planifier la version",
-    "SCHEDULE_RELEASE_WINDOW": "Planifier la fenêtre de version",
+    "SCHEDULE_RELEASE": "Planifier une mise en production",
+    "SCHEDULE_RELEASE_WINDOW": "Planifier une fenêtre de mise en production",
     "SCHEDULING": "Planification",
     "SEARCH_CATALOG": "Rechercher dans le catalogue...",
     "SECONDS": "secondes",
@@ -6761,7 +6814,10 @@
       "STATUS_CHANGED": "Statut du service modifié en {{status}}",
       "STATUS_CHANGE_FAILED": "Échec du changement de statut",
       "TASK_DETAILS": "{{title}} : {{nextAction}} | {{metricLabel}} : {{metricValue}}",
-      "VALIDATION_FAILED": "Veuillez corriger ces champs : {{errors}}"
+      "VALIDATION_FAILED": "Veuillez corriger ces champs : {{errors}}",
+      "RELEASE_UPDATED": "Fenêtre de mise en production « {{name}} » modifiée",
+      "RELEASE_CANCELLED": "Fenêtre de mise en production « {{name}} » annulée",
+      "RELEASE_CANCEL_FAILED": "L'annulation de la fenêtre a échoué."
     },
     "TOTAL_INTEGRATIONS": "Total des intégrations",
     "UAT": "UAT",
@@ -6774,7 +6830,18 @@
     "VERSION": "Version",
     "VIEW_DETAILS": "Voir les détails",
     "VIEW_DOCS": "Voir la documentation",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "PLANNED_WINDOWS_LABEL": "Fenêtres planifiées",
+    "EDIT_RELEASE_WINDOW": "Modifier la fenêtre de mise en production",
+    "CANCEL_RELEASE": "Annuler la fenêtre",
+    "CANCEL_RELEASE_CONFIRM_BODY": "Elle restera dans la liste avec le statut « Annulée », et son gel des changements ne s'appliquera pas.",
+    "RELEASE_SHOW_DETAIL": "Détail",
+    "RELEASE_HIDE_DETAIL": "Masquer le détail",
+    "RELEASE_CREATED_AT": "Créée le",
+    "RELEASE_UPDATED_AT": "Modifiée le",
+    "CANCEL_RELEASE_REASON": "Motif de l'annulation",
+    "CANCEL_RELEASE_KEEP": "Garder la fenêtre",
+    "CANCEL_RELEASE_TITLE": "Annuler cette fenêtre de mise en production ?"
   },
   "PORTAL": {
     "VITALS": {
@@ -10350,7 +10417,15 @@
     "NO_DEPARTMENT_OPTION": "— Aucun département —",
     "DEPARTMENTS_LOAD_FAILED": "Les départements n’ont pas pu être chargés.",
     "REACTIVATE": "Réactiver",
-    "REQUIRES_ASSIGNMENT": "Gérer les affectations pour rétablir les accès du personnel"
+    "REQUIRES_ASSIGNMENT": "Gérer les affectations pour rétablir les accès du personnel",
+    "MEMBERS_COUNT_ONE": "{{count}} membre du personnel",
+    "MEMBERS_COUNT_OTHER": "{{count}} membres du personnel",
+    "FILTER_HOSPITAL": "Hôpital",
+    "ALL_HOSPITALS": "Tous les hôpitaux",
+    "FILTER_STATUS": "Statut",
+    "ALL_STATUSES": "Actifs et désactivés",
+    "STATUS_ACTIVE": "Actifs",
+    "STATUS_INACTIVE": "Désactivés"
   },
   "TREATMENT": {
     "ACTIVE": "Actif",
@@ -13359,7 +13434,23 @@
     "IMPACTED_CONTROLLERS": "Contrôleurs impactés",
     "RECOMMENDED_ACTIONS": "Actions recommandées",
     "SCENARIO_REQUIRED": "Un scénario est requis",
-    "SIM_RULES_REQUIRED": "Le modèle n'a aucune règle à simuler"
+    "SIM_RULES_REQUIRED": "Le modèle n'a aucune règle à simuler",
+    "AGE_DAYS_ONE": "{{count}} jour",
+    "AGE_DAYS_OTHER": "{{count}} jours",
+    "DEFAULT_NAME": {
+      "DEFAULT_ORG": "Organisation de santé par défaut",
+      "ACCESS_CONTROL": "Politique de contrôle d'accès par défaut",
+      "PATIENT_DATA_ACCESS": "Règle d'accès aux données des patients",
+      "ADMIN_ENDPOINT_ACCESS": "Règle d'accès aux fonctions d'administration",
+      "DATA_PROTECTION": "Politique de protection des données par défaut",
+      "AUDIT_LOGGING": "Politique de journalisation d'audit par défaut",
+      "AUDIT_SENSITIVE": "Audit des opérations sensibles",
+      "PASSWORD_POLICY": "Politique de mots de passe par défaut",
+      "PASSWORD_MIN_LENGTH": "Longueur minimale du mot de passe",
+      "SESSION_MANAGEMENT": "Politique de gestion des sessions par défaut",
+      "SESSION_TIMEOUT": "Expiration de session",
+      "ROLE_MANAGEMENT": "Politique de gestion des rôles par défaut"
+    }
   },
   "EDUCATION": {
     "TITLE": "Éducation des patients",
@@ -14868,7 +14959,8 @@
       "NOT_FOUND_TITLE": "Établissement prestataire introuvable",
       "NOT_FOUND_TEXT": "Il a peut-être été supprimé, ou le lien est incorrect.",
       "NOT_AVAILABLE_TITLE": "Non disponible",
-      "NOT_AVAILABLE_TEXT": "Cette page n'est pas disponible pour votre compte dans cet établissement. Si vous pensez qu'elle devrait l'être, contactez l'administrateur de votre établissement."
+      "NOT_AVAILABLE_TEXT": "Cette page n'est pas disponible pour votre compte dans cet établissement. Si vous pensez qu'elle devrait l'être, contactez l'administrateur de votre établissement.",
+      "NOT_CHECKED": "Non vérifié"
     },
     "LIST": {
       "TITLE": "Établissements prestataires",
@@ -14885,7 +14977,9 @@
       "COL_LIFECYCLE": "Cycle de vie",
       "COL_SUBMITTED": "Soumis le",
       "EMPTY_TITLE": "Aucun établissement prestataire",
-      "EMPTY_TEXT": "Aucune pharmacie ni aucun laboratoire ne correspond à ces filtres."
+      "EMPTY_TEXT": "Aucune pharmacie ni aucun laboratoire ne correspond à ces filtres.",
+      "SEARCH": "Rechercher",
+      "SEARCH_PLACEHOLDER": "Nom, code ou ville"
     },
     "FORM": {
       "CREATE_TITLE": "Nouvel établissement prestataire",
@@ -14968,7 +15062,10 @@
       "REVOKED": "Vérification révoquée ; l'établissement est suspendu.",
       "SUSPENDED": "Établissement suspendu.",
       "RESTORED": "Établissement rétabli.",
-      "ARCHIVED": "Établissement archivé."
+      "ARCHIVED": "Établissement archivé.",
+      "DECIDED_BY": "Décidé par",
+      "EVENTS_TITLE": "Journal de l'établissement",
+      "EVENTS_EMPTY": "Aucun événement enregistré."
     },
     "VERIFY": {
       "TITLE": "Vérifier l'établissement",
@@ -15078,6 +15175,20 @@
       "RECORD_OTHER": "Autre",
       "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rôle attribué : {{role}}"
+    },
+    "LIFECYCLE_STATE": {
+      "PENDING_VERIFICATION": "En attente de vérification",
+      "REJECTED_NOT_ACTIVATED": "Non activé (dossier rejeté)",
+      "VERIFICATION_REVOKED": "Suspendu (vérification révoquée)"
+    },
+    "EVENT": {
+      "PROVIDER_CREATED": "Établissement enregistré, dossier soumis",
+      "PROVIDER_VERIFIED": "Dossier vérifié",
+      "PROVIDER_REJECTED": "Dossier rejeté",
+      "PROVIDER_EVIDENCE_RESUBMITTED": "Nouveau dossier soumis",
+      "PROVIDER_VERIFICATION_REVOKED": "Vérification révoquée",
+      "HOSPITAL_SUSPENDED": "Établissement suspendu",
+      "HOSPITAL_RESTORED": "Établissement rétabli"
     }
   },
   "PHARMACY_CLAIMS": {

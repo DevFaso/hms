@@ -463,11 +463,6 @@
     "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
     "control": "plan-seats"
   },
-  "src/app/super-admin/subscriptions/subscriptions.html::input::7e273a3353048b6f13c6::0": {
-    "reason": "Existing module-specific control styling sets padding via .edit-card .grid label input,\n.edit-card .grid label textarea. Preserve that styled layout instead of adding a second form-control skin.",
-    "evidence": [".edit-card .grid label input,\n.edit-card .grid label textarea"],
-    "control": "plan-feature-keys"
-  },
   "src/app/super-admin/super-admin.html::select::3744893ba30ea4347d3d::0": {
     "reason": "Existing module-specific control styling sets padding via .audit-period select. Preserve that styled layout instead of adding a second form-control skin.",
     "evidence": [".audit-period select"],

@@ -181,6 +181,8 @@ export interface ActionPanel {
   pendingIntegrations: number;
   disabledLinks: number;
   activeReleaseWindows: number;
+  /** QA D4081: windows not started yet; `activeReleaseWindows` counts only those running now. */
+  plannedReleaseWindows?: number;
   /** When a release window was last created or changed (ISO local time); null when none exists. */
   lastReleaseWindowChangeAt?: string | null;
 }
@@ -217,6 +219,8 @@ export interface ReleaseWindowResponse {
   freezeChanges: boolean;
   ownerTeam: string;
   notes: string;
+  /** QA D4082: why the window was cancelled; null while it is not. */
+  cancelReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -363,6 +367,25 @@ export class PlatformService {
     return this.http.get<ReleaseWindowResponse[]>('/super-admin/platform/release-windows', {
       params,
     });
+  }
+
+  /** QA D4082: corrects a window that has not started. */
+  updateReleaseWindow(
+    id: string,
+    request: ReleaseWindowRequest,
+  ): Observable<ReleaseWindowResponse> {
+    return this.http.put<ReleaseWindowResponse>(
+      `/super-admin/platform/release-windows/${encodeURIComponent(id)}`,
+      request,
+    );
+  }
+
+  /** QA D4082: withdraws a window that has not finished; it stays listed as cancelled. */
+  cancelReleaseWindow(id: string, reason: string): Observable<ReleaseWindowResponse> {
+    return this.http.post<ReleaseWindowResponse>(
+      `/super-admin/platform/release-windows/${encodeURIComponent(id)}/cancel`,
+      { reason },
+    );
   }
 
   scheduleReleaseWindow(request: ReleaseWindowRequest): Observable<ReleaseWindowResponse> {

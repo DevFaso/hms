@@ -61,7 +61,7 @@ public class AuditEventLogMapper {
             .eventTimestamp(event.getEventTimestamp())
             .ipAddress(event.getIpAddress())
             .status(event.getStatus() != null ? event.getStatus().name() : null)
-            .resourceId(event.getResourceId())
+            .resourceId(shownResourceId(event.getResourceId()))
             .resourceName(resourceName)
             .entityType(event.getEntityType())
             .actorType(event.getActorType() != null ? event.getActorType().name() : null)
@@ -88,6 +88,18 @@ public class AuditEventLogMapper {
 
     /** MVP-8 fast path — same fallback chain as {@link #resolveResourceName}
      *  but never hits PatientRepository. */
+    /**
+     * QA r81: a row written without a resource id stores the writer's
+     * placeholder, and the audit search showed it as if it were an id
+     * ("Unknown Resource"). A reader gets no id rather than a made-up one.
+     */
+    static String shownResourceId(String stored) {
+        return stored == null || stored.isBlank() || UNKNOWN_RESOURCE.equals(stored) ? null : stored;
+    }
+
+    /** The placeholder {@code AuditEventLogServiceImpl} stores for a missing resource id or name. */
+    static final String UNKNOWN_RESOURCE = "Unknown Resource";
+
     private String resolveResourceNameFromColumns(AuditEventLog event) {
         if (event.getResourceName() != null && !event.getResourceName().isBlank()) {
             return event.getResourceName();

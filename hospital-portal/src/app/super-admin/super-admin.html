@@ -100,11 +100,11 @@
                 (summaryUnavailable() ? null : stat.value) | number | dash
               }}</span>
               <span class="stat-label">{{ stat.labelKey | translate }}</span>
-              @if (stat.sublabelKey) {
+              @if (stat.sublabelPlural) {
                 {{ ' '
                 }}<span class="stat-sub">
                   <em>{{ (summaryUnavailable() ? null : stat.subvalue) | dash }}</em>
-                  {{ stat.sublabelKey | translate }}
+                  {{ stat.sublabelPlural | plural: stat.subvalue ?? 0 }}
                 </span>
               }
             </div>

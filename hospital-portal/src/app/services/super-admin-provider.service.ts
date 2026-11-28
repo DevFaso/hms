@@ -9,6 +9,7 @@ import {
   ProviderPage,
   ProviderResponse,
   ProviderResubmitRequest,
+  ProviderLifecycleEvent,
   ProviderVerificationHistoryEntry,
   ProviderVerificationStatus,
   ProviderVerifyRequest,
@@ -19,6 +20,8 @@ const BASE = '/super-admin/providers';
 export interface ProviderListFilters {
   type?: ProviderFacilityType | '';
   status?: ProviderVerificationStatus | '';
+  /** QA D4075: a name, a code or a city. */
+  search?: string;
 }
 
 /**
@@ -34,11 +37,27 @@ export class SuperAdminProviderService {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
     if (filters.type) params = params.set('type', filters.type);
     if (filters.status) params = params.set('status', filters.status);
+    const term = (filters.search ?? '').trim();
+    if (term) {
+      // QA D4075: a typed term stays out of the URL (and of every access log).
+      return this.http.post<ProviderPage>(
+        `${BASE}/search`,
+        { type: filters.type || null, status: filters.status || null, term },
+        { params: new HttpParams().set('page', String(page)).set('size', String(size)) },
+      );
+    }
     return this.http.get<ProviderPage>(BASE, { params });
   }
 
   get(id: string): Observable<ProviderResponse> {
     return this.http.get<ProviderResponse>(`${BASE}/${encodeURIComponent(id)}`);
+  }
+
+  /** QA D4313: onboarding decisions, suspensions and restorations, newest first. */
+  lifecycleEvents(id: string): Observable<ProviderLifecycleEvent[]> {
+    return this.http.get<ProviderLifecycleEvent[]>(
+      `${BASE}/${encodeURIComponent(id)}/lifecycle-events`,
+    );
   }
 
   history(id: string): Observable<ProviderVerificationHistoryEntry[]> {

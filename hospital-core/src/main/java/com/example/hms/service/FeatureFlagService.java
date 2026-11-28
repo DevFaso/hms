@@ -68,4 +68,13 @@ public interface FeatureFlagService {
 
     /** True when {@code flagKey} names a flag the platform knows (D245). */
     boolean isKnownFlagKey(String flagKey);
+
+    /**
+     * QA D4070: the feature keys a subscription plan may list, sorted. A key
+     * is real when the platform configures it (defaults, overrides, any
+     * environment) or an override row carries it. Keys that only another plan
+     * names are not part of it: a typo in one plan must not make the same
+     * typo acceptable in the next.
+     */
+    List<String> catalogueKeys();
 }

@@ -22,6 +22,7 @@ import { HttpClient } from '@angular/common/http';
 import { Subscription, filter, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { PluralPipe } from '../shared/i18n/plural';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -97,6 +98,7 @@ function isMobileViewport(): boolean {
     HospitalScopeHintComponent,
     HospitalNetworkWorkspaceComponent,
     TranslateModule,
+    PluralPipe,
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,

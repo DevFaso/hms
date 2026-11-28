@@ -4184,6 +4184,26 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V415 (QA r81 D4074, D4312): provider facilities keep the licence authority as typed, and one
+         VERIFIED facility per CNSS number (index created only when no duplicate exists). DO block. -->
+    <changeSet id="V415-provider-licence-authority-label" author="hms-team" runOnChange="false">
+        <sqlFile path="V415__provider_licence_authority_label.sql" relativeToChangelogFile="true"
+                 splitStatements="false" stripComments="false"/>
+    </changeSet>
+
+    <!-- V416 (QA r81 D4317): an inactive organization that still holds an active facility gets its
+         active flag back; nothing is suspended. -->
+    <changeSet id="V416-organization-active-follows-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V416__organization_active_follows_lifecycle.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- V417 (QA r81 D4082): a cancelled release window keeps its reason. -->
+    <changeSet id="V417-release-window-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V417__release_window_cancel_reason.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- V465 (QA D4140, r81): an imaging request placed by a nurse or a midwife waits for a physician. Who
          placed the request and whether it needs a physician, on clinical.imaging_orders. Additive.
          Range V465-V469 is reserved for the r81 lab lane. -->

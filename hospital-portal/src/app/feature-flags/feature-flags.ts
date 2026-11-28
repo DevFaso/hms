@@ -15,21 +15,9 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { FEATURE_KEY_CATALOG } from '../shared/feature-key-labels';
 
-const FLAG_CATALOG: Readonly<Record<string, { title: string; description: string }>> = {
-  'ff.platform.billing': {
-    title: 'FLAGS.CATALOG.BILLING_TITLE',
-    description: 'FLAGS.CATALOG.BILLING_DESCRIPTION',
-  },
-  'ff.platform.ehr': {
-    title: 'FLAGS.CATALOG.EHR_TITLE',
-    description: 'FLAGS.CATALOG.EHR_DESCRIPTION',
-  },
-  'ff.platform.inventory': {
-    title: 'FLAGS.CATALOG.INVENTORY_TITLE',
-    description: 'FLAGS.CATALOG.INVENTORY_DESCRIPTION',
-  },
-};
+const FLAG_CATALOG = FEATURE_KEY_CATALOG;
 
 interface FeatureFlag {
   key: string;
@@ -145,7 +133,7 @@ export class FeatureFlagsComponent implements OnInit {
     this.http
       .put<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(flag.key)}`, {
         enabled: newEnabled,
-        description: flag.description || `Toggled ${flag.key}`,
+        description: flag.description || this.flagTitle(flag),
       })
       .subscribe({
         next: () => {

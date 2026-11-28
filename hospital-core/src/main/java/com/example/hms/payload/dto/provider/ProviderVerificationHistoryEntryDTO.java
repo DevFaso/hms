@@ -29,6 +29,8 @@ public class ProviderVerificationHistoryEntryDTO {
     private LocalDateTime submittedAt;
     private LocalDateTime decidedAt;
     private UUID decidedByUserId;
+    /** QA D4313: who decided, by name; null when undecided or the account is gone. */
+    private String decidedByName;
     private String decisionReason;
     private String evidenceNote;
     private String legalName;

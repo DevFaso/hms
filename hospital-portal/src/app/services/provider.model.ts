@@ -97,10 +97,15 @@ export interface ProviderResponse {
   verificationStatus: ProviderVerificationStatus | null;
   business: ProviderBusinessIdentity | null;
   professional: ProviderProfessional | null;
-  ifuMatchesRccm: boolean;
-  cnssMatchesRccm: boolean;
+  /** QA D4072: true once a verifier confirmed it; null while nobody recorded the check. */
+  ifuMatchesRccm: boolean | null;
+  cnssMatchesRccm: boolean | null;
+  /** QA D4073: PENDING_VERIFICATION, VERIFICATION_REVOKED or OPERATOR while suspended; else null. */
+  suspensionCause?: string | null;
   evidenceNote: string | null;
   decidedByUserId: string | null;
+  /** QA D4313: who decided, by name. */
+  decidedByName?: string | null;
   decidedAt: string | null;
   decisionReason: string | null;
   submittedAt: string | null;
@@ -121,6 +126,8 @@ export interface ProviderVerificationHistoryEntry {
   submittedAt: string | null;
   decidedAt: string | null;
   decidedByUserId: string | null;
+  /** QA D4313: who decided, by name. */
+  decidedByName?: string | null;
   decisionReason: string | null;
   evidenceNote: string | null;
   legalName: string | null;
@@ -383,4 +390,30 @@ export function serverMessage(error: unknown): string | null {
 /** True for the backend's "not available here" answer: a 404 identical to an unmapped path. */
 export function isNotAvailable(error: unknown): boolean {
   return (error as { status?: unknown } | null)?.status === 404;
+}
+
+/** QA D4313: one onboarding or lifecycle event of a facility (suspensions and restorations included). */
+export interface ProviderLifecycleEvent {
+  event: string;
+  occurredAt: string | null;
+  actorName: string | null;
+}
+
+/**
+ * QA D4073: a facility that was never verified is SUSPENDED in the database, which read as a
+ * sanction. The label says why it is not active; null when the plain lifecycle label is right.
+ */
+export function providerLifecycleLabelKey(provider: {
+  suspensionCause?: string | null;
+  verificationStatus?: string | null;
+}): string | null {
+  if (provider.suspensionCause === 'PENDING_VERIFICATION') {
+    return provider.verificationStatus === 'REJECTED'
+      ? 'PROVIDER.LIFECYCLE_STATE.REJECTED_NOT_ACTIVATED'
+      : 'PROVIDER.LIFECYCLE_STATE.PENDING_VERIFICATION';
+  }
+  if (provider.suspensionCause === 'VERIFICATION_REVOKED') {
+    return 'PROVIDER.LIFECYCLE_STATE.VERIFICATION_REVOKED';
+  }
+  return null;
 }

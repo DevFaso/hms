@@ -29,9 +29,12 @@ public class OrganizationRequestDTO {
     @NotNull(message = "{organization.type.required}")
     private OrganizationType type;
 
-    /** Boxed so a form that omits it (the portal's) is "active", not a 400 on a null primitive. */
-    @Builder.Default
-    private Boolean active = Boolean.TRUE;
+    /**
+     * Null when the form does not send it (the portal's edit form never does):
+     * on an edit that means "no change", so saving a suspended organization's
+     * contact details does not touch its state; on a create it means active.
+     */
+    private Boolean active;
 
     public boolean isActive() {
         return active == null || active;

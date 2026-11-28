@@ -334,7 +334,9 @@ public class HospitalServiceImpl implements HospitalService {
                     new Object[]{name}, "Hospital already exists.", locale);
             throw new ConflictException("name:" + message);
         }
+        boolean wasActive = hospital.isActive();
         hospitalMapper.updateHospitalFromDto(dto, hospital);
+        applyActiveSwitch(hospital, wasActive);
         applyCodeChange(dto, hospital);
         applyLocale(dto, hospital);
         if (dto.getOrganizationId() != null) {
@@ -343,6 +345,50 @@ public class HospitalServiceImpl implements HospitalService {
         }
         Hospital updated = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(updated);
+    }
+
+    /**
+     * QA D4317 class: the form's "active" switch and the lifecycle state move
+     * together. Deactivating is refused while staff are still assigned (the
+     * count is given); with none, the hospital becomes SUSPENDED and inactive
+     * at once. Reactivating lifts that suspension only: a hospital suspended,
+     * archived or purge-scheduled through its lifecycle comes back there.
+     */
+    private static final String FORM_DEACTIVATION_REASON = "HOSPITAL_DEACTIVATED";
+
+    private void applyActiveSwitch(Hospital hospital, boolean wasActive) {
+        boolean wanted = hospital.isActive();
+        boolean lifecycleActive = hospital.getLifecycleState() == null
+            || hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE;
+        if (wanted == wasActive) {
+            return;
+        }
+        if (!wanted) {
+            if (!lifecycleActive) {
+                return;
+            }
+            long activeStaff = hospitalRepository.countActiveStaffAssignments(hospital.getId());
+            if (activeStaff > 0) {
+                throw new ConflictException("active:"
+                    + MessageUtil.resolveOrRaw("hospital.deactivate.activeStaff", activeStaff));
+            }
+            hospital.setLifecycleState(com.example.hms.enums.HospitalLifecycleState.SUSPENDED);
+            hospital.setSuspendedAt(java.time.Instant.now());
+            hospital.setSuspensionReason(FORM_DEACTIVATION_REASON);
+            return;
+        }
+        if (lifecycleActive) {
+            return;
+        }
+        if (hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.SUSPENDED
+                && FORM_DEACTIVATION_REASON.equals(hospital.getSuspensionReason())) {
+            hospital.setLifecycleState(com.example.hms.enums.HospitalLifecycleState.ACTIVE);
+            hospital.setSuspendedAt(null);
+            hospital.setSuspendedBy(null);
+            hospital.setSuspensionReason(null);
+            return;
+        }
+        throw new ConflictException("active:" + MessageUtil.resolveOrRaw("hospital.reactivate.useLifecycle"));
     }
 
     @Override

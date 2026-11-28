@@ -40,7 +40,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #475569;
+    color: var(--text-secondary);
     font-size: 14px;
     cursor: pointer;
   }
@@ -56,7 +56,7 @@
   padding: 32px;
   border-radius: 12px;
   text-align: center;
-  color: #475569;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -116,7 +116,44 @@
   }
 
   &.inactive {
-    opacity: 0.55;
+    background: #f8fafc;
+    border-style: dashed;
+
+    h2,
+    .desc,
+    .meta {
+      color: var(--text-secondary);
+    }
+  }
+
+  .status-pill {
+    background: #dcfce7;
+    color: #166534;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.off {
+      background: #e2e8f0;
+      color: #334155;
+    }
+  }
+
+  .tier-line {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .feature-chip {
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    font-size: 12px;
   }
 
   .tier-pill {
@@ -129,7 +166,7 @@
   }
 
   .desc {
-    color: #475569;
+    color: var(--text-secondary);
     font-size: 14px;
     margin: 0;
   }
@@ -138,7 +175,7 @@
     list-style: none;
     padding: 0;
     margin: 0;
-    color: #475569;
+    color: var(--text-secondary);
     font-size: 14px;
     display: flex;
     flex-direction: column;
@@ -257,6 +294,60 @@
       border-radius: 6px;
       padding: 8px 14px;
       cursor: pointer;
+    }
+  }
+}
+
+.status-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+
+  select {
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+  }
+}
+
+.feature-picker {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px 12px;
+  margin: 0;
+  min-width: 0;
+
+  legend {
+    padding: 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .hint {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .feature-option {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 0;
+
+    code {
+      font-size: 12px;
+      color: var(--text-secondary);
+      overflow-wrap: anywhere;
+    }
+
+    &.unknown span {
+      color: #b91c1c;
+      font-size: 13px;
     }
   }
 }

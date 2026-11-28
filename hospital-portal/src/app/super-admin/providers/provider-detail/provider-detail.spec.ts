@@ -56,10 +56,16 @@ describe('ProviderDetailComponent', () => {
     service = jasmine.createSpyObj<SuperAdminProviderService>('SuperAdminProviderService', [
       'get',
       'history',
+      'lifecycleEvents',
       'verify',
       'reject',
       'revoke',
     ]);
+    service.lifecycleEvents.and.returnValue(
+      of([
+        { event: 'HOSPITAL_SUSPENDED', occurredAt: '2026-11-27T09:00:00', actorName: 'Awa Admin' },
+      ]),
+    );
     service.history.and.returnValue(
       of([
         {

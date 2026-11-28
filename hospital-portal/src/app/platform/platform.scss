@@ -868,7 +868,7 @@
   padding: 3px 8px;
   border-radius: 6px;
   background: #f1f5f9;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .catalog-meta {
@@ -960,7 +960,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.82rem;
-  color: #475569;
+  color: var(--text-secondary);
   .material-icons {
     font-size: 16px;
     color: var(--text-secondary);
@@ -1225,7 +1225,7 @@
     display: block;
     font-size: 0.78rem;
     font-weight: 600;
-    color: #475569;
+    color: var(--text-secondary);
     margin-bottom: 5px;
   }
 }
@@ -1348,4 +1348,41 @@ textarea.form-input {
   .tab-nav {
     overflow-x: auto;
   }
+}
+
+/* QA D4082: release-window actions and detail. */
+.release-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.release-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0 0;
+
+  dt {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.btn-danger-outline {
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.kpi-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
 }

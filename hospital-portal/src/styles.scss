@@ -692,7 +692,7 @@ textarea {
   border: none;
   border-radius: 8px;
   background: #f1f5f9;
-  color: #475569;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 :where(.btn-close):hover {
@@ -952,6 +952,107 @@ textarea {
     ) {
       animation: none;
     }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D4304 (r81): a pinned column sits ABOVE the cells it is pinned over. The
+   pinned cells are the two above: a row's actions cell at any width (r63), and
+   the last column of any table below the desktop width (r65). A role chip or
+   a badge with its own stacking (position, z-index, transform) was drawn
+   across the pinned « Actions » column; the pin now wins, and its background
+   stops at its own padding box so nothing shows through at a row's edge.
+   Nothing here changes a column's width: every table still fits its box at a
+   desktop width (r64) and keeps its last column on screen below it (r65).
+   Guarded by shared/styles/design-layer.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(
+  td:has(> :where(.action-group, .row-actions, .table-actions)),
+  td:last-child:has(> :where(button, a, .btn-sm))
+) {
+  z-index: 2;
+  background-clip: padding-box;
+}
+:where(
+  table:has(
+      > tbody
+        > tr
+        > td:last-child
+        > :where(.action-group, .row-actions, .table-actions, button, a, .btn-sm)
+    )
+    > thead
+    > tr
+    > th:last-child
+) {
+  z-index: 2;
+}
+@media screen and (max-width: 1023px) {
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > :is(thead, tbody, tfoot)
+      > tr
+      > :is(td, th):last-child:not([colspan], :first-child)
+  ) {
+    z-index: 2;
+    background-clip: padding-box;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D4085 (r81): a tab bar that does not fit shows there is more. « Versions »
+   on /platform and « Messages », « Tâches » in the inbox ended past the right
+   edge of a phone with nothing to say so. Every tab bar (a tablist, or a box
+   of tab buttons) scrolls sideways in place, keeps each tab whole, shows a
+   thin scrollbar, and fades its right edge while tabs remain past it (the
+   table scroll cue: no fade on a bar that fits or is scrolled to its end).
+   A bar that wraps its tabs onto a second line has nothing to scroll and is
+   left as it is. Guarded by shared/styles/design-layer.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(
+  [role='tablist'],
+  .tabs,
+  .tab-bar,
+  .tab-nav,
+  .tab-strip,
+  .section-tabs,
+  .rec-tabs,
+  :has(> .tab-btn),
+  :has(> [role='tab'])
+) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+:where(
+    [role='tablist'],
+    .tabs,
+    .tab-bar,
+    .tab-nav,
+    .tab-strip,
+    .section-tabs,
+    .rec-tabs,
+    :has(> .tab-btn),
+    :has(> [role='tab'])
+  )
+  > :where(.tab-btn, .tab, [role='tab'], .rec-tab, .filter-tab, .chart-tab) {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+@supports (animation-timeline: scroll()) {
+  :where(
+    [role='tablist'],
+    .tabs,
+    .tab-bar,
+    .tab-nav,
+    .tab-strip,
+    .section-tabs,
+    .rec-tabs,
+    :has(> .tab-btn),
+    :has(> [role='tab'])
+  ) {
+    animation: table-scroll-cue-edge linear both;
+    animation-timeline: scroll(self inline);
   }
 }
 

@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabInstrumentMapper;
 import com.example.hms.model.Department;
@@ -22,9 +23,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.UUID;
 
+// (java.time.LocalDate and FieldBusinessException are used by the date rules below.)
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -46,10 +49,65 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     }
 
     @Override
+    public Page<LabInstrumentResponseDTO> getByHospital(UUID hospitalId, boolean includeInactive,
+                                                        Pageable pageable, Locale locale) {
+        if (!includeInactive) {
+            return getByHospital(hospitalId, pageable, locale);
+        }
+        requireHospitalScope(hospitalId, locale);
+        return instrumentRepository.findByHospitalId(hospitalId, pageable).map(mapper::toDto);
+    }
+
+    @Override
+    @Transactional
+    public LabInstrumentResponseDTO reactivate(UUID id, Locale locale) {
+        LabInstrument instrument = instrumentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            instrument.getHospital(), INSTRUMENT_NOT_FOUND_KEY, id);
+        requireOwnInstrument(instrument, id);
+        if (!instrument.isActive()) {
+            instrument.setActive(true);
+            instrument = instrumentRepository.save(instrument);
+        }
+        return mapper.toDto(instrument);
+    }
+
+    /**
+     * QA D4076: the dates the form now carries. A calibration or a
+     * maintenance already done is not in the future, and the next one is not
+     * before the last; each refusal names its field.
+     */
+    private static void requireCoherentDates(LabInstrumentRequestDTO dto, LabInstrument stored) {
+        LocalDate today = LocalDate.now();
+        requireNotFuture("installationDate", dto.getInstallationDate(), today);
+        requireNotFuture("lastCalibrationDate", dto.getLastCalibrationDate(), today);
+        requireNotFuture("lastMaintenanceDate", dto.getLastMaintenanceDate(), today);
+        LocalDate lastCalibration = dto.getLastCalibrationDate() != null || stored == null
+            ? dto.getLastCalibrationDate() : stored.getLastCalibrationDate();
+        LocalDate lastMaintenance = dto.getLastMaintenanceDate() != null || stored == null
+            ? dto.getLastMaintenanceDate() : stored.getLastMaintenanceDate();
+        if (dto.getNextCalibrationDate() != null && lastCalibration != null
+                && dto.getNextCalibrationDate().isBefore(lastCalibration)) {
+            throw new FieldBusinessException("nextCalibrationDate", "instrument.date.nextBeforeLast");
+        }
+        if (dto.getNextMaintenanceDate() != null && lastMaintenance != null
+                && dto.getNextMaintenanceDate().isBefore(lastMaintenance)) {
+            throw new FieldBusinessException("nextMaintenanceDate", "instrument.date.nextBeforeLast");
+        }
+    }
+
+    private static void requireNotFuture(String field, LocalDate date, LocalDate today) {
+        if (date != null && date.isAfter(today)) {
+            throw new FieldBusinessException(field, "instrument.date.future");
+        }
+    }
+
+    @Override
     public LabInstrumentResponseDTO getById(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
         return mapper.toDto(instrument);
     }
 
@@ -65,6 +123,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
             throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
+        requireCoherentDates(dto, null);
         Department department = resolveDepartment(dto.getDepartmentId());
         LabInstrument instrument = mapper.toEntity(dto, hospital, department);
         instrument = instrumentRepository.save(instrument);
@@ -76,7 +135,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
 
         // Check serial number uniqueness if changed
         if (dto.getSerialNumber() != null
@@ -86,6 +145,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
             throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
+        requireCoherentDates(dto, instrument);
         Department department = resolveDepartment(dto.getDepartmentId());
         mapper.updateEntity(instrument, dto, department);
         instrument = instrumentRepository.save(instrument);
@@ -97,7 +157,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     public void deactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
-        requireHospitalScope(instrument.getHospital().getId(), locale);
+        requireOwnInstrument(instrument, id);
         instrument.setActive(false);
         instrumentRepository.save(instrument);
     }
@@ -111,6 +171,16 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         // QA r5 tenancy sweep: another hospital's row answers as unknown.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notfound", departmentId);
         return department;
+    }
+
+    /**
+     * Another hospital's instrument answers exactly as an unknown id (404): a
+     * 403 here told the caller that the id exists somewhere else.
+     */
+    private void requireOwnInstrument(LabInstrument instrument, UUID id) {
+        if (instrument.getHospital() == null || !hasHospitalAccess(instrument.getHospital().getId())) {
+            throw new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id);
+        }
     }
 
     private boolean hasHospitalAccess(UUID hospitalId) {

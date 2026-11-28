@@ -271,7 +271,7 @@
                   <td>{{ row.hospitalName || '—' }}</td>
                   <td>
                     <div class="cell-primary">
-                      {{ entityLabel(row.resourceName) || row.resourceId || '—' }}
+                      {{ entityLabel(row.resourceName) || shownResourceId(row.resourceId) || '—' }}
                     </div>
                     <div class="cell-secondary">{{ entityLabel(row.entityType) || '' }}</div>
                   </td>

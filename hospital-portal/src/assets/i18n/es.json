@@ -379,7 +379,7 @@
     },
     "ACTION": {
       "SUSPEND": "Suspender",
-      "RESTORE": "Restaurar",
+      "RESTORE": "Restablecer",
       "ARCHIVE": "Archivar",
       "SCHEDULE_PURGE": "Programar purga",
       "CANCEL_PURGE": "Cancelar purga"
@@ -403,7 +403,7 @@
     "MODAL": {
       "SUSPEND_TITLE": "Suspender esta organización",
       "SUSPEND_DESC": "Todos los usuarios de esta organización serán bloqueados hasta la restauración. Los super admins conservan acceso. La acción queda auditada permanentemente.",
-      "RESTORE_TITLE": "Restaurar esta organización",
+      "RESTORE_TITLE": "Restablecer esta organización",
       "RESTORE_DESC": "Devuelve la organización a ACTIVO. Los usuarios podrán volver a iniciar sesión en su próximo intento.",
       "ARCHIVE_TITLE": "Archivar esta organización",
       "ARCHIVE_DESC": "La organización queda oculta por defecto pero los datos se conservan. Se puede restaurar más tarde o programar una purga.",
@@ -473,13 +473,17 @@
       "LAB_RESULTS": "Resultados de laboratorio",
       "LAB_TEST_DEFINITIONS": "Catálogo de pruebas",
       "TREATMENT_PLANS": "Planes de tratamiento",
-      "REFERRALS": "Derivaciones"
+      "REFERRALS": "Derivaciones",
+      "ACTIVE_M_ONE": "activo",
+      "ACTIVE_M_OTHER": "activos",
+      "ACTIVE_F_ONE": "activa",
+      "ACTIVE_F_OTHER": "activas"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Total integraciones",
       "PENDING": "Integraciones pendientes",
       "DISABLED": "Enlaces deshabilitados",
-      "RELEASES": "Ventanas de despliegue activas"
+      "RELEASES": "Ventanas de despliegue en curso"
     },
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizaciones",
@@ -703,7 +707,7 @@
     "DISMISS": "Descartar difusión"
   },
   "SUBSCRIPTIONS": {
-    "DEACTIVATE_CONFIRM_BODY": "Ya no se podrá asignar a una organización.",
+    "DEACTIVATE_CONFIRM_BODY": "Ya no podrá asignarse a una organización. Podrá reactivarlo.",
     "DEACTIVATE_CONFIRM": "¿Desactivar el plan {{name}}?",
     "DEACTIVATED": "Plan {{name}} desactivado.",
     "UPDATED": "Plan {{name}} guardado.",
@@ -720,7 +724,7 @@
     "PER_MONTH": "/ mes",
     "SEATS": "licencias de usuario incluidas",
     "NO_FEATURES": "Sin claves de funcionalidad",
-    "NO_PLANS": "Aún no hay planes — cree el primero.",
+    "NO_PLANS": "Ningún plan para este filtro.",
     "LOAD_ERROR": "No se pudieron cargar los planes. Inténtelo de nuevo.",
     "FORM": {
       "NAME": "Nombre",
@@ -729,16 +733,35 @@
       "PRICE_CENTS": "Precio mensual (centavos)",
       "CURRENCY": "Moneda",
       "INCLUDED_SEATS": "Licencias de usuario incluidas",
-      "FEATURE_KEYS": "Claves de funcionalidad",
+      "FEATURE_KEYS": "Funcionalidades incluidas",
       "FEATURE_KEYS_PLACEHOLDER": "claves separadas por comas",
-      "PRICE": "Precio mensual ({{currency}})"
+      "PRICE": "Precio mensual ({{currency}})",
+      "FEATURE_KEYS_HINT": "Una organización suscrita solo accede a las funcionalidades marcadas. Sin ninguna marcada, el plan no restringe nada.",
+      "FEATURE_KEYS_NONE": "La plataforma no declara ninguna funcionalidad por ahora.",
+      "FEATURE_KEY_UNKNOWN": "clave desconocida para la plataforma: desmárquela para guardar"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "El nombre y el código de nivel son obligatorios.",
       "SAVE_FAILED": "Error al guardar.",
       "DEACTIVATE_FAILED": "Error al desactivar.",
-      "WHOLE_UNITS": "Esta moneda no tiene céntimos: introduzca un importe entero."
-    }
+      "WHOLE_UNITS": "Esta moneda no tiene céntimos: introduzca un importe entero.",
+      "REACTIVATE_FAILED": "La reactivación falló."
+    },
+    "REACTIVATE": "Reactivar",
+    "REACTIVATE_CONFIRM": "¿Reactivar el plan {{name}}?",
+    "REACTIVATE_CONFIRM_BODY": "Podrá asignarse de nuevo a una organización.",
+    "REACTIVATED": "Plan {{name}} reactivado.",
+    "STATUS_FILTER": "Estado",
+    "FILTER_ACTIVE": "Planes activos",
+    "FILTER_INACTIVE": "Planes inactivos",
+    "FILTER_ALL": "Todos los planes",
+    "STATUS_ACTIVE": "Activo",
+    "STATUS_INACTIVE": "Inactivo",
+    "TIER_CODE_LABEL": "Código de nivel:",
+    "SEATS_COUNT_ONE": "{{count}} licencia de usuario incluida",
+    "SEATS_COUNT_OTHER": "{{count}} licencias de usuario incluidas",
+    "USED_BY_ONE": "Usado por {{count}} organización",
+    "USED_BY_OTHER": "Usado por {{count}} organizaciones"
   },
   "ORG_REGION": {
     "TITLE": "Residencia de datos",
@@ -802,14 +825,14 @@
     },
     "ACTION": {
       "SUSPEND": "Suspender",
-      "RESTORE": "Restaurar",
+      "RESTORE": "Restablecer",
       "ARCHIVE": "Archivar",
       "SCHEDULE_PURGE": "Programar purga",
       "CANCEL_PURGE": "Cancelar purga"
     },
     "DIALOG": {
       "SUSPEND": "Suspender hospital",
-      "RESTORE": "Restaurar hospital",
+      "RESTORE": "Restablecer el establecimiento",
       "ARCHIVE": "Archivar hospital",
       "SCHEDULE-PURGE": "Programar purga",
       "CANCEL-PURGE": "Cancelar purga programada",
@@ -2277,7 +2300,9 @@
       "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
       "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)",
       "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}",
-      "DUPLICATE_KEPT_SEPARATE": "Posible duplicado conservado como paciente distinto"
+      "DUPLICATE_KEPT_SEPARATE": "Posible duplicado conservado como paciente distinto",
+      "RELEASE_WINDOW_UPDATED": "Ventana de despliegue modificada ({{details}})",
+      "RELEASE_WINDOW_CANCELLED": "Ventana de despliegue cancelada ({{details}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -4833,7 +4858,9 @@
     "LAB_SCIENTIST": "Científico de laboratorio",
     "LAB_MANAGER": "Gerente de laboratorio",
     "LAB_DIRECTOR": "Director de laboratorio",
-    "STAFF_COUNT": "{{count}} miembros del personal"
+    "STAFF_COUNT": "{{count}} miembros del personal",
+    "STAFF_COUNT_ONE": "{{count}} miembro del personal",
+    "STAFF_COUNT_OTHER": "{{count}} miembros del personal"
   },
   "LAB_TEST_CONFIG": {
     "APPROVAL_NEXT_STEP": "Continuar en la cola de aprobación del laboratorio",
@@ -5207,7 +5234,17 @@
     "SAVE_ERROR": "Error al guardar instrumento. Inténtelo de nuevo.",
     "DEACTIVATED": "Instrumento desactivado.",
     "DEACTIVATE_ERROR": "Error al desactivar instrumento.",
-    "CONFIRM_DEACTIVATE": "¿Está seguro de que desea desactivar este instrumento?"
+    "CONFIRM_DEACTIVATE": "¿Está seguro de que desea desactivar este instrumento?",
+    "DATES": "Calibración y mantenimiento",
+    "LAST_CALIBRATION": "Última calibración",
+    "NEXT_CALIBRATION": "Próxima calibración",
+    "LAST_MAINTENANCE": "Último mantenimiento",
+    "NEXT_MAINTENANCE": "Próximo mantenimiento",
+    "INACTIVE": "Desactivado",
+    "SHOW_INACTIVE": "Mostrar los instrumentos desactivados",
+    "REACTIVATE": "Reactivar",
+    "REACTIVATED": "Instrumento reactivado.",
+    "REACTIVATE_ERROR": "La reactivación falló."
   },
   "LAB_OUTBOX": {
     "ORDERING_HOSPITAL": "Hospital solicitante",
@@ -5303,7 +5340,19 @@
     "SAVE_ERROR": "Error al guardar artículo. Inténtelo de nuevo.",
     "DEACTIVATED": "Artículo de inventario desactivado.",
     "DEACTIVATE_ERROR": "Error al desactivar artículo.",
-    "CONFIRM_DEACTIVATE": "¿Está seguro de que desea desactivar este artículo?"
+    "CONFIRM_DEACTIVATE": "¿Está seguro de que desea desactivar este artículo?",
+    "LOT": "Lote",
+    "STATE_OUT": "Agotado",
+    "STATE_LOW": "Stock bajo",
+    "STATE_EXPIRED": "Caducado",
+    "STATE_EXPIRING": "Caduca pronto",
+    "FILTER": "Mostrar",
+    "FILTER_ALL": "Todos los artículos",
+    "SEARCH": "Buscar",
+    "SEARCH_PLACEHOLDER": "Nombre, código o lote",
+    "NO_MATCH": "Ningún artículo corresponde a este filtro.",
+    "SHOWN_ONE": "{{count}} artículo mostrado",
+    "SHOWN_OTHER": "{{count}} artículos mostrados"
   },
   "LANG": {
     "EN": "English",
@@ -5545,7 +5594,11 @@
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
     "CLINICAL_RULES": "Reglas clínicas",
     "PAYER_SHARES": "Partes de aseguradoras",
-    "URGENT_INCIDENTS": "Alertas urgentes no resueltas"
+    "URGENT_INCIDENTS": "Alertas urgentes no resueltas",
+    "MESSAGES_ARIA_ONE": "Mensajes ({{count}} sin leer)",
+    "MESSAGES_ARIA_OTHER": "Mensajes ({{count}} sin leer)",
+    "NOTIFICATIONS_ARIA_ONE": "Notificaciones ({{count}} sin leer)",
+    "NOTIFICATIONS_ARIA_OTHER": "Notificaciones ({{count}} sin leer)"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -6529,8 +6582,8 @@
     "ACCESS_LOGS": "Registros de acceso",
     "ACTIVATE": "Activar",
     "ACTIVE_CONNECTIONS": "Conexiones activas",
-    "ACTIVE_RELEASES": "Versiones activas",
-    "ACTIVE_WINDOWS": "Ventanas activas",
+    "ACTIVE_RELEASES": "Despliegues en curso",
+    "ACTIVE_WINDOWS": "Ventanas en curso",
     "API_KEYS": "Claves de API",
     "API_KEY_KEEP": "Dejar en blanco para conservar el valor actual",
     "API_KEY_REF": "Referencia de clave API",
@@ -6592,7 +6645,7 @@
     "FEATURE_FLAG": "Indicador de función",
     "FEATURE_TOGGLES": "Interruptores de funciones",
     "FREE": "Libre",
-    "FREEZE_CHANGES_DURING": "Congelar cambios durante",
+    "FREEZE_CHANGES_DURING": "Congelar los cambios durante la ventana",
     "GB": "GB",
     "HEALTHY": "Correcto",
     "HOSPITALS": "Hospitales",
@@ -6761,7 +6814,10 @@
       "STATUS_CHANGED": "Estado del servicio cambiado a {{status}}",
       "STATUS_CHANGE_FAILED": "Error al cambiar el estado",
       "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}}",
-      "VALIDATION_FAILED": "Corrija estos campos: {{errors}}"
+      "VALIDATION_FAILED": "Corrija estos campos: {{errors}}",
+      "RELEASE_UPDATED": "Ventana de despliegue «{{name}}» modificada",
+      "RELEASE_CANCELLED": "Ventana de despliegue «{{name}}» cancelada",
+      "RELEASE_CANCEL_FAILED": "No se pudo cancelar la ventana."
     },
     "TOTAL_INTEGRATIONS": "Total de integraciones",
     "UAT": "UAT",
@@ -6774,7 +6830,18 @@
     "VERSION": "Versión",
     "VIEW_DETAILS": "Ver detalles",
     "VIEW_DOCS": "Ver documentación",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "PLANNED_WINDOWS_LABEL": "Ventanas planificadas",
+    "EDIT_RELEASE_WINDOW": "Modificar la ventana de despliegue",
+    "CANCEL_RELEASE": "Cancelar la ventana",
+    "CANCEL_RELEASE_CONFIRM_BODY": "Permanecerá en la lista como cancelada y su congelación de cambios no se aplicará.",
+    "RELEASE_SHOW_DETAIL": "Detalle",
+    "RELEASE_HIDE_DETAIL": "Ocultar el detalle",
+    "RELEASE_CREATED_AT": "Creada el",
+    "RELEASE_UPDATED_AT": "Modificada el",
+    "CANCEL_RELEASE_REASON": "Motivo de la cancelación",
+    "CANCEL_RELEASE_KEEP": "Conservar la ventana",
+    "CANCEL_RELEASE_TITLE": "¿Cancelar esta ventana de despliegue?"
   },
   "PORTAL": {
     "VITALS": {
@@ -10350,7 +10417,15 @@
     "NO_DEPARTMENT_OPTION": "— Ningún departamento —",
     "DEPARTMENTS_LOAD_FAILED": "No se pudieron cargar los departamentos.",
     "REACTIVATE": "Reactivar",
-    "REQUIRES_ASSIGNMENT": "Gestionar las asignaciones para restablecer el acceso del personal"
+    "REQUIRES_ASSIGNMENT": "Gestionar las asignaciones para restablecer el acceso del personal",
+    "MEMBERS_COUNT_ONE": "{{count}} miembro del personal",
+    "MEMBERS_COUNT_OTHER": "{{count}} miembros del personal",
+    "FILTER_HOSPITAL": "Hospital",
+    "ALL_HOSPITALS": "Todos los hospitales",
+    "FILTER_STATUS": "Estado",
+    "ALL_STATUSES": "Activos y desactivados",
+    "STATUS_ACTIVE": "Activos",
+    "STATUS_INACTIVE": "Desactivados"
   },
   "TREATMENT": {
     "ACTIVE": "Activo",
@@ -13359,7 +13434,23 @@
     "IMPACTED_CONTROLLERS": "Controladores impactados",
     "RECOMMENDED_ACTIONS": "Acciones recomendadas",
     "SCENARIO_REQUIRED": "Se requiere un escenario",
-    "SIM_RULES_REQUIRED": "La plantilla no tiene reglas para simular"
+    "SIM_RULES_REQUIRED": "La plantilla no tiene reglas para simular",
+    "AGE_DAYS_ONE": "{{count}} día",
+    "AGE_DAYS_OTHER": "{{count}} días",
+    "DEFAULT_NAME": {
+      "DEFAULT_ORG": "Organización sanitaria predeterminada",
+      "ACCESS_CONTROL": "Política de control de acceso predeterminada",
+      "PATIENT_DATA_ACCESS": "Regla de acceso a los datos de pacientes",
+      "ADMIN_ENDPOINT_ACCESS": "Regla de acceso a las funciones de administración",
+      "DATA_PROTECTION": "Política de protección de datos predeterminada",
+      "AUDIT_LOGGING": "Política de registro de auditoría predeterminada",
+      "AUDIT_SENSITIVE": "Auditoría de operaciones sensibles",
+      "PASSWORD_POLICY": "Política de contraseñas predeterminada",
+      "PASSWORD_MIN_LENGTH": "Longitud mínima de la contraseña",
+      "SESSION_MANAGEMENT": "Política de gestión de sesiones predeterminada",
+      "SESSION_TIMEOUT": "Expiración de sesión",
+      "ROLE_MANAGEMENT": "Política de gestión de roles predeterminada"
+    }
   },
   "EDUCATION": {
     "TITLE": "Educación del paciente",
@@ -14868,7 +14959,8 @@
       "NOT_FOUND_TITLE": "Establecimiento proveedor no encontrado",
       "NOT_FOUND_TEXT": "Puede que se haya eliminado o que el enlace sea incorrecto.",
       "NOT_AVAILABLE_TITLE": "No disponible",
-      "NOT_AVAILABLE_TEXT": "Esta página no está disponible para su cuenta en este establecimiento. Si cree que debería estarlo, contacte con el administrador de su establecimiento."
+      "NOT_AVAILABLE_TEXT": "Esta página no está disponible para su cuenta en este establecimiento. Si cree que debería estarlo, contacte con el administrador de su establecimiento.",
+      "NOT_CHECKED": "No verificado"
     },
     "LIST": {
       "TITLE": "Establecimientos proveedores",
@@ -14885,7 +14977,9 @@
       "COL_LIFECYCLE": "Ciclo de vida",
       "COL_SUBMITTED": "Presentado el",
       "EMPTY_TITLE": "Ningún establecimiento proveedor",
-      "EMPTY_TEXT": "Ninguna farmacia ni laboratorio coincide con estos filtros."
+      "EMPTY_TEXT": "Ninguna farmacia ni laboratorio coincide con estos filtros.",
+      "SEARCH": "Buscar",
+      "SEARCH_PLACEHOLDER": "Nombre, código o ciudad"
     },
     "FORM": {
       "CREATE_TITLE": "Nuevo establecimiento proveedor",
@@ -14968,7 +15062,10 @@
       "REVOKED": "Verificación revocada; el establecimiento queda suspendido.",
       "SUSPENDED": "Establecimiento suspendido.",
       "RESTORED": "Establecimiento restablecido.",
-      "ARCHIVED": "Establecimiento archivado."
+      "ARCHIVED": "Establecimiento archivado.",
+      "DECIDED_BY": "Decidido por",
+      "EVENTS_TITLE": "Registro del establecimiento",
+      "EVENTS_EMPTY": "Ningún evento registrado."
     },
     "VERIFY": {
       "TITLE": "Verificar el establecimiento",
@@ -15078,6 +15175,20 @@
       "RECORD_OTHER": "Otro",
       "BY_SUPPORT": "En su nombre: soporte de la plataforma ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rol asignado: {{role}}"
+    },
+    "LIFECYCLE_STATE": {
+      "PENDING_VERIFICATION": "Pendiente de verificación",
+      "REJECTED_NOT_ACTIVATED": "No activado (solicitud rechazada)",
+      "VERIFICATION_REVOKED": "Suspendido (verificación revocada)"
+    },
+    "EVENT": {
+      "PROVIDER_CREATED": "Establecimiento registrado, expediente enviado",
+      "PROVIDER_VERIFIED": "Expediente verificado",
+      "PROVIDER_REJECTED": "Expediente rechazado",
+      "PROVIDER_EVIDENCE_RESUBMITTED": "Nuevo expediente enviado",
+      "PROVIDER_VERIFICATION_REVOKED": "Verificación revocada",
+      "HOSPITAL_SUSPENDED": "Establecimiento suspendido",
+      "HOSPITAL_RESTORED": "Establecimiento restablecido"
     }
   },
   "PHARMACY_CLAIMS": {

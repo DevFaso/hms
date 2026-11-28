@@ -21,6 +21,9 @@ public interface LabInstrumentRepository extends JpaRepository<LabInstrument, UU
 
     Optional<LabInstrument> findByIdAndActiveTrue(UUID id);
 
+    /** QA D4314: every instrument of the hospital, deactivated ones included. */
+    Page<LabInstrument> findByHospitalId(UUID hospitalId, Pageable pageable);
+
     boolean existsByHospitalIdAndSerialNumber(UUID hospitalId, String serialNumber);
 
     @Query("SELECT i FROM LabInstrument i WHERE i.hospital.id = :hospitalId "

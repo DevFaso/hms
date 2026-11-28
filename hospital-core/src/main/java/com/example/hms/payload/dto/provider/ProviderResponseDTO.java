@@ -33,10 +33,24 @@ public class ProviderResponseDTO {
     private ProviderVerificationStatus verificationStatus;
     private ProviderBusinessIdentityDTO business;
     private ProviderProfessionalDTO professional;
-    private boolean ifuMatchesRccm;
-    private boolean cnssMatchesRccm;
+    /**
+     * QA D4072: true once a verifier confirmed the IFU document agrees with
+     * the RCCM extract; null while nobody has recorded that check. Never
+     * false: a mismatch is a refusal to verify, not a stored answer.
+     */
+    private Boolean ifuMatchesRccm;
+    /** QA D4072: as {@link #ifuMatchesRccm}, for the CNSS document. */
+    private Boolean cnssMatchesRccm;
+    /**
+     * QA D4073: why a SUSPENDED facility is suspended: PENDING_VERIFICATION
+     * (never verified), VERIFICATION_REVOKED, or OPERATOR (a lifecycle
+     * suspension). Null when the facility is not suspended.
+     */
+    private String suspensionCause;
     private String evidenceNote;
     private UUID decidedByUserId;
+    /** QA D4313: who decided, by name; null when undecided or the account is gone. */
+    private String decidedByName;
     private LocalDateTime decidedAt;
     private String decisionReason;
     private LocalDateTime submittedAt;
