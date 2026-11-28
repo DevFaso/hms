@@ -55,6 +55,10 @@ const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject|deac
 /** Sites that end a record legitimately without a reason, each with why. */
 const PINS = new Map([
   [
+    'services/insurer-claims.service.ts::/billing-invoices/insurer-claims/write-offs/{}/cancel',
+    'a write-off request taken back before any decision: nothing was written off and no amount moves; the requester or finance withdraws it, and a refusal or an approval takes its reason',
+  ],
+  [
     'services/pharmacy.service.ts::/medication-catalog/versions/{}/withdraw',
     'the author taking back their own proposed catalogue version before any decision: it never took effect and nothing in the catalogue changes ("NOT A CLINICAL RECORD" in CancelVoidReasonGuardTest); a refusal takes its reason',
   ],

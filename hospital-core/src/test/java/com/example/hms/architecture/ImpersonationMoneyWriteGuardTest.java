@@ -83,9 +83,19 @@ class ImpersonationMoneyWriteGuardTest {
             "POST /billing-invoices/{invoiceId}/payments",
             "POST /billing-invoices/{invoiceId}/payments/{paymentId}/reverse",
             // Billing-money plan PR 7: a payer's decision on its share moves what the patient owes.
-            "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/claim",
-            "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/paid",
             "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
+            // Insurer claims plan PRs 2-4: a bordereau, an insurer payment, a refusal and a write-off all move what
+            // a payer or a patient owes, and the last two are four-eyes steps.
+            "POST /billing-invoices/insurer-claims/batches",
+            "POST /billing-invoices/insurer-claims/batches/{batchId}/submit",
+            "POST /billing-invoices/insurer-claims/batches/{batchId}/cancel",
+            "POST /billing-invoices/insurer-claims/payments",
+            "POST /billing-invoices/insurer-claims/payments/{paymentId}/allocations",
+            "POST /billing-invoices/insurer-claims/payments/{paymentId}/reverse",
+            "POST /billing-invoices/insurer-claims/lines/{lineId}/refusals",
+            "POST /billing-invoices/insurer-claims/lines/{lineId}/write-offs",
+            "POST /billing-invoices/insurer-claims/write-offs/{writeOffId}/approve",
+            "POST /billing-invoices/insurer-claims/write-offs/{writeOffId}/refuse",
             "PUT /invoice-items/{id}",
             "DELETE /invoice-items/{id}",
             "POST /billing/price-list",

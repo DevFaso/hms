@@ -126,6 +126,8 @@ class InvoiceCoverageServiceTest {
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_A);
         when(roles.getCurrentUserId()).thenReturn(BILLING_A);
         when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        // Review of #1394 (F2): the user who refuses a whole share is a hospital admin or an accountant.
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(true);
 
         invoice = invoice(HOSPITAL_A);
         // RAMU, Formule Base 80 %, laboratoire exclu, plafond annuel 150 000 F.
@@ -191,6 +193,11 @@ class InvoiceCoverageServiceTest {
             Optional.ofNullable(ledger.get(call.<UUID>getArgument(0)))
                 .filter(s -> s.getInvoiceId().equals(call.getArgument(1)) && s.getHospitalId().equals(call.getArgument(2))));
         when(shares.sumUsedInYear(any(), any(), anyInt(), any())).thenReturn(BigDecimal.ZERO);
+        // Review of #1394 (F1): the status as the database holds it, read again under the share's lock.
+        when(shares.statusOf(any(), any())).thenAnswer(call ->
+            Optional.ofNullable(ledger.get(call.<UUID>getArgument(0)))
+                .filter(s -> s.getHospitalId().equals(call.getArgument(1)))
+                .map(InvoicePayerShare::getStatus));
         when(shares.decide(any(), any(), any(), any(), any(), any(), any())).thenAnswer(call -> {
             InvoicePayerShare share = ledger.get(call.<UUID>getArgument(0));
             if (share == null || !share.getHospitalId().equals(call.getArgument(1))
@@ -203,6 +210,21 @@ class InvoiceCoverageServiceTest {
             share.setRejectionReason(call.getArgument(6));
             return 1;
         });
+        when(shares.rejectWhole(any(), any(), any(), any(), any())).thenAnswer(call -> {
+            InvoicePayerShare share = ledger.get(call.<UUID>getArgument(0));
+            if (share == null || !share.getHospitalId().equals(call.getArgument(1))
+                    || share.getStatus() != PayerShareStatus.OPEN) {
+                return 0;
+            }
+            share.setStatus(PayerShareStatus.REJECTED);
+            share.setRejectedAmount(share.getAmount());
+            return 1;
+        });
+    }
+
+    /** The share as it stands once its bordereau was sent (insurer claims plan PR 2). */
+    private static void sentOnABordereau(InvoicePayerShare share) {
+        share.setStatus(PayerShareStatus.CLAIMED);
     }
 
     private BillingInvoice invoice(UUID hospitalId) {
@@ -570,21 +592,63 @@ class InvoiceCoverageServiceTest {
         assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.PARTIALLY_PAID);
         assertThat(xray.getPayerShareAmount()).isEqualByComparingTo("0");
 
-        // Decided once: a second decision is refused with the share's status named.
-        assertThatThrownBy(() -> service.markPaid(invoiceId, shareId)).isInstanceOf(ConflictException.class);
+        assertThat(ledger.get(shareId).getRejectedAmount()).as("the whole share is recorded as re-billed")
+            .isEqualByComparingTo("5600");
+        // Decided once: a second refusal is refused with the share's status named.
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Encore")).isInstanceOf(ConflictException.class);
     }
 
     @Test
-    @DisplayName("claim, then paid: the patient's balance does not move")
-    void claimThenPaid() {
+    @DisplayName("insurer claims PR 3: a share on a sent bordereau is refused line by line there, never whole here")
+    void aClaimedShareIsNotRejectedWhole() {
         service.applyAtIssue(invoice, BILLING_A);
-        UUID shareId = onlyShare().getId();
-        assertThat(service.claim(invoice.getId(), shareId)).singleElement()
-            .extracting(InvoicePayerShareDTO::getStatus).isEqualTo("CLAIMED");
-        assertThat(service.markPaid(invoice.getId(), shareId)).singleElement()
-            .extracting(InvoicePayerShareDTO::getStatus).isEqualTo("PAID");
-        assertThat(InvoiceBalance.dueOf(invoice)).isEqualByComparingTo("2900");
-        verify(audit, atLeastOnce()).logEvent(any());
+        InvoicePayerShare share = onlyShare();
+        sentOnABordereau(share);
+        UUID invoiceId = invoice.getId();
+        UUID shareId = share.getId();
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ConflictException.class);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.CLAIMED);
+        assertThat(InvoiceBalance.dueOf(invoice)).as("the patient's balance does not move").isEqualByComparingTo("2900");
+    }
+
+    @Test
+    @DisplayName("review of #1394 (F2): the billing specialist and the claims reviewer never move a whole share to "
+        + "the patient; only the hospital admin or the accountant refuses it")
+    void aWholeRefusalIsAFinanceDecision() {
+        service.applyAtIssue(invoice, BILLING_A);
+        UUID invoiceId = invoice.getId();
+        InvoicePayerShare share = onlyShare();
+        UUID shareId = share.getId();
+        // A role that decides shares (it reads the list) but settles no claim.
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.OPEN);
+        assertThat(InvoiceBalance.dueOf(invoice)).as("the patient's balance does not move").isEqualByComparingTo("2900");
+
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        service.reject(invoiceId, shareId, "Hors délai");
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.REJECTED);
+    }
+
+    @Test
+    @DisplayName("review of #1394 (F1): a share read OPEN but sent on a bordereau before its lock is taken is not "
+        + "refused from the stale read")
+    void aShareSentBeforeItsLockIsReadAgain() {
+        service.applyAtIssue(invoice, BILLING_A);
+        UUID invoiceId = invoice.getId();
+        InvoicePayerShare share = onlyShare();
+        UUID shareId = share.getId();
+        // The entity still says OPEN; the database, read under the lock, says a bordereau claimed it meanwhile.
+        when(shares.statusOf(shareId, HOSPITAL_A)).thenReturn(Optional.of(PayerShareStatus.CLAIMED));
+
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ConflictException.class);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.OPEN);
+        assertThat(InvoiceBalance.dueOf(invoice)).as("the patient's balance does not move").isEqualByComparingTo("2900");
+        org.mockito.Mockito.verify(shares).lockAllByIdInAndHospitalId(java.util.Set.of(shareId), HOSPITAL_A);
     }
 
     @Test
@@ -595,13 +659,16 @@ class InvoiceCoverageServiceTest {
         UUID shareId = onlyShare().getId();
 
         when(roles.getCurrentUserId()).thenReturn(DOCTOR_A);
-        assertThatThrownBy(() -> service.claim(invoiceId, shareId)).isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
 
         when(roles.getCurrentUserId()).thenReturn(BILLING_A);
         when(scope.requirePinned()).thenReturn(HOSPITAL_B);
         when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_B)).thenReturn(true);
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_B)).thenReturn(true);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_B);
-        assertThatThrownBy(() -> service.claim(invoiceId, shareId)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.list(invoiceId)).isInstanceOf(ResourceNotFoundException.class);
         assertThat(onlyShare().getStatus()).isEqualTo(PayerShareStatus.OPEN);
     }
@@ -623,7 +690,7 @@ class InvoiceCoverageServiceTest {
         assertThat(xray.getPayerShareAmount()).isEqualByComparingTo("3200");
         assertThat(InvoiceBalance.patientShareOf(invoice)).isEqualByComparingTo("2700");
 
-        service.claim(invoice.getId(), second.getId());
+        sentOnABordereau(second);
         creditNotes.put(xray.getId(), new BigDecimal("2000"));
         invoice.setTotalAmount(new BigDecimal("6500"));
         assertThatThrownBy(() -> service.recomputeAfterLineChange(invoice, BILLING_A))
@@ -631,7 +698,8 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("review of #1353 (F1): a credit note that keeps the total under a ceiling re-splits the claimed acts")
+    @DisplayName("review of #1353 (F1): a credit note that keeps the total under a ceiling re-splits an open share; "
+        + "once the share is on a sent bordereau its split is frozen and the credit note is refused")
     void aCreditNoteThatKeepsTheTotalMovesTheClaimedActs() {
         // 80 %, per-invoice ceiling 10 000 F: A 5 000 (posted first) and B 20 000 give A 4 000 + B 6 000 = 10 000.
         PayerPlanTerms capped = PayerPlanTerms.builder().hospitalId(HOSPITAL_A).planId(plan.getId())
@@ -666,16 +734,13 @@ class InvoiceCoverageServiceTest {
         InvoicePayerShare share = onlyShare();
         assertThat(first.getPayerShareAmount()).isEqualByComparingTo("4000");
         assertThat(second.getPayerShareAmount()).isEqualByComparingTo("6000");
-        // Sent to the payer on a bordereau: the total stands, so the credit note is allowed.
-        service.claim(invoice.getId(), share.getId());
-
         // A is credited in full: A 0, B 16 000 capped at 10 000; the total is still 10 000.
         creditNotes.put(first.getId(), new BigDecimal("5000"));
         invoice.setTotalAmount(new BigDecimal("20000"));
         assertThat(service.recomputeAfterLineChange(invoice, BILLING_A)).isEqualByComparingTo("10000");
 
         assertThat(onlyShare().getId()).isEqualTo(share.getId());
-        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.CLAIMED);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.OPEN);
         assertThat(first.getPayerShareAmount()).isEqualByComparingTo("0");
         assertThat(second.getPayerShareAmount()).isEqualByComparingTo("10000");
         assertThat(stored).singleElement().satisfies(row -> {
@@ -704,6 +769,17 @@ class InvoiceCoverageServiceTest {
         service.recomputeAfterLineChange(invoice, BILLING_A);
         org.mockito.Mockito.verify(shareLines, org.mockito.Mockito.never()).deleteByShareAndHospital(any(), any());
         org.mockito.Mockito.verify(shareLines, org.mockito.Mockito.never()).saveAll(any());
+
+        // Insurer claims plan PR 2: sent on a bordereau, the split is frozen. A credit note that leaves it alone
+        // passes; one that would move it (the total still 10 000) is refused, and nothing is rewritten.
+        sentOnABordereau(share);
+        assertThat(service.recomputeAfterLineChange(invoice, BILLING_A)).isEqualByComparingTo("10000");
+        creditNotes.put(first.getId(), BigDecimal.ZERO);
+        invoice.setTotalAmount(new BigDecimal("25000"));
+        assertThatThrownBy(() -> service.recomputeAfterLineChange(invoice, BILLING_A))
+            .isInstanceOf(ConflictException.class);
+        org.mockito.Mockito.verify(shareLines, org.mockito.Mockito.never()).deleteByShareAndHospital(any(), any());
+        assertThat(second.getPayerShareAmount()).isEqualByComparingTo("10000");
     }
 
     @Test
@@ -722,7 +798,7 @@ class InvoiceCoverageServiceTest {
         service.applyAtIssue(other, BILLING_A);
         UUID shareId = ledger.values().stream().filter(s -> s.getInvoiceId().equals(other.getId())).findFirst()
             .orElseThrow().getId();
-        service.claim(other.getId(), shareId);
+        sentOnABordereau(ledger.get(shareId));
         assertThatThrownBy(() -> service.cancelWithInvoice(other, BILLING_A)).isInstanceOf(ConflictException.class);
     }
 

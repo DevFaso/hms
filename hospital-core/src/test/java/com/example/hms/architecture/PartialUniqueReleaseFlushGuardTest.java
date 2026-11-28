@@ -121,7 +121,13 @@ class PartialUniqueReleaseFlushGuardTest {
         // marked approved; a version is never built in a method that releases one.
         Map.entry("medication_catalog_versions", "MedicationCatalogVersion"),
         // V386: one open incident per unresolved urgent alert.
-        Map.entry("urgent_alert_incidents", "UrgentAlertIncident"));
+        Map.entry("urgent_alert_incidents", "UrgentAlertIncident"),
+        // V455: a bordereau's number and creation key (never released), and one live line per claimed act: a line
+        // is released or deleted by a bulk statement that runs at once, before any new line is built.
+        Map.entry("insurer_claim_batches", "InsurerClaimBatch"),
+        Map.entry("insurer_claim_lines", "InsurerClaimLine"),
+        // V456: one recorded payment per payer and reference; a reversed payment is saved and flushed on its own.
+        Map.entry("insurer_payments", "InsurerPayment"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

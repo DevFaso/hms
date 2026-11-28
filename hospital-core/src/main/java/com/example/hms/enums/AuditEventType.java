@@ -145,6 +145,27 @@ public enum AuditEventType {
     PAYER_SHARE_DECIDED,
     /** Billing-money plan PR 7: a payer share cancelled with its invoice, or replaced after a credit note (ids only). */
     PAYER_SHARE_CANCELLED,
+    /** Insurer claims plan PR 2 (V455): a draft bordereau built, changed or deleted (ids only). */
+    INSURER_CLAIM_BATCH_DRAFTED,
+    /** Insurer claims plan PR 2: a bordereau sent to the payer, or the payer's receipt of it recorded (ids only). */
+    INSURER_CLAIM_BATCH_SUBMITTED,
+    /** Insurer claims plan PR 2: a submitted bordereau cancelled (ids only, never the reason). */
+    INSURER_CLAIM_BATCH_CANCELLED,
+    /** Insurer claims plan PR 2: a bordereau exported as PDF or CSV: patient data leaves for the payer (ids only). */
+    INSURER_CLAIM_BATCH_EXPORTED,
+    /** Insurer claims plan PR 3 (V456): a payer's remittance recorded or allocated to lines (ids only). */
+    INSURER_PAYMENT_RECORDED,
+    /** Insurer claims plan PR 3: a payer's remittance reversed by another person (ids only, never the reason). */
+    INSURER_PAYMENT_REVERSED,
+    /** Insurer claims plan PR 3 (V458): a payer's refusal of a bordereau line recorded (ids only). */
+    INSURER_CLAIM_LINE_REFUSED,
+    /** Insurer claims plan PR 3: a refused amount re-billed to the patient by an approver (ids only). */
+    INSURER_CLAIM_LINE_REBILLED,
+    /** Insurer claims plan PR 4 (V458): a write-off asked for, approved, refused or cancelled (ids only). */
+    INSURER_CLAIM_WRITE_OFF_REQUESTED,
+    INSURER_CLAIM_WRITE_OFF_APPROVED,
+    INSURER_CLAIM_WRITE_OFF_REFUSED,
+    INSURER_CLAIM_WRITE_OFF_CANCELLED,
     /**
      * Insurer claims plan PR 1 (V383, QA D3984): an insurer's pre-authorisation number recorded on an invoice line or
      * an imaging order, or copied from the order onto its lines (ids and counts only, never the number).

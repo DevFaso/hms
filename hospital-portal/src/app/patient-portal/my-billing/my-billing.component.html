@@ -303,7 +303,7 @@
                           'PORTAL.BILLING.PAYER_SHARE_REJECTED'
                             | translate
                               : {
-                                  amount: (share.amount | cfa),
+                                  amount: (refusedAmount(share) | cfa),
                                   reason: share.rejectionReason ?? '',
                                 }
                         }}</span>

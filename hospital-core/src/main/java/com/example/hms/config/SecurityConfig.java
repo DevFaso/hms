@@ -1009,6 +1009,16 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES + "/*/payer-shares/*/*")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER)
 
+                // Insurer claims plan PRs 2-4 (QA D3983): bordereaux, insurer payments, refusals, write-offs and the
+                // receivable reports; mirrors InsurerClaimController (which narrows payments, cancellations and
+                // write-off decisions to the hospital admin and the accountant). Before the broader patterns: the
+                // claims reviewer reads and builds here, reception and clinicians never do.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/insurer-claims/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
+                    ROLE_CLAIMS_REVIEWER)
+                .requestMatchers(API_BILLING_INVOICES + "/insurer-claims/**")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER)
+
                 // QA D4222 / D4223 (round 81): the addresses an invoice may be mailed to, for those who may mail
                 // it (the POST below), not for every reader of invoices. Before the broader GET pattern.
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/email-recipients")

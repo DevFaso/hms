@@ -593,6 +593,78 @@ export const routes: Routes = [
           import('./billing/payers/payers.component').then((m) => m.PayersComponent),
       },
 
+      // Insurer claims PRs 2-4 (QA D3983): bordereaux, insurer payments and receivables; mirrors
+      // InsurerClaimController (the hospital admin and the accountant alone record payments and decide write-offs;
+      // each screen shows the other claims roles what they may read).
+      {
+        path: 'billing/bordereaux',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/claim-batches.component').then(
+            (m) => m.ClaimBatchesComponent,
+          ),
+      },
+      {
+        path: 'billing/bordereaux/:id',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/claim-batch-detail.component').then(
+            (m) => m.ClaimBatchDetailComponent,
+          ),
+      },
+      {
+        path: 'billing/reglements-assureurs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/insurer-payments.component').then(
+            (m) => m.InsurerPaymentsComponent,
+          ),
+      },
+      {
+        path: 'billing/creances-assureurs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/insurer-claims/insurer-receivables.component').then(
+            (m) => m.InsurerReceivablesComponent,
+          ),
+      },
+
       // QA D2706 (r70): the hospital's insurer shares in one list, the claims reviewer's own screen; mirrors
       // GET /billing-invoices/payer-shares (InvoicePayerShareController).
       {

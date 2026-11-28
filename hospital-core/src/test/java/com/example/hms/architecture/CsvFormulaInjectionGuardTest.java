@@ -58,6 +58,8 @@ class CsvFormulaInjectionGuardTest {
         "controller/RoleController.java", List.of("service/RoleServiceImpl.java"),
         // Billing plan PR 10: the day's cash journal is written by the reports service.
         "controller/CashSessionController.java", List.of("service/billing/cash/CashSessionReports.java"),
+        // Insurer claims plan PRs 2 and 4: the bordereau and the receivable reports are written by the report service.
+        "controller/InsurerClaimController.java", List.of("service/billing/claim/InsurerClaimReportService.java"),
         "controller/SuperAdminAuditSearchController.java",
             List.of("service/impl/SuperAdminAuditSearchServiceImpl.java"),
         // Attaches the report the generator wrote; it writes no cell itself.

@@ -556,6 +556,16 @@ public class RoleValidator {
     }
 
     /**
+     * Insurer claims plan PR 3 (owner decision of 2026-11-26, Q2): who records, allocates or reverses a payer's
+     * remittance at {@code hospitalId}, cancels a submitted bordereau, re-bills a refused amount to the patient and
+     * approves or refuses a write-off: a hospital admin or an accountant assignment there. Never the billing
+     * specialist (the till) and never the platform super-admin on their own.
+     */
+    public boolean canSettleInsurerClaims(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /**
      * Insurer claims plan PR 1 (QA D3984, plan section 4.4): who records or corrects the insurer's pre-authorisation
      * number of an act at {@code hospitalId} - on its invoice line or, without any clinical field, on its imaging
      * order: the deciders of a payer share and reception, which obtains the number from the patient's insurer.

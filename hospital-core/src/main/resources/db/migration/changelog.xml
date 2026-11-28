@@ -4204,6 +4204,27 @@
                  splitStatements="true" stripComments="true"/>
     </changeSet>
 
+    <!-- V455-V458 (insurer claims plan PRs 2-4, QA D3983; V455-V459 reserved, V459 unused): the bordereau sent to
+         a payer and its lines (V455), the payer's remittances and their allocation to lines (V456), a payer share
+         settled by amounts with PARTIALLY_PAID and WRITTEN_OFF (V457), the payer's refusals and the four-eyes
+         write-offs (V458). Plain DDL, no DO block. -->
+    <changeSet id="V455-insurer-claim-batches" author="hms-team" runOnChange="false">
+        <sqlFile path="V455__insurer_claim_batches.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V456-insurer-payments" author="hms-team" runOnChange="false">
+        <sqlFile path="V456__insurer_payments.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V457-payer-share-settlement" author="hms-team" runOnChange="false">
+        <sqlFile path="V457__payer_share_settlement.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+    <changeSet id="V458-insurer-claim-refusals-write-offs" author="hms-team" runOnChange="false">
+        <sqlFile path="V458__insurer_claim_refusals_write_offs.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <!-- V465 (QA D4140, r81): an imaging request placed by a nurse or a midwife waits for a physician. Who
          placed the request and whether it needs a physician, on clinical.imaging_orders. Additive.
          Range V465-V469 is reserved for the r81 lab lane. -->

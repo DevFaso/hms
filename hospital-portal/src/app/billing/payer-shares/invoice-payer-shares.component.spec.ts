@@ -83,7 +83,7 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
   });
 
   it('shows the insurer share and the patient share, and the shares with their decisions', () => {
-    render(['ROLE_BILLING_SPECIALIST'], invoice(), [open]);
+    render(['ROLE_ACCOUNTANT'], invoice(), [open]);
 
     expect(host().querySelector('[data-testid="payer-share-amount"]')?.textContent).toContain('5');
     expect(host().querySelector('[data-testid="patient-share-amount"]')?.textContent).toContain(
@@ -133,6 +133,14 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
     expect(host().querySelector('[data-testid^="payer-share-reject-"]')).toBeNull();
   });
 
+  for (const role of ['ROLE_BILLING_SPECIALIST', 'ROLE_CLAIMS_REVIEWER']) {
+    it(`review of #1394 (F2): ${role} reads the open share but never refuses it to the patient`, () => {
+      render([role], invoice(), [open]);
+      expect(host().querySelector('[data-testid="payer-share-share-1"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid^="payer-share-reject-"]')).toBeNull();
+    });
+  }
+
   it("a rejected share shows the insurer's reason and offers no decision", () => {
     render(['ROLE_ACCOUNTANT'], invoice({ insuranceCoverageAmount: 0 }), [
       { ...open, status: 'REJECTED', rejectionReason: 'Bénéficiaire non à jour de cotisation' },
@@ -143,7 +151,7 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
   });
 
   it('an empty rejection is refused on the reason and nothing is sent', () => {
-    render(['ROLE_CLAIMS_REVIEWER'], invoice(), [open]);
+    render(['ROLE_HOSPITAL_ADMIN'], invoice(), [open]);
     host().querySelector<HTMLButtonElement>('[data-testid="payer-share-reject-share-1"]')!.click();
     fixture.detectChanges();
 
@@ -169,7 +177,7 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
   });
 
   it('a rejection with its reason is sent, and the invoice is re-read', () => {
-    render(['ROLE_BILLING_SPECIALIST'], invoice(), [open]);
+    render(['ROLE_ACCOUNTANT'], invoice(), [open]);
     const rejected = { ...open, status: 'REJECTED' as const, rejectionReason: 'Hors délai' };
     billing.decidePayerShare.and.returnValue(of([rejected]));
     const changed = jasmine.createSpy('changed');
@@ -190,7 +198,7 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
   });
 
   it('the server refusal of the reason marks the field it names', () => {
-    render(['ROLE_BILLING_SPECIALIST'], invoice(), [open]);
+    render(['ROLE_ACCOUNTANT'], invoice(), [open]);
     billing.decidePayerShare.and.returnValue(
       throwError(() => fieldErrorsResponse({ reason: 'Le motif est limité à 500 caractères.' })),
     );
@@ -205,15 +213,14 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
     });
   });
 
-  it('claim and paid are offered on an open share; only paid and reject once claimed', () => {
+  it('insurer claims PR 3 (QA D3983): only an open share is refused here; a claimed one is settled on its bordereau', () => {
     render(['ROLE_ACCOUNTANT'], invoice(), [open]);
-    billing.decidePayerShare.and.returnValue(of([{ ...open, status: 'CLAIMED' }]));
-    expect(fixture.componentInstance.canClaim(open)).toBeTrue();
-    fixture.componentInstance.decide(open, 'claim');
-    expect(billing.decidePayerShare).toHaveBeenCalledWith('inv-bc2', 'share-1', 'claim', undefined);
-    const claimed = { ...open, status: 'CLAIMED' as const };
-    expect(fixture.componentInstance.canClaim(claimed)).toBeFalse();
-    expect(fixture.componentInstance.canSettle(claimed)).toBeTrue();
+    expect(fixture.componentInstance.canSettle(open)).toBeTrue();
+    expect(fixture.componentInstance.canSettle({ ...open, status: 'CLAIMED' })).toBeFalse();
+    expect(fixture.componentInstance.canSettle({ ...open, status: 'PARTIALLY_PAID' })).toBeFalse();
     expect(fixture.componentInstance.canSettle({ ...open, status: 'PAID' })).toBeFalse();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('BILLING.PAYER_SHARES.CLAIM');
+    expect(text).not.toContain('BILLING.PAYER_SHARES.MARK_PAID');
   });
 });

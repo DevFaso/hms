@@ -87,8 +87,6 @@ export class InvoicePayerSharesComponent {
   readonly canDecide = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_ACCOUNTANT',
-    'ROLE_BILLING_SPECIALIST',
-    'ROLE_CLAIMS_REVIEWER',
   ]);
 
   readonly shares = signal<InvoicePayerShare[]>([]);
@@ -145,17 +143,15 @@ export class InvoicePayerSharesComponent {
       });
   }
 
-  /** "Marquer réclamée" on an open share. */
-  canClaim(share: InvoicePayerShare): boolean {
+  /**
+   * « Refuser » on a share not yet claimed. Insurer claims PR 3: a share is claimed by sending its bordereau and paid
+   * by an insurer payment with an amount, a date and a reference, never from here.
+   */
+  canSettle(share: InvoicePayerShare): boolean {
     return this.canDecide && share.status === 'OPEN';
   }
 
-  /** "Marquer payée" and "Refuser" on an open or claimed share. */
-  canSettle(share: InvoicePayerShare): boolean {
-    return this.canDecide && (share.status === 'OPEN' || share.status === 'CLAIMED');
-  }
-
-  decide(share: InvoicePayerShare, decision: PayerShareDecision, reason?: string): void {
+  decide(share: InvoicePayerShare, decision: PayerShareDecision, reason: string): void {
     if (this.busy()) return;
     this.busy.set(true);
     this.billing
@@ -172,12 +168,9 @@ export class InvoicePayerSharesComponent {
         error: (err: unknown) => {
           this.busy.set(false);
           // The server names the reason when it refuses it (blank, too long, a card number).
-          const marked =
-            decision === 'reject'
-              ? markServerFieldErrors(this.host.nativeElement, err, {
-                  reason: PAYER_SHARE_REASON_ID,
-                })
-              : [];
+          const marked = markServerFieldErrors(this.host.nativeElement, err, {
+            reason: PAYER_SHARE_REASON_ID,
+          });
           if (marked.length === 0) {
             this.toast.error(
               refusalReason(err) ?? this.translate.instant('BILLING.PAYER_SHARES.FAILED'),

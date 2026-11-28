@@ -47,4 +47,18 @@ public class OpenPayerShareDTO {
     private LocalDateTime coverageVerifiedAt;
     /** The invoice's lines the payer pays part of: the acts claimed, with their pre-authorisation numbers. */
     private java.util.List<PayerShareLineDTO> lines;
+
+    /**
+     * Insurer claims plan PRs 2 and 3 (QA D3983): how far the share is settled (paid by the payer, refused and
+     * re-billed to the patient, written off, still expected), the payer's reason for a refusal and when the share
+     * last changed, and the bordereau it is on (its number once sent; a draft has none).
+     */
+    private BigDecimal paidAmount;
+    private BigDecimal rejectedAmount;
+    private BigDecimal writtenOffAmount;
+    private BigDecimal openAmount;
+    private String rejectionReason;
+    private LocalDateTime decidedAt;
+    private UUID claimBatchId;
+    private String claimBatchNumber;
 }

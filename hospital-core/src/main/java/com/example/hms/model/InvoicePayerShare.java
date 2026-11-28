@@ -77,4 +77,49 @@ public class InvoicePayerShare extends BaseEntity {
 
     @Column(name = "created_by", updatable = false)
     private UUID createdBy;
+
+    /** Insurer claims plan PR 3 (V457): what the payer's remittances paid of the share. Whole francs. */
+    @Builder.Default
+    @Column(name = "paid_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal paidAmount = BigDecimal.ZERO;
+
+    /** V457: what the payer refused and the hospital re-billed to the patient; it left the invoice's payer share. */
+    @Builder.Default
+    @Column(name = "rejected_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal rejectedAmount = BigDecimal.ZERO;
+
+    /** V457: what the hospital gave up after an approved write-off. The patient never owes it. */
+    @Builder.Default
+    @Column(name = "written_off_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal writtenOffAmount = BigDecimal.ZERO;
+
+    /** What the payer still bears of the share: the amount less what was re-billed or written off. */
+    public BigDecimal borneAmount() {
+        return amount.subtract(zeroIfNull(rejectedAmount)).subtract(zeroIfNull(writtenOffAmount));
+    }
+
+    /** What is neither paid, re-billed nor written off: still expected from the payer. */
+    public BigDecimal openAmount() {
+        return borneAmount().subtract(zeroIfNull(paidAmount));
+    }
+
+    /**
+     * V457: the status of a claimed share that follows its amounts. Closed ({@link #openAmount} is 0): PAID when the
+     * payer paid any of it, else WRITTEN_OFF when any of it was written off, else REJECTED (all of it re-billed to
+     * the patient). Not closed: PARTIALLY_PAID once something was paid, else CLAIMED.
+     */
+    public PayerShareStatus settledStatus() {
+        boolean paid = zeroIfNull(paidAmount).signum() > 0;
+        if (openAmount().signum() > 0) {
+            return paid ? PayerShareStatus.PARTIALLY_PAID : PayerShareStatus.CLAIMED;
+        }
+        if (paid) {
+            return PayerShareStatus.PAID;
+        }
+        return zeroIfNull(writtenOffAmount).signum() > 0 ? PayerShareStatus.WRITTEN_OFF : PayerShareStatus.REJECTED;
+    }
+
+    private static BigDecimal zeroIfNull(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
 }

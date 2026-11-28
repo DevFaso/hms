@@ -613,6 +613,8 @@ export interface PortalPayerShare {
   amount: number;
   status: 'OPEN' | 'CLAIMED' | 'PAID' | 'REJECTED' | 'CANCELLED' | string;
   rejectionReason?: string | null;
+  /** Insurer claims PR 3: the part of the share my insurer refused and that is now mine to pay. */
+  rejectedAmount?: number | null;
 }
 
 export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {

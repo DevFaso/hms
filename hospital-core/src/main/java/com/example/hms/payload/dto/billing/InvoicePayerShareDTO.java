@@ -37,12 +37,30 @@ public class InvoicePayerShareDTO {
     private String subscriberName;
     private String subscriberRelationship;
 
+    /**
+     * Insurer claims plan PR 3 (V457): what the payer paid of the share, what it refused and the hospital re-billed
+     * to the patient, and what the hospital wrote off. {@code amount} less the three is still expected.
+     */
+    private BigDecimal paidAmount;
+    private BigDecimal rejectedAmount;
+    private BigDecimal writtenOffAmount;
+
+    /** A share with its coverage's policy and no settlement yet. */
+    @SuppressWarnings("java:S107") // the share's own fields, in the order of the list's columns
+    public InvoicePayerShareDTO(UUID id, String payerName, String planName, BigDecimal amount, int coverageYear,
+                                String status, String rejectionReason, LocalDateTime decidedAt,
+                                LocalDateTime createdAt, String policyNumber, String subscriberName,
+                                String subscriberRelationship) {
+        this(id, payerName, planName, amount, coverageYear, status, rejectionReason, decidedAt, createdAt,
+            policyNumber, subscriberName, subscriberRelationship, null, null, null);
+    }
+
     /** A share named without its coverage's policy (a test, or a coverage no longer readable at the hospital). */
     @SuppressWarnings("java:S107") // the share's own fields, in the order of the list's columns
     public InvoicePayerShareDTO(UUID id, String payerName, String planName, BigDecimal amount, int coverageYear,
                                 String status, String rejectionReason, LocalDateTime decidedAt,
                                 LocalDateTime createdAt) {
         this(id, payerName, planName, amount, coverageYear, status, rejectionReason, decidedAt, createdAt, null, null,
-            null);
+            null, null, null, null);
     }
 }

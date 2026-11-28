@@ -12,6 +12,8 @@
     </div>
   </div>
 
+  <app-claims-nav current="shares" />
+
   <div class="share-views" role="group" [attr.aria-label]="'R70_MONEY.SHARES.VIEWS' | translate">
     <button
       type="button"
@@ -250,28 +252,59 @@
               </table>
             </div>
           }
-          @if (canSettle(row)) {
+          <dl class="share-meta" [attr.data-testid]="'payer-share-settlement-' + row.id">
+            <div>
+              <dt>{{ 'INSURER_CLAIMS.SHARES.BATCH' | translate }}</dt>
+              <dd>
+                @if (row.claimBatchId) {
+                  <a [routerLink]="['/billing/bordereaux', row.claimBatchId]">{{
+                    row.claimBatchNumber || ('INSURER_CLAIMS.BATCHES.DRAFT_NAME' | translate)
+                  }}</a>
+                } @else {
+                  <span class="muted">{{ 'INSURER_CLAIMS.SHARES.NO_BATCH' | translate }}</span>
+                }
+              </dd>
+            </div>
+            @if (row.status !== 'OPEN') {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCHES.PAID' | translate }}</dt>
+                <dd>{{ row.paidAmount ?? 0 | cfa: 'XOF' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCHES.OUTSTANDING' | translate }}</dt>
+                <dd>{{ row.openAmount ?? 0 | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if ((row.rejectedAmount ?? 0) > 0) {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCH.REBILLED' | translate }}</dt>
+                <dd>{{ row.rejectedAmount ?? 0 | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if ((row.writtenOffAmount ?? 0) > 0) {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.BATCH.WRITTEN_OFF' | translate }}</dt>
+                <dd>{{ row.writtenOffAmount ?? 0 | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (row.decidedAt && row.status !== 'OPEN') {
+              <div>
+                <dt>{{ 'INSURER_CLAIMS.SHARES.DECIDED_ON' | translate }}</dt>
+                <dd [attr.data-testid]="'payer-share-decided-' + row.id">
+                  {{ row.decidedAt | dayMonth: undefined : true }}
+                </dd>
+              </div>
+            }
+          </dl>
+          @if (row.rejectionReason) {
+            <p class="share-warning" [attr.data-testid]="'payer-share-refusal-' + row.id">
+              {{
+                'INSURER_CLAIMS.SHARES.REFUSAL_REASON' | translate: { reason: row.rejectionReason }
+              }}
+            </p>
+          }
+          @if (canReject(row)) {
             <div class="share-actions">
-              @if (canClaim(row)) {
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  [disabled]="busy() === row.id"
-                  [attr.data-testid]="'payer-share-claim-' + row.id"
-                  (click)="decide(row, 'claim')"
-                >
-                  {{ 'R70_MONEY.SHARES.CLAIM' | translate }}
-                </button>
-              }
-              <button
-                type="button"
-                class="btn-primary btn-sm"
-                [disabled]="busy() === row.id"
-                [attr.data-testid]="'payer-share-paid-' + row.id"
-                (click)="markPaid(row)"
-              >
-                {{ 'R70_MONEY.SHARES.PAID' | translate }}
-              </button>
               <button
                 type="button"
                 class="btn-secondary btn-sm"

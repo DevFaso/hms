@@ -133,6 +133,7 @@
     "IMAGING.PATIENT": "Patient",
     "IMAGING.REPORT_VERSION": "Version",
     "IMAGING.TECHNIQUE": "Technique",
+    "INSURER_CLAIMS.PAYMENT_METHOD.MOBILE_MONEY": "Mobile money",
     "INTAKE.ALLERGIES": "Allergies",
     "INTAKE.PATIENT": "Patient",
     "INTEGRATION_HEALTH.ACTION.OK": "OK",
