@@ -254,6 +254,9 @@ class InstrumentOutboxServiceImplTest {
     @Test
     void search_returnsScopedPageWithCountsAndNoPayload() {
         InstrumentOutbox row = message(InstrumentOutboxStatus.ERROR);
+        labOrder.getPatient().setFirstName("Awa");
+        labOrder.getPatient().setLastName("Kaboré");
+        labOrder.setLabTestDefinition(com.example.hms.model.LabTestDefinition.builder().name("Kaliémie").build());
         row.setLastError("SocketTimeoutException: read timed out");
         row.setAttempts(5);
 
@@ -272,6 +275,10 @@ class InstrumentOutboxServiceImplTest {
         assertThat(page.getContent().get(0).getPayload()).isNull();
         assertThat(page.getContent().get(0).getOrderingHospitalId()).isEqualTo(hospitalId);
         assertThat(page.getContent().get(0).getOrderingHospitalName()).isEqualTo("Ordering hospital");
+        // QA r81 D4168: the row says which order, patient and test it carries.
+        assertThat(page.getContent().get(0).getPatientName()).contains("Awa");
+        assertThat(page.getContent().get(0).getTestName()).isEqualTo("Kaliémie");
+        assertThat(page.getContent().get(0).getLabOrderCode()).isNotBlank();
         // QA D4078: the text of the exception never reaches the page.
         assertThat(page.getContent().get(0).getLastError())
             .isEqualTo("TIMEOUT").doesNotContain("Exception");

@@ -351,6 +351,11 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         return InstrumentOutboxResponseDTO.builder()
             .id(msg.getId())
             .labOrderId(msg.getLabOrder() != null ? msg.getLabOrder().getId() : null)
+            .labOrderCode(com.example.hms.mapper.LabOrderMapper.orderCodeOf(msg.getLabOrder()))
+            .patientName(msg.getLabOrder() != null && msg.getLabOrder().getPatient() != null
+                ? msg.getLabOrder().getPatient().getFullName() : null)
+            .testName(msg.getLabOrder() != null && msg.getLabOrder().getLabTestDefinition() != null
+                ? msg.getLabOrder().getLabTestDefinition().getName() : null)
             .orderingHospitalId(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
                 ? msg.getLabOrder().getHospital().getId() : null)
             .orderingHospitalName(msg.getLabOrder() != null && msg.getLabOrder().getHospital() != null
