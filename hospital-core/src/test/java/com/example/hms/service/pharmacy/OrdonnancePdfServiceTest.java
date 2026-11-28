@@ -151,6 +151,38 @@ class OrdonnancePdfServiceTest {
     }
 
     @Test
+    void asNeededInstructionAlignsWithTheMedicineFields() throws Exception {
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(6);
+        byte[] pdf = service.forPrescriber(rx.getId());
+        class Positions extends PDFTextStripper {
+            Float asNeeded;
+            Float quantity;
+            Positions() throws java.io.IOException { }
+            @Override protected void writeString(String text, java.util.List<org.apache.pdfbox.text.TextPosition> positions) {
+                int prnIndex = text.indexOf("Si besoin");
+                int quantityIndex = text.indexOf("Quantité");
+                if (prnIndex >= 0) asNeeded = positions.get(prnIndex).getXDirAdj();
+                if (quantityIndex >= 0) quantity = positions.get(quantityIndex).getXDirAdj();
+            }
+        }
+        try (var doc = PDDocument.load(pdf)) {
+            Positions positions = new Positions();
+            positions.getText(doc);
+            assertThat(positions.asNeeded).isNotNull();
+            assertThat(positions.quantity).isNotNull();
+            assertThat(positions.asNeeded).isCloseTo(positions.quantity, org.assertj.core.data.Offset.offset(1.0f));
+        }
+    }
+
+    @Test
+    void printedQuantityUsesTheCountedUnitPlural() throws Exception {
+        rx.setQuantity(new BigDecimal("21"));
+        rx.setQuantityUnit("gélule");
+        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("21 gélules");
+    }
+
+    @Test
     void knownSpecialtyIsTranslatedAndChildAgeUsesThePrescriptionDate() throws Exception {
         staff.setSpecialization("GENERAL_PRACTICE");
         patient.setDateOfBirth(LocalDate.of(2024, 11, 21));

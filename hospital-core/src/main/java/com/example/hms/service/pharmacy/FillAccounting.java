@@ -75,9 +75,6 @@ public final class FillAccounting {
         if (remaining == null) {
             return null;
         }
-        String amount = com.example.hms.utility.DisplayNumbers.quantity(remaining, locale);
-        return quantityUnit != null && !quantityUnit.isBlank()
-                ? amount + " " + quantityUnit.trim()
-                : amount;
+        return com.example.hms.utility.DisplayNumbers.countedUnit(remaining, quantityUnit, locale);
     }
 }

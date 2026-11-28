@@ -54,6 +54,11 @@ export interface LaborEpisodeResponse {
   registrationId: string | null;
   maternalHistoryId: string | null;
   admittedByStaffName: string | null;
+  /**
+   * QA r81 D4113: set when she was under the hospital's safeguarding age at admission (provisional
+   * rule, under 13 by default); a safeguarding review is open for her.
+   */
+  minorSafeguardingUnderYears?: number | null;
   laborOnsetAt: string | null;
   admittedAt: string;
   membraneStatus: MembraneStatus | null;

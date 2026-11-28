@@ -3243,6 +3243,50 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        void r81_d4115_aSecondQueuedWalkInTheSameDayInTheSameDepartmentIsRefused() {
+            // QA r81 D4115: the queue listed the patient twice. Only a visit still in the queue counts.
+            when(encounterRepository
+                .existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
+                    eq(hospitalId), any(), eq(departmentId), eq(com.example.hms.enums.EncounterType.CONSULTATION),
+                    eq(java.util.EnumSet.of(EncounterStatus.ARRIVED, EncounterStatus.TRIAGE,
+                        EncounterStatus.WAITING_FOR_PHYSICIAN)),
+                    any(), any()))
+                .thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+            request.setStatus(EncounterStatus.ARRIVED);
+
+            assertThatThrownBy(() -> service.createEncounter(request, locale))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    e -> assertThat(e.getMessageKey()).isEqualTo("encounter.duplicateOpenVisit"));
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        void r81_d4115_anEmergencyWalkInIsNeverRefusedAtTheDesk() {
+            // Review of #1378 F6 / QA D1476: a patient seen this morning (READY_FOR_DISCHARGE) or still queued
+            // returns with a new emergency: the walk-in is accepted, whatever the same-day visits.
+            lenient().when(encounterRepository
+                .existsByHospital_IdAndPatient_IdAndDepartment_IdAndEncounterTypeAndStatusInAndEncounterDateBetween(
+                    any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(true);
+            Encounter fresh = encounter();
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            request.setStatus(EncounterStatus.ARRIVED);
+
+            service.createEncounter(request, locale);
+
+            verify(encounterRepository).save(any(Encounter.class));
+        }
+
+        @Test
         void d761_aClinicianEncounterWithNoStatusKeepsItsInProgressDefault() {
             // Path re-verified: the encounters page posts no status.
             Encounter fresh = encounter();

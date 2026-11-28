@@ -1409,6 +1409,7 @@
                   </label>
                   <textarea
                     id="cds-override-reason"
+                    aria-describedby="cds-override-reason-hint"
                     name="cds-override-reason"
                     rows="2"
                     maxlength="1024"
@@ -1416,6 +1417,9 @@
                     [(ngModel)]="form.overrideReason"
                     data-testid="cds-override-reason"
                   ></textarea>
+                  <small id="cds-override-reason-hint">{{
+                    'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate
+                  }}</small>
                 }
               </div>
             } @else if (!createdWithAdvisories()) {
@@ -1851,6 +1855,7 @@
               >
               <textarea
                 id="rx-sign-allergy-reason"
+                aria-describedby="rx-sign-allergy-reason-hint"
                 name="signAllergyReason"
                 rows="3"
                 maxlength="1024"
@@ -1859,6 +1864,9 @@
                 data-testid="rx-sign-allergy-reason"
                 [(ngModel)]="signAllergyReason"
               ></textarea>
+              <small id="rx-sign-allergy-reason-hint">{{
+                'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate
+              }}</small>
             </div>
             @if (signAlertIsAboveLimit()) {
               <label class="checkbox-label">

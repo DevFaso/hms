@@ -375,6 +375,17 @@ class TransferServiceImplTest {
     }
 
     @Test
+    void anIsolationOverrideRefusesShortReasonsWithoutReservingTheBed() {
+        when(precautionRepository.findActiveForPatient(patient.getId()))
+            .thenReturn(List.of(precaution(IsolationPrecautionType.AIRBORNE)));
+        for (String reason : List.of("ok", "          ", "123456789")) {
+            TransferOrderRequestDTO request = base().isolationOverride(true).isolationOverrideReason(reason).build();
+            assertThatThrownBy(() -> service.requestTransfer(request)).isInstanceOf(BusinessException.class);
+        }
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+    }
+
+    @Test
     void anOverrideWithoutAReasonIsRefused() {
         when(precautionRepository.findActiveForPatient(patient.getId()))
             .thenReturn(List.of(precaution(IsolationPrecautionType.AIRBORNE)));

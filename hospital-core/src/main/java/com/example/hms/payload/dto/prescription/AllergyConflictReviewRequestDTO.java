@@ -1,7 +1,6 @@
 package com.example.hms.payload.dto.prescription;
 
 import com.example.hms.enums.AllergyReviewDecision;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -30,8 +29,11 @@ public class AllergyConflictReviewRequestDTO {
     @Size(max = 1000)
     private String plan;
 
-    /** The clinical rationale. Mandatory. */
-    @NotBlank(message = "{allergy.review.rationaleRequired}")
+    /**
+     * The clinical rationale. Mandatory, at least 10 non-whitespace characters (QA r81 D4108 class,
+     * ClinicalOverrideReasonRequired), refused at the edge with the other fields.
+     */
+    @com.example.hms.validation.ClinicalOverrideReasonRequired
     @Size(max = 1000, message = "{allergy.review.rationaleTooLong}")
     private String rationale;
 

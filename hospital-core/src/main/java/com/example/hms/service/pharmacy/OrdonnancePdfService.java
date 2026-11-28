@@ -297,14 +297,14 @@ public class OrdonnancePdfService {
                 com.example.hms.service.emar.MedicationRoutes.label(rx.getRoute(), locale), 10f);
         pdf.field("   " + label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 10f);
         if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(rx)) {
-            pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, "   " + (rx.getPrnMinIntervalHours() != null
+            pdf.indentedParagraph(PharmacyPdfWriter.REGULAR, 10f, (rx.getPrnMinIntervalHours() != null
                     ? label(locale, "pdf.rxcopy.asNeededInterval", rx.getPrnMinIntervalHours())
                     : label(locale, "pdf.rxcopy.asNeeded")));
         }
         pdf.field("   " + label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 10f);
         if (rx.getQuantity() != null) {
             pdf.field("   " + label(locale, "pdf.ordonnance.quantity"),
-                    joinNonBlank(" ", com.example.hms.utility.DisplayNumbers.quantity(rx.getQuantity(), locale), rx.getQuantityUnit()), 10f);
+                    com.example.hms.utility.DisplayNumbers.countedUnit(rx.getQuantity(), rx.getQuantityUnit(), locale), 10f);
         }
         if (rx.getRefillsAllowed() != null && rx.getRefillsAllowed() > 0) {
             pdf.field("   " + label(locale, "pdf.ordonnance.refills"), String.valueOf(rx.getRefillsAllowed()), 10f);

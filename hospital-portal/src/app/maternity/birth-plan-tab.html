@@ -37,6 +37,7 @@
       [showMrnHint]="true"
       [hospitalId]="hospitalId"
       inputId="bp-filter-patient"
+      maternalOnly
       [selected]="filterPatient()"
       (selectedChange)="onFilterPatientPicked($event)"
     />
@@ -337,6 +338,7 @@
               [hospitalId]="hospitalId"
               required
               inputId="bp-patient"
+              maternalOnly
               [selected]="planPatient()"
               (selectedChange)="onPlanPatientPicked($event)"
             />

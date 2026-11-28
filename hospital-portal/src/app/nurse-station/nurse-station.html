@@ -1594,9 +1594,12 @@
       <!-- QA D1304 (D1272 NOT_FIXED in round 28): the label is visible and
            starred, like the witness below it; an sr-only label showed the
            reader no marker. -->
-      <label class="mar-reason-label" for="mar-reason-input"
-        >{{ 'NURSE.MAR_REASON_LABEL' | translate }} *</label
-      >
+      <label class="mar-reason-label" for="mar-reason-input">
+        {{ 'NURSE.MAR_REASON_LABEL' | translate }} *
+        @if (reasonPrompt()?.action === 'GIVEN') {
+          <small>{{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}</small>
+        }
+      </label>
       <textarea
         id="mar-reason-input"
         class="reason-input"
@@ -1729,7 +1732,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-rr">{{ 'NURSE.RESP_RATE' | translate }} (bpm)</label>
+          <label for="vf-rr">{{ 'NURSE.RESP_RATE' | translate }} (/min)</label>
           <input
             id="vf-rr"
             type="number"
@@ -1879,12 +1882,14 @@
           />
         </div>
         <!-- Policy 2026-11-20 (provisional): optional additional concerns, read by the server's maternal early warning. -->
-        <div class="vitals-field vitals-field-full">
-          <app-maternal-concerns
-            [selected]="vitalsForm().maternalConcerns ?? []"
-            (selectedChange)="updateVitalsMaternalConcerns($event)"
-          />
-        </div>
+        @if (showVitalsMaternalConcerns()) {
+          <div class="vitals-field vitals-field-full">
+            <app-maternal-concerns
+              [selected]="vitalsForm().maternalConcerns ?? []"
+              (selectedChange)="updateVitalsMaternalConcerns($event)"
+            />
+          </div>
+        }
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea

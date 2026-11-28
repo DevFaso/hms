@@ -23,6 +23,7 @@ import { Subscription } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
@@ -52,6 +53,7 @@ export interface NursingNotePart {
     SubmitGuardDirective,
     TranslateModule,
     ServerTimePipe,
+    DateTimePipe,
     EnumLabelPipe,
     CredentialsLabelPipe,
   ],

@@ -27,6 +27,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class DeathRecordAmendmentDTO {
 
+    /** Recognised only to refuse attempts to change the recorded time explicitly. */
+    private LocalDateTime diedAt;
+
     /** Mandatory. An amended certificate with no account of why is worse than none. */
     @NotBlank
     @Size(max = 500)

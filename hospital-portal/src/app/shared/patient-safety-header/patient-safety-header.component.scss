@@ -65,6 +65,17 @@
   font-size: 0.9375rem;
 }
 
+// In a narrow clinical dialog, keep the blood group readable and let the
+// request link move to the next line rather than compressing the value.
+.psh-fact-blood {
+  flex-wrap: wrap;
+  max-width: 100%;
+
+  dt {
+    white-space: nowrap;
+  }
+}
+
 .psh-fact-allergies {
   flex: 1 1 16rem;
 }

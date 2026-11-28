@@ -84,6 +84,19 @@ public class MinorLabourSafeguarding {
         }
     }
 
+    /**
+     * QA r81 D4113: the threshold (in years) when this patient was in the covered band at this admission, so the
+     * labour card carries the vigilance mark; {@code null} otherwise, or with no birth date.
+     */
+    public Integer coveredThresholdYears(Patient patient, LocalDateTime admittedAt) {
+        if (patient == null) {
+            return null;
+        }
+        LocalDateTime at = admittedAt != null ? admittedAt : LocalDateTime.now();
+        OptionalInt age = ageAt(patient.getDateOfBirth(), at.toLocalDate());
+        return age.isPresent() && isCovered(age.getAsInt()) ? ageUnderYears : null;
+    }
+
     /** Whether a patient of this age at admission is in the covered band. */
     public boolean isCovered(int ageYears) {
         return ageYears >= 0 && ageYears < ageUnderYears;

@@ -654,7 +654,10 @@
           </label>
           @if (transferForm.isolationOverride) {
             <div class="form-row">
-              <label for="override-reason">{{ 'BED_BOARD.OVERRIDE_REASON' | translate }} *</label>
+              <label for="override-reason">
+                {{ 'BED_BOARD.OVERRIDE_REASON' | translate }} *
+                <small>{{ 'CLINICAL_OVERRIDE.MIN_REASON_HINT' | translate }}</small>
+              </label>
               <input
                 id="override-reason"
                 required

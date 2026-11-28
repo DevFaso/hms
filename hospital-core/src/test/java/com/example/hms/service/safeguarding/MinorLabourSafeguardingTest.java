@@ -68,6 +68,15 @@ class MinorLabourSafeguardingTest {
     }
 
     @Test
+    void theLabourCardMarkFollowsTheSameBand() {
+        // QA r81 D4113: the vigilance mark on the labour card names the threshold, for the covered band only.
+        assertThat(screen.coveredThresholdYears(agedAt(12, ADMITTED), ADMITTED)).isEqualTo(13);
+        assertThat(screen.coveredThresholdYears(agedAt(13, ADMITTED), ADMITTED)).isNull();
+        assertThat(screen.coveredThresholdYears(new Patient(), ADMITTED)).isNull();
+        assertThat(screen.coveredThresholdYears(null, ADMITTED)).isNull();
+    }
+
+    @Test
     void theAgeIsCountedOnTheAdmissionDayNotToday() {
         // Twelve on the admission day, thirteen the day after: covered.
         Patient patient = new Patient();
