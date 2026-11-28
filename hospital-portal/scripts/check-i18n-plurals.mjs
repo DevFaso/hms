@@ -5,7 +5,8 @@
  *
  * 1. A counted text goes through the plural pipe (`'KEY' | plural: n`) or
  *    `pluralKey('KEY', n)`, and then `KEY_ONE` and `KEY_OTHER` exist in the
- *    three locales.
+ *    three locales. The pharmacy convention (`'KEY' | pluralKey: n`, or the
+ *    `pluralKey()` of a `plural-key` module) needs `KEY_ONE` and `KEY` instead.
  * 2. No NEW French text carries a parameter beside an optional plural
  *    (« {{count}} ligne(s) »). The ones that exist are pinned in
  *    scripts/i18n-plurals-baseline.json; the list may only shrink.
@@ -51,18 +52,32 @@ const failures = [];
 // Rule 1: every key handed to the plural pipe or pluralKey() has both forms everywhere.
 const KEY = String.raw`([A-Z][A-Z0-9_]*(?:\.[A-Za-z0-9_-]+)+)`;
 const QUOTE = '[\'"\x60]';
-const USES = [
-  new RegExp(QUOTE + KEY + QUOTE + String.raw`\s*\|\s*plural`, 'g'),
-  new RegExp(String.raw`pluralKey\(\s*` + QUOTE + KEY + QUOTE, 'g'),
-];
+// The pharmacy lane (QA D4194) counts with a second convention: `KEY` is the plural and
+// `KEY_ONE` the singular, through the `pluralKey` pipe or the `pluralKey()` of a
+// `plural-key` module (shared/i18n/plural-key.ts, shared/pipes/plural-key.pipe.ts).
+const PLURAL_PIPE = new RegExp(QUOTE + KEY + QUOTE + String.raw`\s*\|\s*plural(?!Key)\b`, 'g');
+const PLURAL_KEY_PIPE = new RegExp(QUOTE + KEY + QUOTE + String.raw`\s*\|\s*pluralKey\b`, 'g');
+const PLURAL_KEY_CALL = new RegExp(String.raw`pluralKey\(\s*` + QUOTE + KEY + QUOTE, 'g');
+const IMPORTS_PLURAL_KEY_MODULE = /from\s+['"][^'"]*\/plural-key(?:\.pipe)?['"]/;
+const ONE_OTHER = ['_ONE', '_OTHER'];
+const KEY_AND_ONE = ['_ONE', ''];
 let uses = 0;
 for (const file of walk(join(root, 'src', 'app'))) {
   const text = readFileSync(file, 'utf8');
-  for (const pattern of USES) {
+  const callForms =
+    IMPORTS_PLURAL_KEY_MODULE.test(text) || /[\\/]plural-key(?:\.pipe)?\.ts$/.test(file)
+      ? KEY_AND_ONE
+      : ONE_OTHER;
+  const checks = [
+    [PLURAL_PIPE, ONE_OTHER],
+    [PLURAL_KEY_PIPE, KEY_AND_ONE],
+    [PLURAL_KEY_CALL, callForms],
+  ];
+  for (const [pattern, suffixes] of checks) {
     for (const match of text.matchAll(pattern)) {
       uses++;
       for (const lang of LOCALES) {
-        for (const suffix of ['_ONE', '_OTHER']) {
+        for (const suffix of suffixes) {
           if (!(match[1] + suffix in locales[lang])) {
             failures.push(`${lang}: missing ${match[1]}${suffix} (${file.slice(root.length + 1)})`);
           }
