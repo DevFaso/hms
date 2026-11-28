@@ -9,8 +9,9 @@ import com.example.hms.payload.dto.LabInventoryItemRequestDTO;
 import com.example.hms.payload.dto.LabInventoryItemResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabInventoryItemRepository;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -123,11 +124,14 @@ public class LabInventoryServiceImpl implements LabInventoryService {
 
     // ── helpers ───────────────────────────────────────────────────
 
+    /** The acting scope decides, as in {@link LabFacilityAccess}: global view sees every hospital, a
+     *  super-admin pinned to a hospital sees that one, anyone else their own hospitals. */
     private boolean hasHospitalAccess(UUID hospitalId) {
         if (hospitalId == null) return false;
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) return true;
-        return HospitalScopeUtils.resolveScope(context).contains(hospitalId);
+        if (ActingScopeResolver.currentScope() instanceof ActingScope.Global) return true;
+        UUID superAdminPin = ActingScopeResolver.superAdminPinnedHospitalIdOrNull();
+        if (superAdminPin != null) return superAdminPin.equals(hospitalId);
+        return HospitalScopeUtils.resolveScope(HospitalContextHolder.getContextOrEmpty()).contains(hospitalId);
     }
 
     /**
