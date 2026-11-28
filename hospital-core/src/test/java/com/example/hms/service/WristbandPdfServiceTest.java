@@ -207,6 +207,40 @@ class WristbandPdfServiceTest {
     }
 
     @Test
+    void d4177_theSpecimenLabelCarriesTwoMorePatientIdentifiersAndTheTest() throws Exception {
+        com.example.hms.model.LabTestDefinition potassium = new com.example.hms.model.LabTestDefinition();
+        potassium.setName("Kaliémie");
+        LabOrder order = LabOrder.builder().hospital(hospital).patient(patient).labTestDefinition(potassium)
+            .priority("STAT").build();
+        order.setId(UUID.randomUUID());
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(order)
+            .accessionNumber("ACC-20261127-00007")
+            .barcodeValue("LAB-ACC-20261127-00007")
+            .specimenType("Blood")
+            .collectedAt(LocalDateTime.of(2026, 11, 27, 5, 22))
+            .build();
+        specimen.setId(UUID.randomUUID());
+        when(specimenRepository.findById(specimen.getId())).thenReturn(Optional.of(specimen));
+
+        String label = textOf(service.generateSpecimenLabelPdf(specimen.getId(), hospitalId));
+
+        // The name, then the date of birth and the record number at the ordering hospital.
+        assertThat(label).contains("Awa Kaboré", "pdf.wristband.dob 1 mai 1990", "pdf.wristband.mrn OUA-1234");
+        // The test the tube is for, and that it is not routine.
+        assertThat(label).contains("[STAT] Kaliémie");
+        assertThat(label).contains("ACC-20261127-00007", "Blood 27 nov. 2026 05:22");
+
+        order.setPriority("ROUTINE");
+        assertThat(textOf(service.generateSpecimenLabelPdf(specimen.getId(), hospitalId)))
+            .contains("Kaliémie").doesNotContain("[");
+        // A long test name is cut; the priority never is.
+        potassium.setName("Recherche et identification des anticorps irréguliers anti-érythrocytaires avec titrage");
+        order.setPriority("STAT");
+        assertThat(textOf(service.generateSpecimenLabelPdf(specimen.getId(), hospitalId))).contains("[STAT]");
+    }
+
+    @Test
     void specimenLabelPrintsForThePerformingLaboratory() throws Exception {
         Hospital orderingHospital = new Hospital();
         orderingHospital.setId(UUID.randomUUID());

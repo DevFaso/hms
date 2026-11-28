@@ -70,4 +70,19 @@ public class BloodGroupStatusDTO {
 
     /** The bag was given (true), or is out with no administration on record (false). Null with no exposure. */
     private Boolean rhdPositiveExposureConfirmed;
+
+    /**
+     * QA D4151 (r81): a severe or life-threatening transfusion reaction is on record for the patient at the acting
+     * hospital. A permanent safety line, like the antibody flag. Null when this read did not look (list reads).
+     */
+    private Boolean severeTransfusionReaction;
+
+    /** The newest such reaction: its type (ACUTE_HEMOLYTIC, ANAPHYLACTIC, ...). */
+    private com.example.hms.enums.TransfusionReactionType severeTransfusionReactionType;
+
+    /** When that reaction began. */
+    private java.time.LocalDateTime severeTransfusionReactionAt;
+
+    /** The hospital that holds that reaction's record (it follows the patient to every hospital). */
+    private String severeTransfusionReactionHospitalName;
 }

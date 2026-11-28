@@ -111,6 +111,28 @@ public class BloodUnit extends BaseEntity {
     private String notes;
 
     /**
+     * QA D4178 (V466): the laboratory's record of this bag coming back after it was issued: what became of it,
+     * who recorded it and when. Null while the bag never came back from an issue.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_outcome", length = 30)
+    private com.example.hms.enums.BloodUnitReturnOutcome returnOutcome;
+
+    @Column(name = "return_recorded_at")
+    private java.time.LocalDateTime returnRecordedAt;
+
+    @Column(name = "return_recorded_by_user_id")
+    private java.util.UUID returnRecordedByUserId;
+
+    @Size(max = 200)
+    @Column(name = "return_recorded_by_name", length = 200)
+    private String returnRecordedByName;
+
+    @Size(max = 500)
+    @Column(name = "return_note", length = 500)
+    private String returnNote;
+
+    /**
      * Expiry is evaluated against the CALLER's date rather than stored as a
      * status, because a unit does not become expired when someone looks at it.
      * The EXPIRED status exists for units explicitly retired in stock.

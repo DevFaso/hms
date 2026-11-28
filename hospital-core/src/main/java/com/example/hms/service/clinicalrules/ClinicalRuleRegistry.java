@@ -121,8 +121,10 @@ public final class ClinicalRuleRegistry {
             "service.impl.RefillApprovalServiceImpl", "service.pharmacy.RenewalAlertRouting"),
         rule(ClinicalRuleSetKey.DEFERRED_BILLING, DATE_2026_11_20,
             "service.pharmacy.DispenseBillingDeferralService"),
-        rule(ClinicalRuleSetKey.CONSULTATION_FEE, DATE_2026_11_20,
-            "service.billing.ConsultationChargeSource"),
+        // 2026-11-27 (.1), QA D4221: the consultation is billed the tariff of its kind (emergency by day or by
+        // night, follow-up, antenatal, postnatal, a specialty) when the price list has one; else the default.
+        rule(ClinicalRuleSetKey.CONSULTATION_FEE, "2026-11-27.1",
+            "service.billing.ConsultationChargeSource", "service.billing.ConsultationTariffContext"),
         rule(ClinicalRuleSetKey.EMERGENCY_EPISODE_CONSULTATION, DATE_2026_11_20,
             "service.billing.EmergencyEpisodeConsultation"),
         rule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING, DATE_2026_11_20,
@@ -157,6 +159,9 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
             "service.lab.CriticalResultEscalationSettingsService"),
+        // QA D4147 (r81): the 1-3s rejection rule of internal quality control.
+        rule(ClinicalRuleSetKey.LAB_QC_REJECTION, "2026-11-27.1",
+            "service.lab.LabQcAcceptanceRule"),
         // QA D3940 (r77): what a fill may take from the shelf against an order; substitution by ingredient and strength.
         // Review of #1380 (QA r81 D4181), coordinator decision: a missing price never blocks care.
         rule(ClinicalRuleSetKey.UNPRICED_FILL_RELEASE, "2026-11-27.1",
@@ -182,7 +187,11 @@ public final class ClinicalRuleRegistry {
             "service.escalation.UrgentEscalationSupport"),
         // Go-live D2 (V385): a formulary entry or a dose limit takes effect when a second person approves it.
         rule(ClinicalRuleSetKey.CATALOGUE_CHANGE_APPROVAL, "2026-11-26.1",
-            "service.formulary.MedicationCatalogApprovalPolicy"));
+            "service.formulary.MedicationCatalogApprovalPolicy"),
+        // QA D4140 (r81, V465): a nurse's or midwife's imaging request waits for a physician of the hospital.
+        rule(ClinicalRuleSetKey.IMAGING_ORDER_PHYSICIAN_AUTHORISATION, "2026-11-27.1",
+            "service.imaging.ImagingOrderAuthorisation",
+            "service.imaging.ImagingAuthorisationRequestFollowUp"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

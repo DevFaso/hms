@@ -25,7 +25,6 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -183,12 +182,12 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
 
     /**
      * A hospital the caller may act at on this request: one they hold a role at,
-     * and on a write outside the patient portal not one where they are only a
-     * patient ({@link HospitalContextRequestOverrides#refusesStaffWriteAt}).
+     * and outside the patient portal not one where they are only a
+     * patient ({@link HospitalContextRequestOverrides#actsOnlyAsPatientAt}).
      */
     private static boolean worksAt(HospitalContext context, UUID hospitalId) {
         return context.getPermittedHospitalIds().contains(hospitalId)
-            && !HospitalContextRequestOverrides.refusesStaffWriteAt(context, hospitalId);
+            && !HospitalContextRequestOverrides.actsOnlyAsPatientAt(context, hospitalId);
     }
 
     private boolean insideOrganisationScope(UUID hospitalId) {
@@ -213,16 +212,7 @@ public class RequestBodyScopeAdvice extends RequestBodyAdviceAdapter {
         if (pinned != null) {
             return Set.of(pinned);
         }
-        if (context.getPermittedHospitalIds() == null) {
-            return Set.of();
-        }
-        Set<UUID> held = new LinkedHashSet<>();
-        for (UUID hospitalId : context.getPermittedHospitalIds()) {
-            if (worksAt(context, hospitalId)) {
-                held.add(hospitalId);
-            }
-        }
-        return held;
+        return context.getPermittedHospitalIds() == null ? Set.of() : ActingScopeResolver.workingHospitalIds(context);
     }
 
     private static boolean actsAtAProviderFacility(HospitalContext context, Set<UUID> hospitals) {

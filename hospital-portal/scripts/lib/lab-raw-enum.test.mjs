@@ -43,6 +43,8 @@ const LAB_FREE_TEXT = {
     'an HL7 table-0085 code the screen does not name, shown as sent',
   'src/app/lab/lab-results/lab-results.html::r.qcOverrideReason':
     'r63 D2304: the reason the releaser typed to release despite a rejected QC run',
+  'src/app/lab/lab-results/lab-results.html::r.correctionReason':
+    'QA D4143: the reason the scientist typed when correcting a released result',
   'src/app/lab/lab-results/lab-results.html::r.expectedResult':
     'the expected answer typed on the test definition (QA D834)',
   'src/app/lab/lab-test-config/lab-test-config.html::def.category':

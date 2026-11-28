@@ -322,4 +322,121 @@ class TariffAtCheckoutTest {
         assertThat(draft.getInvoiceItems()).extracting(InvoiceItem::getItemDescription)
             .contains("Consultation générale");
     }
+
+    // ── QA D4221 (round 81): the consultation tariff follows the kind of visit ──
+
+    private static final String NIGHT_LABEL = "Consultation aux urgences (nuit, dimanche et jour férié)";
+
+    /** A time on the hospital's clock, written as the server stores it (its own zone). */
+    private static LocalDateTime onTheHospitalClock(int year, int month, int day, int hour, int minute) {
+        return java.time.ZonedDateTime.of(LocalDateTime.of(year, month, day, hour, minute),
+                java.time.ZoneId.of("Africa/Ouagadougou"))
+            .withZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    /** The consultation lines of the draft: the visit's lab and imaging orders are billed beside them. */
+    private static List<InvoiceItem> consultationLines(BillingInvoice draft) {
+        return draft.getInvoiceItems().stream()
+            .filter(line -> line.getItemDescription().startsWith("Consultation")).toList();
+    }
+
+    private void anEmergencyWalkInArrivingAt(LocalDateTime arrival) {
+        encounter.setAdmissionId(null);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        encounter.setArrivalTimestamp(arrival);
+        encounter.setEncounterDate(arrival);
+    }
+
+    private void theEmergencyTariffs(UUID hospital) {
+        tariff(hospital, PriceListLinkType.SYSTEM, "CONSULTATION_EMERGENCY", "Consultation aux urgences (jour)", "4000",
+            TODAY.minusDays(30));
+        tariff(hospital, PriceListLinkType.SYSTEM, "CONSULTATION_EMERGENCY_NIGHT", NIGHT_LABEL, "5000",
+            TODAY.minusDays(30));
+    }
+
+    @Test
+    @DisplayName("QA D4221: an emergency seen at 05:35 is billed the night tariff (CS-URG-NUIT, 5 000 F), not the general one")
+    void qaD4221_anEmergencyAtNightIsBilledTheNightTariff() {
+        theTestClinicGrid(hospitalId);
+        theEmergencyTariffs(hospitalId);
+        anEmergencyWalkInArrivingAt(onTheHospitalClock(2026, 11, 27, 5, 35));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 27, 6, 30))).orElseThrow();
+
+        assertThat(consultationLines(draft))
+            .extracting(InvoiceItem::getItemDescription, InvoiceItem::getQuantity, InvoiceItem::getUnitPrice,
+                InvoiceItem::getPriceSource)
+            .containsExactly(tuple(NIGHT_LABEL, 1, new BigDecimal("5000.00"), InvoiceLinePriceSource.TARIFF));
+    }
+
+    @Test
+    @DisplayName("QA D4221: the same emergency on a weekday morning is billed the day tariff (CS-URG, 4 000 F)")
+    void qaD4221_anEmergencyByDayIsBilledTheDayTariff() {
+        theTestClinicGrid(hospitalId);
+        theEmergencyTariffs(hospitalId);
+        anEmergencyWalkInArrivingAt(onTheHospitalClock(2026, 11, 27, 10, 0));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 27, 11, 0))).orElseThrow();
+
+        assertThat(consultationLines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .containsExactly(tuple("Consultation aux urgences (jour)", new BigDecimal("4000.00")));
+    }
+
+    @Test
+    @DisplayName("QA D4221: on a Sunday the emergency is billed the night-and-Sunday tariff at any hour")
+    void qaD4221_anEmergencyOnASundayIsBilledTheNightTariff() {
+        theTestClinicGrid(hospitalId);
+        theEmergencyTariffs(hospitalId);
+        anEmergencyWalkInArrivingAt(onTheHospitalClock(2026, 11, 29, 11, 0));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 29, 12, 0))).orElseThrow();
+
+        assertThat(consultationLines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .containsExactly(tuple(NIGHT_LABEL, new BigDecimal("5000.00")));
+    }
+
+    @Test
+    @DisplayName("QA D4221: a hospital whose list holds only the default consultation is billed it, as before")
+    void qaD4221_aHospitalWithOnlyTheDefaultTariffIsBilledAsBefore() {
+        theTestClinicGrid(hospitalId);
+        anEmergencyWalkInArrivingAt(onTheHospitalClock(2026, 11, 27, 5, 35));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 27, 6, 30))).orElseThrow();
+
+        assertThat(consultationLines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .containsExactly(tuple("Consultation générale", new BigDecimal("2000.00")));
+    }
+
+    @Test
+    @DisplayName("QA D4221: an ordinary consultation is not billed the emergency tariff the hospital also holds")
+    void qaD4221_anOrdinaryConsultationKeepsTheDefaultTariff() {
+        theTestClinicGrid(hospitalId);
+        theEmergencyTariffs(hospitalId);
+        encounter.setAdmissionId(null);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        encounter.setArrivalTimestamp(onTheHospitalClock(2026, 11, 27, 5, 35));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 27, 6, 30))).orElseThrow();
+
+        assertThat(consultationLines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .containsExactly(tuple("Consultation générale", new BigDecimal("2000.00")));
+    }
+
+    @Test
+    @DisplayName("QA D4221: a visit of the paediatrics department is billed that specialty's tariff")
+    void qaD4221_aSpecialtyVisitIsBilledItsDepartmentsTariff() {
+        theTestClinicGrid(hospitalId);
+        tariff(hospitalId, PriceListLinkType.SYSTEM, "CONSULTATION_PAEDIATRICS", "Consultation spécialisée pédiatrie",
+            "5000", TODAY.minusDays(30));
+        encounter.setAdmissionId(null);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        com.example.hms.model.Department paediatrics = new com.example.hms.model.Department();
+        paediatrics.setName("Pédiatrie");
+        encounter.setDepartment(paediatrics);
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 27, 9, 30))).orElseThrow();
+
+        assertThat(consultationLines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .containsExactly(tuple("Consultation spécialisée pédiatrie", new BigDecimal("5000.00")));
+    }
 }

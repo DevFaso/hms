@@ -230,6 +230,11 @@ public class StaffServiceImpl implements StaffService {
         validateBaseStaffRequirements(dto);
 
         User user = resolveStaffUser(dto.getUserEmail());
+        // r81: a staff record belongs to one account. An edit keeps it; another person is a
+        // new staff record, created where that person holds a role.
+        if (existingStaff.getUser() != null && !existingStaff.getUser().getId().equals(user.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("userEmail", "staff.user.unchangeable");
+        }
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));

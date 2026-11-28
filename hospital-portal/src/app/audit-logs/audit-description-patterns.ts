@@ -637,6 +637,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital RhD positive exposure flag read \(transfusion safety, shown whatever the sharing choice\)$/,
   },
   {
+    // QA D4151 review: a severe transfusion reaction follows the patient across hospitals.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_SEVERE_REACTION',
+    re: /^Cross-hospital severe transfusion reaction read \(transfusion safety, shown whatever the sharing choice\)$/,
+  },
+  {
     // V380: the decision behind an emergency O positive release; the tier and the basis are in the details.
     key: 'AUDIT.DESC.O_POSITIVE_RELEASE_DECIDED',
     re: /^Emergency O positive release decision recorded for blood unit (\S+) against transfusion request (\S+)$/,
@@ -1303,6 +1308,19 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.WITNESS_CONFIRMATION_REFUSED',
     re: /^Controlled-drug movement witness confirmation refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
+  // QA D4141: the second bedside checker of a transfusion confirmed with their own factor, or was refused.
+  {
+    key: 'AUDIT.DESC.BEDSIDE_CHECK_CONFIRMED',
+    re: /^Transfusion bedside second check confirmed by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.BEDSIDE_CHECK_CONFIRMATION_REFUSED',
+    re: /^Transfusion bedside second check confirmation refused \((\S+)\)$/,
     params: ['reason'],
     localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },

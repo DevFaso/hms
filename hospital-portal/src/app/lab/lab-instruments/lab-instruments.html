@@ -80,6 +80,64 @@
               <option value="RETIRED">{{ 'LAB_INSTRUMENTS.STATUS_RETIRED' | translate }}</option>
             </select>
           </label>
+          <!-- QA D4153: the dates the list and its « en retard » flag are fed from. -->
+          <div class="form-dates" data-testid="instrument-dates">
+            <label
+              >{{ 'LAB_INSTRUMENTS.INSTALLATION_DATE' | translate }}
+              <input
+                type="date"
+                class="keneya-form-control"
+                [(ngModel)]="form.installationDate"
+                name="installationDate"
+                data-testid="instrument-installationDate"
+                data-server-field="installationDate"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.LAST_CALIBRATION_DATE' | translate }}
+              <input
+                type="date"
+                class="keneya-form-control"
+                [(ngModel)]="form.lastCalibrationDate"
+                name="lastCalibrationDate"
+                data-testid="instrument-lastCalibrationDate"
+                data-server-field="lastCalibrationDate"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.NEXT_CALIBRATION_DATE' | translate }}
+              <input
+                type="date"
+                class="keneya-form-control"
+                [(ngModel)]="form.nextCalibrationDate"
+                name="nextCalibrationDate"
+                data-testid="instrument-nextCalibrationDate"
+                data-server-field="nextCalibrationDate"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.LAST_MAINTENANCE_DATE' | translate }}
+              <input
+                type="date"
+                class="keneya-form-control"
+                [(ngModel)]="form.lastMaintenanceDate"
+                name="lastMaintenanceDate"
+                data-testid="instrument-lastMaintenanceDate"
+                data-server-field="lastMaintenanceDate"
+              />
+            </label>
+            <label
+              >{{ 'LAB_INSTRUMENTS.NEXT_MAINTENANCE_DATE' | translate }}
+              <input
+                type="date"
+                class="keneya-form-control"
+                [(ngModel)]="form.nextMaintenanceDate"
+                name="nextMaintenanceDate"
+                data-testid="instrument-nextMaintenanceDate"
+                data-server-field="nextMaintenanceDate"
+              />
+            </label>
+          </div>
           <label
             >{{ 'LAB_INSTRUMENTS.NOTES' | translate }}
             <textarea [(ngModel)]="form.notes" name="notes" rows="3"></textarea>

@@ -111,6 +111,8 @@ class TransfusionRunningBagPostgresIT {
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    /** QA D4141: the second checker's own confirmation; its rules are BedsideVerifierConfirmationTest's. */
+    @MockitoBean private com.example.hms.service.transfusion.BedsideVerifierConfirmation bedsideVerifier;
 
     private final UUID hospital = UUID.randomUUID();
     private final UUID patient = UUID.randomUUID();
@@ -154,12 +156,20 @@ class TransfusionRunningBagPostgresIT {
             """).setParameter("id", user).setParameter("username", "r34-" + tag)
             .setParameter("email", "r34-" + tag + "@example.test").setParameter("phone", "+226" + tag)
             .executeUpdate();
+        // QA D4141: the second checker is of the bedside team, so the staff record carries a real nurse assignment.
+        UUID assignment = UUID.randomUUID();
+        entityManager.createNativeQuery("""
+            INSERT INTO security.user_role_hospital_assignment (id, user_id, role_id, hospital_id, is_active, assigned_at,
+                created_at, updated_at, confirmation_code, confirmation_sent_at)
+            SELECT :id, :u, r.id, :h, true, now(), now(), now(), :code, now() FROM security.roles r WHERE r.code = 'ROLE_NURSE'
+            """).setParameter("id", assignment).setParameter("u", user).setParameter("h", hospital)
+            .setParameter("code", tag).executeUpdate();
         entityManager.createNativeQuery("""
             INSERT INTO hospital.staff (id, user_id, hospital_id, assignment_id, active, employment_type, job_title,
                 created_at, updated_at)
             VALUES (:id, :u, :h, :a, true, 'FULL_TIME', 'NURSE', now(), now())
             """).setParameter("id", UUID.randomUUID()).setParameter("u", user).setParameter("h", hospital)
-            .setParameter("a", UUID.randomUUID()).executeUpdate();
+            .setParameter("a", assignment).executeUpdate();
     }
 
     private void actingAs(UUID user) {

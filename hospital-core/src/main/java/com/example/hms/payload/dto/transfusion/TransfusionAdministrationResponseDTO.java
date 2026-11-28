@@ -31,6 +31,9 @@ public class TransfusionAdministrationResponseDTO {
     private String administeredByName;
     private String verifiedByName;
     private String verificationMethod;
+    /** QA D4141: when the second checker confirmed with their own factor, and which one (TOTP, PASSWORD). */
+    private java.time.LocalDateTime verifierConfirmedAt;
+    private String verifierConfirmationMethod;
     private String stopReason;
     private String notes;
     private List<TransfusionReactionResponseDTO> reactions;

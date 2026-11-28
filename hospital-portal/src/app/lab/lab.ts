@@ -63,6 +63,7 @@ import { serverDateOrInstant, serverInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
@@ -91,6 +92,11 @@ class DialogSession {
   }
 }
 
+/** QA D4148: nothing collected yet: the prescriber's own order is theirs to cancel. */
+const CANCELLABLE_BY_PRESCRIBER = new Set(['ORDERED', 'PENDING']);
+/** QA D4148: no result yet: the laboratory manager or director cancels. */
+const CANCELLABLE_BY_LAB = new Set(['ORDERED', 'PENDING', 'COLLECTED', 'RECEIVED', 'IN_PROGRESS']);
+
 @Component({
   selector: 'app-lab',
   standalone: true,
@@ -110,6 +116,7 @@ class DialogSession {
     LabValuePipe,
     ResultRangeComponent,
     LabCorrectionBadgeComponent,
+    ReasonDialogComponent,
     RouterLink,
   ],
   templateUrl: './lab.html',
@@ -959,6 +966,41 @@ export class LabComponent implements OnInit {
     return (
       !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR' && o.status !== 'CANCELLED'
     );
+  }
+
+  /**
+   * QA D4148 (r81): the prescriber could not cancel their own order, and no screen offered a
+   * cancellation at all. Offered to the prescriber while nothing was collected (the server's rule),
+   * and to the laboratory manager or director until a result exists.
+   */
+  canCancelOrder(o: LabOrderResponse): boolean {
+    if (this.isIncomingExternal(o)) return false;
+    const me = this.auth.getUserProfile()?.id;
+    if (!!me && o.orderingStaffUserId === me && CANCELLABLE_BY_PRESCRIBER.has(o.status)) {
+      return true;
+    }
+    return this.canVoidOrder() && CANCELLABLE_BY_LAB.has(o.status);
+  }
+
+  readonly cancellingOrder = signal<LabOrderResponse | null>(null);
+  readonly cancelBusy = signal(false);
+
+  confirmCancelOrder(order: LabOrderResponse, reason: string): void {
+    if (this.cancelBusy()) return;
+    this.cancelBusy.set(true);
+    this.labService.cancelOrder(order.id, reason).subscribe({
+      next: () => {
+        this.cancelBusy.set(false);
+        this.cancellingOrder.set(null);
+        this.toast.success(this.translate.instant('LAB.CANCEL.DONE'));
+        this.loadOrders();
+      },
+      error: (err: unknown) => {
+        this.cancelBusy.set(false);
+        // The server's refusal names who may cancel at this stage.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.CANCEL.FAILED'));
+      },
+    });
   }
 
   openVoid(o: LabOrderResponse): void {

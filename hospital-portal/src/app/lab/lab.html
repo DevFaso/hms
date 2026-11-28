@@ -226,6 +226,18 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
+                  @if (canCancelOrder(order)) {
+                    <!-- QA D4148: the prescriber before collection, the laboratory until a result. -->
+                    <button
+                      class="action-link delete-link"
+                      [attr.data-testid]="'lab-cancel-' + order.id"
+                      [title]="'LAB.CANCEL.ACTION' | translate"
+                      [attr.aria-label]="'LAB.CANCEL.ACTION' | translate"
+                      (click)="cancellingOrder.set(order)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+                    </button>
+                  }
                   @if (canVoidOrder() && isVoidable(order)) {
                     <button
                       class="action-link void-link"
@@ -818,6 +830,18 @@
       </div>
     </div>
   </div>
+}
+
+<!-- QA D4148: cancelling an order states why. -->
+@if (cancellingOrder(); as co) {
+  <app-reason-dialog
+    titleKey="LAB.CANCEL.TITLE"
+    messageKey="LAB.CANCEL.EXPLAIN"
+    confirmKey="LAB.CANCEL.CONFIRM"
+    [busy]="cancelBusy()"
+    (confirmed)="confirmCancelOrder(co, $event)"
+    (cancelled)="cancellingOrder.set(null)"
+  />
 }
 
 <!-- ═══ VOID (ENTERED IN ERROR), QA D820 ═══ -->

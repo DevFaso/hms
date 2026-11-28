@@ -149,6 +149,48 @@ class LabResultServiceImplTrendScopeTest {
         verify(recordAccessPolicy).readableHospitalIds(actorId, patient.getId(), hospitalB.getId());
     }
 
+    /** QA D4143 (r81): the read of a correction carries the released value it replaced, of the same order. */
+    @Test
+    void d4143_theReadOfACorrectionCarriesTheReleasedValueItReplaced() {
+        LabResult replaced = row(hospitalB, null, 2);
+        LocalDateTime releasedAt = LocalDateTime.now().minusDays(2);
+        replaced.setReleasedAt(releasedAt);
+        LabResult correction = row(hospitalB, null, 1);
+        correction.setLabOrder(replaced.getLabOrder());
+        correction.setSupersedesResultId(replaced.getId());
+        when(labResultRepository.findById(replaced.getId())).thenReturn(Optional.of(replaced));
+        when(labResultRepository.findById(correction.getId())).thenReturn(Optional.of(correction));
+        when(labResultMapper.toResponseDTO(correction)).thenReturn(LabResultResponseDTO.builder().id("fix").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(correction));
+
+        LabResultResponseDTO response = service.getLabResultById(correction.getId(), Locale.ENGLISH);
+
+        assertThat(response.getSupersededResultValue()).isEqualTo(replaced.getResultValue());
+        assertThat(response.getSupersededReleasedAt()).isEqualTo(releasedAt);
+    }
+
+    /** QA D4143: a value never released is not shown as « replaced »; nor is a row of another order. */
+    @Test
+    void d4143_anUnreleasedOrForeignRowIsNotShownAsReplaced() {
+        LabResult unreleased = row(hospitalB, null, 2);
+        LabResult correction = row(hospitalB, null, 1);
+        correction.setLabOrder(unreleased.getLabOrder());
+        correction.setSupersedesResultId(unreleased.getId());
+        when(labResultRepository.findById(unreleased.getId())).thenReturn(Optional.of(unreleased));
+        when(labResultRepository.findById(correction.getId())).thenReturn(Optional.of(correction));
+        when(labResultMapper.toResponseDTO(correction)).thenReturn(LabResultResponseDTO.builder().id("fix").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(correction));
+        assertThat(service.getLabResultById(correction.getId(), Locale.ENGLISH).getSupersededResultValue()).isNull();
+
+        LabResult foreign = row(hospitalB, null, 3);
+        foreign.setReleasedAt(LocalDateTime.now().minusDays(3));
+        correction.setSupersedesResultId(foreign.getId());
+        when(labResultRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        assertThat(service.getLabResultById(correction.getId(), Locale.ENGLISH).getSupersededResultValue()).isNull();
+    }
+
     @Test
     void accountingThatFailsToResolveTheScopeDoesNotFailTheRead() {
         // Scope resolves for the guard and the trend, then fails on the

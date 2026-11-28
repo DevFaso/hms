@@ -77,6 +77,12 @@ export interface AntibodyStatusResponse {
   rhdPositiveExposedHospitalName?: string | null;
   /** The bag was given (true), or is out with no administration on record (false). */
   rhdPositiveExposureConfirmed?: boolean | null;
+  /** QA D4151: a severe or life-threatening transfusion reaction is on record at this hospital. */
+  severeTransfusionReaction?: boolean;
+  severeTransfusionReactionType?: TransfusionReactionType | null;
+  severeTransfusionReactionAt?: string | null;
+  /** QA D4151 review: the hospital that holds the reaction's record (it follows the patient). */
+  severeTransfusionReactionHospitalName?: string | null;
 }
 
 export interface AntibodyWorkupRequest {
@@ -144,6 +150,26 @@ export interface BloodUnitResponse {
   status: BloodUnitStatus;
   discardReason: string | null;
   notes: string | null;
+  /** QA D4178: issued, never hung, its request closed: out of the laboratory until its return is recorded. */
+  awaitingReturn?: boolean;
+  /** QA D4178: what the laboratory recorded when the bag came back from an issue (or did not). */
+  returnOutcome?: BloodUnitReturnOutcome | null;
+  returnRecordedAt?: string | null;
+  returnRecordedByName?: string | null;
+  returnNote?: string | null;
+}
+
+/** QA D4178: what became of a bag that was issued and never hung. */
+export type BloodUnitReturnOutcome = 'FIT_FOR_STOCK' | 'UNFIT_DESTROYED' | 'NOT_RECOVERED';
+
+export interface BloodUnitReturnRequest {
+  outcome: BloodUnitReturnOutcome;
+  /** The laboratory states the cold chain was kept while the bag was out. Required to restock it. */
+  coldChainKept?: boolean;
+  /** The laboratory states the bag came back intact and sealed. Required to restock it. */
+  bagIntact?: boolean;
+  /** What was found; required when the bag is destroyed or was not recovered. */
+  note?: string;
 }
 
 export interface BloodUnitRequest {
@@ -249,6 +275,8 @@ export interface TransfusionAdministrationResponse {
 export interface VerifierCandidate {
   userId: string;
   displayName: string;
+  /** QA D4141: what this colleague types to confirm a second check: a code, a password, or nothing they can give. */
+  confirmationMethod?: 'TOTP' | 'PASSWORD' | 'UNAVAILABLE';
 }
 
 export type EmergencyReleaseType =
@@ -560,6 +588,11 @@ export interface TransfusionAdministrationRequest {
   bloodUnitId: string;
   /** The independent second bedside check. Never the caller themselves. */
   verifiedByUserId: string;
+  /**
+   * QA D4141: typed by the second checker themselves: their authenticator code, or their password.
+   * Sent once, never kept by the page after the call.
+   */
+  verifierSecret: string;
   verificationMethod?: string;
   notes?: string;
 }
@@ -678,6 +711,11 @@ export class TransfusionService {
 
   listAssignableUnits(): Observable<BloodUnitResponse[]> {
     return this.http.get<BloodUnitResponse[]>(`${this.baseUrl}/units/assignable`);
+  }
+
+  /** QA D4178: the laboratory records what became of a bag it issued and that was never hung. */
+  recordUnitReturn(unitId: string, body: BloodUnitReturnRequest): Observable<BloodUnitResponse> {
+    return this.http.post<BloodUnitResponse>(`${this.baseUrl}/units/${unitId}/return`, body);
   }
 
   discardUnit(unitId: string, reason: string): Observable<BloodUnitResponse> {

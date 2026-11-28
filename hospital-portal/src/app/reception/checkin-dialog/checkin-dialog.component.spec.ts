@@ -114,7 +114,8 @@ describe('CheckinDialogComponent', () => {
 
   it('QA D3258 (r70): shows the payer, plan, policy and validity the desk verifies', () => {
     const host = fixture.nativeElement as HTMLElement;
-    expect(mockReceptionService.getPatientSnapshot).toHaveBeenCalledWith('pat-1');
+    // QA D4221: the appointment checked in, so the suggestion is that visit's consultation tariff.
+    expect(mockReceptionService.getPatientSnapshot).toHaveBeenCalledWith('pat-1', 'appt-1');
     expect(host.querySelector('[data-testid="checkin-coverage-payer"]')?.textContent).toContain(
       'Mutuelle Test A',
     );

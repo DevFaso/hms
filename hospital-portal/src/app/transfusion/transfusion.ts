@@ -22,6 +22,7 @@ import {
   AntibodyWorkupStatus,
   BloodProductType,
   BloodUnitResponse,
+  BloodUnitReturnOutcome,
   BloodUnitStatus,
   EmergencyReleaseOptions,
   OPositiveRule,
@@ -133,6 +134,10 @@ export class TransfusionComponent implements OnInit {
    * the flag follows the patient, so it is read on its own, with or without a blood group on record here.
    */
   requestAntibody = signal<AntibodyStatusResponse | null>(null);
+  /** QA D4151: the i18n key of a severe reaction's type on record (never the raw enum). */
+  severeReactionTypeKey(known: AntibodyStatusResponse): string {
+    return `TRANSFUSION.REACTION_${known.severeTransfusionReactionType ?? 'OTHER'}`;
+  }
 
   /** The patient of the request being written is allo-immunised, by the group read here or by the patient's flag. */
   get requestPatientAlloImmunised(): boolean {
@@ -351,7 +356,12 @@ export class TransfusionComponent implements OnInit {
   /* ── Bedside modals ── */
   showHangModal = signal(false);
   hangSubmitting = signal(false);
-  hangForm = { bloodUnitId: '', verifiedByUserId: '', verificationMethod: 'Wristband scan' };
+  hangForm = {
+    bloodUnitId: '',
+    verifiedByUserId: '',
+    verifierSecret: '',
+    verificationMethod: 'Wristband scan',
+  };
   /** QA CX-008: colleagues the server accepts as the second check; a staff id was typed by hand. */
   verifierCandidates = signal<VerifierCandidate[]>([]);
   verifierCandidatesFailed = signal(false);
@@ -601,6 +611,16 @@ export class TransfusionComponent implements OnInit {
     this.transfusion.cancelRequest(request.id, reason).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('TRANSFUSION.REQUEST_CANCELLED'));
+        // QA D4178: a bag that had been issued stays out of stock; the laboratory is asked for it.
+        const out = (updated?.units ?? []).filter((u) => u.awaitingReturn).length;
+        if (out > 0) {
+          this.toast.warning(
+            this.translate.instant(
+              out === 1 ? 'TRANSFUSION.RETURN.BAGS_OUT_ONE' : 'TRANSFUSION.RETURN.BAGS_OUT_MANY',
+              { count: out },
+            ),
+          );
+        }
         this.cancelRequestBusy.set(false);
         this.cancellingRequest.set(null);
         this.showRequest(updated);
@@ -790,6 +810,105 @@ export class TransfusionComponent implements OnInit {
 
   discardUnit(unit: BloodUnitResponse): void {
     this.discardingUnit.set(unit);
+  }
+
+  /**
+   * QA D4178: a bag that was issued has left the laboratory. It is neither written off from this list
+   * nor put back by a cancelled request: the laboratory records its return, and what it found.
+   */
+  isOutOfTheLab(unit: BloodUnitResponse): boolean {
+    return unit.status === 'ISSUED';
+  }
+
+  /** The laboratory records the return of a bag that is out. */
+  canRecordReturn(unit: BloodUnitResponse): boolean {
+    return this.canLab && this.isOutOfTheLab(unit);
+  }
+
+  /** A bag still in the laboratory's stock can be written off; one that is out cannot. */
+  canDiscard(unit: BloodUnitResponse): boolean {
+    return (
+      this.canStock &&
+      unit.status !== 'TRANSFUSED' &&
+      unit.status !== 'DISCARDED' &&
+      !this.isOutOfTheLab(unit)
+    );
+  }
+
+  returningUnit = signal<BloodUnitResponse | null>(null);
+  returnBusy = signal(false);
+  returnForm: {
+    outcome: BloodUnitReturnOutcome | '';
+    coldChainKept: boolean;
+    bagIntact: boolean;
+    note: string;
+  } = { outcome: '', coldChainKept: false, bagIntact: false, note: '' };
+  readonly returnOutcomes: readonly BloodUnitReturnOutcome[] = [
+    'FIT_FOR_STOCK',
+    'UNFIT_DESTROYED',
+    'NOT_RECOVERED',
+  ];
+
+  openReturn(unit: BloodUnitResponse): void {
+    this.returnForm = { outcome: '', coldChainKept: false, bagIntact: false, note: '' };
+    this.returningUnit.set(unit);
+  }
+
+  closeReturn(): void {
+    this.returningUnit.set(null);
+  }
+
+  /** Back in stock takes the two statements; out of stock takes what was found. */
+  returnIncomplete(): boolean {
+    const form = this.returnForm;
+    if (!form.outcome) return true;
+    if (form.outcome === 'FIT_FOR_STOCK') return !form.coldChainKept || !form.bagIntact;
+    return !form.note.trim();
+  }
+
+  /** The fields the guard marks when the return is sent incomplete. */
+  returnMissingFields(): string[] {
+    const form = this.returnForm;
+    if (!form.outcome) return ['return-outcome-FIT_FOR_STOCK'];
+    if (form.outcome === 'FIT_FOR_STOCK') {
+      return [
+        ...(form.coldChainKept ? [] : ['return-cold-chain']),
+        ...(form.bagIntact ? [] : ['return-intact']),
+      ];
+    }
+    return ['return-note'];
+  }
+
+  submitReturn(): void {
+    const unit = this.returningUnit();
+    if (!unit || this.returnBusy() || this.returnIncomplete() || !this.returnForm.outcome) return;
+    const fit = this.returnForm.outcome === 'FIT_FOR_STOCK';
+    this.returnBusy.set(true);
+    this.transfusion
+      .recordUnitReturn(unit.id, {
+        outcome: this.returnForm.outcome,
+        coldChainKept: fit ? this.returnForm.coldChainKept : undefined,
+        bagIntact: fit ? this.returnForm.bagIntact : undefined,
+        note: this.returnForm.note.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(
+            this.translate.instant(
+              fit ? 'TRANSFUSION.RETURN.DONE_RESTOCKED' : 'TRANSFUSION.RETURN.DONE_OUT',
+            ),
+          );
+          this.returnBusy.set(false);
+          this.returningUnit.set(null);
+          this.loadUnits();
+        },
+        error: (err: unknown) => {
+          this.returnBusy.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.RETURN.ERROR'),
+          );
+        },
+      });
   }
 
   confirmDiscardUnit(unit: BloodUnitResponse, reason: string): void {
@@ -1247,6 +1366,7 @@ export class TransfusionComponent implements OnInit {
     this.hangForm = {
       bloodUnitId: unit.id,
       verifiedByUserId: '',
+      verifierSecret: '',
       verificationMethod: 'Wristband scan',
     };
     this.verifierCandidatesFailed.set(false);
@@ -1265,17 +1385,48 @@ export class TransfusionComponent implements OnInit {
 
   closeHang(): void {
     this.showHangModal.set(false);
+    // QA D4141: a colleague's code or password never outlives the dialog it was typed in.
+    this.hangForm.verifierSecret = '';
+  }
+
+  /**
+   * QA D4141: the second check is confirmed by the second checker, with their own factor. What
+   * the chosen colleague types: the code of their authenticator, or their password; a colleague
+   * with neither cannot confirm, and another one is chosen.
+   */
+  hangVerifierMethod(): 'TOTP' | 'PASSWORD' | 'UNAVAILABLE' | null {
+    const chosen = this.verifierCandidates().find(
+      (c) => c.userId === this.hangForm.verifiedByUserId,
+    );
+    return chosen ? (chosen.confirmationMethod ?? 'PASSWORD') : null;
+  }
+
+  /** The chosen colleague changed: what the previous one typed is not theirs. */
+  onHangVerifierChange(): void {
+    this.hangForm.verifierSecret = '';
+  }
+
+  hangIncomplete(): boolean {
+    return (
+      !this.hangForm.verifiedByUserId ||
+      this.hangVerifierMethod() === 'UNAVAILABLE' ||
+      !this.hangForm.verifierSecret
+    );
   }
 
   submitHang(): void {
     const request = this.selectedRequest();
-    if (!request || !this.hangForm.verifiedByUserId.trim()) return;
+    if (!request || this.hangIncomplete()) return;
     this.hangSubmitting.set(true);
+    const verifierSecret = this.hangForm.verifierSecret;
+    // Sent once: whatever the answer, the field is emptied (a code is spent, a password is not kept).
+    this.hangForm.verifierSecret = '';
     this.transfusion
       .startAdministration({
         requestId: request.id,
         bloodUnitId: this.hangForm.bloodUnitId,
         verifiedByUserId: this.hangForm.verifiedByUserId.trim(),
+        verifierSecret,
         verificationMethod: this.hangForm.verificationMethod.trim() || undefined,
       })
       .subscribe({

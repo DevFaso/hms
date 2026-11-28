@@ -496,6 +496,29 @@ export interface InvoicePage {
   size: number;
 }
 
+/** QA D4222 / D4223: what the invoice e-mail dialog offers before anything is sent. */
+export interface InvoiceMailRecipientOptions {
+  /** The patient's own address on file; null when there is none. */
+  patient: {
+    address: string;
+    /** False when a send to this address would be refused. */
+    usable: boolean;
+    /** The delivery ledger's code (OPTED_OUT, RECIPIENT_UNVERIFIED); null when usable. */
+    refusalCode: string | null;
+    refusalMessage: string | null;
+  } | null;
+  guarantors: {
+    guarantorId: string;
+    fullName: string;
+    relationship: string | null;
+    address: string;
+    primary: boolean;
+  }[];
+  maxRecipients: number;
+  reasonMaxLength: number;
+  messageMaxLength: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BillingService {
   private readonly http = inject(HttpClient);
@@ -795,8 +818,18 @@ export class BillingService {
     });
   }
 
-  /** Synchronous send; flips the invoice to SENT on success. attachPdf
-   *  defaults to false server-side, so pass it explicitly. */
+  /**
+   * QA D4222 / D4223 (round 81): the addresses on file this invoice may be
+   * mailed to (the patient's own, the active guarantors'), and whether a send
+   * to the patient's would be refused and why. Nothing is sent.
+   */
+  emailRecipients(id: string): Observable<InvoiceMailRecipientOptions> {
+    return this.http.get<InvoiceMailRecipientOptions>(`/billing-invoices/${id}/email-recipients`);
+  }
+
+  /** Synchronous send; the invoice keeps its status (QA D758). attachPdf
+   *  defaults to false server-side, so pass it explicitly. `reason` is
+   *  required by the server for an address that is on no file (QA D4223). */
   emailInvoice(
     id: string,
     data: {
@@ -806,6 +839,7 @@ export class BillingService {
       message?: string;
       locale?: string;
       attachPdf: boolean;
+      reason?: string;
     },
   ): Observable<{ status: string; sentAt?: string; error?: string }> {
     return this.http.post<{ status: string; sentAt?: string; error?: string }>(

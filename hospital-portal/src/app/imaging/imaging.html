@@ -271,11 +271,20 @@
                   </td>
                 }
                 <td>
-                  <span
-                    class="status-badge {{ getStatusClass(o.status) }}"
-                    data-testid="imaging-row-status"
-                    >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
-                  >
+                  @if (awaitsPhysician(o)) {
+                    <!-- QA D4140: a nurse's or midwife's request, not an order yet. -->
+                    <span
+                      class="status-badge status-preliminary"
+                      data-testid="imaging-row-awaiting-physician"
+                      >{{ 'IMAGING.AUTHORISE.AWAITING' | translate }}</span
+                    >
+                  } @else {
+                    <span
+                      class="status-badge {{ getStatusClass(o.status) }}"
+                      data-testid="imaging-row-status"
+                      >{{ o.status | enumLabel: 'imagingOrderStatus' }}</span
+                    >
+                  }
                   @if (o.authorizationPending) {
                     {{ ' '
                     }}<span
@@ -355,6 +364,43 @@
                         [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
+                      </button>
+                    }
+                    @if (canAuthoriseRequest(o)) {
+                      <button
+                        type="button"
+                        class="action-link"
+                        [attr.data-testid]="'imaging-authorise-' + o.id"
+                        [disabled]="!!authorisingId()"
+                        (click)="authoriseRequest(o)"
+                        [title]="'IMAGING.AUTHORISE.ACTION' | translate"
+                        [attr.aria-label]="'IMAGING.AUTHORISE.ACTION' | translate"
+                      >
+                        <span class="material-symbols-outlined">verified</span>
+                      </button>
+                    }
+                    @if (canDeclineRequest(o)) {
+                      <button
+                        type="button"
+                        class="action-link delete"
+                        [attr.data-testid]="'imaging-decline-' + o.id"
+                        (click)="declineRequest(o)"
+                        [title]="'IMAGING.AUTHORISE.DECLINE' | translate"
+                        [attr.aria-label]="'IMAGING.AUTHORISE.DECLINE' | translate"
+                      >
+                        <span class="material-symbols-outlined">block</span>
+                      </button>
+                    }
+                    @if (canWithdrawRequest(o)) {
+                      <button
+                        type="button"
+                        class="action-link delete"
+                        [attr.data-testid]="'imaging-withdraw-' + o.id"
+                        (click)="withdrawRequest(o)"
+                        [title]="'IMAGING.AUTHORISE.WITHDRAW' | translate"
+                        [attr.aria-label]="'IMAGING.AUTHORISE.WITHDRAW' | translate"
+                      >
+                        <span class="material-symbols-outlined">undo</span>
                       </button>
                     }
                     @if (isOrderCancellable(o.status)) {
@@ -1299,15 +1345,37 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
                 class="field-value"
-                ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
-                  ord.status | enumLabel: 'imagingOrderStatus'
-                }}</span></span
               >
+                @if (awaitsPhysician(ord)) {
+                  <span
+                    class="status-badge status-preliminary"
+                    data-testid="imaging-drawer-awaiting-physician"
+                    >{{ 'IMAGING.AUTHORISE.AWAITING' | translate }}</span
+                  >
+                } @else {
+                  <span class="status-badge {{ getStatusClass(ord.status) }}">{{
+                    ord.status | enumLabel: 'imagingOrderStatus'
+                  }}</span>
+                }
+              </span>
             </div>
+            <!-- QA D4140: a nurse or a midwife asks, a physician prescribes: each under their own name. -->
+            @if (ord.physicianAuthorisationRequired) {
+              <div class="detail-field" data-testid="imaging-drawer-requested-by">
+                <span class="field-label">{{
+                  'IMAGING.AUTHORISE.REQUESTED_BY' | translate
+                }}</span><span class="field-value">{{ ord.requestedByName || '—' }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span><span
                 class="field-value"
-                >{{ ord.orderingProviderName || '—' }}</span
+                data-testid="imaging-drawer-prescriber"
+                >{{
+                  awaitsPhysician(ord)
+                    ? ('IMAGING.AUTHORISE.NO_PRESCRIBER_YET' | translate)
+                    : ord.orderingProviderName || '—'
+                }}</span
               >
             </div>
             <div class="detail-field">
@@ -1471,6 +1539,51 @@
                     · {{ ref.orderedAt | serverTime | dateTime }}
                   }
                 </p>
+              }
+            </div>
+          }
+          <!-- QA D4140: what a pending request waits for, and who can end the wait. -->
+          @if (awaitsPhysician(ord)) {
+            <div class="detail-section" data-testid="imaging-drawer-awaiting-notice">
+              <p class="field-hint" role="status">
+                <span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span>
+                {{ 'IMAGING.AUTHORISE.NOTICE' | translate }}
+              </p>
+              @if (canAuthoriseRequest(ord) || canDeclineRequest(ord) || canWithdrawRequest(ord)) {
+                <div class="detail-actions">
+                  @if (canAuthoriseRequest(ord)) {
+                    <button
+                      type="button"
+                      class="btn-primary"
+                      data-testid="imaging-drawer-authorise"
+                      [disabled]="!!authorisingId()"
+                      (click)="authoriseRequest(ord)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+                      {{ 'IMAGING.AUTHORISE.ACTION' | translate }}
+                    </button>
+                  }
+                  @if (canDeclineRequest(ord)) {
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      data-testid="imaging-drawer-decline"
+                      (click)="declineRequest(ord)"
+                    >
+                      {{ 'IMAGING.AUTHORISE.DECLINE' | translate }}
+                    </button>
+                  }
+                  @if (canWithdrawRequest(ord)) {
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      data-testid="imaging-drawer-withdraw"
+                      (click)="withdrawRequest(ord)"
+                    >
+                      {{ 'IMAGING.AUTHORISE.WITHDRAW' | translate }}
+                    </button>
+                  }
+                </div>
               }
             </div>
           }
@@ -2010,7 +2123,7 @@
       (escaped)="cancelDeleteAction()"
     >
       <div class="modal-header">
-        <h2 id="imaging-dialog-4-title">{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
+        <h2 id="imaging-dialog-4-title">{{ cancelDialogTitleKey() | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"

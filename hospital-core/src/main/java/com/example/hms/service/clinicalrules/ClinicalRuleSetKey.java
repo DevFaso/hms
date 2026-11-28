@@ -51,6 +51,8 @@ public enum ClinicalRuleSetKey {
     SAME_DAY_PRICE_CORRECTION(ClinicalRuleArea.BILLING),
     TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
     CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB),
+    /** QA D4147 (r81): a control more than 3 SD from its target is rejected, never accepted by the operator. */
+    LAB_QC_REJECTION(ClinicalRuleArea.LAB),
     /** QA D3940 (r77): the product dispensed is the prescribed one, or a substitute of the same ingredient and strength. */
     DISPENSED_PRODUCT_SUBSTITUTION(ClinicalRuleArea.PRESCRIBING),
     /** Owner decision 2026-11-25 (V380): who decides an emergency O RhD positive release, by patient tier. */
@@ -63,6 +65,8 @@ public enum ClinicalRuleSetKey {
     CATALOGUE_CHANGE_APPROVAL(ClinicalRuleArea.PRESCRIBING),
     /** Scorecard K4 (V386): the one escalation ladder of every urgent clinical alert that is not a laboratory value. */
     URGENT_ALERT_ESCALATION(ClinicalRuleArea.VITALS),
+    /** QA D4140 (r81, V465): an imaging request placed by a nurse or a midwife waits for a physician's authorisation. */
+    IMAGING_ORDER_PHYSICIAN_AUTHORISATION(ClinicalRuleArea.IMAGING),
     /** Review of #1380 (QA r81 D4181): an unpriced fill leaves only on an urgency override or an open stay. */
     UNPRICED_FILL_RELEASE(ClinicalRuleArea.BILLING);
 

@@ -17,6 +17,9 @@ public interface ImagingOrderService {
 
     ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId);
 
+    /** QA D4140: whoever placed a request that still waits for a physician withdraws it, with a reason. */
+    ImagingOrderResponseDTO withdrawPendingRequest(UUID orderId, String reason);
+
     ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request);
 
     ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request, UUID signerUserId);

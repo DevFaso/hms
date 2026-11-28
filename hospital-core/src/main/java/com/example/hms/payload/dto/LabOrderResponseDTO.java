@@ -28,6 +28,11 @@ public class LabOrderResponseDTO {
     private java.time.LocalDate patientDateOfBirth;
     /** Lab requests list and drawer: the clinician who placed the order. */
     private String orderingStaffName;
+    /**
+     * QA D4148 (r81): the account of the clinician who placed the order, so the portal offers « annuler » to
+     * the prescriber of an order nothing was collected for. The service decides; this only shows the button.
+     */
+    private String orderingStaffUserId;
     private String hospitalId;
     private String hospitalName;
     /** Null when the ordering hospital performs the test itself. */
@@ -38,6 +43,11 @@ public class LabOrderResponseDTO {
     /** QA D648: the order's test definition no longer exists; labTestName is the "deleted test" label. */
     private boolean labTestDefinitionMissing;
     private String labTestCode;
+    /**
+     * QA D4176 (r81): the test is resulted through the culture and antibiogram workflow. The culture form
+     * offers only such orders; the others were listed there and refused on saving.
+     */
+    private boolean labTestCulture;
     /** QA D1095: the test definition's unit, which a result is entered in. */
     private String labTestUnit;
     /** r63 D2312: the test's reference ranges (critical limits included), for the warning at entry. */

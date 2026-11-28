@@ -226,13 +226,15 @@ class PatientMessageGateTest {
     void attachmentMailRechecksCurrentProofAfterThePatientSnapshotWasLoaded() {
         PatientMessageGate.OutgoingMail mail = new PatientMessageGate.OutgoingMail(
             List.of(patient.getEmail()), null, null, "cdx-subject", "cdx-body");
+        // QA D4222: the refusal names its reason, the trace row's own code.
         assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
-            new byte[] {1}, "cdx.pdf", "application/pdf")).isFalse();
+            new byte[] {1}, "cdx.pdf", "application/pdf"))
+            .contains(PatientMessageGate.AttachmentMailRefusal.RECIPIENT_UNVERIFIED);
         verifyNoInteractions(emailService);
         verify(ledger).recordUnverified(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL);
         when(currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, patient.getEmail())).thenReturn(true);
         assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
-            new byte[] {1}, "cdx.pdf", "application/pdf")).isTrue();
+            new byte[] {1}, "cdx.pdf", "application/pdf")).isEmpty();
         verify(emailService).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
@@ -246,9 +248,9 @@ class PatientMessageGateTest {
             List.of("claims@insurer.test"), List.of(), List.of(" SEYDOU.portal@example.test"), "s", "b");
 
         assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), toInsurer, null,
-            "f.pdf", "application/pdf")).isTrue();
+            "f.pdf", "application/pdf")).isEmpty();
         assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), bccPortal, null,
-            "f.pdf", "application/pdf")).isFalse();
+            "f.pdf", "application/pdf")).contains(PatientMessageGate.AttachmentMailRefusal.OPTED_OUT);
 
         verify(emailService).sendWithAttachment(List.of("claims@insurer.test"), List.of(), List.of(), "s", "b", null,
             "f.pdf", "application/pdf");
