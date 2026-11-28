@@ -130,8 +130,6 @@ class ActingScopeCoverageTest {
                 "controller/SuperAdminDashboardController.java", 1, VERIFIED_SIGNAL,
                 "service/AppointmentServiceImpl.java", 1, VERIFIED_SIGNAL,
                 "service/HospitalServiceImpl.java", 2, VERIFIED_SIGNAL,
-                "service/LabInstrumentServiceImpl.java", 1, VERIFIED_SIGNAL + "; " + LAB_PR,
-                "service/LabInventoryServiceImpl.java", 1, VERIFIED_SIGNAL + "; " + LAB_PR,
                 "service/LabResultServiceImpl.java", 1, VERIFIED_SIGNAL + "; " + LAB_PR,
                 "service/PrenatalSchedulingServiceImpl.java", 1, VERIFIED_SIGNAL,
                 "service/StaffServiceImpl.java", 2, VERIFIED_SIGNAL,

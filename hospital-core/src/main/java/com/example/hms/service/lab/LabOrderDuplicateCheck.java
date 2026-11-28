@@ -165,7 +165,7 @@ public class LabOrderDuplicateCheck {
         String description = (acknowledged
             ? "Duplicate warning acknowledged (order anyway): lab order "
             : "Duplicate warning not acknowledged: lab order ")
-            + orderId + " placed while active order " + referenceId + " of the same test is open";
+            + orderId + " placed while recent order " + referenceId + " of the same test exists";
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()

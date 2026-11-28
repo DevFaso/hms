@@ -64,7 +64,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             requireDefinitionVisibleAt(testDef, request.getHospitalId());
             // QA r81 D4173: a QC run is a measured value against a numeric target, so a
             // culture or a qualitative test (one that states an expected answer) cannot carry one.
-            if (testDef.isCulture() || testDef.hasExpectedResult()) {
+            if (!testDef.takesNumericQc()) {
                 throw new FieldBusinessException("testDefinitionId", "lab.qc.quantitativeOnly");
             }
             target = qcTargetRepository.findByHospitalIdAndTestDefinition_IdAndQcLevel(

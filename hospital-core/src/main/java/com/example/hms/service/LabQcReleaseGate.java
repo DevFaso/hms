@@ -43,6 +43,11 @@ public class LabQcReleaseGate {
         if (hospitalId == null || testDefinitionId == null) {
             return Optional.empty();
         }
+        // QA r81 D4173 (review of #1379, F5): a culture or qualitative test takes no QC run, so a run
+        // recorded on one before that rule can never be followed by a passing one and must not hold results.
+        if (!order.getLabTestDefinition().takesNumericQc()) {
+            return Optional.empty();
+        }
         for (LabQcEventLevel level : LabQcEventLevel.values()) {
             Optional<LabQcEvent> latest = qcEventRepository
                 .findFirstByHospitalIdAndTestDefinition_IdAndQcLevelOrderByRecordedAtDescCreatedAtDesc(

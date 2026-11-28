@@ -52,6 +52,7 @@ public class LabInventoryController {
 
     @Operation(summary = "Search inventory items for a hospital")
     @PostMapping("/hospital/{hospitalId}/search")
+    @com.example.hms.security.ReadsOnly("a search: the term travels in the body so it stays out of URLs and logs")
     @PreAuthorize("hasAnyAuthority('ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_TECHNICIAN','ROLE_LAB_SCIENTIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Page<LabInventoryItemResponseDTO>> search(
             @PathVariable UUID hospitalId, @ParameterObject Pageable pageable,

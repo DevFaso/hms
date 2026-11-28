@@ -927,7 +927,7 @@
                               date:
                                 (known.severeTransfusionReactionAt
                                   | serverTime
-                                  | date: 'shortDate') ?? '',
+                                  | date: 'mediumDate') ?? '',
                               hospital: known.severeTransfusionReactionHospitalName ?? '',
                             }
                     }}
@@ -2253,12 +2253,12 @@
           {{ 'TRANSFUSION.RETURN.TITLE' | translate: { unit: u.unitNumber } }}
         </h2>
         <button
-          class="modal-close"
+          class="btn-close"
           (click)="closeReturn()"
           [title]="'COMMON.CLOSE' | translate"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          &times;
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">

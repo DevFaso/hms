@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import org.springframework.security.access.AccessDeniedException;
 
@@ -17,9 +19,16 @@ final class LabFacilityAccess {
     private LabFacilityAccess() { }
 
     static void require(UUID hospitalId, boolean manage) {
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         if (hospitalId == null) throw new AccessDeniedException("access.denied");
-        if (context.isSuperAdmin()) return;
+        // The super-admin decision is the resolver's: global view reads and manages every hospital; a
+        // super-admin pinned to a hospital acts at that hospital only.
+        if (ActingScopeResolver.currentScope() instanceof ActingScope.Global) return;
+        UUID superAdminPin = ActingScopeResolver.superAdminPinnedHospitalIdOrNull();
+        if (superAdminPin != null) {
+            if (superAdminPin.equals(hospitalId)) return;
+            throw new AccessDeniedException("access.denied");
+        }
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         if (!HospitalScopeUtils.resolveScope(context).contains(hospitalId)) {
             throw new AccessDeniedException("access.denied");
         }

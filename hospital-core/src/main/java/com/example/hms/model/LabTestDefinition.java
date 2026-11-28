@@ -233,6 +233,15 @@ public class LabTestDefinition extends BaseEntity {
     private Integer versionNumber = 1;
 
     /**
+     * QA r81 D4173: whether a quality-control run (a measured value against a numeric target) applies to
+     * this test. A culture or a qualitative test (one that states an expected answer) takes none: the QC
+     * form refuses a run on it and the release gate ignores old runs on it.
+     */
+    public boolean takesNumericQc() {
+        return !culture && !hasExpectedResult();
+    }
+
+    /**
      * QA D834: a qualitative test states the answer it expects instead of a numeric range.
      */
     public boolean hasExpectedResult() {
