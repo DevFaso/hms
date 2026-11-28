@@ -129,7 +129,7 @@ class LabInstrumentServiceImplTest {
     @Test
     @DisplayName("QA D4076: a date in the future, or a next date before the last one (typed or stored), is refused on its field")
     void incoherentDatesAreRefusedOnTheirField() {
-        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Ouagadougou"));
         when(instrumentRepository.findByIdAndActiveTrue(INSTRUMENT_ID)).thenReturn(java.util.Optional.of(instrument));
 
         requestDto.setInstallationDate(today.plusDays(1));
