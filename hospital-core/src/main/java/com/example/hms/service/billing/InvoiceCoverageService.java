@@ -226,6 +226,7 @@ public class InvoiceCoverageService {
         if (live.isEmpty()) {
             return InvoiceBalance.payerShareOf(invoice);
         }
+        lockForChange(live, hospitalId);
         InvoicePayerShare current = live.get(0);
         LocalDate day = serviceDay(invoice);
         insuranceRepository.lockById(current.getPatientInsuranceId());
@@ -288,6 +289,7 @@ public class InvoiceCoverageService {
         UUID hospitalId = invoice.getHospital().getId();
         List<InvoicePayerShare> live = shareRepository.findByInvoiceIdAndHospitalIdAndStatusIn(invoice.getId(),
             hospitalId, LIVE);
+        lockForChange(live, hospitalId);
         if (live.stream().anyMatch(share -> share.getStatus() != PayerShareStatus.OPEN)) {
             throw new ConflictException(MessageUtil.resolve("billing.payerShare.cancelOnceClaimed"));
         }
@@ -328,14 +330,17 @@ public class InvoiceCoverageService {
         ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService, "payer share");
         UUID hospitalId = actingScopeResolver.requirePinned();
         UUID userId = roleValidator.getCurrentUserId();
-        if (userId == null || !roleValidator.canDecidePayerShare(userId, hospitalId)) {
-            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.payerShare.decidersOnly"));
+        // Review of #1394 (F2): the patient then owes the whole share, a money decision of the hospital admin or
+        // the accountant, never of the billing specialist or the claims reviewer.
+        if (userId == null || !roleValidator.canSettleInsurerClaims(userId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.claim.financeOnly"));
         }
         BillingInvoice invoice = invoiceRepository.findLockedById(invoiceId)
             .filter(found -> found.getHospital() != null && hospitalId.equals(found.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_NOT_FOUND, invoiceId));
         InvoicePayerShare share = shareRepository.findByIdAndInvoiceIdAndHospitalId(shareId, invoiceId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(SHARE_NOT_FOUND));
+        lockForChange(List.of(share), hospitalId);
         if (share.getStatus() != PayerShareStatus.OPEN) {
             throw new ConflictException(MessageUtil.resolve("billing.payerShare.notDecidable",
                 MessageUtil.resolve("billing.payerShare.status." + share.getStatus().name())));
@@ -948,6 +953,30 @@ public class InvoiceCoverageService {
         this.claimLineRepository = claimLineRepository;
         this.claimBatchRepository = claimBatchRepository;
         this.claimRefusalRepository = claimRefusalRepository;
+    }
+
+    /**
+     * Review of #1394 (F1): before a share of this invoice is decided on or written, the bordereaux holding it and
+     * then the share itself are locked, in the order a bordereau is sent and settled (invoice, bordereau, share),
+     * and its status is read again under those locks. A bordereau sent in the meantime has made the share CLAIMED:
+     * the change is then refused and the reader reloads, never decided on the OPEN status read before the locks.
+     */
+    private void lockForChange(List<InvoicePayerShare> shares, UUID hospitalId) {
+        if (shares.isEmpty()) {
+            return;
+        }
+        Set<UUID> ids = shares.stream().map(InvoicePayerShare::getId)
+            .collect(Collectors.toCollection(java.util.TreeSet::new));
+        if (claimDraftSync != null) {
+            claimDraftSync.lockBatchesOf(ids, hospitalId);
+        }
+        shareRepository.lockAllByIdInAndHospitalId(ids, hospitalId);
+        for (InvoicePayerShare share : shares) {
+            PayerShareStatus now = shareRepository.statusOf(share.getId(), hospitalId).orElse(null);
+            if (now != share.getStatus()) {
+                throw new ConflictException(MessageUtil.resolve("billing.payerShare.alreadyDecided"));
+            }
+        }
     }
 
     private void followOnDrafts(UUID previousShareId, InvoicePayerShare current, UUID hospitalId) {

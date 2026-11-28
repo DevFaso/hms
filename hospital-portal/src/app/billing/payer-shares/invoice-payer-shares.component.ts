@@ -87,8 +87,6 @@ export class InvoicePayerSharesComponent {
   readonly canDecide = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_ACCOUNTANT',
-    'ROLE_BILLING_SPECIALIST',
-    'ROLE_CLAIMS_REVIEWER',
   ]);
 
   readonly shares = signal<InvoicePayerShare[]>([]);

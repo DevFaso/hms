@@ -45,6 +45,14 @@ public interface InsurerClaimLineRepository extends JpaRepository<InsurerClaimLi
            """)
     List<UUID> liveBatchIdsOfShare(@Param("shareId") UUID shareId, @Param("hospitalId") UUID hospitalId);
 
+    /** The bordereaux, not cancelled, that hold a line of any of these shares at one hospital. */
+    @Query("""
+           SELECT DISTINCT l.batchId FROM InsurerClaimLine l
+            WHERE l.shareId IN :shareIds AND l.hospitalId = :hospitalId AND l.released = false
+           """)
+    List<UUID> liveBatchIdsOfShares(@Param("shareIds") Collection<UUID> shareIds,
+                                    @Param("hospitalId") UUID hospitalId);
+
     /** The lines under a row lock, in id order. The first read of these lines in the transaction. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT l FROM InsurerClaimLine l WHERE l.id IN :ids AND l.hospitalId = :hospitalId ORDER BY l.id ASC")

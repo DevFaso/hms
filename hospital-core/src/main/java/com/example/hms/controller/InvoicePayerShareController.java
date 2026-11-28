@@ -43,8 +43,12 @@ public class InvoicePayerShareController {
 
     static final String READERS = "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
         + "'ROLE_BILLING_SPECIALIST','ROLE_CLAIMS_REVIEWER')";
-    static final String DECIDERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
-        + "'ROLE_BILLING_SPECIALIST','ROLE_CLAIMS_REVIEWER')";
+    /**
+     * Review of #1394 (F2): a whole refusal moves the share's full amount to the patient, a money decision taken by
+     * the hospital admin or the accountant only (RoleValidator#canSettleInsurerClaims), as a refused bordereau line
+     * re-billed to the patient is.
+     */
+    static final String REFUSERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT')";
 
     /** Insurer claims plan PR 1: who records a pre-authorisation number (RoleValidator#canRecordPreAuthorisation). */
     static final String PRE_AUTHORISATION_RECORDERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT',"
@@ -117,7 +121,7 @@ public class InvoicePayerShareController {
     }
 
     @PostMapping("/{invoiceId}/payer-shares/{shareId}/reject")
-    @PreAuthorize(DECIDERS)
+    @PreAuthorize(REFUSERS)
     @Operation(summary = "Record that the payer refused a share not yet claimed, with its reason; the patient owes it")
     public ResponseEntity<List<InvoicePayerShareDTO>> reject(
         @PathVariable UUID invoiceId,

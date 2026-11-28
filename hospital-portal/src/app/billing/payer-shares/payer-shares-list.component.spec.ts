@@ -172,7 +172,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
   });
 
   it('insurer claims PR 3 (QA D3983): no « claimed » or « paid » button; an open share is only refused here', () => {
-    render(['ROLE_CLAIMS_REVIEWER']);
+    render(['ROLE_ACCOUNTANT']);
 
     expect(host().querySelector('[data-testid="payer-share-claim-share-1"]')).toBeNull();
     expect(host().querySelector('[data-testid="payer-share-paid-share-1"]')).toBeNull();
@@ -210,7 +210,7 @@ describe('PayerSharesListComponent (QA D2706)', () => {
   });
 
   it('a refusal needs the payer reason: the empty submit is refused on the field and nothing is sent', () => {
-    render(['ROLE_CLAIMS_REVIEWER']);
+    render(['ROLE_HOSPITAL_ADMIN']);
     host().querySelector<HTMLButtonElement>('[data-testid="payer-share-reject-share-1"]')!.click();
     fixture.detectChanges();
 
@@ -219,6 +219,14 @@ describe('PayerSharesListComponent (QA D2706)', () => {
       sent: billing.decidePayerShare,
     });
   });
+
+  for (const role of ['ROLE_BILLING_SPECIALIST', 'ROLE_CLAIMS_REVIEWER']) {
+    it(`review of #1394 (F2): ${role} reads the list but never refuses a share to the patient`, () => {
+      render([role]);
+      expect(host().querySelector('[data-testid="payer-share-share-1"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid^="payer-share-reject-"]')).toBeNull();
+    });
+  }
 
   it('the super-admin reads only: no decision button', () => {
     render(['ROLE_SUPER_ADMIN']);

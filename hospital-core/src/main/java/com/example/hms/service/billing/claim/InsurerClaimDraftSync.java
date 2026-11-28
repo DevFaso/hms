@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,6 +55,22 @@ public class InsurerClaimDraftSync {
                     lineRepository.saveAllAndFlush(lines);
                 }
             }
+        }
+    }
+
+    /**
+     * Review of #1394 (F1): the bordereaux, not cancelled, that hold any of these shares, under row locks in id
+     * order. The coverage service takes them before it locks or writes the shares, the order a bordereau is sent in
+     * (bordereau, then share): a credit note and a sending of the same share wait on each other instead of
+     * deadlocking, and the second one reads what the first one left.
+     */
+    public void lockBatchesOf(Collection<UUID> shareIds, UUID hospitalId) {
+        if (shareIds == null || shareIds.isEmpty() || hospitalId == null) {
+            return;
+        }
+        List<UUID> batchIds = lineRepository.liveBatchIdsOfShares(shareIds, hospitalId);
+        if (!batchIds.isEmpty()) {
+            batchRepository.lockAllByIdInAndHospitalId(batchIds, hospitalId);
         }
     }
 

@@ -126,6 +126,8 @@ class InvoiceCoverageServiceTest {
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_A);
         when(roles.getCurrentUserId()).thenReturn(BILLING_A);
         when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        // Review of #1394 (F2): the user who refuses a whole share is a hospital admin or an accountant.
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(true);
 
         invoice = invoice(HOSPITAL_A);
         // RAMU, Formule Base 80 %, laboratoire exclu, plafond annuel 150 000 F.
@@ -191,6 +193,11 @@ class InvoiceCoverageServiceTest {
             Optional.ofNullable(ledger.get(call.<UUID>getArgument(0)))
                 .filter(s -> s.getInvoiceId().equals(call.getArgument(1)) && s.getHospitalId().equals(call.getArgument(2))));
         when(shares.sumUsedInYear(any(), any(), anyInt(), any())).thenReturn(BigDecimal.ZERO);
+        // Review of #1394 (F1): the status as the database holds it, read again under the share's lock.
+        when(shares.statusOf(any(), any())).thenAnswer(call ->
+            Optional.ofNullable(ledger.get(call.<UUID>getArgument(0)))
+                .filter(s -> s.getHospitalId().equals(call.getArgument(1)))
+                .map(InvoicePayerShare::getStatus));
         when(shares.decide(any(), any(), any(), any(), any(), any(), any())).thenAnswer(call -> {
             InvoicePayerShare share = ledger.get(call.<UUID>getArgument(0));
             if (share == null || !share.getHospitalId().equals(call.getArgument(1))
@@ -606,6 +613,45 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1394 (F2): the billing specialist and the claims reviewer never move a whole share to "
+        + "the patient; only the hospital admin or the accountant refuses it")
+    void aWholeRefusalIsAFinanceDecision() {
+        service.applyAtIssue(invoice, BILLING_A);
+        UUID invoiceId = invoice.getId();
+        InvoicePayerShare share = onlyShare();
+        UUID shareId = share.getId();
+        // A role that decides shares (it reads the list) but settles no claim.
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.OPEN);
+        assertThat(InvoiceBalance.dueOf(invoice)).as("the patient's balance does not move").isEqualByComparingTo("2900");
+
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        service.reject(invoiceId, shareId, "Hors délai");
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.REJECTED);
+    }
+
+    @Test
+    @DisplayName("review of #1394 (F1): a share read OPEN but sent on a bordereau before its lock is taken is not "
+        + "refused from the stale read")
+    void aShareSentBeforeItsLockIsReadAgain() {
+        service.applyAtIssue(invoice, BILLING_A);
+        UUID invoiceId = invoice.getId();
+        InvoicePayerShare share = onlyShare();
+        UUID shareId = share.getId();
+        // The entity still says OPEN; the database, read under the lock, says a bordereau claimed it meanwhile.
+        when(shares.statusOf(shareId, HOSPITAL_A)).thenReturn(Optional.of(PayerShareStatus.CLAIMED));
+
+        assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
+            .isInstanceOf(ConflictException.class);
+        assertThat(share.getStatus()).isEqualTo(PayerShareStatus.OPEN);
+        assertThat(InvoiceBalance.dueOf(invoice)).as("the patient's balance does not move").isEqualByComparingTo("2900");
+        org.mockito.Mockito.verify(shares).lockAllByIdInAndHospitalId(java.util.Set.of(shareId), HOSPITAL_A);
+    }
+
+    @Test
     @DisplayName("only the payer-share roles decide, at their hospital; another hospital's invoice is not found")
     void rolesAndTenancy() {
         service.applyAtIssue(invoice, BILLING_A);
@@ -619,6 +665,7 @@ class InvoiceCoverageServiceTest {
         when(roles.getCurrentUserId()).thenReturn(BILLING_A);
         when(scope.requirePinned()).thenReturn(HOSPITAL_B);
         when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_B)).thenReturn(true);
+        when(roles.canSettleInsurerClaims(BILLING_A, HOSPITAL_B)).thenReturn(true);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_B);
         assertThatThrownBy(() -> service.reject(invoiceId, shareId, "Hors délai"))
             .isInstanceOf(ResourceNotFoundException.class);

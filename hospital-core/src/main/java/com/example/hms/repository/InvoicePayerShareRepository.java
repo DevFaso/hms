@@ -137,6 +137,14 @@ public interface InvoicePayerShareRepository extends JpaRepository<InvoicePayerS
 
     List<InvoicePayerShare> findByIdInAndHospitalId(Collection<UUID> ids, UUID hospitalId);
 
+    /**
+     * The share's status as the database holds it now. A scalar read, so it is never answered from an entity read
+     * earlier in the transaction: called under the share's row lock, it is the status every other writer left.
+     */
+    @Query("SELECT s.status FROM InvoicePayerShare s WHERE s.id = :id AND s.hospitalId = :hospitalId")
+    Optional<com.example.hms.enums.PayerShareStatus> statusOf(@Param("id") UUID id,
+                                                              @Param("hospitalId") UUID hospitalId);
+
     /** The shares under a row lock, in id order. The first read of these shares in the transaction. */
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM InvoicePayerShare s WHERE s.id IN :ids AND s.hospitalId = :hospitalId ORDER BY s.id ASC")

@@ -157,6 +157,17 @@ class InsurerClaimAccessTest {
     }
 
     @Test
+    @DisplayName("review of #1394 (F2): a whole share is refused to the patient by the hospital admin or the "
+        + "accountant only, as a refused bordereau line is re-billed")
+    void aWholeRefusalToThePatientIsFinanceOnly() throws NoSuchMethodException {
+        String rule = InvoicePayerShareController.class
+            .getMethod("reject", java.util.UUID.class, java.util.UUID.class,
+                com.example.hms.payload.dto.billing.PayerShareRejectRequestDTO.class)
+            .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+        assertThat(rule).isEqualTo(InvoicePayerShareController.REFUSERS).isEqualTo(InsurerClaimController.FINANCE);
+    }
+
+    @Test
     @DisplayName("a payment without its amount, date, reference or key, a refusal without a reason, and a card "
         + "number in a reference are refused at the edge, with the fields named")
     void incompleteMoneyRequestsAreRefusedAtTheEdge() throws Exception {

@@ -78,12 +78,13 @@ export class PayerSharesListComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  /** The roles that decide a share (the super-admin reads only). */
+  /**
+   * Review of #1394 (F2): who refuses a whole share, which the patient then owes: the hospital admin or the
+   * accountant (the server answers the same).
+   */
   readonly canDecide = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_ACCOUNTANT',
-    'ROLE_BILLING_SPECIALIST',
-    'ROLE_CLAIMS_REVIEWER',
   ]);
 
   /** The page size the list asks for. */

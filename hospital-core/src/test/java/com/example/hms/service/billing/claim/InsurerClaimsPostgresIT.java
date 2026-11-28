@@ -600,6 +600,104 @@ class InsurerClaimsPostgresIT {
     }
 
     @Test
+    @DisplayName("review of #1394 (F1): a credit note that would move a share's split while its bordereau is being "
+        + "sent waits for the sending, then is refused; the bordereau, the share and the invoice keep the same acts "
+        + "and nothing deadlocks")
+    void aCreditNoteRacingTheSendingNeverLeavesAStaleBordereau() throws Exception {
+        UUID payerR = payer(hospitalA, "Mutuelle R");
+        UUID planR = plan(hospitalA, payerR);
+        jdbc.update("UPDATE billing.payer_plan_terms SET per_invoice_ceiling = 10000 WHERE plan_id = ?", planR);
+        // 80 % with a ceiling of 10 000 per invoice, in line order: 5 000 and 20 000 give 4 000 + 6 000.
+        Issued invoice = issued("Plafond", planR, NOVEMBER, "5000", "20000");
+        assertThat(money("SELECT amount FROM billing.invoice_payer_shares WHERE id = ?", invoice.share()))
+            .isEqualByComparingTo("10000");
+        InsurerClaimBatchDTO draft = draft(payerR);
+        assertThat(draft.getLines()).extracting(InsurerClaimLineDTO::getClaimedAmount)
+            .usingComparatorForType(BigDecimal::compareTo, BigDecimal.class)
+            .containsExactlyInAnyOrder(new BigDecimal("4000"), new BigDecimal("6000"));
+        UUID firstAct = jdbc.queryForObject("""
+            SELECT id FROM billing.invoice_items WHERE billing_invoice_id = ? ORDER BY created_at LIMIT 1
+            """, UUID.class, invoice.invoice());
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch bordereauLocked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        // The sending holds the bordereau's row lock until the credit note is seen waiting on a lock.
+        Future<String> sending = pool.submit(() -> {
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            return tx.execute(status -> {
+                jdbc.queryForObject("SELECT id FROM billing.insurer_claim_batches WHERE id = ? FOR UPDATE",
+                    UUID.class, draft.getId());
+                bordereauLocked.countDown();
+                awaitQuietly(release);
+                return batches.submit(draft.getId(), null).getStatus();
+            });
+        });
+        // A credit note brings the first act down to 1 000: 800 + 9 200, still 10 000, but another split.
+        Future<String> creditNote = pool.submit(() -> {
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            awaitQuietly(bordereauLocked);
+            try {
+                tx.executeWithoutResult(status -> {
+                    BillingInvoice entity = invoices.findLockedById(invoice.invoice()).orElseThrow();
+                    jdbc.update("UPDATE billing.invoice_items SET unit_price = 1000, total_price = 1000 WHERE id = ?",
+                        firstAct);
+                    coverage.recomputeAfterLineChange(entity, accountant);
+                    invoices.save(entity);
+                });
+                return "APPLIED";
+            } catch (ConflictException refused) {
+                return "REFUSED";
+            }
+        });
+        assertThat(bordereauLocked.await(30, TimeUnit.SECONDS)).isTrue();
+        long until = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < until && jdbc.queryForObject("""
+                SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'
+                """, Integer.class) == 0) {
+            Thread.sleep(50);
+        }
+        release.countDown();
+        String sent = sending.get(60, TimeUnit.SECONDS);
+        String credited = creditNote.get(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+
+        assertThat(sent).isEqualTo("SUBMITTED");
+        assertThat(credited).as("the credit note reads the share as the sending left it: claimed, its split frozen")
+            .isEqualTo("REFUSED");
+        // No stale snapshot: the bordereau sent, the share's acts and the invoice lines agree act by act.
+        for (java.util.Map<String, Object> act : jdbc.queryForList("""
+                SELECT l.invoice_item_id, l.claimed_amount, s.amount AS share_amount, i.payer_share_amount
+                  FROM billing.insurer_claim_lines l
+                  JOIN billing.invoice_payer_share_lines s
+                    ON s.share_id = l.share_id AND s.invoice_item_id = l.invoice_item_id
+                  JOIN billing.invoice_items i ON i.id = l.invoice_item_id
+                 WHERE l.batch_id = ?
+                """, draft.getId())) {
+            BigDecimal claimedOnBordereau = (BigDecimal) act.get("claimed_amount");
+            assertThat((BigDecimal) act.get("share_amount")).isEqualByComparingTo(claimedOnBordereau);
+            assertThat((BigDecimal) act.get("payer_share_amount")).isEqualByComparingTo(claimedOnBordereau);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM billing.insurer_claim_lines WHERE batch_id = ?",
+            Integer.class, draft.getId())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM billing.invoice_payer_share_lines WHERE share_id = ?",
+            Integer.class, invoice.share())).isEqualTo(2);
+        assertThat(money("SELECT total_price FROM billing.invoice_items WHERE id = ?", firstAct))
+            .as("the refused credit note changed nothing").isEqualByComparingTo("5000");
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("the other transaction never got there");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
+    }
+
+    @Test
     @DisplayName("money: after every step of a random run of payments, refusals, write-offs and reversals, the "
         + "shares' totals = claimed = paid + re-billed + written off + outstanding, and the reports add up")
     void everyAmountReconciles() {

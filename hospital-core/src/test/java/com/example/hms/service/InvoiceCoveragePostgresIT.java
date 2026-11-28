@@ -160,6 +160,7 @@ class InvoiceCoveragePostgresIT {
         when(roles.requireActiveHospitalId()).thenReturn(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(cashier);
         when(roles.canDecidePayerShare(any(), any())).thenReturn(true);
+        when(roles.canSettleInsurerClaims(any(), any())).thenReturn(true);
         coverage = new InvoiceCoverageService(shares, invoices, items, adjustments, insurances, payers, plans, terms,
             rules, priceItems, roles, scope, mock(AuditEventLogService.class),
             Clock.fixed(Instant.parse("2026-11-17T10:00:00Z"), ZoneOffset.UTC));
