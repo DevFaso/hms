@@ -82,6 +82,22 @@ public class InsurerClaimReportService {
 
     /** A rendered file and its name without extension. */
     public record Rendered(byte[] content, String fileName) {
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Rendered that
+                && java.util.Arrays.equals(content, that.content)
+                && java.util.Objects.equals(fileName, that.fileName);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(content) + java.util.Objects.hashCode(fileName);
+        }
+
+        @Override
+        public String toString() {
+            return "Rendered[content=" + java.util.Arrays.toString(content) + ", fileName=" + fileName + "]";
+        }
     }
 
     /* -------------------------------------------------------------- bordereau */

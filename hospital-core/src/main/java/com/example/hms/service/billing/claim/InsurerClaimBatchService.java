@@ -429,12 +429,13 @@ public class InsurerClaimBatchService {
                 LocaleContextHolder.getLocale());
             for (InsurerClaimLine line : lines) {
                 InsurerClaimLineReader.ShareFacts share = facts.get(line.getShareId());
-                InsurerClaimLineReader.Act act = share == null ? null : share.acts().stream()
-                    .filter(candidate -> candidate.invoiceItemId().equals(line.getInvoiceItemId()))
-                    .findFirst().orElse(null);
-                if (act != null) {
-                    out.add(liveLine(line, batch, share, act));
+                if (share == null) {
+                    continue;
                 }
+                share.acts().stream()
+                    .filter(candidate -> candidate.invoiceItemId().equals(line.getInvoiceItemId()))
+                    .findFirst()
+                    .ifPresent(act -> out.add(liveLine(line, batch, share, act)));
             }
         } else {
             Set<UUID> lineIds = lines.stream().map(InsurerClaimLine::getId).collect(Collectors.toSet());
